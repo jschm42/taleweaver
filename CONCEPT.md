@@ -37,6 +37,8 @@ Follow these packages **strictly in the specified order** to ensure successful i
 **Goal:** Build the graphical user interface.
 * Initialize the Vue 3 (Composition API) project with Tailwind CSS.
 * Create a base layout in Pixel-Art / Retro style.
+* For icons: https://github.com/nagoshiashumari/Rpg-Awesome
+* For UI-Elements: https://ronenness.github.io/RPGUI/
 * **Module Game UI:**
   * Main Chat Window.
   * Modal Dialog for the Character Sheet (`/sheet`).
