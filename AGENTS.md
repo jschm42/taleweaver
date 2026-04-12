@@ -1,49 +1,47 @@
-# 🤖 Instructions for the Coding Agent
+# Agent Guidelines & Best Practices
 
-Follow these packages **strictly in the specified order** to ensure successful implementation and avoid circular dependencies:
+Diese Datei enthält die grundlegenden Coding- und Architekturrichtlinien für alle (KI-gesteuerten sowie menschlichen) Entwickler, die an **TaleWeaver** arbeiten. 
 
-### Package 1: Foundation & Multi-User Database Schema
-**Goal:** Establish the base architecture and the SQLite database.
-* Setup the Python/FastAPI project.
-* Implement the asynchronous ORM (e.g., SQLAlchemy v2).
-* Create the base models with UUIDv4 as Primary Keys:
-  * `User`: (Placeholder for later, initially a local default user).
-  * `Avatar`: Character Sheet (Stats, HP/Stamina/Mana defaults to 200) + JSON fields for `inventory`, `equipment` (Head, Chest, Arms, Legs, Hands, Feet, Ring_1, Ring_2, Amulet), and `status_effects`.
-  * `Adventure`: Title, `strict_rules` flag, heartbeat interval, optional Game Over rules.
-  * `GameState`: Links User, Avatar, and Adventure; stores the current `scene_id` and in-game time.
-* Create CRUD repositories for these models.
+Bitte halte dich bei allen Implementierungen an die folgenden Regeln, um eine hohe Code-Qualität sicherzustellen.
 
-### Package 2: Security & LLM Router (Abstraction Layer)
-**Goal:** Unified interface to all AI models and secure key management.
-* Implement an Encryption Utility class (AES-based).
-* Extend the model to store encrypted provider API keys.
-* Implement the `GameMasterLLM` class with routing for Simple Tasks and Complex Tasks.
+---
 
-### Package 3: Core Game Engine & State Management
-**Goal:** The game logic that manages the state and mediates between AI and database.
-* **Command Parsers:** Action, Inventory & Equipment Parsers for slash commands routing directly to JSON updates (`O(1)` performance).
-* **Stat Aggregator:** Dynamic Stat Calculation (`O(1)` performance) determining Base Stat + Equipment + Status Effects.
-* **Skill-Check Engine:** A module generating D20 rolls, adding aggregated stats, and checking against the "challenge rating."
-* **Rule Engine (`strict_rules`):** Pydantic JSON schemas passed to the LLM. Catch HP <= 0 conditions (Game Over).
-* **Memory Management:** Sliding-window context + inject Character Sheet into system prompt.
+## 1. Clean Code
 
-### Package 4: API & Real-Time Communication
-**Goal:** Provide interfaces for the Vue.js frontend.
-* Standardized REST routes for configuration and adventure management.
-* WebSocket endpoint (`/ws/adventure/{game_id}`).
-* Asynchronous Heartbeat Timer to evaluate time-based logic (e.g., status-effect damage per minute).
+* **Namenskonventionen:**
+  * Python: `PascalCase` für Klassen, `snake_case` für Methoden, Variablen und Module. Konstanten in `UPPER_SNAKE_CASE`.
+  * JavaScript/TypeScript: `PascalCase` für Klassen/Komponenten, `camelCase` für Funktionen und Variablen.
+  * Verwende immer aussagekräftige Namen (z.B. `calculate_damage` statt `calc_dmg`).
+* **Single Responsibility Principle (SRP):**
+  * Eine Funktion, Klasse oder ein Modul sollte exakt einen Zweck erfüllen. Wenn eine Funktion unübersichtlich lang wird, teile sie in kleinere, testbare Einheiten auf.
+* **Typisierung (Type Hints):**
+  * **Python:** Nutze durchgängig Type Hinting (z.B. `str`, `int`, `dict`, `list`, `Optional`). Das erleichtert das Linting (mit `mypy`) und macht den Code lesbarer.
+  * **Frontend:** Verwende in JavaScript wo möglich JSDoc, oder idealerweise TypeScript für klare Interfaces.
+* **Fehlerbehandlung (Error Handling):**
+  * Behandle Fehler da, wo sie auftreten. 
+  * Verwende in FastAPI `HTTPException`, um Fehler an das Frontend mit sinnvollen Statuscodes (400, 404, 500) und klarer Message zurückzugeben.
 
-### Package 5: Frontend MVP (Vue.js + TypeScript + Tailwind)
-**Goal:** Build the graphical user interface.
-* Initialize the Vue 3 (Composition API) project with Tailwind CSS.
-* Create a base layout in Pixel-Art / Retro style.
-* **Module Game UI:**
-  * Main Chat Window.
-  * Modal Dialog for the Character Sheet (`/sheet`).
-  * WebSocket client integration.
+---
 
-### Package 6: World Mapping (Mermaid.js) & Media
-**Goal:** Visual support for the text adventure logic.
-* **Backend:** Graph update logic (Nodes = Scenes, Edges = Exits).
-* Convert JSON map data for Mermaid.js (`O(V+E)`).
-* **Frontend:** Implement the `/map` command to render.
+## 2. Testing
+
+* **Prinzipien:**
+  * Jeder neue Endpunkt, jede Kernfunktion (z.B. der D20-Würfel-Wurf oder das Evaluieren des LLM-Ergebnisses) muss mit automatisierten Unit-Tests abgedeckt sein.
+  * Baue Tests nach dem Schema **Arrange, Act, Assert** (AAA) auf.
+* **Tools & Frameworks:**
+  * **Backend:** Nutze `pytest`. Für asynchrone Routen nutze `pytest-asyncio` und den `AsyncClient` von `httpx`.
+* **Mocking:**
+  * Netzwerkanfragen (insbesondere LLM-API-Calls zu OpenAI/Anthropic/etc.) **müssen** in Unit-Tests gemockt werden. Wir wollen keine echten API-Kosten oder Latenzen beim Ausführen der Testsuite erzeugen!
+  * Datenbankzugriffe in isolierten Tests ebenfalls mocken oder eine dedizierte In-Memory-SQLite Test-Datenbank verwenden.
+
+---
+
+## 3. Kommentare & Dokumentation
+
+* **Code-Dokumentation (Docstrings):**
+  * Das "Warum" und "Was" ist wichtiger als das "Wie". Der Code selbst sollte das "Wie" durch gute Benennung zeigen.
+  * Verwende in Python Docstrings (`"""..."""`) auf Modul-, Klassen- und Funktionsebene, idealerweise im Google- oder Sphinx-Format.
+* **Inline-Kommentare:**
+  * Nutze sie sparsam. Sie sind nur dann sinnvoll, wenn ein bestimmter Algorithmus extrem komplex ist, ein überraschender Fix implementiert wurde oder ein obskurer Workaround dokumentiert werden muss.
+* **TODOs:**
+  * Verwende `TODO: [Kurzbeschreibung]` für offene Aufgaben im Code. Die Aufgaben sollten in Issue-Trackern nachgepflegt werden.

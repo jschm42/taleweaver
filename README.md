@@ -51,4 +51,52 @@ The `strict_rules` flag determines AI behavior:
 * **Strict Mode:** Forces state modifications (HP loss, debuffs) to return "Structured Outputs" (JSON) which the backend validates.
 * **Hallucination Mode:** Narrative freedom where the backend adapts to textual estimations.
 
+## 4. Technical Details & Setup
 
+### System Requirements
+* **Python:** 3.12 (specified via `.python-version` file)
+* **Node.js:** 18+ (for the Vue.js frontend MVP)
+* **Package Managers:** `pip` and `npm`
+* **Database:** SQLite (built-in, no separate server needed)
+* **LLM Provider:** An active API key from an LLM provider (e.g., OpenAI, Anthropic, Gemini) is required for the AI Gamemaster.
+
+### Installation & Execution
+
+The project is split into a Python/FastAPI backend and a Vue.js frontend.
+
+#### 1. Backend Setup
+Navigate to the root or backend directory, create a virtual environment, and install dependencies:
+
+```bash
+# Create and activate a virtual environment
+python -m venv venv
+
+# On Windows:
+venv\Scripts\activate
+# On Linux/macOS:
+source venv/bin/activate
+
+# Install requirements
+pip install -r requirements.txt
+
+# Start the FastAPI server
+uvicorn backend.main:app --reload
+```
+The backend API will typically run on `http://localhost:8000`.
+
+#### 2. Frontend Setup
+Navigate to the frontend directory to set up the Vue.js interface:
+
+```bash
+cd frontend
+
+# Install UI dependencies
+npm install
+
+# Start the development server
+npm run dev
+```
+The frontend will typically run on `http://localhost:5173`.
+
+#### 3. First Launch
+Once both servers are running, open the frontend URL in your browser. You will be prompted in the settings/configuration UI to provide your LLM API key. This key is encrypted using AES and stored safely in your local SQLite database before you can start generating your first adventure.
