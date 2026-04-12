@@ -1,40 +1,59 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from backend.core.database import engine, Base
+from fastapi.middleware.cors import CORSMiddleware
+
+from backend.core.database import engine
+from backend.models.base import Base
 from backend.engine.heartbeat import heartbeat_daemon
 
-# Import all models so metadata knows them
+# Import all models so SQLAlchemy metadata registers them before create_all
 import backend.models.user
 import backend.models.avatar
 import backend.models.adventure
 import backend.models.game_state
 import backend.models.chat
 
-from backend.api.routes import config_api, adventures, ws
+from backend.api.routes import config_api, adventures, avatars, ws
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup actions
+    """Manages application startup and shutdown lifecycle."""
+    # Startup: create DB tables and launch background heartbeat
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        
+
     heartbeat_daemon.start()
-    
+
     yield
-    # Shutdown actions
+
+    # Shutdown: stop heartbeat gracefully
     await heartbeat_daemon.stop()
+
 
 app = FastAPI(
     title="TaleWeaver",
-    description="Backend API for TaleWeaver",
+    description="Backend API for the TaleWeaver text-adventure engine.",
     version="0.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+)
+
+# Allow the Vue.js frontend (dev server on port 5173) to reach the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(config_api.router, prefix="/api")
 app.include_router(adventures.router, prefix="/api")
+app.include_router(avatars.router, prefix="/api")
 app.include_router(ws.router)
 
-@app.get("/health")
-async def health_check():
+
+@app.get("/health", tags=["Health"])
+async def health_check() -> dict:
+    """Returns a simple liveness signal for load-balancer health checks."""
     return {"status": "ok"}

@@ -6,3 +6,8 @@ pydantic
 pydantic-settings
 cryptography
 litellm
+
+# Testing
+pytest
+pytest-asyncio
+httpx
