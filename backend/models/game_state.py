@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, ForeignKey
 from backend.models.base import Base, TimestampMixin
 
 class GameState(Base, TimestampMixin):
@@ -12,3 +12,4 @@ class GameState(Base, TimestampMixin):
     
     scene_id = Column(String(255), nullable=False) # Reference to graph node
     in_game_time = Column(Integer, default=0, nullable=False) # e.g. minutes passed
+    is_paused = Column(Boolean, default=False, nullable=False)

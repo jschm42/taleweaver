@@ -9,6 +9,7 @@ class Adventure(Base, TimestampMixin):
     title = Column(String(255), nullable=False)
     
     strict_rules = Column(Boolean, default=True, nullable=False)
-    heartbeat_interval = Column(Integer, default=60, nullable=False) # e.g. seconds per tick
+    heartbeat_enabled = Column(Boolean, default=False, nullable=False)
+    heartbeat_interval = Column(Integer, default=10, nullable=False) # Configurable interval
     
     game_over_rules = Column(JSON, nullable=True)
