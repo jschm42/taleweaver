@@ -1,47 +1,47 @@
 # Agent Guidelines & Best Practices
 
-Diese Datei enthält die grundlegenden Coding- und Architekturrichtlinien für alle (KI-gesteuerten sowie menschlichen) Entwickler, die an **TaleWeaver** arbeiten. 
+This file contains the fundamental coding and architectural guidelines for all developers (AI-driven and human) working on **TaleWeaver**. 
 
-Bitte halte dich bei allen Implementierungen an die folgenden Regeln, um eine hohe Code-Qualität sicherzustellen.
+Please adhere to the following rules for all implementations to ensure high code quality.
 
 ---
 
 ## 1. Clean Code
 
-* **Namenskonventionen:**
-  * Python: `PascalCase` für Klassen, `snake_case` für Methoden, Variablen und Module. Konstanten in `UPPER_SNAKE_CASE`.
-  * JavaScript/TypeScript: `PascalCase` für Klassen/Komponenten, `camelCase` für Funktionen und Variablen.
-  * Verwende immer aussagekräftige Namen (z.B. `calculate_damage` statt `calc_dmg`).
+* **Naming Conventions:**
+  * Python: `PascalCase` for classes, `snake_case` for methods, variables, and modules. Constants in `UPPER_SNAKE_CASE`.
+  * JavaScript/TypeScript: `PascalCase` for classes/components, `camelCase` for functions and variables.
+  * Always use descriptive names (e.g., `calculate_damage` instead of `calc_dmg`).
 * **Single Responsibility Principle (SRP):**
-  * Eine Funktion, Klasse oder ein Modul sollte exakt einen Zweck erfüllen. Wenn eine Funktion unübersichtlich lang wird, teile sie in kleinere, testbare Einheiten auf.
-* **Typisierung (Type Hints):**
-  * **Python:** Nutze durchgängig Type Hinting (z.B. `str`, `int`, `dict`, `list`, `Optional`). Das erleichtert das Linting (mit `mypy`) und macht den Code lesbarer.
-  * **Frontend:** Verwende in JavaScript wo möglich JSDoc, oder idealerweise TypeScript für klare Interfaces.
-* **Fehlerbehandlung (Error Handling):**
-  * Behandle Fehler da, wo sie auftreten. 
-  * Verwende in FastAPI `HTTPException`, um Fehler an das Frontend mit sinnvollen Statuscodes (400, 404, 500) und klarer Message zurückzugeben.
+  * A function, class, or module should fulfill exactly one purpose. If a function becomes confusingly long, split it into smaller, testable units.
+* **Typing (Type Hints):**
+  * **Python:** Use type hinting consistently throughout the codebase (e.g., `str`, `int`, `dict`, `list`, `Optional`). This facilitates linting (with `mypy`) and makes the code more readable.
+  * **Frontend:** Use JSDoc in JavaScript wherever possible, or ideally TypeScript for clear interfaces.
+* **Error Handling:**
+  * Handle errors where they occur.
+  * In FastAPI, use `HTTPException` to return errors to the frontend with meaningful status codes (400, 404, 500) and clear messages.
 
 ---
 
 ## 2. Testing
 
-* **Prinzipien:**
-  * Jeder neue Endpunkt, jede Kernfunktion (z.B. der D20-Würfel-Wurf oder das Evaluieren des LLM-Ergebnisses) muss mit automatisierten Unit-Tests abgedeckt sein.
-  * Baue Tests nach dem Schema **Arrange, Act, Assert** (AAA) auf.
+* **Principles:**
+  * Every new endpoint and core function (e.g., the D20 dice roll or evaluating the LLM result) must be covered by automated unit tests.
+  * Structure tests according to the **Arrange, Act, Assert** (AAA) pattern.
 * **Tools & Frameworks:**
-  * **Backend:** Nutze `pytest`. Für asynchrone Routen nutze `pytest-asyncio` und den `AsyncClient` von `httpx`.
+  * **Backend:** Use `pytest`. For asynchronous routes, use `pytest-asyncio` and the `AsyncClient` from `httpx`.
 * **Mocking:**
-  * Netzwerkanfragen (insbesondere LLM-API-Calls zu OpenAI/Anthropic/etc.) **müssen** in Unit-Tests gemockt werden. Wir wollen keine echten API-Kosten oder Latenzen beim Ausführen der Testsuite erzeugen!
-  * Datenbankzugriffe in isolierten Tests ebenfalls mocken oder eine dedizierte In-Memory-SQLite Test-Datenbank verwenden.
+  * Network requests (especially LLM API calls to OpenAI/Anthropic/etc.) **must** be mocked in unit tests. We do not want to incur actual API costs or latencies when running the test suite!
+  * Database access in isolated tests should also be mocked or use a dedicated in-memory SQLite test database.
 
 ---
 
-## 3. Kommentare & Dokumentation
+## 3. Comments & Documentation
 
-* **Code-Dokumentation (Docstrings):**
-  * Das "Warum" und "Was" ist wichtiger als das "Wie". Der Code selbst sollte das "Wie" durch gute Benennung zeigen.
-  * Verwende in Python Docstrings (`"""..."""`) auf Modul-, Klassen- und Funktionsebene, idealerweise im Google- oder Sphinx-Format.
-* **Inline-Kommentare:**
-  * Nutze sie sparsam. Sie sind nur dann sinnvoll, wenn ein bestimmter Algorithmus extrem komplex ist, ein überraschender Fix implementiert wurde oder ein obskurer Workaround dokumentiert werden muss.
+* **Code Documentation (Docstrings):**
+  * The "Why" and "What" are more important than the "How". The code itself should reveal the "How" through good naming.
+  * In Python, use docstrings (`"""..."""`) at the module, class, and function levels, ideally in Google or Sphinx format.
+* **Inline Comments:**
+  * Use them sparingly. They only make sense if a specific algorithm is extremely complex, a surprising fix was implemented, or an obscure workaround needs documentation.
 * **TODOs:**
-  * Verwende `TODO: [Kurzbeschreibung]` für offene Aufgaben im Code. Die Aufgaben sollten in Issue-Trackern nachgepflegt werden.
+  * Use `TODO: [Short Description]` for pending tasks in the code. These tasks should be tracked in issue trackers.
