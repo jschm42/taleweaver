@@ -1,4 +1,4 @@
-# AI Text Adventure RPG
+# TaleWeaver - AI Text Adventure Wolrd Generator
 
 Welcome to the AI Text Adventure RPG project! This is a next-generation browser-based text adventure RPG that combines the nostalgic feel of classic point-and-click and text adventures with the dynamic creativity of modern Large Language Models (LLMs).
 
