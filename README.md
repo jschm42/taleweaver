@@ -79,6 +79,10 @@ source venv/bin/activate
 # Install requirements
 pip install -r requirements.txt
 
+# Generate a secure ENCRYPTION_KEY and follow the script's instructions
+# to place it into your .env file
+python scripts/generate_fernet_key.py
+
 # Start the FastAPI server
 uvicorn backend.main:app --reload
 ```

@@ -4,3 +4,5 @@ sqlalchemy
 aiosqlite
 pydantic
 pydantic-settings
+cryptography
+litellm
