@@ -6,7 +6,6 @@ import os
 
 from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
-from backend.engine.heartbeat import heartbeat_daemon
 
 # Import all models so SQLAlchemy metadata registers them before create_all
 import backend.models.user
@@ -28,12 +27,9 @@ async def lifespan(app: FastAPI):
 
     await apply_sqlite_compat_migrations()
 
-    heartbeat_daemon.start()
+    await apply_sqlite_compat_migrations()
 
     yield
-
-    # Shutdown: stop heartbeat gracefully
-    await heartbeat_daemon.stop()
 
 
 app = FastAPI(

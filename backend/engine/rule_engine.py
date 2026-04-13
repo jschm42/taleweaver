@@ -21,6 +21,23 @@ class InventoryItem(BaseModel):
     stat_modifier_intelligence: Optional[int] = None
     stat_modifier_charisma: Optional[int] = None
 
+class EntityMovement(BaseModel):
+    entity_id: str
+    to_scene_id: Optional[str] = None
+    to_spatial_position: Optional[str] = None
+
+class ExitUpdate(BaseModel):
+    from_scene_id: str
+    to_scene_id: str
+    is_locked: bool
+
+class WorldEntityUpdate(BaseModel):
+    """Used for changing an entity's name or description at runtime."""
+    entity_id: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+    spatial_position: Optional[str] = None
+
 
 class GameEvent(BaseModel):
     """
@@ -41,8 +58,59 @@ class GameEvent(BaseModel):
     
     # Media
     image_prompt: Optional[str] = None # Short prompt for AI image generation of this scene
+    
+    # World State Updates
+    moved_entities: Optional[List[EntityMovement]] = None
+    updated_exits: Optional[List[ExitUpdate]] = None
+    updated_entities: Optional[List[WorldEntityUpdate]] = None
+    deleted_entities: Optional[List[str]] = None # List of IDs to remove
+    
+    # Time Management
+    extra_time_minutes: int = 0 # Extra time this action takes (added to turn base)
+
+# Maximum resource cap
+RESOURCE_CAP = 200
+
+# Maps status-effect names to per-turn resource deltas.
+STATUS_EFFECT_TICKS: dict = {
+    "Poisoned": {"hp": -5},
+    "Burning": {"hp": -10},
+    "Bleeding": {"hp": -3, "stamina": -2},
+    "Regenerating": {"hp": 5},
+    "Resting": {"stamina": 3, "mana": 3},
+}
 
 class RuleEngine:
+    @staticmethod
+    def apply_ticks(avatar: Avatar) -> list[str]:
+        """
+        Applies per-turn resource changes for all active status effects.
+        Returns a list of messages describing what happened.
+        """
+        messages: list[str] = []
+        for effect in list(avatar.status_effects or []):
+            if effect not in STATUS_EFFECT_TICKS:
+                continue
+
+            deltas = STATUS_EFFECT_TICKS[effect]
+            parts: list[str] = []
+
+            if "hp" in deltas:
+                avatar.hp = max(0, min(RESOURCE_CAP, avatar.hp + deltas["hp"]))
+                parts.append(f"HP {deltas['hp']:+d}")
+
+            if "stamina" in deltas:
+                avatar.stamina = max(0, min(RESOURCE_CAP, avatar.stamina + deltas["stamina"]))
+                parts.append(f"Stamina {deltas['stamina']:+d}")
+
+            if "mana" in deltas:
+                avatar.mana = max(0, min(RESOURCE_CAP, avatar.mana + deltas["mana"]))
+                parts.append(f"Mana {deltas['mana']:+d}")
+
+            if parts:
+                messages.append(f"[{effect}] {', '.join(parts)}")
+
+        return messages
     @staticmethod
     def apply_event(avatar: Avatar, event: GameEvent) -> str:
         """

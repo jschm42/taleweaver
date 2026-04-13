@@ -15,6 +15,8 @@ import backend.models.character  # noqa: F401
 import backend.models.adventure  # noqa: F401
 import backend.models.game_state  # noqa: F401
 import backend.models.chat  # noqa: F401
+import backend.models.world_entity  # noqa: F401
+import backend.models.world_map  # noqa: F401
 
 config = context.config
 

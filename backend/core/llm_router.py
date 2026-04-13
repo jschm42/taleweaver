@@ -18,6 +18,11 @@ class GameMasterLLM:
         self.user = user
         self.provider = provider
         self.api_key = self._get_decrypted_key(provider)
+        
+        # Global fixes for certain providers
+        litellm.drop_params = True
+        # Prevents litellm from passing 'usage' to OpenAI-compatible endpoints that don't support it
+        litellm.add_usage = False 
 
     def _get_decrypted_key(self, provider: str) -> str:
         if not self.user.encrypted_api_keys or provider not in self.user.encrypted_api_keys:
@@ -36,11 +41,21 @@ class GameMasterLLM:
             {"role": "user", "content": user_prompt}
         ]
         
-        response = litellm.completion(
-            model=model,
-            messages=messages,
-            api_key=self.api_key
-        )
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "api_key": self.api_key
+        }
+        
+        # Auto-detect OpenRouter keys or provider
+        if self.api_key.startswith("sk-or-v1") or self.provider == "openrouter":
+            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+            # Some models on OpenRouter prefer not having the openrouter/ prefix 
+            # when using it as an OpenAI-compatible endpoint.
+            if model.startswith("openrouter/"):
+                kwargs["model"] = model.replace("openrouter/", "")
+        
+        response = litellm.completion(**kwargs)
         
         result = response.choices[0].message.content or ""
         
@@ -68,12 +83,20 @@ class GameMasterLLM:
         
         # litellm will translate the Pydantic model into a JSON schema 
         # for providers that support structured outputs (e.g. OpenAI).
-        response = litellm.completion(
-            model=model,
-            messages=messages,
-            api_key=self.api_key,
-            response_format=response_model
-        )
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "api_key": self.api_key,
+            "response_format": response_model
+        }
+
+        # Auto-detect OpenRouter keys or provider
+        if self.api_key.startswith("sk-or-v1") or self.provider == "openrouter":
+            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+            if model.startswith("openrouter/"):
+                kwargs["model"] = model.replace("openrouter/", "")
+
+        response = litellm.completion(**kwargs)
         
         content = response.choices[0].message.content
         

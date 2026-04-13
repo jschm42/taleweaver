@@ -45,6 +45,40 @@ const goToCreate = () => {
   router.push({ name: 'character-create' })
 }
 
+const importCharacter = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (!target.files || target.files.length === 0) return
+  
+  const file = target.files[0]
+  try {
+    const text = await file.text()
+    const payload = JSON.parse(text)
+    
+    // Validate it's likely a character
+    if (!payload.name) {
+      alert("Invalid character file.")
+      return
+    }
+    
+    const res = await fetch('http://localhost:8000/api/characters/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    
+    if (res.ok) {
+      await fetchCharacters()
+      alert("Character imported successfully!")
+    } else {
+      alert("Failed to import character.")
+    }
+  } catch (err) {
+    alert("Error reading character file.")
+  } finally {
+    target.value = ''
+  }
+}
+
 const goToEdit = (id: string) => {
   router.push({ name: 'character-edit', params: { id } })
 }
@@ -83,6 +117,22 @@ onMounted(() => {
         </svg>
         New Character
       </button>
+      <div class="relative">
+        <button 
+          @click="$refs.importInput.click()"
+          class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-all flex items-center gap-2"
+        >
+          <i class="ra ra-save text-lg"></i>
+          Import Blueprint
+        </button>
+        <input 
+          type="file" 
+          ref="importInput" 
+          class="hidden" 
+          accept=".json"
+          @change="importCharacter"
+        />
+      </div>
     </header>
 
     <main class="w-full max-w-6xl flex-grow px-4">

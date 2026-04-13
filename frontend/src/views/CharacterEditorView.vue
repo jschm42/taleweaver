@@ -110,6 +110,28 @@ const saveCharacter = async () => {
   }
 }
 
+const exportCharacter = () => {
+  if (!isEditMode.value || !charId.value) return
+  
+  // Construct a clean export object
+  const exportData = {
+    name: name.value,
+    profile_image: profileImageUrl.value,
+    stats: stats.value,
+    inventory: [], // Starting blueprints have empty inventory
+    equipment: {}, 
+    status_effects: []
+  }
+  
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${name.value.replace(/\s+/g, '_')}_blueprint.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 onMounted(() => {
   if (isEditMode.value) {
     loadCharacter()
@@ -185,7 +207,15 @@ onMounted(() => {
             {{ errorMsg }}
           </div>
 
-          <div class="mt-6 flex justify-end">
+          <div class="mt-6 flex flex-col sm:flex-row justify-end gap-3">
+            <button 
+              v-if="isEditMode"
+              @click="exportCharacter"
+              class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2"
+            >
+              <i class="ra ra-save text-lg"></i>
+              Export Blueprint
+            </button>
             <button 
               @click="saveCharacter"
               :disabled="isSubmitting || !name"

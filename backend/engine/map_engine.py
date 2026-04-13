@@ -51,6 +51,7 @@ class MapEngine:
         from_scene: str,
         to_scene: str,
         exit_label: str = "",
+        is_locked: bool = False,
     ) -> None:
         """
         Add a directed edge (exit) between two scenes, deduplicating by
@@ -61,16 +62,29 @@ class MapEngine:
             from_scene:  Source scene_id.
             to_scene:    Destination scene_id.
             exit_label:  Optional direction / action label (e.g. "north", "open door").
+            is_locked:   Whether the path is currently blocked.
         """
         edges: list = list(world_map.edges or [])
 
-        already_exists = any(
-            e["from"] == from_scene and e["to"] == to_scene
-            for e in edges
-        )
-        if not already_exists:
-            edges.append({"from": from_scene, "to": to_scene, "label": exit_label})
-            world_map.edges = edges
+        # Find existing edge to update or add new
+        existing_idx = -1
+        for idx, e in enumerate(edges):
+            if e["from"] == from_scene and e["to"] == to_scene:
+                existing_idx = idx
+                break
+
+        if existing_idx != -1:
+            edges[existing_idx]["is_locked"] = is_locked
+            if exit_label: edges[existing_idx]["label"] = exit_label
+        else:
+            edges.append({
+                "from": from_scene, 
+                "to": to_scene, 
+                "label": exit_label,
+                "is_locked": is_locked
+            })
+            
+        world_map.edges = edges
 
     @staticmethod
     def to_mermaid(world_map, direction: str = "LR") -> str:
@@ -92,28 +106,56 @@ class MapEngine:
 
         lines: list[str] = [f"flowchart {direction}"]
 
-        # Emit node definitions — sanitise labels for Mermaid compatibility.
-        for scene_id, meta in nodes.items():
+        # Emit node definitions.
+        # Collect all unique scene IDs from both the visited nodes and the discovered edges.
+        all_scene_ids = set(nodes.keys())
+        for edge in edges:
+            all_scene_ids.add(edge["from"])
+            all_scene_ids.add(edge["to"])
+
+        for scene_id in all_scene_ids:
             safe_id = _safe_id(scene_id)
-            label = meta.get("label", scene_id).replace('"', "'")
-            if scene_id == current:
-                # Highlight the current location with a distinctive shape.
-                lines.append(f'  {safe_id}["{label} ★"]:::current')
+            is_visited = scene_id in nodes
+            meta = nodes.get(scene_id, {})
+            
+            if is_visited:
+                label = meta.get("label", scene_id).replace('"', "'")
+                if scene_id == current:
+                    lines.append(f'  {safe_id}["{label} ★"]:::current')
+                else:
+                    lines.append(f'  {safe_id}["{label}"]')
             else:
-                lines.append(f'  {safe_id}["{label}"]')
+                # Discovered but not yet visited (Fog of War)
+                lines.append(f'  {safe_id}["?"]:::unvisited')
 
         # Emit edges.
-        for edge in edges:
+        locked_indices = []
+        for idx, edge in enumerate(edges):
             src = _safe_id(edge["from"])
             dst = _safe_id(edge["to"])
+            is_locked = edge.get("is_locked", False)
+            
             lbl = edge.get("label", "").replace('"', "'")
-            if lbl:
-                lines.append(f'  {src} -->|"{lbl}"| {dst}')
+            if is_locked:
+                lbl = f"🔒 {lbl}".strip()
+                locked_indices.append(idx)
+                # Dotted line for locked passages
+                connection = "-.->"
             else:
-                lines.append(f"  {src} --> {dst}")
+                connection = "-->"
+
+            if lbl:
+                lines.append(f'  {src} {connection}|"{lbl}"| {dst}')
+            else:
+                lines.append(f"  {src} {connection} {dst}")
 
         # Mermaid classDef for the current-location highlight.
         lines.append("  classDef current fill:#10b981,stroke:#059669,color:#fff,font-weight:bold")
+        lines.append("  classDef unvisited fill:#1e293b,stroke:#475569,color:#94a3b8,stroke-dasharray: 2 2")
+        
+        # Style locked links (dotted red)
+        for idx in locked_indices:
+            lines.append(f"  linkStyle {idx} stroke:#ef4444,stroke-width:2px,stroke-dasharray: 5 5")
 
         return "\n".join(lines)
 

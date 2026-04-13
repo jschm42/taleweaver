@@ -2,7 +2,7 @@ import logging
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from pydantic import BaseModel
 
 from backend.core.database import get_db
@@ -11,9 +11,13 @@ from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
 from backend.models.character import Character
 from backend.models.game_state import GameState
-from backend.schemas.adventure import AdventureUpdate
+from backend.models.chat import ChatMessage
+from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
+from backend.models.world_map import WorldMap
+from backend.schemas.adventure import AdventureUpdate, AdventureDebugResponse
 from backend.schemas.avatar import AvatarUpdate
 from backend.schemas.game_state import GameStateUpdate
+from backend.engine.world_generator import WorldGenerator
 
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
 logger = logging.getLogger(__name__)
@@ -30,8 +34,7 @@ class CreateAdventurePayload(BaseModel):
     image_url: Optional[str] = None
     context: Optional[str] = None
     strict_rules: bool = True
-    heartbeat_enabled: bool = False
-    heartbeat_interval: int = 60
+    time_per_turn: int = 5
     game_over_rules: Optional[Dict[str, Any]] = None
 
 
@@ -40,8 +43,7 @@ class AdventureResponse(BaseModel):
     id: str
     title: str
     strict_rules: bool
-    heartbeat_enabled: bool
-    heartbeat_interval: int
+    time_per_turn: int
     game_over_rules: Optional[Dict[str, Any]]
     context: Optional[str] = None
 
@@ -88,8 +90,7 @@ async def create_adventure(
         image_url=payload.image_url,
         context=payload.context,
         strict_rules=payload.strict_rules,
-        heartbeat_enabled=payload.heartbeat_enabled,
-        heartbeat_interval=payload.heartbeat_interval,
+        time_per_turn=payload.time_per_turn,
         game_over_rules=payload.game_over_rules,
     )
     db.add(adv)
@@ -110,11 +111,31 @@ async def create_adventure(
     db.add(avatar)
     await db.flush()
 
+    # --- Generate World ---
+    llm_settings = user.llm_settings or {}
+    complex_model = llm_settings.get("complex_model", "gpt-4o")
+    
+    await WorldGenerator.generate_world(
+        db=db,
+        user=user,
+        adventure_id=adv.id,
+        title=adv.title,
+        context=adv.context or "A standard fantasy world.",
+        model=complex_model
+    )
+    
+    # Set initial scene to the first generated scene for this adventure
+    scene_res = await db.execute(
+        select(WorldScene).where(WorldScene.adventure_id == adv.id).limit(1)
+    )
+    first_scene = scene_res.scalars().first()
+    start_scene_id = first_scene.id if first_scene else "START"
+
     game_state = GameState(
         user_id=user.id,
         adventure_id=adv.id,
         avatar_id=avatar.id,
-        scene_id="START",
+        scene_id=start_scene_id,
         in_game_time=0,
     )
     db.add(game_state)
@@ -276,3 +297,223 @@ async def resume_game(adventure_id: str, db: AsyncSession = Depends(get_db)) -> 
     state.is_paused = False
     await db.commit()
     return {"status": "resumed", "game_id": state.id}
+
+@router.get("/{adventure_id}/debug", response_model=AdventureDebugResponse)
+async def get_adventure_debug(adventure_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Returns full world state and configuration for a specific adventure.
+    """
+    adv_res = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
+    adventure = adv_res.scalars().first()
+    if not adventure:
+        raise HTTPException(status_code=404, detail="Adventure not found")
+        
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+    scenes = scene_res.scalars().all()
+    
+    exit_res = await db.execute(select(WorldExit).where(WorldExit.adventure_id == adventure_id))
+    exits = exit_res.scalars().all()
+    
+    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+    entities = entity_res.scalars().all()
+    
+    # Return serializable dicts
+    return AdventureDebugResponse(
+        adventure={c.name: getattr(adventure, c.name) for c in adventure.__table__.columns},
+        scenes=[{c.name: getattr(s, c.name) for c in s.__table__.columns} for s in scenes],
+        npcs=[{c.name: getattr(ent, c.name) for c in ent.__table__.columns} for ent in entities if ent.entity_type == "NPC"],
+        objects=[{c.name: getattr(ent, c.name) for c in ent.__table__.columns} for ent in entities if ent.entity_type == "OBJECT"],
+        exits=[{c.name: getattr(ex, c.name) for c in ex.__table__.columns} for ex in exits]
+    )
+
+@router.post("/{adventure_id}/reset")
+async def reset_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Resets the adventure's world state to its original pre-generated blueprint.
+    """
+    adv_res = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
+    adventure = adv_res.scalars().first()
+    if not adventure or not adventure.original_manifest:
+        raise HTTPException(status_code=400, detail="Adventure not found or has no original manifest to reset to.")
+    
+    # Clear current world state
+    await db.execute(delete(WorldScene).where(WorldScene.adventure_id == adventure_id))
+    await db.execute(delete(WorldExit).where(WorldExit.adventure_id == adventure_id))
+    await db.execute(delete(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+    await db.execute(delete(WorldMap).where(WorldMap.adventure_id == adventure_id))
+    
+    # Re-apply manifest
+    await WorldGenerator.apply_manifest(db, adventure_id, adventure.original_manifest)
+    
+    await db.commit()
+    return {"status": "reset", "message": "World restored to initial state."}
+
+@router.get("/{adventure_id}/export/manifest")
+async def export_adventure_manifest(adventure_id: str, db: AsyncSession = Depends(get_db)):
+    """Exports only the original world blueprint."""
+    adv_res = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
+    adventure = adv_res.scalars().first()
+    if not adventure or not adventure.original_manifest:
+        raise HTTPException(status_code=404, detail="Original manifest not found.")
+    return adventure.original_manifest
+
+@router.get("/{adventure_id}/export/session")
+async def export_adventure_session(adventure_id: str, db: AsyncSession = Depends(get_db)):
+    """Exports the COMPLETE current game state as a bundle."""
+    adv_res = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
+    adventure = adv_res.scalars().first()
+    if not adventure:
+        raise HTTPException(status_code=404, detail="Adventure not found")
+        
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+    exit_res = await db.execute(select(WorldExit).where(WorldExit.adventure_id == adventure_id))
+    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+    
+    # Game State & Avatar
+    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state = state_res.scalars().first()
+    avatar = None
+    chat_logs = []
+    
+    if state:
+        av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+        avatar = av_res.scalars().first()
+        
+        chat_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == state.id).order_by(ChatMessage.created_at))
+        chat_logs = chat_res.scalars().all()
+
+    return {
+        "version": "1.0",
+        "type": "SESSION_BUNDLE",
+        "adventure": {c.name: getattr(adventure, c.name) for c in adventure.__table__.columns},
+        "scenes": [{c.name: getattr(s, c.name) for c in s.__table__.columns} for s in scene_res.scalars().all()],
+        "exits": [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in exit_res.scalars().all()],
+        "entities": [{c.name: getattr(ent, c.name) for c in ent.__table__.columns} for ent in entity_res.scalars().all()],
+        "game_state": {c.name: getattr(state, c.name) for c in state.__table__.columns} if state else None,
+        "avatar": {c.name: getattr(avatar, c.name) for c in avatar.__table__.columns} if avatar else None,
+        "chat_history": [{c.name: getattr(msg, c.name) for c in msg.__table__.columns} for msg in chat_logs]
+    }
+
+@router.post("/import")
+async def import_adventure(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
+    """
+    Imports an adventure from JSON.
+    Supports either a Raw Manifest or a Full Session Bundle.
+    """
+    res = await db.execute(select(User).limit(1))
+    user = res.scalars().first()
+    if not user:
+        user = User(username="default_player")
+        db.add(user)
+        await db.flush()
+
+    # Determine if this is a Session Bundle or just a Manifest
+    is_session = payload.get("type") == "SESSION_BUNDLE"
+    
+    if is_session:
+        # --- Handle Session Bundle ---
+        data = payload
+        old_adv = data["adventure"]
+        
+        # 1. Recreate Adventure
+        new_adv = Adventure(
+            title=f"{old_adv['title']} (Imported)",
+            context=old_adv.get("context"),
+            image_url=old_adv.get("image_url"),
+            strict_rules=old_adv.get("strict_rules", True),
+            time_per_turn=old_adv.get("time_per_turn", 10),
+            game_over_rules=old_adv.get("game_over_rules"),
+            original_manifest=old_adv.get("original_manifest")
+        )
+        db.add(new_adv)
+        await db.flush() # Get new_adv.id
+        
+        # 2. Recreate Scenes (ID Slug preservation is fine as they are scoped by adventure_id)
+        for s in data["scenes"]:
+            db.add(WorldScene(
+                id=s["id"],
+                adventure_id=new_adv.id,
+                label=s["label"],
+                description=s["description"]
+            ))
+            
+        # 3. Recreate Entities
+        for ent in data["entities"]:
+            db.add(WorldEntity(
+                id=ent["id"],
+                adventure_id=new_adv.id,
+                entity_type=ent["entity_type"],
+                name=ent["name"],
+                description=ent["description"],
+                current_scene_id=ent["current_scene_id"],
+                spatial_position=ent.get("spatial_position"),
+                inventory=ent.get("inventory", []),
+                stats=ent.get("stats", {})
+            ))
+            
+        # 4. Recreate Exits
+        for ex in data["exits"]:
+            db.add(WorldExit(
+                adventure_id=new_adv.id,
+                from_scene_id=ex["from_scene_id"],
+                to_scene_id=ex["to_scene_id"],
+                label=ex["label"],
+                is_locked=ex.get("is_locked", False),
+                lock_description=ex.get("lock_description")
+            ))
+            
+        # 5. Recreate Avatar & GameState
+        old_state = data.get("game_state")
+        old_avatar = data.get("avatar")
+        
+        if old_state and old_avatar:
+            new_avatar = Avatar(
+                user_id=user.id,
+                name=old_avatar["name"],
+                hp=old_avatar["hp"],
+                stamina=old_avatar["stamina"],
+                mana=old_avatar["mana"],
+                stats=old_avatar["stats"],
+                inventory=old_avatar["inventory"],
+                equipment=old_avatar["equipment"],
+                status_effects=old_avatar["status_effects"]
+            )
+            db.add(new_avatar)
+            await db.flush()
+            
+            new_state = GameState(
+                user_id=user.id,
+                adventure_id=new_adv.id,
+                avatar_id=new_avatar.id,
+                scene_id=old_state["scene_id"],
+                in_game_time=old_state.get("in_game_time", 0)
+            )
+            db.add(new_state)
+            await db.flush()
+            
+            # 6. Recreate Chat History
+            for msg in data.get("chat_history", []):
+                db.add(ChatMessage(
+                    game_state_id=new_state.id,
+                    role=msg["role"],
+                    content=msg["content"]
+                ))
+        
+        await db.commit()
+        return {"status": "imported", "adventure_id": new_adv.id, "type": "SESSION"}
+
+    else:
+        # --- Handle Pure Manifest Import ---
+        # Assume payload IS the manifest
+        # We need a title and context to create the shell first
+        new_adv = Adventure(
+            title="Imported Blueprint",
+            context="Restored from blueprint.",
+            original_manifest=payload
+        )
+        db.add(new_adv)
+        await db.flush()
+        
+        await WorldGenerator.apply_manifest(db, new_adv.id, payload)
+        await db.commit()
+        return {"status": "imported", "adventure_id": new_adv.id, "type": "MANIFEST"}

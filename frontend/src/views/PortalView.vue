@@ -1,3 +1,4 @@
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import EditAdventureModal from '@/components/EditAdventureModal.vue'
@@ -258,33 +259,40 @@ onMounted(() => {
             </div>
             
             <div class="p-6 flex-grow flex flex-col">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-mono text-emerald-400">SESSION: {{ adv.game_id.substring(0,8) }}</span>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] px-1.5 py-0.5 bg-slate-800 rounded uppercase text-slate-500 tracking-tighter">{{ adv.is_paused ? 'PAUSED' : 'ACTIVE' }}</span>
-                  <button 
-                    @click="openEditModal(adv.adventure_id)"
-                    class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors"
-                  >
-                    <i class="ra ra-gear text-sm"></i>
-                  </button>
-                </div>
+              <div class="flex items-center justify-between mb-4">
+                <span class="text-xs font-mono text-emerald-500/80 bg-emerald-500/5 px-2 py-1 rounded">SESSION: {{ adv.game_id.substring(0,8) }}</span>
+                <span class="text-[10px] px-2 py-1 bg-slate-800 rounded uppercase text-slate-500 tracking-wider font-bold">{{ adv.is_paused ? 'PAUSED' : 'ACTIVE' }}</span>
               </div>
-              <h3 class="text-xl font-bold text-white mb-4 line-clamp-2">{{ adv.adventure_title }}</h3>
               
-              <div class="mt-auto space-y-3">
-                <div class="flex justify-between text-sm">
-                  <span class="text-slate-400">Current Scene</span>
-                  <span class="text-slate-200 font-medium truncate max-w-[120px]">{{ adv.scene_id }}</span>
+              <h3 class="text-xl font-bold text-white mb-2 line-clamp-1 hover:text-emerald-400 transition-colors cursor-pointer" @click="playAdventure(adv.game_id)">
+                {{ adv.adventure_title }}
+              </h3>
+              
+              <div class="flex-grow space-y-3 mt-2">
+                <div class="flex justify-between text-[11px] pb-2 border-b border-white/5">
+                  <span class="text-slate-500 uppercase tracking-widest font-semibold">Location</span>
+                  <span class="text-slate-300 font-mono">{{ adv.scene_id }}</span>
                 </div>
               </div>
 
-              <button 
-                @click="playAdventure(adv.game_id)" 
-                class="mt-6 w-full py-3 bg-white/5 hover:bg-emerald-500/20 text-white font-medium rounded-xl border border-white/10 hover:border-emerald-500/50 transition-all duration-300"
-              >
-                Enter Realm
-              </button>
+              <!-- Action Footer -->
+              <div class="mt-6 flex gap-2">
+                <button 
+                  @click="playAdventure(adv.game_id)" 
+                  class="flex-grow py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20 transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  <i class="ra ra-gear-hammer text-lg"></i>
+                  Play
+                </button>
+                <button 
+                  @click="openEditModal(adv.adventure_id)" 
+                  class="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all duration-300 flex items-center justify-center gap-2"
+                  title="Configure Adventure"
+                >
+                  <i class="ra ra-gear text-lg"></i>
+                  <span class="hidden lg:inline text-xs font-bold uppercase tracking-tight">Edit</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
