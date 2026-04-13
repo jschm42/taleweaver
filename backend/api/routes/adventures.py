@@ -890,13 +890,34 @@ async def post_chat_message(
                 # If the LLM generates a brand NEW item (not an existing world entity), 
                 # we should still consider syncing it if it has an ID
                 for item in game_event.new_inventory_items:
-                    if item.id:
-                        ent_sync_res = await db.execute(select(WorldEntity).where(WorldEntity.id == item.id, WorldEntity.adventure_id == state.adventure_id))
-                        ent_sync = ent_sync_res.scalars().first()
-                        if ent_sync:
-                             ent_sync.is_in_inventory = True
-                             ent_sync.is_hidden = False
-                             response_messages.append({"role": "system", "content": f"[System] New item '{item.name}' added to inventory."})
+                    ent_sync_res = await db.execute(select(WorldEntity).where(WorldEntity.id == item.id, WorldEntity.adventure_id == state.adventure_id))
+                    ent_sync = ent_sync_res.scalars().first()
+                    
+                    if ent_sync:
+                         ent_sync.is_in_inventory = True
+                         ent_sync.is_hidden = False
+                         
+                         # BACKFILL image_url into the avatar's inventory if missing
+                         for inv_item in avatar.inventory:
+                             if inv_item.get('id') == item.id and not inv_item.get('image_url'):
+                                 inv_item['image_url'] = ent_sync.image_url
+                         
+                         response_messages.append({"role": "system", "content": f"[System] Item '{item.name}' added to inventory."})
+                    else:
+                        # CREATE brand new entity for runtime items
+                        new_ent = WorldEntity(
+                            id=item.id or str(uuid.uuid4()),
+                            adventure_id=state.adventure_id,
+                            entity_type="OBJECT",
+                            name=item.name,
+                            description=item.description,
+                            current_scene_id="INVENTORY", # Mark as in inventory
+                            is_in_inventory=True,
+                            item_type=item.item_type or "PICKABLE",
+                            image_url=item.image_url
+                        )
+                        db.add(new_ent)
+                        response_messages.append({"role": "system", "content": f"[System] New discovery: '{item.name}' added to inventory."})
 
             if game_event.updated_exits:
                 for upd in game_event.updated_exits:
@@ -924,17 +945,27 @@ async def post_chat_message(
         
         # --- Media Generation ---
         if adventure.strict_rules and game_event and game_event.image_prompt and payload.auto_visualize:
-            image_url = await MediaEngine.generate_scene_image(
-                game_event.image_prompt, 
-                adventure.id,  # ADDED adventure_id
-                {"t2i_settings": user.t2i_settings}, 
-                user.encrypted_api_keys
-            )
+            try:
+                image_url = await MediaEngine.generate_scene_image(
+                    game_event.image_prompt, 
+                    adventure.id,  
+                    {"t2i_settings": user.t2i_settings}, 
+                    user.encrypted_api_keys
+                )
+            except Exception as e:
+                logger.error(f"On-demand scene generation failed: {e}")
+                # We do NOT fail the turn, just return no image
+                image_url = None
 
         await db.commit()
         
-        # Fetch current entities for the response
-        curr_ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == state.adventure_id, WorldEntity.current_scene_id == state.scene_id))
+        # Fetch current entities for the response (only show what is logically 'there')
+        curr_ent_res = await db.execute(select(WorldEntity).where(
+            WorldEntity.adventure_id == state.adventure_id, 
+            WorldEntity.current_scene_id == state.scene_id,
+            WorldEntity.is_in_inventory == False,
+            WorldEntity.is_hidden == False
+        ))
         curr_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in curr_ent_res.scalars().all()]
 
         return ChatResponse(

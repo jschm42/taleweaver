@@ -16,6 +16,7 @@ class InventoryItem(BaseModel):
     description: Optional[str] = None
     item_type: Optional[str] = None
     wearable_slots: Optional[List[str]] = None
+    image_url: Optional[str] = None
     stat_modifier_strength: Optional[int] = None
     stat_modifier_endurance: Optional[int] = None
     stat_modifier_agility: Optional[int] = None

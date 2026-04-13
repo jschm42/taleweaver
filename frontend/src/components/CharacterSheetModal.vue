@@ -151,7 +151,10 @@ const getTypeColor = (type?: string) => {
                     >
                       <span class="text-[9px] text-slate-600 uppercase font-bold tracking-widest mb-2">{{ slot }}</span>
                       <template v-if="item && typeof item === 'object'">
-                        <i :class="['text-xl mb-2', getItemIcon((item as any).item_type), getTypeColor((item as any).item_type)]"></i>
+                        <div v-if="(item as any).image_url" class="relative w-12 h-12 mb-2 rounded-lg overflow-hidden border border-slate-700">
+                          <img :src="'http://localhost:8000' + (item as any).image_url" class="w-full h-full object-cover" />
+                        </div>
+                        <i v-else :class="['text-xl mb-2', getItemIcon((item as any).item_type), getTypeColor((item as any).item_type)]"></i>
                         <span class="text-xs font-bold text-slate-200 line-clamp-1 truncate w-full px-1">{{ (item as any).name }}</span>
                       </template>
                       <template v-else>
@@ -174,7 +177,10 @@ const getTypeColor = (type?: string) => {
                       :key="idx"
                       class="p-3 bg-slate-900 border border-slate-800 rounded-xl group cursor-pointer transition-all hover:border-slate-500 hover:scale-[1.02] flex flex-col items-center"
                     >
-                      <i :class="['text-2xl mb-3', getItemIcon(item?.item_type), getTypeColor(item?.item_type)]"></i>
+                      <div v-if="item?.image_url" class="relative w-16 h-16 mb-3 rounded-lg overflow-hidden border border-slate-700 shadow-lg">
+                        <img :src="'http://localhost:8000' + item.image_url" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                      </div>
+                      <i v-else :class="['text-2xl mb-3', getItemIcon(item?.item_type), getTypeColor(item?.item_type)]"></i>
                       <span class="text-[11px] font-bold text-slate-300 text-center leading-tight line-clamp-2 truncate w-full">{{ item?.name || 'Unknown' }}</span>
                       <span v-if="item?.item_type" class="text-[8px] text-slate-600 uppercase mt-2 font-mono tracking-widest">{{ item.item_type }}</span>
                     </div>
