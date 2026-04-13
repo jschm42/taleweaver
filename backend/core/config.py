@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "TaleWeaver"
     DATABASE_URL: str = "sqlite+aiosqlite:///./taleweaver.db"
     
+    # Storage configuration
+    DATA_DIR: str = "data"
+    
     # Use existing key from environment or generate a temporary one
     ENCRYPTION_KEY: str = Field(default_factory=generate_temp_key)
     

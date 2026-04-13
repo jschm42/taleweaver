@@ -9,6 +9,7 @@ import requests
 import litellm
 from typing import Optional
 from backend.core.security import encryption_util
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class MediaEngine:
         model: str, 
         api_key: str, 
         provider: str = "openai",
-        target_dir: str = "uploads",
+        target_dir: Optional[str] = None,
         filename: Optional[str] = None
     ) -> Optional[str]:
         """
@@ -28,6 +29,10 @@ class MediaEngine:
         if not prompt or not model or not api_key:
             return None
             
+        # Default target dir if not provided
+        if target_dir is None:
+            target_dir = os.path.join(settings.DATA_DIR, "adventures")
+
         logger.info(f"Generating image with model {model} (provider: {provider}). Prompt: {prompt}")
         
         try:
@@ -65,7 +70,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_b64_image(b64_data: str, target_dir: str = "uploads", filename: Optional[str] = None) -> Optional[str]:
+    async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None) -> Optional[str]:
         """Decodes and saves a base64 image string."""
         import base64
         try:
@@ -79,14 +84,15 @@ class MediaEngine:
             with open(filepath, "wb") as f:
                 f.write(base64.b64decode(b64_data))
             
-            rel_path = filepath.split("uploads")[-1].replace("\\", "/")
-            return f"/uploads{rel_path}"
+            # Convert to relative path for URL
+            rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
+            return f"/data/{rel_path}"
         except Exception as e:
             logger.exception("Error saving b64 image")
             return None
 
     @staticmethod
-    async def _save_remote_image(url: str, target_dir: str = "uploads", filename: Optional[str] = None) -> Optional[str]:
+    async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None) -> Optional[str]:
         """Downloads a remote image and persists it in the specified directory."""
         try:
             response = requests.get(url, timeout=30)
@@ -102,8 +108,8 @@ class MediaEngine:
                     f.write(response.content)
                 
                 # Convert absolute path to relative for frontend
-                rel_path = filepath.split("uploads")[-1].replace("\\", "/") # Handles windows/linux
-                return f"/uploads{rel_path}"
+                rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
+                return f"/data/{rel_path}"
             else:
                 logger.error(f"Failed to download image from {url}, status: {response.status_code}")
                 return None
@@ -125,7 +131,7 @@ class MediaEngine:
             
         api_key = encryption_util.decrypt_key(api_keys[provider])
         
-        target_dir = os.path.join("uploads", "adventures", adventure_id, "scenes")
+        target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
         filename = f"{int(uuid.uuid4())}.png"
         
         return await MediaEngine.generate_image(prompt, model, api_key, provider, target_dir, filename)
@@ -144,7 +150,7 @@ class MediaEngine:
             
         api_key = encryption_util.decrypt_key(api_keys[provider])
         
-        target_dir = os.path.join("uploads", "adventures", adventure_id, "entities")
+        target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
         filename = f"{entity_id}.png"
         
         return await MediaEngine.generate_image(prompt, model, api_key, provider, target_dir, filename)

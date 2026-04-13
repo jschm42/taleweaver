@@ -15,7 +15,7 @@ import backend.models.game_state
 import backend.models.chat
 import backend.models.world_map
 
-from backend.api.routes import config_api, adventures, avatars, uploads, characters, map_api
+from backend.api.routes import config_api, adventures, avatars, data, characters, map_api
 
 
 @asynccontextmanager
@@ -52,11 +52,19 @@ app.include_router(config_api.router, prefix="/api")
 app.include_router(adventures.router, prefix="/api")
 app.include_router(avatars.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
-app.include_router(uploads.router, prefix="/api")
+app.include_router(data.router, prefix="/api")
 app.include_router(map_api.router, prefix="/api")
 
-os.makedirs("uploads", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+from backend.core.config import settings
+
+# Ensure storage directories exist
+os.makedirs(os.path.join(settings.DATA_DIR, "characters"), exist_ok=True)
+os.makedirs(os.path.join(settings.DATA_DIR, "adventures"), exist_ok=True)
+
+app.mount("/data", StaticFiles(directory=settings.DATA_DIR), name="data")
+# Keep /uploads mount temporarily for backward compatibility if needed, 
+# but the plan said rename folder and I'll update the URLs.
+# app.mount("/uploads", StaticFiles(directory=settings.DATA_DIR), name="uploads")
 
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict:

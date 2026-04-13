@@ -209,3 +209,4 @@ __marimo__/
 # Taleweaver
 node_modules/
 *.db
+data/

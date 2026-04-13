@@ -53,7 +53,7 @@ const handleImageUpload = async (event: Event) => {
 
   try {
     errorMsg.value = ''
-    const res = await fetch(`http://localhost:8000/api/uploads/image?type=character`, {
+    const res = await fetch(`http://localhost:8000/api/data/image?type=character`, {
       method: 'POST',
       body: formData
     })
