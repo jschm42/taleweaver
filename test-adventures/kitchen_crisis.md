@@ -1,27 +1,47 @@
-# Adventure Title: The Great Kitchen Crisis
+# Adventure: Kitchen Crisis - The Sitcom Edition
 
 ## Story Idea
-A high-stakes domestic simulation set in a modern, slightly chaotic family home. The player must navigate the complexities of suburban life, maintain family harmony, and successfully prepare a meal.
-
-## Scenes (Locations)
-1. **The Family Kitchen (Central Hub):** A warm, bustling room filled with the smell of coffee and the hum of appliances. It features a cluttered island, a mountain of mail on the counter, and a magnetic calendar on the wall.
-2. **The Living Room (Adjacent):** Connected by a wide archway. It is a sea of scattered toys, soft carpets, and a large sofa where the remote control is currently missing.
-3. **The Bathroom (Hallway):** A small, tiled sanctuary down the hallway. It has a slightly leaky faucet and a cabinet filled with domestic "potions" (band-aids and aspirin).
-
-## Key Objects (Interactables)
-- **The Stove:** A high-tech gas range. The primary tool for the "Grand Meal" quest. It requires careful monitoring to avoid burning the food.
-- **The Refrigerator:** A cold archive of family history. Contains various ingredients like "Mystery Leftovers," "Fresh Pasta," and "The Forbidden Chocolate."
-- **The Wall Telephone:** An old-school landline that rings at the most inconvenient moments, delivering distractions or "side-quests" from Grandma or the Boss.
-
-## Characters (NPCs)
-- **Dad (Arthur):** Kind-hearted but easily overwhelmed. He is currently trying to assemble a flat-pack chair at the kitchen table and will ask for help or tools.
-- **Mom (Beatrice):** Sharp and organized. She is attempting to work from home on her laptop in the Kitchen corner but acts as the ultimate judge of the domestic peace.
-- **The Kids (Timmy & Lily):** A dynamic duo of chaos. They periodically rush into the Kitchen from the Living Room to report "emergencies" (broken toys, stolen snacks) before vanishing again.
-
-## Main Objectives & Conflicts
-1. **The Culinary Challenge:** Use the Stove and Refrigerator to cook a three-course dinner before the "Hunger Meter" reaches critical levels.
-2. **The Peacekeeper:** Resolve at least three sibling conflicts between Timmy and Lily using diplomacy or distraction techniques.
-3. **The Distraction Defense:** Manage the Telephone calls and Dad's assembly struggle without letting the dinner burn.
+"The Miller Family Meltdown." It's 18:00 on a Tuesday. Grandma is coming for dinner in one hour, and the household is a disaster zone. A laugh track punctuates every failure. You play as the "Last Sane Person" (or the biggest chaos agent) trying to get the legendary Casserole ready while managing a cast of eccentric family members and a very persistent neighbor.
 
 ## Tone
-"Commonplace Comedy" – Whimsical, slightly stressful, but ultimately heartwarming. Every domestic action should have the weight of an epic RPG choice.
+**90s Sitcom / Absurd Comedy:** Bright colors, high stakes over trivial things, and frequent "Oh you!" moments. Every action should feel like a scene transition. Use snappy English dialogue.
+
+## Scenes (Locations)
+1. **The Modern Kitchen [ID: MODERN_KITCHEN]:** The heart of the chaos. Cluttered, bright, and smells like impending burnt cheese.
+2. **The Living Room [ID: LIVING_ROOM]:** Dominated by a massive TV and a sofa that swallows small objects.
+3. **The Hallway [ID: HALLWAY]:** A narrow transition zone where the 'Wall of Honor' hangs.
+4. **The Master Bedroom [ID: MASTER_BEDROOM]:** A strictly forbidden zone containing the 'heavy-duty stuff'.
+5. **The Mystery Basement [ID: MYSTERY_BASEMENT, is_hidden: true]:** A dark abyss that requires a key.
+
+## Characters (NPCs)
+- **Dad Arthur [ID: DAD_ARTHUR]:** (NPC) Wearing a Hawaiian shirt and trying to "fix" the sink with a banana.
+- **Mom Beatrice [ID: MOM_BEATRICE]:** (NPC) Trying to close a billion-dollar deal while holding a laundry basket.
+- **Grumpy Grandpa Joe [ID: GRAMPS_JOE]:** (NPC) Complaining about the "lack of grit" in modern furniture.
+- **Neighbor Kevin [ID: NEIGHBOR_KEVIN]:** (NPC) Periodically bursts through the back door asking to "borrow" or "sample" things.
+
+## Objects & Item Types (English)
+
+### Consumables
+- **Forbidden Casserole [ID: CASSEROLE, item_type: CONSUMABLE]:** Mom's prize possession.
+- **Extra-Strength Espresso [ID: ESPRESSO, item_type: CONSUMABLE]:** Liquid energy.
+
+### Weapons & Tools
+- **The Golden Spatula [ID: GOLDEN_SPATULA, item_type: WEAPON]:** Good for flipping burgers or neighbor suppression.
+- **Leaky WD-40 [ID: WD40, item_type: TOOL]:** Used to fix the Squeaky Floor.
+
+### Wearables
+- **Dad's Lucky Power Tie [ID: POWER_TIE, item_type: WEARABLE, wearable_slots: ["Neck"]]:** Increases Charisma.
+- **Furry Rabbit Slippers [ID: RABBIT_SLIPPERS, item_type: WEARABLE, wearable_slots: ["Feet"]]:** Grants Stealth.
+
+### Keys & Readables
+- **The Basement Key [ID: BASEMENT_KEY, item_type: KEY, is_hidden: true]:** Hidden behind the 'Wedding Photo' in the Hallway.
+- **The Secret Diary [ID: SECRET_DIARY, item_type: READABLE]:** Contains deep family secrets.
+
+### Combinables
+- **Electronic Remote [ID: TV_REMOTE, item_type: COMBINABLE]:** Dead without batteries.
+- **AA Batteries [ID: AA_BATTERIES, item_type: COMBINABLE, is_hidden: true]:** Hidden in the Sofa.
+
+## Main Quest: The Remote Hack
+1. Search the **Sofa** to discover the **AA Batteries**.
+2. **COMBINE** the **Electronic Remote** with the **AA Batteries**.
+3. Use the **Remote** on the **TV** to distract Grandpa Joe.

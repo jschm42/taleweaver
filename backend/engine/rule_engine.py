@@ -10,11 +10,12 @@ class GameOverException(Exception):
 class InventoryItem(BaseModel):
     """
     A typed item acquired during gameplay.
-    Using a strict Pydantic model instead of raw dict ensures OpenAI structured
-    output accepts the schema (requires additionalProperties: false on all objects).
     """
+    id: Optional[str] = None # WorldEntity ID (if linked)
     name: str
     description: Optional[str] = None
+    item_type: Optional[str] = None
+    wearable_slots: Optional[List[str]] = None
     stat_modifier_strength: Optional[int] = None
     stat_modifier_endurance: Optional[int] = None
     stat_modifier_agility: Optional[int] = None
@@ -32,11 +33,12 @@ class ExitUpdate(BaseModel):
     is_locked: bool
 
 class WorldEntityUpdate(BaseModel):
-    """Used for changing an entity's name or description at runtime."""
+    """Used for changing an entity's name, description or visibility at runtime."""
     entity_id: str
     name: Optional[str] = None
     description: Optional[str] = None
     spatial_position: Optional[str] = None
+    is_hidden: Optional[bool] = None
 
 
 class GameEvent(BaseModel):
@@ -137,7 +139,9 @@ class RuleEngine:
         if event.new_inventory_items:
             # Reassign for SQLAlchemy state tracking; serialize Pydantic models to dicts
             new_inv = list(avatar.inventory)
-            new_inv.extend([item.model_dump(exclude_none=True) for item in event.new_inventory_items])
+            for item in event.new_inventory_items:
+                item_dict = item.model_dump(exclude_none=True)
+                new_inv.append(item_dict)
             avatar.inventory = new_inv
             
         return event.narrative_description

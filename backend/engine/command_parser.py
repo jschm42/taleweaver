@@ -15,10 +15,28 @@ class CommandParser:
             return CommandParser._handle_equip(avatar, args)
         elif command == "/drop":
             return CommandParser._handle_drop(avatar, args)
+        elif command == "/help":
+            return CommandParser._handle_help()
+        elif command == "/combine":
+            return "[TRIGGER_COMBINE]" # Special signal to let LLM handle it
         elif command in ["/sheet", "/inventory", "/stats"]:
             return f"Opening character sheet for {avatar.name}..."
             
-        return f"Unknown command: {command}"
+        return f"Unknown command: {command}. Type /help for a list of commands."
+
+    @staticmethod
+    def _handle_help() -> str:
+        return (
+            "**Available Commands:**\n"
+            "- `/help`: Show this list.\n"
+            "- `/map`: Toggle the world map.\n"
+            "- `/equip <item>`: Equip an item from your inventory.\n"
+            "- `/drop <item>`: Drop an item into the current room.\n"
+            "- `/combine <item1> <item2>`: Attempt to combine two objects.\n"
+            "- `/sheet`: Open your character sheet.\n"
+            "- `/debug <cmd>`: Engine debug commands.\n\n"
+            "*Alternatively, just type your actions naturally!*"
+        )
 
     @staticmethod
     def _handle_equip(avatar: Avatar, item_name: str) -> str:

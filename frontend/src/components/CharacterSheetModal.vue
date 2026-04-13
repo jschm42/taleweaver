@@ -29,6 +29,32 @@ function onKeydown(e: KeyboardEvent): void {
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
+const getItemIcon = (type?: string) => {
+  switch (type?.toUpperCase()) {
+    case 'CONSUMABLE': return 'ra-bottle-vapors'
+    case 'WEAPON': return 'ra-sword'
+    case 'TOOL': return 'ra-hammer'
+    case 'KEY': return 'ra-old-key'
+    case 'READABLE': return 'ra-book'
+    case 'WEARABLE': return 'ra-helmet'
+    case 'COMBINABLE': return 'ra-gears'
+    case 'PICKABLE': return 'ra-hand'
+    case 'STATIC': return 'ra-anchor'
+    default: return 'ra-quill-ink'
+  }
+}
+
+const getTypeColor = (type?: string) => {
+  switch (type?.toUpperCase()) {
+    case 'WEAPON': return 'text-red-400'
+    case 'CONSUMABLE': return 'text-emerald-400'
+    case 'KEY': return 'text-amber-400'
+    case 'READABLE': return 'text-cyan-400'
+    case 'WEARABLE': return 'text-blue-400'
+    default: return 'text-slate-400'
+  }
+}
 </script>
 
 <template>
@@ -60,84 +86,103 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
           <!-- Body -->
           <div class="flex-grow overflow-y-auto p-6" v-if="sheet">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="flex flex-col lg:flex-row gap-8">
               
-              <!-- Left Column: Core -->
-              <div class="space-y-6">
+              <!-- Left: Stats & Core -->
+              <div class="w-full lg:w-72 space-y-6 shrink-0">
                 <!-- Identity -->
-                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
-                  <h3 class="text-2xl font-bold tracking-tight text-white mb-4">{{ sheet.name || 'Unnamed' }}</h3>
+                <div class="bg-slate-950/40 rounded-2xl p-6 border border-slate-800/50 shadow-inner">
+                  <h3 class="text-2xl font-black tracking-tight text-white mb-6 uppercase">{{ sheet.name || 'Unnamed' }}</h3>
                   <StatBar label="Health" :value="sheet.hp" color="crimson" />
                   <StatBar label="Stamina" :value="sheet.stamina" color="emerald" />
                   <StatBar label="Mana" :value="sheet.mana" color="sapphire" />
                 </div>
                 
-                <!-- Status Effects -->
-                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
-                  <h4 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Status Effects</h4>
-                  <div v-if="statusEffects.length" class="flex flex-wrap gap-2">
-                    <span
-                      v-for="effect in statusEffects"
-                      :key="effect"
-                      class="px-2.5 py-1 rounded bg-red-950 border border-red-900 text-red-400 text-xs font-medium"
-                    >
-                      {{ effect }}
-                    </span>
-                  </div>
-                  <p v-else class="text-sm text-slate-500 italic">No active effects.</p>
-                </div>
-              </div>
-
-              <!-- Middle Column: Stats -->
-              <div class="md:col-span-1">
-                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50 h-full">
-                  <h4 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Attributes</h4>
+                <!-- Attributes -->
+                <div class="bg-slate-950/40 rounded-2xl p-6 border border-slate-800/50 shadow-inner">
+                  <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <i class="ra ra-double-team"></i>
+                    Attributes
+                  </h4>
                   <div v-if="sortedStats.length" class="space-y-3">
                     <div
                       v-for="[key, value] in sortedStats"
                       :key="key"
-                      class="flex items-center justify-between"
+                      class="flex items-center justify-between group"
                     >
-                      <span class="text-sm text-slate-400 capitalize">{{ key }}</span>
-                      <span class="text-sm font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">{{ value }}</span>
+                      <span class="text-xs text-slate-500 uppercase tracking-wider group-hover:text-slate-300 transition-colors">{{ key }}</span>
+                      <span class="text-sm font-black text-amber-500 font-mono">{{ value }}</span>
                     </div>
                   </div>
-                  <p v-else class="text-sm text-slate-500 italic">No attributes recorded.</p>
+                </div>
+
+                <!-- Status -->
+                <div class="bg-slate-950/40 rounded-2xl p-6 border border-slate-800/50 shadow-inner">
+                  <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <i class="ra ra-burning-embers"></i>
+                    Status
+                  </h4>
+                  <div v-if="statusEffects.length" class="flex flex-wrap gap-2">
+                    <span
+                      v-for="effect in statusEffects"
+                      :key="effect"
+                      class="px-2 py-1 rounded bg-red-950/30 border border-red-900/50 text-red-400 text-[10px] font-bold uppercase tracking-tighter"
+                    >
+                      {{ effect }}
+                    </span>
+                  </div>
+                  <p v-else class="text-[10px] text-slate-600 italic">No active effects.</p>
                 </div>
               </div>
 
-              <!-- Right Column: Equipment -->
-              <div class="space-y-6">
-                <!-- Equipment -->
-                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
-                  <h4 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Equipped</h4>
-                  <div class="space-y-3">
+              <!-- Main Content: Equipment & Backpack -->
+              <div class="flex-grow space-y-8">
+                <!-- Equipment Grid -->
+                <div class="bg-slate-950/20 rounded-2xl p-6 border border-slate-800 shadow-inner">
+                  <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                    <i class="ra ra-helmet"></i>
+                    Worn Equipment
+                  </h4>
+                  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     <div
                       v-for="[slot, item] in equipmentEntries"
                       :key="slot"
-                      class="flex flex-col"
+                      class="p-3 bg-slate-900 border border-slate-800 rounded-xl flex flex-col items-center justify-center text-center group transition-all hover:bg-slate-800 hover:border-slate-700"
                     >
-                      <span class="text-xs text-slate-500 uppercase">{{ slot }}</span>
-                      <span class="text-sm text-slate-200 mt-0.5">
-                        {{ (item && typeof item === 'object' && 'name' in item) ? item.name : '—' }}
-                      </span>
+                      <span class="text-[9px] text-slate-600 uppercase font-bold tracking-widest mb-2">{{ slot }}</span>
+                      <template v-if="item && typeof item === 'object'">
+                        <i :class="['text-xl mb-2', getItemIcon((item as any).item_type), getTypeColor((item as any).item_type)]"></i>
+                        <span class="text-xs font-bold text-slate-200 line-clamp-1 truncate w-full px-1">{{ (item as any).name }}</span>
+                      </template>
+                      <template v-else>
+                        <i class="ra ra-plain-dagger text-slate-800 text-lg mb-2 opacity-20"></i>
+                        <span class="text-[10px] text-slate-700 italic">Empty</span>
+                      </template>
                     </div>
                   </div>
                 </div>
 
-                <!-- Bag -->
-                <div class="bg-slate-800/50 rounded-xl p-5 border border-slate-700/50">
-                  <h4 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-4 border-b border-slate-700 pb-2">Backpack</h4>
-                  <ul v-if="inventoryList.length" class="space-y-2">
-                    <li
+                <!-- Bag Grid -->
+                <div class="flex-grow bg-slate-950/20 rounded-2xl p-6 border border-slate-800 shadow-inner min-h-[300px] flex flex-col">
+                  <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                    <i class="ra ra-knapsack"></i>
+                    Backpack
+                  </h4>
+                  <div v-if="inventoryList.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                    <div
                       v-for="(item, idx) in inventoryList"
                       :key="idx"
-                      class="text-sm text-slate-300 bg-slate-900/50 px-3 py-2 rounded border border-slate-800"
+                      class="p-3 bg-slate-900 border border-slate-800 rounded-xl group cursor-pointer transition-all hover:border-slate-500 hover:scale-[1.02] flex flex-col items-center"
                     >
-                      {{ item?.name || 'Unknown item' }}
-                    </li>
-                  </ul>
-                  <p v-else class="text-sm text-slate-500 italic">Bag is empty.</p>
+                      <i :class="['text-2xl mb-3', getItemIcon(item?.item_type), getTypeColor(item?.item_type)]"></i>
+                      <span class="text-[11px] font-bold text-slate-300 text-center leading-tight line-clamp-2 truncate w-full">{{ item?.name || 'Unknown' }}</span>
+                      <span v-if="item?.item_type" class="text-[8px] text-slate-600 uppercase mt-2 font-mono tracking-widest">{{ item.item_type }}</span>
+                    </div>
+                  </div>
+                  <div v-else class="flex-grow flex flex-col items-center justify-center opacity-20 py-12">
+                    <i class="ra ra-desert-skull text-6xl mb-4"></i>
+                    <p class="text-sm font-bold uppercase tracking-[0.3em]">Vault is Empty</p>
+                  </div>
                 </div>
               </div>
             </div>

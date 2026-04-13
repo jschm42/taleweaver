@@ -47,6 +47,12 @@ class WorldEntity(Base, TimestampMixin):
     spatial_position = Column(String(255), nullable=True) # e.g. "inside the desk"
     image_url = Column(String(255), nullable=True)
     
+    # Advanced Item Management
+    item_type = Column(String(50), nullable=True) # e.g. "CONSUMABLE", "WEAPON", "KEY", "STATIC"
+    wearable_slots = Column(JSON, nullable=True) # e.g. ["Head", "Neck"]
+    is_in_inventory = Column(Boolean, default=False, nullable=False)
+    is_hidden = Column(Boolean, default=False, nullable=False)
+    
     # Optional state, e.g. NPC inventory: [{"name": "Key", "id": "BRONZE_KEY"}]
     inventory = Column(JSON, default=list, nullable=False)
     metadata_json = Column(JSON, default=dict, nullable=False) # For stats or dynamic state

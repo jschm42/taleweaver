@@ -626,7 +626,12 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
     world_map = map_res.scalars().first()
     mermaid_data = MapEngine.to_mermaid(world_map) if world_map else None
     
-    ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == state.adventure_id, WorldEntity.current_scene_id == state.scene_id))
+    ent_res = await db.execute(select(WorldEntity).where(
+        WorldEntity.adventure_id == state.adventure_id, 
+        WorldEntity.current_scene_id == state.scene_id,
+        WorldEntity.is_hidden == False,
+        WorldEntity.is_in_inventory == False
+    ))
     entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in ent_res.scalars().all()]
     
     return ChatResponse(
@@ -702,11 +707,16 @@ async def post_chat_message(
              return ChatResponse(messages=[], sheet=_build_sheet_snapshot(avatar, state), mermaid=mermaid_data)
         
         response = CommandParser.parse_command(avatar, user_msg)
-        await db.commit()
-        return ChatResponse(
-            messages=[{"role": "system", "content": response}],
-            sheet=_build_sheet_snapshot(avatar, state)
-        )
+        
+        if response == "[TRIGGER_COMBINE]":
+            # Let the message fall through to the LLM to decide the outcome
+            user_msg = f"[COMBINE ACTION] {user_msg}"
+        else:
+            await db.commit()
+            return ChatResponse(
+                messages=[{"role": "system", "content": response}],
+                sheet=_build_sheet_snapshot(avatar, state)
+            )
 
     # --- Turn-based Logic: Advance Time & Status Effects ---
     state.in_game_time += adventure.time_per_turn
@@ -766,7 +776,19 @@ async def post_chat_message(
             # --- PASS 2: Atmospheric Narration (Complex Model) ---
             # We use the complex model to turn the technical outcome into premium prose.
             narration_system_prompt = system_prompt + f"\n\nTECHNICAL OUTCOME TO NARRATE: {game_event.model_dump_json(exclude={'narrative_description'})}\n"
-            narration_system_prompt += "Write a highly atmospheric, rich narrative for this turn. Do not mention numbers or system IDs; describe the effects physically. 1-2 paragraphs max."
+            
+            # Determine target length
+            is_new_scene = bool(game_event.new_scene_id and game_event.new_scene_id != state.scene_id)
+            is_detailed_request = any(word in user_msg.lower() for word in ["look", "examine", "describe", "search", "details"])
+            
+            if is_new_scene:
+                narration_system_prompt += "The player moved to a NEW location. Write a rich, atmospheric introduction (2-3 paragraphs). Describe the architecture, smell, and general mood."
+            elif is_detailed_request:
+                narration_system_prompt += "The player is looking for details. Provide a very detailed physical description of the surroundings or objects mentioned."
+            else:
+                narration_system_prompt += "Keep the response snappy and punchy (1 short paragraph). Move the action forward without excessive flowery prose."
+
+            narration_system_prompt += "\nDo not mention numbers, IDs, or system terms. Use English. 1-3 paragraphs based on the context above."
             
             response_text = llm.execute_simple_task(
                 system_prompt=narration_system_prompt,
@@ -798,10 +820,45 @@ async def post_chat_message(
             if game_event.moved_entities:
                 for move in game_event.moved_entities:
                     ent_mv_res = await db.execute(select(WorldEntity).where(WorldEntity.id == move.entity_id, WorldEntity.adventure_id == state.adventure_id))
-                    entity = ent_mv_res.scalars().first()
-                    if entity:
-                        if move.to_scene_id: entity.current_scene_id = move.to_scene_id
-                        if move.to_spatial_position: entity.spatial_position = move.to_spatial_position
+                    ent_mv = ent_mv_res.scalars().first()
+                    if ent_mv:
+                        if move.to_scene_id == "INVENTORY":
+                            ent_mv.is_in_inventory = True
+                            response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' added to inventory."})
+                        else:
+                            old_scene = ent_mv.current_scene_id
+                            ent_mv.current_scene_id = move.to_scene_id or ent_mv.current_scene_id
+                            ent_mv.is_in_inventory = False
+                            if old_scene == "INVENTORY":
+                                response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' removed from inventory."})
+                            
+                        if move.to_spatial_position: ent_mv.spatial_position = move.to_spatial_position
+
+            if game_event.updated_entities:
+                for upd in game_event.updated_entities:
+                    ent_upd_res = await db.execute(select(WorldEntity).where(WorldEntity.id == upd.entity_id, WorldEntity.adventure_id == state.adventure_id))
+                    ent_upd = ent_upd_res.scalars().first()
+                    if ent_upd:
+                        if upd.name: ent_upd.name = upd.name
+                        if upd.description: ent_upd.description = upd.description
+                        if upd.spatial_position: ent_upd.spatial_position = upd.spatial_position
+                        if upd.is_hidden is not None: ent_upd.is_hidden = upd.is_hidden
+
+            if game_event.deleted_entities:
+                for d_id in game_event.deleted_entities:
+                    await db.execute(delete(WorldEntity).where(WorldEntity.id == d_id, WorldEntity.adventure_id == state.adventure_id))
+
+            if game_event.new_inventory_items:
+                # If the LLM generates a brand NEW item (not an existing world entity), 
+                # we should still consider syncing it if it has an ID
+                for item in game_event.new_inventory_items:
+                    if item.id:
+                        ent_sync_res = await db.execute(select(WorldEntity).where(WorldEntity.id == item.id, WorldEntity.adventure_id == state.adventure_id))
+                        ent_sync = ent_sync_res.scalars().first()
+                        if ent_sync:
+                             ent_sync.is_in_inventory = True
+                             ent_sync.is_hidden = False
+                             response_messages.append({"role": "system", "content": f"[System] New item '{item.name}' added to inventory."})
 
             if game_event.updated_exits:
                 for upd in game_event.updated_exits:

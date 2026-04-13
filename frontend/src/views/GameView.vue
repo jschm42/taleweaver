@@ -64,6 +64,32 @@ const gameTime = computed(() => {
   return { day, time: `${hh}:${mm}` }
 })
 
+const getItemIcon = (type?: string) => {
+  switch (type?.toUpperCase()) {
+    case 'CONSUMABLE': return 'ra-bottle-vapors'
+    case 'WEAPON': return 'ra-sword'
+    case 'TOOL': return 'ra-hammer'
+    case 'KEY': return 'ra-old-key'
+    case 'READABLE': return 'ra-book'
+    case 'WEARABLE': return 'ra-helmet'
+    case 'COMBINABLE': return 'ra-gears'
+    case 'PICKABLE': return 'ra-hand'
+    case 'STATIC': return 'ra-anchor'
+    default: return 'ra-quill-ink'
+  }
+}
+
+const getTypeColor = (type?: string) => {
+  switch (type?.toUpperCase()) {
+    case 'WEAPON': return 'text-red-400'
+    case 'CONSUMABLE': return 'text-emerald-400'
+    case 'KEY': return 'text-amber-400'
+    case 'READABLE': return 'text-cyan-400'
+    case 'WEARABLE': return 'text-blue-400'
+    default: return 'text-slate-600'
+  }
+}
+
 // Flash the clock on every update to give a living-time feel
 watch(() => sheet.value?.in_game_time, () => {
   clockTick.value = true
@@ -194,10 +220,9 @@ onBeforeUnmount(() => {
               @mouseleave="hoveredEntity = null"
             >
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">{{ ent.name }}</span>
-                <i class="ra ra-pawn text-[10px] text-slate-700"></i>
+                <span class="text-xs font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight">{{ ent.name }}</span>
+                <i class="ra ra-pawn text-[10px] text-slate-800"></i>
               </div>
-              <p class="text-[10px] text-slate-500 leading-relaxed italic line-clamp-1 mt-1">{{ ent.description }}</p>
             </div>
           </div>
         </div>
@@ -220,10 +245,12 @@ onBeforeUnmount(() => {
               @mouseleave="hoveredEntity = null"
             >
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-200 group-hover:text-amber-400 transition-colors">{{ ent.name }}</span>
-                <i class="ra ra-gem text-[10px] text-slate-700"></i>
+                <div class="flex items-center gap-2 overflow-hidden">
+                  <i :class="['ra text-xs shrink-0', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
+                  <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate">{{ ent.name }}</span>
+                </div>
+                <i class="ra ra-gem text-[10px] text-slate-800"></i>
               </div>
-              <p class="text-[10px] text-slate-500 leading-relaxed italic line-clamp-1 mt-1">{{ ent.description }}</p>
             </div>
           </div>
         </div>

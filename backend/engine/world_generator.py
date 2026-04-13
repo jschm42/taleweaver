@@ -30,6 +30,11 @@ class WorldEntitySchema(BaseModel):
     description: str = Field(..., description="Appearance and demeanor or physical characteristics.")
     start_scene_id: str
     spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'sitting in the armchair', 'hidden in a drawer'")
+    
+    # Advanced Item Fields (only for type='OBJECT')
+    item_type: Optional[str] = Field(None, description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
+    wearable_slots: Optional[List[str]] = Field(None, description="If WEARABLE, which slots? e.g. ['Head'], ['Chest'], ['Hands'], ['Ring_1'], ['Ring_2']")
+    is_hidden: bool = Field(False, description="If True, the player must SEARCH or trigger an event to see this.")
 
 class WorldManifesto(BaseModel):
     """
@@ -71,6 +76,14 @@ class WorldGenerator:
             "IMPORTANT: Every NPC and Object must have a specific 'spatial_position' relative to items in the room "
             "(e.g., 'behind the bar counter', 'in the locked drawer'). "
             "Ensure the logic of the world is consistent: if a door is locked, mention why. "
+            "For OBJECTS, assign a specific 'item_type':\n"
+            "- CONSUMABLE: Food, potions, herbs.\n"
+            "- WEARABLE: Armor, clothes, jewelry (specify 'wearable_slots' like 'Head', 'Chest', 'Hands', 'Feet', 'Ring_1', 'Ring_2', 'Amulet').\n"
+            "- STATIC: Fountains, heavy alters, attached machines (cannot be picked up).\n"
+            "- COMBINABLE: Parts of a machine, ingredients for a recipe.\n"
+            "- PICKABLE: Standard items without special traits.\n"
+            "- WEAPON / TOOL / KEY / READABLE: Self-explanatory.\n"
+            "Use 'is_hidden: true' for objects that aren't immediately obvious (e.g., a key taped under a chair)."
             "Provide rich, atmospheric descriptions."
         )
         
@@ -120,8 +133,17 @@ class WorldGenerator:
         """
         from backend.engine.media_engine import MediaEngine
         adventure = await db.get(Adventure, adventure_id)
+        
+        # Deduplication caches
+        seen_scene_ids = set()
+        seen_entity_ids = set()
+        
         # Persist Scenes
         for s in manifest_dict.get("scenes", []):
+            if s["id"] in seen_scene_ids:
+                continue
+            seen_scene_ids.add(s["id"])
+            
             db.add(WorldScene(
                 id=s["id"],
                 adventure_id=adventure_id,
@@ -142,6 +164,10 @@ class WorldGenerator:
             
         # Persist NPCs
         for n in manifest_dict.get("npcs", []):
+            if n["id"] in seen_entity_ids:
+                continue
+            seen_entity_ids.add(n["id"])
+            
             image_url = None
             if user and gen_npc:
                 if adventure:
@@ -163,6 +189,10 @@ class WorldGenerator:
             
         # Persist Objects
         for o in manifest_dict.get("objects", []):
+            if o["id"] in seen_entity_ids:
+                continue
+            seen_entity_ids.add(o["id"])
+            
             image_url = None
             if user and gen_items:
                 if adventure:
@@ -179,5 +209,8 @@ class WorldGenerator:
                 description=o["description"],
                 current_scene_id=o["start_scene_id"],
                 spatial_position=o.get("spatial_position"),
-                image_url=image_url
+                image_url=image_url,
+                item_type=o.get("item_type", "PICKABLE"),
+                wearable_slots=o.get("wearable_slots"),
+                is_hidden=o.get("is_hidden", False)
             ))
