@@ -35,6 +35,19 @@ const {
   revealIllustration
 } = useGameSocket()
 
+// Tooltip & Hover State
+const hoveredEntity = ref<any>(null)
+const mousePos = ref({ x: 0, y: 0 })
+
+const handleHover = (ent: any, event: MouseEvent) => {
+  hoveredEntity.value = ent
+  mousePos.value = { x: event.clientX, y: event.clientY }
+}
+
+// Split entities into NPCs and Objects
+const npcs = computed(() => entities.value.filter(e => e.entity_type === 'NPC'))
+const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
+
 /**
  * Formats in_game_time (minutes) into a human-readable in-game clock.
  * Game day starts at 06:00. One game-minute = one real second (heartbeat pace).
@@ -163,43 +176,55 @@ onBeforeUnmount(() => {
     <div class="flex-grow flex overflow-hidden">
       <!-- Left Sidebar: Inhabitants & Discovery -->
       <aside v-if="entities.length > 0" class="hidden xl:flex w-72 bg-slate-900 border-r border-slate-800 flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar">
-        <div class="flex items-center justify-between gap-2 mb-6">
-          <div class="flex items-center gap-2">
-            <i class="ra ra-venoms-trap text-emerald-500"></i>
-            <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500">World Inhabitants</h3>
+        <!-- NPCs SECTION -->
+        <div v-if="npcs.length > 0">
+          <div class="flex items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2">
+              <i class="ra ra-venoms-trap text-cyan-500"></i>
+              <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-500/80">Population</h3>
+            </div>
           </div>
-          <button 
-            @click="isDebugVisuals = !isDebugVisuals" 
-            class="p-1.5 rounded bg-slate-800 border border-slate-700 hover:border-cyan-500/50 transition-all"
-            :title="isDebugVisuals ? 'Disable Debug Visuals' : 'Enable Debug Visuals'"
-          >
-            <i class="ra ra-eye-shield text-xs" :class="isDebugVisuals ? 'text-cyan-400' : 'text-slate-500'"></i>
-          </button>
+          <div class="space-y-3 mb-8">
+            <div 
+              v-for="ent in npcs" 
+              :key="ent.id" 
+              class="p-3 bg-slate-950 border border-slate-800 rounded-xl group cursor-help transition-all hover:border-cyan-500/40 hover:bg-slate-900/50"
+              @mouseenter="handleHover(ent, $event)"
+              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+              @mouseleave="hoveredEntity = null"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">{{ ent.name }}</span>
+                <i class="ra ra-pawn text-[10px] text-slate-700"></i>
+              </div>
+              <p class="text-[10px] text-slate-500 leading-relaxed italic line-clamp-1 mt-1">{{ ent.description }}</p>
+            </div>
+          </div>
         </div>
 
-        <div class="space-y-4">
-          <div v-for="ent in entities" :key="ent.id" class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 group transition-all hover:border-slate-700">
-            <div v-if="isDebugVisuals && ent.image_url" class="h-24 w-full rounded-lg overflow-hidden border border-white/5 bg-slate-900 mb-2">
-              <img :src="'http://localhost:8000' + ent.image_url" class="w-full h-full object-cover opacity-80" />
+        <!-- ITEMS SECTION -->
+        <div v-if="items.length > 0">
+          <div class="flex items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2">
+              <i class="ra ra-locked-fortress text-amber-500"></i>
+              <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500/80">Discovery</h3>
             </div>
-
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-bold" :class="ent.entity_type === 'NPC' ? 'text-cyan-400' : 'text-amber-400'">
-                {{ ent.name }}
-              </span>
-              <span class="text-[9px] font-mono text-slate-600 uppercase">{{ ent.entity_type }}</span>
-            </div>
-            
-            <p class="text-[10px] text-slate-500 leading-relaxed italic line-clamp-2">{{ ent.description }}</p>
-
-            <button 
-              v-if="ent.image_url"
-              @click="revealIllustration(ent.name, ent.image_url)"
-              class="w-full py-2 bg-slate-900 hover:bg-emerald-500/10 border border-slate-800 hover:border-emerald-500/30 rounded-lg text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:text-emerald-400 transition-all flex items-center justify-center gap-2"
+          </div>
+          <div class="space-y-3">
+            <div 
+              v-for="ent in items" 
+              :key="ent.id" 
+              class="p-3 bg-slate-950 border border-slate-800 rounded-xl group cursor-help transition-all hover:border-amber-500/40 hover:bg-slate-900/50"
+              @mouseenter="handleHover(ent, $event)"
+              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+              @mouseleave="hoveredEntity = null"
             >
-              <i class="ra ra-camera"></i>
-              Reveal Illustration
-            </button>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-200 group-hover:text-amber-400 transition-colors">{{ ent.name }}</span>
+                <i class="ra ra-gem text-[10px] text-slate-700"></i>
+              </div>
+              <p class="text-[10px] text-slate-500 leading-relaxed italic line-clamp-1 mt-1">{{ ent.description }}</p>
+            </div>
           </div>
         </div>
       </aside>
@@ -241,6 +266,39 @@ onBeforeUnmount(() => {
     <!-- Modals -->
     <CharacterSheetModal :open="showSheet" :sheet="sheet" @close="showSheet = false" />
     <MapModal :open="showMap" :mermaid-src="mermaidData" @close="showMap = false" />
+
+    <!-- HOVER TOOLTIP -->
+    <Teleport to="body">
+      <Transition name="tooltip">
+        <div 
+          v-if="hoveredEntity" 
+          class="fixed z-[100] pointer-events-none transition-all duration-75"
+          :style="{ left: (mousePos.x + 20) + 'px', top: (mousePos.y - 40) + 'px' }"
+        >
+          <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
+            <!-- Image Area -->
+            <div v-if="hoveredEntity.image_url" class="h-32 w-full relative">
+              <img :src="'http://localhost:8000' + hoveredEntity.image_url" class="absolute inset-0 w-full h-full object-cover" />
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+            </div>
+
+            <!-- Content -->
+            <div class="p-4 bg-slate-900">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
+                <span 
+                  class="text-[8px] px-1.5 py-0.5 rounded border font-mono uppercase"
+                  :class="hoveredEntity.entity_type === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : 'border-amber-500/50 text-amber-400'"
+                >
+                  {{ hoveredEntity.entity_type }}
+                </span>
+              </div>
+              <p class="text-xs text-slate-400 leading-relaxed italic">{{ hoveredEntity.description }}</p>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </main>
 </template>
 
@@ -254,4 +312,23 @@ onBeforeUnmount(() => {
   0%   { color: #fbbf24; text-shadow: 0 0 12px rgba(251,191,36,0.8); }
   100% { color: inherit;  text-shadow: none; }
 }
+
+/* Tooltip Animations */
+.tooltip-enter-active, .tooltip-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.tooltip-enter-from, .tooltip-leave-to { opacity: 0; transform: scale(0.95) translateY(5px); }
+
+.animate-tooltip-in {
+  animation: toolTipIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes toolTipIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Sidebar Scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.1); }
 </style>

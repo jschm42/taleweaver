@@ -49,6 +49,7 @@ class WorldGenerator:
         title: str, 
         context: str,
         model: str = "gpt-4o", # default to a complex model
+        provider: Optional[str] = None,
         generate_npc_images: bool = False,
         generate_item_images: bool = False
     ) -> None:
@@ -56,7 +57,12 @@ class WorldGenerator:
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
         Persists the result to the WorldScene, WorldExit, and WorldEntity tables.
         """
-        llm = GameMasterLLM(user)
+        # If no provider is given, use the one from user settings
+        if not provider:
+            settings = user.llm_settings or {}
+            provider = settings.get("preferred_provider", "openai")
+
+        llm = GameMasterLLM(user, provider=provider)
         
         system_prompt = (
             "You are a master world-builder for a dark RPG. Your task is to generate a coherent, "

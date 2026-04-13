@@ -114,6 +114,29 @@ const resetAdventure = async () => {
   }
 }
 
+const removeAdventure = async () => {
+  if (!props.adventureId) return
+  if (!confirm("Are you sure? This delete the entire adventure and all its data FOREVER.")) return
+  
+  isSaving.value = true
+  try {
+    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`, {
+      method: 'DELETE'
+    })
+    if (res.ok) {
+      alert("Adventure deleted.")
+      emit('updated')
+      emit('close')
+    } else {
+      errorMsg.value = "Failed to delete adventure."
+    }
+  } catch (err) {
+    errorMsg.value = "Network error during deletion."
+  } finally {
+    isSaving.value = false
+  }
+}
+
 const exportBlueprint = async () => {
   if (!props.adventureId) return
   try {
@@ -484,21 +507,31 @@ watch(() => props.open, (isOpen) => {
           </div>
 
           <!-- Footer -->
-          <div class="p-8 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
+          <div class="p-8 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
             <button 
-              @click="emit('close')"
-              class="px-6 py-2 rounded-xl text-slate-400 hover:bg-white/5 transition-colors font-medium border border-transparent hover:border-slate-700"
-            >
-              Cancel
-            </button>
-            <button 
-              @click="saveChanges"
+              @click="removeAdventure"
               :disabled="isSaving || isLoading"
-              class="px-8 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
+              class="px-4 py-2 border border-red-500/30 hover:border-red-500 text-red-500 hover:bg-red-500/10 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-30"
             >
-              <span v-if="isSaving" class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-              {{ isSaving ? 'Saving...' : 'Save Settings' }}
+              <i class="ra ra-trash-can"></i>
+              Delete
             </button>
+            <div class="flex gap-3">
+              <button 
+                @click="emit('close')"
+                class="px-6 py-2 rounded-xl text-slate-400 hover:bg-white/5 transition-colors font-medium border border-transparent hover:border-slate-700"
+              >
+                Cancel
+              </button>
+              <button 
+                @click="saveChanges"
+                :disabled="isSaving || isLoading"
+                class="px-8 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                <span v-if="isSaving" class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                {{ isSaving ? 'Saving...' : 'Save Settings' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

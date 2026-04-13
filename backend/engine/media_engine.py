@@ -20,6 +20,7 @@ class MediaEngine:
         model: str, 
         api_key: str, 
         provider: str = "openai",
+        adventure_id: Optional[str] = None,
         target_dir: Optional[str] = None,
         filename: Optional[str] = None
     ) -> Optional[str]:
@@ -27,11 +28,14 @@ class MediaEngine:
         Calls LiteLLM to generate an image and saves it locally.
         """
         if not prompt or not model or not api_key:
-            return None
+            raise ValueError("Missing prompt, model, or API key for image generation.")
             
         # Default target dir if not provided
         if target_dir is None:
-            target_dir = os.path.join(settings.DATA_DIR, "adventures")
+            if adventure_id:
+                target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
+            else:
+                target_dir = os.path.join(settings.DATA_DIR, "adventures")
 
         logger.info(f"Generating image with model {model} (provider: {provider}). Prompt: {prompt}")
         
@@ -45,9 +49,10 @@ class MediaEngine:
             
             # Handle OpenRouter specifics
             if provider == "openrouter":
-                kwargs["api_base"] = "https://openrouter.ai/api/v1"
                 if not model.startswith("openrouter/"):
                     kwargs["model"] = f"openrouter/{model}"
+                # Remove provider override to let LiteLLM use the prefix-based routing
+                kwargs.pop("custom_llm_provider", None)
 
             # Call LiteLLM
             response = litellm.image_generation(**kwargs)
@@ -66,8 +71,8 @@ class MediaEngine:
                 return None
 
         except Exception as e:
-            logger.exception("Image generation failed")
-            return None
+            logger.error(f"Image generation failed: {str(e)}")
+            raise RuntimeError(f"Visual generation failed: {str(e)}")
 
     @staticmethod
     async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None) -> Optional[str]:
@@ -127,14 +132,22 @@ class MediaEngine:
         model = t2i.get("advanced_model")
         
         if not model or provider not in api_keys:
-            return None
+            raise ValueError(f"Missing image configuration or API key for {provider}")
             
         api_key = encryption_util.decrypt_key(api_keys[provider])
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
         filename = f"{int(uuid.uuid4())}.png"
         
-        return await MediaEngine.generate_image(prompt, model, api_key, provider, target_dir, filename)
+        return await MediaEngine.generate_image(
+            prompt=prompt, 
+            model=model, 
+            api_key=api_key, 
+            provider=provider, 
+            adventure_id=adventure_id,
+            target_dir=target_dir, 
+            filename=filename
+        )
 
     @staticmethod
     async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict) -> Optional[str]:
@@ -146,11 +159,19 @@ class MediaEngine:
         model = t2i.get("simple_model")
         
         if not model or provider not in api_keys:
-            return None
+            raise ValueError(f"Missing image configuration or API key for {provider}")
             
         api_key = encryption_util.decrypt_key(api_keys[provider])
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
         filename = f"{entity_id}.png"
         
-        return await MediaEngine.generate_image(prompt, model, api_key, provider, target_dir, filename)
+        return await MediaEngine.generate_image(
+            prompt=prompt, 
+            model=model, 
+            api_key=api_key, 
+            provider=provider, 
+            adventure_id=adventure_id,
+            target_dir=target_dir, 
+            filename=filename
+        )

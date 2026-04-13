@@ -30,6 +30,7 @@ const creationStatus = ref('')
 
 // Adventure form
 const form = ref({
+  id: '',
   title: '',
   context: '',
   character_id: '',
@@ -94,7 +95,13 @@ const playAdventure = (gameId: string) => {
 }
 
 const openNewAdventureModal = () => {
-  form.value = { title: '', context: '', character_id: '', image_url: null }
+  form.value = { 
+    id: crypto.randomUUID(),
+    title: '', 
+    context: '', 
+    character_id: '', 
+    image_url: null 
+  }
   errorMsg.value = ''
   showModal.value = true
 }
@@ -118,7 +125,7 @@ const handleImageUpload = async (event: Event) => {
 
   try {
     errorMsg.value = ''
-    const res = await fetch(`http://localhost:8000/api/data/image?type=adventure`, {
+    const res = await fetch(`http://localhost:8000/api/data/image?type=adventure&adventure_id=${form.value.id}`, {
       method: 'POST',
       body: formData
     })
@@ -149,7 +156,7 @@ async function createAdventure() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: crypto.randomUUID(),
+        id: form.value.id,
         title: form.value.title,
         character_id: form.value.character_id,
         context: form.value.context,

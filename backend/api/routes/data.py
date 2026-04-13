@@ -1,5 +1,6 @@
 import os
 import uuid
+from typing import Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Query
 from PIL import Image
 from backend.core.config import settings
@@ -15,11 +16,12 @@ def _get_extension(filename: str) -> str:
 async def upload_image(
     file: UploadFile = File(...),
     type: str = Query("character", description="Type of upload: 'character' or 'adventure'"),
+    adventure_id: Optional[str] = Query(None, description="Optional ID for adventure-specific subfolders")
 ):
     """
     Uploads an image, resizes/crops it based on type, and returns the URL.
     - characters: saved to data/characters, max 256x256
-    - adventures: saved to data/adventures, max 512x512
+    - adventures: saved to data/adventures/{adventure_id}, max 512x512
     """
     if type not in {"character", "adventure"}:
         raise HTTPException(status_code=400, detail="Invalid upload type")
@@ -29,8 +31,13 @@ async def upload_image(
         raise HTTPException(status_code=400, detail="Unsupported file extension. Use jpg, png, or webp.")
 
     # Determine target directory
-    subfolder = "characters" if type == "character" else "adventures"
-    target_dir = os.path.join(settings.DATA_DIR, subfolder)
+    if type == "character":
+        subfolder = "characters"
+        target_dir = os.path.join(settings.DATA_DIR, subfolder)
+    else:
+        subfolder = f"adventures/{adventure_id}" if adventure_id else "adventures"
+        target_dir = os.path.join(settings.DATA_DIR, subfolder)
+    
     os.makedirs(target_dir, exist_ok=True)
 
     # Generate a unique filename
@@ -54,7 +61,8 @@ async def upload_image(
         image.save(filepath, format=ext.upper() if ext != "jpg" else "JPEG")
         
         # Return the public URL for the image
-        return {"url": f"/data/{subfolder}/{filename}"}
+        url = f"/data/{subfolder}/{filename}".replace("\\", "/")
+        return {"url": url}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")

@@ -23,7 +23,7 @@ def log_llm_interaction(
         os.makedirs(LOG_DIR, exist_ok=True)
         
     entry = {
-        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "model": model,
         "provider": provider,
         "system_prompt": system_prompt,

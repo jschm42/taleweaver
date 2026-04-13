@@ -157,6 +157,7 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
 
             llm_settings = user.llm_settings or {}
             complex_model = llm_settings.get("complex_model", "gpt-4o")
+            preferred_provider = llm_settings.get("preferred_provider", "openai")
             
             # 1. World Gen
             await WorldGenerator.generate_world(
@@ -166,6 +167,7 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 title=payload_dict['title'], 
                 context=payload_dict.get('context') or "A standard fantasy world.",
                 model=complex_model,
+                provider=preferred_provider,
                 generate_npc_images=payload_dict.get('generate_npc_images', False),
                 generate_item_images=payload_dict.get('generate_item_images', False)
             )

@@ -7,7 +7,7 @@ export default {
         // Pixel-art / retro monospace font loaded via Google Fonts
         pixel: ['"Press Start 2P"', 'monospace'],
         // Modern UI font
-        sans: ['Inter', 'sans-serif'],
+        sans: ['Acme', 'sans-serif'],
       },
       colors: {
         // Dark fantasy palette
