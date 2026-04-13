@@ -49,7 +49,8 @@ class WorldGenerator:
         title: str, 
         context: str,
         model: str = "gpt-4o", # default to a complex model
-        generate_entity_images: bool = False
+        generate_npc_images: bool = False,
+        generate_item_images: bool = False
     ) -> None:
         """
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
@@ -69,6 +70,12 @@ class WorldGenerator:
         
         user_prompt = f"Adventure Title: {title}\nStory Idea: {context}\n\nGenerate at least 5 scenes with a complex network of exits and interesting entities."
         
+        # 1. Update Status
+        adventure = await db.get(Adventure, adventure_id)
+        if adventure:
+            adventure.creation_status = "Analyzing Story Idea..."
+            await db.commit()
+
         manifesto: WorldManifesto = llm.execute_complex_task(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -76,27 +83,37 @@ class WorldGenerator:
             model=model
         )
         
-        # Save manifest to Adventure for reset support
-        adv_res = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
-        adventure = adv_res.scalars().first()
+        # 2. Update Status
         if adventure:
+            adventure.creation_status = "Building Scenes & Plot..."
             adventure.original_manifest = manifesto.model_dump()
+            await db.commit()
             
         await WorldGenerator.apply_manifest(
             db, 
             adventure_id, 
             manifesto.model_dump(), 
-            user=user if generate_entity_images else None
+            user=user if (generate_npc_images or generate_item_images) else None,
+            gen_npc=generate_npc_images,
+            gen_items=generate_item_images
         )
         await db.flush()
 
     @staticmethod
-    async def apply_manifest(db: AsyncSession, adventure_id: str, manifest_dict: dict, user: Optional[User] = None) -> None:
+    async def apply_manifest(
+        db: AsyncSession, 
+        adventure_id: str, 
+        manifest_dict: dict, 
+        user: Optional[User] = None,
+        gen_npc: bool = False,
+        gen_items: bool = False
+    ) -> None:
         """
         Populates (or re-populates) the world entities based on a manifest dictionary.
-        If user is provided, attempts to generate entity images.
+        If user is provided, attempts to generate entity images based on flags.
         """
         from backend.engine.media_engine import MediaEngine
+        adventure = await db.get(Adventure, adventure_id)
         # Persist Scenes
         for s in manifest_dict.get("scenes", []):
             db.add(WorldScene(
@@ -120,9 +137,12 @@ class WorldGenerator:
         # Persist NPCs
         for n in manifest_dict.get("npcs", []):
             image_url = None
-            if user:
+            if user and gen_npc:
+                if adventure:
+                    adventure.creation_status = f"Envisioning Portrait: {n['name']}..."
+                    await db.commit()
                 prompt = f"Portrait of NPC {n['name']}. {n['description']}. Game attribute art style."
-                image_url = await MediaEngine.generate_entity_image(prompt, {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
+                image_url = await MediaEngine.generate_entity_image(prompt, adventure_id, n['id'], "NPC", {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
 
             db.add(WorldEntity(
                 id=n["id"],
@@ -138,9 +158,12 @@ class WorldGenerator:
         # Persist Objects
         for o in manifest_dict.get("objects", []):
             image_url = None
-            if user:
+            if user and gen_items:
+                if adventure:
+                    adventure.creation_status = f"Envisioning Item: {o['name']}..."
+                    await db.commit()
                 prompt = f"Highly detailed item: {o['name']}. {o['description']}. Isolated on simple background, RPG asset style."
-                image_url = await MediaEngine.generate_entity_image(prompt, {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
+                image_url = await MediaEngine.generate_entity_image(prompt, adventure_id, o['id'], "OBJECT", {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
 
             db.add(WorldEntity(
                 id=o["id"],

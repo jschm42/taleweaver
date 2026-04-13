@@ -21,6 +21,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const showDebug = ref(false)
 const debugData = ref<any>(null)
+const activeTab = ref<'settings' | 'visuals' | 'advanced'>('settings')
 
 const form = ref({
   title: '',
@@ -185,7 +186,9 @@ const importAdventure = async (event: Event) => {
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     fetchAdventure()
+    fetchDebugInfo() // Always fetch for the visuals tab
     showDebug.value = false
+    activeTab.value = 'settings'
   }
 })
 </script>
@@ -227,6 +230,21 @@ watch(() => props.open, (isOpen) => {
             </div>
           </div>
 
+          <!-- Tab Navigation -->
+          <div class="flex px-8 border-b border-slate-800 bg-slate-950/30">
+            <button 
+              v-for="tab in ['settings', 'visuals', 'advanced']" 
+              :key="tab"
+              @click="activeTab = tab as any"
+              :class="[
+                'px-6 py-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2',
+                activeTab === tab ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-500 hover:text-slate-300'
+              ]"
+            >
+              {{ tab }}
+            </button>
+          </div>
+
           <!-- Body -->
           <div class="flex-grow overflow-y-auto p-8 custom-scrollbar">
             <div v-if="isLoading" class="flex justify-center py-12">
@@ -237,7 +255,7 @@ watch(() => props.open, (isOpen) => {
               {{ errorMsg }}
             </div>
 
-            <div v-else-if="adventure" class="space-y-6">
+            <div v-else-if="activeTab === 'settings' && adventure" class="space-y-6">
               <!-- Title -->
               <div>
                 <label class="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">Chronicle Title</label>
@@ -256,21 +274,6 @@ watch(() => props.open, (isOpen) => {
                   rows="4"
                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all resize-none"
                 ></textarea>
-              </div>
-
-              <!-- Rules Toggle -->
-              <div class="grid grid-cols-1 gap-4">
-                <div 
-                  class="p-4 rounded-xl border-2 cursor-pointer transition-all"
-                  :class="form.strict_rules ? 'bg-emerald-500/5 border-emerald-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
-                  @click="form.strict_rules = !form.strict_rules"
-                >
-                  <div class="flex items-center gap-3 mb-1">
-                    <i class="ra ra-scales text-lg"></i>
-                    <span class="font-bold">Strict Rules</span>
-                  </div>
-                  <p class="text-[10px] leading-tight opacity-70">Enforces structured mechanics and character sheet impact via complexe LLM routing.</p>
-                </div>
               </div>
 
               <!-- Time Pacing -->
@@ -299,6 +302,70 @@ watch(() => props.open, (isOpen) => {
                     <span class="text-[10px] text-slate-500 block uppercase pt-0.5">Minutes</span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- VISUAL ASSETS TAB -->
+            <div v-else-if="activeTab === 'visuals'" class="space-y-8">
+              <div v-if="!debugData" class="flex flex-col items-center py-12 gap-4">
+                <div class="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+                <span class="text-xs text-slate-500 font-bold uppercase tracking-widest">Scanning World Manifest...</span>
+              </div>
+              
+              <div v-else class="space-y-12">
+                <!-- NPCs -->
+                <section>
+                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Population Portraits</h3>
+                  <div v-if="debugData.npcs.length === 0" class="text-xs text-slate-600 italic">No inhabitant visuals generated for this world.</div>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div v-for="npc in debugData.npcs" :key="npc.id" class="relative group aspect-square bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden hover:border-cyan-500/30 transition-all">
+                      <img v-if="npc.image_url" :src="'http://localhost:8000' + npc.image_url" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700" />
+                      <div v-else class="absolute inset-0 flex items-center justify-center bg-slate-900">
+                        <i class="ra ra-pawn text-2xl text-slate-800"></i>
+                      </div>
+                      <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"></div>
+                      <div class="absolute bottom-0 left-0 right-0 p-3">
+                        <div class="text-[10px] font-bold text-white uppercase">{{ npc.name }}</div>
+                        <div class="text-[8px] text-cyan-400/80 font-mono">{{ npc.current_scene_id }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- Objects -->
+                <section>
+                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Artifact Illustrations</h3>
+                  <div v-if="debugData.objects.length === 0" class="text-xs text-slate-600 italic">No object visuals generated for this world.</div>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div v-for="obj in debugData.objects" :key="obj.id" class="relative group aspect-square bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden hover:border-amber-500/30 transition-all">
+                      <img v-if="obj.image_url" :src="'http://localhost:8000' + obj.image_url" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700" />
+                      <div v-else class="absolute inset-0 flex items-center justify-center bg-slate-900">
+                        <i class="ra ra-locked-fortress text-2xl text-slate-800"></i>
+                      </div>
+                      <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"></div>
+                      <div class="absolute bottom-0 left-0 right-0 p-3">
+                        <div class="text-[10px] font-bold text-white uppercase">{{ obj.name }}</div>
+                        <div class="text-[8px] text-amber-400/80 font-mono">{{ obj.current_scene_id }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <!-- ADVANCED TAB -->
+            <div v-else-if="activeTab === 'advanced'" class="space-y-6">
+              <!-- Rules Toggle -->
+              <div 
+                class="p-4 rounded-xl border-2 cursor-pointer transition-all"
+                :class="form.strict_rules ? 'bg-emerald-500/5 border-emerald-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
+                @click="form.strict_rules = !form.strict_rules"
+              >
+                <div class="flex items-center gap-3 mb-1">
+                  <i class="ra ra-scales text-lg"></i>
+                  <span class="font-bold">Strict Rules</span>
+                </div>
+                <p class="text-[10px] leading-tight opacity-70">Enforces structured mechanics and character sheet impact via complexe LLM routing.</p>
               </div>
 
               <!-- Export Options -->
@@ -344,9 +411,9 @@ watch(() => props.open, (isOpen) => {
                   
                   <div v-else class="space-y-4">
                     <!-- Basic Config -->
-                    <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
+                    <div class="bg-black/50 border border-slate-800 rounded-xl p-4 overflow-hidden">
                       <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Adventure Configuration</h4>
-                      <pre class="text-[10px] font-mono text-emerald-500/80 leading-relaxed">{{ JSON.stringify(debugData.adventure, null, 2) }}</pre>
+                      <pre class="text-[10px] font-mono text-emerald-500/80 leading-relaxed overflow-auto max-h-64 custom-scrollbar">{{ JSON.stringify(debugData.adventure, null, 2) }}</pre>
                     </div>
 
                     <!-- World Scenes -->
@@ -363,14 +430,13 @@ watch(() => props.open, (isOpen) => {
                     <!-- NPCs & Items -->
                     <div class="grid grid-cols-2 gap-4">
                       <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
-                          <div v-for="npc in debugData.npcs" :key="npc.id" class="text-[9px] text-slate-400 flex flex-col gap-2 p-2 bg-slate-900 border border-slate-700/50 rounded-lg">
-                            <div class="flex items-center gap-2">
-                              <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
-                              <span class="font-bold underline">{{ npc.name }}</span> ({{ npc.current_scene_id }})
-                            </div>
-                            <img v-if="npc.image_url" :src="npc.image_url" class="w-full h-24 object-cover rounded-md border border-slate-700 shadow-inner" />
-                            <div v-if="npc.spatial_position" class="pl-1 text-slate-500 italic">{{ npc.spatial_position }}</div>
+                        <div v-for="npc in debugData.npcs" :key="npc.id" class="text-[9px] text-slate-400 flex flex-col gap-2 p-2 bg-slate-900 border border-slate-700/50 rounded-lg">
+                          <div class="flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+                            <span class="font-bold underline">{{ npc.name }}</span> ({{ npc.current_scene_id }})
                           </div>
+                          <img v-if="npc.image_url" :src="'http://localhost:8000' + npc.image_url" class="w-full h-24 object-cover rounded-md border border-slate-700 shadow-inner" />
+                          <div v-if="npc.spatial_position" class="pl-1 text-slate-500 italic">{{ npc.spatial_position }}</div>
                         </div>
                       </div>
                       <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
@@ -381,7 +447,7 @@ watch(() => props.open, (isOpen) => {
                               <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                               <span class="font-bold underline">{{ obj.name }}</span> ({{ obj.current_scene_id }})
                             </div>
-                            <img v-if="obj.image_url" :src="obj.image_url" class="w-full h-24 object-cover rounded-md border border-slate-700 shadow-inner" />
+                            <img v-if="obj.image_url" :src="'http://localhost:8000' + obj.image_url" class="w-full h-24 object-cover rounded-md border border-slate-700 shadow-inner" />
                             <div v-if="obj.spatial_position" class="pl-1 text-slate-500 italic">{{ obj.spatial_position }}</div>
                           </div>
                         </div>

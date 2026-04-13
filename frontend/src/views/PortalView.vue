@@ -26,6 +26,7 @@ const showEditModal = ref(false)
 const selectedAdventureId = ref<string | null>(null)
 const isSubmitting = ref(false)
 const errorMsg = ref('')
+const creationStatus = ref('')
 
 // Adventure form
 const form = ref({
@@ -33,7 +34,8 @@ const form = ref({
   context: '',
   character_id: '',
   image_url: '' as string | null,
-  generate_entity_images: false
+  generate_npc_images: false,
+  generate_item_images: false
 })
 
 // Characters available to pick
@@ -132,41 +134,70 @@ const handleImageUpload = async (event: Event) => {
   }
 }
 
-const createAdventure = async () => {
-  if (!form.value.title.trim() || !form.value.character_id) {
-    errorMsg.value = "Title and Character selection are required."
+async function createAdventure() {
+  if (!form.value.title || !form.value.character_id) {
+    errorMsg.value = "Character and Title are required."
     return
   }
 
   isSubmitting.value = true
   errorMsg.value = ''
+  creationStatus.value = 'Initializing...'
 
   try {
     const res = await fetch('http://localhost:8000/api/adventures', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id: crypto.randomUUID(),
         title: form.value.title,
         character_id: form.value.character_id,
         context: form.value.context,
         image_url: form.value.image_url,
         strict_rules: true,
-        generate_entity_images: form.value.generate_entity_images,
+        generate_npc_images: form.value.generate_npc_images,
+        generate_item_images: form.value.generate_item_images,
         heartbeat_enabled: false
       })
     })
 
-    if (res.ok) {
-      const data = await res.json()
-      router.push({ name: 'game', params: { id: data.game_id } })
-    } else {
-      errorMsg.value = "Failed to create adventure. Server returned an error."
-    }
-  } catch (err) {
-    errorMsg.value = "Network connection failed."
-  } finally {
+    if (!res.ok) throw new Error('Failed to start creation. Please check settings.')
+    
+    const data = await res.json()
+    const adventureId = data.adventure_id
+    
+    // Start polling
+    pollAdventureStatus(adventureId)
+  } catch (err: any) {
+    errorMsg.value = err.message || "Network connection failed."
     isSubmitting.value = false
   }
+}
+
+function pollAdventureStatus(id: string) {
+  const pollInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/adventures/${id}/status`)
+      if (!res.ok) {
+        clearInterval(pollInterval)
+        errorMsg.value = "Engine failure: Generation stopped and session was cleaned up. Please try a different theme."
+        isSubmitting.value = false
+        return
+      }
+
+      const data = await res.json()
+      creationStatus.value = data.status || "Constructing world..."
+
+      if (data.is_ready) {
+        clearInterval(pollInterval)
+        router.push({ name: 'game', params: { id: id } })
+      }
+    } catch (err) {
+      clearInterval(pollInterval)
+      errorMsg.value = "Lost connection to the weaver's loom."
+      isSubmitting.value = false
+    }
+  }, 1500)
 }
 
 const goToCharacters = () => {
@@ -390,13 +421,23 @@ onMounted(() => {
           <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
             <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Engine Auxiliaries</h3>
             
-            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer" @click="form.generate_entity_images = !form.generate_entity_images">
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer" @click="form.generate_npc_images = !form.generate_npc_images">
               <div class="flex flex-col">
-                <span class="text-sm font-bold text-white">Envision World Inhabitants</span>
-                <span class="text-[10px] text-slate-400">Generate unique Gen-AI portraits for all NPCs and Objects. (Higher cost/latency)</span>
+                <span class="text-sm font-bold text-white">Envision NPCs</span>
+                <span class="text-[10px] text-slate-400">Generate unique portraits for all inhabitants.</span>
               </div>
-              <div :class="['w-10 h-6 rounded-full relative transition-colors duration-300', form.generate_entity_images ? 'bg-emerald-500' : 'bg-slate-800']">
-                <div :class="['absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300', form.generate_entity_images ? 'left-5' : 'left-1']"></div>
+              <div :class="['w-10 h-6 rounded-full relative transition-colors duration-300', form.generate_npc_images ? 'bg-emerald-500' : 'bg-slate-800']">
+                <div :class="['absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300', form.generate_npc_images ? 'left-5' : 'left-1']"></div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer" @click="form.generate_item_images = !form.generate_item_images">
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-white">Envision Items</span>
+                <span class="text-[10px] text-slate-400">Generate visuals for key objects and loot.</span>
+              </div>
+              <div :class="['w-10 h-6 rounded-full relative transition-colors duration-300', form.generate_item_images ? 'bg-emerald-500' : 'bg-slate-800']">
+                <div :class="['absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300', form.generate_item_images ? 'left-5' : 'left-1']"></div>
               </div>
             </div>
           </div>
@@ -420,7 +461,7 @@ onMounted(() => {
              class="px-8 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
            >
              <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-             {{ isSubmitting ? 'Creating...' : 'Forge Adventure' }}
+             {{ isSubmitting ? (creationStatus || 'Creating...') : 'Forge Adventure' }}
            </button>
         </div>
 

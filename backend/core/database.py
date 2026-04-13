@@ -95,3 +95,31 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE world_entities ADD COLUMN image_url TEXT"
             )
             logger.info("SQLite migration: added world_entities.image_url")
+
+        # Async Generation Status
+        if "is_ready" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN is_ready BOOLEAN NOT NULL DEFAULT 1"
+            )
+            logger.info("SQLite migration: added adventures.is_ready")
+        
+        if "creation_status" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN creation_status TEXT"
+            )
+            logger.info("SQLite migration: added adventures.creation_status")
+
+        if "creation_error" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN creation_error TEXT"
+            )
+            logger.info("SQLite migration: added adventures.creation_error")
+
+        # Avatar link for cleanup
+        avatar_cols_result = await conn.exec_driver_sql("PRAGMA table_info(avatars)")
+        avatar_cols = {row[1] for row in avatar_cols_result.fetchall()}
+        if "adventure_id" not in avatar_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE avatars ADD COLUMN adventure_id TEXT"
+            )
+            logger.info("SQLite migration: added avatars.adventure_id")

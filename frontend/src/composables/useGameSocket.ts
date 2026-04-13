@@ -14,12 +14,14 @@ export interface UseGameSocket {
   sheet: Ref<CharacterSheet | null>
   mermaidData: Ref<string>
   currentSceneImage: Ref<string | null>
+  entities: Ref<any[]>
   status: Ref<ConnectionStatus>
   gameOverReason: Ref<string>
   autoVisualize: Ref<bool>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
+  revealIllustration: (name: string, url: string) => void
 }
 
 export function useGameSocket(): UseGameSocket {
@@ -27,6 +29,7 @@ export function useGameSocket(): UseGameSocket {
   const sheet = ref<CharacterSheet | null>(null)
   const mermaidData = ref<string>('')
   const currentSceneImage = ref<string | null>(null)
+  const entities = ref<any[]>([])
   const status = ref<ConnectionStatus>('disconnected')
   const gameOverReason = ref('')
   const autoVisualize = ref(false)
@@ -52,6 +55,7 @@ export function useGameSocket(): UseGameSocket {
         messages.value = data.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
         sheet.value = data.sheet
         mermaidData.value = data.mermaid || ''
+        entities.value = data.entities || []
         
         status.value = 'connected'
 
@@ -106,6 +110,7 @@ export function useGameSocket(): UseGameSocket {
         sheet.value = data.sheet
         if (data.mermaid) mermaidData.value = data.mermaid
         if (data.image_url) currentSceneImage.value = data.image_url
+        entities.value = data.entities || []
         
         if (data.game_over) {
           status.value = 'game_over'
@@ -128,11 +133,15 @@ export function useGameSocket(): UseGameSocket {
     sheet,
     mermaidData,
     currentSceneImage,
+    entities,
     status,
     gameOverReason,
     autoVisualize,
     connect,
     disconnect,
     sendMessage,
+    revealIllustration: (name: string, url: string) => {
+      _pushMessage('system', `**Illustration Revealed:** ${name}\n\n![${name}](${url})`)
+    }
   }
 }

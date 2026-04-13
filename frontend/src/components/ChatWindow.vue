@@ -72,6 +72,34 @@ function handleKeydown(e: KeyboardEvent): void {
     handleSend()
   }
 }
+
+/**
+ * Very basic markdown parser for images and bolds.
+ */
+function parseContent(content: string) {
+  const parts: any[] = []
+  const imgRegex = /!\[(.*?)\]\((.*?)\)/g
+  let lastIdx = 0
+  let match
+
+  while ((match = imgRegex.exec(content)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push({ type: 'text', value: content.slice(lastIdx, match.index) })
+    }
+    parts.push({ type: 'image', alt: match[1], url: match[2] })
+    lastIdx = match.index + match[0].length
+  }
+
+  if (lastIdx < content.length) {
+    parts.push({ type: 'text', value: content.slice(lastIdx) })
+  }
+
+  return parts
+}
+
+function formatBolds(text: string) {
+  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+}
 </script>
 
 <template>
@@ -120,7 +148,7 @@ function handleKeydown(e: KeyboardEvent): void {
         </div>
 
         <!-- Content -->
-        <p
+        <div
           :class="[
             'text-sm leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2',
             msg.role === 'user' ? 'text-slate-300 border-cyan-500/50' :
@@ -128,8 +156,14 @@ function handleKeydown(e: KeyboardEvent): void {
             'text-emerald-300 border-emerald-500/50 italic opacity-80'
           ]"
         >
-          {{ msg.content }}
-        </p>
+          <template v-for="(part, pIdx) in parseContent(msg.content)" :key="pIdx">
+            <span v-if="part.type === 'text'" v-html="formatBolds(part.value)"></span>
+            <div v-else-if="part.type === 'image'" class="my-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
+              <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />
+              <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-[10px] text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>
+            </div>
+          </template>
+        </div>
       </div>
 
       <!-- Connecting/empty state -->

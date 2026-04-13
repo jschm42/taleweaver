@@ -1,6 +1,6 @@
 import logging
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from pydantic import BaseModel
@@ -36,12 +36,14 @@ logger = logging.getLogger(__name__)
 
 class CreateAdventurePayload(BaseModel):
     """Payload for creating a new adventure with its initial avatar."""
+    id: str  # Added to support client-side UUID generation for polling
     title: str
     character_id: str
     image_url: Optional[str] = None
     context: Optional[str] = None
     strict_rules: bool = True
-    generate_entity_images: bool = False
+    generate_npc_images: bool = False
+    generate_item_images: bool = False
     time_per_turn: int = 5
     game_over_rules: Optional[Dict[str, Any]] = None
 
@@ -76,6 +78,7 @@ class ChatResponse(BaseModel):
     sheet: Dict[str, Any]
     mermaid: Optional[str] = None
     image_url: Optional[str] = None
+    entities: List[Dict[str, Any]] = []
     game_over: bool = False
     game_over_reason: Optional[str] = None
 
@@ -91,6 +94,7 @@ class ChatRequest(BaseModel):
 @router.post("", status_code=201)
 async def create_adventure(
     payload: CreateAdventurePayload,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     result = await db.execute(select(User).limit(1))
@@ -106,19 +110,24 @@ async def create_adventure(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found.")
 
+    # Create placeholder adventure
     adv = Adventure(
+        id=payload.id,
         title=payload.title,
         image_url=payload.image_url,
         context=payload.context,
         strict_rules=payload.strict_rules,
         time_per_turn=payload.time_per_turn,
         game_over_rules=payload.game_over_rules,
+        is_ready=False,
+        creation_status="Initializing Foundations..."
     )
     db.add(adv)
     await db.flush()
 
     avatar = Avatar(
         user_id=user.id,
+        adventure_id=adv.id, # Link early for background tasks
         name=character.name,
         hp=200,
         stamina=200,
@@ -128,43 +137,86 @@ async def create_adventure(
         equipment=character.equipment,
         status_effects=character.status_effects,
     )
-    # Add profile image if added to Avatar later, for now we skip adding the column to avoid migration issues.
     db.add(avatar)
-    await db.flush()
-
-    # --- Generate World ---
-    llm_settings = user.llm_settings or {}
-    complex_model = llm_settings.get("complex_model", "gpt-4o")
-    
-    await WorldGenerator.generate_world(
-        db=db,
-        user=user,
-        adventure_id=adv.id,
-        title=adv.title,
-        context=adv.context or "A standard fantasy world.",
-        model=complex_model,
-        generate_entity_images=payload.generate_entity_images
-    )
-    
-    # Set initial scene to the first generated scene for this adventure
-    scene_res = await db.execute(
-        select(WorldScene).where(WorldScene.adventure_id == adv.id).limit(1)
-    )
-    first_scene = scene_res.scalars().first()
-    start_scene_id = first_scene.id if first_scene else "START"
-
-    game_state = GameState(
-        user_id=user.id,
-        adventure_id=adv.id,
-        avatar_id=avatar.id,
-        scene_id=start_scene_id,
-        in_game_time=0,
-    )
-    db.add(game_state)
     await db.commit()
 
-    logger.info("Created adventure '%s' (id=%s)", payload.title, adv.id)
-    return {"game_id": game_state.id, "adventure_id": adv.id, "avatar_id": avatar.id}
+    # Dispatch generation
+    background_tasks.add_task(run_background_generation, adv.id, user.id, payload.model_dump())
+    
+    return {"adventure_id": adv.id}
+
+async def run_background_generation(adventure_id: str, user_id: str, payload_dict: dict):
+    """Background task for world gen, scene init, and auto-cleanup on failure."""
+    from backend.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        try:
+            # Re-fetch user in this session
+            result = await db.execute(select(User).where(User.id == user_id))
+            user = result.scalars().first()
+            if not user: return
+
+            llm_settings = user.llm_settings or {}
+            complex_model = llm_settings.get("complex_model", "gpt-4o")
+            
+            # 1. World Gen
+            await WorldGenerator.generate_world(
+                db=db, 
+                user=user, 
+                adventure_id=adventure_id, 
+                title=payload_dict['title'], 
+                context=payload_dict.get('context') or "A standard fantasy world.",
+                model=complex_model,
+                generate_npc_images=payload_dict.get('generate_npc_images', False),
+                generate_item_images=payload_dict.get('generate_item_images', False)
+            )
+            
+            # 2. Initial GameState
+            scenes_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+            scenes = scenes_res.scalars().all()
+            if not scenes: raise ValueError("Engine failed to sprout any locations.")
+            
+            # Get Avatar ID
+            avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
+            avatar = avatar_res.scalars().first()
+            
+            db.add(GameState(
+                id=adventure_id,
+                user_id=user_id,
+                adventure_id=adventure_id,
+                avatar_id=avatar.id if avatar else None,
+                scene_id=scenes[0].id,
+                in_game_time=0
+            ))
+            
+            # 3. Mark Ready
+            adv = await db.get(Adventure, adventure_id)
+            if adv:
+                adv.is_ready = True
+                adv.creation_status = "Ready"
+            
+            await db.commit()
+            
+        except Exception as e:
+            logger.error("Background Gen Failed for %s: %s", adventure_id, e)
+            try:
+                await db.rollback()
+                # Auto-cleanup as per user preference
+                await db.execute(delete(Avatar).where(Avatar.adventure_id == adventure_id))
+                await db.execute(delete(Adventure).where(Adventure.id == adventure_id))
+                await db.commit()
+            except:
+                pass
+
+@router.get("/{game_id}/status")
+async def get_adventure_status(game_id: str, db: AsyncSession = Depends(get_db)):
+    adv = await db.get(Adventure, game_id)
+    if not adv:
+        raise HTTPException(status_code=404, detail="Adventure cleaned up due to failure")
+    return {
+        "is_ready": adv.is_ready,
+        "status": adv.creation_status,
+        "error": adv.creation_error
+    }
 
 
 @router.get("", response_model=List[GameSessionResponse])
@@ -572,10 +624,14 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
     world_map = map_res.scalars().first()
     mermaid_data = MapEngine.to_mermaid(world_map) if world_map else None
     
+    ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == state.adventure_id, WorldEntity.current_scene_id == state.scene_id))
+    entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in ent_res.scalars().all()]
+    
     return ChatResponse(
         messages=history,
         sheet=_build_sheet_snapshot(avatar, state),
-        mermaid=mermaid_data
+        mermaid=mermaid_data,
+        entities=entities
     )
 
 @router.post("/{game_id}/chat", response_model=ChatResponse)
@@ -773,17 +829,23 @@ async def post_chat_message(
         if adventure.strict_rules and game_event and game_event.image_prompt and payload.auto_visualize:
             image_url = await MediaEngine.generate_scene_image(
                 game_event.image_prompt, 
+                adventure.id,  # ADDED adventure_id
                 {"t2i_settings": user.t2i_settings}, 
                 user.encrypted_api_keys
             )
 
         await db.commit()
         
+        # Fetch current entities for the response
+        curr_ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == state.adventure_id, WorldEntity.current_scene_id == state.scene_id))
+        curr_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in curr_ent_res.scalars().all()]
+
         return ChatResponse(
             messages=response_messages,
             sheet=_build_sheet_snapshot(avatar, state),
             mermaid=mermaid_data,
             image_url=image_url,
+            entities=curr_entities,
             game_over=game_over,
             game_over_reason=game_over_reason
         )

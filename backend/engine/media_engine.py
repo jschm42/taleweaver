@@ -18,7 +18,9 @@ class MediaEngine:
         prompt: str, 
         model: str, 
         api_key: str, 
-        provider: str = "openai"
+        provider: str = "openai",
+        target_dir: str = "uploads",
+        filename: Optional[str] = None
     ) -> Optional[str]:
         """
         Calls LiteLLM to generate an image and saves it locally.
@@ -33,43 +35,75 @@ class MediaEngine:
                 "prompt": prompt,
                 "model": model,
                 "api_key": api_key,
+                "custom_llm_provider": provider
             }
             
             # Handle OpenRouter specifics
             if provider == "openrouter":
                 kwargs["api_base"] = "https://openrouter.ai/api/v1"
-                if model.startswith("openrouter/"):
-                    kwargs["model"] = model.replace("openrouter/", "")
+                if not model.startswith("openrouter/"):
+                    kwargs["model"] = f"openrouter/{model}"
 
             # Call LiteLLM
             response = litellm.image_generation(**kwargs)
-            image_url = response.data[0].url
             
-            if not image_url:
-                logger.error("No image URL returned from provider.")
+            # Check for URL or Base64 data
+            image_data = response.data[0]
+            image_url = getattr(image_data, 'url', None)
+            b64_json = getattr(image_data, 'b64_json', None)
+            
+            if image_url:
+                return await MediaEngine._save_remote_image(image_url, target_dir, filename)
+            elif b64_json:
+                return await MediaEngine._save_b64_image(b64_json, target_dir, filename)
+            else:
+                logger.error(f"No image data in response: {response}")
                 return None
-
-            # Download and save locally
-            return await MediaEngine._save_remote_image(image_url)
 
         except Exception as e:
             logger.exception("Image generation failed")
             return None
 
     @staticmethod
-    async def _save_remote_image(url: str) -> Optional[str]:
-        """Downloads a remote image and persists it in the /uploads directory."""
+    async def _save_b64_image(b64_data: str, target_dir: str = "uploads", filename: Optional[str] = None) -> Optional[str]:
+        """Decodes and saves a base64 image string."""
+        import base64
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            final_filename = filename or f"{uuid.uuid4()}.png"
+            if not final_filename.endswith(".png"):
+                final_filename += ".png"
+                
+            filepath = os.path.join(target_dir, final_filename)
+            
+            with open(filepath, "wb") as f:
+                f.write(base64.b64decode(b64_data))
+            
+            rel_path = filepath.split("uploads")[-1].replace("\\", "/")
+            return f"/uploads{rel_path}"
+        except Exception as e:
+            logger.exception("Error saving b64 image")
+            return None
+
+    @staticmethod
+    async def _save_remote_image(url: str, target_dir: str = "uploads", filename: Optional[str] = None) -> Optional[str]:
+        """Downloads a remote image and persists it in the specified directory."""
         try:
             response = requests.get(url, timeout=30)
             if response.status_code == 200:
-                os.makedirs("uploads", exist_ok=True)
-                filename = f"{uuid.uuid4()}.png"
-                filepath = os.path.join("uploads", filename)
+                os.makedirs(target_dir, exist_ok=True)
+                final_filename = filename or f"{uuid.uuid4()}.png"
+                if not final_filename.endswith(".png"):
+                    final_filename += ".png"
+                    
+                filepath = os.path.join(target_dir, final_filename)
                 
                 with open(filepath, "wb") as f:
                     f.write(response.content)
                 
-                return f"/uploads/{filename}"
+                # Convert absolute path to relative for frontend
+                rel_path = filepath.split("uploads")[-1].replace("\\", "/") # Handles windows/linux
+                return f"/uploads{rel_path}"
             else:
                 logger.error(f"Failed to download image from {url}, status: {response.status_code}")
                 return None
@@ -78,7 +112,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def generate_scene_image(prompt: str, user_config: dict, api_keys: dict) -> Optional[str]:
+    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict) -> Optional[str]:
         """High-level wrapper for gameplay scene generation (uses Advanced Model)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: return None
@@ -90,10 +124,14 @@ class MediaEngine:
             return None
             
         api_key = encryption_util.decrypt_key(api_keys[provider])
-        return await MediaEngine.generate_image(prompt, model, api_key, provider)
+        
+        target_dir = os.path.join("uploads", "adventures", adventure_id, "scenes")
+        filename = f"{int(uuid.uuid4())}.png"
+        
+        return await MediaEngine.generate_image(prompt, model, api_key, provider, target_dir, filename)
 
     @staticmethod
-    async def generate_entity_image(prompt: str, user_config: dict, api_keys: dict) -> Optional[str]:
+    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict) -> Optional[str]:
         """High-level wrapper for NPC/Object generation (uses Simple Model)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: return None
@@ -105,4 +143,8 @@ class MediaEngine:
             return None
             
         api_key = encryption_util.decrypt_key(api_keys[provider])
-        return await MediaEngine.generate_image(prompt, model, api_key, provider)
+        
+        target_dir = os.path.join("uploads", "adventures", adventure_id, "entities")
+        filename = f"{entity_id}.png"
+        
+        return await MediaEngine.generate_image(prompt, model, api_key, provider, target_dir, filename)

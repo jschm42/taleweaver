@@ -19,14 +19,20 @@ const props = defineProps<{
 const router = useRouter()
 const showSheet = ref(false)
 const showMap = ref(false)
-const clockTick = ref(false)  // triggers brief highlight animation
+const clockTick = ref(false)
+const isDebugVisuals = ref(false)
 
+const {
+  sheet,
   status,
+  messages,
   gameOverReason,
   autoVisualize,
+  entities,
   connect,
   disconnect,
   sendMessage,
+  revealIllustration
 } = useGameSocket()
 
 /**
@@ -154,8 +160,52 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <!-- Main Game Area -->
-    <div class="flex-grow relative overflow-hidden flex flex-col items-center p-4 sm:p-6 w-full max-w-5xl mx-auto">
+    <div class="flex-grow flex overflow-hidden">
+      <!-- Left Sidebar: Inhabitants & Discovery -->
+      <aside v-if="entities.length > 0" class="hidden xl:flex w-72 bg-slate-900 border-r border-slate-800 flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between gap-2 mb-6">
+          <div class="flex items-center gap-2">
+            <i class="ra ra-venoms-trap text-emerald-500"></i>
+            <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500">World Inhabitants</h3>
+          </div>
+          <button 
+            @click="isDebugVisuals = !isDebugVisuals" 
+            class="p-1.5 rounded bg-slate-800 border border-slate-700 hover:border-cyan-500/50 transition-all"
+            :title="isDebugVisuals ? 'Disable Debug Visuals' : 'Enable Debug Visuals'"
+          >
+            <i class="ra ra-eye-shield text-xs" :class="isDebugVisuals ? 'text-cyan-400' : 'text-slate-500'"></i>
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div v-for="ent in entities" :key="ent.id" class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 group transition-all hover:border-slate-700">
+            <div v-if="isDebugVisuals && ent.image_url" class="h-24 w-full rounded-lg overflow-hidden border border-white/5 bg-slate-900 mb-2">
+              <img :src="'http://localhost:8000' + ent.image_url" class="w-full h-full object-cover opacity-80" />
+            </div>
+
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold" :class="ent.entity_type === 'NPC' ? 'text-cyan-400' : 'text-amber-400'">
+                {{ ent.name }}
+              </span>
+              <span class="text-[9px] font-mono text-slate-600 uppercase">{{ ent.entity_type }}</span>
+            </div>
+            
+            <p class="text-[10px] text-slate-500 leading-relaxed italic line-clamp-2">{{ ent.description }}</p>
+
+            <button 
+              v-if="ent.image_url"
+              @click="revealIllustration(ent.name, ent.image_url)"
+              class="w-full py-2 bg-slate-900 hover:bg-emerald-500/10 border border-slate-800 hover:border-emerald-500/30 rounded-lg text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:text-emerald-400 transition-all flex items-center justify-center gap-2"
+            >
+              <i class="ra ra-camera"></i>
+              Reveal Illustration
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Game Area -->
+      <div class="flex-grow relative overflow-hidden flex flex-col items-center p-4 sm:p-6 w-full max-w-5xl mx-auto">
       <div v-if="gameOverReason" class="w-full bg-red-900/20 border border-red-500/30 p-4 rounded-xl mb-4 text-red-400 font-medium flex items-center gap-3 shadow-lg backdrop-blur-sm shrink-0">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -185,6 +235,7 @@ onBeforeUnmount(() => {
         @send="sendMessage"
         @open-sheet="showSheet = true"
       />
+      </div>
     </div>
 
     <!-- Modals -->
