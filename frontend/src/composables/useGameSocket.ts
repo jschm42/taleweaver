@@ -1,19 +1,13 @@
 /**
- * useGameSocket — Reactive WebSocket composable for the TaleWeaver game loop.
- *
- * Manages the WebSocket lifecycle (connect / disconnect / reconnect),
- * parses incoming server messages, and exposes reactive state consumed
- * by the Chat Window and Character Sheet components.
+ * useGameSocket — Reactive REST-based composable for the TaleWeaver game loop.
+ * 
+ * Replaces the legacy WebSocket implementation with a robust REST architecture.
+ * Manages chat history fetching, message posting, and state synchronization.
  */
 import { ref, type Ref } from 'vue'
-import type { ChatMessage, CharacterSheet, WsIncoming } from '@/types'
+import type { ChatMessage, CharacterSheet } from '@/types'
 
-/** Maximum number of reconnect attempts before giving up. */
-const MAX_RECONNECT_ATTEMPTS = 5
-/** Base delay (ms) for exponential back-off reconnect strategy. */
-const RECONNECT_BASE_DELAY_MS = 1000
-
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over'
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading'
 
 export interface UseGameSocket {
   messages: Ref<ChatMessage[]>
@@ -22,9 +16,9 @@ export interface UseGameSocket {
   currentSceneImage: Ref<string | null>
   status: Ref<ConnectionStatus>
   gameOverReason: Ref<string>
-  connect: (gameId: string) => void
+  connect: (gameId: string) => Promise<void>
   disconnect: () => void
-  sendMessage: (content: string) => void
+  sendMessage: (content: string) => Promise<void>
 }
 
 export function useGameSocket(): UseGameSocket {
@@ -34,125 +28,94 @@ export function useGameSocket(): UseGameSocket {
   const currentSceneImage = ref<string | null>(null)
   const status = ref<ConnectionStatus>('disconnected')
   const gameOverReason = ref('')
-
-  let socket: WebSocket | null = null
   let currentGameId = ''
-  let reconnectAttempts = 0
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
-
-  // ── Internal helpers ────────────────────────────────────────────────────
 
   function _pushMessage(role: ChatMessage['role'], content: string): void {
     messages.value.push({ role, content, timestamp: new Date() })
   }
 
-  function _handleMessage(raw: string): void {
-    let parsed: WsIncoming
-    try {
-      parsed = JSON.parse(raw) as WsIncoming
-    } catch {
-      console.warn('[WS] Received non-JSON message:', raw)
-      return
-    }
-
-    if ('type' in parsed) {
-      if (parsed.type === 'sheet_update') {
-        sheet.value = parsed.data
-      } else if (parsed.type === 'game_over') {
-        gameOverReason.value = parsed.reason
-        status.value = 'game_over'
-        _pushMessage('system', `☠ GAME OVER: ${parsed.reason}`)
-      } else if (parsed.type === 'map_update') {
-        mermaidData.value = parsed.mermaid
-      } else if (parsed.type === 'image_update') {
-        currentSceneImage.value = parsed.url
-      }
-    } else if ('role' in parsed) {
-      _pushMessage(parsed.role, parsed.content)
-    }
-  }
-
-  function _scheduleReconnect(): void {
-    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      status.value = 'error'
-      _pushMessage('system', 'Connection lost. Please refresh the page.')
-      return
-    }
-    const delay = RECONNECT_BASE_DELAY_MS * Math.pow(2, reconnectAttempts)
-    reconnectAttempts++
-    _pushMessage('system', `Connection lost. Reconnecting in ${delay / 1000}s… (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`)
-    reconnectTimer = setTimeout(() => connect(currentGameId), delay)
-  }
-
-  // ── Public API ──────────────────────────────────────────────────────────
-
   /**
-   * Opens a WebSocket connection for the given game session.
-   * Clears previous messages and resets state on a fresh connect.
+   * Loads the current session state and history.
+   * If history is empty, triggers the initial world description.
    */
-  function connect(gameId: string): void {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.close()
-    }
-
+  async function connect(gameId: string): Promise<void> {
     currentGameId = gameId
-    status.value = 'connecting'
+    status.value = 'loading'
+    messages.value = []
+    
+    try {
+      const res = await fetch(`http://localhost:8000/api/adventures/${gameId}/chat`)
+      if (res.ok) {
+        const data = await res.json()
+        messages.value = data.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
+        sheet.value = data.sheet
+        mermaidData.value = data.mermaid || ''
+        
+        status.value = 'connected'
 
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const host = window.location.host
-    const url = `${protocol}://${host}/ws/adventure/${gameId}`
-
-    socket = new WebSocket(url)
-
-    socket.onopen = () => {
-      status.value = 'connected'
-      reconnectAttempts = 0
-      _pushMessage('system', '⚔ Connected to the Game Master. Your adventure begins…')
-    }
-
-    socket.onmessage = (event: MessageEvent<string>) => {
-      _handleMessage(event.data)
-    }
-
-    socket.onclose = (event) => {
-      if (status.value === 'game_over') return // intentional end
-      if (event.wasClean) {
-        status.value = 'disconnected'
+        // If no history, trigger prologue automatically
+        if (messages.value.length === 0) {
+          await sendMessage('')
+        }
       } else {
-        _scheduleReconnect()
+        status.value = 'error'
       }
-    }
-
-    socket.onerror = () => {
-      // onclose fires right after onerror, so reconnect logic lives there
-      console.error('[WS] WebSocket error for game', gameId)
+    } catch (err) {
+      console.error('[Session] Load error:', err)
+      status.value = 'error'
     }
   }
 
-  /** Closes the WebSocket and cancels any pending reconnect timer. */
   function disconnect(): void {
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer)
-      reconnectTimer = null
-    }
-    if (socket) {
-      socket.close(1000, 'User navigated away')
-      socket = null
-    }
+    currentGameId = ''
     status.value = 'disconnected'
   }
 
   /**
-   * Sends a player message to the server and optimistically appends it
-   * to the local message list so the UI feels instant.
+   * Posts a player message and processes the GM response.
    */
-  function sendMessage(content: string): void {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      _pushMessage('system', 'Not connected. Please wait…')
-      return
+  async function sendMessage(content: string): Promise<void> {
+    if (content) _pushMessage('user', content)
+    
+    const wasGameOver = status.value === 'game_over'
+    if (wasGameOver) return
+
+    status.value = 'connecting' 
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/adventures/${currentGameId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        
+        // Append only new messages (if content was provided, we already pushed user msg)
+        // Actually, the server returns all messages generated in this turn (Assistant + System)
+        for (const m of data.messages) {
+          _pushMessage(m.role as any, m.content)
+        }
+        
+        sheet.value = data.sheet
+        if (data.mermaid) mermaidData.value = data.mermaid
+        if (data.image_url) currentSceneImage.value = data.image_url
+        
+        if (data.game_over) {
+          status.value = 'game_over'
+          gameOverReason.value = data.game_over_reason
+        } else {
+          status.value = 'connected'
+        }
+      } else {
+        _pushMessage('system', 'The Game Master is currently over capacity. Try once more.')
+        status.value = 'connected'
+      }
+    } catch (err) {
+      console.error('[Session] Chat error:', err)
+      status.value = 'error'
     }
-    socket.send(JSON.stringify({ content }))
-    _pushMessage('user', content)
   }
 
   return {

@@ -15,7 +15,7 @@ import backend.models.game_state
 import backend.models.chat
 import backend.models.world_map
 
-from backend.api.routes import config_api, adventures, avatars, ws, uploads, characters, map_api
+from backend.api.routes import config_api, adventures, avatars, uploads, characters, map_api
 
 
 @asynccontextmanager
@@ -54,7 +54,6 @@ app.include_router(avatars.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(uploads.router, prefix="/api")
 app.include_router(map_api.router, prefix="/api")
-app.include_router(ws.router)
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

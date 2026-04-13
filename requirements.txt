@@ -1,6 +1,5 @@
 fastapi
 uvicorn[standard]
-websockets
 sqlalchemy
 aiosqlite
 pydantic

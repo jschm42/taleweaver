@@ -18,6 +18,13 @@ from backend.schemas.adventure import AdventureUpdate, AdventureDebugResponse
 from backend.schemas.avatar import AvatarUpdate
 from backend.schemas.game_state import GameStateUpdate
 from backend.engine.world_generator import WorldGenerator
+from backend.engine.command_parser import CommandParser
+from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException
+from backend.engine.map_engine import MapEngine
+from backend.engine.media_engine import MediaEngine
+from backend.engine.memory_manager import MemoryManager
+from backend.engine.debug_engine import DebugEngine
+from backend.core.llm_router import GameMasterLLM
 
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
 logger = logging.getLogger(__name__)
@@ -61,6 +68,15 @@ class GameSessionResponse(BaseModel):
     scene_id: str
     in_game_time: int
     is_paused: bool
+
+class ChatResponse(BaseModel):
+    """Unified response for a game turn."""
+    messages: List[Dict[str, str]] # [{'role': '...', 'content': '...'}]
+    sheet: Dict[str, Any]
+    mermaid: Optional[str] = None
+    image_url: Optional[str] = None
+    game_over: bool = False
+    game_over_reason: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -517,3 +533,230 @@ async def import_adventure(payload: Dict[str, Any], db: AsyncSession = Depends(g
         await WorldGenerator.apply_manifest(db, new_adv.id, payload)
         await db.commit()
         return {"status": "imported", "adventure_id": new_adv.id, "type": "MANIFEST"}
+
+def _build_sheet_snapshot(avatar: Avatar, state: GameState) -> dict:
+    """Builds a serialisable character-sheet snapshot."""
+    return {
+        "name": avatar.name,
+        "hp": avatar.hp,
+        "stamina": avatar.stamina,
+        "mana": avatar.mana,
+        "stats": avatar.stats,
+        "inventory": avatar.inventory,
+        "equipment": avatar.equipment,
+        "status_effects": avatar.status_effects,
+        "in_game_time": state.in_game_time,
+    }
+
+@router.get("/{game_id}/chat", response_model=ChatResponse)
+async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
+    """Retrieves full chat history and current session state."""
+    state_res = await db.execute(select(GameState).where(GameState.id == game_id))
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+        
+    av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+    avatar = av_res.scalars().first()
+    
+    chat_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == game_id).order_by(ChatMessage.created_at.asc()))
+    history = [{"role": m.role, "content": m.content} for m in chat_res.scalars().all()]
+    
+    map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
+    world_map = map_res.scalars().first()
+    mermaid_data = MapEngine.to_mermaid(world_map) if world_map else None
+    
+    return ChatResponse(
+        messages=history,
+        sheet=_build_sheet_snapshot(avatar, state),
+        mermaid=mermaid_data
+    )
+
+@router.post("/{game_id}/chat", response_model=ChatResponse)
+async def post_chat_message(
+    game_id: str,
+    payload: Dict[str, str],
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Unified game turn endpoint. Processes user input (natural language or slash command),
+    advances world state, and returns all updates.
+    """
+    user_msg = payload.get("content", "").strip()
+    
+    # 1. Load context
+    state_res = await db.execute(select(GameState).where(GameState.id == game_id))
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Game session not found.")
+
+    if state.is_paused:
+        return ChatResponse(
+            messages=[{"role": "system", "content": "The game is currently paused."}],
+            sheet=_build_sheet_snapshot(avatar, state) if 'avatar' in locals() else {}
+        )
+
+    av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+    avatar = av_res.scalars().first()
+    
+    u_res = await db.execute(select(User).where(User.id == state.user_id))
+    user = u_res.scalars().first()
+
+    adv_res = await db.execute(select(Adventure).where(Adventure.id == state.adventure_id))
+    adventure = adv_res.scalars().first()
+
+    response_messages = []
+    mermaid_data = None
+    image_url = None
+    game_over = False
+    game_over_reason = None
+
+    # --- Fresh Entry / Re-orientation Check ---
+    msg_count_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == game_id).limit(1))
+    is_first_message = msg_count_res.scalars().first() is None
+    
+    # If it's a [LOOK AROUND] trigger or a completely new start
+    actual_user_input = user_msg
+    if not user_msg:
+        user_msg = "[LOOK AROUND]"
+
+    # --- Handle Debug Commands ---
+    if user_msg.startswith("/debug"):
+        cmd_args = user_msg[7:].strip()
+        debug_info = await DebugEngine.handle_debug_command(db, state, cmd_args)
+        return ChatResponse(
+            messages=[{"role": "system", "content": debug_info}],
+            sheet=_build_sheet_snapshot(avatar, state)
+        )
+
+    # --- Slash-command fast path ---
+    if user_msg.startswith("/"):
+        if user_msg.strip().lower() == "/map":
+             map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
+             world_map = map_res.scalars().first()
+             mermaid_data = MapEngine.to_mermaid(world_map) if world_map else None
+             return ChatResponse(messages=[], sheet=_build_sheet_snapshot(avatar, state), mermaid=mermaid_data)
+        
+        response = CommandParser.parse_command(avatar, user_msg)
+        await db.commit()
+        return ChatResponse(
+            messages=[{"role": "system", "content": response}],
+            sheet=_build_sheet_snapshot(avatar, state)
+        )
+
+    # --- Turn-based Logic: Advance Time & Status Effects ---
+    state.in_game_time += adventure.time_per_turn
+    tick_msgs = RuleEngine.apply_ticks(avatar)
+    for tm in tick_msgs:
+        response_messages.append({"role": "system", "content": tm})
+
+    # Record User Message
+    if actual_user_input:
+        user_chat_rec = ChatMessage(game_state_id=game_id, role="user", content=actual_user_input)
+        db.add(user_chat_rec)
+        await db.flush()
+
+    # --- History & Context ---
+    hist_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == game_id).order_by(ChatMessage.created_at.asc()))
+    history = [{"role": m.role, "content": m.content} for m in hist_res.scalars().all()]
+
+    # Fetch pre-generated entities for context
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.scene_id, WorldScene.adventure_id == state.adventure_id))
+    current_scene = scene_res.scalars().first()
+    
+    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.current_scene_id == state.scene_id, WorldEntity.adventure_id == state.adventure_id))
+    entities = entity_res.scalars().all()
+    
+    exit_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == state.scene_id, WorldExit.adventure_id == state.adventure_id))
+    exits = exit_res.scalars().all()
+
+    context_messages = MemoryManager.build_context(
+        avatar, adventure.context or "", history, 
+        current_scene=current_scene, entities=entities, exits=exits, in_game_time=state.in_game_time
+    )
+    system_prompt = context_messages[0]["content"]
+
+    # --- LLM Processing ---
+    settings = user.llm_settings or {}
+    small_model = settings.get("small_model", "openai/gpt-4o-mini")
+    complex_model = settings.get("complex_model", "openai/gpt-4o-mini")
+    provider = settings.get("preferred_provider", "openai")
+    
+    llm = GameMasterLLM(user, provider=provider)
+    game_event = None
+    response_text = ""
+
+    try:
+        if adventure.strict_rules:
+            game_event = llm.execute_complex_task(system_prompt, user_msg, GameEvent, complex_model)
+            try:
+                response_text = RuleEngine.apply_event(avatar, game_event)
+            except GameOverException as exc:
+                game_over = True
+                game_over_reason = str(exc)
+                response_text = str(exc)
+        else:
+            response_text = llm.execute_simple_task(system_prompt, user_msg, small_model)
+
+        # Record Assistant Message
+        assistant_chat = ChatMessage(game_state_id=game_id, role="assistant", content=response_text)
+        db.add(assistant_chat)
+        response_messages.append({"role": "assistant", "content": response_text})
+
+        # --- Update World State ---
+        if adventure.strict_rules and game_event:
+            if game_event.new_scene_id: state.scene_id = game_event.new_scene_id
+            
+            if game_event.moved_entities:
+                for move in game_event.moved_entities:
+                    ent_mv_res = await db.execute(select(WorldEntity).where(WorldEntity.id == move.entity_id, WorldEntity.adventure_id == state.adventure_id))
+                    entity = ent_mv_res.scalars().first()
+                    if entity:
+                        if move.to_scene_id: entity.current_scene_id = move.to_scene_id
+                        if move.to_spatial_position: entity.spatial_position = move.to_spatial_position
+
+            if game_event.updated_exits:
+                for upd in game_event.updated_exits:
+                    ex_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == upd.from_scene_id, WorldExit.to_scene_id == upd.to_scene_id, WorldExit.adventure_id == state.adventure_id))
+                    world_exit = ex_res.scalars().first()
+                    if world_exit: world_exit.is_locked = upd.is_locked
+
+            if game_event.extra_time_minutes:
+                state.in_game_time += game_event.extra_time_minutes
+                response_messages.append({"role": "system", "content": f"Gamemaster added +{game_event.extra_time_minutes} minutes."})
+
+        # --- Update Map & Register Discovery ---
+        map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
+        world_map = map_res.scalars().first()
+        if not world_map:
+            world_map = WorldMap(adventure_id=state.adventure_id)
+            db.add(world_map)
+        
+        MapEngine.register_visit(world_map, state.scene_id, label=game_event.scene_label if game_event else None)
+        room_exits_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == state.scene_id, WorldExit.adventure_id == state.adventure_id))
+        for ex in room_exits_res.scalars().all():
+            MapEngine.register_exit(world_map, ex.from_scene_id, ex.to_scene_id, exit_label=ex.label, is_locked=ex.is_locked)
+        
+        mermaid_data = MapEngine.to_mermaid(world_map)
+        
+        # --- Media Generation ---
+        if adventure.strict_rules and game_event and game_event.image_prompt:
+            image_url = await MediaEngine.generate_scene_image(game_event.image_prompt, state.adventure_id)
+
+        await db.commit()
+        
+        return ChatResponse(
+            messages=response_messages,
+            sheet=_build_sheet_snapshot(avatar, state),
+            mermaid=mermaid_data,
+            image_url=image_url,
+            game_over=game_over,
+            game_over_reason=game_over_reason
+        )
+
+    except Exception as e:
+        logger.exception("Chat processing error")
+        return ChatResponse(
+            messages=[{"role": "system", "content": "The Game Master is momentarily unavailable. Please try again."}],
+            sheet=_build_sheet_snapshot(avatar, state) if 'avatar' in locals() else {}
+        )
