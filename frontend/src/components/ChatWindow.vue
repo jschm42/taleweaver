@@ -98,7 +98,9 @@ function parseContent(content: string) {
 }
 
 function formatBolds(text: string) {
-  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  return text
+    .replace(/\*\*(.*?):\*\*/g, '<strong class="text-amber-400 font-bold">$1:</strong>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
 }
 </script>
 

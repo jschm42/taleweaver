@@ -826,7 +826,7 @@ async def post_chat_message(
                 narration_system_prompt += "Keep the response snappy and punchy (1 short paragraph). Move the action forward without excessive flowery prose."
 
             narration_system_prompt += "\nDo not mention numbers, IDs, or system terms. Use English. 1-3 paragraphs based on the context above."
-            narration_system_prompt += "\n\nMANDATORY FORMATTING: Start all character dialogue on a NEW LINE. Separate narrative prose from speech with a blank line."
+            narration_system_prompt += "\n\nMANDATORY FORMATTING: Start all character dialogue on a NEW LINE. Use the format: **Character Name:** \"Dialogue\". Separate narrative prose from speech with a blank line."
             
             response_text = llm.execute_simple_task(
                 system_prompt=narration_system_prompt,
