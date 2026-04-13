@@ -65,7 +65,7 @@ The `strict_rules` flag determines AI behavior:
 The project is split into a Python/FastAPI backend and a Vue.js frontend.
 
 #### 1. Backend Setup
-Navigate to the root or backend directory, create a virtual environment, and install dependencies:
+Navigate to the project root directory, create a virtual environment, and install dependencies:
 
 ```bash
 # Create and activate a virtual environment
@@ -77,7 +77,7 @@ venv\Scripts\activate
 source venv/bin/activate
 
 # Install requirements
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 # Set up your environment variables
 cp .env.example .env
@@ -86,10 +86,38 @@ cp .env.example .env
 # to place the generated key into your new .env file
 python scripts/generate_fernet_key.py
 
+# Apply database migrations
+python -m alembic upgrade head
+
 # Start the FastAPI server
-uvicorn backend.main:app --reload
+python -m uvicorn backend.main:app --reload
 ```
+
+Important: Run this command from the project root. Running it from inside the backend directory causes import errors like ModuleNotFoundError: No module named backend.
+
+If you see SQLite errors such as no such column after model changes, recreate the local database file taleweaver.db (or run your migration flow) so the schema matches the current models.
+
 The backend API will typically run on `http://localhost:8000`.
+
+#### Windows Quick Start (PowerShell)
+
+If you want a copy-paste setup for Windows PowerShell from the project root:
+
+```powershell
+# Backend terminal
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m alembic upgrade head
+python -m uvicorn backend.main:app --reload
+```
+
+```powershell
+# Frontend terminal
+cd frontend
+npm install
+npm run dev
+```
 
 #### 2. Frontend Setup
 Navigate to the frontend directory to set up the Vue.js interface:

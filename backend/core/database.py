@@ -1,5 +1,8 @@
+import logging
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from backend.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Create the async engine
 engine = create_async_engine(
@@ -23,3 +26,50 @@ async def get_db():
             yield session
         finally:
             await session.close()
+
+
+async def apply_sqlite_compat_migrations() -> None:
+    """
+    Applies lightweight, idempotent schema fixes for local SQLite databases.
+
+    SQLAlchemy `create_all()` does not alter existing tables. This helper adds
+    columns introduced after initial schema creation so older local DB files
+    continue to work without manual resets.
+    """
+    if not settings.DATABASE_URL.startswith("sqlite"):
+        return
+
+    async with engine.begin() as conn:
+        # Ensure tables exist first
+        await conn.exec_driver_sql("CREATE TABLE IF NOT EXISTS adventures (id TEXT PRIMARY KEY)")
+        await conn.exec_driver_sql("CREATE TABLE IF NOT EXISTS game_states (id TEXT PRIMARY KEY)")
+
+        adventure_cols_result = await conn.exec_driver_sql("PRAGMA table_info(adventures)")
+        adventure_cols = {row[1] for row in adventure_cols_result.fetchall()}
+
+        if "heartbeat_enabled" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN heartbeat_enabled BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added adventures.heartbeat_enabled")
+
+        if "heartbeat_interval" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN heartbeat_interval INTEGER NOT NULL DEFAULT 10"
+            )
+            logger.info("SQLite migration: added adventures.heartbeat_interval")
+
+        if "game_over_rules" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN game_over_rules TEXT"
+            )
+            logger.info("SQLite migration: added adventures.game_over_rules")
+
+        game_state_cols_result = await conn.exec_driver_sql("PRAGMA table_info(game_states)")
+        game_state_cols = {row[1] for row in game_state_cols_result.fetchall()}
+
+        if "is_paused" not in game_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE game_states ADD COLUMN is_paused BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added game_states.is_paused")

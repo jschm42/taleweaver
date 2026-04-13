@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.core.database import engine
+from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
 from backend.engine.heartbeat import heartbeat_daemon
 
@@ -22,6 +22,8 @@ async def lifespan(app: FastAPI):
     # Startup: create DB tables and launch background heartbeat
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    await apply_sqlite_compat_migrations()
 
     heartbeat_daemon.start()
 

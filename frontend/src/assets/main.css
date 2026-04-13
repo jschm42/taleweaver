@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Global resets & base ─────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html, body, #app {
+    @apply h-full m-0 p-0 bg-panel-bg text-parchment;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    line-height: 1.8;
+    image-rendering: pixelated;
+  }
+
+  /* Scrollbar — retro dark style */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: #1a0a00; }
+  ::-webkit-scrollbar-thumb { background: #8b6914; border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: #c9a84c; }
+}
+
+/* ─── Utility component classes ─────────────────────────────────────────── */
+@layer components {
+  /* Retro panel with double-border gold frame */
+  .rpg-panel {
+    @apply relative bg-panel-bg border-2 border-panel-border;
+    box-shadow: 0 0 0 2px #8b6914, inset 0 0 30px rgba(0, 0, 0, 0.7);
+  }
+
+  .rpg-panel-gold {
+    @apply relative bg-panel-bg border-2 border-gold;
+    box-shadow: 0 0 0 2px #c9a84c, 0 0 12px rgba(201, 168, 76, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.7);
+  }
+
+  /* Corner ornaments via pseudo-elements */
+  .rpg-panel::before,
+  .rpg-panel-gold::before {
+    content: '✦';
+    @apply absolute -top-2 -left-2 text-gold text-xs leading-none;
+  }
+
+  /* Retro button */
+  .rpg-btn {
+    @apply px-4 py-2 bg-ink border-2 border-gold text-gold font-pixel text-xs
+           cursor-pointer select-none transition-all duration-100
+           hover:bg-gold hover:text-ink active:scale-95;
+    image-rendering: pixelated;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.8);
+  }
+
+  .rpg-btn-danger {
+    @apply rpg-btn border-crimson text-crimson hover:bg-crimson hover:text-parchment;
+  }
+
+  /* HP / Stamina / Mana progress bars */
+  .stat-bar {
+    @apply relative h-4 w-full overflow-hidden border border-panel-border bg-ink;
+  }
+
+  .stat-bar-fill {
+    @apply h-full transition-all duration-500;
+  }
+
+  /* Chat message bubbles */
+  .msg-assistant {
+    @apply text-parchment;
+  }
+
+  .msg-user {
+    @apply text-gold-light;
+  }
+
+  .msg-system {
+    @apply text-emerald-light italic;
+  }
+
+  /* Blinking text cursor */
+  .cursor::after {
+    content: '█';
+    @apply animate-blink-cursor text-gold;
+  }
+}
