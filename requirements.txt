@@ -1,5 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
+websockets
 sqlalchemy
 aiosqlite
 pydantic
@@ -7,6 +8,8 @@ pydantic-settings
 cryptography
 litellm
 alembic
+Pillow
+python-multipart
 
 # Testing
 pytest

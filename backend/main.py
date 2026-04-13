@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
 from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
@@ -12,8 +14,9 @@ import backend.models.avatar
 import backend.models.adventure
 import backend.models.game_state
 import backend.models.chat
+import backend.models.world_map
 
-from backend.api.routes import config_api, adventures, avatars, ws
+from backend.api.routes import config_api, adventures, avatars, ws, uploads, characters, map_api
 
 
 @asynccontextmanager
@@ -52,8 +55,13 @@ app.add_middleware(
 app.include_router(config_api.router, prefix="/api")
 app.include_router(adventures.router, prefix="/api")
 app.include_router(avatars.router, prefix="/api")
+app.include_router(characters.router, prefix="/api")
+app.include_router(uploads.router, prefix="/api")
+app.include_router(map_api.router, prefix="/api")
 app.include_router(ws.router)
 
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict:

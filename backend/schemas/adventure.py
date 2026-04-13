@@ -1,14 +1,16 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
 class AdventureBase(BaseModel):
-    title: str
+    title: str = Field(..., max_length=50)
+    image_url: Optional[str] = None
+    context: Optional[str] = Field(None, max_length=2000)
     strict_rules: Optional[bool] = True
     heartbeat_interval: Optional[int] = 60
     game_over_rules: Optional[Dict[str, Any]] = None
 
 class AdventureCreate(AdventureBase):
-    pass
+    character_id: str
 
 class AdventureUpdate(BaseModel):
     title: Optional[str] = None

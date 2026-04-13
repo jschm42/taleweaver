@@ -1,0 +1,42 @@
+import uuid
+from sqlalchemy import Column, String, Integer, JSON, ForeignKey
+from backend.models.base import Base, TimestampMixin
+
+class Character(Base, TimestampMixin):
+    """
+    User's character templates.
+    """
+    __tablename__ = "characters"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    
+    name = Column(String(30), nullable=False)
+    profile_image = Column(String(255), nullable=True)
+    
+    # Generic base stats that can be mapped conceptually anywhere.
+    # We initialize them statically to 10 as per rules.
+    stats = Column(JSON, default=lambda: {
+        "strength": 10,
+        "endurance": 10,
+        "agility": 10,
+        "intelligence": 10,
+        "charisma": 10
+    }, nullable=False)
+    
+    # Empty starting gear and stuff
+    inventory = Column(JSON, default=list, nullable=False)
+    
+    equipment = Column(JSON, default=lambda: {
+        "Head": None,
+        "Chest": None,
+        "Arms": None,
+        "Legs": None,
+        "Hands": None,
+        "Feet": None,
+        "Ring_1": None,
+        "Ring_2": None,
+        "Amulet": None
+    }, nullable=False)
+    
+    status_effects = Column(JSON, default=list, nullable=False)

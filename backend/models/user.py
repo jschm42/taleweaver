@@ -10,3 +10,6 @@ class User(Base, TimestampMixin):
 
     # Store encrypted keys mapping, e.g., {"openai": "gAAAAAB...", "anthropic": "..."}
     encrypted_api_keys = Column(JSON, nullable=True)
+
+    # Store LLM preferences: {"small_model": "...", "complex_model": "..."}
+    llm_settings = Column(JSON, nullable=True)

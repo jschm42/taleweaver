@@ -5,6 +5,7 @@ from typing import TypeVar, Type
 
 from backend.models.user import User
 from backend.core.security import encryption_util
+from backend.core.llm_logger import log_llm_interaction
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -41,7 +42,18 @@ class GameMasterLLM:
             api_key=self.api_key
         )
         
-        return response.choices[0].message.content or ""
+        result = response.choices[0].message.content or ""
+        
+        log_llm_interaction(
+            model=model,
+            provider=self.provider,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_content=result,
+            raw_response=response.model_dump()
+        )
+        
+        return result
 
     def execute_complex_task(self, system_prompt: str, user_prompt: str, response_model: Type[T], model: str) -> T:
         """
@@ -64,6 +76,16 @@ class GameMasterLLM:
         )
         
         content = response.choices[0].message.content
+        
+        log_llm_interaction(
+            model=model,
+            provider=self.provider,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_content=content or "",
+            raw_response=response.model_dump()
+        )
+        
         if not content:
             raise ValueError("No content returned from LLM for complex task.")
             

@@ -18,6 +18,8 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 export interface UseGameSocket {
   messages: Ref<ChatMessage[]>
   sheet: Ref<CharacterSheet | null>
+  mermaidData: Ref<string>
+  currentSceneImage: Ref<string | null>
   status: Ref<ConnectionStatus>
   gameOverReason: Ref<string>
   connect: (gameId: string) => void
@@ -28,6 +30,8 @@ export interface UseGameSocket {
 export function useGameSocket(): UseGameSocket {
   const messages = ref<ChatMessage[]>([])
   const sheet = ref<CharacterSheet | null>(null)
+  const mermaidData = ref<string>('')
+  const currentSceneImage = ref<string | null>(null)
   const status = ref<ConnectionStatus>('disconnected')
   const gameOverReason = ref('')
 
@@ -58,6 +62,10 @@ export function useGameSocket(): UseGameSocket {
         gameOverReason.value = parsed.reason
         status.value = 'game_over'
         _pushMessage('system', `☠ GAME OVER: ${parsed.reason}`)
+      } else if (parsed.type === 'map_update') {
+        mermaidData.value = parsed.mermaid
+      } else if (parsed.type === 'image_update') {
+        currentSceneImage.value = parsed.url
       }
     } else if ('role' in parsed) {
       _pushMessage(parsed.role, parsed.content)
@@ -150,6 +158,8 @@ export function useGameSocket(): UseGameSocket {
   return {
     messages,
     sheet,
+    mermaidData,
+    currentSceneImage,
     status,
     gameOverReason,
     connect,

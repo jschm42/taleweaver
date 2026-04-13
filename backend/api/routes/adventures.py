@@ -9,6 +9,7 @@ from backend.core.database import get_db
 from backend.models.user import User
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
+from backend.models.character import Character
 from backend.models.game_state import GameState
 from backend.schemas.adventure import AdventureUpdate
 from backend.schemas.avatar import AvatarUpdate
@@ -25,7 +26,9 @@ logger = logging.getLogger(__name__)
 class CreateAdventurePayload(BaseModel):
     """Payload for creating a new adventure with its initial avatar."""
     title: str
-    avatar_name: str
+    character_id: str
+    image_url: Optional[str] = None
+    context: Optional[str] = None
     strict_rules: bool = True
     heartbeat_enabled: bool = False
     heartbeat_interval: int = 60
@@ -40,6 +43,7 @@ class AdventureResponse(BaseModel):
     heartbeat_enabled: bool
     heartbeat_interval: int
     game_over_rules: Optional[Dict[str, Any]]
+    context: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -50,6 +54,8 @@ class GameSessionResponse(BaseModel):
     game_id: str
     adventure_id: str
     avatar_id: str
+    adventure_title: str
+    image_url: Optional[str] = None
     scene_id: str
     in_game_time: int
     is_paused: bool
@@ -64,10 +70,6 @@ async def create_adventure(
     payload: CreateAdventurePayload,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """
-    Creates a new adventure, an avatar, and the initial game state.
-    Returns the IDs of all three created entities.
-    """
     result = await db.execute(select(User).limit(1))
     user = result.scalars().first()
     if not user:
@@ -75,8 +77,16 @@ async def create_adventure(
         db.add(user)
         await db.flush()
 
+    # Fetch character
+    char_res = await db.execute(select(Character).where(Character.id == payload.character_id))
+    character = char_res.scalars().first()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found.")
+
     adv = Adventure(
         title=payload.title,
+        image_url=payload.image_url,
+        context=payload.context,
         strict_rules=payload.strict_rules,
         heartbeat_enabled=payload.heartbeat_enabled,
         heartbeat_interval=payload.heartbeat_interval,
@@ -87,15 +97,16 @@ async def create_adventure(
 
     avatar = Avatar(
         user_id=user.id,
-        name=payload.avatar_name,
+        name=character.name,
         hp=200,
         stamina=200,
         mana=200,
-        stats={},
-        inventory=[],
-        equipment={},
-        status_effects=[],
+        stats=character.stats,
+        inventory=character.inventory,
+        equipment=character.equipment,
+        status_effects=character.status_effects,
     )
+    # Add profile image if added to Avatar later, for now we skip adding the column to avoid migration issues.
     db.add(avatar)
     await db.flush()
 
@@ -116,18 +127,23 @@ async def create_adventure(
 @router.get("", response_model=List[GameSessionResponse])
 async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
     """Returns all game sessions with their linked adventure and avatar IDs."""
-    result = await db.execute(select(GameState))
-    states = result.scalars().all()
+    result = await db.execute(
+        select(GameState, Adventure)
+        .join(Adventure, GameState.adventure_id == Adventure.id)
+    )
+    rows = result.all()
     return [
         GameSessionResponse(
             game_id=s.id,
             adventure_id=s.adventure_id,
             avatar_id=s.avatar_id,
+            adventure_title=a.title,
+            image_url=a.image_url,
             scene_id=s.scene_id,
             in_game_time=s.in_game_time,
             is_paused=s.is_paused,
         )
-        for s in states
+        for s, a in rows
     ]
 
 

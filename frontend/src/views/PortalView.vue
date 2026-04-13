@@ -1,6 +1,6 @@
-<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import EditAdventureModal from '@/components/EditAdventureModal.vue'
 
 const router = useRouter()
 
@@ -8,21 +8,45 @@ interface Adventure {
   game_id: string
   adventure_id: string
   avatar_id: string
+  adventure_title: string
+  image_url: string | null
   scene_id: string
   in_game_time: number
   is_paused: boolean
 }
 
+// For the active adventures list
 const adventures = ref<Adventure[]>([])
 const isLoading = ref(true)
 
+// Modals
+const showModal = ref(false)
+const showEditModal = ref(false)
+const selectedAdventureId = ref<string | null>(null)
+const isSubmitting = ref(false)
+const errorMsg = ref('')
+
+// Adventure form
+const form = ref({
+  title: '',
+  context: '',
+  character_id: '',
+  image_url: '' as string | null
+})
+
+// Characters available to pick
+interface Character {
+  id: string
+  name: string
+  profile_image: string | null
+}
+const availableCharacters = ref<Character[]>([])
+
 const fetchAdventures = async () => {
   try {
-    const res = await fetch('http://localhost:8000/api/v1/adventures')
+    const res = await fetch('http://localhost:8000/api/adventures')
     if (res.ok) {
       adventures.value = await res.json()
-    } else {
-      console.error('Failed to fetch adventures')
     }
   } catch (error) {
     console.error('API Error:', error)
@@ -31,17 +55,29 @@ const fetchAdventures = async () => {
   }
 }
 
+const fetchCharacters = async () => {
+  try {
+    const res = await fetch('http://localhost:8000/api/characters')
+    if (res.ok) {
+      availableCharacters.value = await res.json()
+      // Default selection if only one character exists
+      if (availableCharacters.value.length === 1 && !form.value.character_id) {
+        form.value.character_id = availableCharacters.value[0].id
+      }
+    }
+  } catch (error) {
+    console.error('Characters API Error:', error)
+  }
+}
+
 const deleteAdventure = async (adventureId: string) => {
   if (confirm('Are you sure you want to delete this adventure? This action cannot be undone.')) {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/adventures/${adventureId}`, {
+      const res = await fetch(`http://localhost:8000/api/adventures/${adventureId}`, {
         method: 'DELETE'
       })
       if (res.ok) {
-        // Remove from local state to avoid full reload
         adventures.value = adventures.value.filter(a => a.adventure_id !== adventureId)
-      } else {
-        console.error('Failed to delete adventure')
       }
     } catch (error) {
       console.error('Error deleting adventure:', error)
@@ -53,8 +89,85 @@ const playAdventure = (gameId: string) => {
   router.push({ name: 'game', params: { id: gameId } })
 }
 
-const createNewAdventure = () => {
-  router.push({ name: 'character-create' })
+const openNewAdventureModal = () => {
+  form.value = { title: '', context: '', character_id: '', image_url: null }
+  errorMsg.value = ''
+  showModal.value = true
+}
+
+const openEditModal = (adventureId: string) => {
+  selectedAdventureId.value = adventureId
+  showEditModal.value = true
+}
+
+const handleAdventureUpdate = () => {
+  fetchAdventures()
+}
+
+const handleImageUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (!target.files || target.files.length === 0) return
+
+  const file = target.files[0]
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    errorMsg.value = ''
+    const res = await fetch(`http://localhost:8000/api/uploads/image?type=adventure`, {
+      method: 'POST',
+      body: formData
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      form.value.image_url = data.url
+    } else {
+      errorMsg.value = 'Failed to upload adventure image. Max dimensions 512x512.'
+    }
+  } catch (err) {
+    errorMsg.value = 'Network error uploading image.'
+  }
+}
+
+const createAdventure = async () => {
+  if (!form.value.title.trim() || !form.value.character_id) {
+    errorMsg.value = "Title and Character selection are required."
+    return
+  }
+
+  isSubmitting.value = true
+  errorMsg.value = ''
+
+  try {
+    const res = await fetch('http://localhost:8000/api/adventures', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: form.value.title,
+        character_id: form.value.character_id,
+        context: form.value.context,
+        image_url: form.value.image_url,
+        strict_rules: true,
+        heartbeat_enabled: false
+      })
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      router.push({ name: 'game', params: { id: data.game_id } })
+    } else {
+      errorMsg.value = "Failed to create adventure. Server returned an error."
+    }
+  } catch (err) {
+    errorMsg.value = "Network connection failed."
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const goToCharacters = () => {
+  router.push({ name: 'characters' })
 }
 
 const goToAdmin = () => {
@@ -63,27 +176,40 @@ const goToAdmin = () => {
 
 onMounted(() => {
   fetchAdventures()
+  fetchCharacters()
 })
 </script>
 
 <template>
   <div class="min-h-screen bg-slate-950 text-slate-200 font-sans p-8 flex flex-col items-center">
+    
+    <!-- HEADER -->
     <header class="w-full max-w-6xl mb-12 flex justify-between items-center px-4">
       <h1 class="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-500 shadow-sm">
         TaleWeaver
       </h1>
-      <button 
-        @click="goToAdmin" 
-        class="group flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300"
-      >
-        <span class="text-sm font-medium">Settings</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-400 group-hover:rotate-45 transition-transform duration-300" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
-        </svg>
-      </button>
+      <div class="flex items-center gap-4">
+        <button 
+          @click="goToCharacters" 
+          class="group flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-emerald-500/50 transition-all duration-300"
+        >
+          <span class="text-sm font-medium">Characters</span>
+          <i class="ra ra-helmet text-emerald-400"></i>
+        </button>
+        <button 
+          @click="goToAdmin" 
+          class="group flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300"
+        >
+          <span class="text-sm font-medium">Settings</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-400 group-hover:rotate-45 transition-transform duration-300" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>
     </header>
 
-    <main class="w-full max-w-6xl flex-grow px-4">
+    <!-- CONTENT -->
+    <main class="w-full max-w-6xl flex-grow px-4 relative">
       <div v-if="isLoading" class="flex justify-center items-center h-64">
         <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
       </div>
@@ -92,7 +218,7 @@ onMounted(() => {
         <h2 class="text-2xl font-bold text-white mb-2">No active adventures</h2>
         <p class="text-slate-400 mb-8 max-w-md mx-auto">It appears your library is empty. Spin a new tale and embark on your first journey.</p>
         <button 
-          @click="createNewAdventure"
+          @click="openNewAdventureModal"
           class="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 transform hover:-translate-y-1"
         >
           Begin New Adventure
@@ -106,7 +232,7 @@ onMounted(() => {
             <p class="text-slate-400 text-sm mt-1">Continue where you left off</p>
           </div>
           <button 
-            @click="createNewAdventure"
+            @click="openNewAdventureModal"
             class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold rounded-lg shadow-md hover:shadow-emerald-500/25 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center gap-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -122,43 +248,37 @@ onMounted(() => {
             :key="adv.game_id" 
             class="group relative bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden hover:border-emerald-500/50 transition-all duration-500 hover:shadow-[0_8px_30px_rgb(16,185,129,0.12)] flex flex-col"
           >
-            <!-- Card visual header -->
-            <div class="h-32 bg-gradient-to-br from-slate-800 to-slate-950 relative overflow-hidden">
-              <div class="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity duration-700 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjwvc3ZnPg==')]"></div>
-              
-              <div class="absolute top-4 right-4">
-                <button 
-                  @click.stop="deleteAdventure(adv.adventure_id)" 
-                  class="p-2 backdrop-blur-md bg-black/40 hover:bg-red-500/80 text-white/70 hover:text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300"
-                  title="Abandon Journey"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
+            <div class="h-32 bg-slate-800 relative overflow-hidden flex items-center justify-center">
+               <template v-if="adv.image_url"> 
+                 <img :src="'http://localhost:8000' + adv.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+               </template>
+               <template v-else>
+                 <i class="ra ra-scroll-unfurled text-6xl text-slate-700 opacity-50 group-hover:opacity-100 transition-opacity"></i>
+               </template>
             </div>
             
-            <!-- Card body -->
             <div class="p-6 flex-grow flex flex-col">
               <div class="flex items-center justify-between mb-2">
                 <span class="text-xs font-mono text-emerald-400">SESSION: {{ adv.game_id.substring(0,8) }}</span>
-                <span class="text-xs px-2 py-1 bg-slate-800 rounded-full text-slate-400">{{ adv.is_paused ? 'PAUSED' : 'ACTIVE' }}</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] px-1.5 py-0.5 bg-slate-800 rounded uppercase text-slate-500 tracking-tighter">{{ adv.is_paused ? 'PAUSED' : 'ACTIVE' }}</span>
+                  <button 
+                    @click="openEditModal(adv.adventure_id)"
+                    class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors"
+                  >
+                    <i class="ra ra-gear text-sm"></i>
+                  </button>
+                </div>
               </div>
-              <h3 class="text-xl font-bold text-white mb-4 line-clamp-2">{{ adv.adventure_id }}</h3>
+              <h3 class="text-xl font-bold text-white mb-4 line-clamp-2">{{ adv.adventure_title }}</h3>
               
               <div class="mt-auto space-y-3">
                 <div class="flex justify-between text-sm">
                   <span class="text-slate-400">Current Scene</span>
                   <span class="text-slate-200 font-medium truncate max-w-[120px]">{{ adv.scene_id }}</span>
                 </div>
-                <div class="flex justify-between text-sm">
-                  <span class="text-slate-400">In-game Time</span>
-                  <span class="text-slate-200 font-medium">{{ adv.in_game_time }} turns</span>
-                </div>
               </div>
 
-              <!-- Action -->
               <button 
                 @click="playAdventure(adv.game_id)" 
                 class="mt-6 w-full py-3 bg-white/5 hover:bg-emerald-500/20 text-white font-medium rounded-xl border border-white/10 hover:border-emerald-500/50 transition-all duration-300"
@@ -170,9 +290,150 @@ onMounted(() => {
         </div>
       </div>
     </main>
-    
-    <footer class="mt-12 w-full max-w-6xl text-center text-slate-500 text-sm">
-      <p>Powered by the TaleWeaver Engine</p>
-    </footer>
+
+    <!-- NEW ADVENTURE MODAL -->
+    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center pt-10">
+      <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="showModal = false"></div>
+      
+      <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative z-10 shadow-2xl p-8 flex flex-col animate-fade-in-up">
+        
+        <button @click="showModal = false" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h2 class="text-3xl font-extrabold text-white mb-2">Create New Adventure</h2>
+        <p class="text-slate-400 mb-8 text-base">Define the world and choose who will explore it.</p>
+
+        <div class="space-y-5">
+           
+          <!-- Title -->
+          <div>
+            <label class="block text-base font-semibold text-slate-300 mb-2">Adventure Chronicle Title *</label>
+            <input 
+              v-model="form.title" 
+              type="text" 
+              maxlength="50"
+              placeholder="e.g. The Curse of Blackwood" 
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+            />
+          </div>
+
+          <!-- Character Select -->
+          <div>
+            <label class="block text-base font-semibold text-slate-300 mb-2">Select your Champion *</label>
+            <div v-if="availableCharacters.length === 0" class="text-amber-500 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 text-sm">
+               You need to create a character first before starting an adventure. 
+               <a href="#" @click.prevent="goToCharacters" class="underline font-bold">Go to Characters</a>
+            </div>
+            <div v-else class="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+               <button 
+                  v-for="char in availableCharacters" 
+                  :key="char.id"
+                  @click="form.character_id = char.id"
+                  :class="[
+                    'flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all duration-300',
+                    form.character_id === char.id 
+                      ? 'bg-emerald-500/10 border-emerald-500 ring-4 ring-emerald-500/20 text-white' 
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-emerald-500/50 hover:bg-slate-900'
+                  ]"
+               >
+                 <div class="w-12 h-12 rounded-lg bg-slate-800 overflow-hidden flex items-center justify-center border border-white/10 shrink-0">
+                    <img v-if="char.profile_image" :src="'http://localhost:8000' + char.profile_image" class="w-full h-full object-cover"/>
+                    <i v-else class="ra ra-player text-2xl text-slate-500"></i>
+                 </div>
+                 <div class="truncate font-bold text-lg">{{ char.name }}</div>
+               </button>
+            </div>
+          </div>
+
+          <!-- Story Idea -->
+          <div>
+            <label class="block text-base font-semibold text-slate-300 mb-2">Story Idea / Context</label>
+            <textarea 
+              v-model="form.context" 
+              rows="4"
+              placeholder="Describe the setting or specific plot you have in mind..." 
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all resize-none"
+            ></textarea>
+          </div>
+
+          <!-- Adventure Cover Image -->
+          <div>
+            <label class="block text-base font-semibold text-slate-300 mb-2">Adventure Cover Image</label>
+            <div class="relative w-full h-32 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/50 flex items-center justify-center hover:border-emerald-500/50 transition-colors overflow-hidden group cursor-pointer">
+              <template v-if="form.image_url">
+                <img :src="'http://localhost:8000' + form.image_url" class="absolute inset-0 w-full h-full object-cover">
+              </template>
+              <div class="relative z-10 flex flex-col items-center">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                 </svg>
+                 <span class="text-xs text-slate-400 font-medium">Click to upload (max 512x512)</span>
+              </div>
+              <input type="file" @change="handleImageUpload" accept="image/png, image/jpeg, image/webp" class="absolute inset-0 opacity-0 cursor-pointer z-20">
+            </div>
+          </div>
+
+          <div v-if="errorMsg" class="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">
+             {{ errorMsg }}
+          </div>
+
+        </div>
+
+        <div class="mt-8 flex justify-end gap-4">
+           <button 
+             @click="showModal = false"
+             class="px-6 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+           >
+             Cancel
+           </button>
+           <button 
+             @click="createAdventure"
+             :disabled="isSubmitting || !form.title || !form.character_id"
+             class="px-8 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
+           >
+             <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+             {{ isSubmitting ? 'Creating...' : 'Forge Adventure' }}
+           </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- EDIT ADVENTURE MODAL -->
+    <EditAdventureModal 
+      :open="showEditModal" 
+      :adventure-id="selectedAdventureId"
+      @close="showEditModal = false"
+      @updated="handleAdventureUpdate"
+    />
+
   </div>
 </template>
+
+<style scoped>
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out;
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.2); 
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.3); 
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.5); 
+}
+</style>

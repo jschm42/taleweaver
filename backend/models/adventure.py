@@ -6,7 +6,10 @@ class Adventure(Base, TimestampMixin):
     __tablename__ = "adventures"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    title = Column(String(255), nullable=False)
+    title = Column(String(50), nullable=False)
+    
+    image_url = Column(String(255), nullable=True) # Max 512x512
+    context = Column(String(2000), nullable=True) # Story idea
     
     strict_rules = Column(Boolean, default=True, nullable=False)
     heartbeat_enabled = Column(Boolean, default=False, nullable=False)

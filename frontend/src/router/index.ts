@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import PortalView from '@/views/PortalView.vue'
 import AdminView from '@/views/AdminView.vue'
-import CharacterCreateView from '@/views/CharacterCreateView.vue'
+import CharactersView from '@/views/CharactersView.vue'
+import CharacterEditorView from '@/views/CharacterEditorView.vue'
 import GameView from '@/views/GameView.vue'
 
 const router = createRouter({
@@ -18,9 +19,20 @@ const router = createRouter({
       component: AdminView,
     },
     {
+      path: '/characters',
+      name: 'characters',
+      component: CharactersView,
+    },
+    {
       path: '/characters/create',
       name: 'character-create',
-      component: CharacterCreateView,
+      component: CharacterEditorView,
+    },
+    {
+      path: '/characters/:id/edit',
+      name: 'character-edit',
+      component: CharacterEditorView,
+      props: true,
     },
     {
       path: '/game/:id',

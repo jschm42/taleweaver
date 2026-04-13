@@ -15,6 +15,7 @@ export interface CharacterSheet {
   inventory: InventoryItem[]
   equipment: Record<string, InventoryItem | null>
   status_effects: string[]
+  in_game_time: number  // minutes elapsed in-game
 }
 
 export interface InventoryItem {
@@ -47,3 +48,5 @@ export type WsIncoming =
   | { role: 'assistant' | 'system'; content: string }
   | { type: 'sheet_update'; data: CharacterSheet }
   | { type: 'game_over'; reason: string }
+  | { type: 'map_update'; mermaid: string }
+  | { type: 'image_update'; url: string }

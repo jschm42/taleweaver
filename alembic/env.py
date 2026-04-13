@@ -11,6 +11,7 @@ from backend.models.base import Base
 # Import all models so metadata is fully registered for autogenerate.
 import backend.models.user  # noqa: F401
 import backend.models.avatar  # noqa: F401
+import backend.models.character  # noqa: F401
 import backend.models.adventure  # noqa: F401
 import backend.models.game_state  # noqa: F401
 import backend.models.chat  # noqa: F401
