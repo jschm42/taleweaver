@@ -688,15 +688,39 @@ async def post_chat_message(
 
     try:
         if adventure.strict_rules:
-            game_event = llm.execute_complex_task(system_prompt, user_msg, GameEvent, complex_model)
+            # --- PASS 1: Technical Reasoning (Small Model) ---
+            # We ask the small model to decide the technical outcomes (GameEvent)
+            # focusing on IDs, resources, and world state.
+            mechanics_system_prompt = system_prompt + "\n\nCRITICAL: Focus on logical consistency and mechanics. Your 'narrative_description' will be used as a draft/log; keep it short."
+            game_event = llm.execute_complex_task(
+                system_prompt=mechanics_system_prompt,
+                user_prompt=user_msg,
+                response_model=GameEvent,
+                model=small_model
+            )
+
+            # --- PASS 2: Atmospheric Narration (Complex Model) ---
+            # We use the complex model to turn the technical outcome into premium prose.
+            narration_system_prompt = system_prompt + f"\n\nTECHNICAL OUTCOME TO NARRATE: {game_event.model_dump_json(exclude={'narrative_description'})}\n"
+            narration_system_prompt += "Write a highly atmospheric, rich narrative for this turn. Do not mention numbers or system IDs; describe the effects physically. 1-2 paragraphs max."
+            
+            response_text = llm.execute_simple_task(
+                system_prompt=narration_system_prompt,
+                user_prompt=user_msg,
+                model=complex_model
+            )
+            
+            # Apply mechanics to avatar, but use the complex narration for the final output
             try:
-                response_text = RuleEngine.apply_event(avatar, game_event)
+                # We ignore the small model's narrative draft and use the complex one
+                RuleEngine.apply_event(avatar, game_event)
             except GameOverException as exc:
                 game_over = True
                 game_over_reason = str(exc)
                 response_text = str(exc)
         else:
-            response_text = llm.execute_simple_task(system_prompt, user_msg, small_model)
+            # Free-form narrative always uses the high-quality complex model
+            response_text = llm.execute_simple_task(system_prompt, user_msg, complex_model)
 
         # Record Assistant Message
         assistant_chat = ChatMessage(game_state_id=game_id, role="assistant", content=response_text)
