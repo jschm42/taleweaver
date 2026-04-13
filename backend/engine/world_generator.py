@@ -48,7 +48,8 @@ class WorldGenerator:
         adventure_id: str, 
         title: str, 
         context: str,
-        model: str = "gpt-4o" # default to a complex model
+        model: str = "gpt-4o", # default to a complex model
+        generate_entity_images: bool = False
     ) -> None:
         """
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
@@ -81,15 +82,21 @@ class WorldGenerator:
         if adventure:
             adventure.original_manifest = manifesto.model_dump()
             
-        await WorldGenerator.apply_manifest(db, adventure_id, manifesto.model_dump())
+        await WorldGenerator.apply_manifest(
+            db, 
+            adventure_id, 
+            manifesto.model_dump(), 
+            user=user if generate_entity_images else None
+        )
         await db.flush()
 
     @staticmethod
-    async def apply_manifest(db: AsyncSession, adventure_id: str, manifest_dict: dict) -> None:
+    async def apply_manifest(db: AsyncSession, adventure_id: str, manifest_dict: dict, user: Optional[User] = None) -> None:
         """
         Populates (or re-populates) the world entities based on a manifest dictionary.
-        Does NOT clear existing data; that should be handled by the caller.
+        If user is provided, attempts to generate entity images.
         """
+        from backend.engine.media_engine import MediaEngine
         # Persist Scenes
         for s in manifest_dict.get("scenes", []):
             db.add(WorldScene(
@@ -112,6 +119,11 @@ class WorldGenerator:
             
         # Persist NPCs
         for n in manifest_dict.get("npcs", []):
+            image_url = None
+            if user:
+                prompt = f"Portrait of NPC {n['name']}. {n['description']}. Game attribute art style."
+                image_url = await MediaEngine.generate_entity_image(prompt, {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
+
             db.add(WorldEntity(
                 id=n["id"],
                 adventure_id=adventure_id,
@@ -119,11 +131,17 @@ class WorldGenerator:
                 name=n["name"],
                 description=n["description"],
                 current_scene_id=n["start_scene_id"],
-                spatial_position=n.get("spatial_position")
+                spatial_position=n.get("spatial_position"),
+                image_url=image_url
             ))
             
         # Persist Objects
         for o in manifest_dict.get("objects", []):
+            image_url = None
+            if user:
+                prompt = f"Highly detailed item: {o['name']}. {o['description']}. Isolated on simple background, RPG asset style."
+                image_url = await MediaEngine.generate_entity_image(prompt, {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
+
             db.add(WorldEntity(
                 id=o["id"],
                 adventure_id=adventure_id,
@@ -131,5 +149,6 @@ class WorldGenerator:
                 name=o["name"],
                 description=o["description"],
                 current_scene_id=o["start_scene_id"],
-                spatial_position=o.get("spatial_position")
+                spatial_position=o.get("spatial_position"),
+                image_url=image_url
             ))

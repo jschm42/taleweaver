@@ -363,26 +363,26 @@ watch(() => props.open, (isOpen) => {
                     <!-- NPCs & Items -->
                     <div class="grid grid-cols-2 gap-4">
                       <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
-                        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">NPCs ({{ debugData.npcs.length }})</h4>
-                        <div class="space-y-1">
-                          <div v-for="npc in debugData.npcs" :key="npc.id" class="text-[9px] text-slate-400 flex flex-col gap-0.5">
+                          <div v-for="npc in debugData.npcs" :key="npc.id" class="text-[9px] text-slate-400 flex flex-col gap-2 p-2 bg-slate-900 border border-slate-700/50 rounded-lg">
                             <div class="flex items-center gap-2">
                               <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
-                              {{ npc.name }} ({{ npc.current_scene_id }})
+                              <span class="font-bold underline">{{ npc.name }}</span> ({{ npc.current_scene_id }})
                             </div>
-                            <div v-if="npc.spatial_position" class="pl-3.5 text-slate-500 italic">{{ npc.spatial_position }}</div>
+                            <img v-if="npc.image_url" :src="npc.image_url" class="w-full h-24 object-cover rounded-md border border-slate-700 shadow-inner" />
+                            <div v-if="npc.spatial_position" class="pl-1 text-slate-500 italic">{{ npc.spatial_position }}</div>
                           </div>
                         </div>
                       </div>
                       <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
                         <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Objects ({{ debugData.objects.length }})</h4>
-                        <div class="space-y-1">
-                          <div v-for="obj in debugData.objects" :key="obj.id" class="text-[9px] text-slate-400 flex flex-col gap-0.5">
+                        <div class="space-y-2">
+                          <div v-for="obj in debugData.objects" :key="obj.id" class="text-[9px] text-slate-400 flex flex-col gap-2 p-2 bg-slate-900 border border-slate-700/50 rounded-lg">
                             <div class="flex items-center gap-2">
                               <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                              {{ obj.name }} ({{ obj.current_scene_id }})
+                              <span class="font-bold underline">{{ obj.name }}</span> ({{ obj.current_scene_id }})
                             </div>
-                            <div v-if="obj.spatial_position" class="pl-3.5 text-slate-500 italic">{{ obj.spatial_position }}</div>
+                            <img v-if="obj.image_url" :src="obj.image_url" class="w-full h-24 object-cover rounded-md border border-slate-700 shadow-inner" />
+                            <div v-if="obj.spatial_position" class="pl-1 text-slate-500 italic">{{ obj.spatial_position }}</div>
                           </div>
                         </div>
                       </div>

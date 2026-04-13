@@ -18,6 +18,11 @@ class SettingsPayload(BaseModel):
     complex_model: str
     preferred_provider: str # openai, openrouter, etc.
 
+class T2ISettingsPayload(BaseModel):
+    simple_model: str
+    advanced_model: str
+    provider: str
+
 @router.get("")
 async def get_settings(db: AsyncSession = Depends(get_db)):
     """Returns the current settings (sanitized keys)."""
@@ -34,6 +39,11 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
             "small_model": "openai/gpt-4o-mini",
             "complex_model": "openai/gpt-4o-mini",
             "preferred_provider": "openai"
+        },
+        "t2i_settings": user.t2i_settings or {
+            "simple_model": "openai/dall-e-2",
+            "advanced_model": "openai/dall-e-3",
+            "provider": "openai"
         }
     }
 
@@ -69,7 +79,22 @@ async def update_llm_settings(payload: SettingsPayload, db: AsyncSession = Depen
         db.add(user)
         await db.flush()
         
-    user.llm_settings = payload.dict()
+    user.llm_settings = payload.model_dump()
     await db.commit()
     return {"status": "success", "message": "LLM settings updated."}
+
+@router.post("/t2i")
+async def update_t2i_settings(payload: T2ISettingsPayload, db: AsyncSession = Depends(get_db)):
+    """Updates the Text-to-Image model preferences."""
+    result = await db.execute(select(User).limit(1))
+    user = result.scalars().first()
+    
+    if not user:
+        user = User(username="local_default_user")
+        db.add(user)
+        await db.flush()
+        
+    user.t2i_settings = payload.model_dump()
+    await db.commit()
+    return {"status": "success", "message": "Image generation settings updated."}
 

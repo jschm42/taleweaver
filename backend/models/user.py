@@ -13,3 +13,6 @@ class User(Base, TimestampMixin):
 
     # Store LLM preferences: {"small_model": "...", "complex_model": "..."}
     llm_settings = Column(JSON, nullable=True)
+
+    # Store T2I preferences: {"simple_model": "...", "advanced_model": "...", "provider": "..."}
+    t2i_settings = Column(JSON, nullable=True)

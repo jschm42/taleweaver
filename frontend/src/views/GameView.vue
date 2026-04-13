@@ -21,13 +21,9 @@ const showSheet = ref(false)
 const showMap = ref(false)
 const clockTick = ref(false)  // triggers brief highlight animation
 
-const {
-  messages,
-  sheet,
-  mermaidData,
-  currentSceneImage,
   status,
   gameOverReason,
+  autoVisualize,
   connect,
   disconnect,
   sendMessage,
@@ -141,6 +137,20 @@ onBeforeUnmount(() => {
           </svg>
           <span class="hidden sm:inline">Character</span>
         </button>
+
+        <!-- Auto-Visualize Toggle -->
+        <div 
+          class="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer transition-all hover:bg-slate-700"
+          :class="{ 'border-cyan-500/50': autoVisualize }"
+          @click="autoVisualize = !autoVisualize"
+          title="Toggle Auto-Visualize (Advanced Image Gen)"
+        >
+          <i class="ra ra-camera-shot text-base" :class="autoVisualize ? 'text-cyan-400' : 'text-slate-500'"></i>
+          <span class="hidden lg:inline text-xs font-bold uppercase tracking-tighter" :class="autoVisualize ? 'text-cyan-400' : 'text-slate-500'">Visuals</span>
+          <div :class="['w-6 h-3 rounded-full relative transition-colors duration-300', autoVisualize ? 'bg-cyan-600' : 'bg-slate-900']">
+            <div :class="['absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all duration-300', autoVisualize ? 'left-3.5' : 'left-0.5']"></div>
+          </div>
+        </div>
       </div>
     </header>
 

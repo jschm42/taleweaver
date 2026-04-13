@@ -32,7 +32,8 @@ const form = ref({
   title: '',
   context: '',
   character_id: '',
-  image_url: '' as string | null
+  image_url: '' as string | null,
+  generate_entity_images: false
 })
 
 // Characters available to pick
@@ -150,6 +151,7 @@ const createAdventure = async () => {
         context: form.value.context,
         image_url: form.value.image_url,
         strict_rules: true,
+        generate_entity_images: form.value.generate_entity_images,
         heartbeat_enabled: false
       })
     })
@@ -381,6 +383,21 @@ onMounted(() => {
                  <span class="text-xs text-slate-400 font-medium">Click to upload (max 512x512)</span>
               </div>
               <input type="file" @change="handleImageUpload" accept="image/png, image/jpeg, image/webp" class="absolute inset-0 opacity-0 cursor-pointer z-20">
+            </div>
+          </div>
+
+          <!-- AI Generation Options -->
+          <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Engine Auxiliaries</h3>
+            
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer" @click="form.generate_entity_images = !form.generate_entity_images">
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-white">Envision World Inhabitants</span>
+                <span class="text-[10px] text-slate-400">Generate unique Gen-AI portraits for all NPCs and Objects. (Higher cost/latency)</span>
+              </div>
+              <div :class="['w-10 h-6 rounded-full relative transition-colors duration-300', form.generate_entity_images ? 'bg-emerald-500' : 'bg-slate-800']">
+                <div :class="['absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300', form.generate_entity_images ? 'left-5' : 'left-1']"></div>
+              </div>
             </div>
           </div>
 

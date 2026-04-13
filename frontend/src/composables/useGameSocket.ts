@@ -16,6 +16,7 @@ export interface UseGameSocket {
   currentSceneImage: Ref<string | null>
   status: Ref<ConnectionStatus>
   gameOverReason: Ref<string>
+  autoVisualize: Ref<bool>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
@@ -28,6 +29,7 @@ export function useGameSocket(): UseGameSocket {
   const currentSceneImage = ref<string | null>(null)
   const status = ref<ConnectionStatus>('disconnected')
   const gameOverReason = ref('')
+  const autoVisualize = ref(false)
   let currentGameId = ''
 
   function _pushMessage(role: ChatMessage['role'], content: string): void {
@@ -86,7 +88,10 @@ export function useGameSocket(): UseGameSocket {
       const res = await fetch(`http://localhost:8000/api/adventures/${currentGameId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ 
+          content,
+          auto_visualize: autoVisualize.value
+        })
       })
 
       if (res.ok) {
@@ -125,6 +130,7 @@ export function useGameSocket(): UseGameSocket {
     currentSceneImage,
     status,
     gameOverReason,
+    autoVisualize,
     connect,
     disconnect,
     sendMessage,

@@ -45,6 +45,7 @@ class WorldEntity(Base, TimestampMixin):
     
     current_scene_id = Column(String(50), nullable=False)
     spatial_position = Column(String(255), nullable=True) # e.g. "inside the desk"
+    image_url = Column(String(255), nullable=True)
     
     # Optional state, e.g. NPC inventory: [{"name": "Key", "id": "BRONZE_KEY"}]
     inventory = Column(JSON, default=list, nullable=False)

@@ -81,3 +81,17 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE users ADD COLUMN llm_settings TEXT"
             )
             logger.info("SQLite migration: added users.llm_settings")
+
+        if "t2i_settings" not in user_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN t2i_settings TEXT"
+            )
+            logger.info("SQLite migration: added users.t2i_settings")
+
+        entity_cols_result = await conn.exec_driver_sql("PRAGMA table_info(world_entities)")
+        entity_cols = {row[1] for row in entity_cols_result.fetchall()}
+        if "image_url" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN image_url TEXT"
+            )
+            logger.info("SQLite migration: added world_entities.image_url")

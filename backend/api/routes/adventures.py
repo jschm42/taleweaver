@@ -41,6 +41,7 @@ class CreateAdventurePayload(BaseModel):
     image_url: Optional[str] = None
     context: Optional[str] = None
     strict_rules: bool = True
+    generate_entity_images: bool = False
     time_per_turn: int = 5
     game_over_rules: Optional[Dict[str, Any]] = None
 
@@ -77,6 +78,10 @@ class ChatResponse(BaseModel):
     image_url: Optional[str] = None
     game_over: bool = False
     game_over_reason: Optional[str] = None
+
+class ChatRequest(BaseModel):
+    content: str
+    auto_visualize: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +142,8 @@ async def create_adventure(
         adventure_id=adv.id,
         title=adv.title,
         context=adv.context or "A standard fantasy world.",
-        model=complex_model
+        model=complex_model,
+        generate_entity_images=payload.generate_entity_images
     )
     
     # Set initial scene to the first generated scene for this adventure
@@ -575,14 +581,14 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
 @router.post("/{game_id}/chat", response_model=ChatResponse)
 async def post_chat_message(
     game_id: str,
-    payload: Dict[str, str],
+    payload: ChatRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Unified game turn endpoint. Processes user input (natural language or slash command),
     advances world state, and returns all updates.
     """
-    user_msg = payload.get("content", "").strip()
+    user_msg = payload.content.strip()
     
     # 1. Load context
     state_res = await db.execute(select(GameState).where(GameState.id == game_id))
@@ -764,8 +770,12 @@ async def post_chat_message(
         mermaid_data = MapEngine.to_mermaid(world_map)
         
         # --- Media Generation ---
-        if adventure.strict_rules and game_event and game_event.image_prompt:
-            image_url = await MediaEngine.generate_scene_image(game_event.image_prompt, state.adventure_id)
+        if adventure.strict_rules and game_event and game_event.image_prompt and payload.auto_visualize:
+            image_url = await MediaEngine.generate_scene_image(
+                game_event.image_prompt, 
+                {"t2i_settings": user.t2i_settings}, 
+                user.encrypted_api_keys
+            )
 
         await db.commit()
         
