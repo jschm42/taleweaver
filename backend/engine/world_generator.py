@@ -125,11 +125,13 @@ class WorldGenerator:
         manifest_dict: dict, 
         user: Optional[User] = None,
         gen_npc: bool = False,
-        gen_items: bool = False
+        gen_items: bool = False,
+        existing_images: Optional[dict] = None
     ) -> None:
         """
         Populates (or re-populates) the world entities based on a manifest dictionary.
         If user is provided, attempts to generate entity images based on flags.
+        If existing_images is provided, uses them to restore entity visual states.
         """
         from backend.engine.media_engine import MediaEngine
         adventure = await db.get(Adventure, adventure_id)
@@ -168,8 +170,8 @@ class WorldGenerator:
                 continue
             seen_entity_ids.add(n["id"])
             
-            image_url = None
-            if user and gen_npc:
+            image_url = (existing_images or {}).get(n["id"])
+            if not image_url and user and gen_npc:
                 if adventure:
                     adventure.creation_status = f"Envisioning Portrait: {n['name']}..."
                     await db.commit()
@@ -193,8 +195,8 @@ class WorldGenerator:
                 continue
             seen_entity_ids.add(o["id"])
             
-            image_url = None
-            if user and gen_items:
+            image_url = (existing_images or {}).get(o["id"])
+            if not image_url and user and gen_items:
                 if adventure:
                     adventure.creation_status = f"Envisioning Item: {o['name']}..."
                     await db.commit()

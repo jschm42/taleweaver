@@ -405,24 +405,61 @@ async def get_adventure_debug(adventure_id: str, db: AsyncSession = Depends(get_
 @router.post("/{adventure_id}/reset")
 async def reset_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)):
     """
-    Resets the adventure's world state to its original pre-generated blueprint.
+    Hard-resets the adventure: restores world, wipes chat history, and resets character stats/inventory.
     """
     adv_res = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
     adventure = adv_res.scalars().first()
     if not adventure or not adventure.original_manifest:
         raise HTTPException(status_code=400, detail="Adventure not found or has no original manifest to reset to.")
     
-    # Clear current world state
+    # 1. Clear current world & narration data
+    # Backup image URLs first to preserve visuals
+    ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+    img_map = {e.id: e.image_url for e in ent_res.scalars().all() if e.image_url}
+
     await db.execute(delete(WorldScene).where(WorldScene.adventure_id == adventure_id))
     await db.execute(delete(WorldExit).where(WorldExit.adventure_id == adventure_id))
     await db.execute(delete(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
     await db.execute(delete(WorldMap).where(WorldMap.adventure_id == adventure_id))
     
-    # Re-apply manifest
-    await WorldGenerator.apply_manifest(db, adventure_id, adventure.original_manifest)
+    # 2. Reset GameState & Avatar
+    # ... (same)
+    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state = state_res.scalars().first()
+    if state:
+        # Wipe chat logs
+        await db.execute(delete(ChatMessage).where(ChatMessage.game_state_id == state.id))
+        
+        # Reset state parameters
+        state.in_game_time = 0
+        state.is_paused = False
+        
+        # Reset Avatar to starting baseline
+        av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+        avatar = av_res.scalars().first()
+        if avatar:
+            avatar.hp = 200
+            avatar.stamina = 200
+            avatar.mana = 200
+            avatar.inventory = []
+            avatar.status_effects = []
+            avatar.equipment = {
+                "Head": None, "Chest": None, "Arms": None, "Legs": None,
+                "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
+            }
+
+    # 3. Re-apply world blueprint (with preserved images)
+    await WorldGenerator.apply_manifest(db, adventure_id, adventure.original_manifest, existing_images=img_map)
     
+    # 4. Final Scene Calibration
+    # We need the first scene ID from the manifest to set the avatar's starting point
+    first_scene_id = adventure.original_manifest.get("scenes", [{}])[0].get("id")
+    if first_scene_id and state:
+        state.scene_id = first_scene_id
+
     await db.commit()
-    return {"status": "reset", "message": "World restored to initial state."}
+    logger.info("Hard-reset adventure %s. World, history, and avatar restored.", adventure_id)
+    return {"status": "reset", "message": "Chronicle and world have been fully restored."}
 
 @router.get("/{adventure_id}/export/manifest")
 async def export_adventure_manifest(adventure_id: str, db: AsyncSession = Depends(get_db)):
@@ -789,6 +826,7 @@ async def post_chat_message(
                 narration_system_prompt += "Keep the response snappy and punchy (1 short paragraph). Move the action forward without excessive flowery prose."
 
             narration_system_prompt += "\nDo not mention numbers, IDs, or system terms. Use English. 1-3 paragraphs based on the context above."
+            narration_system_prompt += "\n\nMANDATORY FORMATTING: Start all character dialogue on a NEW LINE. Separate narrative prose from speech with a blank line."
             
             response_text = llm.execute_simple_task(
                 system_prompt=narration_system_prompt,

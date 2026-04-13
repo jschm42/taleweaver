@@ -88,7 +88,11 @@ class MemoryManager:
             f"{sheet_json}\n\n"
             "Respond organically. Use the pre-generated world description as the static reality. "
             "If an exit is LOCKED, the player cannot pass unless they find a way to unlock it.\n"
-            "TIME ADVANCEMENT: Some complex actions take extra time. You can specify `extra_time_minutes` in your response."
+            "TIME ADVANCEMENT: Some complex actions take extra time. You can specify `extra_time_minutes` in your response.\n\n"
+            "FORMATTING RULES:\n"
+            "1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: Character says: \"...\"\n"
+            "2. LINE BREAKS: Use double line breaks between narrative prose and dialogue or major shifts in focus.\n"
+            "3. READABILITY: Avoid walls of text. Keep paragraphs focused."
         )
         return system_instruction
 

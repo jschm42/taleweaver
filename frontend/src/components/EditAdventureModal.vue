@@ -416,6 +416,20 @@ watch(() => props.open, (isOpen) => {
                 </div>
               </div>
 
+              <!-- Reset Area -->
+              <div class="p-6 bg-red-500/5 border border-red-500/20 rounded-2xl">
+                <h3 class="text-sm font-bold text-red-500 uppercase tracking-wider mb-2">Danger Zone</h3>
+                <p class="text-[10px] text-slate-500 mb-4">Resetting will wipe all progress and restore the world to its original state.</p>
+                <button 
+                  @click="resetAdventure"
+                  :disabled="isSaving"
+                  class="w-full px-4 py-3 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2"
+                >
+                  <i class="ra ra-recycle"></i>
+                  Reset Adventure to Golden Manifest
+                </button>
+              </div>
+
               <!-- Debug Panel -->
               <div class="mt-8 border-t border-slate-800 pt-6">
                 <button 
@@ -488,18 +502,6 @@ watch(() => props.open, (isOpen) => {
                       </div>
                     </div>
 
-                    <!-- Reset Area -->
-                    <div class="mt-8 pt-6 border-t border-red-500/20">
-                       <h4 class="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-3">Danger Zone</h4>
-                       <button 
-                        @click="resetAdventure"
-                        :disabled="isSaving"
-                        class="px-4 py-2 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all rounded-lg text-xs font-bold uppercase tracking-widest flex items-center gap-2"
-                       >
-                        <i class="ra ra-recycle"></i>
-                        Reset Adventure to Golden Manifest
-                       </button>
-                    </div>
                   </div>
                 </div>
               </div>
