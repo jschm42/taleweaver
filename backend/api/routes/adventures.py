@@ -272,6 +272,7 @@ class ChatResponse(BaseModel):
     nodes: Optional[Dict[str, Any]] = None # Metadata for nodes
     image_url: Optional[str] = None
     entities: List[Dict[str, Any]] = []
+    npc_metadata: Dict[str, Dict[str, Any]] = {} # { "NPC Name": { ...entity_props } }
     game_over: bool = False
     game_over_reason: Optional[str] = None
 
@@ -1090,6 +1091,24 @@ async def _enrich_map_nodes(adventure_id: str, nodes: dict, db: AsyncSession) ->
                 
     return enriched
 
+async def _get_npc_metadata(adventure_id: str, db: AsyncSession) -> dict:
+    """Returns a map of { NPC_Name: EntityData } for all NPCs in the adventure."""
+    res = await db.execute(select(WorldEntity).where(
+        WorldEntity.adventure_id == adventure_id, 
+        WorldEntity.entity_type == "NPC"
+    ))
+    npcs = res.scalars().all()
+    # Return mapping of name to full data for tooltips
+    return {
+        n.name: {
+            "id": n.id,
+            "name": n.name,
+            "description": n.description,
+            "image_url": n.image_url,
+            "entity_type": n.entity_type
+        } for n in npcs if n.image_url
+    }
+
 @router.get("/{game_id}/chat", response_model=ChatResponse)
 async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
     """Retrieves full chat history and current session state."""
@@ -1121,7 +1140,8 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
         sheet=await _build_sheet_snapshot(avatar, state, db),
         mermaid=mermaid_data,
         nodes=await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
-        entities=entities
+        entities=entities,
+        npc_metadata=await _get_npc_metadata(state.adventure_id, db)
     )
 
 @router.post("/{game_id}/chat", response_model=ChatResponse)
@@ -1473,6 +1493,7 @@ async def post_chat_message(
             nodes=await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
             image_url=image_url,
             entities=curr_entities,
+            npc_metadata=await _get_npc_metadata(state.adventure_id, db),
             game_over=game_over,
             game_over_reason=game_over_reason
         )

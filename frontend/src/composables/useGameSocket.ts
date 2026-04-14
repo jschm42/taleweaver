@@ -30,6 +30,7 @@ export function useGameSocket(): UseGameSocket {
   const sheet = ref<CharacterSheet | null>(null)
   const mermaidData = ref<string>('')
   const nodes = ref<Record<string, any>>({})
+  const npcMetadata = ref<Record<string, any>>({})
   const currentSceneImage = ref<string | null>(null)
   const entities = ref<any[]>([])
   const status = ref<ConnectionStatus>('disconnected')
@@ -62,7 +63,8 @@ export function useGameSocket(): UseGameSocket {
 
     if (data.sheet) sheet.value = data.sheet
     mermaidData.value = data.mermaid || ''
-    nodes.value = data.nodes || {}
+    if (data.nodes) nodes.value = data.nodes
+    if (data.npc_metadata) npcMetadata.value = data.npc_metadata
     entities.value = data.entities || []
     if (data.image_url !== undefined) {
       currentSceneImage.value = data.image_url
@@ -182,6 +184,7 @@ export function useGameSocket(): UseGameSocket {
     sheet,
     mermaidData,
     nodes,
+    npcMetadata,
     currentSceneImage,
     entities,
     status,

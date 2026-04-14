@@ -6,11 +6,14 @@ import type { ConnectionStatus } from '@/composables/useGameSocket'
 const props = defineProps<{
   messages: ChatMessage[]
   status: ConnectionStatus
+  npcMetadata: Record<string, any>
 }>()
 
 const emit = defineEmits<{
   send: [content: string]
   openSheet: []
+  npcHover: [name: string, event: MouseEvent]
+  npcLeave: []
 }>()
 
 const inputText = ref('')
@@ -100,9 +103,31 @@ function parseContent(content: string) {
 }
 
 function formatBolds(text: string) {
+  // Pattern: **Name:**
   return text
-    .replace(/\*\*(.*?):\*\*/g, '<strong class="text-amber-400 font-bold">$1:</strong>')
+    .replace(/\*\*(.*?):\*\*/g, (match, name) => {
+      const data = props.npcMetadata[name]
+      if (data) {
+        // inline-flex + align-middle centers the whole block vertically in the line.
+        // the :deep styles in the style block handle the rest.
+        return `<span class="npc-portrait-trigger" data-npc-name="${name}"><img src="http://localhost:8000${data.image_url}" class="npc-avatar" alt="${name}-portrait"><strong class="npc-name">${name}:</strong></span>`
+      }
+      return `<strong class="text-amber-400 font-bold">${name}:</strong>`
+    })
     .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
+}
+
+function handleMouseMove(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  const npcWrapper = target.closest('[data-npc-name]')
+  if (npcWrapper) {
+    const name = npcWrapper.getAttribute('data-npc-name')
+    if (name) {
+      emit('npcHover', name, e)
+      return
+    }
+  }
+  emit('npcLeave')
 }
 
 function normalizeLineBreaks(text: string): string {
@@ -133,6 +158,8 @@ function normalizeLineBreaks(text: string): string {
       class="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0 relative scroll-smooth"
       aria-live="polite"
       aria-label="Game log"
+      @mousemove="handleMouseMove"
+      @mouseleave="emit('npcLeave')"
     >
       <div
         v-for="(msg, idx) in messages"
@@ -220,3 +247,35 @@ function normalizeLineBreaks(text: string): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Target elements inside v-html */
+:deep(.npc-portrait-trigger) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+  cursor: help;
+}
+
+:deep(.npc-avatar) {
+  width: 2.5rem; /* 40px */
+  height: 2.5rem;
+  border-radius: 9999px;
+  object-fit: cover;
+  border: 2px solid rgba(245, 158, 11, 0.4); /* amber-500/40 */
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+:deep(.npc-name) {
+  color: #fbbf24; /* amber-400 */
+  font-weight: 700;
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+</style>

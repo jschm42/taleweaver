@@ -30,6 +30,7 @@ const {
   entities,
   mermaidData,
   nodes,
+  npcMetadata,
   currentSceneImage,
   connect,
   disconnect,
@@ -43,6 +44,14 @@ const mousePos = ref({ x: 0, y: 0 })
 const handleHover = (ent: any, event: MouseEvent) => {
   hoveredEntity.value = ent
   mousePos.value = { x: event.clientX, y: event.clientY }
+}
+
+const handleChatNpcHover = (name: string, event: MouseEvent) => {
+  const metadata = npcMetadata.value[name]
+  if (metadata) {
+    hoveredEntity.value = metadata
+    mousePos.value = { x: event.clientX, y: event.clientY }
+  }
 }
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
@@ -308,12 +317,14 @@ onBeforeUnmount(() => {
         </div>
       </Transition>
 
-      <ChatWindow
-        class="w-full flex-grow shadow-[0_8px_30px_rgb(0,0,0,0.5)] rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-xl overflow-hidden"
-        :messages="messages"
+      <ChatWindow 
+        :messages="messages" 
         :status="status"
+        :npc-metadata="npcMetadata"
         @send="sendMessage"
         @open-sheet="showSheet = true"
+        @npc-hover="handleChatNpcHover"
+        @npc-leave="hoveredEntity = null"
       />
       </div>
     </div>
