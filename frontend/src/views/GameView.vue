@@ -391,7 +391,7 @@ onBeforeUnmount(() => {
           class="w-full max-h-48 md:max-h-64 mb-4 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl relative group shrink-0"
         >
           <img 
-            :src="currentSceneImage" 
+            :src="getImageUrl(currentSceneImage)" 
             class="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all duration-700"
             alt="Scene Visual"
           />
