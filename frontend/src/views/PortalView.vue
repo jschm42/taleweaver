@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import EditAdventureModal from '@/components/EditAdventureModal.vue'
 import { api } from '@/composables/useApi'
@@ -18,6 +18,13 @@ interface Adventure {
   is_paused: boolean
 }
 
+interface PendingImportCard {
+  adventureId: string
+  title: string
+  status: string
+  hasError: boolean
+}
+
 const adventures = ref<Adventure[]>([])
 const isLoading = ref(true)
 
@@ -32,6 +39,20 @@ const errorMsg = ref('')
 const creationStatus = ref('')
 
 const importInput = ref<HTMLInputElement | null>(null)
+const pendingImports = ref<PendingImportCard[]>([])
+const loadingWordIndex = ref(0)
+const loadingWords = [
+  'Manifest wird geprueft',
+  'Weltstruktur entsteht',
+  'Szenen werden gebaut',
+  'Figuren werden gewebt',
+]
+let loadingWordTimer: number | null = null
+
+const visibleAdventures = computed(() => {
+  const pendingIds = new Set(pendingImports.value.map((entry) => entry.adventureId))
+  return adventures.value.filter((adv) => !pendingIds.has(adv.adventure_id))
+})
 
 const form = ref({
   id: '',
@@ -87,6 +108,38 @@ function resetCreateForm() {
     start_time: '',
     protagonist_role: '',
   }
+}
+
+function addPendingImportCard(adventureId: string, title: string) {
+  pendingImports.value = [
+    ...pendingImports.value.filter((entry) => entry.adventureId !== adventureId),
+    {
+      adventureId,
+      title,
+      status: 'Import gestartet',
+      hasError: false,
+    },
+  ]
+}
+
+function updatePendingImportStatus(adventureId: string, status: string, hasError = false) {
+  pendingImports.value = pendingImports.value.map((entry) =>
+    entry.adventureId === adventureId
+      ? {
+          ...entry,
+          status,
+          hasError,
+        }
+      : entry,
+  )
+}
+
+function removePendingImportCard(adventureId: string) {
+  pendingImports.value = pendingImports.value.filter((entry) => entry.adventureId !== adventureId)
+}
+
+function dismissPendingImportCard(adventureId: string) {
+  removePendingImportCard(adventureId)
 }
 
 async function fetchAdventures() {
@@ -183,8 +236,15 @@ async function executeImport() {
     }
 
     const result = await api.importAdventure(payload)
+    addPendingImportCard(result.adventure_id, payload.title)
     showImportModal.value = false
-    await pollAdventureStatus(result.adventure_id)
+    await fetchAdventures()
+    await pollAdventureStatus(result.adventure_id, {
+      navigateOnReady: false,
+      onStatus: (status) => updatePendingImportStatus(result.adventure_id, status),
+      onReady: () => updatePendingImportStatus(result.adventure_id, 'Fertig generiert'),
+      onFailure: (status) => updatePendingImportStatus(result.adventure_id, status, true),
+    })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Import failed.'
     isImporting.value = false
@@ -280,21 +340,31 @@ async function createAdventure() {
 
     const result = await api.createAdventure(payload)
     showCreateModal.value = false
-    await pollAdventureStatus(result.adventure_id)
+    await pollAdventureStatus(result.adventure_id, { navigateOnReady: true })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to start creation.'
     isSubmitting.value = false
   }
 }
 
-async function pollAdventureStatus(adventureId: string) {
+async function pollAdventureStatus(
+  adventureId: string,
+  options?: {
+    navigateOnReady?: boolean
+    onStatus?: (status: string) => void
+    onReady?: () => void
+    onFailure?: (status: string) => void
+  },
+) {
   return new Promise<void>((resolve) => {
     const pollInterval = setInterval(async () => {
       try {
         const res = await fetch(`http://localhost:8000/api/adventures/${adventureId}/status`)
         if (!res.ok) {
           clearInterval(pollInterval)
+          const failStatus = 'Generierung fehlgeschlagen'
           errorMsg.value = 'Generation failed. Please try again with a different setup.'
+          options?.onFailure?.(failStatus)
           isSubmitting.value = false
           isImporting.value = false
           resolve()
@@ -302,16 +372,22 @@ async function pollAdventureStatus(adventureId: string) {
         }
 
         const data = await res.json()
-        creationStatus.value = data.status || 'Constructing world...'
+        const statusText = data.status || 'Constructing world...'
+        creationStatus.value = statusText
+        options?.onStatus?.(statusText)
 
         if (data.is_ready) {
           clearInterval(pollInterval)
-          router.push({ name: 'game', params: { id: adventureId } })
+          options?.onReady?.()
+          if (options?.navigateOnReady) {
+            router.push({ name: 'game', params: { id: adventureId } })
+          }
           resolve()
         }
       } catch {
         clearInterval(pollInterval)
         errorMsg.value = 'Lost connection while tracking generation status.'
+        options?.onFailure?.('Verbindung unterbrochen')
         isSubmitting.value = false
         isImporting.value = false
         resolve()
@@ -327,6 +403,15 @@ function goToAdmin() {
 onMounted(() => {
   resetCreateForm()
   fetchAdventures()
+  loadingWordTimer = window.setInterval(() => {
+    loadingWordIndex.value = (loadingWordIndex.value + 1) % loadingWords.length
+  }, 1300)
+})
+
+onUnmounted(() => {
+  if (loadingWordTimer !== null) {
+    clearInterval(loadingWordTimer)
+  }
 })
 </script>
 
@@ -359,7 +444,7 @@ onMounted(() => {
         <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
       </div>
 
-      <div v-else-if="adventures.length === 0" class="text-center py-20 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
+      <div v-else-if="adventures.length === 0 && pendingImports.length === 0" class="text-center py-20 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
         <h2 class="text-2xl font-bold text-white mb-2">No active adventures</h2>
         <p class="text-slate-400 mb-8 max-w-md mx-auto">Start your first world or import a prepared ADV manifest.</p>
         <div class="flex items-center justify-center gap-3">
@@ -402,7 +487,57 @@ onMounted(() => {
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div
-            v-for="adv in adventures"
+            v-for="pending in pendingImports"
+            :key="pending.adventureId"
+            class="relative bg-slate-900 rounded-2xl border border-cyan-500/40 overflow-hidden flex flex-col"
+          >
+              <div class="h-32 bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
+              <div v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="absolute inset-0 loading-placeholder-shimmer"></div>
+              <i class="ra ra-quill-ink text-4xl text-cyan-300/80 z-10"></i>
+            </div>
+
+            <div class="p-6 flex-grow flex flex-col">
+              <div class="flex items-center justify-between mb-4">
+                <span class="text-xs font-mono text-cyan-400/90 bg-cyan-500/10 px-2 py-1 rounded">WIRD ERZEUGT</span>
+                <span :class="['text-[10px] px-2 py-1 rounded uppercase tracking-wider font-bold', pending.hasError ? 'bg-red-500/20 text-red-300' : 'bg-cyan-500/20 text-cyan-200']">
+                  {{ pending.hasError ? 'Fehler' : 'Import' }}
+                </span>
+              </div>
+
+              <h3 class="text-xl font-bold text-white mb-2 line-clamp-1">
+                {{ pending.title }}
+              </h3>
+
+              <div class="flex-grow space-y-3 mt-2">
+                <div class="flex justify-between text-[11px] pb-2 border-b border-white/5">
+                  <span class="text-slate-500 uppercase tracking-widest font-semibold">Status</span>
+                  <span :class="['font-medium', pending.hasError ? 'text-red-300' : 'text-cyan-200']">{{ pending.status }}</span>
+                </div>
+                <div class="text-xs text-slate-400 flex items-center gap-2">
+                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-word animate-wordfade">{{ loadingWords[loadingWordIndex] }}</span>
+                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-dots" aria-hidden="true"></span>
+                </div>
+              </div>
+
+              <div class="mt-6">
+                <button
+                  :disabled="!(pending.hasError || pending.status === 'Fertig generiert')"
+                  @click="dismissPendingImportCard(pending.adventureId)"
+                  :class="[
+                    'w-full py-3 font-bold rounded-xl transition-all duration-200',
+                    (pending.hasError || pending.status === 'Fertig generiert')
+                      ? 'bg-red-600/20 text-red-200 hover:bg-red-600/30 border border-red-400/30'
+                      : 'bg-cyan-900/40 text-cyan-200/70 cursor-not-allowed'
+                  ]"
+                >
+                  {{ (pending.hasError || pending.status === 'Fertig generiert') ? 'Kachel entfernen' : 'Bitte warten...' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-for="adv in visibleAdventures"
             :key="adv.game_id"
             class="group relative bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden hover:border-emerald-500/50 transition-all duration-500 flex flex-col"
           >
@@ -668,5 +803,59 @@ onMounted(() => {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(16, 185, 129, 0.5);
+}
+
+.loading-placeholder-gradient {
+  background: linear-gradient(120deg, rgba(15, 23, 42, 1) 0%, rgba(8, 47, 73, 0.9) 50%, rgba(15, 23, 42, 1) 100%);
+}
+
+.loading-placeholder-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.18), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.8s infinite;
+}
+
+.loading-word {
+  min-width: 170px;
+}
+
+.loading-dots::after {
+  content: '...';
+  display: inline-block;
+  width: 1em;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes dots {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 1em;
+  }
+}
+
+@keyframes wordfade {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
+.animate-wordfade {
+  animation: wordfade 1.2s ease-in-out infinite;
 }
 </style>

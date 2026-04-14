@@ -156,7 +156,6 @@ async def create_adventure(
     await db.commit()
     # Create initial GameState so the session is visible immediately to clients/tests
     db.add(GameState(
-        id=adv.id,
         user_id=user.id,
         adventure_id=adv.id,
         avatar_id=avatar.id,

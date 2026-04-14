@@ -3,7 +3,7 @@ import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from backend.core.llm_router import GameMasterLLM
 from backend.models.user import User
@@ -152,6 +152,16 @@ class WorldGenerator:
         from backend.engine.media_engine import MediaEngine
         adventure = await db.get(Adventure, adventure_id)
         
+        # Preserve any existing images if caller didn't provide them
+        if existing_images is None:
+            ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+            existing_images = {e.id: e.image_url for e in ent_res.scalars().all() if e.image_url}
+
+        # Ensure idempotency: clear prior world objects for this adventure so re-runs don't attempt duplicate inserts
+        await db.execute(delete(WorldScene).where(WorldScene.adventure_id == adventure_id))
+        await db.execute(delete(WorldExit).where(WorldExit.adventure_id == adventure_id))
+        await db.execute(delete(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+
         # Deduplication caches
         seen_scene_ids = set()
         seen_entity_ids = set()
