@@ -1060,6 +1060,36 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
         "start_datetime": start_datetime,
     }
 
+async def _enrich_map_nodes(adventure_id: str, nodes: dict, db: AsyncSession) -> dict:
+    """Enriches map node metadata (labels/descriptions) with current data from WorldScene table."""
+    if not nodes:
+        return {}
+        
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+    db_scenes = {s.id: s for s in scene_res.scalars().all()}
+    
+    # Also get safe-id mapped scenes to ensure we find everything
+    safe_db_scenes = {MapEngine._safe_id(s.id) if hasattr(MapEngine, '_safe_id') else (s.id.upper().replace("-", "_")): s for s in db_scenes.values()}
+    
+    enriched = {}
+    for sid, meta in nodes.items():
+        # Try to find the scene by the stored sid or original ID
+        scene = db_scenes.get(meta.get("id")) or safe_db_scenes.get(sid)
+        
+        enriched[sid] = dict(meta)
+        if scene:
+            # Only update if the DB version is more detailed or the meta version is empty
+            if not meta.get("label") or (scene.label and len(scene.label) > len(meta.get("label", ""))):
+                enriched[sid]["label"] = scene.label
+            if not meta.get("description") or (scene.description and len(scene.description) > len(meta.get("description", ""))):
+                enriched[sid]["description"] = scene.description
+            # Note: WorldScene doesn't have image_url yet, so we skip it or use getattr safely
+            db_img = getattr(scene, "image_url", None)
+            if not meta.get("image_url") and db_img:
+                enriched[sid]["image_url"] = db_img
+                
+    return enriched
+
 @router.get("/{game_id}/chat", response_model=ChatResponse)
 async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
     """Retrieves full chat history and current session state."""
@@ -1090,7 +1120,7 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
         messages=history,
         sheet=await _build_sheet_snapshot(avatar, state, db),
         mermaid=mermaid_data,
-        nodes=world_map.nodes if world_map else {},
+        nodes=await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
         entities=entities
     )
 
@@ -1406,6 +1436,13 @@ async def post_chat_message(
                     {"t2i_settings": user.t2i_settings}, 
                     user.encrypted_api_keys
                 )
+                # Persist image to the world scene record
+                if current_scene:
+                    current_scene.image_url = image_url
+                
+                # Update map node immediately
+                MapEngine.register_visit(world_map, state.scene_id, image_url=image_url)
+                
             except Exception as e:
                 logger.error(f"On-demand scene generation failed: {e}")
                 # We do NOT fail the turn, just return no image
@@ -1426,7 +1463,7 @@ async def post_chat_message(
             messages=[{"role": "system", "content": response_text}],
             sheet=await _build_sheet_snapshot(avatar, state, db),
             mermaid=mermaid_data,
-            nodes=world_map.nodes if world_map else {},
+            nodes=await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
             image_url=image_url,
             entities=curr_entities,
             game_over=game_over,

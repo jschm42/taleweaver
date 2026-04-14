@@ -12,6 +12,13 @@ from typing import Optional
 
 
 class MapEngine:
+    @staticmethod
+    def _safe_id(raw: str) -> str:
+        """
+        Convert an arbitrary scene_id string to a Mermaid-safe node identifier.
+        Replaces spaces and hyphens with underscores; strips other specials.
+        """
+        return "".join(c if (c.isalnum() or c == "_") else "_" for c in raw.replace("-", "_")).upper()
 
     @staticmethod
     def register_visit(
@@ -27,31 +34,39 @@ class MapEngine:
 
         Args:
             world_map:   WorldMap ORM instance (mutated in-place).
-            scene_id:    Unique identifier of the scene (e.g. "START", "TAVERN").
+            scene_id:    Unique identifier of the scene.
             label:       Short human-readable name for display on the map.
             description: Optional one-line flavour text stored alongside the node.
             image_url:   Optional URL to the scene image for the tooltip.
         """
         # Reassign to a new dict so SQLAlchemy detects the mutation.
         nodes: dict = dict(world_map.nodes or {})
+        
+        # Use safe ID for keys to ensure consistency with Mermaid diagram IDs
+        sid = MapEngine._safe_id(scene_id)
 
-        if scene_id not in nodes:
-            nodes[scene_id] = {
+        if sid not in nodes:
+            nodes[sid] = {
+                "id": scene_id, # Preserve original ID in metadata
                 "label": label or scene_id, 
                 "description": description or "",
                 "image_url": image_url
             }
         else:
-            # Preserve existing data; only fill gaps.
-            if label and not nodes[scene_id].get("label"):
-                nodes[scene_id]["label"] = label
-            if description and not nodes[scene_id].get("description"):
-                nodes[scene_id]["description"] = description
-            if image_url and not nodes[scene_id].get("image_url"):
-                nodes[scene_id]["image_url"] = image_url
+            # Update data if missing or if the new data is more detailed.
+            if label and (not nodes[sid].get("label") or len(label) > len(nodes[sid]["label"])):
+                nodes[sid]["label"] = label
+            
+            # If current description is empty, always fill it.
+            curr_desc = nodes[sid].get("description", "")
+            if description and (not curr_desc or len(description) > len(curr_desc)):
+                nodes[sid]["description"] = description
+                
+            if image_url and not nodes[sid].get("image_url"):
+                nodes[sid]["image_url"] = image_url
 
         world_map.nodes = nodes
-        world_map.current_scene_id = scene_id
+        world_map.current_scene_id = sid # Also store safe ID as current location
 
     @staticmethod
     def register_exit(
@@ -122,7 +137,7 @@ class MapEngine:
             all_scene_ids.add(edge["to"])
 
         for scene_id in all_scene_ids:
-            safe_id = _safe_id(scene_id)
+            safe_id = MapEngine._safe_id(scene_id)
             is_visited = scene_id in nodes
             meta = nodes.get(scene_id, {})
             
@@ -139,8 +154,8 @@ class MapEngine:
         # Emit edges.
         locked_indices = []
         for idx, edge in enumerate(edges):
-            src = _safe_id(edge["from"])
-            dst = _safe_id(edge["to"])
+            src = MapEngine._safe_id(edge["from"])
+            dst = MapEngine._safe_id(edge["to"])
             is_locked = edge.get("is_locked", False)
             
             lbl = edge.get("label", "").replace('"', "'")

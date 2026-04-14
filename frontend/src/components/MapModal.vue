@@ -96,16 +96,18 @@ mermaid.initialize({
  * Mermaid flowchart IDs are often formatted as 'flowchart-[scene_id]-[index]'
  */
 function extractSceneId(mermaidId: string): string | null {
-  const parts = mermaidId.split('-')
-  if (parts.length < 2) return null
-  // The scene_id is typically the part between 'flowchart' and the trailing number
-  return parts[1]
+  // Mermaid IDs are typically: [diagram-id]-flowchart-[sceneId]-[index]
+  // We use a regex to capture everything between 'flowchart-' and the final '-index'
+  const match = mermaidId.match(/flowchart-(.+)-\d+$/)
+  return match ? match[1] : null
 }
 
 /** Attaches hover events to the generated SVG nodes. */
 function addMapInteractivity(): void {
   const nodes = mapContainer.value?.querySelectorAll('.node')
   if (!nodes) return
+
+  console.log(`[MapMap] Synchronizing nodes...`)
 
   nodes.forEach((nodeEl) => {
     const mermaidId = nodeEl.id
@@ -263,11 +265,13 @@ onMounted(async () => {
                         <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label }}</span>
                         <div class="flex gap-1.5">
                           <span class="text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
-                            Visited
+                            Room
                           </span>
                         </div>
                       </div>
-                      <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-3">{{ hoveredNode.description || 'No description available for this area.' }}</p>
+                      <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-4">
+                        {{ (hoveredNode.description && hoveredNode.description.trim()) ? hoveredNode.description : 'Explore closer to learn more about this area...' }}
+                      </p>
                     </div>
                   </div>
                 </div>

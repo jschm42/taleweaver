@@ -29,6 +29,7 @@ const {
   autoVisualize,
   entities,
   mermaidData,
+  nodes,
   currentSceneImage,
   connect,
   disconnect,

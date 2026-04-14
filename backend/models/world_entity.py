@@ -13,6 +13,7 @@ class WorldScene(Base, TimestampMixin):
     
     label = Column(String(100), nullable=False) # Human readable name
     description = Column(String(2000), nullable=False) # Atmospheric description
+    image_url = Column(String(255), nullable=True) # Scene visual link
 
 class WorldExit(Base, TimestampMixin):
     """
