@@ -229,8 +229,41 @@ onBeforeUnmount(() => {
     </header>
 
     <div class="flex-grow flex overflow-hidden">
-      <!-- Left Sidebar: Inhabitants & Discovery -->
-      <aside v-if="entities.length > 0 || (sheet && sheet.inventory && sheet.inventory.length > 0)" class="hidden xl:flex w-72 bg-slate-900 border-r border-slate-800 flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar">
+      <!-- Left Sidebar: Scene, inhabitants & Discovery -->
+      <aside v-if="entities.length > 0 || (sheet && sheet.inventory && sheet.inventory.length > 0) || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900 border-r border-slate-800 flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar">
+        
+        <!-- CURRENT SCENE SECTION -->
+        <div class="mb-8">
+          <div class="flex items-center gap-2 mb-4">
+            <i class="ra ra-mountain-cave text-indigo-500"></i>
+            <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500/80">Location</h3>
+          </div>
+          <div 
+            class="relative group cursor-help overflow-hidden rounded-xl border border-slate-800 bg-slate-950 transition-all hover:border-indigo-500/50"
+            @mouseenter="handleHover({ 
+              name: sheet?.current_scene || 'Current Scene', 
+              description: nodes[sheet?.scene_id || '']?.description || 'The current location of your adventure.' 
+            }, $event)"
+            @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+            @mouseleave="hoveredEntity = null"
+          >
+            <div class="aspect-video w-full relative overflow-hidden bg-slate-900 flex items-center justify-center">
+              <img 
+                v-if="currentSceneImage && showImage(currentSceneImage)" 
+                :src="getImageUrl(currentSceneImage)" 
+                class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                @error="handleImageError(currentSceneImage)"
+              />
+              <div v-else class="w-full h-full flex items-center justify-center bg-slate-800">
+                <i :class="['ra text-7xl opacity-20', getItemIcon('SCENE'), 'text-indigo-400']"></i>
+              </div>
+              <div class="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-slate-950 to-transparent">
+                <span class="text-xs font-bold text-white uppercase tracking-wider truncate block overflow-hidden shadow-sm">{{ sheet?.current_scene || 'Unknown' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- NPCs SECTION -->
         <div v-if="npcs.length > 0">
           <div class="flex items-center justify-between gap-2 mb-4">
@@ -239,23 +272,36 @@ onBeforeUnmount(() => {
               <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-500/80">Population</h3>
             </div>
           </div>
-          <div class="space-y-3 mb-8">
+          <div class="grid grid-cols-2 gap-3 mb-8">
             <div 
               v-for="ent in npcs" 
               :key="ent.id" 
-              class="p-3 bg-slate-950 border border-slate-800 rounded-xl group cursor-help transition-all hover:border-cyan-500/40 hover:bg-slate-900/50"
+              class="relative bg-slate-950 border border-slate-800 rounded-xl group cursor-help transition-all hover:border-cyan-500/40 hover:bg-slate-900/50 p-2 flex flex-col items-center"
               @mouseenter="handleHover(ent, $event)"
               @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
               @mouseleave="hoveredEntity = null"
             >
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2 overflow-hidden">
-                  <i :class="['ra text-xs shrink-0', getItemIcon('NPC'), getTypeColor('NPC')]"></i>
-                  <span class="text-xs font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate">{{ ent.name }}</span>
-                </div>
-                <i v-if="ent.id === 'PLAYER'" class="ra ra-pawn text-[10px] text-slate-800"></i>
-                <i v-else class="ra ra-speech-bubble text-[10px] text-slate-800"></i>
+              <!-- Small Badge Icons -->
+              <div class="absolute top-1 right-1 z-10 flex gap-1">
+                <i v-if="ent.id === 'PLAYER'" class="ra ra-pawn text-[8px] text-cyan-400 drop-shadow-md"></i>
+                <i v-else class="ra ra-speech-bubble text-[8px] text-slate-600 group-hover:text-cyan-500 transition-colors drop-shadow-md"></i>
               </div>
+
+              <!-- NPC Portrait (64x64) -->
+              <div class="w-16 h-16 rounded-lg overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
+                <img 
+                  v-if="ent.image_url && showImage(ent.image_url)" 
+                  :src="getImageUrl(ent.image_url)" 
+                  class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  @error="handleImageError(ent.image_url)"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
+                  <i :class="['ra text-2xl', getItemIcon('NPC'), 'text-cyan-500/40']"></i>
+                </div>
+              </div>
+              
+              <!-- NPC Name -->
+              <span class="text-[10px] font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
             </div>
           </div>
         </div>

@@ -115,6 +115,24 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added adventures.creation_error")
 
+        if "generate_scene_images" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN generate_scene_images BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added adventures.generate_scene_images")
+
+        if "generate_npc_images" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN generate_npc_images BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added adventures.generate_npc_images")
+
+        if "generate_item_images" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN generate_item_images BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added adventures.generate_item_images")
+
         # Avatar link for cleanup
         avatar_cols_result = await conn.exec_driver_sql("PRAGMA table_info(avatars)")
         avatar_cols = {row[1] for row in avatar_cols_result.fetchall()}

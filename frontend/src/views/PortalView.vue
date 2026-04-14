@@ -117,6 +117,7 @@ function resetCreateForm() {
     image_url: null,
     generate_npc_images: false,
     generate_item_images: false,
+    generate_scene_images: false,
     automatic_cover_generation: false,
     time_per_turn: 5,
     story_idea: '',
@@ -410,6 +411,7 @@ async function createAdventure() {
       strict_rules: true,
       generate_npc_images: form.value.generate_npc_images,
       generate_item_images: form.value.generate_item_images,
+      generate_scene_images: form.value.generate_scene_images,
       heartbeat_enabled: false,
       time_per_turn: form.value.time_per_turn,
     }
@@ -886,6 +888,10 @@ onUnmounted(() => {
             <div class="flex items-center justify-between cursor-pointer" @click="form.generate_item_images = !form.generate_item_images">
               <span class="text-sm font-bold text-white">Generate Item Images</span>
               <input type="checkbox" v-model="form.generate_item_images" />
+            </div>
+            <div class="flex items-center justify-between cursor-pointer" @click="form.generate_scene_images = !form.generate_scene_images">
+              <span class="text-sm font-bold text-white">Generate Scene Images</span>
+              <input type="checkbox" v-model="form.generate_scene_images" />
             </div>
             <div class="flex items-center justify-between cursor-pointer" @click="form.automatic_cover_generation = !form.automatic_cover_generation">
               <span class="text-sm font-bold text-white">Automatic Cover Generation</span>

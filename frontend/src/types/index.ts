@@ -20,6 +20,8 @@ export interface CharacterSheet {
   status_effects: string[]
   in_game_time: number  // minutes elapsed in-game
   start_datetime?: string | null
+  current_scene?: string | null
+  scene_id?: string | null
 }
 
 export interface InventoryItem {
@@ -51,6 +53,7 @@ export interface CreateAdventurePayload {
   strict_rules?: boolean
   generate_npc_images?: boolean
   generate_item_images?: boolean
+  generate_scene_images?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean
   time_per_turn?: number

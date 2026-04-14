@@ -16,6 +16,10 @@ class Adventure(Base, TimestampMixin):
     heartbeat_enabled = Column(Boolean, default=False, nullable=False) # Deprecated but kept for safety
     heartbeat_interval = Column(Integer, default=10, nullable=False)
     
+    generate_scene_images = Column(Boolean, default=False, nullable=False)
+    generate_npc_images = Column(Boolean, default=False, nullable=False)
+    generate_item_images = Column(Boolean, default=False, nullable=False)
+
     game_over_rules = Column(JSON, nullable=True)
     original_manifest = Column(JSON, nullable=True) # Full blueprint for reset
     

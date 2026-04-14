@@ -69,6 +69,7 @@ class WorldGenerator:
         context: str,
         model: str = "gpt-4o", # default to a complex model
         provider: Optional[str] = None,
+        generate_scene_images: bool = False,
         generate_npc_images: bool = False,
         generate_item_images: bool = False
     ) -> None:
@@ -133,9 +134,10 @@ class WorldGenerator:
             db, 
             adventure_id, 
             manifesto.model_dump(), 
-            user=user if (generate_npc_images or generate_item_images) else None,
+            user=user if (generate_npc_images or generate_item_images or generate_scene_images) else None,
             gen_npc=generate_npc_images,
             gen_items=generate_item_images,
+            gen_scenes=generate_scene_images,
             gen_protagonist_image=True # Always generate protagonist image
         )
         await db.flush()
@@ -148,6 +150,7 @@ class WorldGenerator:
         user: Optional[User] = None,
         gen_npc: bool = False,
         gen_items: bool = False,
+        gen_scenes: bool = False,
         gen_protagonist_image: bool = False,
         existing_images: Optional[dict] = None
     ) -> None:
@@ -161,8 +164,14 @@ class WorldGenerator:
         
         # Preserve any existing images if caller didn't provide them
         if existing_images is None:
+            existing_images = {}
             ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
-            existing_images = {e.id: e.image_url for e in ent_res.scalars().all() if e.image_url}
+            for e in ent_res.scalars().all():
+                if e.image_url: existing_images[e.id] = e.image_url
+            
+            scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+            for s in scene_res.scalars().all():
+                if s.image_url: existing_images[s.id] = s.image_url
 
         # Ensure idempotency: clear prior world objects for this adventure so re-runs don't attempt duplicate inserts
         await db.execute(delete(WorldScene).where(WorldScene.adventure_id == adventure_id))
@@ -216,11 +225,29 @@ class WorldGenerator:
                 continue
             seen_scene_ids.add(s["id"])
             
+            image_url = (existing_images or {}).get(s["id"])
+            if not image_url and user and gen_scenes:
+                if adventure:
+                    adventure.creation_status = f"Envisioning Scene: {s['name']}..."
+                    await db.commit()
+                prompt = f"Atmospheric background: {s['name']}. {s['description']}. RPG visual novel style, high detail."
+                try:
+                    image_url = await MediaEngine.generate_scene_image(
+                        prompt,
+                        adventure_id,
+                        {"t2i_settings": user.t2i_settings},
+                        user.encrypted_api_keys,
+                    )
+                except Exception as exc:
+                    logger.warning("Scene image generation failed for %s/%s: %s", adventure_id, s['id'], exc)
+                    image_url = None
+
             db.add(WorldScene(
                 id=s["id"],
                 adventure_id=adventure_id,
                 label=s["name"],
-                description=s["description"]
+                description=s["description"],
+                image_url=image_url
             ))
             
         # Persist Exits

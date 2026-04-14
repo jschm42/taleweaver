@@ -15,6 +15,7 @@ export const getItemIcon = (type?: string) => {
     case 'STATIC': return 'ra-anchor'
     case 'NPC': return 'ra-player'
     case 'PLAYER': return 'ra-player'
+    case 'SCENE': return 'ra-mountains' // NEW: Default for current scene
     default: return 'ra-tower'
   }
 }

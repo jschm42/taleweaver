@@ -226,6 +226,7 @@ class CreateAdventurePayload(BaseModel):
     image_url: Optional[str] = None
     context: Optional[str] = None
     strict_rules: bool = True
+    generate_scene_images: bool = False
     generate_npc_images: bool = False
     generate_item_images: bool = False
     time_per_turn: int = 5
@@ -310,7 +311,10 @@ async def create_adventure(
         game_over_rules=payload.game_over_rules,
         is_ready=False,
         creation_status="Initializing Foundations...",
-        heartbeat_enabled=bool(payload.heartbeat_enabled)
+        heartbeat_enabled=bool(payload.heartbeat_enabled),
+        generate_scene_images=payload.generate_scene_images,
+        generate_npc_images=payload.generate_npc_images,
+        generate_item_images=payload.generate_item_images
     )
 
     if payload.heartbeat_interval is not None:
@@ -401,9 +405,10 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     db=db,
                     adventure_id=adventure_id,
                     manifest_dict=normalized_manifest,
-                    user=user if (payload_dict.get('generate_npc_images', False) or payload_dict.get('generate_item_images', False)) else None,
+                    user=user if (payload_dict.get('generate_npc_images', False) or payload_dict.get('generate_item_images', False) or payload_dict.get('generate_scene_images', False)) else None,
                     gen_npc=payload_dict.get('generate_npc_images', False),
                     gen_items=payload_dict.get('generate_item_images', False),
+                    gen_scenes=payload_dict.get('generate_scene_images', False),
                     gen_protagonist_image=True,
                 )
             else:
@@ -415,6 +420,7 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     context=adventure_context,
                     model=complex_model,
                     provider=preferred_provider,
+                    generate_scene_images=payload_dict.get('generate_scene_images', False),
                     generate_npc_images=payload_dict.get('generate_npc_images', False),
                     generate_item_images=payload_dict.get('generate_item_images', False)
                 )
@@ -1034,7 +1040,6 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
             item_copy["image_url"] = img_map[item_id]
         synced_inventory.append(item_copy)
         
-    # 3. Enrich equipment
     synced_equipment = {}
     for slot, item in (avatar.equipment or {}).items():
         if item and isinstance(item, dict):
@@ -1045,7 +1050,11 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
             synced_equipment[slot] = item_copy
         else:
             synced_equipment[slot] = item
-
+            
+    # 4. Include current scene info
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.scene_id, WorldScene.adventure_id == state.adventure_id))
+    current_scene = scene_res.scalars().first()
+    
     return {
         "name": avatar.name,
         "role": avatar.role,
@@ -1060,6 +1069,8 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
         "status_effects": avatar.status_effects,
         "in_game_time": state.in_game_time,
         "start_datetime": start_datetime,
+        "current_scene": current_scene.label if current_scene else state.scene_id,
+        "scene_id": state.scene_id
     }
 
 async def _enrich_map_nodes(adventure_id: str, nodes: dict, db: AsyncSession) -> dict:
