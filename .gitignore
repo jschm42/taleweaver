@@ -210,3 +210,4 @@ __marimo__/
 node_modules/
 *.db
 data/
+logs/

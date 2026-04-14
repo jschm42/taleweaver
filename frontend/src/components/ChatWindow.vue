@@ -102,6 +102,11 @@ function formatBolds(text: string) {
     .replace(/\*\*(.*?):\*\*/g, '<strong class="text-amber-400 font-bold">$1:</strong>')
     .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
 }
+
+function normalizeLineBreaks(text: string): string {
+  // Keep intentional paragraph breaks, but cap excessive blank lines.
+  return text.replace(/\n{3,}/g, '\n\n')
+}
 </script>
 
 <template>
@@ -123,7 +128,7 @@ function formatBolds(text: string) {
     <!-- Message log -->
     <div
       ref="logEl"
-      class="flex-1 overflow-y-auto px-5 py-4 space-y-6 min-h-0 relative scroll-smooth"
+      class="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0 relative scroll-smooth"
       aria-live="polite"
       aria-label="Game log"
     >
@@ -152,14 +157,14 @@ function formatBolds(text: string) {
         <!-- Content -->
         <div
           :class="[
-            'text-sm leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2',
+            'text-sm leading-normal whitespace-pre-wrap break-words pl-4 border-l-2',
             msg.role === 'user' ? 'text-slate-300 border-cyan-500/50' :
             msg.role === 'assistant' ? 'text-amber-50/90 border-amber-500/50' :
             'text-emerald-300 border-emerald-500/50 italic opacity-80'
           ]"
         >
           <template v-for="(part, pIdx) in parseContent(msg.content)" :key="pIdx">
-            <span v-if="part.type === 'text'" v-html="formatBolds(part.value)"></span>
+            <span v-if="part.type === 'text'" v-html="formatBolds(normalizeLineBreaks(part.value))"></span>
             <div v-else-if="part.type === 'image'" class="my-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
               <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />
               <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-[10px] text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>
