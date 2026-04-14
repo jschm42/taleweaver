@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import StatBar from './StatBar.vue'
 import type { CharacterSheet } from '@/types'
+import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
   open: boolean
@@ -30,41 +31,7 @@ function onKeydown(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
-const getItemIcon = (type?: string) => {
-  switch (type?.toUpperCase()) {
-    case 'CONSUMABLE': return 'ra-bottle-vapors'
-    case 'WEAPON': return 'ra-sword'
-    case 'TOOL': return 'ra-hammer'
-    case 'KEY': return 'ra-old-key'
-    case 'READABLE': return 'ra-book'
-    case 'WEARABLE': return 'ra-helmet'
-    case 'COMBINABLE': return 'ra-gears'
-    case 'PICKABLE': return 'ra-hand'
-    case 'STATIC': return 'ra-anchor'
-    default: return 'ra-quill-ink'
-  }
-}
-
-const getTypeColor = (type?: string) => {
-  switch (type?.toUpperCase()) {
-    case 'WEAPON': return 'text-red-400'
-    case 'CONSUMABLE': return 'text-emerald-400'
-    case 'KEY': return 'text-amber-400'
-    case 'READABLE': return 'text-cyan-400'
-    case 'WEARABLE': return 'text-blue-400'
-    default: return 'text-slate-400'
-  }
-}
-
 const brokenImages = ref<Record<string, boolean>>({})
-
-const getImageUrl = (path?: string | null) => {
-  if (!path) return ''
-  if (path.startsWith('http')) return path
-  // In dev, the frontend is on 5173 and backend on 8000
-  const baseUrl = window.location.origin.replace('5173', '8000')
-  return `${baseUrl}${path}`
-}
 
 const handleImageError = (path?: string | null) => {
   if (!path) return
@@ -112,8 +79,9 @@ const showImage = (path?: string | null) => {
                 <!-- Identity -->
                 <div class="bg-slate-950/40 rounded-2xl p-6 border border-slate-800/50 shadow-inner">
                   <div class="flex items-center gap-4">
-                    <div v-if="sheet.profile_image && showImage(sheet.profile_image)" class="w-16 h-16 rounded-lg overflow-hidden border border-slate-700">
-                      <img :src="getImageUrl(sheet.profile_image)" class="w-full h-full object-cover" @error="handleImageError(sheet.profile_image)" />
+                    <div class="w-16 h-16 rounded-lg overflow-hidden border border-slate-700 bg-slate-900/50 flex items-center justify-center shrink-0">
+                      <img v-if="sheet.profile_image && showImage(sheet.profile_image)" :src="getImageUrl(sheet.profile_image)" class="w-full h-full object-cover" @error="handleImageError(sheet.profile_image)" />
+                      <i v-else class="ra ra-player text-3xl text-amber-500/60"></i>
                     </div>
                     <div>
                       <h3 class="text-2xl font-black tracking-tight text-white mb-1 uppercase">{{ sheet.name || 'Unnamed' }}</h3>
@@ -179,14 +147,16 @@ const showImage = (path?: string | null) => {
                     >
                       <span class="text-[9px] text-slate-600 uppercase font-bold tracking-widest mb-2">{{ slot }}</span>
                       <template v-if="item && typeof item === 'object'">
-                        <div v-if="showImage((item as any).image_url)" class="relative w-12 h-12 mb-2 rounded-lg overflow-hidden border border-slate-700 shadow-lg">
+                        <div v-if="item && typeof item === 'object' && showImage((item as any).image_url)" class="relative w-12 h-12 mb-2 rounded-lg overflow-hidden border border-slate-700 shadow-lg shrink-0">
                           <img 
                             :src="getImageUrl((item as any).image_url)" 
                             class="w-full h-full object-cover" 
                             @error="handleImageError((item as any).image_url)"
                           />
                         </div>
-                        <i v-else :class="['text-xl mb-2', getItemIcon((item as any).item_type), getTypeColor((item as any).item_type)]"></i>
+                        <div v-else-if="item && typeof item === 'object'" class="w-12 h-12 mb-2 rounded-lg border border-slate-800 bg-slate-950/40 flex items-center justify-center shrink-0">
+                          <i :class="['ra text-xl', getItemIcon((item as any).item_type), getTypeColor((item as any).item_type)]"></i>
+                        </div>
                         <span class="text-xs font-bold text-slate-200 line-clamp-1 truncate w-full px-1">{{ (item as any).name }}</span>
                       </template>
                       <template v-else>
@@ -209,14 +179,16 @@ const showImage = (path?: string | null) => {
                       :key="idx"
                       class="p-3 bg-slate-900 border border-slate-800 rounded-xl group cursor-pointer transition-all hover:border-slate-500 hover:scale-[1.02] flex flex-col items-center"
                     >
-                      <div v-if="showImage(item?.image_url)" class="relative w-16 h-16 mb-3 rounded-lg overflow-hidden border border-slate-700 shadow-lg">
+                      <div v-if="showImage(item?.image_url)" class="relative w-16 h-16 mb-3 rounded-lg overflow-hidden border border-slate-700 shadow-lg shrink-0">
                         <img 
                           :src="getImageUrl(item.image_url)" 
                           class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
                           @error="handleImageError(item.image_url)"
                         />
                       </div>
-                      <i v-else :class="['text-2xl mb-3', getItemIcon(item?.item_type), getTypeColor(item?.item_type)]"></i>
+                      <div v-else class="w-16 h-16 mb-3 rounded-lg border border-slate-800 bg-slate-950/40 flex items-center justify-center shrink-0">
+                        <i :class="['ra text-3xl', getItemIcon(item?.item_type), getTypeColor(item?.item_type)]"></i>
+                      </div>
                       <span class="text-[11px] font-bold text-slate-300 text-center leading-tight line-clamp-2 truncate w-full">{{ item?.name || 'Unknown' }}</span>
                       <span v-if="item?.item_type" class="text-[8px] text-slate-600 uppercase mt-2 font-mono tracking-widest">{{ item.item_type }}</span>
                     </div>
@@ -250,5 +222,17 @@ const showImage = (path?: string | null) => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.npc-name {
+  color: #fbbf24; /* amber-400 */
+}
+
+/* Ensure RPG Awesome icons render correctly */
+.ra {
+  font-family: 'rpgawesome' !important;
+  display: inline-block;
+  line-height: 1;
+  text-align: center;
 }
 </style>

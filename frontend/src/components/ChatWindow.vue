@@ -2,6 +2,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import type { ChatMessage } from '@/types'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
+import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -19,6 +20,16 @@ const emit = defineEmits<{
 
 const inputText = ref('')
 const logEl = ref<HTMLElement | null>(null)
+const brokenImages = ref<Record<string, boolean>>({})
+
+const handleImageError = (path?: string | null) => {
+  if (!path) return
+  brokenImages.value[path] = true
+}
+
+const showImage = (path?: string | null) => {
+  return !!path && !brokenImages.value[path]
+}
 
 function appendText(text: string) {
   const current = inputText.value.trim()
@@ -116,9 +127,11 @@ function formatBolds(text: string) {
     .replace(/\*\*(.*?):\*\*/g, (match, name) => {
       const data = props.npcMetadata[name]
       if (data) {
-        // inline-flex + align-middle centers the whole block vertically in the line.
-        // the :deep styles in the style block handle the rest.
-        return `<span class="npc-portrait-trigger" data-npc-name="${name}"><img src="http://localhost:8000${data.image_url}" class="npc-avatar" alt="${name}-portrait"><strong class="npc-name">${name}:</strong></span>`
+        const iconOrImg = data.image_url 
+          ? `<img src="${getImageUrl(data.image_url)}" class="npc-avatar" alt="${name}-portrait">`
+          : `<div class="npc-avatar ra ra-player flex items-center justify-center bg-slate-800 text-amber-500/80 text-xl border-amber-500/30 font-normal"></div>`;
+        
+        return `<span class="npc-portrait-trigger" data-npc-name="${name}">${iconOrImg}<strong class="npc-name">${name}:</strong></span>`
       }
       return `<strong class="text-amber-400 font-bold">${name}:</strong>`
     })
@@ -218,16 +231,15 @@ function normalizeLineBreaks(text: string): string {
             class="item-card flex flex-col w-56 bg-slate-800/80 border border-slate-700/50 rounded-xl overflow-hidden shadow-xl backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-500/30"
           >
             <!-- Item Image -->
-            <div class="h-32 bg-slate-900 relative overflow-hidden group/img">
+            <div class="h-32 bg-slate-900 relative overflow-hidden group/img flex items-center justify-center">
               <img 
-                v-if="entities.find(e => e.id === itemId)?.image_url" 
-                :src="'http://localhost:8000' + entities.find(e => e.id === itemId).image_url" 
+                v-if="entities.find(e => e.id === itemId)?.image_url && showImage(entities.find(e => e.id === itemId).image_url)" 
+                :src="getImageUrl(entities.find(e => e.id === itemId).image_url)" 
                 class="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110"
+                @error="handleImageError(entities.find(e => e.id === itemId).image_url)"
               />
-              <div v-else class="w-full h-full flex items-center justify-center text-slate-700">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
+              <div v-else class="w-full h-full flex items-center justify-center text-slate-700 bg-slate-900/50">
+                <i :class="['ra text-5xl', getItemIcon(entities.find(e => e.id === itemId)?.item_type), getTypeColor(entities.find(e => e.id === itemId)?.item_type)]"></i>
               </div>
               <div class="absolute top-2 right-2 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase rounded border border-emerald-500/30">
                 New Discovery
@@ -346,5 +358,13 @@ function normalizeLineBreaks(text: string): string {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* Ensure RPG Awesome icons render correctly */
+.ra {
+  font-family: 'rpgawesome' !important;
+  display: inline-block;
+  line-height: 1;
+  vertical-align: middle;
 }
 </style>

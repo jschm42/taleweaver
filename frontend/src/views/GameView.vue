@@ -11,6 +11,8 @@ import ChatWindow from '@/components/ChatWindow.vue'
 import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
 import MapModal from '@/components/MapModal.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
+import type { WorldScene, WorldEntity, CharacterSheet, GameStatus } from '@/types'
+import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
   id: string
@@ -100,38 +102,8 @@ const gameTime = computed(() => {
   return { date, time }
 })
 
-const getItemIcon = (type?: string) => {
-  switch (type?.toUpperCase()) {
-    case 'CONSUMABLE': return 'ra-bottle-vapors'
-    case 'WEAPON': return 'ra-sword'
-    case 'TOOL': return 'ra-hammer'
-    case 'KEY': return 'ra-old-key'
-    case 'READABLE': return 'ra-book'
-    case 'WEARABLE': return 'ra-helmet'
-    case 'COMBINABLE': return 'ra-gears'
-    case 'PICKABLE': return 'ra-hand'
-    case 'STATIC': return 'ra-anchor'
-    default: return 'ra-quill-ink'
-  }
-}
-
-const getImageUrl = (path?: string | null) => {
-  if (!path) return ''
-  if (path.startsWith('http')) return path
-  // In dev, the frontend is on 5173 and backend on 8000
-  const baseUrl = window.location.origin.replace('5173', '8000')
-  return `${baseUrl}${path}`
-}
-
-const getTypeColor = (type?: string) => {
-  switch (type?.toUpperCase()) {
-    case 'WEAPON': return 'text-red-400'
-    case 'CONSUMABLE': return 'text-emerald-400'
-    case 'KEY': return 'text-amber-400'
-    case 'READABLE': return 'text-cyan-400'
-    case 'WEARABLE': return 'text-blue-400'
-    default: return 'text-slate-600'
-  }
+const getTypeColorLocal = (type?: string) => {
+  return getTypeColor(type)
 }
 
 // Flash the clock on every update to give a living-time feel
@@ -139,6 +111,17 @@ watch(() => sheet.value?.in_game_time, () => {
   clockTick.value = true
   setTimeout(() => { clockTick.value = false }, 600)
 })
+
+const brokenImages = ref<Record<string, boolean>>({})
+
+const handleImageError = (path?: string | null) => {
+  if (!path) return
+  brokenImages.value[path] = true
+}
+
+const showImage = (path?: string | null) => {
+  return !!path && !brokenImages.value[path]
+}
 
 const goBack = () => {
   disconnect()
@@ -266,8 +249,12 @@ onBeforeUnmount(() => {
               @mouseleave="hoveredEntity = null"
             >
               <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight">{{ ent.name }}</span>
-                <i class="ra ra-pawn text-[10px] text-slate-800"></i>
+                <div class="flex items-center gap-2 overflow-hidden">
+                  <i :class="['ra text-xs shrink-0', getItemIcon('NPC'), getTypeColor('NPC')]"></i>
+                  <span class="text-xs font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate">{{ ent.name }}</span>
+                </div>
+                <i v-if="ent.id === 'PLAYER'" class="ra ra-pawn text-[10px] text-slate-800"></i>
+                <i v-else class="ra ra-speech-bubble text-[10px] text-slate-800"></i>
               </div>
             </div>
           </div>
@@ -292,7 +279,12 @@ onBeforeUnmount(() => {
             >
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2 overflow-hidden">
-                  <i :class="['ra text-xs shrink-0', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
+                  <div v-if="ent.image_url && showImage(ent.image_url)" class="relative w-6 h-6 rounded overflow-hidden border border-slate-800 shrink-0">
+                    <img :src="getImageUrl(ent.image_url)" class="w-full h-full object-cover" @error="handleImageError(ent.image_url)" />
+                  </div>
+                  <div v-else class="w-6 h-6 rounded border border-slate-800/50 bg-slate-900/50 flex items-center justify-center shrink-0">
+                    <i :class="['ra text-[10px]', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
+                  </div>
                   <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate">{{ ent.name }}</span>
                 </div>
                 <i class="ra ra-gem text-[10px] text-slate-800"></i>
@@ -322,7 +314,9 @@ onBeforeUnmount(() => {
               <div v-if="item.image_url" class="relative w-8 h-8 rounded-md overflow-hidden border border-slate-800 mb-1 shrink-0">
                 <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
               </div>
-              <i v-else :class="['ra text-xl mb-1 shrink-0', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
+              <div v-else class="w-8 h-8 mb-1 rounded border border-slate-800/50 bg-slate-900/50 flex items-center justify-center shrink-0">
+                <i :class="['ra text-xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
+              </div>
               <span class="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 transition-colors uppercase tracking-tight truncate w-full text-center px-1">{{ item.name }}</span>
             </div>
           </div>
@@ -447,4 +441,12 @@ onBeforeUnmount(() => {
 .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.1); }
+
+/* Ensure RPG Awesome icons render correctly */
+.ra {
+  font-family: 'rpgawesome' !important;
+  display: inline-block;
+  line-height: 1;
+  vertical-align: middle;
+}
 </style>
