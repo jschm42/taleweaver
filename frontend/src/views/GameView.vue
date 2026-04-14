@@ -63,19 +63,30 @@ const npcs = computed(() => {
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
 
 /**
- * Formats in_game_time (minutes) into a human-readable in-game clock.
- * Game day starts at 06:00. One game-minute = one real second (heartbeat pace).
+ * Formats the session clock as a full datetime derived from the adventure start.
  */
 const gameTime = computed(() => {
-  if (!sheet.value) return null
-  const totalMinutes = sheet.value.in_game_time ?? 0
-  const startHour = 6  // in-game day starts at 06:00
-  const minutesInDay = 24 * 60
-  const offsetMinutes = (totalMinutes + startHour * 60) % minutesInDay
-  const day = Math.floor((totalMinutes + startHour * 60) / minutesInDay) + 1
-  const hh = String(Math.floor(offsetMinutes / 60)).padStart(2, '0')
-  const mm = String(offsetMinutes % 60).padStart(2, '0')
-  return { day, time: `${hh}:${mm}` }
+  if (!sheet.value?.start_datetime) return null
+
+  const start = new Date(sheet.value.start_datetime)
+  if (Number.isNaN(start.getTime())) return null
+
+  const elapsedMinutes = sheet.value.in_game_time ?? 0
+  const current = new Date(start.getTime() + elapsedMinutes * 60_000)
+
+  const date = current.toLocaleDateString('de-DE', {
+    weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const time = current.toLocaleTimeString('de-DE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  return { date, time }
 })
 
 const getItemIcon = (type?: string) => {
@@ -155,21 +166,23 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Center: In-Game Clock -->
-      <div class="hidden sm:flex flex-col items-center select-none" :class="{ 'clock-tick': clockTick }">
+      <div class="hidden sm:flex flex-col items-center select-none game-clock" :class="{ 'clock-tick': clockTick }">
         <template v-if="gameTime">
           <div class="flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span class="text-2xl font-mono font-bold text-amber-300 tracking-widest leading-none">
+            <span class="clock-time text-2xl font-bold text-amber-300 tracking-widest leading-none">
               {{ gameTime.time }}
             </span>
           </div>
-          <span class="text-xs font-semibold tracking-widest text-amber-600 mt-0.5 uppercase">Day {{ gameTime.day }}</span>
+          <span class="clock-date text-xs font-semibold tracking-widest text-amber-600 mt-0.5 uppercase">
+            {{ gameTime.date }}
+          </span>
         </template>
         <template v-else>
-          <span class="text-2xl font-mono font-bold text-slate-600 tracking-widest opacity-40">--:--</span>
-          <span class="text-xs text-slate-700 mt-0.5 tracking-wider uppercase opacity-40">Day -</span>
+          <span class="clock-time text-2xl font-bold text-slate-600 tracking-widest opacity-40">--:--</span>
+          <span class="clock-date text-xs text-slate-700 mt-0.5 tracking-wider uppercase opacity-40">--.--.----</span>
         </template>
       </div>
 
@@ -344,6 +357,18 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@font-face {
+  font-family: 'OrbitronClock';
+  src: url('@/assets/fonts/Orbitron-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+.game-clock .clock-time,
+.game-clock .clock-date {
+  font-family: 'OrbitronClock', monospace;
+}
+
 /* Brief amber pulse whenever in_game_time advances */
 .clock-tick span {
   animation: clockPulse 0.6s ease-out;

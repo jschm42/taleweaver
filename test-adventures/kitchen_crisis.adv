@@ -7,6 +7,13 @@
   "story_idea": "\"The Miller Family Meltdown.\" It's 18:00 on a Tuesday. Grandma is coming for dinner in one hour, and the household is a disaster zone. A laugh track punctuates every failure. You play as the \"Last Sane Person\" (or the biggest chaos agent) trying to get the legendary Casserole ready while managing a cast of eccentric family members and a very persistent neighbor.",
   "tone": "90s Sitcom / Absurd Comedy",
   "image_style": "Bright, warm colors, slight VHS grain; comedic, high-contrast lighting",
+  "time_per_turn": 5,
+  "start_date": "2026-04-14",
+  "start_time": "18:00",
+  "start_datetime": "2026-04-14T18:00:00.000Z",
+  "generate_npc_images": false,
+  "generate_item_images": false,
+  "automatic_cover_generation": false,
   "pacing": {
     "scene_length": "short",
     "event_frequency": "high",
@@ -81,31 +88,36 @@
       "id": "CASSEROLE",
       "name": "Forbidden Casserole",
       "type": "CONSUMABLE",
-      "description": "Mom's prize possession. Missing key ingredient is a running gag."
+      "description": "Mom's prize possession. Missing key ingredient is a running gag.",
+      "start_scene_id": "MODERN_KITCHEN"
     },
     {
       "id": "ESPRESSO",
       "name": "Extra-Strength Espresso",
       "type": "CONSUMABLE",
-      "description": "Liquid energy; temporarily boosts focus but causes jittery chaos."
+      "description": "Liquid energy; temporarily boosts focus but causes jittery chaos.",
+      "start_scene_id": "MODERN_KITCHEN"
     },
     {
       "id": "GOLDEN_SPATULA",
       "name": "The Golden Spatula",
       "type": "WEAPON",
-      "description": "Good for flipping burgers or neighbor suppression."
+      "description": "Good for flipping burgers or neighbor suppression.",
+      "start_scene_id": "MODERN_KITCHEN"
     },
     {
       "id": "WD40",
       "name": "Leaky WD-40",
       "type": "TOOL",
-      "description": "Used to fix the Squeaky Floor; may cause unintended slickness."
+      "description": "Used to fix the Squeaky Floor; may cause unintended slickness.",
+      "start_scene_id": "HALLWAY"
     },
     {
       "id": "POWER_TIE",
       "name": "Dad's Lucky Power Tie",
       "type": "WEARABLE",
       "description": "Increases Charisma when worn.",
+      "start_scene_id": "MASTER_BEDROOM",
       "wearable_slots": ["Neck"]
     },
     {
@@ -113,6 +125,7 @@
       "name": "Furry Rabbit Slippers",
       "type": "WEARABLE",
       "description": "Grants Stealth and silent movement.",
+      "start_scene_id": "MASTER_BEDROOM",
       "wearable_slots": ["Feet"]
     },
     {
@@ -120,25 +133,29 @@
       "name": "The Basement Key",
       "type": "KEY",
       "description": "Hidden behind the 'Wedding Photo' in the Hallway.",
+      "start_scene_id": "HALLWAY",
       "is_hidden": true
     },
     {
       "id": "SECRET_DIARY",
       "name": "The Secret Diary",
       "type": "READABLE",
-      "description": "Contains deep family secrets."
+      "description": "Contains deep family secrets.",
+      "start_scene_id": "MASTER_BEDROOM"
     },
     {
       "id": "TV_REMOTE",
       "name": "Electronic Remote",
       "type": "COMBINABLE",
-      "description": "Dead without batteries."
+      "description": "Dead without batteries.",
+      "start_scene_id": "LIVING_ROOM"
     },
     {
       "id": "AA_BATTERIES",
       "name": "AA Batteries",
       "type": "COMBINABLE",
       "description": "Hidden in the sofa; powers the remote.",
+      "start_scene_id": "LIVING_ROOM",
       "is_hidden": true
     }
   ],

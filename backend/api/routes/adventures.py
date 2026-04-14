@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -128,9 +129,6 @@ async def create_adventure(
 
     if payload.heartbeat_interval is not None:
         adv_kwargs["heartbeat_interval"] = int(payload.heartbeat_interval)
-
-    if payload.id:
-        adv_kwargs["id"] = payload.id
 
     adv = Adventure(**adv_kwargs)
     db.add(adv)
@@ -325,16 +323,13 @@ async def import_adventure(
         image_url=None,
         context=payload.story_idea or payload.description or payload.subtitle,
         strict_rules=True,
-        time_per_turn=5,
+        time_per_turn=payload.time_per_turn or 5,
         game_over_rules=None,
         is_ready=False,
         creation_status="Importing Manifest...",
         heartbeat_enabled=False,
         original_manifest=payload.model_dump()
     )
-
-    if payload.id:
-        adv_kwargs["id"] = payload.id
 
     adv = Adventure(**adv_kwargs)
     db.add(adv)
@@ -379,10 +374,14 @@ async def import_adventure(
     payload_dict = {
         "title": payload.title,
         "context": adv.context or "A standard adventure.",
+        "time_per_turn": payload.time_per_turn or adv.time_per_turn,
         "generate_npc_images": payload.generate_npc_images,
         "generate_item_images": payload.generate_item_images,
         "automatic_cover_generation": payload.automatic_cover_generation,
         "pacing": payload.pacing.model_dump() if payload.pacing else None,
+        "start_date": payload.start_date,
+        "start_time": payload.start_time,
+        "start_datetime": payload.start_datetime,
         "original_manifest": payload.model_dump(),
     }
 
@@ -609,7 +608,29 @@ async def export_adventure_manifest(adventure_id: str, db: AsyncSession = Depend
     adventure = adv_res.scalars().first()
     if not adventure or not adventure.original_manifest:
         raise HTTPException(status_code=404, detail="Original manifest not found.")
-    return adventure.original_manifest
+
+    manifest = deepcopy(adventure.original_manifest)
+
+    entity_res = await db.execute(select(WorldEntity.id, WorldEntity.current_scene_id).where(WorldEntity.adventure_id == adventure_id))
+    entity_scene_map = {row.id: row.current_scene_id for row in entity_res.all() if row.id}
+
+    def _ensure_item_locations(items: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+        if not items:
+            return items
+
+        normalized_items: list[dict[str, Any]] = []
+        for item in items:
+            item_copy = dict(item)
+            item_id = item_copy.get("id")
+            if not item_copy.get("start_scene_id") and item_id in entity_scene_map:
+                item_copy["start_scene_id"] = entity_scene_map[item_id]
+            normalized_items.append(item_copy)
+        return normalized_items
+
+    manifest["items"] = _ensure_item_locations(manifest.get("items"))
+    manifest["objects"] = _ensure_item_locations(manifest.get("objects"))
+
+    return manifest
 
 @router.get("/{adventure_id}/export/session")
 async def export_adventure_session(adventure_id: str, db: AsyncSession = Depends(get_db)):
@@ -774,6 +795,11 @@ async def import_adventure_session_bundle(payload: Dict[str, Any], db: AsyncSess
 
 async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSession) -> dict:
     """Builds a serialisable character-sheet snapshot with synchronised world entity images."""
+    adv_res = await db.execute(select(Adventure).where(Adventure.id == state.adventure_id))
+    adventure = adv_res.scalars().first()
+    start_datetime = None
+    if adventure and adventure.original_manifest:
+        start_datetime = adventure.original_manifest.get("start_datetime")
     
     # 1. Fetch current adventure entities that have image_urls to ensure the sheet is up to date
     res = await db.execute(
@@ -816,6 +842,7 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
         "equipment": synced_equipment,
         "status_effects": avatar.status_effects,
         "in_game_time": state.in_game_time,
+        "start_datetime": start_datetime,
     }
 
 @router.get("/{game_id}/chat", response_model=ChatResponse)

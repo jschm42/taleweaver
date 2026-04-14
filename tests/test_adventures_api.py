@@ -7,6 +7,9 @@ sub-routes. All tests follow the Arrange-Act-Assert pattern.
 import pytest
 from httpx import AsyncClient
 
+from backend.models.world_entity import WorldEntity
+from tests.conftest import TestSessionLocal
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -59,6 +62,103 @@ async def test_create_adventure_with_heartbeat(client: AsyncClient):
     adv = adv_resp.json()
     assert adv["heartbeat_enabled"] is True
     assert adv["heartbeat_interval"] == 30
+
+
+async def test_create_adventure_preserves_advanced_manifest_fields(client: AsyncClient):
+    """Advanced create payloads preserve time pacing and start datetime metadata."""
+    payload = {
+        "title": "Chronicle of Dawn",
+        "avatar_name": "Chronicle Keeper",
+        "time_per_turn": 12,
+        "original_manifest": {
+            "version": "1.0",
+            "title": "Chronicle of Dawn",
+            "time_per_turn": 12,
+            "start_date": "2026-04-14",
+            "start_time": "08:30",
+            "start_datetime": "2026-04-14T08:30:00.000Z",
+            "protagonist": {
+                "name": "Nora",
+                "role": "Archivist",
+                "description": "A careful keeper of the first dawn records.",
+            },
+        },
+    }
+
+    resp = await client.post("/api/adventures", json=payload)
+    assert resp.status_code == 201, resp.text
+    ids = resp.json()
+
+    adv_resp = await client.get(f"/api/adventures/{ids['adventure_id']}")
+    assert adv_resp.status_code == 200
+    adv = adv_resp.json()
+    assert adv["time_per_turn"] == 12
+
+    debug_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/debug")
+    assert debug_resp.status_code == 200
+    debug_data = debug_resp.json()
+    original_manifest = debug_data["adventure"]["original_manifest"]
+    assert original_manifest["time_per_turn"] == 12
+    assert original_manifest["start_date"] == "2026-04-14"
+    assert original_manifest["start_time"] == "08:30"
+    assert original_manifest["start_datetime"] == "2026-04-14T08:30:00.000Z"
+
+
+async def test_export_manifest_backfills_item_start_scene(client: AsyncClient):
+    """Exported manifests should include item start_scene_id values even if the stored manifest omitted them."""
+    payload = {
+        "title": "Export Quest",
+        "avatar_name": "Archivist",
+        "original_manifest": {
+            "version": "1.0",
+            "title": "Export Quest",
+            "scenes": [
+                {
+                    "id": "LIBRARY",
+                    "title": "The Library",
+                    "description": "A quiet room of dusty shelves.",
+                    "is_hidden": False,
+                }
+            ],
+            "items": [
+                {
+                    "id": "ANCIENT_KEY",
+                    "name": "Ancient Key",
+                    "type": "KEY",
+                    "description": "A key from another age.",
+                }
+            ],
+        },
+    }
+
+    resp = await client.post("/api/adventures", json=payload)
+    assert resp.status_code == 201, resp.text
+    adventure_id = resp.json()["adventure_id"]
+
+    async with TestSessionLocal() as session:
+        session.add(
+            WorldEntity(
+                id="ANCIENT_KEY",
+                adventure_id=adventure_id,
+                entity_type="OBJECT",
+                name="Ancient Key",
+                description="A key from another age.",
+                current_scene_id="LIBRARY",
+                spatial_position="on a pedestal near the shelves",
+                item_type="KEY",
+                wearable_slots=None,
+                is_in_inventory=False,
+                is_hidden=False,
+                inventory=[],
+                metadata_json={},
+            )
+        )
+        await session.commit()
+
+    export_resp = await client.get(f"/api/adventures/{adventure_id}/export/manifest")
+    assert export_resp.status_code == 200, export_resp.text
+    export_data = export_resp.json()
+    assert export_data["items"][0]["start_scene_id"] == "LIBRARY"
 
 
 # ---------------------------------------------------------------------------

@@ -179,6 +179,21 @@ async function exportSession() {
   URL.revokeObjectURL(url)
 }
 
+async function exportADV() {
+  if (!props.adventureId) return
+  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/manifest`)
+  if (!res.ok) return
+  const data = await res.json()
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `adv_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.adv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 watch(
   () => props.open,
   async (isOpen) => {
@@ -313,7 +328,7 @@ watch(
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-3 gap-4">
                 <button @click="exportBlueprint" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 text-left">
                   <div class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Blueprint</div>
                   <div class="text-[10px] text-slate-500 mt-1">Export world manifest.</div>
@@ -321,6 +336,10 @@ watch(
                 <button @click="exportSession" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 text-left">
                   <div class="text-xs font-bold text-cyan-400 uppercase tracking-widest">Session</div>
                   <div class="text-[10px] text-slate-500 mt-1">Export complete runtime session.</div>
+                </button>
+                <button @click="exportADV" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-violet-500/50 text-left">
+                  <div class="text-xs font-bold text-violet-400 uppercase tracking-widest">ADV</div>
+                  <div class="text-[10px] text-slate-500 mt-1">Export vanilla ADV (all items).</div>
                 </button>
               </div>
 

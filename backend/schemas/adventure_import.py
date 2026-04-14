@@ -36,6 +36,7 @@ class ItemSpec(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
     description: Optional[str] = None
+    start_scene_id: Optional[str] = None
     properties: Optional[Dict[str, Any]] = None
 
 
@@ -54,6 +55,10 @@ class AdventureImportPayload(BaseModel):
     scenes: Optional[List[SceneSpec]] = None
     items: Optional[List[ItemSpec]] = None
     objects: Optional[List[ItemSpec]] = None
+    time_per_turn: Optional[int] = None
+    start_date: Optional[str] = None
+    start_time: Optional[str] = None
+    start_datetime: Optional[str] = None
     quests: Optional[List[Dict[str, Any]]] = None
     metadata: Optional[Dict[str, Any]] = None
     generate_npc_images: bool = False

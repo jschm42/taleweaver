@@ -19,6 +19,7 @@ export interface CharacterSheet {
   equipment: Record<string, InventoryItem | null>
   status_effects: string[]
   in_game_time: number  // minutes elapsed in-game
+  start_datetime?: string | null
 }
 
 export interface InventoryItem {
@@ -52,6 +53,7 @@ export interface CreateAdventurePayload {
   generate_item_images?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean
+  time_per_turn?: number
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
 }
@@ -77,6 +79,10 @@ export interface AdventureImportPayload {
     event_frequency?: 'low' | 'normal' | 'high'
     notes?: string
   }
+  time_per_turn?: number
+  start_date?: string
+  start_time?: string
+  start_datetime?: string
   metadata?: Record<string, unknown>
   generate_npc_images?: boolean
   generate_item_images?: boolean

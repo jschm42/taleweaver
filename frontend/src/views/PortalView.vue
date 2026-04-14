@@ -36,6 +36,7 @@ const selectedAdventureId = ref<string | null>(null)
 const isSubmitting = ref(false)
 const isImporting = ref(false)
 const errorMsg = ref('')
+const advancedValidationError = ref('')
 const creationStatus = ref('')
 
 const importInput = ref<HTMLInputElement | null>(null)
@@ -63,6 +64,7 @@ const form = ref({
   generate_npc_images: false,
   generate_item_images: false,
   automatic_cover_generation: false,
+  time_per_turn: 5,
   story_idea: '',
   tone: '',
   characters_text: '',
@@ -95,6 +97,7 @@ function resetCreateForm() {
     generate_npc_images: false,
     generate_item_images: false,
     automatic_cover_generation: false,
+    time_per_turn: 5,
     story_idea: '',
     tone: '',
     characters_text: '',
@@ -171,6 +174,7 @@ function playAdventure(gameId: string) {
 function openCreateModal() {
   resetCreateForm()
   errorMsg.value = ''
+  advancedValidationError.value = ''
   showCreateModal.value = true
 }
 
@@ -242,7 +246,10 @@ async function executeImport() {
     await pollAdventureStatus(result.adventure_id, {
       navigateOnReady: false,
       onStatus: (status) => updatePendingImportStatus(result.adventure_id, status),
-      onReady: () => updatePendingImportStatus(result.adventure_id, 'Fertig generiert'),
+      onReady: async () => {
+        removePendingImportCard(result.adventure_id)
+        await fetchAdventures()
+      },
       onFailure: (status) => updatePendingImportStatus(result.adventure_id, status, true),
     })
   } catch (error: any) {
@@ -280,12 +287,20 @@ async function handleImageUpload(event: Event) {
 }
 
 function buildAdvancedManifest() {
+  const startDateTime = form.value.start_date && form.value.start_time
+    ? new Date(`${form.value.start_date}T${form.value.start_time}`)
+    : null
+
   return {
     version: '1.0',
     title: form.value.title,
     story_idea: form.value.story_idea || form.value.context,
     tone: form.value.tone || undefined,
     image_style: form.value.image_style || undefined,
+    time_per_turn: form.value.time_per_turn,
+    start_date: form.value.start_date || undefined,
+    start_time: form.value.start_time || undefined,
+    start_datetime: startDateTime && !Number.isNaN(startDateTime.getTime()) ? startDateTime.toISOString() : undefined,
     protagonist: form.value.protagonist_role
       ? {
           role: form.value.protagonist_role,
@@ -297,8 +312,6 @@ function buildAdvancedManifest() {
         }
       : undefined,
     metadata: {
-      start_date: form.value.start_date || undefined,
-      start_time: form.value.start_time || undefined,
       characters_text: form.value.characters_text || undefined,
       npc_text: form.value.npc_text || undefined,
       scenes_text: form.value.scenes_text || undefined,
@@ -314,8 +327,22 @@ async function createAdventure() {
     return
   }
 
+  if (form.value.mode === 'advanced') {
+    if (!form.value.start_date || !form.value.start_time) {
+      advancedValidationError.value = 'Start date and start time are required in advanced mode.'
+      return
+    }
+
+    const startDateTime = new Date(`${form.value.start_date}T${form.value.start_time}`)
+    if (Number.isNaN(startDateTime.getTime())) {
+      advancedValidationError.value = 'Please provide a valid start date and time.'
+      return
+    }
+  }
+
   isSubmitting.value = true
   errorMsg.value = ''
+  advancedValidationError.value = ''
   creationStatus.value = 'Initializing...'
 
   try {
@@ -328,6 +355,7 @@ async function createAdventure() {
       generate_npc_images: form.value.generate_npc_images,
       generate_item_images: form.value.generate_item_images,
       heartbeat_enabled: false,
+      time_per_turn: form.value.time_per_turn,
     }
 
     if (form.value.mode === 'advanced') {
@@ -677,25 +705,49 @@ onUnmounted(() => {
               <textarea v-model="form.objects_text" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
             </div>
 
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">Pacing</label>
-              <textarea v-model="form.pacing_text" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
+            <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
+                  <i class="ra ra-hourglass text-xl"></i>
+                </div>
+                <div>
+                  <h3 class="text-sm font-bold text-white uppercase tracking-wider">Time Pacing</h3>
+                  <p class="text-[10px] text-slate-500">Minutes advanced per action.</p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-6">
+                <input type="range" v-model.number="form.time_per_turn" min="1" max="60" step="1" class="flex-grow accent-emerald-500" />
+                <div class="w-20 text-center">
+                  <span class="text-xl font-bold text-emerald-500">{{ form.time_per_turn }}</span>
+                  <span class="text-[10px] text-slate-500 block uppercase pt-0.5">Minutes</span>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Pacing Notes</label>
+                <textarea v-model="form.pacing_text" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
+              </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label class="block text-sm font-semibold text-slate-300 mb-2">Start Date</label>
-                <input v-model="form.start_date" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                <input v-model="form.start_date" type="date" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
               <div>
                 <label class="block text-sm font-semibold text-slate-300 mb-2">Start Time</label>
-                <input v-model="form.start_time" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+                <input v-model="form.start_time" type="time" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
               <div>
                 <label class="block text-sm font-semibold text-slate-300 mb-2">Protagonist Role</label>
                 <input v-model="form.protagonist_role" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
             </div>
+
+            <p v-if="advancedValidationError" class="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              {{ advancedValidationError }}
+            </p>
           </template>
 
           <div>
