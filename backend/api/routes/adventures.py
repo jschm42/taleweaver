@@ -1409,6 +1409,13 @@ async def post_chat_message(
                 state.in_game_time += game_event.extra_time_minutes
                 response_messages.append({"role": "system", "content": f"Gamemaster added +{game_event.extra_time_minutes} minutes."})
 
+        # --- Update Map & Register Discovery ---
+        map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
+        world_map = map_res.scalars().first()
+        if not world_map:
+            world_map = WorldMap(adventure_id=state.adventure_id)
+            db.add(world_map)
+
         # If we moved, refresh the current_scene record to get proper labels/images for the map
         if game_event and game_event.new_scene_id:
             scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.scene_id, WorldScene.adventure_id == state.adventure_id))

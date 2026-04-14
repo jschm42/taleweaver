@@ -414,8 +414,11 @@ async function createAdventure() {
       time_per_turn: form.value.time_per_turn,
     }
 
+    if (form.value.automatic_cover_generation) {
+      payload.automatic_cover_generation = true
+    }
+
     if (form.value.mode === 'advanced') {
-      payload.automatic_cover_generation = form.value.automatic_cover_generation
       payload.original_manifest = buildAdvancedManifest()
       payload.pacing = form.value.pacing_text
         ? { notes: form.value.pacing_text }
@@ -884,7 +887,7 @@ onUnmounted(() => {
               <span class="text-sm font-bold text-white">Generate Item Images</span>
               <input type="checkbox" v-model="form.generate_item_images" />
             </div>
-            <div v-if="form.mode === 'advanced'" class="flex items-center justify-between cursor-pointer" @click="form.automatic_cover_generation = !form.automatic_cover_generation">
+            <div class="flex items-center justify-between cursor-pointer" @click="form.automatic_cover_generation = !form.automatic_cover_generation">
               <span class="text-sm font-bold text-white">Automatic Cover Generation</span>
               <input type="checkbox" v-model="form.automatic_cover_generation" />
             </div>
