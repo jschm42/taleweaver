@@ -34,9 +34,58 @@ export function useGameSocket(): UseGameSocket {
   const gameOverReason = ref('')
   const autoVisualize = ref(false)
   let currentGameId = ''
+  let syncTimer: number | null = null
 
   function _pushMessage(role: ChatMessage['role'], content: string): void {
     messages.value.push({ role, content, timestamp: new Date() })
+  }
+
+  async function fetchSessionSnapshot(gameId: string): Promise<any | null> {
+    try {
+      const res = await fetch(`http://localhost:8000/api/adventures/${gameId}/chat`)
+      if (!res.ok) return null
+      return await res.json()
+    } catch (err) {
+      console.error('[Session] Snapshot load error:', err)
+      return null
+    }
+  }
+
+  function applySessionSnapshot(data: any, updateMessages = true): void {
+    if (!data) return
+
+    if (updateMessages && Array.isArray(data.messages)) {
+      messages.value = data.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
+    }
+
+    if (data.sheet) sheet.value = data.sheet
+    mermaidData.value = data.mermaid || ''
+    entities.value = data.entities || []
+    if (data.image_url !== undefined) {
+      currentSceneImage.value = data.image_url
+    }
+  }
+
+  function startSyncTimer(): void {
+    if (syncTimer !== null) {
+      clearInterval(syncTimer)
+    }
+
+    syncTimer = window.setInterval(async () => {
+      if (!currentGameId || status.value === 'disconnected') {
+        return
+      }
+
+      const snapshot = await fetchSessionSnapshot(currentGameId)
+      applySessionSnapshot(snapshot, false)
+    }, 5000)
+  }
+
+  function stopSyncTimer(): void {
+    if (syncTimer !== null) {
+      clearInterval(syncTimer)
+      syncTimer = null
+    }
   }
 
   /**
@@ -47,17 +96,14 @@ export function useGameSocket(): UseGameSocket {
     currentGameId = gameId
     status.value = 'loading'
     messages.value = []
+    stopSyncTimer()
     
     try {
-      const res = await fetch(`http://localhost:8000/api/adventures/${gameId}/chat`)
-      if (res.ok) {
-        const data = await res.json()
-        messages.value = data.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
-        sheet.value = data.sheet
-        mermaidData.value = data.mermaid || ''
-        entities.value = data.entities || []
-        
+      const data = await fetchSessionSnapshot(gameId)
+      if (data) {
+        applySessionSnapshot(data)
         status.value = 'connected'
+        startSyncTimer()
 
         // If no history, trigger prologue automatically
         if (messages.value.length === 0) {
@@ -75,6 +121,7 @@ export function useGameSocket(): UseGameSocket {
   function disconnect(): void {
     currentGameId = ''
     status.value = 'disconnected'
+    stopSyncTimer()
   }
 
   /**
@@ -100,21 +147,20 @@ export function useGameSocket(): UseGameSocket {
 
       if (res.ok) {
         const data = await res.json()
-        
-        // Append only new messages (if content was provided, we already pushed user msg)
-        // Actually, the server returns all messages generated in this turn (Assistant + System)
-        for (const m of data.messages) {
-          _pushMessage(m.role as any, m.content)
+        // Append only the messages produced by this turn.
+        // The server response is authoritative for the latest scene snapshot.
+        if (data.messages) {
+          for (const m of data.messages) {
+            _pushMessage(m.role as any, m.content)
+          }
         }
-        
-        sheet.value = data.sheet
-        if (data.mermaid) mermaidData.value = data.mermaid
-        if (data.image_url) currentSceneImage.value = data.image_url
-        entities.value = data.entities || []
+
+        applySessionSnapshot(data, false)
         
         if (data.game_over) {
           status.value = 'game_over'
           gameOverReason.value = data.game_over_reason
+          stopSyncTimer()
         } else {
           status.value = 'connected'
         }

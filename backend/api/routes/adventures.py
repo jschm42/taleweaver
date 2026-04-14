@@ -154,6 +154,7 @@ async def create_adventure(
     await db.commit()
     # Create initial GameState so the session is visible immediately to clients/tests
     db.add(GameState(
+        id=adv.id,
         user_id=user.id,
         adventure_id=adv.id,
         avatar_id=avatar.id,
@@ -224,7 +225,8 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             avatar = avatar_res.scalars().first()
             
             # create_adventure already seeds a GameState; update it instead of inserting a duplicate
-            state = await db.get(GameState, adventure_id)
+            state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+            state = state_res.scalars().first()
             if state:
                 state.avatar_id = avatar.id if avatar else state.avatar_id
                 state.scene_id = scenes[0].id

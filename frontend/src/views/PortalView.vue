@@ -18,7 +18,7 @@ interface Adventure {
   is_paused: boolean
 }
 
-interface PendingImportCard {
+interface PendingAdventureCard {
   adventureId: string
   title: string
   status: string
@@ -40,7 +40,8 @@ const advancedValidationError = ref('')
 const creationStatus = ref('')
 
 const importInput = ref<HTMLInputElement | null>(null)
-const pendingImports = ref<PendingImportCard[]>([])
+const pendingImports = ref<PendingAdventureCard[]>([])
+const pendingCreations = ref<PendingAdventureCard[]>([])
 const loadingWordIndex = ref(0)
 const loadingWords = [
   'Manifest wird geprueft',
@@ -51,7 +52,10 @@ const loadingWords = [
 let loadingWordTimer: number | null = null
 
 const visibleAdventures = computed(() => {
-  const pendingIds = new Set(pendingImports.value.map((entry) => entry.adventureId))
+  const pendingIds = new Set([
+    ...pendingImports.value.map((entry) => entry.adventureId),
+    ...pendingCreations.value.map((entry) => entry.adventureId),
+  ])
   return adventures.value.filter((adv) => !pendingIds.has(adv.adventure_id))
 })
 
@@ -125,6 +129,18 @@ function addPendingImportCard(adventureId: string, title: string) {
   ]
 }
 
+function addPendingCreationCard(adventureId: string, title: string) {
+  pendingCreations.value = [
+    ...pendingCreations.value.filter((entry) => entry.adventureId !== adventureId),
+    {
+      adventureId,
+      title,
+      status: 'Generierung gestartet',
+      hasError: false,
+    },
+  ]
+}
+
 function updatePendingImportStatus(adventureId: string, status: string, hasError = false) {
   pendingImports.value = pendingImports.value.map((entry) =>
     entry.adventureId === adventureId
@@ -137,8 +153,24 @@ function updatePendingImportStatus(adventureId: string, status: string, hasError
   )
 }
 
+function updatePendingCreationStatus(adventureId: string, status: string, hasError = false) {
+  pendingCreations.value = pendingCreations.value.map((entry) =>
+    entry.adventureId === adventureId
+      ? {
+          ...entry,
+          status,
+          hasError,
+        }
+      : entry,
+  )
+}
+
 function removePendingImportCard(adventureId: string) {
   pendingImports.value = pendingImports.value.filter((entry) => entry.adventureId !== adventureId)
+}
+
+function removePendingCreationCard(adventureId: string) {
+  pendingCreations.value = pendingCreations.value.filter((entry) => entry.adventureId !== adventureId)
 }
 
 function dismissPendingImportCard(adventureId: string) {
@@ -367,8 +399,18 @@ async function createAdventure() {
     }
 
     const result = await api.createAdventure(payload)
+    addPendingCreationCard(result.adventure_id, payload.title)
     showCreateModal.value = false
-    await pollAdventureStatus(result.adventure_id, { navigateOnReady: true })
+    await fetchAdventures()
+    await pollAdventureStatus(result.adventure_id, {
+      navigateOnReady: false,
+      onStatus: (status) => updatePendingCreationStatus(result.adventure_id, status),
+      onReady: async () => {
+        removePendingCreationCard(result.adventure_id)
+        await fetchAdventures()
+      },
+      onFailure: (status) => updatePendingCreationStatus(result.adventure_id, status, true),
+    })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to start creation.'
     isSubmitting.value = false
@@ -506,7 +548,7 @@ onUnmounted(() => {
             </button>
             <button
               @click="triggerImportPicker"
-              class="px-5 py-2.5 bg-slate-800 text-white font-semibold rounded-lg"
+              class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-lg"
             >
               Import
             </button>
@@ -514,6 +556,56 @@ onUnmounted(() => {
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div
+            v-for="pending in pendingCreations"
+            :key="pending.adventureId"
+            class="relative bg-slate-900 rounded-2xl border border-emerald-500/40 overflow-hidden flex flex-col"
+          >
+            <div class="h-32 bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
+              <div v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="absolute inset-0 loading-placeholder-shimmer"></div>
+              <i class="ra ra-scroll-unfurled text-4xl text-emerald-300/80 z-10"></i>
+            </div>
+
+            <div class="p-6 flex-grow flex flex-col">
+              <div class="flex items-center justify-between mb-4">
+                <span class="text-xs font-mono text-emerald-400/90 bg-emerald-500/10 px-2 py-1 rounded">WIRD ERZEUGT</span>
+                <span :class="['text-[10px] px-2 py-1 rounded uppercase tracking-wider font-bold', pending.hasError ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200']">
+                  {{ pending.hasError ? 'Fehler' : 'Create' }}
+                </span>
+              </div>
+
+              <h3 class="text-xl font-bold text-white mb-2 line-clamp-1">
+                {{ pending.title }}
+              </h3>
+
+              <div class="flex-grow space-y-3 mt-2">
+                <div class="flex justify-between text-[11px] pb-2 border-b border-white/5">
+                  <span class="text-slate-500 uppercase tracking-widest font-semibold">Status</span>
+                  <span :class="['font-medium', pending.hasError ? 'text-red-300' : 'text-emerald-200']">{{ pending.status }}</span>
+                </div>
+                <div class="text-xs text-slate-400 flex items-center gap-2">
+                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-word animate-wordfade">{{ loadingWords[loadingWordIndex] }}</span>
+                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-dots" aria-hidden="true"></span>
+                </div>
+              </div>
+
+              <div class="mt-6">
+                <button
+                  :disabled="!(pending.hasError || pending.status === 'Fertig generiert')"
+                  @click="removePendingCreationCard(pending.adventureId)"
+                  :class="[
+                    'w-full py-3 font-bold rounded-xl transition-all duration-200',
+                    (pending.hasError || pending.status === 'Fertig generiert')
+                      ? 'bg-red-600/20 text-red-200 hover:bg-red-600/30 border border-red-400/30'
+                      : 'bg-emerald-900/40 text-emerald-200/70 cursor-not-allowed'
+                  ]"
+                >
+                  {{ (pending.hasError || pending.status === 'Fertig generiert') ? 'Kachel entfernen' : 'Bitte warten...' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div
             v-for="pending in pendingImports"
             :key="pending.adventureId"

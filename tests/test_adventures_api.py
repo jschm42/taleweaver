@@ -42,6 +42,20 @@ async def test_create_adventure_returns_ids(client: AsyncClient):
     assert "avatar_id" in data
 
 
+async def test_create_adventure_creates_one_visible_session(client: AsyncClient):
+    """A single create call should result in exactly one visible session row."""
+    # Arrange & Act
+    ids = await _create_adventure(client)
+
+    # Assert
+    resp = await client.get("/api/adventures")
+    assert resp.status_code == 200
+    sessions = resp.json()
+    assert len(sessions) == 1
+    assert sessions[0]["adventure_id"] == ids["adventure_id"]
+    assert sessions[0]["game_id"] == ids["adventure_id"]
+
+
 async def test_create_adventure_with_heartbeat(client: AsyncClient):
     """Heartbeat settings are persisted when creating an adventure."""
     # Arrange
