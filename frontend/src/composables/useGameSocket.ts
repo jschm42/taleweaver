@@ -13,6 +13,7 @@ export interface UseGameSocket {
   messages: Ref<ChatMessage[]>
   sheet: Ref<CharacterSheet | null>
   mermaidData: Ref<string>
+  nodes: Ref<Record<string, any>>
   currentSceneImage: Ref<string | null>
   entities: Ref<any[]>
   status: Ref<ConnectionStatus>
@@ -28,6 +29,7 @@ export function useGameSocket(): UseGameSocket {
   const messages = ref<ChatMessage[]>([])
   const sheet = ref<CharacterSheet | null>(null)
   const mermaidData = ref<string>('')
+  const nodes = ref<Record<string, any>>({})
   const currentSceneImage = ref<string | null>(null)
   const entities = ref<any[]>([])
   const status = ref<ConnectionStatus>('disconnected')
@@ -60,6 +62,7 @@ export function useGameSocket(): UseGameSocket {
 
     if (data.sheet) sheet.value = data.sheet
     mermaidData.value = data.mermaid || ''
+    nodes.value = data.nodes || {}
     entities.value = data.entities || []
     if (data.image_url !== undefined) {
       currentSceneImage.value = data.image_url
@@ -178,6 +181,7 @@ export function useGameSocket(): UseGameSocket {
     messages,
     sheet,
     mermaidData,
+    nodes,
     currentSceneImage,
     entities,
     status,

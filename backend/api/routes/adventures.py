@@ -269,6 +269,7 @@ class ChatResponse(BaseModel):
     messages: List[Dict[str, str]] # [{'role': '...', 'content': '...'}]
     sheet: Dict[str, Any]
     mermaid: Optional[str] = None
+    nodes: Optional[Dict[str, Any]] = None # Metadata for nodes
     image_url: Optional[str] = None
     entities: List[Dict[str, Any]] = []
     game_over: bool = False
@@ -1089,6 +1090,7 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
         messages=history,
         sheet=await _build_sheet_snapshot(avatar, state, db),
         mermaid=mermaid_data,
+        nodes=world_map.nodes if world_map else {},
         entities=entities
     )
 
@@ -1377,14 +1379,18 @@ async def post_chat_message(
                 state.in_game_time += game_event.extra_time_minutes
                 response_messages.append({"role": "system", "content": f"Gamemaster added +{game_event.extra_time_minutes} minutes."})
 
-        # --- Update Map & Register Discovery ---
-        map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
-        world_map = map_res.scalars().first()
-        if not world_map:
-            world_map = WorldMap(adventure_id=state.adventure_id)
-            db.add(world_map)
-        
-        MapEngine.register_visit(world_map, state.scene_id, label=game_event.scene_label if game_event else None)
+        # If we moved, refresh the current_scene record to get proper labels/images for the map
+        if game_event and game_event.new_scene_id:
+            scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.scene_id, WorldScene.adventure_id == state.adventure_id))
+            current_scene = scene_res.scalars().first()
+
+        MapEngine.register_visit(
+            world_map, 
+            state.scene_id, 
+            label=(game_event.scene_label if game_event and game_event.scene_label else (current_scene.label if current_scene else None)),
+            description=(current_scene.description if current_scene else None),
+            image_url=(current_scene.image_url if current_scene else None)
+        )
         room_exits_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == state.scene_id, WorldExit.adventure_id == state.adventure_id))
         for ex in room_exits_res.scalars().all():
             MapEngine.register_exit(world_map, ex.from_scene_id, ex.to_scene_id, exit_label=ex.label, is_locked=ex.is_locked)
@@ -1420,6 +1426,7 @@ async def post_chat_message(
             messages=[{"role": "system", "content": response_text}],
             sheet=await _build_sheet_snapshot(avatar, state, db),
             mermaid=mermaid_data,
+            nodes=world_map.nodes if world_map else {},
             image_url=image_url,
             entities=curr_entities,
             game_over=game_over,

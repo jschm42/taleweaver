@@ -19,6 +19,7 @@ class MapEngine:
         scene_id: str,
         label: Optional[str] = None,
         description: Optional[str] = None,
+        image_url: Optional[str] = None,
     ) -> None:
         """
         Upsert a scene node. If the node already exists only missing fields
@@ -29,18 +30,25 @@ class MapEngine:
             scene_id:    Unique identifier of the scene (e.g. "START", "TAVERN").
             label:       Short human-readable name for display on the map.
             description: Optional one-line flavour text stored alongside the node.
+            image_url:   Optional URL to the scene image for the tooltip.
         """
         # Reassign to a new dict so SQLAlchemy detects the mutation.
         nodes: dict = dict(world_map.nodes or {})
 
         if scene_id not in nodes:
-            nodes[scene_id] = {"label": label or scene_id, "description": description or ""}
+            nodes[scene_id] = {
+                "label": label or scene_id, 
+                "description": description or "",
+                "image_url": image_url
+            }
         else:
             # Preserve existing data; only fill gaps.
             if label and not nodes[scene_id].get("label"):
                 nodes[scene_id]["label"] = label
             if description and not nodes[scene_id].get("description"):
                 nodes[scene_id]["description"] = description
+            if image_url and not nodes[scene_id].get("image_url"):
+                nodes[scene_id]["image_url"] = image_url
 
         world_map.nodes = nodes
         world_map.current_scene_id = scene_id
@@ -121,9 +129,9 @@ class MapEngine:
             if is_visited:
                 label = meta.get("label", scene_id).replace('"', "'")
                 if scene_id == current:
-                    lines.append(f'  {safe_id}["{label} ★"]:::current')
+                    lines.append(f'  {safe_id}["{label} 📍"]:::current')
                 else:
-                    lines.append(f'  {safe_id}["{label}"]')
+                    lines.append(f'  {safe_id}["{label}"]:::visited')
             else:
                 # Discovered but not yet visited (Fog of War)
                 lines.append(f'  {safe_id}["?"]:::unvisited')
@@ -149,13 +157,10 @@ class MapEngine:
             else:
                 lines.append(f"  {src} {connection} {dst}")
 
-        # Mermaid classDef for the current-location highlight.
-        lines.append("  classDef current fill:#10b981,stroke:#059669,color:#fff,font-weight:bold")
-        lines.append("  classDef unvisited fill:#1e293b,stroke:#475569,color:#94a3b8,stroke-dasharray: 2 2")
-        
-        # Style locked links (dotted red)
-        for idx in locked_indices:
-            lines.append(f"  linkStyle {idx} stroke:#ef4444,stroke-width:2px,stroke-dasharray: 5 5")
+        # Mermaid classDef tags to be styled in the frontend/themeCSS.
+        lines.append("  classDef current stroke-width:4px;")
+        lines.append("  classDef visited opacity:1.0;")
+        lines.append("  classDef unvisited stroke-dasharray: 2 2;")
 
         return "\n".join(lines)
 

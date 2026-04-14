@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
 
     <!-- Modals -->
     <CharacterSheetModal :open="showSheet" :sheet="sheet" @close="showSheet = false" />
-    <MapModal :open="showMap" :mermaid-src="mermaidData" @close="showMap = false" />
+    <MapModal :open="showMap" :mermaid-src="mermaidData" :nodes="nodes" @close="showMap = false" />
 
     <!-- HOVER TOOLTIP -->
     <Teleport to="body">

@@ -28,6 +28,7 @@ class VisitPayload(BaseModel):
     scene_id: str
     label: Optional[str] = None
     description: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class ExitPayload(BaseModel):
@@ -72,16 +73,22 @@ async def get_map(adventure_id: str, db: AsyncSession = Depends(get_db)) -> dict
 
 @router.get("/adventures/{adventure_id}/map/mermaid")
 async def get_mermaid(adventure_id: str, db: AsyncSession = Depends(get_db)) -> dict:
-    """Return the scene graph serialised as a Mermaid.js flowchart string."""
+    """Return the scene graph serialised as a Mermaid.js flowchart string and node metadata."""
     result = await db.execute(
         select(WorldMap).where(WorldMap.adventure_id == adventure_id)
     )
     world_map = result.scalars().first()
     if not world_map or not world_map.nodes:
         # Return a minimal Mermaid diagram that shows an empty state.
-        return {"mermaid": 'flowchart LR\n  START["No map data yet..."]'}
+        return {
+            "mermaid": 'flowchart LR\n  START["No map data yet..."]',
+            "nodes": {}
+        }
 
-    return {"mermaid": MapEngine.to_mermaid(world_map)}
+    return {
+        "mermaid": MapEngine.to_mermaid(world_map),
+        "nodes": world_map.nodes
+    }
 
 
 @router.post("/adventures/{adventure_id}/map/visit", status_code=200)
@@ -97,7 +104,13 @@ async def post_visit(
         raise HTTPException(status_code=404, detail="Adventure not found.")
 
     world_map = await _get_or_create_map(adventure_id, db)
-    MapEngine.register_visit(world_map, payload.scene_id, payload.label, payload.description)
+    MapEngine.register_visit(
+        world_map, 
+        payload.scene_id, 
+        payload.label, 
+        payload.description,
+        payload.image_url
+    )
     await db.commit()
     return {"status": "ok", "current_scene_id": payload.scene_id}
 
