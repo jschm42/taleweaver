@@ -1170,6 +1170,12 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
     ))
     entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in ent_res.scalars().all()]
     
+    scene_res = await db.execute(select(WorldScene).where(
+        WorldScene.adventure_id == state.adventure_id,
+        WorldScene.id == state.scene_id
+    ))
+    current_scene = scene_res.scalars().first()
+
     return ChatResponse(
         messages=history,
         sheet=await _build_sheet_snapshot(avatar, state, db),
@@ -1177,6 +1183,7 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
         nodes=await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
         entities=entities,
         npc_metadata=await _get_npc_metadata(state.adventure_id, db),
+        image_url=current_scene.image_url if current_scene else None,
         adventure_image=adventure.image_url if adventure else None
     )
 

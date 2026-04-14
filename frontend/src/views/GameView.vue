@@ -277,7 +277,8 @@ onBeforeUnmount(() => {
             class="relative group cursor-help overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 transition-all hover:border-indigo-500/50"
             @mouseenter="handleHover({ 
               name: sheet?.current_scene || 'Current Scene', 
-              description: nodes[sheet?.scene_id || '']?.description || 'The current location of your adventure.' 
+              description: nodes[sheet?.scene_id || '']?.description || 'The current location of your adventure.',
+              image_url: currentSceneImage
             }, $event)"
             @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
             @mouseleave="hoveredEntity = null"
@@ -384,20 +385,7 @@ onBeforeUnmount(() => {
         <span>{{ gameOverReason }}</span>
       </div>
 
-      <!-- Scene Visual Container -->
-      <Transition name="slide-up">
-        <div 
-          v-if="currentSceneImage" 
-          class="w-full max-h-48 md:max-h-64 mb-4 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl relative group shrink-0"
-        >
-          <img 
-            :src="getImageUrl(currentSceneImage)" 
-            class="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all duration-700"
-            alt="Scene Visual"
-          />
-          <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent"></div>
-        </div>
-      </Transition>
+
 
       <ChatWindow 
         ref="chatWindow"
@@ -428,7 +416,7 @@ onBeforeUnmount(() => {
           <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
             <!-- Image Area -->
             <div v-if="hoveredEntity.image_url" class="h-32 w-full relative">
-              <img :src="'http://localhost:8000' + hoveredEntity.image_url" class="absolute inset-0 w-full h-full object-cover" />
+              <img :src="getImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover" />
               <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
             </div>
 
