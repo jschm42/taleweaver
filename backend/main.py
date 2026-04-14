@@ -27,8 +27,6 @@ async def lifespan(app: FastAPI):
 
     await apply_sqlite_compat_migrations()
 
-    await apply_sqlite_compat_migrations()
-
     yield
 
 

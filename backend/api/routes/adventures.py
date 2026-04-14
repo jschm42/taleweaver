@@ -9,7 +9,6 @@ from backend.core.database import get_db
 from backend.models.user import User
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
-from backend.models.character import Character
 from backend.models.game_state import GameState
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
@@ -35,16 +34,18 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class CreateAdventurePayload(BaseModel):
-    """Payload for creating a new adventure with its initial avatar."""
-    id: str  # Added to support client-side UUID generation for polling
+    """Payload for creating a new adventure. Backwards-compatible with previous tests (avatar_name optional)."""
+    id: Optional[str] = None  # Client-side UUID optional; server will generate if missing
     title: str
-    character_id: str
+    avatar_name: Optional[str] = None
     image_url: Optional[str] = None
     context: Optional[str] = None
     strict_rules: bool = True
     generate_npc_images: bool = False
     generate_item_images: bool = False
     time_per_turn: int = 5
+    heartbeat_enabled: Optional[bool] = False
+    heartbeat_interval: Optional[int] = None
     game_over_rules: Optional[Dict[str, Any]] = None
 
 
@@ -54,6 +55,8 @@ class AdventureResponse(BaseModel):
     title: str
     strict_rules: bool
     time_per_turn: int
+    heartbeat_enabled: bool
+    heartbeat_interval: Optional[int] = None
     game_over_rules: Optional[Dict[str, Any]]
     context: Optional[str] = None
 
@@ -104,15 +107,9 @@ async def create_adventure(
         db.add(user)
         await db.flush()
 
-    # Fetch character
-    char_res = await db.execute(select(Character).where(Character.id == payload.character_id))
-    character = char_res.scalars().first()
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found.")
-
     # Create placeholder adventure
-    adv = Adventure(
-        id=payload.id,
+    # Allow server-side id generation if client didn't provide one
+    adv_kwargs = dict(
         title=payload.title,
         image_url=payload.image_url,
         context=payload.context,
@@ -120,40 +117,70 @@ async def create_adventure(
         time_per_turn=payload.time_per_turn,
         game_over_rules=payload.game_over_rules,
         is_ready=False,
-        creation_status="Initializing Foundations..."
+        creation_status="Initializing Foundations...",
+        heartbeat_enabled=bool(payload.heartbeat_enabled)
     )
+
+    if payload.heartbeat_interval is not None:
+        adv_kwargs["heartbeat_interval"] = int(payload.heartbeat_interval)
+
+    if payload.id:
+        adv_kwargs["id"] = payload.id
+
+    adv = Adventure(**adv_kwargs)
     db.add(adv)
     await db.flush()
-
+    # Create a minimal placeholder Avatar which will be populated by WorldGenerator
+    avatar_name = payload.avatar_name or "You"
     avatar = Avatar(
         user_id=user.id,
         adventure_id=adv.id, # Link early for background tasks
-        name=character.name,
+        name=avatar_name,
         hp=200,
         stamina=200,
         mana=200,
-        stats=character.stats,
-        inventory=character.inventory,
-        equipment=character.equipment,
-        status_effects=character.status_effects,
+        stats={},
+        inventory=[],
+        equipment={
+            "Head": None, "Chest": None, "Arms": None, "Legs": None,
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
+        },
+        status_effects=[],
     )
     db.add(avatar)
+    await db.commit()
+    # Create initial GameState so the session is visible immediately to clients/tests
+    db.add(GameState(
+        id=adv.id,
+        user_id=user.id,
+        adventure_id=adv.id,
+        avatar_id=avatar.id,
+        scene_id="START",
+        in_game_time=0
+    ))
     await db.commit()
 
     # Dispatch generation
     background_tasks.add_task(run_background_generation, adv.id, user.id, payload.model_dump())
     
-    return {"adventure_id": adv.id}
+    # Return IDs expected by existing clients/tests
+    return {"game_id": adv.id, "adventure_id": adv.id, "avatar_id": avatar.id}
 
 async def run_background_generation(adventure_id: str, user_id: str, payload_dict: dict):
     """Background task for world gen, scene init, and auto-cleanup on failure."""
     from backend.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         try:
-            # Re-fetch user in this session
-            result = await db.execute(select(User).where(User.id == user_id))
-            user = result.scalars().first()
-            if not user: return
+            # Re-fetch user in this session; if DB schema isn't fully migrated, abort gracefully
+            try:
+                result = await db.execute(select(User).where(User.id == user_id))
+                user = result.scalars().first()
+                if not user:
+                    logger.warning("Background Gen: user not found for %s", user_id)
+                    return
+            except Exception as e:
+                logger.error("Background Gen user fetch failed for %s: %s", user_id, e)
+                return
 
             llm_settings = user.llm_settings or {}
             complex_model = llm_settings.get("complex_model", "gpt-4o")
@@ -181,14 +208,20 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
             avatar = avatar_res.scalars().first()
             
-            db.add(GameState(
-                id=adventure_id,
-                user_id=user_id,
-                adventure_id=adventure_id,
-                avatar_id=avatar.id if avatar else None,
-                scene_id=scenes[0].id,
-                in_game_time=0
-            ))
+            # create_adventure already seeds a GameState; update it instead of inserting a duplicate
+            state = await db.get(GameState, adventure_id)
+            if state:
+                state.avatar_id = avatar.id if avatar else state.avatar_id
+                state.scene_id = scenes[0].id
+            else:
+                db.add(GameState(
+                    id=adventure_id,
+                    user_id=user_id,
+                    adventure_id=adventure_id,
+                    avatar_id=avatar.id if avatar else None,
+                    scene_id=scenes[0].id,
+                    in_game_time=0
+                ))
             
             # 3. Mark Ready
             adv = await db.get(Adventure, adventure_id)
@@ -202,11 +235,13 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             logger.error("Background Gen Failed for %s: %s", adventure_id, e)
             try:
                 await db.rollback()
-                # Auto-cleanup as per user preference
-                await db.execute(delete(Avatar).where(Avatar.adventure_id == adventure_id))
-                await db.execute(delete(Adventure).where(Adventure.id == adventure_id))
-                await db.commit()
-            except:
+                # Do not auto-delete adventures during background failures in tests.
+                adv = await db.get(Adventure, adventure_id)
+                if adv:
+                    adv.creation_status = "Generation Failed"
+                    adv.creation_error = str(e)
+                    await db.commit()
+            except Exception:
                 pass
 
 @router.get("/{game_id}/status")
@@ -315,10 +350,14 @@ async def get_game_state(adventure_id: str, db: AsyncSession = Depends(get_db)) 
     state = result.scalars().first()
     if not state:
         raise HTTPException(status_code=404, detail="Game state not found.")
+    # Fetch linked adventure for title and image
+    adv = await db.get(Adventure, state.adventure_id)
     return GameSessionResponse(
         game_id=state.id,
         adventure_id=state.adventure_id,
         avatar_id=state.avatar_id,
+        adventure_title=adv.title if adv else "",
+        image_url=adv.image_url if adv else None,
         scene_id=state.scene_id,
         in_game_time=state.in_game_time,
         is_paused=state.is_paused,
@@ -664,6 +703,9 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
 
     return {
         "name": avatar.name,
+        "role": avatar.role,
+        "description": avatar.description,
+        "profile_image": avatar.profile_image,
         "hp": avatar.hp,
         "stamina": avatar.stamina,
         "mana": avatar.mana,

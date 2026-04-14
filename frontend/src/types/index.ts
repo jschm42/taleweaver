@@ -8,6 +8,9 @@ export interface ChatMessage {
 /** Character sheet snapshot pushed by the server after every action. */
 export interface CharacterSheet {
   name: string
+  role?: string | null
+  description?: string | null
+  profile_image?: string | null
   hp: number
   stamina: number
   mana: number
@@ -36,11 +39,14 @@ export interface GameSession {
 
 /** Payload for creating a new adventure. */
 export interface CreateAdventurePayload {
+  id?: string
   title: string
-  avatar_name: string
+  context?: string
+  image_url?: string | null
   strict_rules?: boolean
+  generate_npc_images?: boolean
+  generate_item_images?: boolean
   heartbeat_enabled?: boolean
-  heartbeat_interval?: number
 }
 
 /** WebSocket message types received from the server. */

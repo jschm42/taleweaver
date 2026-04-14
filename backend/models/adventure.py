@@ -14,6 +14,7 @@ class Adventure(Base, TimestampMixin):
     strict_rules = Column(Boolean, default=True, nullable=False)
     time_per_turn = Column(Integer, default=5, nullable=False) # Minutes advanced per action
     heartbeat_enabled = Column(Boolean, default=False, nullable=False) # Deprecated but kept for safety
+    heartbeat_interval = Column(Integer, default=10, nullable=False)
     
     game_over_rules = Column(JSON, nullable=True)
     original_manifest = Column(JSON, nullable=True) # Full blueprint for reset

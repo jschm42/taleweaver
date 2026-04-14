@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,8 @@ from backend.core.llm_router import GameMasterLLM
 from backend.models.user import User
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.models.adventure import Adventure
+
+logger = logging.getLogger(__name__)
 
 # --- Schemas for Structured LLM Output ---
 
@@ -168,7 +171,19 @@ class WorldGenerator:
                     adventure.creation_status = f"Envisioning You: {prot['name']}..."
                     await db.commit()
                     prompt = f"Portrait of character {prot['name']}, {prot['role']}. {prot['description']}. Game attribute art style."
-                    image_url = await MediaEngine.generate_entity_image(prompt, adventure_id, "PROTAGONIST", "NPC", {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
+                    try:
+                        image_url = await MediaEngine.generate_entity_image(
+                            prompt,
+                            adventure_id,
+                            "PROTAGONIST",
+                            "NPC",
+                            {"t2i_settings": user.t2i_settings},
+                            user.encrypted_api_keys,
+                        )
+                    except Exception as exc:
+                        # Visual failures (e.g. provider moderation) must not abort world creation
+                        logger.warning("Protagonist image generation failed for %s: %s", adventure_id, exc)
+                        image_url = None
                     avatar.profile_image = image_url
             
         # Persist Scenes
@@ -207,7 +222,18 @@ class WorldGenerator:
                     adventure.creation_status = f"Envisioning Portrait: {n['name']}..."
                     await db.commit()
                 prompt = f"Portrait of NPC {n['name']}. {n['description']}. Game attribute art style."
-                image_url = await MediaEngine.generate_entity_image(prompt, adventure_id, n['id'], "NPC", {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
+                try:
+                    image_url = await MediaEngine.generate_entity_image(
+                        prompt,
+                        adventure_id,
+                        n['id'],
+                        "NPC",
+                        {"t2i_settings": user.t2i_settings},
+                        user.encrypted_api_keys,
+                    )
+                except Exception as exc:
+                    logger.warning("NPC image generation failed for %s/%s: %s", adventure_id, n['id'], exc)
+                    image_url = None
 
             db.add(WorldEntity(
                 id=n["id"],
@@ -232,7 +258,18 @@ class WorldGenerator:
                     adventure.creation_status = f"Envisioning Item: {o['name']}..."
                     await db.commit()
                 prompt = f"Highly detailed item: {o['name']}. {o['description']}. Isolated on simple background, RPG asset style."
-                image_url = await MediaEngine.generate_entity_image(prompt, adventure_id, o['id'], "OBJECT", {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
+                try:
+                    image_url = await MediaEngine.generate_entity_image(
+                        prompt,
+                        adventure_id,
+                        o['id'],
+                        "OBJECT",
+                        {"t2i_settings": user.t2i_settings},
+                        user.encrypted_api_keys,
+                    )
+                except Exception as exc:
+                    logger.warning("Object image generation failed for %s/%s: %s", adventure_id, o['id'], exc)
+                    image_url = None
 
             db.add(WorldEntity(
                 id=o["id"],

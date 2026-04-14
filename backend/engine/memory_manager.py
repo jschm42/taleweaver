@@ -39,6 +39,9 @@ class MemoryManager:
         
         character_sheet = {
             "name": avatar.name,
+            "role": getattr(avatar, 'role', None),
+            "description": getattr(avatar, 'description', None),
+            "profile_image": getattr(avatar, 'profile_image', None),
             "hp": avatar.hp,
             "stamina": avatar.stamina,
             "mana": avatar.mana,
@@ -83,7 +86,7 @@ class MemoryManager:
             f"The world context/setting is:\n{world_context}\n\n"
             f"CURRENT GAME TIME: {time_str}\n"
             f"{location_context}\n"
-            "Below is the REAL-TIME character sheet of the player. "
+            "Below is the REAL-TIME character sheet of the player, including the narrative role and description so NPCs can reference the player's identity. "
             "You MUST consider these stats, equipment, and HP in all your narratives:\n"
             f"{sheet_json}\n\n"
             "Respond organically. Use the pre-generated world description as the static reality. "

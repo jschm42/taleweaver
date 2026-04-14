@@ -89,6 +89,10 @@ python scripts/generate_fernet_key.py
 # Apply database migrations
 python -m alembic upgrade head
 
+# If a previous migration crashed and left temp tables behind, clean and retry:
+# python -c "import sqlite3; c=sqlite3.connect('taleweaver.db'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_adventures'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_users'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_avatars'); c.commit(); c.close()"
+# python -m alembic upgrade head
+
 # Start the FastAPI server
 python -m uvicorn backend.main:app --reload
 ```

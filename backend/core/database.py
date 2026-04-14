@@ -123,3 +123,21 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE avatars ADD COLUMN adventure_id TEXT"
             )
             logger.info("SQLite migration: added avatars.adventure_id")
+
+        if "role" not in avatar_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE avatars ADD COLUMN role TEXT"
+            )
+            logger.info("SQLite migration: added avatars.role")
+
+        if "description" not in avatar_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE avatars ADD COLUMN description TEXT"
+            )
+            logger.info("SQLite migration: added avatars.description")
+
+        if "profile_image" not in avatar_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE avatars ADD COLUMN profile_image TEXT"
+            )
+            logger.info("SQLite migration: added avatars.profile_image")

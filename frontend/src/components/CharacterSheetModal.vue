@@ -110,8 +110,17 @@ const showImage = (path?: string) => {
               <div class="w-full lg:w-72 space-y-6 shrink-0">
                 <!-- Identity -->
                 <div class="bg-slate-950/40 rounded-2xl p-6 border border-slate-800/50 shadow-inner">
-                  <h3 class="text-2xl font-black tracking-tight text-white mb-6 uppercase">{{ sheet.name || 'Unnamed' }}</h3>
-                  <StatBar label="Health" :value="sheet.hp" color="crimson" />
+                  <div class="flex items-center gap-4">
+                    <div v-if="sheet.profile_image && showImage(sheet.profile_image)" class="w-16 h-16 rounded-lg overflow-hidden border border-slate-700">
+                      <img :src="getImageUrl(sheet.profile_image)" class="w-full h-full object-cover" @error="handleImageError(sheet.profile_image)" />
+                    </div>
+                    <div>
+                      <h3 class="text-2xl font-black tracking-tight text-white mb-1 uppercase">{{ sheet.name || 'Unnamed' }}</h3>
+                      <div v-if="sheet.role" class="text-sm text-slate-400 font-semibold">{{ sheet.role }}</div>
+                    </div>
+                  </div>
+                  <p v-if="sheet.description" class="text-sm text-slate-300 mt-3 italic">{{ sheet.description }}</p>
+                    <StatBar label="Health" :value="sheet.hp" color="crimson" />
                   <StatBar label="Stamina" :value="sheet.stamina" color="emerald" />
                   <StatBar label="Mana" :value="sheet.mana" color="sapphire" />
                 </div>

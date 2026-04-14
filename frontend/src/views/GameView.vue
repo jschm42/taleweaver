@@ -46,8 +46,22 @@ const handleHover = (ent: any, event: MouseEvent) => {
   mousePos.value = { x: event.clientX, y: event.clientY }
 }
 
-// Split entities into NPCs and Objects
-const npcs = computed(() => entities.value.filter(e => e.entity_type === 'NPC'))
+// Split entities into NPCs and Objects, and inject the player as the top-listed NPC
+const npcs = computed(() => {
+  const worldNpcs = entities.value.filter(e => e.entity_type === 'NPC')
+  if (sheet.value && sheet.value.name) {
+    const playerEntity = {
+      id: 'PLAYER',
+      entity_type: 'NPC',
+      name: `You (${sheet.value.name})`,
+      description: sheet.value.description || '',
+      image_url: sheet.value.profile_image || sheet.value.profile_image || null,
+      role: sheet.value.role || null
+    }
+    return [playerEntity, ...worldNpcs]
+  }
+  return worldNpcs
+})
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
 
 /**
