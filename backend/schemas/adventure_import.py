@@ -20,6 +20,7 @@ class CharacterSpec(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
     description: Optional[str] = None
+    start_scene_id: Optional[str] = None
     is_npc: Optional[bool] = True
     image_hint: Optional[str] = None
 

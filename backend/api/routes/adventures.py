@@ -614,7 +614,7 @@ async def export_adventure_manifest(adventure_id: str, db: AsyncSession = Depend
     entity_res = await db.execute(select(WorldEntity.id, WorldEntity.current_scene_id).where(WorldEntity.adventure_id == adventure_id))
     entity_scene_map = {row.id: row.current_scene_id for row in entity_res.all() if row.id}
 
-    def _ensure_item_locations(items: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+    def _ensure_entity_locations(items: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
         if not items:
             return items
 
@@ -627,8 +627,9 @@ async def export_adventure_manifest(adventure_id: str, db: AsyncSession = Depend
             normalized_items.append(item_copy)
         return normalized_items
 
-    manifest["items"] = _ensure_item_locations(manifest.get("items"))
-    manifest["objects"] = _ensure_item_locations(manifest.get("objects"))
+    manifest["characters"] = _ensure_entity_locations(manifest.get("characters"))
+    manifest["items"] = _ensure_entity_locations(manifest.get("items"))
+    manifest["objects"] = _ensure_entity_locations(manifest.get("objects"))
 
     return manifest
 

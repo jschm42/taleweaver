@@ -30,32 +30,37 @@
       "id": "DAD_ARTHUR",
       "name": "Dad Arthur",
       "role": "NPC",
-      "description": "Wearing a Hawaiian shirt and trying to 'fix' the sink with a banana."
+      "description": "Wearing a Hawaiian shirt and trying to 'fix' the sink with a banana.",
+      "start_scene_id": "MODERN_KITCHEN"
     },
     {
       "id": "MOM_BEATRICE",
       "name": "Mom Beatrice",
       "role": "NPC",
-      "description": "Trying to close a billion-dollar deal while holding a laundry basket."
+      "description": "Trying to close a billion-dollar deal while holding a laundry basket.",
+      "start_scene_id": "LIVING_ROOM"
     },
     {
       "id": "GRAMPS_JOE",
       "name": "Grumpy Grandpa Joe",
       "role": "NPC",
-      "description": "Complaining about the 'lack of grit' in modern furniture."
+      "description": "Complaining about the 'lack of grit' in modern furniture.",
+      "start_scene_id": "LIVING_ROOM"
     },
     {
       "id": "NEIGHBOR_KEVIN",
       "name": "Neighbor Kevin",
       "role": "NPC",
-      "description": "Periodically bursts through the back door asking to 'borrow' or 'sample' things."
+      "description": "Periodically bursts through the back door asking to 'borrow' or 'sample' things.",
+      "start_scene_id": "HALLWAY"
     }
   ],
   "scenes": [
     {
       "id": "MODERN_KITCHEN",
       "title": "The Modern Kitchen",
-      "description": "The heart of the chaos. Cluttered, bright, and smells like impending burnt cheese.",
+      "description": "Wearing a Hawaiian shirt and trying to 'fix' the sink with a banana.",
+      "start_scene_id": "MODERN_KITCHEN",
       "is_hidden": false
     },
     {
@@ -63,7 +68,8 @@
       "title": "The Living Room",
       "description": "Dominated by a massive TV and a sofa that swallows small objects.",
       "is_hidden": false
-    },
+      "description": "Trying to close a billion-dollar deal while holding a laundry basket.",
+      "start_scene_id": "LIVING_ROOM",
     {
       "id": "HALLWAY",
       "title": "The Hallway",
@@ -71,7 +77,8 @@
       "is_hidden": false
     },
     {
-      "id": "MASTER_BEDROOM",
+      "description": "Complaining about the 'lack of grit' in modern furniture.",
+      "start_scene_id": "LIVING_ROOM",
       "title": "The Master Bedroom",
       "description": "A strictly forbidden zone containing the 'heavy-duty stuff'.",
       "is_hidden": false
@@ -79,7 +86,8 @@
     {
       "id": "MYSTERY_BASEMENT",
       "title": "The Mystery Basement",
-      "description": "A dark abyss that requires a key.",
+      "description": "Periodically bursts through the back door asking to 'borrow' or 'sample' things.",
+      "start_scene_id": "HALLWAY",
       "is_hidden": true
     }
   ],

@@ -120,6 +120,15 @@ async def test_export_manifest_backfills_item_start_scene(client: AsyncClient):
                     "is_hidden": False,
                 }
             ],
+            "characters": [
+                {
+                    "id": "LIBRARIAN",
+                    "name": "Old Librarian",
+                    "role": "NPC",
+                    "description": "A stern keeper of secrets.",
+                    "is_npc": True,
+                }
+            ],
             "items": [
                 {
                     "id": "ANCIENT_KEY",
@@ -136,6 +145,23 @@ async def test_export_manifest_backfills_item_start_scene(client: AsyncClient):
     adventure_id = resp.json()["adventure_id"]
 
     async with TestSessionLocal() as session:
+        session.add(
+            WorldEntity(
+                id="LIBRARIAN",
+                adventure_id=adventure_id,
+                entity_type="NPC",
+                name="Old Librarian",
+                description="A stern keeper of secrets.",
+                current_scene_id="LIBRARY",
+                spatial_position="behind the main desk",
+                item_type=None,
+                wearable_slots=None,
+                is_in_inventory=False,
+                is_hidden=False,
+                inventory=[],
+                metadata_json={},
+            )
+        )
         session.add(
             WorldEntity(
                 id="ANCIENT_KEY",
@@ -158,6 +184,7 @@ async def test_export_manifest_backfills_item_start_scene(client: AsyncClient):
     export_resp = await client.get(f"/api/adventures/{adventure_id}/export/manifest")
     assert export_resp.status_code == 200, export_resp.text
     export_data = export_resp.json()
+    assert export_data["characters"][0]["start_scene_id"] == "LIBRARY"
     assert export_data["items"][0]["start_scene_id"] == "LIBRARY"
 
 
