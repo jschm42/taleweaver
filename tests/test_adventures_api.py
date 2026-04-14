@@ -118,8 +118,8 @@ async def test_create_adventure_preserves_advanced_manifest_fields(client: Async
     assert original_manifest["start_datetime"] == "2026-04-14T08:30:00.000Z"
 
 
-async def test_export_manifest_backfills_item_start_scene(client: AsyncClient):
-    """Exported manifests should include item start_scene_id values even if the stored manifest omitted them."""
+async def test_export_manifest_returns_original_manifest_only(client: AsyncClient):
+    """Exported .adv manifest should be the original blueprint without runtime/session enrichment."""
     payload = {
         "title": "Export Quest",
         "avatar_name": "Archivist",
@@ -158,24 +158,8 @@ async def test_export_manifest_backfills_item_start_scene(client: AsyncClient):
     assert resp.status_code == 201, resp.text
     adventure_id = resp.json()["adventure_id"]
 
+    # Add runtime state that must NOT bleed into exported manifest.
     async with TestSessionLocal() as session:
-        session.add(
-            WorldEntity(
-                id="LIBRARIAN",
-                adventure_id=adventure_id,
-                entity_type="NPC",
-                name="Old Librarian",
-                description="A stern keeper of secrets.",
-                current_scene_id="LIBRARY",
-                spatial_position="behind the main desk",
-                item_type=None,
-                wearable_slots=None,
-                is_in_inventory=False,
-                is_hidden=False,
-                inventory=[],
-                metadata_json={},
-            )
-        )
         session.add(
             WorldEntity(
                 id="ANCIENT_KEY",
@@ -183,14 +167,14 @@ async def test_export_manifest_backfills_item_start_scene(client: AsyncClient):
                 entity_type="OBJECT",
                 name="Ancient Key",
                 description="A key from another age.",
-                current_scene_id="LIBRARY",
-                spatial_position="on a pedestal near the shelves",
+                current_scene_id="HIDDEN_VAULT",
+                spatial_position="inside a brass lockbox",
                 item_type="KEY",
                 wearable_slots=None,
                 is_in_inventory=False,
                 is_hidden=False,
                 inventory=[],
-                metadata_json={},
+                metadata_json={"durability": 42},
             )
         )
         await session.commit()
@@ -198,8 +182,65 @@ async def test_export_manifest_backfills_item_start_scene(client: AsyncClient):
     export_resp = await client.get(f"/api/adventures/{adventure_id}/export/manifest")
     assert export_resp.status_code == 200, export_resp.text
     export_data = export_resp.json()
-    assert export_data["characters"][0]["start_scene_id"] == "LIBRARY"
-    assert export_data["items"][0]["start_scene_id"] == "LIBRARY"
+    assert export_data["title"] == "Export Quest"
+    assert "npcs" not in export_data
+    assert "objects" not in export_data
+    assert export_data["items"][0].get("start_scene_id") is None
+
+
+async def test_export_manifest_backfills_core_metadata_without_runtime_state(client: AsyncClient):
+    """Export should include core .adv metadata even if original manifest is sparse."""
+    payload = {
+        "title": "Sparse Quest",
+        "avatar_name": "Archivist",
+        "context": "A lightweight context.",
+        "time_per_turn": 7,
+        "original_manifest": {
+            "title": "Sparse Quest",
+            "items": [{"id": "SPARE_KEY", "name": "Spare Key", "type": "KEY"}],
+        },
+    }
+
+    resp = await client.post("/api/adventures", json=payload)
+    assert resp.status_code == 201, resp.text
+    adventure_id = resp.json()["adventure_id"]
+
+    async with TestSessionLocal() as session:
+        session.add(
+            WorldEntity(
+                id="SPARE_KEY",
+                adventure_id=adventure_id,
+                entity_type="OBJECT",
+                name="Spare Key",
+                description="A tiny brass key.",
+                current_scene_id="SECRET_ROOM",
+                spatial_position="inside a hidden drawer",
+                item_type="KEY",
+                wearable_slots=None,
+                is_in_inventory=False,
+                is_hidden=False,
+                inventory=[],
+                metadata_json={"uses": 1},
+            )
+        )
+        await session.commit()
+
+    export_resp = await client.get(f"/api/adventures/{adventure_id}/export/manifest")
+    assert export_resp.status_code == 200, export_resp.text
+    export_data = export_resp.json()
+
+    assert export_data["version"] == "1.0"
+    assert export_data["id"] == adventure_id
+    assert export_data["title"] == "Sparse Quest"
+    assert export_data["time_per_turn"] == 7
+    assert export_data["generate_npc_images"] is False
+    assert export_data["generate_item_images"] is False
+    assert export_data["automatic_cover_generation"] is False
+
+    # Runtime world details must not leak into export.
+    assert "npcs" not in export_data
+    assert "objects" not in export_data
+    assert export_data["items"][0].get("start_scene_id") is None
 
 
 # ---------------------------------------------------------------------------

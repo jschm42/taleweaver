@@ -91,6 +91,23 @@ const importState = ref({
   automatic_cover_generation: false,
 })
 
+function resetImportState() {
+  importState.value = {
+    manifest: null,
+    titleOverride: '',
+    generate_npc_images: false,
+    generate_item_images: false,
+    automatic_cover_generation: false,
+  }
+}
+
+function closeImportModal() {
+  showImportModal.value = false
+  isImporting.value = false
+  errorMsg.value = ''
+  resetImportState()
+}
+
 function resetCreateForm() {
   form.value = {
     id: crypto.randomUUID(),
@@ -236,11 +253,13 @@ async function onImportFileSelected(event: Event) {
       throw new Error('Invalid ADV file. Missing required version/title.')
     }
 
+    resetImportState()
     importState.value.manifest = parsed
     importState.value.titleOverride = parsed.title
     importState.value.generate_npc_images = false
     importState.value.generate_item_images = false
     importState.value.automatic_cover_generation = false
+    isImporting.value = false
     errorMsg.value = ''
     showImportModal.value = true
   } catch (error: any) {
@@ -250,7 +269,11 @@ async function onImportFileSelected(event: Event) {
   }
 }
 
-async function executeImport() {
+async function executeImport(userInitiated = false) {
+  if (!userInitiated) {
+    return
+  }
+
   if (!importState.value.manifest) {
     return
   }
@@ -275,7 +298,7 @@ async function executeImport() {
     addPendingImportCard(result.adventure_id, payload.title)
     showImportModal.value = false
     await fetchAdventures()
-    await pollAdventureStatus(result.adventure_id, {
+    void pollAdventureStatus(result.adventure_id, {
       navigateOnReady: false,
       onStatus: (status) => updatePendingImportStatus(result.adventure_id, status),
       onReady: async () => {
@@ -286,6 +309,7 @@ async function executeImport() {
     })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Import failed.'
+  } finally {
     isImporting.value = false
   }
 }
@@ -881,10 +905,10 @@ onUnmounted(() => {
     </div>
 
     <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center pt-10">
-      <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="showImportModal = false"></div>
+      <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="closeImportModal"></div>
 
-      <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl relative z-10 shadow-2xl p-8 flex flex-col">
-        <button @click="showImportModal = false" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">X</button>
+      <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl relative z-10 shadow-2xl p-8 flex flex-col" @keydown.enter.prevent="executeImport(true)">
+        <button @click="closeImportModal" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">X</button>
 
         <h2 class="text-3xl font-extrabold text-white mb-2">Import Adventure</h2>
         <p class="text-slate-400 mb-6 text-base">Set import options and create directly from the ADV manifest.</p>
@@ -916,8 +940,8 @@ onUnmounted(() => {
         </div>
 
         <div class="mt-8 flex justify-end gap-4 border-t border-slate-700 pt-6">
-          <button @click="showImportModal = false" class="px-6 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</button>
-          <button @click="executeImport" :disabled="isImporting || !importState.titleOverride" class="px-8 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl disabled:opacity-50">
+          <button @click="closeImportModal" class="px-6 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</button>
+          <button @click="executeImport(true)" :disabled="isImporting || !importState.titleOverride" class="px-8 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl disabled:opacity-50">
             {{ isImporting ? 'Importing...' : 'Import & Create' }}
           </button>
         </div>

@@ -7,13 +7,6 @@
   "story_idea": "\"The Miller Family Meltdown.\" It's 18:00 on a Tuesday. Grandma is coming for dinner in one hour, and the household is a disaster zone. A laugh track punctuates every failure. You play as the \"Last Sane Person\" (or the biggest chaos agent) trying to get the legendary Casserole ready while managing a cast of eccentric family members and a very persistent neighbor.",
   "tone": "90s Sitcom / Absurd Comedy",
   "image_style": "Bright, warm colors, slight VHS grain; comedic, high-contrast lighting",
-  "time_per_turn": 5,
-  "start_date": "2026-04-14",
-  "start_time": "18:00",
-  "start_datetime": "2026-04-14T18:00:00.000Z",
-  "generate_npc_images": false,
-  "generate_item_images": false,
-  "automatic_cover_generation": false,
   "pacing": {
     "scene_length": "short",
     "event_frequency": "high",
@@ -31,28 +24,36 @@
       "name": "Dad Arthur",
       "role": "NPC",
       "description": "Wearing a Hawaiian shirt and trying to 'fix' the sink with a banana.",
-      "start_scene_id": "MODERN_KITCHEN"
+      "start_scene_id": "MODERN_KITCHEN",
+      "is_npc": true,
+      "image_hint": null
     },
     {
       "id": "MOM_BEATRICE",
       "name": "Mom Beatrice",
       "role": "NPC",
       "description": "Trying to close a billion-dollar deal while holding a laundry basket.",
-      "start_scene_id": "LIVING_ROOM"
+      "start_scene_id": "LIVING_ROOM",
+      "is_npc": true,
+      "image_hint": null
     },
     {
       "id": "GRAMPS_JOE",
       "name": "Grumpy Grandpa Joe",
       "role": "NPC",
       "description": "Complaining about the 'lack of grit' in modern furniture.",
-      "start_scene_id": "LIVING_ROOM"
+      "start_scene_id": "LIVING_ROOM",
+      "is_npc": true,
+      "image_hint": null
     },
     {
       "id": "NEIGHBOR_KEVIN",
       "name": "Neighbor Kevin",
       "role": "NPC",
       "description": "Periodically bursts through the back door asking to 'borrow' or 'sample' things.",
-      "start_scene_id": "HALLWAY"
+      "start_scene_id": "HALLWAY",
+      "is_npc": true,
+      "image_hint": null
     }
   ],
   "scenes": [
@@ -93,28 +94,32 @@
       "name": "Forbidden Casserole",
       "type": "CONSUMABLE",
       "description": "Mom's prize possession. Missing key ingredient is a running gag.",
-      "start_scene_id": "MODERN_KITCHEN"
+      "start_scene_id": "MODERN_KITCHEN",
+      "properties": null
     },
     {
       "id": "ESPRESSO",
       "name": "Extra-Strength Espresso",
       "type": "CONSUMABLE",
       "description": "Liquid energy; temporarily boosts focus but causes jittery chaos.",
-      "start_scene_id": "MODERN_KITCHEN"
+      "start_scene_id": "MODERN_KITCHEN",
+      "properties": null
     },
     {
       "id": "GOLDEN_SPATULA",
       "name": "The Golden Spatula",
       "type": "WEAPON",
       "description": "Good for flipping burgers or neighbor suppression.",
-      "start_scene_id": "MODERN_KITCHEN"
+      "start_scene_id": "MODERN_KITCHEN",
+      "properties": null
     },
     {
       "id": "WD40",
       "name": "Leaky WD-40",
       "type": "TOOL",
       "description": "Used to fix the Squeaky Floor; may cause unintended slickness.",
-      "start_scene_id": "HALLWAY"
+      "start_scene_id": "HALLWAY",
+      "properties": null
     },
     {
       "id": "POWER_TIE",
@@ -122,7 +127,7 @@
       "type": "WEARABLE",
       "description": "Increases Charisma when worn.",
       "start_scene_id": "MASTER_BEDROOM",
-      "wearable_slots": ["Neck"]
+      "properties": null
     },
     {
       "id": "RABBIT_SLIPPERS",
@@ -130,7 +135,7 @@
       "type": "WEARABLE",
       "description": "Grants Stealth and silent movement.",
       "start_scene_id": "MASTER_BEDROOM",
-      "wearable_slots": ["Feet"]
+      "properties": null
     },
     {
       "id": "BASEMENT_KEY",
@@ -138,21 +143,23 @@
       "type": "KEY",
       "description": "Hidden behind the 'Wedding Photo' in the Hallway.",
       "start_scene_id": "HALLWAY",
-      "is_hidden": true
+      "properties": null
     },
     {
       "id": "SECRET_DIARY",
       "name": "The Secret Diary",
       "type": "READABLE",
       "description": "Contains deep family secrets.",
-      "start_scene_id": "MASTER_BEDROOM"
+      "start_scene_id": "MASTER_BEDROOM",
+      "properties": null
     },
     {
       "id": "TV_REMOTE",
       "name": "Electronic Remote",
       "type": "COMBINABLE",
       "description": "Dead without batteries.",
-      "start_scene_id": "LIVING_ROOM"
+      "start_scene_id": "LIVING_ROOM",
+      "properties": null
     },
     {
       "id": "AA_BATTERIES",
@@ -160,9 +167,14 @@
       "type": "COMBINABLE",
       "description": "Hidden in the sofa; powers the remote.",
       "start_scene_id": "LIVING_ROOM",
-      "is_hidden": true
+      "properties": null
     }
   ],
+  "objects": null,
+  "time_per_turn": 5,
+  "start_date": "2026-04-14",
+  "start_time": "18:00",
+  "start_datetime": "2026-04-14T18:00:00.000Z",
   "quests": [
     {
       "id": "REMOTE_HACK",
@@ -178,5 +190,8 @@
   "metadata": {
     "author": "importer",
     "source_file": "kitchen_crisis.md"
-  }
+  },
+  "generate_npc_images": false,
+  "generate_item_images": false,
+  "automatic_cover_generation": false
 }

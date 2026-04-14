@@ -1,9 +1,11 @@
 import logging
+import uuid
 from copy import deepcopy
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from pydantic import BaseModel
 
 from backend.core.database import get_db
@@ -29,6 +31,187 @@ from backend.core.llm_router import GameMasterLLM
 
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
 logger = logging.getLogger(__name__)
+
+
+def _resolve_start_datetime(manifest: dict[str, Any] | None) -> Optional[str]:
+    """Returns a usable ISO datetime string from manifest fields.
+
+    Accepts either explicit `start_datetime` or fallback `start_date` + `start_time`.
+    """
+    if not manifest:
+        return None
+
+    start_datetime = manifest.get("start_datetime")
+    if isinstance(start_datetime, str) and start_datetime.strip():
+        return start_datetime
+
+    start_date = manifest.get("start_date")
+    start_time = manifest.get("start_time")
+    if not (isinstance(start_date, str) and start_date.strip() and isinstance(start_time, str) and start_time.strip()):
+        return None
+
+    try:
+        dt = datetime.fromisoformat(f"{start_date.strip()}T{start_time.strip()}")
+        return dt.isoformat()
+    except ValueError:
+        return None
+
+
+def _normalize_manifest_for_world_generator(manifest: dict[str, Any] | None) -> Optional[dict[str, Any]]:
+    """Normalize ADV import schema to the structure expected by WorldGenerator.apply_manifest."""
+    if not isinstance(manifest, dict):
+        return None
+
+    raw_scenes = manifest.get("scenes") or []
+    if not isinstance(raw_scenes, list) or not raw_scenes:
+        return None
+
+    scenes: list[dict[str, Any]] = []
+    for idx, scene in enumerate(raw_scenes):
+        if not isinstance(scene, dict):
+            continue
+        scene_id = scene.get("id")
+        if not scene_id:
+            continue
+        scenes.append(
+            {
+                "id": scene_id,
+                "name": scene.get("name") or scene.get("title") or f"Scene {idx + 1}",
+                "description": scene.get("description") or "",
+                "is_hidden": bool(scene.get("is_hidden", False)),
+            }
+        )
+
+    if not scenes:
+        return None
+
+    default_scene_id = scenes[0]["id"]
+
+    raw_npcs: list[dict[str, Any]] = []
+    for key in ("npcs", "characters"):
+        values = manifest.get(key) or []
+        if isinstance(values, list):
+            raw_npcs.extend([v for v in values if isinstance(v, dict)])
+
+    npcs: list[dict[str, Any]] = []
+    for npc in raw_npcs:
+        npc_id = npc.get("id")
+        if not npc_id:
+            continue
+        npcs.append(
+            {
+                "id": npc_id,
+                "name": npc.get("name") or npc_id,
+                "description": npc.get("description") or npc.get("role") or "",
+                "start_scene_id": npc.get("start_scene_id") or default_scene_id,
+                "spatial_position": npc.get("spatial_position") or "standing nearby",
+                "is_hidden": bool(npc.get("is_hidden", False)),
+            }
+        )
+
+    raw_objects: list[dict[str, Any]] = []
+    for key in ("objects", "items"):
+        values = manifest.get(key) or []
+        if isinstance(values, list):
+            raw_objects.extend([v for v in values if isinstance(v, dict)])
+
+    objects: list[dict[str, Any]] = []
+    for obj in raw_objects:
+        obj_id = obj.get("id")
+        if not obj_id:
+            continue
+        objects.append(
+            {
+                "id": obj_id,
+                "name": obj.get("name") or obj_id,
+                "description": obj.get("description") or "",
+                "start_scene_id": obj.get("start_scene_id") or default_scene_id,
+                "spatial_position": obj.get("spatial_position") or "placed in plain sight",
+                "item_type": obj.get("item_type") or obj.get("type") or "PICKABLE",
+                "wearable_slots": obj.get("wearable_slots"),
+                "is_hidden": bool(obj.get("is_hidden", False)),
+            }
+        )
+
+    raw_exits = manifest.get("exits") or []
+    exits: list[dict[str, Any]] = []
+    if isinstance(raw_exits, list):
+        for ex in raw_exits:
+            if not isinstance(ex, dict):
+                continue
+            from_scene_id = ex.get("from_scene_id")
+            to_scene_id = ex.get("to_scene_id")
+            if not from_scene_id or not to_scene_id:
+                continue
+            exits.append(
+                {
+                    "from_scene_id": from_scene_id,
+                    "to_scene_id": to_scene_id,
+                    "label": ex.get("label") or "passage",
+                    "is_locked": bool(ex.get("is_locked", False)),
+                    "lock_description": ex.get("lock_description"),
+                }
+            )
+
+    normalized: dict[str, Any] = {
+        "scenes": scenes,
+        "exits": exits,
+        "npcs": npcs,
+        "objects": objects,
+    }
+
+    prot = manifest.get("protagonist")
+    if isinstance(prot, dict):
+        normalized["protagonist"] = {
+            "name": prot.get("name") or "You",
+            "role": prot.get("role") or "Adventurer",
+            "description": prot.get("description") or "",
+        }
+
+    return normalized
+
+
+async def _resolve_scene_id(db: AsyncSession, adventure_id: str, scene_ref: Optional[str]) -> Optional[str]:
+    """Resolve a scene reference by ID, label, or normalized label slug.
+
+    This guards against LLM outputs that sometimes return scene labels instead of IDs.
+    """
+    if not scene_ref:
+        return None
+
+    candidate = scene_ref.strip()
+    if not candidate:
+        return None
+
+    by_id = await db.execute(
+        select(WorldScene.id).where(
+            WorldScene.adventure_id == adventure_id,
+            WorldScene.id == candidate,
+        )
+    )
+    resolved = by_id.scalar_one_or_none()
+    if resolved:
+        return resolved
+
+    normalized_slug = candidate.upper().replace(" ", "_")
+    if normalized_slug != candidate:
+        by_slug = await db.execute(
+            select(WorldScene.id).where(
+                WorldScene.adventure_id == adventure_id,
+                WorldScene.id == normalized_slug,
+            )
+        )
+        resolved = by_slug.scalar_one_or_none()
+        if resolved:
+            return resolved
+
+    by_label = await db.execute(
+        select(WorldScene.id).where(
+            WorldScene.adventure_id == adventure_id,
+            func.lower(WorldScene.label) == candidate.lower(),
+        )
+    )
+    return by_label.scalar_one_or_none()
 
 
 # ---------------------------------------------------------------------------
@@ -195,25 +378,43 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             llm_settings = user.llm_settings or {}
             complex_model = llm_settings.get("complex_model", "gpt-4o")
             preferred_provider = llm_settings.get("preferred_provider", "openai")
+            adv_for_context = await db.get(Adventure, adventure_id)
+            source_manifest = (adv_for_context.original_manifest if adv_for_context else None) or payload_dict.get("original_manifest")
+            normalized_manifest = _normalize_manifest_for_world_generator(source_manifest)
+            initial_scene_id = normalized_manifest["scenes"][0]["id"] if normalized_manifest else None
             
             # 1. World Gen
             adventure_context = payload_dict.get('context')
             if not adventure_context:
-                adv_for_context = await db.get(Adventure, adventure_id)
                 manifest = (adv_for_context.original_manifest or {}) if adv_for_context else {}
                 adventure_context = manifest.get('story_idea') or manifest.get('description') or "A standard fantasy world."
 
-            await WorldGenerator.generate_world(
-                db=db, 
-                user=user, 
-                adventure_id=adventure_id, 
-                title=payload_dict['title'], 
-                context=adventure_context,
-                model=complex_model,
-                provider=preferred_provider,
-                generate_npc_images=payload_dict.get('generate_npc_images', False),
-                generate_item_images=payload_dict.get('generate_item_images', False)
-            )
+            if normalized_manifest:
+                if adv_for_context:
+                    adv_for_context.creation_status = "Applying Imported Manifest..."
+                    await db.commit()
+
+                await WorldGenerator.apply_manifest(
+                    db=db,
+                    adventure_id=adventure_id,
+                    manifest_dict=normalized_manifest,
+                    user=user if (payload_dict.get('generate_npc_images', False) or payload_dict.get('generate_item_images', False)) else None,
+                    gen_npc=payload_dict.get('generate_npc_images', False),
+                    gen_items=payload_dict.get('generate_item_images', False),
+                    gen_protagonist_image=True,
+                )
+            else:
+                await WorldGenerator.generate_world(
+                    db=db,
+                    user=user,
+                    adventure_id=adventure_id,
+                    title=payload_dict['title'],
+                    context=adventure_context,
+                    model=complex_model,
+                    provider=preferred_provider,
+                    generate_npc_images=payload_dict.get('generate_npc_images', False),
+                    generate_item_images=payload_dict.get('generate_item_images', False)
+                )
             
             # 2. Initial GameState
             scenes_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
@@ -227,16 +428,17 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             # create_adventure already seeds a GameState; update it instead of inserting a duplicate
             state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
             state = state_res.scalars().first()
+            resolved_initial_scene_id = initial_scene_id if initial_scene_id and any(s.id == initial_scene_id for s in scenes) else scenes[0].id
             if state:
                 state.avatar_id = avatar.id if avatar else state.avatar_id
-                state.scene_id = scenes[0].id
+                state.scene_id = resolved_initial_scene_id
             else:
                 db.add(GameState(
                     id=adventure_id,
                     user_id=user_id,
                     adventure_id=adventure_id,
                     avatar_id=avatar.id if avatar else None,
-                    scene_id=scenes[0].id,
+                    scene_id=resolved_initial_scene_id,
                     in_game_time=0
                 ))
             
@@ -591,11 +793,13 @@ async def reset_adventure(adventure_id: str, db: AsyncSession = Depends(get_db))
             }
 
     # 3. Re-apply world blueprint (with preserved images)
-    await WorldGenerator.apply_manifest(db, adventure_id, adventure.original_manifest, existing_images=img_map)
+    normalized_manifest = _normalize_manifest_for_world_generator(adventure.original_manifest)
+    manifest_to_apply = normalized_manifest or adventure.original_manifest
+    await WorldGenerator.apply_manifest(db, adventure_id, manifest_to_apply, existing_images=img_map)
     
     # 4. Final Scene Calibration
     # We need the first scene ID from the manifest to set the avatar's starting point
-    first_scene_id = adventure.original_manifest.get("scenes", [{}])[0].get("id")
+    first_scene_id = (manifest_to_apply.get("scenes", [{}])[0].get("id") if isinstance(manifest_to_apply, dict) else None)
     if first_scene_id and state:
         state.scene_id = first_scene_id
 
@@ -605,7 +809,7 @@ async def reset_adventure(adventure_id: str, db: AsyncSession = Depends(get_db))
 
 @router.get("/{adventure_id}/export/manifest")
 async def export_adventure_manifest(adventure_id: str, db: AsyncSession = Depends(get_db)):
-    """Exports only the original world blueprint."""
+    """Exports an importable blueprint manifest without runtime/session state."""
     adv_res = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
     adventure = adv_res.scalars().first()
     if not adventure or not adventure.original_manifest:
@@ -613,25 +817,32 @@ async def export_adventure_manifest(adventure_id: str, db: AsyncSession = Depend
 
     manifest = deepcopy(adventure.original_manifest)
 
-    entity_res = await db.execute(select(WorldEntity.id, WorldEntity.current_scene_id).where(WorldEntity.adventure_id == adventure_id))
-    entity_scene_map = {row.id: row.current_scene_id for row in entity_res.all() if row.id}
+    # Keep export free of runtime/session data while ensuring expected blueprint metadata exists.
+    manifest.setdefault("version", "1.0")
+    manifest.setdefault("id", adventure.id)
+    manifest.setdefault("title", adventure.title)
 
-    def _ensure_entity_locations(items: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
-        if not items:
-            return items
+    if not manifest.get("story_idea") and adventure.context:
+        manifest["story_idea"] = adventure.context
+    if not manifest.get("description") and adventure.context:
+        manifest["description"] = adventure.context
 
-        normalized_items: list[dict[str, Any]] = []
-        for item in items:
-            item_copy = dict(item)
-            item_id = item_copy.get("id")
-            if not item_copy.get("start_scene_id") and item_id in entity_scene_map:
-                item_copy["start_scene_id"] = entity_scene_map[item_id]
-            normalized_items.append(item_copy)
-        return normalized_items
+    if not manifest.get("time_per_turn"):
+        manifest["time_per_turn"] = adventure.time_per_turn
 
-    manifest["characters"] = _ensure_entity_locations(manifest.get("characters"))
-    manifest["items"] = _ensure_entity_locations(manifest.get("items"))
-    manifest["objects"] = _ensure_entity_locations(manifest.get("objects"))
+    manifest.setdefault("generate_npc_images", False)
+    manifest.setdefault("generate_item_images", False)
+    manifest.setdefault("automatic_cover_generation", False)
+
+    start_dt = _resolve_start_datetime(manifest)
+    if start_dt:
+        manifest["start_datetime"] = start_dt
+        try:
+            dt = datetime.fromisoformat(start_dt.replace("Z", "+00:00"))
+            manifest.setdefault("start_date", dt.date().isoformat())
+            manifest.setdefault("start_time", dt.strftime("%H:%M"))
+        except ValueError:
+            pass
 
     return manifest
 
@@ -802,7 +1013,7 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
     adventure = adv_res.scalars().first()
     start_datetime = None
     if adventure and adventure.original_manifest:
-        start_datetime = adventure.original_manifest.get("start_datetime")
+        start_datetime = _resolve_start_datetime(adventure.original_manifest)
     
     # 1. Fetch current adventure entities that have image_urls to ensure the sheet is up to date
     res = await db.execute(
@@ -1061,11 +1272,26 @@ async def post_chat_message(
 
         # --- Update World State ---
         if adventure.strict_rules and game_event:
-            if game_event.new_scene_id: state.scene_id = game_event.new_scene_id
-            
+            if game_event.new_scene_id:
+                resolved_scene_id = await _resolve_scene_id(db, state.adventure_id, game_event.new_scene_id)
+                if resolved_scene_id:
+                    state.scene_id = resolved_scene_id
+                else:
+                    logger.warning(
+                        "Unresolved new_scene_id '%s' for adventure %s; staying in scene %s",
+                        game_event.new_scene_id,
+                        state.adventure_id,
+                        state.scene_id,
+                    )
+
             if game_event.moved_entities:
                 for move in game_event.moved_entities:
-                    ent_mv_res = await db.execute(select(WorldEntity).where(WorldEntity.id == move.entity_id, WorldEntity.adventure_id == state.adventure_id))
+                    ent_mv_res = await db.execute(
+                        select(WorldEntity).where(
+                            WorldEntity.id == move.entity_id,
+                            WorldEntity.adventure_id == state.adventure_id,
+                        )
+                    )
                     ent_mv = ent_mv_res.scalars().first()
                     if ent_mv:
                         if move.to_scene_id == "INVENTORY":
@@ -1073,12 +1299,22 @@ async def post_chat_message(
                             response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' added to inventory."})
                         else:
                             old_scene = ent_mv.current_scene_id
-                            ent_mv.current_scene_id = move.to_scene_id or ent_mv.current_scene_id
+                            resolved_target_scene_id = await _resolve_scene_id(db, state.adventure_id, move.to_scene_id)
+                            if move.to_scene_id and not resolved_target_scene_id:
+                                logger.warning(
+                                    "Unresolved move target '%s' for entity %s in adventure %s; keeping current scene %s",
+                                    move.to_scene_id,
+                                    move.entity_id,
+                                    state.adventure_id,
+                                    ent_mv.current_scene_id,
+                                )
+                            ent_mv.current_scene_id = resolved_target_scene_id or ent_mv.current_scene_id
                             ent_mv.is_in_inventory = False
                             if old_scene == "INVENTORY":
                                 response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' removed from inventory."})
-                            
-                        if move.to_spatial_position: ent_mv.spatial_position = move.to_spatial_position
+
+                        if move.to_spatial_position:
+                            ent_mv.spatial_position = move.to_spatial_position
 
             if game_event.updated_entities:
                 for upd in game_event.updated_entities:
@@ -1102,19 +1338,19 @@ async def post_chat_message(
                     ent_sync = ent_sync_res.scalars().first()
                     
                     if ent_sync:
-                         ent_sync.is_in_inventory = True
-                         ent_sync.is_hidden = False
-                         
-                         # BACKFILL image_url into the avatar's inventory if missing (with persistence fix)
-                         new_inv = []
-                         for inv_item in avatar.inventory:
-                             updated_item = dict(inv_item) # Copy to ensure change detection
-                             if updated_item.get('id') == item.id and not updated_item.get('image_url'):
-                                 updated_item['image_url'] = ent_sync.image_url
-                             new_inv.append(updated_item)
-                         avatar.inventory = new_inv
-                         
-                         response_messages.append({"role": "system", "content": f"[System] Item '{item.name}' added to inventory."})
+                        ent_sync.is_in_inventory = True
+                        ent_sync.is_hidden = False
+
+                        # BACKFILL image_url into the avatar's inventory if missing (with persistence fix)
+                        new_inv = []
+                        for inv_item in avatar.inventory:
+                            updated_item = dict(inv_item) # Copy to ensure change detection
+                            if updated_item.get('id') == item.id and not updated_item.get('image_url'):
+                                updated_item['image_url'] = ent_sync.image_url
+                            new_inv.append(updated_item)
+                        avatar.inventory = new_inv
+
+                        response_messages.append({"role": "system", "content": f"[System] Item '{item.name}' added to inventory."})
                     else:
                         # CREATE brand new entity for runtime items
                         new_ent = WorldEntity(
