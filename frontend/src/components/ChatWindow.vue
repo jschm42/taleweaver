@@ -158,7 +158,7 @@ function normalizeLineBreaks(text: string): string {
 </script>
 
 <template>
-  <div class="flex flex-col w-full h-full bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+  <div class="flex flex-col w-full h-full bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-xl overflow-hidden shadow-2xl relative z-10">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-slate-950/50 backdrop-blur-md shrink-0">
       <div class="flex items-center gap-2">

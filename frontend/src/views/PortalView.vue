@@ -225,6 +225,8 @@ function openCreateModal() {
   resetCreateForm()
   errorMsg.value = ''
   advancedValidationError.value = ''
+  isSubmitting.value = false
+  creationStatus.value = ''
   showCreateModal.value = true
 }
 
@@ -477,6 +479,9 @@ async function pollAdventureStatus(
 
         if (data.is_ready) {
           clearInterval(pollInterval)
+          creationStatus.value = ''
+          isSubmitting.value = false
+          isImporting.value = false
           options?.onReady?.()
           if (options?.navigateOnReady) {
             router.push({ name: 'game', params: { id: adventureId } })
@@ -590,7 +595,7 @@ onUnmounted(() => {
             :key="pending.adventureId"
             class="relative bg-slate-900 rounded-2xl border border-emerald-500/40 overflow-hidden flex flex-col"
           >
-            <div class="h-32 bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
+            <div class="aspect-[2/1] bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
               <div v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="absolute inset-0 loading-placeholder-shimmer"></div>
               <i class="ra ra-scroll-unfurled text-4xl text-emerald-300/80 z-10"></i>
             </div>
@@ -640,7 +645,7 @@ onUnmounted(() => {
             :key="pending.adventureId"
             class="relative bg-slate-900 rounded-2xl border border-cyan-500/40 overflow-hidden flex flex-col"
           >
-              <div class="h-32 bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
+              <div class="aspect-[2/1] bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
               <div v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="absolute inset-0 loading-placeholder-shimmer"></div>
               <i class="ra ra-quill-ink text-4xl text-cyan-300/80 z-10"></i>
             </div>
@@ -690,7 +695,7 @@ onUnmounted(() => {
             :key="adv.game_id"
             class="group relative bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden hover:border-emerald-500/50 transition-all duration-500 flex flex-col"
           >
-            <div class="h-32 bg-slate-800 relative overflow-hidden flex items-center justify-center">
+            <div class="aspect-[2/1] bg-slate-800 relative overflow-hidden flex items-center justify-center">
               <template v-if="adv.image_url">
                 <img :src="'http://localhost:8000' + adv.image_url" class="w-full h-full object-cover" />
               </template>

@@ -19,6 +19,7 @@ export interface UseGameSocket {
   status: Ref<ConnectionStatus>
   gameOverReason: Ref<string>
   autoVisualize: Ref<boolean>
+  adventureImage: Ref<string | null>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
@@ -36,6 +37,7 @@ export function useGameSocket(): UseGameSocket {
   const status = ref<ConnectionStatus>('disconnected')
   const gameOverReason = ref('')
   const autoVisualize = ref(false)
+  const adventureImage = ref<string | null>(null)
   let currentGameId = ''
   let syncTimer: number | null = null
 
@@ -68,6 +70,9 @@ export function useGameSocket(): UseGameSocket {
     entities.value = data.entities || []
     if (data.image_url !== undefined) {
       currentSceneImage.value = data.image_url
+    }
+    if (data.adventure_image !== undefined) {
+      adventureImage.value = data.adventure_image
     }
   }
 
@@ -191,6 +196,7 @@ export function useGameSocket(): UseGameSocket {
     status,
     gameOverReason,
     autoVisualize,
+    adventureImage,
     connect,
     disconnect,
     sendMessage,

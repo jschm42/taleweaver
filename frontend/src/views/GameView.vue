@@ -30,6 +30,7 @@ const {
   messages,
   gameOverReason,
   autoVisualize,
+  adventureImage,
   entities,
   mermaidData,
   nodes,
@@ -147,90 +148,124 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="h-screen bg-slate-950 flex flex-col font-sans overflow-hidden">
-    <!-- Header Navigation -->
-    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center z-10 shrink-0">
-      <!-- Left: back + title -->
-      <div class="flex items-center gap-4">
-        <button 
-          @click="goBack" 
-          class="p-2 rounded-full bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors"
-          title="Return to Portal"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-300" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-          </svg>
-        </button>
-        <div>
-          <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-500">TaleWeaver Engine</h1>
-          <p class="text-slate-500 text-xs mt-0.5">Session: {{ props.id.substring(0, 8) }}</p>
-        </div>
-      </div>
+  <main class="h-screen bg-slate-950 flex flex-col font-sans overflow-hidden relative">
+    <!-- Full-Width Adventure Background (Top Third) -->
+    <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
+      <img 
+        :src="getImageUrl(adventureImage)" 
+        class="w-full h-full object-cover blur-sm brightness-[0.5]"
+        @error="adventureImage = null"
+      >
+      <div class="absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/40 to-slate-950"></div>
+      <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
+    </div>
 
-      <!-- Center: In-Game Clock -->
-      <div class="hidden sm:flex flex-col items-center select-none game-clock" :class="{ 'clock-tick': clockTick }">
-        <template v-if="gameTime">
-          <div class="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <!-- Header Navigation -->    <!-- Header Navigation -->
+    <header class="bg-transparent px-8 py-6 flex flex-col z-10 shrink-0 relative">
+      <div class="flex justify-between items-center gap-4">
+        <!-- Left: back + Adventure Title -->
+        <div class="flex items-center gap-6 relative z-10 shrink-0">
+          <button 
+            @click="goBack" 
+            class="p-2.5 rounded-full bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 transition-colors backdrop-blur-md shadow-xl"
+            title="Return to Portal"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-100" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
             </svg>
-            <span class="clock-time text-2xl font-bold text-amber-300 tracking-widest leading-none">
-              {{ gameTime.time }}
-            </span>
+          </button>
+          <h1 class="text-3xl md:text-4xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide" style="font-family: 'Acme', sans-serif;">
+            {{ sheet?.adventure_title || 'Chronicle' }}
+          </h1>
+        </div>
+
+        <!-- Center: Inventory 'Belt' (Wrapped in labeled panel) -->
+        <div v-if="sheet?.inventory?.length > 0" class="flex-grow flex justify-center items-center relative z-10 animate-fade-in px-4">
+          <div class="relative bg-slate-900/30 border border-slate-700/30 rounded-2xl px-5 py-3 backdrop-blur-md shadow-2xl flex flex-col items-center max-w-full">
+            <!-- Panel Label -->
+            <div class="absolute -top-2 left-4 px-2 py-0.5 bg-slate-800 border border-slate-700 rounded-md flex items-center gap-1.5 shadow-lg">
+              <i class="ra ra-pouch text-[9px] text-emerald-500"></i>
+              <span class="text-[8px] font-black text-emerald-400 uppercase tracking-[0.2em]">Inventory</span>
+            </div>
+            
+            <!-- Items scrollable area -->
+            <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar w-full py-1">
+              <div 
+                v-for="(item, idx) in sheet.inventory" 
+                :key="idx" 
+                class="flex items-center gap-2 bg-slate-950/40 border border-slate-800/40 rounded-xl pl-1 pr-3 py-1 group cursor-pointer transition-all hover:border-emerald-500/50 hover:bg-slate-900/60 active:scale-95 shrink-0"
+                @click="chatWindow?.appendText(item.name)"
+                @mouseenter="handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, $event)"
+                @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+                @mouseleave="hoveredEntity = null"
+              >
+                <div v-if="item.image_url" class="relative w-6 h-6 rounded-lg overflow-hidden border border-slate-800/50 shrink-0">
+                  <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
+                </div>
+                <div v-else class="w-6 h-6 rounded-lg border border-slate-800/50 bg-slate-900/50 flex items-center justify-center shrink-0">
+                  <i :class="['ra text-xs', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
+                </div>
+                <span class="text-[8px] font-black text-slate-100 uppercase tracking-wide group-hover:text-emerald-400 transition-colors truncate max-w-[60px]">{{ item.name }}</span>
+              </div>
+            </div>
           </div>
-          <span class="clock-date text-xs font-semibold tracking-widest text-amber-600 mt-0.5 uppercase">
-            {{ gameTime.date }}
-          </span>
-        </template>
-        <template v-else>
-          <span class="clock-time text-2xl font-bold text-slate-600 tracking-widest opacity-40">--:--</span>
-          <span class="clock-date text-xs text-slate-700 mt-0.5 tracking-wider uppercase opacity-40">--.--.----</span>
-        </template>
-      </div>
+        </div>
 
-      <!-- Right: action buttons -->
-      <div class="flex items-center gap-2">
-        <!-- Map Button -->
-        <button
-          class="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 text-sm font-medium transition-colors"
-          :class="{ 'border-emerald-500/50 text-emerald-400': mermaidData }"
-          @click="showMap = true"
-          title="Open World Map (/map)"
-        >
-          <i class="ra ra-map text-base" :class="mermaidData ? 'text-emerald-500' : 'text-slate-400'"></i>
-          <span class="hidden sm:inline">World Map</span>
-        </button>
+        <!-- Right Actions: Clock + Buttons -->
+        <div class="flex items-center gap-4 relative z-10 shrink-0">
+          <div class="hidden sm:flex flex-col items-end select-none game-clock mr-2" :class="{ 'clock-tick': clockTick }">
+            <template v-if="gameTime">
+              <div class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-500/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="clock-time text-xl font-black text-amber-300 tracking-widest leading-none">
+                  {{ gameTime.time }}
+                </span>
+              </div>
+            </template>
+          </div>
 
-        <!-- Character Sheet Button -->
-        <button
-          class="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 text-sm font-medium transition-colors"
-          @click="showSheet = true"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
-          </svg>
-          <span class="hidden sm:inline">Character</span>
-        </button>
+          <div class="flex items-center gap-2">
+            <button
+              class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700 border border-slate-700/50 rounded-lg text-slate-300 text-xs font-medium transition-colors backdrop-blur-sm shadow-md"
+              @click="showMap = true"
+            >
+              <i class="ra ra-map text-sm" :class="mermaidData ? 'text-emerald-500' : 'text-slate-400'"></i>
+              <span class="hidden xl:inline">Map</span>
+            </button>
 
-        <!-- Auto-Visualize Toggle -->
-        <div 
-          class="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer transition-all hover:bg-slate-700"
-          :class="{ 'border-cyan-500/50': autoVisualize }"
-          @click="autoVisualize = !autoVisualize"
-          title="Toggle Auto-Visualize (Advanced Image Gen)"
-        >
-          <i class="ra ra-camera-shot text-base" :class="autoVisualize ? 'text-cyan-400' : 'text-slate-500'"></i>
-          <span class="hidden lg:inline text-xs font-bold uppercase tracking-tighter" :class="autoVisualize ? 'text-cyan-400' : 'text-slate-500'">Visuals</span>
-          <div :class="['w-6 h-3 rounded-full relative transition-colors duration-300', autoVisualize ? 'bg-cyan-600' : 'bg-slate-900']">
-            <div :class="['absolute top-0.5 w-2 h-2 bg-white rounded-full transition-all duration-300', autoVisualize ? 'left-3.5' : 'left-0.5']"></div>
+            <button
+              class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700 border border-slate-700/50 rounded-lg text-slate-300 text-xs font-medium transition-colors backdrop-blur-sm shadow-md"
+              @click="showSheet = true"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+              </svg>
+              <span class="hidden xl:inline">Char</span>
+            </button>
+
+            <div 
+              class="flex items-center gap-2 px-2 py-1.5 bg-slate-800/60 border border-slate-700/50 rounded-lg cursor-pointer transition-all hover:bg-slate-700 backdrop-blur-sm shadow-md"
+              :class="{ 'border-cyan-500/50': autoVisualize }"
+              @click="autoVisualize = !autoVisualize"
+            >
+              <i class="ra ra-camera-shot text-sm" :class="autoVisualize ? 'text-cyan-400' : 'text-slate-500'"></i>
+              <span class="hidden 2xl:inline text-[10px] font-bold uppercase tracking-tighter" :class="autoVisualize ? 'text-cyan-400' : 'text-slate-500'">Vis</span>
+              <div :class="['w-5 h-2.5 rounded-full relative transition-colors duration-300', autoVisualize ? 'bg-cyan-600' : 'bg-slate-900']">
+                <div :class="['absolute top-0.5 w-1.5 h-1.5 bg-white rounded-full transition-all duration-300', autoVisualize ? 'left-3' : 'left-0.5']"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </header>
 
-    <div class="flex-grow flex overflow-hidden">
+
+    <div class="flex-grow flex overflow-hidden relative">
+
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
-      <aside v-if="entities.length > 0 || (sheet && sheet.inventory && sheet.inventory.length > 0) || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900 border-r border-slate-800 flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar">
+      <aside v-if="entities.length > 0 || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar relative z-10 m-6 shadow-2xl">
         
         <!-- CURRENT SCENE SECTION -->
         <div class="mb-8">
@@ -239,7 +274,7 @@ onBeforeUnmount(() => {
             <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500/80">Location</h3>
           </div>
           <div 
-            class="relative group cursor-help overflow-hidden rounded-xl border border-slate-800 bg-slate-950 transition-all hover:border-indigo-500/50"
+            class="relative group cursor-help overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 transition-all hover:border-indigo-500/50"
             @mouseenter="handleHover({ 
               name: sheet?.current_scene || 'Current Scene', 
               description: nodes[sheet?.scene_id || '']?.description || 'The current location of your adventure.' 
@@ -276,7 +311,7 @@ onBeforeUnmount(() => {
             <div 
               v-for="ent in npcs" 
               :key="ent.id" 
-              class="relative bg-slate-950 border border-slate-800 rounded-xl group cursor-help transition-all hover:border-cyan-500/40 hover:bg-slate-900/50 p-2 flex flex-col items-center"
+              class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group cursor-help transition-all hover:border-cyan-500/40 hover:bg-slate-900/50 p-2 flex flex-col items-center shadow-lg"
               @mouseenter="handleHover(ent, $event)"
               @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
               @mouseleave="hoveredEntity = null"
@@ -288,7 +323,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- NPC Portrait (64x64) -->
-              <div class="w-16 h-16 rounded-lg overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
+              <div class="w-16 h-16 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
                 <img 
                   v-if="ent.image_url && showImage(ent.image_url)" 
                   :src="getImageUrl(ent.image_url)" 
@@ -318,52 +353,23 @@ onBeforeUnmount(() => {
             <div 
               v-for="ent in items" 
               :key="ent.id" 
-              class="p-3 bg-slate-950 border border-slate-800 rounded-xl group cursor-help transition-all hover:border-amber-500/40 hover:bg-slate-900/50"
+              class="p-3 bg-slate-950/40 border border-slate-800/40 rounded-2xl group cursor-help transition-all hover:border-amber-500/40 hover:bg-slate-900/50 shadow-lg"
               @mouseenter="handleHover(ent, $event)"
               @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
               @mouseleave="hoveredEntity = null"
             >
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2 overflow-hidden">
-                  <div v-if="ent.image_url && showImage(ent.image_url)" class="relative w-6 h-6 rounded overflow-hidden border border-slate-800 shrink-0">
+                  <div v-if="ent.image_url && showImage(ent.image_url)" class="relative w-6 h-6 rounded-lg overflow-hidden border border-slate-800 shrink-0">
                     <img :src="getImageUrl(ent.image_url)" class="w-full h-full object-cover" @error="handleImageError(ent.image_url)" />
                   </div>
-                  <div v-else class="w-6 h-6 rounded border border-slate-800/50 bg-slate-900/50 flex items-center justify-center shrink-0">
+                  <div v-else class="w-6 h-6 rounded-lg border border-slate-800/50 bg-slate-900/50 flex items-center justify-center shrink-0">
                     <i :class="['ra text-[10px]', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
                   </div>
                   <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate">{{ ent.name }}</span>
                 </div>
                 <i class="ra ra-gem text-[10px] text-slate-800"></i>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- PLAYER INVENTORY SECTION -->
-        <div v-if="sheet?.inventory?.length > 0" class="mt-8 border-t border-slate-800/50 pt-8">
-          <div class="flex items-center justify-between gap-2 mb-4">
-            <div class="flex items-center gap-2">
-              <i class="ra ra-pouch text-emerald-500"></i>
-              <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500/80">Inventory</h3>
-            </div>
-          </div>
-          <div class="grid grid-cols-3 gap-2">
-            <div 
-              v-for="(item, idx) in sheet.inventory" 
-              :key="idx" 
-              class="aspect-square bg-slate-950/60 border border-slate-800/50 rounded-xl flex flex-col items-center justify-center p-2 group cursor-pointer transition-all hover:border-emerald-500/50 hover:bg-slate-900 active:scale-95"
-              @click="chatWindow?.appendText(item.name)"
-              @mouseenter="handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, $event)"
-              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
-              @mouseleave="hoveredEntity = null"
-            >
-              <div v-if="item.image_url" class="relative w-8 h-8 rounded-md overflow-hidden border border-slate-800 mb-1 shrink-0">
-                <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
-              </div>
-              <div v-else class="w-8 h-8 mb-1 rounded border border-slate-800/50 bg-slate-900/50 flex items-center justify-center shrink-0">
-                <i :class="['ra text-xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
-              </div>
-              <span class="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 transition-colors uppercase tracking-tight truncate w-full text-center px-1">{{ item.name }}</span>
             </div>
           </div>
         </div>
@@ -447,6 +453,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Acme&display=swap');
 @font-face {
   font-family: 'OrbitronClock';
   src: url('@/assets/fonts/Orbitron-VariableFont_wght.ttf') format('truetype');

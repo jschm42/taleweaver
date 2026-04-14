@@ -277,6 +277,7 @@ class ChatResponse(BaseModel):
     discovered_item_ids: List[str] = []
     game_over: bool = False
     game_over_reason: Optional[str] = None
+    adventure_image: Optional[str] = None
 
 class ChatRequest(BaseModel):
     content: str
@@ -451,6 +452,24 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     in_game_time=0
                 ))
             
+            # 2.5 Generate Cinematic Cover if requested
+            if payload_dict.get('automatic_cover_generation'):
+                adv_for_context.creation_status = "Generating Cinematic Cover..."
+                await db.commit()
+                try:
+                    cover_url = await MediaEngine.generate_adventure_cover(
+                        title=adv_for_context.title,
+                        context=adventure_context,
+                        adventure_id=adventure_id,
+                        user_config={"t2i_settings": user.t2i_settings},
+                        api_keys=user.encrypted_api_keys
+                    )
+                    if cover_url:
+                        adv_for_context.image_url = cover_url
+                        await db.commit()
+                except Exception as e:
+                    logger.error(f"Cover generation failed: {e}")
+
             # 3. Mark Ready
             adv = await db.get(Adventure, adventure_id)
             if adv:
@@ -1070,7 +1089,8 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
         "in_game_time": state.in_game_time,
         "start_datetime": start_datetime,
         "current_scene": current_scene.label if current_scene else state.scene_id,
-        "scene_id": state.scene_id
+        "scene_id": state.scene_id,
+        "adventure_title": adventure.title if adventure else "Unknown Adventure"
     }
 
 async def _enrich_map_nodes(adventure_id: str, nodes: dict, db: AsyncSession) -> dict:
@@ -1132,6 +1152,9 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
     av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
     avatar = av_res.scalars().first()
     
+    adv_res = await db.execute(select(Adventure).where(Adventure.id == state.adventure_id))
+    adventure = adv_res.scalars().first()
+    
     chat_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == game_id).order_by(ChatMessage.created_at.asc()))
     history = [{"role": m.role, "content": m.content} for m in chat_res.scalars().all()]
     
@@ -1153,7 +1176,8 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
         mermaid=mermaid_data,
         nodes=await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
         entities=entities,
-        npc_metadata=await _get_npc_metadata(state.adventure_id, db)
+        npc_metadata=await _get_npc_metadata(state.adventure_id, db),
+        adventure_image=adventure.image_url if adventure else None
     )
 
 @router.post("/{game_id}/chat", response_model=ChatResponse)
@@ -1182,7 +1206,8 @@ async def post_chat_message(
 
         return ChatResponse(
             messages=[{"role": "system", "content": "The game is currently paused."}],
-            sheet=await _build_sheet_snapshot(avatar, state, db) if avatar else {}
+            sheet=await _build_sheet_snapshot(avatar, state, db) if avatar else {},
+            adventure_image=getattr(adventure, 'image_url', None) if 'adventure' in locals() else None
         )
 
     av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
@@ -1621,7 +1646,8 @@ async def post_chat_message(
             entities=curr_entities,
             npc_metadata=await _get_npc_metadata(state.adventure_id, db),
             game_over=game_over,
-            game_over_reason=game_over_reason
+            game_over_reason=game_over_reason,
+            adventure_image=adventure.image_url if adventure else None
         )
 
     except Exception as e:
