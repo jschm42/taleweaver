@@ -17,7 +17,7 @@ export interface UseGameSocket {
   entities: Ref<any[]>
   status: Ref<ConnectionStatus>
   gameOverReason: Ref<string>
-  autoVisualize: Ref<bool>
+  autoVisualize: Ref<boolean>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>

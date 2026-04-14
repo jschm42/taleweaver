@@ -20,7 +20,6 @@ const router = useRouter()
 const showSheet = ref(false)
 const showMap = ref(false)
 const clockTick = ref(false)
-const isDebugVisuals = ref(false)
 
 const {
   sheet,
@@ -33,8 +32,7 @@ const {
   currentSceneImage,
   connect,
   disconnect,
-  sendMessage,
-  revealIllustration
+  sendMessage
 } = useGameSocket()
 
 // Tooltip & Hover State

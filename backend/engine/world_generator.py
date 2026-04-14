@@ -117,7 +117,9 @@ class WorldGenerator:
         # 2. Update Status
         if adventure:
             adventure.creation_status = "Building Scenes & Plot..."
-            adventure.original_manifest = manifesto.model_dump()
+            # Keep imported/source manifest intact for reproducible resets.
+            if not adventure.original_manifest:
+                adventure.original_manifest = manifesto.model_dump()
             await db.commit()
             
         await WorldGenerator.apply_manifest(

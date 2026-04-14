@@ -218,3 +218,85 @@ async def test_pause_and_resume_game(client: AsyncClient):
 
     state = (await client.get(f"/api/adventures/{adv_id}/state")).json()
     assert state["is_paused"] is False
+
+
+# ---------------------------------------------------------------------------
+# POST /api/adventures/import
+# ---------------------------------------------------------------------------
+
+async def test_import_adv_payload_maps_protagonist_and_manifest(client: AsyncClient):
+    """Importing an ADV payload maps protagonist fields and persists original_manifest."""
+    payload = {
+        "version": "1.0",
+        "title": "Imported Quest",
+        "story_idea": "A direct import test.",
+        "protagonist": {
+            "name": "Aria",
+            "role": "Scout",
+            "description": "A keen-eyed trailblazer.",
+        },
+        "pacing": {
+            "scene_length": "short",
+            "event_frequency": "high",
+            "notes": "Fast pace",
+        },
+        "generate_npc_images": True,
+        "generate_item_images": True,
+        "automatic_cover_generation": True,
+    }
+
+    import_resp = await client.post("/api/adventures/import", json=payload)
+    assert import_resp.status_code == 201, import_resp.text
+    ids = import_resp.json()
+
+    debug_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/debug")
+    assert debug_resp.status_code == 200
+    debug_data = debug_resp.json()
+
+    original_manifest = debug_data["adventure"]["original_manifest"]
+    assert original_manifest["title"] == "Imported Quest"
+    assert original_manifest["pacing"]["scene_length"] == "short"
+    assert original_manifest["generate_npc_images"] is True
+    assert original_manifest["generate_item_images"] is True
+    assert original_manifest["automatic_cover_generation"] is True
+
+    session_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/export/session")
+    assert session_resp.status_code == 200
+    session_data = session_resp.json()
+    assert session_data["avatar"]["name"] == "Aria"
+    assert session_data["avatar"]["role"] == "Scout"
+    assert session_data["avatar"]["description"] == "A keen-eyed trailblazer."
+
+
+# ---------------------------------------------------------------------------
+# POST /api/adventures/import/session-bundle
+# ---------------------------------------------------------------------------
+
+async def test_import_session_bundle_uses_split_route(client: AsyncClient):
+    """Session bundle imports use the dedicated split route and return SESSION type."""
+    payload = {
+        "version": "1.0",
+        "type": "SESSION_BUNDLE",
+        "adventure": {
+            "title": "Bundle Quest",
+            "context": "Restored context",
+            "image_url": None,
+            "strict_rules": True,
+            "time_per_turn": 5,
+            "game_over_rules": None,
+            "original_manifest": {"version": "1.0", "title": "Bundle Quest"},
+        },
+        "scenes": [],
+        "exits": [],
+        "entities": [],
+        "game_state": None,
+        "avatar": None,
+        "chat_history": [],
+    }
+
+    resp = await client.post("/api/adventures/import/session-bundle", json=payload)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "imported"
+    assert data["type"] == "SESSION"
+    assert data["adventure_id"]

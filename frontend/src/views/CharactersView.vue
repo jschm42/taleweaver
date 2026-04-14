@@ -12,6 +12,7 @@ interface Character {
 
 const characters = ref<Character[]>([])
 const isLoading = ref(true)
+const importInput = ref<HTMLInputElement | null>(null)
 
 const fetchCharacters = async () => {
   try {
@@ -119,7 +120,7 @@ onMounted(() => {
       </button>
       <div class="relative">
         <button 
-          @click="$refs.importInput.click()"
+          @click="importInput?.click()"
           class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-all flex items-center gap-2"
         >
           <i class="ra ra-save text-lg"></i>
@@ -127,7 +128,7 @@ onMounted(() => {
         </button>
         <input 
           type="file" 
-          ref="importInput" 
+          ref="importInput"
           class="hidden" 
           accept=".json"
           @change="importCharacter"

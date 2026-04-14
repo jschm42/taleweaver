@@ -4,7 +4,7 @@
  * All methods throw on non-2xx responses so callers can handle errors
  * with a simple try/catch.
  */
-import type { CreateAdventurePayload, GameSession } from '@/types'
+import type { CreateAdventurePayload, GameSession, AdventureImportPayload } from '@/types'
 
 const BASE = '/api'
 
@@ -31,6 +31,11 @@ export const api = {
   /** Creates a new adventure and returns the generated IDs. */
   createAdventure(payload: CreateAdventurePayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
     return request('/adventures', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  /** Import an adventure JSON payload (parsed .adv) and open creation flow on the server. */
+  importAdventure(payload: AdventureImportPayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
+    return request('/adventures/import', { method: 'POST', body: JSON.stringify(payload) })
   },
 
   /** Deletes an adventure by its ID. */

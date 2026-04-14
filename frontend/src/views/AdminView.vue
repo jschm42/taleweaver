@@ -196,7 +196,7 @@ onMounted(() => {
             <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Configured Vaults</h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div v-if="Object.keys(configuredKeys).length === 0" class="col-span-2 text-slate-600 italic py-4 text-center border border-dashed border-slate-800 rounded-xl">No keys secured yet.</div>
-              <div v-for="(val, provider) in configuredKeys" :key="provider" class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-xl">
+              <div v-for="(_, provider) in configuredKeys" :key="provider" class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-xl">
                  <span class="capitalize font-bold text-slate-300">{{ provider }}</span>
                  <span class="text-emerald-500 text-[10px] font-mono font-black tracking-widest bg-emerald-500/10 px-2 py-1 rounded">SECURED</span>
               </div>

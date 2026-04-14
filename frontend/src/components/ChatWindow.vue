@@ -29,6 +29,7 @@ watch(
 const isConnected = computed(() => props.status === 'connected')
 const statusLabel = computed(() => {
   const map: Record<ConnectionStatus, string> = {
+    loading: 'Loading…',
     disconnected: 'Disconnected',
     connecting: 'Connecting…',
     connected: 'Connected',
@@ -39,6 +40,7 @@ const statusLabel = computed(() => {
 })
 const statusColor = computed(() => {
   const map: Record<ConnectionStatus, string> = {
+    loading: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
     disconnected: 'text-slate-500 bg-slate-500/10 border-slate-500/20',
     connecting: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
     connected: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',

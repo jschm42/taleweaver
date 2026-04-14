@@ -16,6 +16,7 @@ from backend.models.world_map import WorldMap
 from backend.schemas.adventure import AdventureUpdate, AdventureDebugResponse
 from backend.schemas.avatar import AvatarUpdate
 from backend.schemas.game_state import GameStateUpdate
+from backend.schemas.adventure_import import AdventureImportPayload
 from backend.engine.world_generator import WorldGenerator
 from backend.engine.command_parser import CommandParser
 from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException
@@ -47,6 +48,10 @@ class CreateAdventurePayload(BaseModel):
     heartbeat_enabled: Optional[bool] = False
     heartbeat_interval: Optional[int] = None
     game_over_rules: Optional[Dict[str, Any]] = None
+    # Advanced/import fields
+    original_manifest: Optional[Dict[str, Any]] = None
+    automatic_cover_generation: Optional[bool] = False
+    pacing: Optional[Dict[str, Any]] = None
 
 
 class AdventureResponse(BaseModel):
@@ -160,8 +165,15 @@ async def create_adventure(
     ))
     await db.commit()
 
-    # Dispatch generation
-    background_tasks.add_task(run_background_generation, adv.id, user.id, payload.model_dump())
+    # Store original_manifest if provided and dispatch generation with payload
+    if getattr(payload, 'original_manifest', None):
+        adv.original_manifest = payload.original_manifest
+
+    await db.commit()
+
+    # Prepare payload for background generation; include original_manifest if present
+    bg_payload = payload.model_dump()
+    background_tasks.add_task(run_background_generation, adv.id, user.id, bg_payload)
     
     # Return IDs expected by existing clients/tests
     return {"game_id": adv.id, "adventure_id": adv.id, "avatar_id": avatar.id}
@@ -187,12 +199,18 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             preferred_provider = llm_settings.get("preferred_provider", "openai")
             
             # 1. World Gen
+            adventure_context = payload_dict.get('context')
+            if not adventure_context:
+                adv_for_context = await db.get(Adventure, adventure_id)
+                manifest = (adv_for_context.original_manifest or {}) if adv_for_context else {}
+                adventure_context = manifest.get('story_idea') or manifest.get('description') or "A standard fantasy world."
+
             await WorldGenerator.generate_world(
                 db=db, 
                 user=user, 
                 adventure_id=adventure_id, 
                 title=payload_dict['title'], 
-                context=payload_dict.get('context') or "A standard fantasy world.",
+                context=adventure_context,
                 model=complex_model,
                 provider=preferred_provider,
                 generate_npc_images=payload_dict.get('generate_npc_images', False),
@@ -287,6 +305,91 @@ async def get_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)) -
     if not adv:
         raise HTTPException(status_code=404, detail="Adventure not found.")
     return adv
+
+
+@router.post("/import", status_code=201)
+async def import_adventure(
+    payload: AdventureImportPayload,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Import an adventure manifest (versioned .ADV JSON). Opens an adventure scaffold and starts background generation."""
+    result = await db.execute(select(User).limit(1))
+    user = result.scalars().first()
+    if not user:
+        user = User(username="local_default_user")
+        db.add(user)
+        await db.flush()
+
+    adv_kwargs = dict(
+        title=payload.title,
+        image_url=None,
+        context=payload.story_idea or payload.description or payload.subtitle,
+        strict_rules=True,
+        time_per_turn=5,
+        game_over_rules=None,
+        is_ready=False,
+        creation_status="Importing Manifest...",
+        heartbeat_enabled=False,
+        original_manifest=payload.model_dump()
+    )
+
+    if payload.id:
+        adv_kwargs["id"] = payload.id
+
+    adv = Adventure(**adv_kwargs)
+    db.add(adv)
+    await db.flush()
+
+    avatar_name = None
+    if payload.protagonist and payload.protagonist.name:
+        avatar_name = payload.protagonist.name
+    avatar_name = avatar_name or "You"
+
+    avatar = Avatar(
+        user_id=user.id,
+        adventure_id=adv.id,
+        name=avatar_name,
+        role=(payload.protagonist.role if payload.protagonist else None),
+        description=(payload.protagonist.description if payload.protagonist else None),
+        hp=200,
+        stamina=200,
+        mana=200,
+        stats={},
+        inventory=[],
+        equipment={
+            "Head": None, "Chest": None, "Arms": None, "Legs": None,
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
+        },
+        status_effects=[],
+    )
+    db.add(avatar)
+    await db.commit()
+
+    db.add(GameState(
+        id=adv.id,
+        user_id=user.id,
+        adventure_id=adv.id,
+        avatar_id=avatar.id,
+        scene_id="START",
+        in_game_time=0
+    ))
+    await db.commit()
+
+    # Prepare minimal payload for background gen; world generator will read original_manifest from DB if needed
+    payload_dict = {
+        "title": payload.title,
+        "context": adv.context or "A standard adventure.",
+        "generate_npc_images": payload.generate_npc_images,
+        "generate_item_images": payload.generate_item_images,
+        "automatic_cover_generation": payload.automatic_cover_generation,
+        "pacing": payload.pacing.model_dump() if payload.pacing else None,
+        "original_manifest": payload.model_dump(),
+    }
+
+    background_tasks.add_task(run_background_generation, adv.id, user.id, payload_dict)
+
+    return {"game_id": adv.id, "adventure_id": adv.id, "avatar_id": avatar.id}
 
 
 @router.patch("/{adventure_id}", response_model=AdventureResponse)
@@ -546,8 +649,8 @@ async def export_adventure_session(adventure_id: str, db: AsyncSession = Depends
         "chat_history": [{c.name: getattr(msg, c.name) for c in msg.__table__.columns} for msg in chat_logs]
     }
 
-@router.post("/import")
-async def import_adventure(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
+@router.post("/import/session-bundle")
+async def import_adventure_session_bundle(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
     """
     Imports an adventure from JSON.
     Supports either a Raw Manifest or a Full Session Bundle.
@@ -814,10 +917,10 @@ async def post_chat_message(
     # --- Slash-command fast path ---
     if user_msg.startswith("/"):
         if user_msg.strip().lower() == "/map":
-             map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
-             world_map = map_res.scalars().first()
-             mermaid_data = MapEngine.to_mermaid(world_map) if world_map else None
-             return ChatResponse(messages=[], sheet=_build_sheet_snapshot(avatar, state), mermaid=mermaid_data)
+            map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
+            world_map = map_res.scalars().first()
+            mermaid_data = MapEngine.to_mermaid(world_map) if world_map else None
+            return ChatResponse(messages=[], sheet=await _build_sheet_snapshot(avatar, state, db), mermaid=mermaid_data)
         
         response = CommandParser.parse_command(avatar, user_msg)
         
@@ -1062,5 +1165,5 @@ async def post_chat_message(
         logger.exception("Chat processing error")
         return ChatResponse(
             messages=[{"role": "system", "content": "The Game Master is momentarily unavailable. Please try again."}],
-            sheet=_build_sheet_snapshot(avatar, state) if 'avatar' in locals() else {}
+            sheet=await _build_sheet_snapshot(avatar, state, db) if 'avatar' in locals() else {}
         )

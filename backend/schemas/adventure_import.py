@@ -1,0 +1,61 @@
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any, Literal
+
+
+class Pacing(BaseModel):
+    scene_length: Optional[Literal["short", "normal", "long"]] = Field(None, description="short|normal|long")
+    event_frequency: Optional[Literal["low", "normal", "high"]] = Field(None, description="low|normal|high")
+    notes: Optional[str] = None
+
+
+class Protagonist(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    description: Optional[str] = None
+    image_hint: Optional[str] = None
+
+
+class CharacterSpec(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    role: Optional[str] = None
+    description: Optional[str] = None
+    is_npc: Optional[bool] = True
+    image_hint: Optional[str] = None
+
+
+class SceneSpec(BaseModel):
+    id: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    is_hidden: Optional[bool] = False
+
+
+class ItemSpec(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    type: Optional[str] = None
+    description: Optional[str] = None
+    properties: Optional[Dict[str, Any]] = None
+
+
+class AdventureImportPayload(BaseModel):
+    version: str = Field(..., description="Import format version, e.g. '1.0'")
+    id: Optional[str] = None
+    title: str
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    story_idea: Optional[str] = None
+    tone: Optional[str] = None
+    image_style: Optional[str] = None
+    pacing: Optional[Pacing] = None
+    protagonist: Optional[Protagonist] = None
+    characters: Optional[List[CharacterSpec]] = None
+    scenes: Optional[List[SceneSpec]] = None
+    items: Optional[List[ItemSpec]] = None
+    objects: Optional[List[ItemSpec]] = None
+    quests: Optional[List[Dict[str, Any]]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    generate_npc_images: bool = False
+    generate_item_images: bool = False
+    automatic_cover_generation: bool = False

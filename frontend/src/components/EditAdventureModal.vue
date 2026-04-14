@@ -1,9 +1,5 @@
 <script setup lang="ts">
-/**
- * EditAdventureModal — Dedicated modal for editing adventure settings.
- * Includes a "Debug Panel" showing the raw JSON configuration.
- */
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps<{
   open: boolean
@@ -16,247 +12,208 @@ const emit = defineEmits<{
 }>()
 
 const adventure = ref<any>(null)
+const debugData = ref<any>(null)
 const isLoading = ref(false)
 const isSaving = ref(false)
 const errorMsg = ref('')
 const showDebug = ref(false)
-const debugData = ref<any>(null)
 const activeTab = ref<'settings' | 'visuals' | 'advanced'>('settings')
 
 const form = ref({
   title: '',
   context: '',
   strict_rules: true,
-  time_per_turn: 5
+  time_per_turn: 5,
 })
 
-const fetchAdventure = async () => {
-  if (!props.adventureId) return
+async function fetchAdventure() {
+  if (!props.adventureId) {
+    return
+  }
   isLoading.value = true
   errorMsg.value = ''
   try {
     const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`)
-    if (res.ok) {
-      const data = await res.json()
-      adventure.value = data
-      form.value = {
-        title: data.title,
-        context: data.context || '',
-        strict_rules: data.strict_rules,
-        time_per_turn: data.time_per_turn || 5
-      }
-    } else {
-      errorMsg.value = "Failed to load adventure configuration."
+    if (!res.ok) {
+      throw new Error('Failed to load adventure configuration.')
     }
-  } catch (err) {
-    errorMsg.value = "Network error loading adventure."
+    const data = await res.json()
+    adventure.value = data
+    form.value.title = data.title
+    form.value.context = data.context || ''
+    form.value.strict_rules = data.strict_rules
+    form.value.time_per_turn = data.time_per_turn || 5
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
     isLoading.value = false
   }
 }
 
-const fetchDebugInfo = async () => {
-  if (!props.adventureId) return
+async function fetchDebugInfo() {
+  if (!props.adventureId) {
+    return
+  }
   try {
     const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/debug`)
     if (res.ok) {
       debugData.value = await res.json()
     }
-  } catch (err) {
-    console.error("Failed to fetch debug info:", err)
+  } catch (error) {
+    console.error('Failed to fetch debug info:', error)
   }
 }
 
-const saveChanges = async () => {
-  if (!props.adventureId) return
+async function saveChanges() {
+  if (!props.adventureId) {
+    return
+  }
   isSaving.value = true
   errorMsg.value = ''
   try {
     const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form.value)
+      body: JSON.stringify(form.value),
     })
-    if (res.ok) {
-      emit('updated')
-      emit('close')
-    } else {
-      errorMsg.value = "Failed to save changes."
+
+    if (!res.ok) {
+      throw new Error('Failed to save changes.')
     }
-  } catch (err) {
-    errorMsg.value = "Network error while saving."
+
+    emit('updated')
+    emit('close')
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Network error while saving.'
   } finally {
     isSaving.value = false
   }
 }
 
-const resetAdventure = async () => {
-  if (!props.adventureId) return
-  if (!confirm("Are you sure? This will wipe ALL current progress and restore the world to its original state.")) return
-  
+async function resetAdventure() {
+  if (!props.adventureId) {
+    return
+  }
+  if (!confirm('Are you sure? This will wipe all progress and restore the original world.')) {
+    return
+  }
+
   isSaving.value = true
   try {
     const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/reset`, {
-      method: 'POST'
+      method: 'POST',
     })
-    if (res.ok) {
-      await fetchAdventure()
-      await fetchDebugInfo()
-      emit('updated')
-      alert("World has been reset to the golden manifest.")
-    } else {
-      errorMsg.value = "Failed to reset adventure."
+    if (!res.ok) {
+      throw new Error('Failed to reset adventure.')
     }
-  } catch (err) {
-    errorMsg.value = "Network error during reset."
+
+    await fetchAdventure()
+    await fetchDebugInfo()
+    emit('updated')
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Network error during reset.'
   } finally {
     isSaving.value = false
   }
 }
 
-const removeAdventure = async () => {
-  if (!props.adventureId) return
-  if (!confirm("Are you sure? This delete the entire adventure and all its data FOREVER.")) return
-  
+async function removeAdventure() {
+  if (!props.adventureId) {
+    return
+  }
+  if (!confirm('Are you sure? This deletes the entire adventure permanently.')) {
+    return
+  }
+
   isSaving.value = true
   try {
     const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
     })
-    if (res.ok) {
-      alert("Adventure deleted.")
-      emit('updated')
-      emit('close')
-    } else {
-      errorMsg.value = "Failed to delete adventure."
+    if (!res.ok) {
+      throw new Error('Failed to delete adventure.')
     }
-  } catch (err) {
-    errorMsg.value = "Network error during deletion."
+
+    emit('updated')
+    emit('close')
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Network error during deletion.'
   } finally {
     isSaving.value = false
   }
 }
 
-const exportBlueprint = async () => {
-  if (!props.adventureId) return
-  try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/manifest`)
-    if (res.ok) {
-      const data = await res.json()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `blueprint_${adventure.value.title.replace(/\s+/g, '_')}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-    }
-  } catch (err) {
-    console.error("Blueprint export failed", err)
+async function exportBlueprint() {
+  if (!props.adventureId) {
+    return
   }
+  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/manifest`)
+  if (!res.ok) {
+    return
+  }
+  const data = await res.json()
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `blueprint_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.json`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
-const exportSession = async () => {
-  if (!props.adventureId) return
-  try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/session`)
-    if (res.ok) {
-      const data = await res.json()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `session_${adventure.value.title.replace(/\s+/g, '_')}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-    }
-  } catch (err) {
-    console.error("Session backup failed", err)
+async function exportSession() {
+  if (!props.adventureId) {
+    return
   }
+  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/session`)
+  if (!res.ok) {
+    return
+  }
+  const data = await res.json()
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `session_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.json`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
-const importAdventure = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  if (!target.files || target.files.length === 0) return
-  
-  const file = target.files[0]
-  try {
-    const text = await file.text()
-    const payload = JSON.parse(text)
-    
-    isSaving.value = true
-    const res = await fetch('http://localhost:8000/api/adventures/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    
-    if (res.ok) {
-      alert("Adventure imported successfully!")
-      emit('updated')
-      emit('close')
-    } else {
-      alert("Failed to import adventure.")
+watch(
+  () => props.open,
+  async (isOpen) => {
+    if (!isOpen) {
+      return
     }
-  } catch (err) {
-    alert("Error reading file.")
-  } finally {
-    isSaving.value = false
-    target.value = ''
-  }
-}
-
-watch(() => props.open, (isOpen) => {
-  if (isOpen) {
-    fetchAdventure()
-    fetchDebugInfo() // Always fetch for the visuals tab
-    showDebug.value = false
     activeTab.value = 'settings'
+    showDebug.value = false
+    await fetchAdventure()
+    await fetchDebugInfo()
   }
-})
+)
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="fade">
       <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <!-- Backdrop -->
         <div class="absolute inset-0 bg-black/80 backdrop-blur-md" @click="emit('close')" />
 
-        <!-- Modal Content -->
-        <div class="relative z-10 w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-modal-in">
-          
-          <!-- Header -->
+        <div class="relative z-10 w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
           <div class="px-8 py-6 border-b border-slate-800 flex justify-between items-center">
             <div>
               <h2 class="text-2xl font-bold text-white flex items-center gap-3">
                 <i class="ra ra-gear-hammer text-emerald-500"></i>
-               Adventure Settings
+                Adventure Settings
               </h2>
-              <p class="text-xs text-slate-400 mt-1">Configure your chronicle and mechanical rules.</p>
+              <p class="text-xs text-slate-400 mt-1">Configure mechanics and inspect runtime/debug state.</p>
             </div>
-            <div class="flex items-center gap-3">
-              <button 
-                @click="$refs.advImportInput.click()"
-                class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all border border-slate-700 flex items-center gap-2"
-              >
-                <i class="ra ra-save"></i>
-                Import
-              </button>
-              <input type="file" ref="advImportInput" class="hidden" accept=".json" @change="importAdventure" />
-              
-              <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors p-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+            <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors p-2">X</button>
           </div>
 
-          <!-- Tab Navigation -->
           <div class="flex px-8 border-b border-slate-800 bg-slate-950/30">
-            <button 
-              v-for="tab in ['settings', 'visuals', 'advanced']" 
+            <button
+              v-for="tab in ['settings', 'visuals', 'advanced']"
               :key="tab"
               @click="activeTab = tab as any"
               :class="[
@@ -268,7 +225,6 @@ watch(() => props.open, (isOpen) => {
             </button>
           </div>
 
-          <!-- Body -->
           <div class="flex-grow overflow-y-auto p-8 custom-scrollbar">
             <div v-if="isLoading" class="flex justify-center py-12">
               <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-emerald-500"></div>
@@ -279,27 +235,16 @@ watch(() => props.open, (isOpen) => {
             </div>
 
             <div v-else-if="activeTab === 'settings' && adventure" class="space-y-6">
-              <!-- Title -->
               <div>
                 <label class="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">Chronicle Title</label>
-                <input 
-                  v-model="form.title"
-                  type="text"
-                  class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all"
-                />
+                <input v-model="form.title" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
               </div>
 
-              <!-- Context -->
               <div>
                 <label class="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">World Context / Idea</label>
-                <textarea 
-                  v-model="form.context"
-                  rows="4"
-                  class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all resize-none"
-                ></textarea>
+                <textarea v-model="form.context" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
               </div>
 
-              <!-- Time Pacing -->
               <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl">
                 <div class="flex items-center gap-3 mb-4">
                   <div class="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
@@ -310,16 +255,9 @@ watch(() => props.open, (isOpen) => {
                     <p class="text-[10px] text-slate-500">How many minutes pass per action?</p>
                   </div>
                 </div>
-                
+
                 <div class="flex items-center gap-6">
-                  <input 
-                    type="range" 
-                    v-model.number="form.time_per_turn" 
-                    min="1" 
-                    max="60" 
-                    step="1"
-                    class="flex-grow accent-emerald-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
-                  />
+                  <input type="range" v-model.number="form.time_per_turn" min="1" max="60" step="1" class="flex-grow accent-emerald-500" />
                   <div class="w-20 text-center">
                     <span class="text-xl font-bold text-emerald-500">{{ form.time_per_turn }}</span>
                     <span class="text-[10px] text-slate-500 block uppercase pt-0.5">Minutes</span>
@@ -328,209 +266,102 @@ watch(() => props.open, (isOpen) => {
               </div>
             </div>
 
-            <!-- VISUAL ASSETS TAB -->
             <div v-else-if="activeTab === 'visuals'" class="space-y-8">
-              <div v-if="!debugData" class="flex flex-col items-center py-12 gap-4">
-                <div class="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
-                <span class="text-xs text-slate-500 font-bold uppercase tracking-widest">Scanning World Manifest...</span>
-              </div>
-              
-              <div v-else class="space-y-12">
-                <!-- NPCs -->
+              <div v-if="!debugData" class="text-xs text-slate-500">No debug data available yet.</div>
+              <div v-else class="space-y-8">
                 <section>
                   <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Population Portraits</h3>
-                  <div v-if="debugData.npcs.length === 0" class="text-xs text-slate-600 italic">No inhabitant visuals generated for this world.</div>
+                  <div v-if="(debugData.npcs ? debugData.npcs.length : 0) === 0" class="text-xs text-slate-600 italic">No inhabitant visuals generated.</div>
                   <div class="grid grid-cols-2 gap-4">
-                    <div v-for="npc in debugData.npcs" :key="npc.id" class="relative group aspect-square bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden hover:border-cyan-500/30 transition-all">
-                      <img v-if="npc.image_url" :src="'http://localhost:8000' + npc.image_url" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700" />
-                      <div v-else class="absolute inset-0 flex items-center justify-center bg-slate-900">
-                        <i class="ra ra-pawn text-2xl text-slate-800"></i>
-                      </div>
-                      <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"></div>
-                      <div class="absolute bottom-0 left-0 right-0 p-3">
-                        <div class="text-[10px] font-bold text-white uppercase">{{ npc.name }}</div>
-                        <div class="text-[8px] text-cyan-400/80 font-mono">{{ npc.current_scene_id }}</div>
-                      </div>
+                    <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-square bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
+                      <img v-if="npc.image_url" :src="'http://localhost:8000' + npc.image_url" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-[10px] text-white">{{ npc.name }}</div>
                     </div>
                   </div>
                 </section>
 
-                <!-- Objects -->
                 <section>
                   <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Artifact Illustrations</h3>
-                  <div v-if="debugData.objects.length === 0" class="text-xs text-slate-600 italic">No object visuals generated for this world.</div>
+                  <div v-if="(debugData.objects ? debugData.objects.length : 0) === 0" class="text-xs text-slate-600 italic">No object visuals generated.</div>
                   <div class="grid grid-cols-2 gap-4">
-                    <div v-for="obj in debugData.objects" :key="obj.id" class="relative group aspect-square bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden hover:border-amber-500/30 transition-all">
-                      <img v-if="obj.image_url" :src="'http://localhost:8000' + obj.image_url" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700" />
-                      <div v-else class="absolute inset-0 flex items-center justify-center bg-slate-900">
-                        <i class="ra ra-locked-fortress text-2xl text-slate-800"></i>
-                      </div>
-                      <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"></div>
-                      <div class="absolute bottom-0 left-0 right-0 p-3">
-                        <div class="text-[10px] font-bold text-white uppercase">{{ obj.name }}</div>
-                        <div class="text-[8px] text-amber-400/80 font-mono">{{ obj.current_scene_id }}</div>
-                      </div>
+                    <div v-for="obj in (debugData.objects || [])" :key="obj.id" class="relative group aspect-square bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
+                      <img v-if="obj.image_url" :src="'http://localhost:8000' + obj.image_url" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-[10px] text-white">{{ obj.name }}</div>
                     </div>
                   </div>
                 </section>
               </div>
             </div>
 
-            <!-- ADVANCED TAB -->
             <div v-else-if="activeTab === 'advanced'" class="space-y-6">
-              <!-- Rules Toggle -->
-              <div 
-                class="p-4 rounded-xl border-2 cursor-pointer transition-all"
-                :class="form.strict_rules ? 'bg-emerald-500/5 border-emerald-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
-                @click="form.strict_rules = !form.strict_rules"
-              >
-                <div class="flex items-center gap-3 mb-1">
-                  <i class="ra ra-scales text-lg"></i>
-                  <span class="font-bold">Strict Rules</span>
+              <div class="p-4 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 grid grid-cols-2 gap-3">
+                <div>
+                  <span class="text-slate-500">Scenes:</span>
+                  <span class="ml-2 font-bold">{{ debugData?.scenes?.length || 0 }}</span>
                 </div>
-                <p class="text-[10px] leading-tight opacity-70">Enforces structured mechanics and character sheet impact via complexe LLM routing.</p>
-              </div>
-
-              <!-- Export Options -->
-              <div class="grid grid-cols-2 gap-4 border-t border-slate-800 pt-6">
-                <div 
-                  @click="exportBlueprint"
-                  class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition-all group"
-                >
-                  <div class="flex items-center gap-2 mb-1 text-emerald-400">
-                    <i class="ra ra-scroll-unfurled"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Blueprint</span>
-                  </div>
-                  <p class="text-[9px] text-slate-500">Export world manifest for fresh starts.</p>
+                <div>
+                  <span class="text-slate-500">NPCs:</span>
+                  <span class="ml-2 font-bold">{{ debugData?.npcs?.length || 0 }}</span>
                 </div>
-                
-                <div 
-                  @click="exportSession"
-                  class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 cursor-pointer transition-all group"
-                >
-                  <div class="flex items-center gap-2 mb-1 text-cyan-400">
-                    <i class="ra ra-save"></i>
-                    <span class="text-xs font-bold uppercase tracking-widest">Session</span>
-                  </div>
-                  <p class="text-[9px] text-slate-500">Backup full world state & chat history.</p>
+                <div>
+                  <span class="text-slate-500">Objects:</span>
+                  <span class="ml-2 font-bold">{{ debugData?.objects?.length || 0 }}</span>
+                </div>
+                <div>
+                  <span class="text-slate-500">Exits:</span>
+                  <span class="ml-2 font-bold">{{ debugData?.exits?.length || 0 }}</span>
                 </div>
               </div>
 
-              <!-- Reset Area -->
+              <div class="grid grid-cols-2 gap-4">
+                <button @click="exportBlueprint" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 text-left">
+                  <div class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Blueprint</div>
+                  <div class="text-[10px] text-slate-500 mt-1">Export world manifest.</div>
+                </button>
+                <button @click="exportSession" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 text-left">
+                  <div class="text-xs font-bold text-cyan-400 uppercase tracking-widest">Session</div>
+                  <div class="text-[10px] text-slate-500 mt-1">Export complete runtime session.</div>
+                </button>
+              </div>
+
               <div class="p-6 bg-red-500/5 border border-red-500/20 rounded-2xl">
                 <h3 class="text-sm font-bold text-red-500 uppercase tracking-wider mb-2">Danger Zone</h3>
-                <p class="text-[10px] text-slate-500 mb-4">Resetting will wipe all progress and restore the world to its original state.</p>
-                <button 
+                <p class="text-[10px] text-slate-500 mb-4">Reset restores the original manifest and clears progress.</p>
+                <button
                   @click="resetAdventure"
                   :disabled="isSaving"
-                  class="w-full px-4 py-3 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2"
+                  class="w-full px-4 py-3 border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all rounded-xl text-xs font-bold uppercase tracking-widest"
                 >
-                  <i class="ra ra-recycle"></i>
-                  Reset Adventure to Golden Manifest
+                  Reset Adventure
                 </button>
               </div>
 
-              <!-- Debug Panel -->
-              <div class="mt-8 border-t border-slate-800 pt-6">
-                <button 
-                  @click="() => { showDebug = !showDebug; if(showDebug) fetchDebugInfo(); }"
-                  class="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-emerald-400 transition-colors uppercase tracking-widest"
-                >
-                  <i class="ra ra-search"></i>
+              <div class="border-t border-slate-800 pt-4">
+                <button @click="showDebug = !showDebug" class="text-xs font-bold text-slate-500 hover:text-emerald-400 uppercase tracking-widest">
                   {{ showDebug ? 'Hide Debug Context' : 'Show Debug Context' }}
                 </button>
-                
-                <div v-if="showDebug" class="mt-4 space-y-4">
-                  <div v-if="!debugData" class="flex items-center gap-2 text-slate-400 text-xs py-4">
-                    <span class="w-4 h-4 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></span>
-                    Fetching detailed manifest...
-                  </div>
-                  
-                  <div v-else class="space-y-4">
-                    <!-- Basic Config -->
-                    <div class="bg-black/50 border border-slate-800 rounded-xl p-4 overflow-hidden">
-                      <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Adventure Configuration</h4>
-                      <pre class="text-[10px] font-mono text-emerald-500/80 leading-relaxed overflow-auto max-h-64 custom-scrollbar">{{ JSON.stringify(debugData.adventure, null, 2) }}</pre>
-                    </div>
-
-                    <!-- World Scenes -->
-                    <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
-                      <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Pre-generated Scenes ({{ debugData.scenes.length }})</h4>
-                      <div class="grid grid-cols-1 gap-2">
-                        <div v-for="scene in debugData.scenes" :key="scene.id" class="p-2 border border-slate-800 rounded bg-slate-900/50">
-                          <div class="text-[10px] font-bold text-emerald-400">{{ scene.label }}</div>
-                          <div class="text-[9px] text-slate-500 font-mono">{{ scene.id }}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- NPCs & Items -->
-                    <div class="grid grid-cols-2 gap-4">
-                      <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
-                        <div v-for="npc in debugData.npcs" :key="npc.id" class="text-[9px] text-slate-400 flex flex-col gap-2 p-2 bg-slate-900 border border-slate-700/50 rounded-lg">
-                          <div class="flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
-                            <span class="font-bold underline">{{ npc.name }}</span> ({{ npc.current_scene_id }})
-                          </div>
-                          <img v-if="npc.image_url" :src="'http://localhost:8000' + npc.image_url" class="w-full h-24 object-cover rounded-md border border-slate-700 shadow-inner" />
-                          <div v-if="npc.spatial_position" class="pl-1 text-slate-500 italic">{{ npc.spatial_position }}</div>
-                        </div>
-                      </div>
-                      <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
-                        <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Objects ({{ debugData.objects.length }})</h4>
-                        <div class="space-y-2">
-                          <div v-for="obj in debugData.objects" :key="obj.id" class="text-[9px] text-slate-400 flex flex-col gap-2 p-2 bg-slate-900 border border-slate-700/50 rounded-lg">
-                            <div class="flex items-center gap-2">
-                              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                              <span class="font-bold underline">{{ obj.name }}</span> ({{ obj.current_scene_id }})
-                            </div>
-                            <img v-if="obj.image_url" :src="'http://localhost:8000' + obj.image_url" class="w-full h-24 object-cover rounded-md border border-slate-700 shadow-inner" />
-                            <div v-if="obj.spatial_position" class="pl-1 text-slate-500 italic">{{ obj.spatial_position }}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Exits -->
-                    <div class="bg-black/50 border border-slate-800 rounded-xl p-4">
-                      <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">World Map Exits ({{ debugData.exits.length }})</h4>
-                      <div class="space-y-1">
-                        <div v-for="ex in debugData.exits" :key="ex.id" class="text-[9px] text-slate-400 flex justify-between">
-                          <span>{{ ex.from_scene_id }} → {{ ex.to_scene_id }}</span>
-                          <span :class="ex.is_locked ? 'text-red-500' : 'text-emerald-500'">{{ ex.is_locked ? '[LOCKED]' : '[OPEN]' }}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
+                <div v-if="showDebug" class="mt-4 bg-black/50 border border-slate-800 rounded-xl p-4">
+                  <pre class="text-[10px] font-mono text-emerald-500/80 leading-relaxed overflow-auto max-h-72 custom-scrollbar">{{ JSON.stringify(debugData, null, 2) }}</pre>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Footer -->
           <div class="p-8 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
-            <button 
+            <button
               @click="removeAdventure"
               :disabled="isSaving || isLoading"
-              class="px-4 py-2 border border-red-500/30 hover:border-red-500 text-red-500 hover:bg-red-500/10 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-30"
+              class="px-4 py-2 border border-red-500/30 hover:border-red-500 text-red-500 hover:bg-red-500/10 rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30"
             >
-              <i class="ra ra-trash-can"></i>
               Delete
             </button>
             <div class="flex gap-3">
-              <button 
-                @click="emit('close')"
-                class="px-6 py-2 rounded-xl text-slate-400 hover:bg-white/5 transition-colors font-medium border border-transparent hover:border-slate-700"
-              >
-                Cancel
-              </button>
-              <button 
+              <button @click="emit('close')" class="px-6 py-2 rounded-xl text-slate-400 hover:bg-white/5 transition-colors font-medium">Cancel</button>
+              <button
                 @click="saveChanges"
                 :disabled="isSaving || isLoading"
-                class="px-8 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
+                class="px-8 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl transition-all disabled:opacity-50"
               >
-                <span v-if="isSaving" class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
                 {{ isSaving ? 'Saving...' : 'Save Settings' }}
               </button>
             </div>
@@ -542,20 +373,25 @@ watch(() => props.open, (isOpen) => {
 </template>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-
-.animate-modal-in {
-  animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
 }
-
-@keyframes modalIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
-
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.2); border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.4); }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.2);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.4);
+}
 </style>

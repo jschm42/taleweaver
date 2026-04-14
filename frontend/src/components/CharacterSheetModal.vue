@@ -58,7 +58,7 @@ const getTypeColor = (type?: string) => {
 
 const brokenImages = ref<Record<string, boolean>>({})
 
-const getImageUrl = (path?: string) => {
+const getImageUrl = (path?: string | null) => {
   if (!path) return ''
   if (path.startsWith('http')) return path
   // In dev, the frontend is on 5173 and backend on 8000
@@ -66,12 +66,13 @@ const getImageUrl = (path?: string) => {
   return `${baseUrl}${path}`
 }
 
-const handleImageError = (path: string) => {
+const handleImageError = (path?: string | null) => {
+  if (!path) return
   brokenImages.value[path] = true
 }
 
-const showImage = (path?: string) => {
-  return path && !brokenImages.value[path]
+const showImage = (path?: string | null) => {
+  return !!path && !brokenImages.value[path]
 }
 </script>
 

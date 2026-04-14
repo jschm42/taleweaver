@@ -1,0 +1,161 @@
+{
+  "version": "1.0",
+  "id": "kitchen_crisis",
+  "title": "Kitchen Crisis - The Sitcom Edition",
+  "subtitle": "The Miller Family Meltdown",
+  "description": "A 90s sitcom-style dinner disaster: bright colors, high stakes over trivial things, and frequent 'Oh you!' moments.",
+  "story_idea": "\"The Miller Family Meltdown.\" It's 18:00 on a Tuesday. Grandma is coming for dinner in one hour, and the household is a disaster zone. A laugh track punctuates every failure. You play as the \"Last Sane Person\" (or the biggest chaos agent) trying to get the legendary Casserole ready while managing a cast of eccentric family members and a very persistent neighbor.",
+  "tone": "90s Sitcom / Absurd Comedy",
+  "image_style": "Bright, warm colors, slight VHS grain; comedic, high-contrast lighting",
+  "pacing": {
+    "scene_length": "short",
+    "event_frequency": "high",
+    "notes": "Fast comedic beats, quick scene cuts, frequent interruptions"
+  },
+  "protagonist": {
+    "name": "Last Sane Person",
+    "role": "Player character (household manager)",
+    "description": "Trying to prepare the legendary Casserole under absurd pressure and keep the family from imploding.",
+    "image_hint": "exasperated person in a bright cluttered kitchen, 90s sitcom lighting, humorous expression"
+  },
+  "characters": [
+    {
+      "id": "DAD_ARTHUR",
+      "name": "Dad Arthur",
+      "role": "NPC",
+      "description": "Wearing a Hawaiian shirt and trying to 'fix' the sink with a banana."
+    },
+    {
+      "id": "MOM_BEATRICE",
+      "name": "Mom Beatrice",
+      "role": "NPC",
+      "description": "Trying to close a billion-dollar deal while holding a laundry basket."
+    },
+    {
+      "id": "GRAMPS_JOE",
+      "name": "Grumpy Grandpa Joe",
+      "role": "NPC",
+      "description": "Complaining about the 'lack of grit' in modern furniture."
+    },
+    {
+      "id": "NEIGHBOR_KEVIN",
+      "name": "Neighbor Kevin",
+      "role": "NPC",
+      "description": "Periodically bursts through the back door asking to 'borrow' or 'sample' things."
+    }
+  ],
+  "scenes": [
+    {
+      "id": "MODERN_KITCHEN",
+      "title": "The Modern Kitchen",
+      "description": "The heart of the chaos. Cluttered, bright, and smells like impending burnt cheese.",
+      "is_hidden": false
+    },
+    {
+      "id": "LIVING_ROOM",
+      "title": "The Living Room",
+      "description": "Dominated by a massive TV and a sofa that swallows small objects.",
+      "is_hidden": false
+    },
+    {
+      "id": "HALLWAY",
+      "title": "The Hallway",
+      "description": "A narrow transition zone where the 'Wall of Honor' hangs.",
+      "is_hidden": false
+    },
+    {
+      "id": "MASTER_BEDROOM",
+      "title": "The Master Bedroom",
+      "description": "A strictly forbidden zone containing the 'heavy-duty stuff'.",
+      "is_hidden": false
+    },
+    {
+      "id": "MYSTERY_BASEMENT",
+      "title": "The Mystery Basement",
+      "description": "A dark abyss that requires a key.",
+      "is_hidden": true
+    }
+  ],
+  "items": [
+    {
+      "id": "CASSEROLE",
+      "name": "Forbidden Casserole",
+      "type": "CONSUMABLE",
+      "description": "Mom's prize possession. Missing key ingredient is a running gag."
+    },
+    {
+      "id": "ESPRESSO",
+      "name": "Extra-Strength Espresso",
+      "type": "CONSUMABLE",
+      "description": "Liquid energy; temporarily boosts focus but causes jittery chaos."
+    },
+    {
+      "id": "GOLDEN_SPATULA",
+      "name": "The Golden Spatula",
+      "type": "WEAPON",
+      "description": "Good for flipping burgers or neighbor suppression."
+    },
+    {
+      "id": "WD40",
+      "name": "Leaky WD-40",
+      "type": "TOOL",
+      "description": "Used to fix the Squeaky Floor; may cause unintended slickness."
+    },
+    {
+      "id": "POWER_TIE",
+      "name": "Dad's Lucky Power Tie",
+      "type": "WEARABLE",
+      "description": "Increases Charisma when worn.",
+      "wearable_slots": ["Neck"]
+    },
+    {
+      "id": "RABBIT_SLIPPERS",
+      "name": "Furry Rabbit Slippers",
+      "type": "WEARABLE",
+      "description": "Grants Stealth and silent movement.",
+      "wearable_slots": ["Feet"]
+    },
+    {
+      "id": "BASEMENT_KEY",
+      "name": "The Basement Key",
+      "type": "KEY",
+      "description": "Hidden behind the 'Wedding Photo' in the Hallway.",
+      "is_hidden": true
+    },
+    {
+      "id": "SECRET_DIARY",
+      "name": "The Secret Diary",
+      "type": "READABLE",
+      "description": "Contains deep family secrets."
+    },
+    {
+      "id": "TV_REMOTE",
+      "name": "Electronic Remote",
+      "type": "COMBINABLE",
+      "description": "Dead without batteries."
+    },
+    {
+      "id": "AA_BATTERIES",
+      "name": "AA Batteries",
+      "type": "COMBINABLE",
+      "description": "Hidden in the sofa; powers the remote.",
+      "is_hidden": true
+    }
+  ],
+  "quests": [
+    {
+      "id": "REMOTE_HACK",
+      "title": "The Remote Hack",
+      "steps": [
+        "Search the Sofa to discover the AA Batteries",
+        "COMBINE the Electronic Remote with the AA Batteries",
+        "Use the Remote on the TV to distract Grandpa Joe"
+      ],
+      "reward": "Distract Grandpa Joe and gain time to work on the casserole"
+    }
+  ],
+  "metadata": {
+    "author": "importer",
+    "source_file": "kitchen_crisis.md"
+  }
+}

@@ -23,6 +23,8 @@ export interface CharacterSheet {
 
 export interface InventoryItem {
   name: string
+  image_url?: string | null
+  item_type?: string
   stat_modifiers?: Record<string, number>
   [key: string]: unknown
 }
@@ -32,6 +34,8 @@ export interface GameSession {
   game_id: string
   adventure_id: string
   avatar_id: string
+  adventure_title: string
+  image_url: string | null
   scene_id: string
   in_game_time: number
   is_paused: boolean
@@ -47,6 +51,36 @@ export interface CreateAdventurePayload {
   generate_npc_images?: boolean
   generate_item_images?: boolean
   heartbeat_enabled?: boolean
+  automatic_cover_generation?: boolean
+  pacing?: Record<string, unknown>
+  original_manifest?: Record<string, unknown>
+}
+
+/** Minimal import payload type for .ADV files (frontend-side). */
+export interface AdventureImportPayload {
+  version: string
+  id?: string
+  title: string
+  subtitle?: string
+  description?: string
+  story_idea?: string
+  tone?: string
+  image_style?: string
+  // optional lists are free-form on the frontend
+  characters?: any[]
+  scenes?: any[]
+  items?: any[]
+  objects?: any[]
+  protagonist?: any
+  pacing?: {
+    scene_length?: 'short' | 'normal' | 'long'
+    event_frequency?: 'low' | 'normal' | 'high'
+    notes?: string
+  }
+  metadata?: Record<string, unknown>
+  generate_npc_images?: boolean
+  generate_item_images?: boolean
+  automatic_cover_generation?: boolean
 }
 
 /** WebSocket message types received from the server. */
