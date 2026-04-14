@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -38,11 +38,16 @@ class WorldEntitySchema(BaseModel):
     item_type: Optional[str] = Field(None, description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
     wearable_slots: Optional[List[str]] = Field(None, description="If WEARABLE, which slots? e.g. ['Head'], ['Chest'], ['Hands'], ['Ring_1'], ['Ring_2']")
     is_hidden: bool = Field(False, description="If True, the player must SEARCH or trigger an event to see this.")
+    is_portable: bool = Field(True, description="Whether the item can be picked up. False for STATIC objects.")
+    combination_ingredients: Optional[List[str]] = Field(None, description="Item IDs required to trigger a combination.")
+    reveals_item_id: Optional[str] = Field(None, description="Item slug revealed when combination occurs.")
 
 class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
     role: str = Field(..., description="The professional or narrative role of the player, e.g. 'Royal Chef', 'Exiled Alchemist'.")
     description: str = Field(..., description="A detailed narrative description of the character's appearance and backstory.")
+    starting_inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in the player's pocket.")
+    starting_equipment: Optional[Dict[str, str]] = Field(None, description="Mapping of slots (e.g. 'Hands', 'Head') to object IDs.")
 
 class WorldManifesto(BaseModel):
     """
@@ -87,16 +92,18 @@ class WorldGenerator:
             "Ensure the logic of the world is consistent: if a door is locked, mention why. "
             "For OBJECTS, assign a specific 'item_type':\n"
             "- CONSUMABLE: Food, potions, herbs.\n"
-            "- WEARABLE: Armor, clothes, jewelry (specify 'wearable_slots' like 'Head', 'Chest', 'Hands', 'Feet', 'Ring_1', 'Ring_2', 'Amulet').\n"
-            "- STATIC: Fountains, heavy alters, attached machines (cannot be picked up).\n"
+            "- WEARABLE: Armor, clothes, jewelry.\n"
+            "- STATIC: Fountains, heavy alters, attached machines (set is_portable: false).\n"
             "- COMBINABLE: Parts of a machine, ingredients for a recipe.\n"
             "- PICKABLE: Standard items without special traits.\n"
             "- WEAPON / TOOL / KEY / READABLE: Self-explanatory.\n"
-            "Use 'is_hidden: true' for objects that aren't immediately obvious (e.g., a key taped under a chair)."
-            "Provide rich, atmospheric descriptions.\n\n"
+            "Use 'is_hidden: true' for objects revealed by combinations or searching.\n"
+            "COMBINATIONS:\n"
+            "- Use 'combination_ingredients: [item_id1, item_id2]' on a hidden result item to create a crafting recipe.\n"
+            "- Use 'reveals_item_id: result_id' on a room object (e.g. a generator) and 'combination_ingredients: [fuel_id]' to allow using an item on it to reveal a new state.\n\n"
             "PROTAGONIST GENERATION:\n"
-            "Generate a specialized player character (Protagonist) that fits perfectly into this specific story context. "
-            "Give them a fitting name, a clear role (e.g. 'Detective', 'Beggar', 'Chef'), and a detailed description that NPCs can react to."
+            "Generate a specialized player character (Protagonist). "
+            "Define 'starting_inventory' and 'starting_equipment' using IDs from your objects list for items they already possess (e.g. a coin or their boots)."
         )
         
         user_prompt = f"Adventure Title: {title}\nStory Idea: {context}\n\nGenerate at least 5 scenes with a complex network of exits and interesting entities."
@@ -172,6 +179,11 @@ class WorldGenerator:
             from backend.models.avatar import Avatar
             av_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
             avatar = av_res.scalars().first()
+            
+            # Map of ID -> Slot for starting equipment
+            starting_equipped_ids = {v: k for k, v in (prot.get("starting_equipment") or {}).items()}
+            starting_inv_ids = set(prot.get("starting_inventory") or [])
+
             if avatar:
                 avatar.name = prot["name"]
                 avatar.role = prot["role"]
@@ -283,16 +295,46 @@ class WorldGenerator:
                     logger.warning("Object image generation failed for %s/%s: %s", adventure_id, o['id'], exc)
                     image_url = None
 
+            is_starting_inv = o["id"] in starting_inv_ids
+            starting_slot = starting_equipped_ids.get(o["id"])
+            is_in_inv = is_starting_inv or (starting_slot is not None)
+
+            # Construct the Item Dict for Avatar storage
+            item_data = {
+                "id": o["id"],
+                "name": o["name"],
+                "description": o["description"],
+                "image_url": image_url,
+                "item_type": o.get("item_type", "PICKABLE"),
+                "slot": (o.get("wearable_slots") or ["Hands"])[0] if o.get("item_type") == "WEARABLE" else "Hands"
+            }
+
+            if avatar and is_in_inv:
+                if is_starting_inv:
+                    new_inv = list(avatar.inventory)
+                    new_inv.append(item_data)
+                    avatar.inventory = new_inv
+                if starting_slot:
+                    new_equip = dict(avatar.equipment)
+                    new_equip[starting_slot] = item_data
+                    avatar.equipment = new_equip
+
             db.add(WorldEntity(
                 id=o["id"],
                 adventure_id=adventure_id,
                 entity_type="OBJECT",
                 name=o["name"],
                 description=o["description"],
-                current_scene_id=o["start_scene_id"],
+                current_scene_id="INVENTORY" if is_in_inv else o["start_scene_id"],
                 spatial_position=o.get("spatial_position"),
                 image_url=image_url,
                 item_type=o.get("item_type", "PICKABLE"),
                 wearable_slots=o.get("wearable_slots"),
-                is_hidden=o.get("is_hidden", False)
+                is_hidden=o.get("is_hidden", False),
+                is_in_inventory=is_in_inv,
+                # NEW FIELDS
+                is_portable=o.get("is_portable", o.get("item_type") != "STATIC"),
+                combination_ingredients=o.get("combination_ingredients"),
+                reveals_item_id=o.get("reveals_item_id"),
+                state_comment=o.get("state_comment")
             ))

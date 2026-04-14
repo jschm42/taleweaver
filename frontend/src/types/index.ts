@@ -1,8 +1,8 @@
-/** A single chat message displayed in the chat window. */
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: Date
+  itemIds?: string[]
 }
 
 /** Character sheet snapshot pushed by the server after every action. */

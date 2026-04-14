@@ -54,6 +54,12 @@ class WorldEntity(Base, TimestampMixin):
     is_in_inventory = Column(Boolean, default=False, nullable=False)
     is_hidden = Column(Boolean, default=False, nullable=False)
     
+    is_portable = Column(Boolean, default=True, nullable=False)
+    combination_ingredients = Column(JSON, nullable=True) # List of entity IDs
+    reveals_item_id = Column(String(50), nullable=True)
+    is_final_state = Column(Boolean, default=False, nullable=False)
+    state_comment = Column(String(1000), nullable=True)
+
     # Optional state, e.g. NPC inventory: [{"name": "Key", "id": "BRONZE_KEY"}]
     inventory = Column(JSON, default=list, nullable=False)
     metadata_json = Column(JSON, default=dict, nullable=False) # For stats or dynamic state

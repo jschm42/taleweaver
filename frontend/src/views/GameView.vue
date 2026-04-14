@@ -17,6 +17,7 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+const chatWindow = ref<any>(null)
 const showSheet = ref(false)
 const showMap = ref(false)
 const clockTick = ref(false)
@@ -112,6 +113,14 @@ const getItemIcon = (type?: string) => {
     case 'STATIC': return 'ra-anchor'
     default: return 'ra-quill-ink'
   }
+}
+
+const getImageUrl = (path?: string | null) => {
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  // In dev, the frontend is on 5173 and backend on 8000
+  const baseUrl = window.location.origin.replace('5173', '8000')
+  return `${baseUrl}${path}`
 }
 
 const getTypeColor = (type?: string) => {
@@ -238,7 +247,7 @@ onBeforeUnmount(() => {
 
     <div class="flex-grow flex overflow-hidden">
       <!-- Left Sidebar: Inhabitants & Discovery -->
-      <aside v-if="entities.length > 0" class="hidden xl:flex w-72 bg-slate-900 border-r border-slate-800 flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar">
+      <aside v-if="entities.length > 0 || (sheet && sheet.inventory && sheet.inventory.length > 0)" class="hidden xl:flex w-72 bg-slate-900 border-r border-slate-800 flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar">
         <!-- NPCs SECTION -->
         <div v-if="npcs.length > 0">
           <div class="flex items-center justify-between gap-2 mb-4">
@@ -291,10 +300,37 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+
+        <!-- PLAYER INVENTORY SECTION -->
+        <div v-if="sheet?.inventory?.length > 0" class="mt-8 border-t border-slate-800/50 pt-8">
+          <div class="flex items-center justify-between gap-2 mb-4">
+            <div class="flex items-center gap-2">
+              <i class="ra ra-pouch text-emerald-500"></i>
+              <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500/80">Inventory</h3>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div 
+              v-for="(item, idx) in sheet.inventory" 
+              :key="idx" 
+              class="aspect-square bg-slate-950/60 border border-slate-800/50 rounded-xl flex flex-col items-center justify-center p-2 group cursor-pointer transition-all hover:border-emerald-500/50 hover:bg-slate-900 active:scale-95"
+              @click="chatWindow?.appendText(item.name)"
+              @mouseenter="handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, $event)"
+              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+              @mouseleave="hoveredEntity = null"
+            >
+              <div v-if="item.image_url" class="relative w-8 h-8 rounded-md overflow-hidden border border-slate-800 mb-1 shrink-0">
+                <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
+              </div>
+              <i v-else :class="['ra text-xl mb-1 shrink-0', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
+              <span class="text-[8px] font-bold text-slate-500 group-hover:text-slate-300 transition-colors uppercase tracking-tight truncate w-full text-center px-1">{{ item.name }}</span>
+            </div>
+          </div>
+        </div>
       </aside>
 
       <!-- Main Game Area -->
-      <div class="flex-grow relative overflow-hidden flex flex-col items-center p-4 sm:p-6 w-full max-w-5xl mx-auto min-h-0">
+      <div class="flex-grow relative overflow-hidden flex flex-col items-stretch p-4 sm:p-6 w-full max-w-5xl mx-auto min-h-0">
       <div v-if="gameOverReason" class="w-full bg-red-900/20 border border-red-500/30 p-4 rounded-xl mb-4 text-red-400 font-medium flex items-center gap-3 shadow-lg backdrop-blur-sm shrink-0">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -318,9 +354,11 @@ onBeforeUnmount(() => {
       </Transition>
 
       <ChatWindow 
+        ref="chatWindow"
         :messages="messages" 
         :status="status"
         :npc-metadata="npcMetadata"
+        :entities="entities"
         @send="sendMessage"
         @open-sheet="showSheet = true"
         @npc-hover="handleChatNpcHover"

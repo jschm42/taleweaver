@@ -7,6 +7,7 @@ const props = defineProps<{
   messages: ChatMessage[]
   status: ConnectionStatus
   npcMetadata: Record<string, any>
+  entities: any[]
 }>()
 
 const emit = defineEmits<{
@@ -18,6 +19,13 @@ const emit = defineEmits<{
 
 const inputText = ref('')
 const logEl = ref<HTMLElement | null>(null)
+
+function appendText(text: string) {
+  const current = inputText.value.trim()
+  inputText.value = current ? `${current} ${text}` : text
+}
+
+defineExpose({ appendText })
 
 watch(
   () => props.messages.length,
@@ -137,7 +145,7 @@ function normalizeLineBreaks(text: string): string {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+  <div class="flex flex-col w-full h-full bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-slate-950/50 backdrop-blur-md shrink-0">
       <div class="flex items-center gap-2">
@@ -199,6 +207,52 @@ function normalizeLineBreaks(text: string): string {
               <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-[10px] text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>
             </div>
           </template>
+        </div>
+
+        <!-- Discovery Cards (Items revealed this turn) -->
+        <div v-if="msg.itemIds && msg.itemIds.length" class="mt-4 flex flex-wrap gap-4 pl-4">
+          <div 
+            v-for="itemId in msg.itemIds" 
+            :key="itemId"
+            v-show="entities.find(e => e.id === itemId)"
+            class="item-card flex flex-col w-56 bg-slate-800/80 border border-slate-700/50 rounded-xl overflow-hidden shadow-xl backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-500/30"
+          >
+            <!-- Item Image -->
+            <div class="h-32 bg-slate-900 relative overflow-hidden group/img">
+              <img 
+                v-if="entities.find(e => e.id === itemId)?.image_url" 
+                :src="'http://localhost:8000' + entities.find(e => e.id === itemId).image_url" 
+                class="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110"
+              />
+              <div v-else class="w-full h-full flex items-center justify-center text-slate-700">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </div>
+              <div class="absolute top-2 right-2 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase rounded border border-emerald-500/30">
+                New Discovery
+              </div>
+            </div>
+
+            <!-- Item Details -->
+            <div class="p-3 flex flex-col gap-1 flex-1">
+              <h4 class="text-white font-bold text-sm truncate">{{ entities.find(e => e.id === itemId)?.name }}</h4>
+              <p class="text-slate-400 text-[11px] leading-tight line-clamp-3 mb-2 italic">
+                {{ entities.find(e => e.id === itemId)?.description }}
+              </p>
+              
+              <button 
+                v-if="entities.find(e => e.id === itemId)?.is_portable !== false"
+                class="mt-auto py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 active:scale-95 shadow-lg shadow-emerald-500/10"
+                @click="emit('send', `/take ${entities.find(e => e.id === itemId)?.name}`)"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
+                </svg>
+                Take Item
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -277,5 +331,20 @@ function normalizeLineBreaks(text: string): string {
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
+}
+
+.item-card {
+  animation: cardAppear 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes cardAppear {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>

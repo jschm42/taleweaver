@@ -273,6 +273,7 @@ class ChatResponse(BaseModel):
     image_url: Optional[str] = None
     entities: List[Dict[str, Any]] = []
     npc_metadata: Dict[str, Dict[str, Any]] = {} # { "NPC Name": { ...entity_props } }
+    discovered_item_ids: List[str] = []
     game_over: bool = False
     game_over_reason: Optional[str] = None
 
@@ -1216,9 +1217,123 @@ async def post_chat_message(
         
         response = CommandParser.parse_command(avatar, user_msg)
         
-        if response == "[TRIGGER_COMBINE]":
-            # Let the message fall through to the LLM to decide the outcome
-            user_msg = f"[COMBINE ACTION] {user_msg}"
+        # 1. Handle [TRIGGER_TAKE]
+        if response.startswith("[TRIGGER_TAKE]"):
+            item_name = response[14:].strip()
+            # Find item in current scene
+            ent_res = await db.execute(select(WorldEntity).where(
+                WorldEntity.adventure_id == state.adventure_id,
+                WorldEntity.current_scene_id == state.scene_id,
+                func.lower(WorldEntity.name) == item_name.lower(),
+                WorldEntity.entity_type == "OBJECT",
+                WorldEntity.is_hidden == False
+            ))
+            target_item = ent_res.scalars().first()
+            
+            if not target_item:
+                return ChatResponse(
+                    messages=[{"role": "system", "content": f"You don't see any '{item_name}' here or it is hidden."}],
+                    sheet=await _build_sheet_snapshot(avatar, state, db)
+                )
+            
+            if not target_item.is_portable:
+                return ChatResponse(
+                    messages=[{"role": "system", "content": f"The '{target_item.name}' is not something you can just carry with you."}],
+                    sheet=await _build_sheet_snapshot(avatar, state, db)
+                )
+                
+            # Move to inventory
+            target_item.is_in_inventory = True
+            target_item.current_scene_id = "INVENTORY"
+            
+            # Update Avatar inventory snapshot
+            item_dict = {
+                "id": target_item.id,
+                "name": target_item.name,
+                "description": target_item.description,
+                "image_url": target_item.image_url,
+                "item_type": target_item.item_type,
+                "slot": (target_item.wearable_slots or ["Hands"])[0] if target_item.item_type == "WEARABLE" else "Hands"
+            }
+            new_inv = list(avatar.inventory)
+            new_inv.append(item_dict)
+            avatar.inventory = new_inv
+            
+            await db.commit()
+            return ChatResponse(
+                messages=[{"role": "system", "content": f"You added the {target_item.name} to your inventory."}],
+                sheet=await _build_sheet_snapshot(avatar, state, db),
+                discovered_item_ids=[target_item.id]
+            )
+
+        # 2. Handle [TRIGGER_COMBINE]
+        if response.startswith("[TRIGGER_COMBINE]"):
+            args = response[17:].strip()
+            # Simple split logic
+            parts = args.lower().split(" with ") if " with " in args.lower() else args.split(" ", 1)
+            if len(parts) >= 2:
+                name1, name2 = parts[0].strip(), parts[1].strip()
+                
+                # Fetch all potential candidates
+                all_entities_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == state.adventure_id))
+                all_entities = list(all_entities_res.scalars().all())
+                
+                item1 = next((e for e in all_entities if e.is_in_inventory and e.name.lower() == name1), None)
+                item2 = next((e for e in all_entities if e.is_in_inventory and e.name.lower() == name2), None)
+                
+                # Also allow using an item on a visible room object
+                if not item2:
+                    item2 = next((e for e in all_entities if e.current_scene_id == state.scene_id and e.name.lower() == name2 and not e.is_hidden), None)
+
+                if item1 and item2:
+                    # Check for hidden result item that matches these ingredients (Recipe match)
+                    result_item = next((e for e in all_entities if e.is_hidden and e.combination_ingredients and 
+                                        set(e.combination_ingredients) == {item1.id, item2.id}), None)
+                    
+                    if result_item:
+                        result_item.is_hidden = False
+                        # If the recipe produces a portable item, add it to inventory immediately
+                        if result_item.is_portable:
+                            result_item.is_in_inventory = True
+                            result_item.current_scene_id = "INVENTORY"
+                            
+                            # Remove ingredients (standard crafting logic)
+                            new_inv = [i for i in avatar.inventory if i["id"] not in [item1.id, item2.id]]
+                            new_inv.append({
+                                "id": result_item.id,
+                                "name": result_item.name,
+                                "description": result_item.description,
+                                "image_url": result_item.image_url,
+                                "item_type": result_item.item_type,
+                                "slot": "Hands"
+                            })
+                            avatar.inventory = new_inv
+                        
+                        await db.commit()
+                        return ChatResponse(
+                            messages=[{"role": "system", "content": f"SUCCESS! You combined {item1.name} and {item2.name} into: {result_item.name}."}],
+                            sheet=await _build_sheet_snapshot(avatar, state, db),
+                            discovered_item_ids=[result_item.id]
+                        )
+                    
+                    # Check for transformation (reveals_item_id on target)
+                    if item2.reveals_item_id and item2.combination_ingredients and item1.id in item2.combination_ingredients:
+                        real_result = next((e for e in all_entities if e.id == item2.reveals_item_id), None)
+                        if real_result:
+                            real_result.is_hidden = False
+                            item2.is_final_state = True
+                            item2.state_comment = f"Revealed {real_result.name} using {item1.name}."
+                            
+                            await db.commit()
+                            return ChatResponse(
+                                messages=[{"role": "system", "content": f"Logic match: Using {item1.name} on {item2.name} revealed the {real_result.name}!"}],
+                                sheet=await _build_sheet_snapshot(avatar, state, db),
+                                discovered_item_ids=[real_result.id]
+                            )
+
+            # Fall through if no deterministic match found
+            user_msg = f"[COMBINE ACTION] {user_msg}" 
+        
         else:
             await db.commit()
             return ChatResponse(

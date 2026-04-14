@@ -39,8 +39,8 @@ export function useGameSocket(): UseGameSocket {
   let currentGameId = ''
   let syncTimer: number | null = null
 
-  function _pushMessage(role: ChatMessage['role'], content: string): void {
-    messages.value.push({ role, content, timestamp: new Date() })
+  function _pushMessage(role: ChatMessage['role'], content: string, itemIds?: string[]): void {
+    messages.value.push({ role, content, timestamp: new Date(), itemIds })
   }
 
   async function fetchSessionSnapshot(gameId: string): Promise<any | null> {
@@ -155,9 +155,10 @@ export function useGameSocket(): UseGameSocket {
         // Append only the messages produced by this turn.
         // The server response is authoritative for the latest scene snapshot.
         if (data.messages) {
-          for (const m of data.messages) {
-            _pushMessage(m.role as any, m.content)
-          }
+          data.messages.forEach((m: any, idx: number) => {
+            const isLast = idx === data.messages.length - 1
+            _pushMessage(m.role as any, m.content, isLast ? data.discovered_item_ids : undefined)
+          })
         }
 
         applySessionSnapshot(data, false)
