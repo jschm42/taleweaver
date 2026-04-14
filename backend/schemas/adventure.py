@@ -10,7 +10,7 @@ class AdventureBase(BaseModel):
     game_over_rules: Optional[Dict[str, Any]] = None
 
 class AdventureCreate(AdventureBase):
-    character_id: str
+    pass
 
 class AdventureUpdate(BaseModel):
     title: Optional[str] = None

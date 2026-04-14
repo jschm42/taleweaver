@@ -9,6 +9,9 @@ class Avatar(Base, TimestampMixin):
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     adventure_id = Column(String(36), ForeignKey("adventures.id"), nullable=True) # Linked for cleanup
     name = Column(String(100), nullable=False)
+    role = Column(String(100), nullable=True)
+    description = Column(String(1000), nullable=True)
+    profile_image = Column(String(255), nullable=True)
     
     # Character Sheet values
     hp = Column(Integer, default=200, nullable=False)

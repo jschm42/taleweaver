@@ -36,10 +36,16 @@ class WorldEntitySchema(BaseModel):
     wearable_slots: Optional[List[str]] = Field(None, description="If WEARABLE, which slots? e.g. ['Head'], ['Chest'], ['Hands'], ['Ring_1'], ['Ring_2']")
     is_hidden: bool = Field(False, description="If True, the player must SEARCH or trigger an event to see this.")
 
+class ProtagonistSchema(BaseModel):
+    name: str = Field(..., description="The name of the player character.")
+    role: str = Field(..., description="The professional or narrative role of the player, e.g. 'Royal Chef', 'Exiled Alchemist'.")
+    description: str = Field(..., description="A detailed narrative description of the character's appearance and backstory.")
+
 class WorldManifesto(BaseModel):
     """
     The complete blueprint of the generated world.
     """
+    protagonist: ProtagonistSchema
     scenes: List[WorldSceneSchema]
     exits: List[WorldExitSchema]
     npcs: List[WorldEntitySchema]
@@ -84,7 +90,10 @@ class WorldGenerator:
             "- PICKABLE: Standard items without special traits.\n"
             "- WEAPON / TOOL / KEY / READABLE: Self-explanatory.\n"
             "Use 'is_hidden: true' for objects that aren't immediately obvious (e.g., a key taped under a chair)."
-            "Provide rich, atmospheric descriptions."
+            "Provide rich, atmospheric descriptions.\n\n"
+            "PROTAGONIST GENERATION:\n"
+            "Generate a specialized player character (Protagonist) that fits perfectly into this specific story context. "
+            "Give them a fitting name, a clear role (e.g. 'Detective', 'Beggar', 'Chef'), and a detailed description that NPCs can react to."
         )
         
         user_prompt = f"Adventure Title: {title}\nStory Idea: {context}\n\nGenerate at least 5 scenes with a complex network of exits and interesting entities."
@@ -114,7 +123,8 @@ class WorldGenerator:
             manifesto.model_dump(), 
             user=user if (generate_npc_images or generate_item_images) else None,
             gen_npc=generate_npc_images,
-            gen_items=generate_item_images
+            gen_items=generate_item_images,
+            gen_protagonist_image=True # Always generate protagonist image
         )
         await db.flush()
 
@@ -126,6 +136,7 @@ class WorldGenerator:
         user: Optional[User] = None,
         gen_npc: bool = False,
         gen_items: bool = False,
+        gen_protagonist_image: bool = False,
         existing_images: Optional[dict] = None
     ) -> None:
         """
@@ -140,6 +151,26 @@ class WorldGenerator:
         seen_scene_ids = set()
         seen_entity_ids = set()
         
+        # 0. Sync Protagonist to Avatar
+        prot = manifest_dict.get("protagonist", {})
+        if prot and adventure:
+            from backend.models.avatar import Avatar
+            av_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
+            avatar = av_res.scalars().first()
+            if avatar:
+                avatar.name = prot["name"]
+                avatar.role = prot["role"]
+                avatar.description = prot["description"]
+                
+                # Generate Portrait for Protagonist if requested
+                image_url = (existing_images or {}).get("PROTAGONIST")
+                if not image_url and user and gen_protagonist_image:
+                    adventure.creation_status = f"Envisioning You: {prot['name']}..."
+                    await db.commit()
+                    prompt = f"Portrait of character {prot['name']}, {prot['role']}. {prot['description']}. Game attribute art style."
+                    image_url = await MediaEngine.generate_entity_image(prompt, adventure_id, "PROTAGONIST", "NPC", {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys)
+                    avatar.profile_image = image_url
+            
         # Persist Scenes
         for s in manifest_dict.get("scenes", []):
             if s["id"] in seen_scene_ids:

@@ -3,6 +3,9 @@ from typing import Optional, Dict, Any, List
 
 class AvatarBase(BaseModel):
     name: str
+    role: Optional[str] = None
+    description: Optional[str] = None
+    profile_image: Optional[str] = None
     hp: Optional[int] = 200
     stamina: Optional[int] = 200
     mana: Optional[int] = 200

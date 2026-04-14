@@ -631,16 +631,45 @@ async def import_adventure(payload: Dict[str, Any], db: AsyncSession = Depends(g
         await db.commit()
         return {"status": "imported", "adventure_id": new_adv.id, "type": "MANIFEST"}
 
-def _build_sheet_snapshot(avatar: Avatar, state: GameState) -> dict:
-    """Builds a serialisable character-sheet snapshot."""
+async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSession) -> dict:
+    """Builds a serialisable character-sheet snapshot with synchronised world entity images."""
+    
+    # 1. Fetch current adventure entities that have image_urls to ensure the sheet is up to date
+    res = await db.execute(
+        select(WorldEntity.id, WorldEntity.image_url)
+        .where(WorldEntity.adventure_id == state.adventure_id, WorldEntity.image_url.is_not(None))
+    )
+    img_map = {row.id: row.image_url for row in res.all() if row.id}
+    
+    # 2. Enrich inventory
+    synced_inventory = []
+    for item in (avatar.inventory or []):
+        item_copy = dict(item)
+        item_id = item_copy.get("id")
+        if item_id in img_map and not item_copy.get("image_url"):
+            item_copy["image_url"] = img_map[item_id]
+        synced_inventory.append(item_copy)
+        
+    # 3. Enrich equipment
+    synced_equipment = {}
+    for slot, item in (avatar.equipment or {}).items():
+        if item and isinstance(item, dict):
+            item_copy = dict(item)
+            item_id = item_copy.get("id")
+            if item_id in img_map and not item_copy.get("image_url"):
+                item_copy["image_url"] = img_map[item_id]
+            synced_equipment[slot] = item_copy
+        else:
+            synced_equipment[slot] = item
+
     return {
         "name": avatar.name,
         "hp": avatar.hp,
         "stamina": avatar.stamina,
         "mana": avatar.mana,
         "stats": avatar.stats,
-        "inventory": avatar.inventory,
-        "equipment": avatar.equipment,
+        "inventory": synced_inventory,
+        "equipment": synced_equipment,
         "status_effects": avatar.status_effects,
         "in_game_time": state.in_game_time,
     }
@@ -673,7 +702,7 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
     
     return ChatResponse(
         messages=history,
-        sheet=_build_sheet_snapshot(avatar, state),
+        sheet=await _build_sheet_snapshot(avatar, state, db),
         mermaid=mermaid_data,
         entities=entities
     )
@@ -697,9 +726,14 @@ async def post_chat_message(
         raise HTTPException(status_code=404, detail="Game session not found.")
 
     if state.is_paused:
+        # We need to fetch the avatar if it's not already there for the snapshot
+        if 'avatar' not in locals():
+            av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+            avatar = av_res.scalars().first()
+
         return ChatResponse(
             messages=[{"role": "system", "content": "The game is currently paused."}],
-            sheet=_build_sheet_snapshot(avatar, state) if 'avatar' in locals() else {}
+            sheet=await _build_sheet_snapshot(avatar, state, db) if avatar else {}
         )
 
     av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
@@ -732,7 +766,7 @@ async def post_chat_message(
         debug_info = await DebugEngine.handle_debug_command(db, state, cmd_args)
         return ChatResponse(
             messages=[{"role": "system", "content": debug_info}],
-            sheet=_build_sheet_snapshot(avatar, state)
+            sheet=await _build_sheet_snapshot(avatar, state, db)
         )
 
     # --- Slash-command fast path ---
@@ -752,7 +786,7 @@ async def post_chat_message(
             await db.commit()
             return ChatResponse(
                 messages=[{"role": "system", "content": response}],
-                sheet=_build_sheet_snapshot(avatar, state)
+                sheet=await _build_sheet_snapshot(avatar, state, db)
             )
 
     # --- Turn-based Logic: Advance Time & Status Effects ---
@@ -897,10 +931,14 @@ async def post_chat_message(
                          ent_sync.is_in_inventory = True
                          ent_sync.is_hidden = False
                          
-                         # BACKFILL image_url into the avatar's inventory if missing
+                         # BACKFILL image_url into the avatar's inventory if missing (with persistence fix)
+                         new_inv = []
                          for inv_item in avatar.inventory:
-                             if inv_item.get('id') == item.id and not inv_item.get('image_url'):
-                                 inv_item['image_url'] = ent_sync.image_url
+                             updated_item = dict(inv_item) # Copy to ensure change detection
+                             if updated_item.get('id') == item.id and not updated_item.get('image_url'):
+                                 updated_item['image_url'] = ent_sync.image_url
+                             new_inv.append(updated_item)
+                         avatar.inventory = new_inv
                          
                          response_messages.append({"role": "system", "content": f"[System] Item '{item.name}' added to inventory."})
                     else:
@@ -969,8 +1007,8 @@ async def post_chat_message(
         curr_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in curr_ent_res.scalars().all()]
 
         return ChatResponse(
-            messages=response_messages,
-            sheet=_build_sheet_snapshot(avatar, state),
+            messages=[{"role": "system", "content": response_text}],
+            sheet=await _build_sheet_snapshot(avatar, state, db),
             mermaid=mermaid_data,
             image_url=image_url,
             entities=curr_entities,
