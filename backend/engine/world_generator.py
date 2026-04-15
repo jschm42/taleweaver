@@ -12,6 +12,13 @@ from backend.models.adventure import Adventure
 
 logger = logging.getLogger(__name__)
 
+
+def _uses_ollama_t2i(user: Optional[User]) -> bool:
+    if not user:
+        return False
+    t2i_settings = user.t2i_settings or {}
+    return (t2i_settings.get("provider") or "").lower() == "ollama"
+
 # --- Schemas for Structured LLM Output ---
 
 class WorldSceneSchema(BaseModel):
@@ -214,6 +221,10 @@ class WorldGenerator:
                             user.encrypted_api_keys,
                         )
                     except Exception as exc:
+                        if _uses_ollama_t2i(user):
+                            raise RuntimeError(
+                                f"Ollama protagonist image generation failed for adventure {adventure_id}: {exc}"
+                            ) from exc
                         # Visual failures (e.g. provider moderation) must not abort world creation
                         logger.warning("Protagonist image generation failed for %s: %s", adventure_id, exc)
                         image_url = None
@@ -239,6 +250,10 @@ class WorldGenerator:
                         user.encrypted_api_keys,
                     )
                 except Exception as exc:
+                    if _uses_ollama_t2i(user):
+                        raise RuntimeError(
+                            f"Ollama scene image generation failed for adventure {adventure_id}/{s['id']}: {exc}"
+                        ) from exc
                     logger.warning("Scene image generation failed for %s/%s: %s", adventure_id, s['id'], exc)
                     image_url = None
 
@@ -283,6 +298,10 @@ class WorldGenerator:
                         user.encrypted_api_keys,
                     )
                 except Exception as exc:
+                    if _uses_ollama_t2i(user):
+                        raise RuntimeError(
+                            f"Ollama NPC image generation failed for adventure {adventure_id}/{n['id']}: {exc}"
+                        ) from exc
                     logger.warning("NPC image generation failed for %s/%s: %s", adventure_id, n['id'], exc)
                     image_url = None
 
@@ -319,6 +338,10 @@ class WorldGenerator:
                         user.encrypted_api_keys,
                     )
                 except Exception as exc:
+                    if _uses_ollama_t2i(user):
+                        raise RuntimeError(
+                            f"Ollama object image generation failed for adventure {adventure_id}/{o['id']}: {exc}"
+                        ) from exc
                     logger.warning("Object image generation failed for %s/%s: %s", adventure_id, o['id'], exc)
                     image_url = None
 

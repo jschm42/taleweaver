@@ -47,3 +47,75 @@ async def test_save_api_key_overwrites_existing(client: AsyncClient):
     resp = await client.post("/api/settings/keys", json=payload)
     assert resp.status_code == 200
     assert resp.json()["status"] == "success"
+
+
+async def test_save_t2i_settings_with_ollama_fields(client: AsyncClient):
+    """Saving Ollama image settings persists optional local generation controls."""
+    payload = {
+        "simple_model": "x/flux2-klein",
+        "advanced_model": "x/flux2-klein",
+        "provider": "ollama",
+        "ollama_url": "http://localhost:11434",
+        "width": 1024,
+        "height": 768,
+        "steps": 30,
+        "seed": 42,
+        "negative_prompt": "blurry, artifacts",
+    }
+
+    save_resp = await client.post("/api/settings/t2i", json=payload)
+    assert save_resp.status_code == 200
+    assert save_resp.json()["status"] == "success"
+
+    settings_resp = await client.get("/api/settings")
+    assert settings_resp.status_code == 200
+    data = settings_resp.json()
+    assert data["t2i_settings"] == payload
+
+
+async def test_get_settings_returns_extended_t2i_defaults(client: AsyncClient):
+    """Default settings include Ollama-compatible fields for forward compatibility."""
+    resp = await client.get("/api/settings")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "t2i_settings" in data
+
+    t2i = data["t2i_settings"]
+    assert t2i["simple_model"] == "openai/dall-e-2"
+    assert t2i["advanced_model"] == "openai/dall-e-3"
+    assert t2i["provider"] == "openai"
+    assert t2i["ollama_url"] == "http://localhost:11434"
+    assert t2i["width"] is None
+    assert t2i["height"] is None
+    assert t2i["steps"] is None
+    assert t2i["seed"] is None
+    assert t2i["negative_prompt"] is None
+
+
+async def test_save_llm_settings_with_ollama_url(client: AsyncClient):
+    """Saving LLM settings should persist local Ollama endpoint configuration."""
+    payload = {
+        "small_model": "llama3.2",
+        "complex_model": "qwen2.5",
+        "preferred_provider": "ollama",
+        "ollama_url": "http://localhost:11434",
+    }
+
+    save_resp = await client.post("/api/settings/llm", json=payload)
+    assert save_resp.status_code == 200
+    assert save_resp.json()["status"] == "success"
+
+    settings_resp = await client.get("/api/settings")
+    assert settings_resp.status_code == 200
+    assert settings_resp.json()["llm_settings"] == payload
+
+
+async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
+    """Default llm settings include ollama_url for local provider use."""
+    resp = await client.get("/api/settings")
+    assert resp.status_code == 200
+    llm = resp.json()["llm_settings"]
+    assert llm["small_model"] == "openai/gpt-4o-mini"
+    assert llm["complex_model"] == "openai/gpt-4o-mini"
+    assert llm["preferred_provider"] == "openai"
+    assert llm["ollama_url"] == "http://localhost:11434"

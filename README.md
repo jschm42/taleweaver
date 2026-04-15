@@ -139,3 +139,24 @@ The frontend will typically run on `http://localhost:5173`.
 
 #### 3. First Launch
 Once both servers are running, open the frontend URL in your browser. You will be prompted in the settings/configuration UI to provide your LLM API key. This key is encrypted using AES and stored safely in your local SQLite database before you can start generating your first adventure.
+
+### Local Ollama Image Generation (Experimental)
+
+TaleWeaver supports local image generation through Ollama as an additional `Visuals` provider.
+
+1. Install and run Ollama.
+2. Pull an image model, for example:
+
+```bash
+ollama pull x/flux2-klein
+```
+
+3. In the frontend `Configuration -> Visuals` section:
+	- Set `Image Provider` to `Ollama (Local, Experimental)`.
+	- Set `Simple Image Model` and `Advanced Image Model` (default recommendation: `x/flux2-klein`).
+	- Set `Ollama URL` (default: `http://localhost:11434`).
+	- Optionally set `width`, `height`, `steps`, `seed`, and `negative_prompt`.
+
+Notes:
+- No cloud API key is required for local Ollama image generation.
+- TaleWeaver first tries image generation via LiteLLM integration and falls back to direct Ollama HTTP calls when needed.

@@ -6,7 +6,12 @@
  */
 import type { CreateAdventurePayload, GameSession, AdventureImportPayload } from '@/types'
 
-const BASE = '/api'
+// Use absolute backend URL during local development to avoid proxy/cache timing
+// issues (Vite already proxies `/api` to the backend, but in some dev setups
+// the relative proxy can lead to empty responses on initial load). In
+// production we keep the relative `/api` base so the server can serve the
+// frontend and backend from the same origin.
+const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {

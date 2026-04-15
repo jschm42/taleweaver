@@ -96,6 +96,14 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added world_entities.image_url")
 
+        scene_cols_result = await conn.exec_driver_sql("PRAGMA table_info(world_scenes)")
+        scene_cols = {row[1] for row in scene_cols_result.fetchall()}
+        if "image_url" not in scene_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_scenes ADD COLUMN image_url TEXT"
+            )
+            logger.info("SQLite migration: added world_scenes.image_url")
+
         # Async Generation Status
         if "is_ready" not in adventure_cols:
             await conn.exec_driver_sql(

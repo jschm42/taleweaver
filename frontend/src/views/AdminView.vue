@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -17,13 +17,20 @@ const keyForm = ref({
 const llmForm = ref({
   small_model: 'openai/gpt-4o-mini',
   complex_model: 'openai/gpt-4o-mini',
-  preferred_provider: 'openai'
+  preferred_provider: 'openai',
+  ollama_url: 'http://localhost:11434',
 })
 
 const t2iForm = ref({
   simple_model: 'openai/dall-e-2',
   advanced_model: 'openai/dall-e-3',
-  provider: 'openai'
+  provider: 'openai',
+  ollama_url: 'http://localhost:11434',
+  width: null as number | null,
+  height: null as number | null,
+  steps: null as number | null,
+  seed: null as number | null,
+  negative_prompt: '',
 })
 
 // STATE
@@ -50,6 +57,10 @@ const fetchSettings = async () => {
 }
 
 const saveApiKey = async () => {
+  if (keyForm.value.provider === 'ollama') {
+    statusMessage.value = { type: 'success', text: 'Ollama nutzt lokal keinen API Key.' }
+    return
+  }
   if (!keyForm.value.api_key.trim()) return
   isSubmitting.value = true
   statusMessage.value = null
@@ -115,6 +126,26 @@ const saveT2iSettings = async () => {
 onMounted(() => {
   fetchSettings()
 })
+
+watch(
+  () => t2iForm.value.provider,
+  (provider) => {
+    if (provider !== 'ollama') {
+      return
+    }
+
+    const looksLikeCloudModel = (value: string) => value.startsWith('openai/') || value.startsWith('dall-e')
+    if (!t2iForm.value.simple_model || looksLikeCloudModel(t2iForm.value.simple_model)) {
+      t2iForm.value.simple_model = 'x/flux2-klein'
+    }
+    if (!t2iForm.value.advanced_model || looksLikeCloudModel(t2iForm.value.advanced_model)) {
+      t2iForm.value.advanced_model = 'x/flux2-klein'
+    }
+    if (!t2iForm.value.ollama_url) {
+      t2iForm.value.ollama_url = 'http://localhost:11434'
+    }
+  },
+)
 </script>
 
 <template>
@@ -180,14 +211,16 @@ onMounted(() => {
                   <option value="openrouter">OpenRouter</option>
                   <option value="midjourney">Midjourney / Proxy</option>
                   <option value="anthropic">Anthropic</option>
+                  <option value="ollama">Ollama (Local)</option>
                 </select>
               </div>
               <div class="space-y-2">
                  <label class="block text-sm font-semibold text-slate-300">Set New API Key</label>
-                 <input v-model="keyForm.api_key" type="password" placeholder="sk-..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
+                 <input v-if="keyForm.provider !== 'ollama'" v-model="keyForm.api_key" type="password" placeholder="sk-..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
+                 <p v-else class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-400 text-sm">No API key needed for local Ollama.</p>
               </div>
             </div>
-            <button @click="saveApiKey" :disabled="isSubmitting || !keyForm.api_key" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
+            <button @click="saveApiKey" :disabled="isSubmitting || (keyForm.provider !== 'ollama' && !keyForm.api_key)" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
               {{ isSubmitting ? 'Encrypting...' : 'Lock API Key' }}
             </button>
           </div>
@@ -218,7 +251,14 @@ onMounted(() => {
                 <option value="openai">OpenAI</option>
                 <option value="openrouter">OpenRouter</option>
                 <option value="anthropic">Anthropic</option>
+                <option value="ollama">Ollama (Local)</option>
               </select>
+            </div>
+
+            <div v-if="llmForm.preferred_provider === 'ollama'" class="space-y-2">
+              <label class="block text-sm font-semibold text-slate-300">Ollama URL</label>
+              <input v-model="llmForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+              <p class="text-[10px] text-slate-500">Local endpoint used for chat completions.</p>
             </div>
 
             <div class="space-y-2">
@@ -253,7 +293,12 @@ onMounted(() => {
                 <option value="openai">OpenAI (DALL-E)</option>
                 <option value="openrouter">OpenRouter (Various)</option>
                 <option value="midjourney">Midjourney (via Proxy)</option>
+                <option value="ollama">Ollama (Local, Experimental)</option>
               </select>
+            </div>
+
+            <div v-if="t2iForm.provider === 'ollama'" class="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-cyan-200 text-sm">
+              Experimental: Local image generation with Ollama. Make sure your Ollama server is running and the model is pulled.
             </div>
 
             <div class="space-y-2 font-mono">
@@ -267,6 +312,37 @@ onMounted(() => {
               <input v-model="t2iForm.advanced_model" type="text" placeholder="e.g. dall-e-3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
               <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">High-fidelity scene visualization.</p>
             </div>
+
+            <template v-if="t2iForm.provider === 'ollama'">
+              <div class="space-y-2 font-mono">
+                <label class="block text-sm font-semibold text-slate-300">Ollama URL</label>
+                <input v-model="t2iForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2 font-mono">
+                  <label class="block text-sm font-semibold text-slate-300">Width (optional)</label>
+                  <input v-model.number="t2iForm.width" type="number" min="64" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                </div>
+                <div class="space-y-2 font-mono">
+                  <label class="block text-sm font-semibold text-slate-300">Height (optional)</label>
+                  <input v-model.number="t2iForm.height" type="number" min="64" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                </div>
+                <div class="space-y-2 font-mono">
+                  <label class="block text-sm font-semibold text-slate-300">Steps (optional)</label>
+                  <input v-model.number="t2iForm.steps" type="number" min="1" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                </div>
+                <div class="space-y-2 font-mono">
+                  <label class="block text-sm font-semibold text-slate-300">Seed (optional)</label>
+                  <input v-model.number="t2iForm.seed" type="number" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                </div>
+              </div>
+
+              <div class="space-y-2 font-mono">
+                <label class="block text-sm font-semibold text-slate-300">Negative Prompt (optional)</label>
+                <input v-model="t2iForm.negative_prompt" type="text" placeholder="e.g. blurry, artifacts, low quality" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+              </div>
+            </template>
 
             <button @click="saveT2iSettings" :disabled="isSubmitting" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
                {{ isSubmitting ? 'Painting...' : 'Update Visual Artists' }}

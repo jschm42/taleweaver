@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from typing import Optional
 
 from backend.core.database import get_db
 from backend.models.user import User
@@ -17,11 +18,18 @@ class SettingsPayload(BaseModel):
     small_model: str
     complex_model: str
     preferred_provider: str # openai, openrouter, etc.
+    ollama_url: Optional[str] = None
 
 class T2ISettingsPayload(BaseModel):
     simple_model: str
     advanced_model: str
     provider: str
+    ollama_url: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    steps: Optional[int] = None
+    seed: Optional[int] = None
+    negative_prompt: Optional[str] = None
 
 @router.get("")
 async def get_settings(db: AsyncSession = Depends(get_db)):
@@ -29,7 +37,26 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).limit(1))
     user = result.scalars().first()
     if not user:
-        return {"keys": {}, "llm_settings": {}}
+        return {
+            "keys": {},
+            "llm_settings": {
+                "small_model": "openai/gpt-4o-mini",
+                "complex_model": "openai/gpt-4o-mini",
+                "preferred_provider": "openai",
+                "ollama_url": "http://localhost:11434",
+            },
+            "t2i_settings": {
+                "simple_model": "openai/dall-e-2",
+                "advanced_model": "openai/dall-e-3",
+                "provider": "openai",
+                "ollama_url": "http://localhost:11434",
+                "width": None,
+                "height": None,
+                "steps": None,
+                "seed": None,
+                "negative_prompt": None,
+            },
+        }
     
     # Return providers that have keys, but not the actual keys
     configured_providers = list(user.encrypted_api_keys.keys()) if user.encrypted_api_keys else []
@@ -38,12 +65,19 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
         "llm_settings": user.llm_settings or {
             "small_model": "openai/gpt-4o-mini",
             "complex_model": "openai/gpt-4o-mini",
-            "preferred_provider": "openai"
+            "preferred_provider": "openai",
+            "ollama_url": "http://localhost:11434",
         },
         "t2i_settings": user.t2i_settings or {
             "simple_model": "openai/dall-e-2",
             "advanced_model": "openai/dall-e-3",
-            "provider": "openai"
+            "provider": "openai",
+            "ollama_url": "http://localhost:11434",
+            "width": None,
+            "height": None,
+            "steps": None,
+            "seed": None,
+            "negative_prompt": None,
         }
     }
 

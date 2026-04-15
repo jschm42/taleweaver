@@ -1629,8 +1629,13 @@ async def post_chat_message(
                 MapEngine.register_visit(world_map, state.scene_id, image_url=image_url)
                 
             except Exception as e:
+                t2i_settings = user.t2i_settings or {}
+                if (t2i_settings.get("provider") or "").lower() == "ollama":
+                    raise RuntimeError(
+                        f"On-demand scene generation failed with local Ollama configuration: {e}"
+                    ) from e
                 logger.error(f"On-demand scene generation failed: {e}")
-                # We do NOT fail the turn, just return no image
+                # We do NOT fail the turn for cloud providers, just return no image
                 image_url = None
 
         await db.commit()
