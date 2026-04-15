@@ -6,7 +6,9 @@ sub-routes. All tests follow the Arrange-Act-Assert pattern.
 """
 import pytest
 from httpx import AsyncClient
+from io import BytesIO
 
+from PIL import Image
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity
 from backend.models.world_entity import WorldScene
@@ -149,7 +151,7 @@ async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, 
 
     captured: dict[str, str] = {}
 
-    async def fake_generate_entity_image(prompt, adventure_id, entity_id, entity_type, user_config, api_keys):
+    async def fake_generate_entity_image(prompt, _adventure_id, entity_id, entity_type, _user_config, _api_keys):
         captured["prompt"] = prompt
         captured["entity_id"] = entity_id
         captured["entity_type"] = entity_type
@@ -195,7 +197,7 @@ async def test_regenerate_visual_uses_custom_prompt_for_scene(client: AsyncClien
 
     captured: dict[str, str] = {}
 
-    async def fake_generate_scene_image(prompt, adventure_id, user_config, api_keys):
+    async def fake_generate_scene_image(prompt, _adventure_id, _user_config, _api_keys):
         captured["prompt"] = prompt
         return "/data/adventures/generated/scene.png"
 
@@ -217,6 +219,51 @@ async def test_regenerate_visual_uses_custom_prompt_for_scene(client: AsyncClien
     debug_data = debug_resp.json()
     scene = next(scene for scene in debug_data["scenes"] if scene["id"] == "HALL")
     assert scene["image_url"] == "/data/adventures/generated/scene.png"
+
+
+def _make_png_bytes(width: int, height: int) -> bytes:
+    buffer = BytesIO()
+    image = Image.new("RGB", (width, height), color=(123, 45, 67))
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+async def test_upload_visual_updates_protagonist_image(client: AsyncClient):
+    """Uploading a valid visual should persist the new protagonist image URL."""
+    ids = await _create_adventure(client, "Upload Quest")
+    image_bytes = _make_png_bytes(800, 1000)
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/upload",
+        data={"target_type": "protagonist", "target_id": ids["avatar_id"]},
+        files={"file": ("portrait.png", image_bytes, "image/png")},
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "uploaded"
+    assert data["target_type"] == "protagonist"
+    assert data["image_url"].endswith(f"/protagonist/{ids['avatar_id']}.png")
+
+    debug_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/debug")
+    assert debug_resp.status_code == 200
+    debug_data = debug_resp.json()
+    assert debug_data["protagonist"]["profile_image"] == data["image_url"]
+
+
+async def test_upload_visual_rejects_oversized_image(client: AsyncClient):
+    """Oversized uploads should fail validation before persisting anything."""
+    ids = await _create_adventure(client, "Upload Validation Quest")
+    image_bytes = _make_png_bytes(1600, 1600)
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/upload",
+        data={"target_type": "protagonist", "target_id": ids["avatar_id"]},
+        files={"file": ("too-large.png", image_bytes, "image/png")},
+    )
+
+    assert resp.status_code == 400
+    assert "Max size for this asset" in resp.text
 
 
 async def test_export_manifest_returns_original_manifest_only(client: AsyncClient):

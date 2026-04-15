@@ -1,14 +1,17 @@
 import logging
+import os
 import uuid
 from copy import deepcopy
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Literal
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from pydantic import BaseModel
+from PIL import Image
 
 from backend.core.database import get_db
+from backend.core.config import settings
 from backend.models.user import User
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
@@ -202,6 +205,78 @@ def _build_visual_prompt(target_type: str, target_data: Dict[str, Any], custom_p
         return f"Detailed illustration of object {name}. {description}. Fantasy item concept art, isolated and clearly readable."
 
     raise HTTPException(status_code=400, detail="Unsupported visual target type.")
+
+
+VISUAL_UPLOAD_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+VISUAL_UPLOAD_SPECS: Dict[str, Dict[str, Any]] = {
+    "protagonist": {
+        "folder": "protagonist",
+        "max_width": 1024,
+        "max_height": 1280,
+        "recommended": "Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.",
+    },
+    "scene": {
+        "folder": "scenes",
+        "max_width": 1600,
+        "max_height": 900,
+        "recommended": "Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.",
+    },
+    "npc": {
+        "folder": "entities",
+        "max_width": 1024,
+        "max_height": 1280,
+        "recommended": "Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.",
+    },
+    "object": {
+        "folder": "entities",
+        "max_width": 1024,
+        "max_height": 1024,
+        "recommended": "Optimal: square 1:1, max 1024x1024. PNG, JPEG, or WEBP.",
+    },
+}
+
+
+def _get_visual_upload_spec(target_type: str) -> Dict[str, Any]:
+    spec = VISUAL_UPLOAD_SPECS.get(target_type)
+    if not spec:
+        raise HTTPException(status_code=400, detail="Unsupported visual target type.")
+    return spec
+
+
+def _get_extension(filename: str) -> str:
+    return filename.split(".")[-1].lower() if "." in filename else ""
+
+
+async def _resolve_visual_target(
+    db: AsyncSession,
+    adventure_id: str,
+    target_type: str,
+    target_id: str,
+) -> tuple[Any, Dict[str, Any], str]:
+    if target_type == "protagonist":
+        avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id, Avatar.id == target_id))
+        avatar = avatar_res.scalars().first()
+        if not avatar:
+            raise HTTPException(status_code=404, detail="Protagonist not found.")
+        return avatar, _serialize_model(avatar), "profile_image"
+
+    if target_type == "scene":
+        scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id, WorldScene.id == target_id))
+        scene = scene_res.scalars().first()
+        if not scene:
+            raise HTTPException(status_code=404, detail="Scene not found.")
+        return scene, _serialize_model(scene), "image_url"
+
+    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id, WorldEntity.id == target_id))
+    entity = entity_res.scalars().first()
+    if not entity:
+        raise HTTPException(status_code=404, detail="Visual target not found.")
+
+    expected_entity_type = "NPC" if target_type == "npc" else "OBJECT"
+    if entity.entity_type != expected_entity_type:
+        raise HTTPException(status_code=404, detail="Visual target not found.")
+
+    return entity, _serialize_model(entity), "image_url"
 
 
 class VisualRegenerateRequest(BaseModel):
@@ -894,41 +969,33 @@ async def regenerate_visual(
     if not state:
         raise HTTPException(status_code=404, detail="Game state not found.")
 
-    avatar_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id, Avatar.adventure_id == adventure_id))
-    avatar = avatar_res.scalars().first()
-    if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found.")
-
     user = await db.get(User, state.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
+    target_model, target_data, image_attr = await _resolve_visual_target(
+        db=db,
+        adventure_id=adventure_id,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+    )
+
     image_url: Optional[str] = None
 
     if payload.target_type == "protagonist":
-        if avatar.id != payload.target_id:
-            raise HTTPException(status_code=404, detail="Protagonist not found.")
-        prompt = _build_visual_prompt(payload.target_type, _serialize_model(avatar), payload.prompt)
+        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
         image_url = await MediaEngine.generate_entity_image(
             prompt,
             adventure_id,
-            avatar.id,
+            target_model.id,
             "PROTAGONIST",
             {"t2i_settings": user.t2i_settings},
             user.encrypted_api_keys or {},
         )
         if not image_url:
             raise HTTPException(status_code=504, detail="Protagonist image generation timed out or failed.")
-        avatar.profile_image = image_url
-
     elif payload.target_type == "scene":
-        scene_res = await db.execute(
-            select(WorldScene).where(WorldScene.adventure_id == adventure_id, WorldScene.id == payload.target_id)
-        )
-        scene = scene_res.scalars().first()
-        if not scene:
-            raise HTTPException(status_code=404, detail="Scene not found.")
-        prompt = _build_visual_prompt(payload.target_type, _serialize_model(scene), payload.prompt)
+        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
         image_url = await MediaEngine.generate_scene_image(
             prompt,
             adventure_id,
@@ -937,28 +1004,20 @@ async def regenerate_visual(
         )
         if not image_url:
             raise HTTPException(status_code=504, detail="Scene image generation timed out or failed.")
-        scene.image_url = image_url
-
     else:
-        entity_res = await db.execute(
-            select(WorldEntity).where(WorldEntity.adventure_id == adventure_id, WorldEntity.id == payload.target_id)
-        )
-        entity = entity_res.scalars().first()
-        if not entity:
-            raise HTTPException(status_code=404, detail="Visual target not found.")
-        prompt = _build_visual_prompt(payload.target_type, _serialize_model(entity), payload.prompt)
+        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
         image_url = await MediaEngine.generate_entity_image(
             prompt,
             adventure_id,
-            entity.id,
-            entity.entity_type,
+            target_model.id,
+            target_model.entity_type,
             {"t2i_settings": user.t2i_settings},
             user.encrypted_api_keys or {},
         )
         if not image_url:
             raise HTTPException(status_code=504, detail="Image generation timed out or failed.")
-        entity.image_url = image_url
 
+    setattr(target_model, image_attr, image_url)
     await db.commit()
     return {
         "status": "updated",
@@ -966,6 +1025,77 @@ async def regenerate_visual(
         "target_type": payload.target_type,
         "target_id": payload.target_id,
         "image_url": image_url,
+    }
+
+
+@router.post("/{adventure_id}/visuals/upload")
+async def upload_visual(
+    adventure_id: str,
+    target_type: str = Form(...),
+    target_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Uploads a visual asset for a protagonist, scene, NPC, or object."""
+    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Game state not found.")
+
+    spec = _get_visual_upload_spec(target_type)
+
+    target_model, _, image_attr = await _resolve_visual_target(
+        db=db,
+        adventure_id=adventure_id,
+        target_type=target_type,
+        target_id=target_id,
+    )
+    ext = _get_extension(file.filename or "")
+    if ext not in VISUAL_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported file extension. Use jpg, jpeg, png, or webp.")
+
+    if file.content_type and file.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use png, jpeg, or webp.")
+
+    target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, spec["folder"])
+    os.makedirs(target_dir, exist_ok=True)
+
+    filename = f"{target_id}.{ext}"
+    filepath = os.path.join(target_dir, filename)
+
+    try:
+        image = Image.open(file.file)
+        image.load()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid image file: {exc}") from exc
+
+    if image.width > spec["max_width"] or image.height > spec["max_height"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Image too large. Max size for this asset is {spec['max_width']}x{spec['max_height']}.",
+        )
+
+    try:
+        if image.mode in ("RGBA", "P") and ext in {"jpg", "jpeg"}:
+            image = image.convert("RGB")
+
+        save_format = "JPEG" if ext in {"jpg", "jpeg"} else ext.upper()
+        image.save(filepath, format=save_format)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to store uploaded image: {exc}") from exc
+
+
+    image_url = f"/data/adventures/{adventure_id}/{spec['folder']}/{filename}".replace("\\", "/")
+    setattr(target_model, image_attr, image_url)
+    await db.commit()
+
+    return {
+        "status": "uploaded",
+        "adventure_id": adventure_id,
+        "target_type": target_type,
+        "target_id": target_id,
+        "image_url": image_url,
+        "recommended_format": spec["recommended"],
     }
 
 @router.post("/{adventure_id}/reset")

@@ -16,13 +16,26 @@ const debugData = ref<any>(null)
 const isLoading = ref(false)
 const isSaving = ref(false)
 const isRegenerating = ref(false)
+const isUploading = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
 const showPromptDialog = ref(false)
 const activeTab = ref<'settings' | 'visuals' | 'advanced'>('settings')
-const selectedVisual = ref<{ kind: 'protagonist' | 'scene' | 'npc' | 'object'; id: string; label: string } | null>(null)
+const uploadInput = ref<HTMLInputElement | null>(null)
+const selectedVisual = ref<{ kind: 'protagonist' | 'scene' | 'npc' | 'object'; id: string; label: string; description: string; hint: string } | null>(null)
 const visualPrompt = ref('')
+const visualsCacheVersion = ref(0)
+
+const VISUAL_UPLOAD_LIMITS = {
+  protagonist: { maxWidth: 1024, maxHeight: 1280, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
+  scene: { maxWidth: 1600, maxHeight: 900, hint: 'Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.' },
+  npc: { maxWidth: 1024, maxHeight: 1280, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
+  object: { maxWidth: 1024, maxHeight: 1024, hint: 'Optimal: square 1:1, max 1024x1024. PNG, JPEG, or WEBP.' },
+} as const
+
+const ALLOWED_UPLOAD_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 
 const form = ref({
   title: '',
@@ -63,21 +76,51 @@ async function fetchDebugInfo() {
     const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/debug`)
     if (res.ok) {
       debugData.value = await res.json()
+      visualsCacheVersion.value += 1
     }
   } catch (error) {
     console.error('Failed to fetch debug info:', error)
   }
 }
 
+function buildVisualImageUrl(imagePath?: string | null) {
+  if (!imagePath) {
+    return ''
+  }
+  return `http://localhost:8000${imagePath}?v=${visualsCacheVersion.value}`
+}
+
 function openRegenerateDialog(kind: 'protagonist' | 'scene' | 'npc' | 'object', id: string, label: string) {
-  selectedVisual.value = { kind, id, label }
+  const description = getVisualDescription(kind, id)
+  const hint = VISUAL_UPLOAD_LIMITS[kind].hint
+  selectedVisual.value = { kind, id, label, description, hint }
   visualPrompt.value = ''
   promptError.value = ''
   showPromptDialog.value = true
 }
 
-function closeRegenerateDialog() {
-  if (isRegenerating.value) {
+function getVisualDescription(kind: 'protagonist' | 'scene' | 'npc' | 'object', id: string) {
+  if (!debugData.value) {
+    return ''
+  }
+
+  if (kind === 'protagonist') {
+    return debugData.value.protagonist?.description || ''
+  }
+
+  if (kind === 'scene') {
+    return (debugData.value.scenes || []).find((scene: any) => scene.id === id)?.description || ''
+  }
+
+  if (kind === 'npc') {
+    return (debugData.value.npcs || []).find((npc: any) => npc.id === id)?.description || ''
+  }
+
+  return (debugData.value.objects || []).find((obj: any) => obj.id === id)?.description || ''
+}
+
+function closeRegenerateDialog(force = false) {
+  if ((isRegenerating.value || isUploading.value) && !force) {
     return
   }
   showPromptDialog.value = false
@@ -109,12 +152,101 @@ async function regenerateVisual() {
       throw new Error(payload?.detail || 'Failed to regenerate image.')
     }
 
+    isRegenerating.value = false
+    closeRegenerateDialog(true)
     await fetchDebugInfo()
-    closeRegenerateDialog()
   } catch (error: any) {
     promptError.value = error?.message || 'Network error while regenerating.'
   } finally {
     isRegenerating.value = false
+  }
+}
+
+function triggerUpload() {
+  if (!selectedVisual.value || isUploading.value) {
+    return
+  }
+  uploadInput.value?.click()
+}
+
+function getFileExtension(fileName: string) {
+  return fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() || '' : ''
+}
+
+function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const preview = new window.Image()
+    const objectUrl = URL.createObjectURL(file)
+
+    preview.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      resolve({ width: preview.naturalWidth, height: preview.naturalHeight })
+    }
+
+    preview.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('Invalid image file.'))
+    }
+
+    preview.src = objectUrl
+  })
+}
+
+async function validateUploadFile(file: File, kind: 'protagonist' | 'scene' | 'npc' | 'object'): Promise<string | null> {
+  const ext = getFileExtension(file.name)
+  if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type) && !ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+    return 'Unsupported image format. Use PNG, JPEG, or WEBP.'
+  }
+
+  const limits = VISUAL_UPLOAD_LIMITS[kind]
+  const dimensions = await readImageDimensions(file)
+  if (dimensions.width > limits.maxWidth || dimensions.height > limits.maxHeight) {
+    return `Image too large. Max size for this asset is ${limits.maxWidth}x${limits.maxHeight}.`
+  }
+
+  return null
+}
+
+async function handleUploadChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+
+  if (!file || !props.adventureId || !selectedVisual.value) {
+    return
+  }
+
+  promptError.value = ''
+  try {
+    const validationError = await validateUploadFile(file, selectedVisual.value.kind)
+    if (validationError) {
+      promptError.value = validationError
+      return
+    }
+
+    isUploading.value = true
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('target_type', selectedVisual.value.kind)
+    formData.append('target_id', selectedVisual.value.id)
+
+    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/visuals/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null)
+      throw new Error(payload?.detail || 'Failed to upload image.')
+    }
+
+    isUploading.value = false
+    closeRegenerateDialog(true)
+    await fetchDebugInfo()
+  } catch (error: any) {
+    promptError.value = error?.message || 'Network error while uploading.'
+  } finally {
+    isUploading.value = false
   }
 }
 
@@ -258,6 +390,7 @@ watch(
     showDebug.value = false
     showPromptDialog.value = false
     selectedVisual.value = null
+    promptError.value = ''
     await fetchAdventure()
     await fetchDebugInfo()
   }
@@ -344,7 +477,7 @@ watch(
                   <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Protagonist Portrait</h3>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <img v-if="debugData.protagonist.profile_image" :src="'http://localhost:8000' + debugData.protagonist.profile_image" class="absolute inset-0 w-full h-full object-cover" />
+                      <img v-if="debugData.protagonist.profile_image" :src="buildVisualImageUrl(debugData.protagonist.profile_image)" class="absolute inset-0 w-full h-full object-cover" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ debugData.protagonist.name || 'Protagonist' }}</div>
                         <div class="text-white/70">{{ debugData.protagonist.role || 'Player character' }}</div>
@@ -353,7 +486,7 @@ watch(
                         @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name || 'Protagonist')"
                         class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        {{ debugData.protagonist.profile_image ? 'Regenerate' : 'Generate' }}
+                        {{ debugData.protagonist.profile_image ? 'Replace' : 'Generate' }}
                       </button>
                     </div>
                   </div>
@@ -364,7 +497,7 @@ watch(
                   <div v-if="(debugData.scenes ? debugData.scenes.length : 0) === 0" class="text-xs text-slate-600 italic">No scene visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div v-for="scene in (debugData.scenes || [])" :key="scene.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <img v-if="scene.image_url" :src="'http://localhost:8000' + scene.image_url" class="absolute inset-0 w-full h-full object-cover" />
+                      <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ scene.label || scene.name || scene.id }}</div>
                       </div>
@@ -372,7 +505,7 @@ watch(
                         @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name || scene.id)"
                         class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        {{ scene.image_url ? 'Regenerate' : 'Generate' }}
+                        {{ scene.image_url ? 'Replace' : 'Generate' }}
                       </button>
                     </div>
                   </div>
@@ -383,7 +516,7 @@ watch(
                   <div v-if="(debugData.npcs ? debugData.npcs.length : 0) === 0" class="text-xs text-slate-600 italic">No inhabitant visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <img v-if="npc.image_url" :src="'http://localhost:8000' + npc.image_url" class="absolute inset-0 w-full h-full object-cover" />
+                      <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ npc.name }}</div>
                       </div>
@@ -391,7 +524,7 @@ watch(
                         @click="openRegenerateDialog('npc', npc.id, npc.name || npc.id)"
                         class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        {{ npc.image_url ? 'Regenerate' : 'Generate' }}
+                        {{ npc.image_url ? 'Replace' : 'Generate' }}
                       </button>
                     </div>
                   </div>
@@ -402,7 +535,7 @@ watch(
                   <div v-if="(debugData.objects ? debugData.objects.length : 0) === 0" class="text-xs text-slate-600 italic">No object visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div v-for="obj in (debugData.objects || [])" :key="obj.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <img v-if="obj.image_url" :src="'http://localhost:8000' + obj.image_url" class="absolute inset-0 w-full h-full object-cover" />
+                      <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ obj.name }}</div>
                       </div>
@@ -410,7 +543,7 @@ watch(
                         @click="openRegenerateDialog('object', obj.id, obj.name || obj.id)"
                         class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        {{ obj.image_url ? 'Regenerate' : 'Generate' }}
+                        {{ obj.image_url ? 'Replace' : 'Generate' }}
                       </button>
                     </div>
                   </div>
@@ -501,11 +634,13 @@ watch(
 
     <Transition name="fade">
       <div v-if="showPromptDialog" class="fixed inset-0 z-[70] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" @click="closeRegenerateDialog" />
+        <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" @click="() => closeRegenerateDialog()" />
         <div class="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden">
           <div class="px-6 py-5 border-b border-slate-800">
-            <h3 class="text-lg font-bold text-white">Regenerate Visual</h3>
+            <h3 class="text-lg font-bold text-white">Replace Visual</h3>
             <p class="text-xs text-slate-400 mt-1">{{ selectedVisual?.label || 'Selected visual' }}. Leave the prompt empty to use the default description.</p>
+            <p class="text-xs text-slate-300 mt-3 whitespace-pre-line">{{ selectedVisual?.description || 'No description available.' }}</p>
+            <p class="text-[10px] text-slate-500 mt-2">{{ selectedVisual?.hint || '' }}</p>
           </div>
           <div class="p-6 space-y-4">
             <div>
@@ -516,10 +651,15 @@ watch(
               {{ promptError }}
             </div>
           </div>
+          <div class="px-6 pb-2 flex items-center justify-between gap-3 text-[10px] text-slate-500 uppercase tracking-[0.2em]">
+            <span>Upload PNG, JPEG, or WEBP</span>
+            <button @click="triggerUpload" :disabled="isRegenerating || isUploading" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 hover:bg-cyan-500/30 hover:border-cyan-300/70 font-bold text-[10px] tracking-wider disabled:opacity-40">Upload Image</button>
+          </div>
+          <input ref="uploadInput" type="file" accept="image/png,image/jpeg,image/webp" class="hidden" @change="handleUploadChange" />
           <div class="px-6 py-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-950/40">
-            <button @click="closeRegenerateDialog" :disabled="isRegenerating" class="px-4 py-2 rounded-xl text-slate-400 hover:bg-white/5 transition-colors text-xs font-bold uppercase tracking-widest disabled:opacity-40">Cancel</button>
-            <button @click="regenerateVisual" :disabled="isRegenerating" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest disabled:opacity-50">
-              {{ isRegenerating ? 'Generating...' : 'Generate Image' }}
+            <button @click="closeRegenerateDialog()" :disabled="isRegenerating || isUploading" class="px-4 py-2 rounded-xl text-slate-400 hover:bg-white/5 transition-colors text-xs font-bold uppercase tracking-widest disabled:opacity-40">Cancel</button>
+            <button @click="regenerateVisual" :disabled="isRegenerating || isUploading" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest disabled:opacity-50">
+              {{ isRegenerating ? 'Replacing...' : 'Replace Image' }}
             </button>
           </div>
         </div>
