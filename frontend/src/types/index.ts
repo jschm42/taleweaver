@@ -41,6 +41,7 @@ export interface GameSession {
   adventure_title: string
   image_url: string | null
   scene_id: string
+  current_scene_name?: string | null
   in_game_time: number
   is_paused: boolean
 }

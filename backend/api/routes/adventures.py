@@ -395,6 +395,7 @@ class GameSessionResponse(BaseModel):
     adventure_title: str
     image_url: Optional[str] = None
     scene_id: str
+    current_scene_name: Optional[str] = None
     in_game_time: int
     is_paused: bool
 
@@ -704,8 +705,12 @@ async def get_adventure_status(game_id: str, db: AsyncSession = Depends(get_db))
 async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
     """Returns all game sessions with their linked adventure and avatar IDs."""
     result = await db.execute(
-        select(GameState, Adventure)
+        select(GameState, Adventure, WorldScene.label)
         .join(Adventure, GameState.adventure_id == Adventure.id)
+        .outerjoin(
+            WorldScene,
+            (WorldScene.adventure_id == GameState.adventure_id) & (WorldScene.id == GameState.scene_id),
+        )
     )
     rows = result.all()
     return [
@@ -716,10 +721,11 @@ async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
             adventure_title=a.title,
             image_url=a.image_url,
             scene_id=s.scene_id,
+            current_scene_name=scene_label,
             in_game_time=s.in_game_time,
             is_paused=s.is_paused,
         )
-        for s, a in rows
+        for s, a, scene_label in rows
     ]
 
 
@@ -880,8 +886,15 @@ async def get_game_state(adventure_id: str, db: AsyncSession = Depends(get_db)) 
     state = result.scalars().first()
     if not state:
         raise HTTPException(status_code=404, detail="Game state not found.")
-    # Fetch linked adventure for title and image
+    # Fetch linked adventure and scene label for display metadata
     adv = await db.get(Adventure, state.adventure_id)
+    scene_res = await db.execute(
+        select(WorldScene.label).where(
+            WorldScene.adventure_id == state.adventure_id,
+            WorldScene.id == state.scene_id,
+        )
+    )
+    scene_label = scene_res.scalar_one_or_none()
     return GameSessionResponse(
         game_id=state.id,
         adventure_id=state.adventure_id,
@@ -889,6 +902,7 @@ async def get_game_state(adventure_id: str, db: AsyncSession = Depends(get_db)) 
         adventure_title=adv.title if adv else "",
         image_url=adv.image_url if adv else None,
         scene_id=state.scene_id,
+        current_scene_name=scene_label,
         in_game_time=state.in_game_time,
         is_paused=state.is_paused,
     )

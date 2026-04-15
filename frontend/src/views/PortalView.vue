@@ -14,6 +14,7 @@ interface Adventure {
   adventure_title: string
   image_url: string | null
   scene_id: string
+  current_scene_name?: string | null
   in_game_time: number
   is_paused: boolean
 }
@@ -220,6 +221,10 @@ async function deleteAdventure(adventureId: string) {
 
 function playAdventure(gameId: string) {
   router.push({ name: 'game', params: { id: gameId } })
+}
+
+function displayLocationName(adventure: Adventure) {
+  return adventure.current_scene_name || adventure.scene_id
 }
 
 function openCreateModal() {
@@ -694,7 +699,7 @@ onUnmounted(() => {
           <div
             v-for="adv in visibleAdventures"
             :key="adv.game_id"
-            class="group relative bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden hover:border-emerald-500/50 transition-all duration-500 flex flex-col"
+            class="group relative mx-auto w-full max-w-[21rem] bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden hover:border-emerald-500/50 transition-all duration-500 flex flex-col"
           >
             <div class="aspect-[2/1] bg-slate-800 relative overflow-hidden flex items-center justify-center">
               <template v-if="adv.image_url">
@@ -703,43 +708,48 @@ onUnmounted(() => {
               <template v-else>
                 <i class="ra ra-scroll-unfurled text-6xl text-slate-700 opacity-50"></i>
               </template>
+              <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/75 via-black/42 to-transparent"></div>
+              <div class="absolute inset-x-0 top-0 px-3 pt-3 pb-5">
+                <span class="block truncate text-lg font-extrabold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
+                  {{ adv.adventure_title }}
+                </span>
+              </div>
             </div>
 
-            <div class="p-6 flex-grow flex flex-col">
-              <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-mono text-emerald-500/80 bg-emerald-500/5 px-2 py-1 rounded">SESSION: {{ adv.game_id.substring(0, 8) }}</span>
+            <div class="p-5 flex-grow flex flex-col">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-[9px] font-mono text-emerald-400/75 bg-emerald-500/5 px-2 py-0.5 rounded">{{ adv.game_id.substring(0, 8) }}</span>
                 <span class="text-[10px] px-2 py-1 bg-slate-800 rounded uppercase text-slate-500 tracking-wider font-bold">{{ adv.is_paused ? 'PAUSED' : 'ACTIVE' }}</span>
               </div>
 
-              <h3 class="text-xl font-bold text-white mb-2 line-clamp-1 cursor-pointer" @click="playAdventure(adv.game_id)">
-                {{ adv.adventure_title }}
-              </h3>
-
-              <div class="flex-grow space-y-3 mt-2">
-                <div class="flex justify-between text-[11px] pb-2 border-b border-white/5">
+              <div class="flex-grow space-y-2 mt-1">
+                <div class="flex justify-between text-[11px] pb-2 border-b border-white/5 gap-3">
                   <span class="text-slate-500 uppercase tracking-widest font-semibold">Location</span>
-                  <span class="text-slate-300 font-mono">{{ adv.scene_id }}</span>
+                  <span class="text-slate-200 text-right truncate">{{ displayLocationName(adv) }}</span>
                 </div>
               </div>
 
-              <div class="mt-6 flex gap-2">
+              <div class="mt-4 grid grid-cols-[1fr_auto_auto] gap-2">
                 <button
                   @click="playAdventure(adv.game_id)"
-                  class="flex-grow py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all duration-300"
+                  class="flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all duration-300"
                 >
+                  <span aria-hidden="true">▶</span>
                   Play
                 </button>
                 <button
                   @click="openEditModal(adv.adventure_id)"
-                  class="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all duration-300"
+                  class="flex items-center justify-center px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all duration-300"
+                  title="Edit Adventure"
                 >
-                  Edit
+                  <span aria-hidden="true">✎</span>
                 </button>
                 <button
                   @click="deleteAdventure(adv.adventure_id)"
-                  class="px-4 py-3 bg-slate-800 hover:bg-red-900/30 text-slate-400 hover:text-red-400 rounded-xl border border-slate-700 transition-all duration-300"
+                  class="flex items-center justify-center px-3 py-2.5 bg-slate-800 hover:bg-red-900/30 text-slate-400 hover:text-red-400 rounded-xl border border-slate-700 transition-all duration-300"
+                  title="Delete Adventure"
                 >
-                  Delete
+                  <span aria-hidden="true">🗑</span>
                 </button>
               </div>
             </div>
