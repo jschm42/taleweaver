@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
@@ -6,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
 from backend.core.llm_router import GameMasterLLM
+from backend.core.llm_logger import log_structured_event
 from backend.models.user import User
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.models.adventure import Adventure
@@ -90,6 +90,18 @@ class WorldGenerator:
             provider = settings.get("preferred_provider", "openai")
 
         llm = GameMasterLLM(user, provider=provider)
+
+        log_structured_event(
+            "adventure.generation.start",
+            adventure_id=adventure_id,
+            title=title,
+            provider=provider,
+            model=model,
+            generate_scene_images=generate_scene_images,
+            generate_npc_images=generate_npc_images,
+            generate_item_images=generate_item_images,
+            context_length=len(context or ""),
+        )
         
         system_prompt = (
             "You are a master world-builder for a dark RPG. Your task is to generate a coherent, "
@@ -120,18 +132,47 @@ class WorldGenerator:
         adventure = await db.get(Adventure, adventure_id)
         if adventure:
             adventure.creation_status = "Analyzing Story Idea..."
+            log_structured_event(
+                "adventure.generation.status",
+                adventure_id=adventure_id,
+                status=adventure.creation_status,
+                phase="analysis",
+            )
             await db.commit()
 
         manifesto: WorldManifesto = llm.execute_complex_task(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_model=WorldManifesto,
-            model=model
+            model=model,
+            adventure_id=adventure_id,
+            operation="generate_world",
+            phase="analysis",
+            metadata={
+                "generate_scene_images": generate_scene_images,
+                "generate_npc_images": generate_npc_images,
+                "generate_item_images": generate_item_images,
+            },
+        )
+
+        log_structured_event(
+            "adventure.generation.manifest_received",
+            adventure_id=adventure_id,
+            scene_count=len(manifesto.scenes),
+            exit_count=len(manifesto.exits),
+            npc_count=len(manifesto.npcs),
+            object_count=len(manifesto.objects),
         )
         
         # 2. Update Status
         if adventure:
             adventure.creation_status = "Building Scenes & Plot..."
+            log_structured_event(
+                "adventure.generation.status",
+                adventure_id=adventure_id,
+                status=adventure.creation_status,
+                phase="apply_manifest",
+            )
             # Keep imported/source manifest intact for reproducible resets.
             if not adventure.original_manifest:
                 adventure.original_manifest = manifesto.model_dump()
@@ -146,6 +187,14 @@ class WorldGenerator:
             gen_items=generate_item_images,
             gen_scenes=generate_scene_images,
             gen_protagonist_image=True # Always generate protagonist image
+        )
+        log_structured_event(
+            "adventure.generation.world_applied",
+            adventure_id=adventure_id,
+            scene_count=len(manifesto.scenes),
+            exit_count=len(manifesto.exits),
+            npc_count=len(manifesto.npcs),
+            object_count=len(manifesto.objects),
         )
         await db.flush()
 
@@ -168,6 +217,15 @@ class WorldGenerator:
         """
         from backend.engine.media_engine import MediaEngine
         adventure = await db.get(Adventure, adventure_id)
+
+        log_structured_event(
+            "adventure.generation.apply_manifest.start",
+            adventure_id=adventure_id,
+            scene_count=len(manifest_dict.get("scenes", [])),
+            exit_count=len(manifest_dict.get("exits", [])),
+            npc_count=len(manifest_dict.get("npcs", [])),
+            object_count=len(manifest_dict.get("objects", [])),
+        )
         
         # Preserve any existing images if caller didn't provide them
         if existing_images is None:
@@ -188,6 +246,8 @@ class WorldGenerator:
         # Deduplication caches
         seen_scene_ids = set()
         seen_entity_ids = set()
+        starting_equipped_ids: dict[str, str] = {}
+        starting_inv_ids: set[str] = set()
         
         # 0. Sync Protagonist to Avatar
         prot = manifest_dict.get("protagonist", {})
@@ -369,22 +429,32 @@ class WorldGenerator:
                     new_equip[starting_slot] = item_data
                     avatar.equipment = new_equip
 
-            db.add(WorldEntity(
-                id=o["id"],
-                adventure_id=adventure_id,
-                entity_type="OBJECT",
-                name=o["name"],
-                description=o["description"],
-                current_scene_id="INVENTORY" if is_in_inv else o["start_scene_id"],
-                spatial_position=o.get("spatial_position"),
-                image_url=image_url,
-                item_type=o.get("item_type", "PICKABLE"),
-                wearable_slots=o.get("wearable_slots"),
-                is_hidden=o.get("is_hidden", False),
-                is_in_inventory=is_in_inv,
-                # NEW FIELDS
-                is_portable=o.get("is_portable", o.get("item_type") != "STATIC"),
-                combination_ingredients=o.get("combination_ingredients"),
-                reveals_item_id=o.get("reveals_item_id"),
-                state_comment=o.get("state_comment")
-            ))
+            db.add(
+                WorldEntity(
+                    id=o["id"],
+                    adventure_id=adventure_id,
+                    entity_type="OBJECT",
+                    name=o["name"],
+                    description=o["description"],
+                    current_scene_id="INVENTORY" if is_in_inv else o["start_scene_id"],
+                    spatial_position=o.get("spatial_position"),
+                    image_url=image_url,
+                    item_type=o.get("item_type", "PICKABLE"),
+                    wearable_slots=o.get("wearable_slots"),
+                    is_hidden=o.get("is_hidden", False),
+                    is_in_inventory=is_in_inv,
+                    is_portable=o.get("is_portable", o.get("item_type") != "STATIC"),
+                    combination_ingredients=o.get("combination_ingredients"),
+                    reveals_item_id=o.get("reveals_item_id"),
+                    state_comment=o.get("state_comment"),
+                )
+            )
+
+        log_structured_event(
+            "adventure.generation.apply_manifest.complete",
+            adventure_id=adventure_id,
+            scene_count=len(manifest_dict.get("scenes", [])),
+            exit_count=len(manifest_dict.get("exits", [])),
+            npc_count=len(manifest_dict.get("npcs", [])),
+            object_count=len(manifest_dict.get("objects", [])),
+        )

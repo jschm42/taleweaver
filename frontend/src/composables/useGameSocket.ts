@@ -14,6 +14,7 @@ export interface UseGameSocket {
   sheet: Ref<CharacterSheet | null>
   mermaidData: Ref<string>
   nodes: Ref<Record<string, any>>
+  npcMetadata: Ref<Record<string, any>>
   currentSceneImage: Ref<string | null>
   entities: Ref<any[]>
   status: Ref<ConnectionStatus>

@@ -4,8 +4,6 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // Pixel-art / retro monospace font loaded via Google Fonts
-        pixel: ['"Press Start 2P"', 'monospace'],
         // Modern UI font
         sans: ['Acme', 'sans-serif'],
       },

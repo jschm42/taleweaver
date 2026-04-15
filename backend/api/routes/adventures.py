@@ -1,14 +1,17 @@
 import logging
+import os
 import uuid
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from typing import Optional, Dict, Any, List, Literal
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from pydantic import BaseModel
+from PIL import Image
 
 from backend.core.database import get_db
+from backend.core.config import settings
 from backend.models.user import User
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
@@ -28,6 +31,7 @@ from backend.engine.media_engine import MediaEngine
 from backend.engine.memory_manager import MemoryManager
 from backend.engine.debug_engine import DebugEngine
 from backend.core.llm_router import GameMasterLLM
+from backend.core.llm_logger import log_structured_event
 
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
 logger = logging.getLogger(__name__)
@@ -171,6 +175,135 @@ def _normalize_manifest_for_world_generator(manifest: dict[str, Any] | None) -> 
     return normalized
 
 
+def _serialize_model(instance: Any) -> dict[str, Any]:
+    return {column.name: getattr(instance, column.name) for column in instance.__table__.columns}
+
+
+def _build_visual_prompt(target_type: str, target_data: Dict[str, Any], custom_prompt: Optional[str]) -> str:
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+
+    if target_type == "protagonist":
+        name = target_data.get("name") or "The protagonist"
+        role = target_data.get("role") or "adventurer"
+        description = target_data.get("description") or "A distinctive fantasy hero."
+        return f"Portrait of character {name}, {role}. {description}. Game character art style."
+
+    if target_type == "scene":
+        label = target_data.get("label") or target_data.get("name") or "Scene"
+        description = target_data.get("description") or ""
+        return f"Atmospheric background: {label}. {description}. RPG visual novel style, high detail."
+
+    if target_type == "npc":
+        name = target_data.get("name") or "NPC"
+        description = target_data.get("description") or "A distinctive non-player character."
+        return f"Portrait of NPC {name}. {description}. Character portrait, high detail."
+
+    if target_type == "object":
+        name = target_data.get("name") or "Object"
+        description = target_data.get("description") or "A detailed fantasy object."
+        return f"Detailed illustration of object {name}. {description}. Fantasy item concept art, isolated and clearly readable."
+
+    if target_type == "cover":
+        title = target_data.get("title") or "Adventure"
+        context = target_data.get("context") or "A cinematic fantasy journey."
+        return f"Epic cinematic adventure cover: {title}. {context}. Landscape format, high fantasy art style, immersive atmosphere, detailed concept art."
+
+    raise HTTPException(status_code=400, detail="Unsupported visual target type.")
+
+
+VISUAL_UPLOAD_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+VISUAL_UPLOAD_SPECS: Dict[str, Dict[str, Any]] = {
+    "cover": {
+        "folder": "",
+        "max_width": 2048,
+        "max_height": 1024,
+        "recommended": "Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.",
+    },
+    "protagonist": {
+        "folder": "protagonist",
+        "max_width": 1024,
+        "max_height": 1280,
+        "recommended": "Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.",
+    },
+    "scene": {
+        "folder": "scenes",
+        "max_width": 1600,
+        "max_height": 900,
+        "recommended": "Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.",
+    },
+    "npc": {
+        "folder": "entities",
+        "max_width": 1024,
+        "max_height": 1280,
+        "recommended": "Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.",
+    },
+    "object": {
+        "folder": "entities",
+        "max_width": 1024,
+        "max_height": 1024,
+        "recommended": "Optimal: square 1:1, max 1024x1024. PNG, JPEG, or WEBP.",
+    },
+}
+
+
+def _get_visual_upload_spec(target_type: str) -> Dict[str, Any]:
+    spec = VISUAL_UPLOAD_SPECS.get(target_type)
+    if not spec:
+        raise HTTPException(status_code=400, detail="Unsupported visual target type.")
+    return spec
+
+
+def _get_extension(filename: str) -> str:
+    return filename.split(".")[-1].lower() if "." in filename else ""
+
+
+async def _resolve_visual_target(
+    db: AsyncSession,
+    adventure_id: str,
+    target_type: str,
+    target_id: str,
+) -> tuple[Any, Dict[str, Any], str]:
+    if target_type == "cover":
+        adventure = await db.get(Adventure, adventure_id)
+        if not adventure:
+            raise HTTPException(status_code=404, detail="Adventure not found.")
+        if target_id != adventure_id:
+            raise HTTPException(status_code=400, detail="Invalid cover target id.")
+        return adventure, _serialize_model(adventure), "image_url"
+
+    if target_type == "protagonist":
+        avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id, Avatar.id == target_id))
+        avatar = avatar_res.scalars().first()
+        if not avatar:
+            raise HTTPException(status_code=404, detail="Protagonist not found.")
+        return avatar, _serialize_model(avatar), "profile_image"
+
+    if target_type == "scene":
+        scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id, WorldScene.id == target_id))
+        scene = scene_res.scalars().first()
+        if not scene:
+            raise HTTPException(status_code=404, detail="Scene not found.")
+        return scene, _serialize_model(scene), "image_url"
+
+    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id, WorldEntity.id == target_id))
+    entity = entity_res.scalars().first()
+    if not entity:
+        raise HTTPException(status_code=404, detail="Visual target not found.")
+
+    expected_entity_type = "NPC" if target_type == "npc" else "OBJECT"
+    if entity.entity_type != expected_entity_type:
+        raise HTTPException(status_code=404, detail="Visual target not found.")
+
+    return entity, _serialize_model(entity), "image_url"
+
+
+class VisualRegenerateRequest(BaseModel):
+    target_type: Literal["cover", "protagonist", "scene", "npc", "object"]
+    target_id: str
+    prompt: Optional[str] = None
+
+
 async def _resolve_scene_id(db: AsyncSession, adventure_id: str, scene_ref: Optional[str]) -> Optional[str]:
     """Resolve a scene reference by ID, label, or normalized label slug.
 
@@ -262,6 +395,7 @@ class GameSessionResponse(BaseModel):
     adventure_title: str
     image_url: Optional[str] = None
     scene_id: str
+    current_scene_name: Optional[str] = None
     in_game_time: int
     is_paused: bool
 
@@ -294,6 +428,18 @@ async def create_adventure(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    log_structured_event(
+        "adventure.create.request",
+        title=payload.title,
+        strict_rules=payload.strict_rules,
+        time_per_turn=payload.time_per_turn,
+        generate_scene_images=payload.generate_scene_images,
+        generate_npc_images=payload.generate_npc_images,
+        generate_item_images=payload.generate_item_images,
+        heartbeat_enabled=payload.heartbeat_enabled,
+        has_original_manifest=bool(payload.original_manifest),
+    )
+
     result = await db.execute(select(User).limit(1))
     user = result.scalars().first()
     if not user:
@@ -343,6 +489,12 @@ async def create_adventure(
     )
     db.add(avatar)
     await db.commit()
+    log_structured_event(
+        "adventure.create.placeholder_ready",
+        adventure_id=adv.id,
+        avatar_id=avatar.id,
+        user_id=user.id,
+    )
     # Create initial GameState so the session is visible immediately to clients/tests
     db.add(GameState(
         id=adv.id,
@@ -353,6 +505,12 @@ async def create_adventure(
         in_game_time=0
     ))
     await db.commit()
+    log_structured_event(
+        "adventure.create.session_seeded",
+        adventure_id=adv.id,
+        game_id=adv.id,
+        avatar_id=avatar.id,
+    )
 
     # Store original_manifest if provided and dispatch generation with payload
     if getattr(payload, 'original_manifest', None):
@@ -362,6 +520,13 @@ async def create_adventure(
 
     # Prepare payload for background generation; include original_manifest if present
     bg_payload = payload.model_dump()
+    log_structured_event(
+        "adventure.generation.scheduled",
+        adventure_id=adv.id,
+        title=payload.title,
+        background_task="run_background_generation",
+        has_original_manifest=bool(payload.original_manifest),
+    )
     background_tasks.add_task(run_background_generation, adv.id, user.id, bg_payload)
     
     # Return IDs expected by existing clients/tests
@@ -372,6 +537,15 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
     from backend.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         try:
+            log_structured_event(
+                "adventure.generation.started",
+                adventure_id=adventure_id,
+                user_id=user_id,
+                title=payload_dict.get("title"),
+                generate_scene_images=payload_dict.get("generate_scene_images", False),
+                generate_npc_images=payload_dict.get("generate_npc_images", False),
+                generate_item_images=payload_dict.get("generate_item_images", False),
+            )
             # Re-fetch user in this session; if DB schema isn't fully migrated, abort gracefully
             try:
                 result = await db.execute(select(User).where(User.id == user_id))
@@ -397,9 +571,22 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 manifest = (adv_for_context.original_manifest or {}) if adv_for_context else {}
                 adventure_context = manifest.get('story_idea') or manifest.get('description') or "A standard fantasy world."
 
+            log_structured_event(
+                "adventure.generation.status",
+                adventure_id=adventure_id,
+                status="Generating world structure",
+                phase="world_generation",
+            )
+
             if normalized_manifest:
                 if adv_for_context:
                     adv_for_context.creation_status = "Applying Imported Manifest..."
+                    log_structured_event(
+                        "adventure.generation.status",
+                        adventure_id=adventure_id,
+                        status=adv_for_context.creation_status,
+                        phase="apply_manifest",
+                    )
                     await db.commit()
 
                 await WorldGenerator.apply_manifest(
@@ -475,11 +662,22 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             if adv:
                 adv.is_ready = True
                 adv.creation_status = "Ready"
+                log_structured_event(
+                    "adventure.generation.completed",
+                    adventure_id=adventure_id,
+                    scene_count=len(scenes),
+                    avatar_id=avatar.id if avatar else None,
+                )
             
             await db.commit()
             
         except Exception as e:
             logger.error("Background Gen Failed for %s: %s", adventure_id, e)
+            log_structured_event(
+                "adventure.generation.failed",
+                adventure_id=adventure_id,
+                error=str(e),
+            )
             try:
                 await db.rollback()
                 # Do not auto-delete adventures during background failures in tests.
@@ -507,8 +705,12 @@ async def get_adventure_status(game_id: str, db: AsyncSession = Depends(get_db))
 async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
     """Returns all game sessions with their linked adventure and avatar IDs."""
     result = await db.execute(
-        select(GameState, Adventure)
+        select(GameState, Adventure, WorldScene.label)
         .join(Adventure, GameState.adventure_id == Adventure.id)
+        .outerjoin(
+            WorldScene,
+            (WorldScene.adventure_id == GameState.adventure_id) & (WorldScene.id == GameState.scene_id),
+        )
     )
     rows = result.all()
     return [
@@ -519,10 +721,11 @@ async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
             adventure_title=a.title,
             image_url=a.image_url,
             scene_id=s.scene_id,
+            current_scene_name=scene_label,
             in_game_time=s.in_game_time,
             is_paused=s.is_paused,
         )
-        for s, a in rows
+        for s, a, scene_label in rows
     ]
 
 
@@ -683,8 +886,15 @@ async def get_game_state(adventure_id: str, db: AsyncSession = Depends(get_db)) 
     state = result.scalars().first()
     if not state:
         raise HTTPException(status_code=404, detail="Game state not found.")
-    # Fetch linked adventure for title and image
+    # Fetch linked adventure and scene label for display metadata
     adv = await db.get(Adventure, state.adventure_id)
+    scene_res = await db.execute(
+        select(WorldScene.label).where(
+            WorldScene.adventure_id == state.adventure_id,
+            WorldScene.id == state.scene_id,
+        )
+    )
+    scene_label = scene_res.scalar_one_or_none()
     return GameSessionResponse(
         game_id=state.id,
         adventure_id=state.adventure_id,
@@ -692,6 +902,7 @@ async def get_game_state(adventure_id: str, db: AsyncSession = Depends(get_db)) 
         adventure_title=adv.title if adv else "",
         image_url=adv.image_url if adv else None,
         scene_id=state.scene_id,
+        current_scene_name=scene_label,
         in_game_time=state.in_game_time,
         is_paused=state.is_paused,
     )
@@ -764,15 +975,172 @@ async def get_adventure_debug(adventure_id: str, db: AsyncSession = Depends(get_
     
     entity_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
     entities = entity_res.scalars().all()
+
+    avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
+    avatar = avatar_res.scalars().first()
     
     # Return serializable dicts
     return AdventureDebugResponse(
-        adventure={c.name: getattr(adventure, c.name) for c in adventure.__table__.columns},
-        scenes=[{c.name: getattr(s, c.name) for c in s.__table__.columns} for s in scenes],
-        npcs=[{c.name: getattr(ent, c.name) for c in ent.__table__.columns} for ent in entities if ent.entity_type == "NPC"],
-        objects=[{c.name: getattr(ent, c.name) for c in ent.__table__.columns} for ent in entities if ent.entity_type == "OBJECT"],
-        exits=[{c.name: getattr(ex, c.name) for c in ex.__table__.columns} for ex in exits]
+        adventure=_serialize_model(adventure),
+        protagonist=_serialize_model(avatar) if avatar else None,
+        scenes=[_serialize_model(s) for s in scenes],
+        npcs=[_serialize_model(ent) for ent in entities if ent.entity_type == "NPC"],
+        objects=[_serialize_model(ent) for ent in entities if ent.entity_type == "OBJECT"],
+        exits=[_serialize_model(ex) for ex in exits]
     )
+
+
+@router.post("/{adventure_id}/visuals/regenerate")
+async def regenerate_visual(
+    adventure_id: str,
+    payload: VisualRegenerateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Regenerates a cover, scene, NPC, object, or protagonist portrait for an adventure."""
+    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Game state not found.")
+
+    user = await db.get(User, state.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    target_model, target_data, image_attr = await _resolve_visual_target(
+        db=db,
+        adventure_id=adventure_id,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+    )
+
+    image_url: Optional[str] = None
+
+    if payload.target_type == "cover":
+        cover_context = payload.prompt.strip() if payload.prompt and payload.prompt.strip() else (target_data.get("context") or "")
+        image_url = await MediaEngine.generate_adventure_cover(
+            title=target_data.get("title") or "Adventure",
+            context=cover_context,
+            adventure_id=adventure_id,
+            user_config={"t2i_settings": user.t2i_settings},
+            api_keys=user.encrypted_api_keys or {},
+        )
+        if not image_url:
+            raise HTTPException(status_code=504, detail="Cover image generation timed out or failed.")
+    elif payload.target_type == "protagonist":
+        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
+        image_url = await MediaEngine.generate_entity_image(
+            prompt,
+            adventure_id,
+            target_model.id,
+            "PROTAGONIST",
+            {"t2i_settings": user.t2i_settings},
+            user.encrypted_api_keys or {},
+        )
+        if not image_url:
+            raise HTTPException(status_code=504, detail="Protagonist image generation timed out or failed.")
+    elif payload.target_type == "scene":
+        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
+        image_url = await MediaEngine.generate_scene_image(
+            prompt,
+            adventure_id,
+            {"t2i_settings": user.t2i_settings},
+            user.encrypted_api_keys or {},
+        )
+        if not image_url:
+            raise HTTPException(status_code=504, detail="Scene image generation timed out or failed.")
+    else:
+        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
+        image_url = await MediaEngine.generate_entity_image(
+            prompt,
+            adventure_id,
+            target_model.id,
+            target_model.entity_type,
+            {"t2i_settings": user.t2i_settings},
+            user.encrypted_api_keys or {},
+        )
+        if not image_url:
+            raise HTTPException(status_code=504, detail="Image generation timed out or failed.")
+
+    setattr(target_model, image_attr, image_url)
+    await db.commit()
+    return {
+        "status": "updated",
+        "adventure_id": adventure_id,
+        "target_type": payload.target_type,
+        "target_id": payload.target_id,
+        "image_url": image_url,
+    }
+
+
+@router.post("/{adventure_id}/visuals/upload")
+async def upload_visual(
+    adventure_id: str,
+    target_type: str = Form(...),
+    target_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Uploads a visual asset for a cover, protagonist, scene, NPC, or object."""
+    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Game state not found.")
+
+    spec = _get_visual_upload_spec(target_type)
+
+    target_model, _, image_attr = await _resolve_visual_target(
+        db=db,
+        adventure_id=adventure_id,
+        target_type=target_type,
+        target_id=target_id,
+    )
+    ext = _get_extension(file.filename or "")
+    if ext not in VISUAL_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported file extension. Use jpg, jpeg, png, or webp.")
+
+    if file.content_type and file.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use png, jpeg, or webp.")
+
+    target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, spec["folder"])
+    os.makedirs(target_dir, exist_ok=True)
+
+    filename = f"cover_{uuid.uuid4().hex}.{ext}" if target_type == "cover" else f"{target_id}.{ext}"
+    filepath = os.path.join(target_dir, filename)
+
+    try:
+        image = Image.open(file.file)
+        image.load()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid image file: {exc}") from exc
+
+    if image.width > spec["max_width"] or image.height > spec["max_height"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Image too large. Max size for this asset is {spec['max_width']}x{spec['max_height']}.",
+        )
+
+    try:
+        if image.mode in ("RGBA", "P") and ext in {"jpg", "jpeg"}:
+            image = image.convert("RGB")
+
+        save_format = "JPEG" if ext in {"jpg", "jpeg"} else ext.upper()
+        image.save(filepath, format=save_format)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to store uploaded image: {exc}") from exc
+
+
+    image_url = f"/data/adventures/{adventure_id}/{spec['folder']}/{filename}".replace("\\", "/")
+    setattr(target_model, image_attr, image_url)
+    await db.commit()
+
+    return {
+        "status": "uploaded",
+        "adventure_id": adventure_id,
+        "target_type": target_type,
+        "target_id": target_id,
+        "image_url": image_url,
+        "recommended_format": spec["recommended"],
+    }
 
 @router.post("/{adventure_id}/reset")
 async def reset_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)):
@@ -1436,7 +1804,12 @@ async def post_chat_message(
                 system_prompt=mechanics_system_prompt,
                 user_prompt=user_msg,
                 response_model=GameEvent,
-                model=small_model
+                model=small_model,
+                adventure_id=state.adventure_id,
+                game_id=game_id,
+                operation="chat_turn",
+                phase="mechanics",
+                metadata={"strict_rules": True},
             )
 
             # --- PASS 2: Atmospheric Narration (Complex Model) ---
@@ -1460,7 +1833,12 @@ async def post_chat_message(
             response_text = llm.execute_simple_task(
                 system_prompt=narration_system_prompt,
                 user_prompt=user_msg,
-                model=complex_model
+                model=complex_model,
+                adventure_id=state.adventure_id,
+                game_id=game_id,
+                operation="chat_turn",
+                phase="narration",
+                metadata={"strict_rules": True, "is_new_scene": is_new_scene},
             )
             
             # Apply mechanics to avatar, but use the complex narration for the final output
@@ -1473,7 +1851,16 @@ async def post_chat_message(
                 response_text = str(exc)
         else:
             # Free-form narrative always uses the high-quality complex model
-            response_text = llm.execute_simple_task(system_prompt, user_msg, complex_model)
+            response_text = llm.execute_simple_task(
+                system_prompt,
+                user_msg,
+                complex_model,
+                adventure_id=state.adventure_id,
+                game_id=game_id,
+                operation="chat_turn",
+                phase="freeform",
+                metadata={"strict_rules": False},
+            )
 
         # Record Assistant Message
         assistant_chat = ChatMessage(game_state_id=game_id, role="assistant", content=response_text)

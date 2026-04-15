@@ -1,10 +1,12 @@
 """
 MediaEngine — Handles AI image generation for scenes and entities.
-Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Midjourney.
+Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Midjourney, while using the direct BFL API for Black Forest Labs.
 """
 import logging
 import os
 import uuid
+import asyncio
+import time
 import requests
 import litellm
 from typing import Optional, Any
@@ -13,7 +15,122 @@ from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+BFL_DEFAULT_MODEL = "black_forest_labs/flux-pro-1.1"
+BFL_API_BASE = "https://api.bfl.ai/v1"
+NO_TEXT_IMAGE_PROMPT_SUFFIX = "Do not include any text, letters, captions, logos, watermarks, or signage unless the prompt explicitly asks for text."
+
 class MediaEngine:
+    @staticmethod
+    def _apply_no_text_instruction(prompt: str) -> str:
+        """Append a global no-text instruction to image prompts when missing."""
+        normalized = prompt.strip()
+        if NO_TEXT_IMAGE_PROMPT_SUFFIX.lower() in normalized.lower():
+            return normalized
+        return f"{normalized} {NO_TEXT_IMAGE_PROMPT_SUFFIX}"
+
+    @staticmethod
+    def _normalize_black_forest_labs_model(model: str) -> str:
+        """Return a BFL model slug suitable for the direct API.
+
+        If the saved model is still an OpenAI-style default, fall back to a valid
+        BFL FLUX model so older settings do not silently generate nothing.
+        """
+        normalized = (model or "").strip()
+        if not normalized:
+            return BFL_DEFAULT_MODEL
+
+        lowered = normalized.lower()
+        if lowered.startswith(("openai/", "dall-e", "openrouter/", "midjourney/")):
+            return BFL_DEFAULT_MODEL.removeprefix("black_forest_labs/")
+
+        if normalized.startswith("black_forest_labs/"):
+            return normalized.removeprefix("black_forest_labs/")
+
+        return normalized
+
+    @staticmethod
+    async def _generate_image_black_forest_labs_direct(
+        prompt: str,
+        model: str,
+        api_key: str,
+        target_dir: str,
+        filename: Optional[str] = None,
+        provider_options: Optional[dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """Generate a BFL image by calling the REST API directly and polling for completion."""
+        provider_options = provider_options or {}
+        model_slug = MediaEngine._normalize_black_forest_labs_model(model)
+        endpoint = f"{BFL_API_BASE}/{model_slug}"
+
+        payload: dict[str, Any] = {"prompt": prompt}
+        optional_fields = (
+            "input_image",
+            "input_image_2",
+            "input_image_3",
+            "input_image_4",
+            "seed",
+            "width",
+            "height",
+            "safety_tolerance",
+            "output_format",
+            "webhook_url",
+            "webhook_secret",
+            "transparent_bg",
+        )
+        for field in optional_fields:
+            value = provider_options.get(field)
+            if value is not None:
+                payload[field] = value
+
+        response = requests.post(
+            endpoint,
+            headers={"Content-Type": "application/json", "x-key": api_key},
+            json=payload,
+            timeout=120,
+        )
+        if response.status_code != 200:
+            logger.error("BFL image generation submit failed. status=%s body=%s", response.status_code, response.text)
+            return None
+
+        body = response.json()
+        polling_url = body.get("polling_url")
+        if not polling_url:
+            logger.error("BFL response did not include polling_url: %s", body)
+            return None
+
+        poll_deadline = time.monotonic() + 600.0
+        while time.monotonic() < poll_deadline:
+            poll_response = requests.get(
+                polling_url,
+                headers={"accept": "application/json", "x-key": api_key},
+                timeout=30,
+            )
+            if poll_response.status_code != 200:
+                logger.error(
+                    "BFL polling failed. status=%s body=%s",
+                    poll_response.status_code,
+                    poll_response.text,
+                )
+                return None
+
+            poll_body = poll_response.json()
+            status = str(poll_body.get("status") or "").lower()
+            if status == "ready":
+                result = poll_body.get("result") or {}
+                sample_url = result.get("sample")
+                if not sample_url:
+                    logger.error("BFL polling response missing result.sample: %s", poll_body)
+                    return None
+                return await MediaEngine._save_remote_image(sample_url, target_dir, filename)
+            if status in {"error", "failed"}:
+                logger.error("BFL generation failed: %s", poll_body)
+                return None
+
+            await asyncio.sleep(2.0)
+
+        logger.error("BFL polling timed out after 600s for prompt: %s", prompt)
+        return None
+
     @staticmethod
     async def generate_image(
         prompt: str, 
@@ -25,9 +142,7 @@ class MediaEngine:
         filename: Optional[str] = None,
         provider_options: Optional[dict[str, Any]] = None,
     ) -> Optional[str]:
-        """
-        Calls LiteLLM to generate an image and saves it locally.
-        """
+        """Generates an image and saves it locally."""
         provider_key = (provider or "openai").lower()
         if not prompt or not model:
             raise ValueError("Missing prompt or model for image generation.")
@@ -49,6 +164,8 @@ class MediaEngine:
                 )
         if provider_key != "ollama" and not api_key:
             raise ValueError(f"Missing API key for image generation provider '{provider_key}'.")
+
+        prompt = MediaEngine._apply_no_text_instruction(prompt)
             
         # Default target dir if not provided
         if target_dir is None:
@@ -61,6 +178,16 @@ class MediaEngine:
         
         try:
             provider_options = provider_options or {}
+
+            if provider_key == "black_forest_labs":
+                return await MediaEngine._generate_image_black_forest_labs_direct(
+                    prompt=prompt,
+                    model=model,
+                    api_key=api_key,
+                    target_dir=target_dir,
+                    filename=filename,
+                    provider_options=provider_options,
+                )
 
             kwargs: dict[str, Any] = {
                 "prompt": prompt,
@@ -360,7 +487,8 @@ class MediaEngine:
         api_key = encryption_util.decrypt_key(api_keys[provider]) if provider in api_keys else None
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
-        filename = "cover.png"
+        # Use a versioned filename so clients never stay on a stale cached cover URL.
+        filename = f"cover_{uuid.uuid4().hex}.png"
         
         # Craft a prompt specifically requesting landscape/2:1 ratio
         prompt = (

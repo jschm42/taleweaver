@@ -8,6 +8,7 @@ export interface ChatMessage {
 /** Character sheet snapshot pushed by the server after every action. */
 export interface CharacterSheet {
   name: string
+  adventure_title?: string | null
   role?: string | null
   description?: string | null
   profile_image?: string | null
@@ -40,6 +41,7 @@ export interface GameSession {
   adventure_title: string
   image_url: string | null
   scene_id: string
+  current_scene_name?: string | null
   in_game_time: number
   is_paused: boolean
 }
