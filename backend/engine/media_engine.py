@@ -7,8 +7,8 @@ import os
 import uuid
 import asyncio
 import time
+import importlib
 import requests
-import litellm
 from typing import Optional, Any
 from backend.core.security import encryption_util
 from backend.core.config import settings
@@ -20,6 +20,14 @@ BFL_API_BASE = "https://api.bfl.ai/v1"
 NO_TEXT_IMAGE_PROMPT_SUFFIX = "Do not include any text, letters, captions, logos, watermarks, or signage unless the prompt explicitly asks for text."
 
 class MediaEngine:
+    _litellm_module: Any = None
+
+    @classmethod
+    def _get_litellm(cls) -> Any:
+        if cls._litellm_module is None:
+            cls._litellm_module = importlib.import_module("litellm")
+        return cls._litellm_module
+
     @staticmethod
     def _apply_no_text_instruction(prompt: str) -> str:
         """Append a global no-text instruction to image prompts when missing."""
@@ -216,7 +224,7 @@ class MediaEngine:
                 kwargs["api_base"] = ollama_url
 
             # Call LiteLLM first
-            response = litellm.image_generation(**kwargs)
+            response = MediaEngine._get_litellm().image_generation(**kwargs)
             image_url, b64_json = MediaEngine._extract_image_payload(response)
             
             if image_url:

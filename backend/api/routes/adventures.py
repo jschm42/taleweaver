@@ -179,6 +179,26 @@ def _serialize_model(instance: Any) -> dict[str, Any]:
     return {column.name: getattr(instance, column.name) for column in instance.__table__.columns}
 
 
+async def _set_generation_state(
+    db: AsyncSession,
+    adventure_id: str,
+    *,
+    status: Optional[str] = None,
+    is_ready: Optional[bool] = None,
+    error: Optional[str] = None,
+) -> None:
+    adventure = await db.get(Adventure, adventure_id)
+    if not adventure:
+        return
+
+    if status is not None:
+        adventure.creation_status = status
+    if is_ready is not None:
+        adventure.is_ready = is_ready
+    adventure.creation_error = error
+    await db.commit()
+
+
 def _build_visual_prompt(target_type: str, target_data: Dict[str, Any], custom_prompt: Optional[str]) -> str:
     if custom_prompt and custom_prompt.strip():
         return custom_prompt.strip()
@@ -546,15 +566,35 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 generate_npc_images=payload_dict.get("generate_npc_images", False),
                 generate_item_images=payload_dict.get("generate_item_images", False),
             )
+            await _set_generation_state(
+                db,
+                adventure_id,
+                status="Generating world structure",
+                is_ready=False,
+            )
             # Re-fetch user in this session; if DB schema isn't fully migrated, abort gracefully
             try:
                 result = await db.execute(select(User).where(User.id == user_id))
                 user = result.scalars().first()
                 if not user:
                     logger.warning("Background Gen: user not found for %s", user_id)
+                    await _set_generation_state(
+                        db,
+                        adventure_id,
+                        status="Generation Failed",
+                        is_ready=False,
+                        error="Background generation user not found.",
+                    )
                     return
             except Exception as e:
                 logger.error("Background Gen user fetch failed for %s: %s", user_id, e)
+                await _set_generation_state(
+                    db,
+                    adventure_id,
+                    status="Generation Failed",
+                    is_ready=False,
+                    error=str(e),
+                )
                 return
 
             llm_settings = user.llm_settings or {}
@@ -579,15 +619,18 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             )
 
             if normalized_manifest:
-                if adv_for_context:
-                    adv_for_context.creation_status = "Applying Imported Manifest..."
-                    log_structured_event(
-                        "adventure.generation.status",
-                        adventure_id=adventure_id,
-                        status=adv_for_context.creation_status,
-                        phase="apply_manifest",
-                    )
-                    await db.commit()
+                await _set_generation_state(
+                    db,
+                    adventure_id,
+                    status="Applying Imported Manifest...",
+                    is_ready=False,
+                )
+                log_structured_event(
+                    "adventure.generation.status",
+                    adventure_id=adventure_id,
+                    status="Applying Imported Manifest...",
+                    phase="apply_manifest",
+                )
 
                 await WorldGenerator.apply_manifest(
                     db=db,
@@ -641,8 +684,12 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             
             # 2.5 Generate Cinematic Cover if requested
             if payload_dict.get('automatic_cover_generation'):
-                adv_for_context.creation_status = "Generating Cinematic Cover..."
-                await db.commit()
+                await _set_generation_state(
+                    db,
+                    adventure_id,
+                    status="Generating Cinematic Cover...",
+                    is_ready=False,
+                )
                 try:
                     cover_url = await MediaEngine.generate_adventure_cover(
                         title=adv_for_context.title,
@@ -658,18 +705,19 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     logger.error(f"Cover generation failed: {e}")
 
             # 3. Mark Ready
-            adv = await db.get(Adventure, adventure_id)
-            if adv:
-                adv.is_ready = True
-                adv.creation_status = "Ready"
-                log_structured_event(
-                    "adventure.generation.completed",
-                    adventure_id=adventure_id,
-                    scene_count=len(scenes),
-                    avatar_id=avatar.id if avatar else None,
-                )
-            
-            await db.commit()
+            await _set_generation_state(
+                db,
+                adventure_id,
+                status="Ready",
+                is_ready=True,
+                error=None,
+            )
+            log_structured_event(
+                "adventure.generation.completed",
+                adventure_id=adventure_id,
+                scene_count=len(scenes),
+                avatar_id=avatar.id if avatar else None,
+            )
             
         except Exception as e:
             logger.error("Background Gen Failed for %s: %s", adventure_id, e)
@@ -681,11 +729,13 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             try:
                 await db.rollback()
                 # Do not auto-delete adventures during background failures in tests.
-                adv = await db.get(Adventure, adventure_id)
-                if adv:
-                    adv.creation_status = "Generation Failed"
-                    adv.creation_error = str(e)
-                    await db.commit()
+                await _set_generation_state(
+                    db,
+                    adventure_id,
+                    status="Generation Failed",
+                    is_ready=False,
+                    error=str(e),
+                )
             except Exception:
                 pass
 

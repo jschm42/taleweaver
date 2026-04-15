@@ -123,6 +123,51 @@ async def test_create_adventure_preserves_advanced_manifest_fields(client: Async
     assert original_manifest["start_datetime"] == "2026-04-14T08:30:00.000Z"
 
 
+async def test_create_adventure_persists_generation_status_before_world_gen(client: AsyncClient, monkeypatch):
+    """The background job writes an intermediate status before the world generator starts."""
+    captured: dict[str, str] = {}
+
+    async def fake_generate_world(
+        db,
+        _user,
+        adventure_id,
+        *_args,
+        **_kwargs,
+    ):
+        _ = (_args, _kwargs)
+        adventure = await db.get(Adventure, adventure_id)
+        assert adventure is not None
+        captured["status"] = adventure.creation_status or ""
+
+        db.add(
+            WorldScene(
+                id="START",
+                adventure_id=adventure_id,
+                label="Starting Room",
+                description="A minimal scene created by the test double.",
+                image_url=None,
+            )
+        )
+        await db.commit()
+
+    monkeypatch.setattr("backend.api.routes.adventures.WorldGenerator.generate_world", fake_generate_world)
+
+    resp = await client.post(
+        "/api/adventures",
+        json={"title": "Status Quest", "avatar_name": "Hero"},
+    )
+    assert resp.status_code == 201, resp.text
+    adventure_id = resp.json()["adventure_id"]
+
+    assert captured["status"] == "Generating world structure"
+
+    status_resp = await client.get(f"/api/adventures/{adventure_id}/status")
+    assert status_resp.status_code == 200
+    status_data = status_resp.json()
+    assert status_data["is_ready"] is True
+    assert status_data["status"] == "Ready"
+
+
 async def test_debug_includes_protagonist_profile_image(client: AsyncClient):
     """The adventure debug payload exposes the protagonist portrait for the Visuals panel."""
     ids = await _create_adventure(client, "Portrait Quest")

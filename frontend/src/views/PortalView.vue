@@ -483,6 +483,18 @@ async function pollAdventureStatus(
         creationStatus.value = statusText
         options?.onStatus?.(statusText)
 
+        const hasGenerationError = Boolean(data.error) || /failed/i.test(statusText)
+        if (hasGenerationError) {
+          clearInterval(pollInterval)
+          const detail = data.error ? ` (${data.error})` : ''
+          errorMsg.value = `Generation failed${detail}. Please review your model/image settings.`
+          options?.onFailure?.(statusText)
+          isSubmitting.value = false
+          isImporting.value = false
+          resolve()
+          return
+        }
+
         if (data.is_ready) {
           clearInterval(pollInterval)
           creationStatus.value = ''
@@ -624,7 +636,7 @@ onUnmounted(() => {
                   <span :class="['font-medium', pending.hasError ? 'text-red-300' : 'text-emerald-200']">{{ pending.status }}</span>
                 </div>
                 <div class="text-xs text-slate-400 flex items-center gap-2">
-                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-word animate-wordfade">{{ loadingWords[loadingWordIndex] }}</span>
+                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-word animate-wordfade">Aktueller Schritt: {{ pending.status }}</span>
                   <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-dots" aria-hidden="true"></span>
                 </div>
               </div>
@@ -674,7 +686,7 @@ onUnmounted(() => {
                   <span :class="['font-medium', pending.hasError ? 'text-red-300' : 'text-cyan-200']">{{ pending.status }}</span>
                 </div>
                 <div class="text-xs text-slate-400 flex items-center gap-2">
-                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-word animate-wordfade">{{ loadingWords[loadingWordIndex] }}</span>
+                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-word animate-wordfade">Aktueller Schritt: {{ pending.status }}</span>
                   <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-dots" aria-hidden="true"></span>
                 </div>
               </div>

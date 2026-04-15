@@ -1,5 +1,5 @@
 import json
-import litellm
+import importlib
 from pydantic import BaseModel
 from typing import TypeVar, Type, Any
 
@@ -10,6 +10,17 @@ from backend.core.llm_logger import log_llm_interaction, log_structured_event
 T = TypeVar("T", bound=BaseModel)
 
 class GameMasterLLM:
+    _litellm_module: Any = None
+
+    @classmethod
+    def _get_litellm(cls) -> Any:
+        if cls._litellm_module is None:
+            cls._litellm_module = importlib.import_module("litellm")
+            cls._litellm_module.drop_params = True
+            # Prevents litellm from passing 'usage' to OpenAI-compatible endpoints that don't support it
+            cls._litellm_module.add_usage = False
+        return cls._litellm_module
+
     def __init__(self, user: User, provider: str = "openai"):
         """
         Initialize the router for a specific user and their preferred provider.
@@ -24,11 +35,6 @@ class GameMasterLLM:
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")
         else:
             self.api_key = self._get_decrypted_key(self.provider)
-        
-        # Global fixes for certain providers
-        litellm.drop_params = True
-        # Prevents litellm from passing 'usage' to OpenAI-compatible endpoints that don't support it
-        litellm.add_usage = False 
 
     def _normalize_model(self, model: str) -> str:
         """Return a LiteLLM-friendly model slug for the configured provider."""
@@ -124,7 +130,7 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        response = litellm.completion(**kwargs)
+        response = self._get_litellm().completion(**kwargs)
         
         result = response.choices[0].message.content or ""
         
@@ -201,7 +207,7 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        response = litellm.completion(**kwargs)
+        response = self._get_litellm().completion(**kwargs)
         
         content = response.choices[0].message.content
         

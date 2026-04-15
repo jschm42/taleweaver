@@ -1,4 +1,5 @@
 import logging
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from backend.core.config import settings
 
@@ -9,8 +10,21 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     future=True,
-    connect_args={"check_same_thread": False} # Needed for SQLite
+    connect_args={"check_same_thread": False, "timeout": 30} # Needed for SQLite
 )
+
+
+if settings.DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, _connection_record):
+        """Reduce lock contention for concurrent background writes + status polling."""
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        finally:
+            cursor.close()
 
 # Async session factory
 AsyncSessionLocal = async_sessionmaker(

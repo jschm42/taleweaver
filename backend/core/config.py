@@ -3,7 +3,6 @@ import logging
 import os
 from pydantic import Field
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +21,7 @@ class Settings(BaseSettings):
     
     # Storage configuration
     DATA_DIR: str = "data"
+    IMAGE_GENERATION_TIMEOUT_SECONDS: int = 120
     
     # Use existing key from environment or generate a temporary one
     ENCRYPTION_KEY: str = Field(default_factory=generate_temp_key)
