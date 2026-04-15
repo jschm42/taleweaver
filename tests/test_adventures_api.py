@@ -7,7 +7,9 @@ sub-routes. All tests follow the Arrange-Act-Assert pattern.
 import pytest
 from httpx import AsyncClient
 
+from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity
+from backend.models.world_entity import WorldScene
 from tests.conftest import TestSessionLocal
 
 pytestmark = pytest.mark.asyncio
@@ -116,6 +118,105 @@ async def test_create_adventure_preserves_advanced_manifest_fields(client: Async
     assert original_manifest["start_date"] == "2026-04-14"
     assert original_manifest["start_time"] == "08:30"
     assert original_manifest["start_datetime"] == "2026-04-14T08:30:00.000Z"
+
+
+async def test_debug_includes_protagonist_profile_image(client: AsyncClient):
+    """The adventure debug payload exposes the protagonist portrait for the Visuals panel."""
+    ids = await _create_adventure(client, "Portrait Quest")
+
+    async with TestSessionLocal() as session:
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert avatar is not None
+        avatar.profile_image = "/data/adventures/example/protagonist.png"
+        await session.commit()
+
+    debug_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/debug")
+    assert debug_resp.status_code == 200
+    debug_data = debug_resp.json()
+    assert debug_data["protagonist"]["id"] == ids["avatar_id"]
+    assert debug_data["protagonist"]["profile_image"] == "/data/adventures/example/protagonist.png"
+
+
+async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, monkeypatch):
+    """Regenerating the protagonist uses the default prompt when none is provided."""
+    ids = await _create_adventure(client, "Regenerate Quest")
+
+    async with TestSessionLocal() as session:
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert avatar is not None
+        avatar.profile_image = None
+        await session.commit()
+
+    captured: dict[str, str] = {}
+
+    async def fake_generate_entity_image(prompt, adventure_id, entity_id, entity_type, user_config, api_keys):
+        captured["prompt"] = prompt
+        captured["entity_id"] = entity_id
+        captured["entity_type"] = entity_type
+        return "/data/adventures/generated/protagonist.png"
+
+    monkeypatch.setattr("backend.api.routes.adventures.MediaEngine.generate_entity_image", fake_generate_entity_image)
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/regenerate",
+        json={"target_type": "protagonist", "target_id": ids["avatar_id"]},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["image_url"] == "/data/adventures/generated/protagonist.png"
+    assert captured["entity_id"] == ids["avatar_id"]
+    assert captured["entity_type"] == "PROTAGONIST"
+    assert "Portrait of character" in captured["prompt"]
+
+    async with TestSessionLocal() as session:
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert avatar is not None
+        assert avatar.profile_image == "/data/adventures/generated/protagonist.png"
+
+
+async def test_regenerate_visual_uses_custom_prompt_for_scene(client: AsyncClient, monkeypatch):
+    """A custom prompt overrides the default prompt when regenerating a scene image."""
+    ids = await _create_adventure(client, "Scene Prompt Quest")
+
+    async with TestSessionLocal() as session:
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert avatar is not None
+        avatar.profile_image = None
+        session.add(
+            WorldScene(
+                id="HALL",
+                adventure_id=ids["adventure_id"],
+                label="Great Hall",
+                description="A vast room of cold marble and chandeliers.",
+                image_url=None,
+            )
+        )
+        await session.commit()
+
+    captured: dict[str, str] = {}
+
+    async def fake_generate_scene_image(prompt, adventure_id, user_config, api_keys):
+        captured["prompt"] = prompt
+        return "/data/adventures/generated/scene.png"
+
+    monkeypatch.setattr("backend.api.routes.adventures.MediaEngine.generate_scene_image", fake_generate_scene_image)
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/regenerate",
+        json={
+            "target_type": "scene",
+            "target_id": "HALL",
+            "prompt": "A foggy hall lit by green lanterns, cinematic wide shot.",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert captured["prompt"] == "A foggy hall lit by green lanterns, cinematic wide shot."
+
+    debug_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/debug")
+    assert debug_resp.status_code == 200
+    debug_data = debug_resp.json()
+    scene = next(scene for scene in debug_data["scenes"] if scene["id"] == "HALL")
+    assert scene["image_url"] == "/data/adventures/generated/scene.png"
 
 
 async def test_export_manifest_returns_original_manifest_only(client: AsyncClient):

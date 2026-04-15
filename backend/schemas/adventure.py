@@ -29,6 +29,7 @@ class Adventure(AdventureInDBBase):
 
 class AdventureDebugResponse(BaseModel):
     adventure: Dict[str, Any]
+    protagonist: Optional[Dict[str, Any]] = None
     scenes: List[Dict[str, Any]]
     npcs: List[Dict[str, Any]]
     objects: List[Dict[str, Any]]

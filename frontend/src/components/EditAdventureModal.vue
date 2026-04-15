@@ -15,9 +15,14 @@ const adventure = ref<any>(null)
 const debugData = ref<any>(null)
 const isLoading = ref(false)
 const isSaving = ref(false)
+const isRegenerating = ref(false)
 const errorMsg = ref('')
+const promptError = ref('')
 const showDebug = ref(false)
+const showPromptDialog = ref(false)
 const activeTab = ref<'settings' | 'visuals' | 'advanced'>('settings')
+const selectedVisual = ref<{ kind: 'protagonist' | 'scene' | 'npc' | 'object'; id: string; label: string } | null>(null)
+const visualPrompt = ref('')
 
 const form = ref({
   title: '',
@@ -61,6 +66,55 @@ async function fetchDebugInfo() {
     }
   } catch (error) {
     console.error('Failed to fetch debug info:', error)
+  }
+}
+
+function openRegenerateDialog(kind: 'protagonist' | 'scene' | 'npc' | 'object', id: string, label: string) {
+  selectedVisual.value = { kind, id, label }
+  visualPrompt.value = ''
+  promptError.value = ''
+  showPromptDialog.value = true
+}
+
+function closeRegenerateDialog() {
+  if (isRegenerating.value) {
+    return
+  }
+  showPromptDialog.value = false
+  selectedVisual.value = null
+  visualPrompt.value = ''
+  promptError.value = ''
+}
+
+async function regenerateVisual() {
+  if (!props.adventureId || !selectedVisual.value) {
+    return
+  }
+
+  isRegenerating.value = true
+  promptError.value = ''
+  try {
+    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/visuals/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_type: selectedVisual.value.kind,
+        target_id: selectedVisual.value.id,
+        prompt: visualPrompt.value.trim() || null,
+      }),
+    })
+
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null)
+      throw new Error(payload?.detail || 'Failed to regenerate image.')
+    }
+
+    await fetchDebugInfo()
+    closeRegenerateDialog()
+  } catch (error: any) {
+    promptError.value = error?.message || 'Network error while regenerating.'
+  } finally {
+    isRegenerating.value = false
   }
 }
 
@@ -202,6 +256,8 @@ watch(
     }
     activeTab.value = 'settings'
     showDebug.value = false
+    showPromptDialog.value = false
+    selectedVisual.value = null
     await fetchAdventure()
     await fetchDebugInfo()
   }
@@ -284,6 +340,25 @@ watch(
             <div v-else-if="activeTab === 'visuals'" class="space-y-8">
               <div v-if="!debugData" class="text-xs text-slate-500">No debug data available yet.</div>
               <div v-else class="space-y-8">
+                <section v-if="debugData.protagonist">
+                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Protagonist Portrait</h3>
+                  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                      <img v-if="debugData.protagonist.profile_image" :src="'http://localhost:8000' + debugData.protagonist.profile_image" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px]">{{ debugData.protagonist.name || 'Protagonist' }}</div>
+                        <div class="text-white/70">{{ debugData.protagonist.role || 'Player character' }}</div>
+                      </div>
+                      <button
+                        @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name || 'Protagonist')"
+                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        {{ debugData.protagonist.profile_image ? 'Regenerate' : 'Generate' }}
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
                 <section>
                   <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Scene Visuals</h3>
                   <div v-if="(debugData.scenes ? debugData.scenes.length : 0) === 0" class="text-xs text-slate-600 italic">No scene visuals generated.</div>
@@ -293,6 +368,12 @@ watch(
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ scene.label || scene.name || scene.id }}</div>
                       </div>
+                      <button
+                        @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name || scene.id)"
+                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        {{ scene.image_url ? 'Regenerate' : 'Generate' }}
+                      </button>
                     </div>
                   </div>
                 </section>
@@ -306,6 +387,12 @@ watch(
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ npc.name }}</div>
                       </div>
+                      <button
+                        @click="openRegenerateDialog('npc', npc.id, npc.name || npc.id)"
+                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        {{ npc.image_url ? 'Regenerate' : 'Generate' }}
+                      </button>
                     </div>
                   </div>
                 </section>
@@ -319,6 +406,12 @@ watch(
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ obj.name }}</div>
                       </div>
+                      <button
+                        @click="openRegenerateDialog('object', obj.id, obj.name || obj.id)"
+                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        {{ obj.image_url ? 'Regenerate' : 'Generate' }}
+                      </button>
                     </div>
                   </div>
                 </section>
@@ -401,6 +494,33 @@ watch(
                 {{ isSaving ? 'Saving...' : 'Save Settings' }}
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div v-if="showPromptDialog" class="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" @click="closeRegenerateDialog" />
+        <div class="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden">
+          <div class="px-6 py-5 border-b border-slate-800">
+            <h3 class="text-lg font-bold text-white">Regenerate Visual</h3>
+            <p class="text-xs text-slate-400 mt-1">{{ selectedVisual?.label || 'Selected visual' }}. Leave the prompt empty to use the default description.</p>
+          </div>
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Optional Prompt</label>
+              <textarea v-model="visualPrompt" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-white resize-none" placeholder="Leave empty to use the entity's own description..."></textarea>
+            </div>
+            <div v-if="promptError" class="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs">
+              {{ promptError }}
+            </div>
+          </div>
+          <div class="px-6 py-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-950/40">
+            <button @click="closeRegenerateDialog" :disabled="isRegenerating" class="px-4 py-2 rounded-xl text-slate-400 hover:bg-white/5 transition-colors text-xs font-bold uppercase tracking-widest disabled:opacity-40">Cancel</button>
+            <button @click="regenerateVisual" :disabled="isRegenerating" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest disabled:opacity-50">
+              {{ isRegenerating ? 'Generating...' : 'Generate Image' }}
+            </button>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import logging
 import os
 import uuid
 import asyncio
+import time
 import requests
 import litellm
 from typing import Optional, Any
@@ -97,7 +98,8 @@ class MediaEngine:
             logger.error("BFL response did not include polling_url: %s", body)
             return None
 
-        for _ in range(120):
+        poll_deadline = time.monotonic() + 600.0
+        while time.monotonic() < poll_deadline:
             poll_response = requests.get(
                 polling_url,
                 headers={"accept": "application/json", "x-key": api_key},
@@ -124,9 +126,9 @@ class MediaEngine:
                 logger.error("BFL generation failed: %s", poll_body)
                 return None
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(2.0)
 
-        logger.error("BFL polling timed out for prompt: %s", prompt)
+        logger.error("BFL polling timed out after 600s for prompt: %s", prompt)
         return None
 
     @staticmethod

@@ -2,7 +2,7 @@ import logging
 import uuid
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
@@ -170,6 +170,44 @@ def _normalize_manifest_for_world_generator(manifest: dict[str, Any] | None) -> 
         }
 
     return normalized
+
+
+def _serialize_model(instance: Any) -> dict[str, Any]:
+    return {column.name: getattr(instance, column.name) for column in instance.__table__.columns}
+
+
+def _build_visual_prompt(target_type: str, target_data: Dict[str, Any], custom_prompt: Optional[str]) -> str:
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+
+    if target_type == "protagonist":
+        name = target_data.get("name") or "The protagonist"
+        role = target_data.get("role") or "adventurer"
+        description = target_data.get("description") or "A distinctive fantasy hero."
+        return f"Portrait of character {name}, {role}. {description}. Game character art style."
+
+    if target_type == "scene":
+        label = target_data.get("label") or target_data.get("name") or "Scene"
+        description = target_data.get("description") or ""
+        return f"Atmospheric background: {label}. {description}. RPG visual novel style, high detail."
+
+    if target_type == "npc":
+        name = target_data.get("name") or "NPC"
+        description = target_data.get("description") or "A distinctive non-player character."
+        return f"Portrait of NPC {name}. {description}. Character portrait, high detail."
+
+    if target_type == "object":
+        name = target_data.get("name") or "Object"
+        description = target_data.get("description") or "A detailed fantasy object."
+        return f"Detailed illustration of object {name}. {description}. Fantasy item concept art, isolated and clearly readable."
+
+    raise HTTPException(status_code=400, detail="Unsupported visual target type.")
+
+
+class VisualRegenerateRequest(BaseModel):
+    target_type: Literal["protagonist", "scene", "npc", "object"]
+    target_id: str
+    prompt: Optional[str] = None
 
 
 async def _resolve_scene_id(db: AsyncSession, adventure_id: str, scene_ref: Optional[str]) -> Optional[str]:
@@ -829,15 +867,106 @@ async def get_adventure_debug(adventure_id: str, db: AsyncSession = Depends(get_
     
     entity_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
     entities = entity_res.scalars().all()
+
+    avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
+    avatar = avatar_res.scalars().first()
     
     # Return serializable dicts
     return AdventureDebugResponse(
-        adventure={c.name: getattr(adventure, c.name) for c in adventure.__table__.columns},
-        scenes=[{c.name: getattr(s, c.name) for c in s.__table__.columns} for s in scenes],
-        npcs=[{c.name: getattr(ent, c.name) for c in ent.__table__.columns} for ent in entities if ent.entity_type == "NPC"],
-        objects=[{c.name: getattr(ent, c.name) for c in ent.__table__.columns} for ent in entities if ent.entity_type == "OBJECT"],
-        exits=[{c.name: getattr(ex, c.name) for c in ex.__table__.columns} for ex in exits]
+        adventure=_serialize_model(adventure),
+        protagonist=_serialize_model(avatar) if avatar else None,
+        scenes=[_serialize_model(s) for s in scenes],
+        npcs=[_serialize_model(ent) for ent in entities if ent.entity_type == "NPC"],
+        objects=[_serialize_model(ent) for ent in entities if ent.entity_type == "OBJECT"],
+        exits=[_serialize_model(ex) for ex in exits]
     )
+
+
+@router.post("/{adventure_id}/visuals/regenerate")
+async def regenerate_visual(
+    adventure_id: str,
+    payload: VisualRegenerateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Regenerates a scene, NPC, object, or protagonist portrait for an adventure."""
+    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Game state not found.")
+
+    avatar_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id, Avatar.adventure_id == adventure_id))
+    avatar = avatar_res.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+
+    user = await db.get(User, state.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    image_url: Optional[str] = None
+
+    if payload.target_type == "protagonist":
+        if avatar.id != payload.target_id:
+            raise HTTPException(status_code=404, detail="Protagonist not found.")
+        prompt = _build_visual_prompt(payload.target_type, _serialize_model(avatar), payload.prompt)
+        image_url = await MediaEngine.generate_entity_image(
+            prompt,
+            adventure_id,
+            avatar.id,
+            "PROTAGONIST",
+            {"t2i_settings": user.t2i_settings},
+            user.encrypted_api_keys or {},
+        )
+        if not image_url:
+            raise HTTPException(status_code=504, detail="Protagonist image generation timed out or failed.")
+        avatar.profile_image = image_url
+
+    elif payload.target_type == "scene":
+        scene_res = await db.execute(
+            select(WorldScene).where(WorldScene.adventure_id == adventure_id, WorldScene.id == payload.target_id)
+        )
+        scene = scene_res.scalars().first()
+        if not scene:
+            raise HTTPException(status_code=404, detail="Scene not found.")
+        prompt = _build_visual_prompt(payload.target_type, _serialize_model(scene), payload.prompt)
+        image_url = await MediaEngine.generate_scene_image(
+            prompt,
+            adventure_id,
+            {"t2i_settings": user.t2i_settings},
+            user.encrypted_api_keys or {},
+        )
+        if not image_url:
+            raise HTTPException(status_code=504, detail="Scene image generation timed out or failed.")
+        scene.image_url = image_url
+
+    else:
+        entity_res = await db.execute(
+            select(WorldEntity).where(WorldEntity.adventure_id == adventure_id, WorldEntity.id == payload.target_id)
+        )
+        entity = entity_res.scalars().first()
+        if not entity:
+            raise HTTPException(status_code=404, detail="Visual target not found.")
+        prompt = _build_visual_prompt(payload.target_type, _serialize_model(entity), payload.prompt)
+        image_url = await MediaEngine.generate_entity_image(
+            prompt,
+            adventure_id,
+            entity.id,
+            entity.entity_type,
+            {"t2i_settings": user.t2i_settings},
+            user.encrypted_api_keys or {},
+        )
+        if not image_url:
+            raise HTTPException(status_code=504, detail="Image generation timed out or failed.")
+        entity.image_url = image_url
+
+    await db.commit()
+    return {
+        "status": "updated",
+        "adventure_id": adventure_id,
+        "target_type": payload.target_type,
+        "target_id": payload.target_id,
+        "image_url": image_url,
+    }
 
 @router.post("/{adventure_id}/reset")
 async def reset_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)):
