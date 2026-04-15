@@ -285,12 +285,27 @@ watch(
               <div v-if="!debugData" class="text-xs text-slate-500">No debug data available yet.</div>
               <div v-else class="space-y-8">
                 <section>
+                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Scene Visuals</h3>
+                  <div v-if="(debugData.scenes ? debugData.scenes.length : 0) === 0" class="text-xs text-slate-600 italic">No scene visuals generated.</div>
+                  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div v-for="scene in (debugData.scenes || [])" :key="scene.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                      <img v-if="scene.image_url" :src="'http://localhost:8000' + scene.image_url" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px]">{{ scene.label || scene.name || scene.id }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
                   <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Population Portraits</h3>
                   <div v-if="(debugData.npcs ? debugData.npcs.length : 0) === 0" class="text-xs text-slate-600 italic">No inhabitant visuals generated.</div>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-square bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
+                  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
                       <img v-if="npc.image_url" :src="'http://localhost:8000' + npc.image_url" class="absolute inset-0 w-full h-full object-cover" />
-                      <div class="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-[10px] text-white">{{ npc.name }}</div>
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px]">{{ npc.name }}</div>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -298,10 +313,12 @@ watch(
                 <section>
                   <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Artifact Illustrations</h3>
                   <div v-if="(debugData.objects ? debugData.objects.length : 0) === 0" class="text-xs text-slate-600 italic">No object visuals generated.</div>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div v-for="obj in (debugData.objects || [])" :key="obj.id" class="relative group aspect-square bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden">
+                  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div v-for="obj in (debugData.objects || [])" :key="obj.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
                       <img v-if="obj.image_url" :src="'http://localhost:8000' + obj.image_url" class="absolute inset-0 w-full h-full object-cover" />
-                      <div class="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-[10px] text-white">{{ obj.name }}</div>
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px]">{{ obj.name }}</div>
+                      </div>
                     </div>
                   </div>
                 </section>

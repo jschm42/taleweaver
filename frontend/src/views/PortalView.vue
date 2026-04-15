@@ -67,6 +67,7 @@ const form = ref({
   image_url: null as string | null,
   generate_npc_images: false,
   generate_item_images: false,
+  generate_scene_images: false,
   automatic_cover_generation: false,
   time_per_turn: 5,
   story_idea: '',

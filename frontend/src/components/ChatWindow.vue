@@ -124,7 +124,7 @@ function parseContent(content: string) {
 function formatBolds(text: string) {
   // Pattern: **Name:**
   return text
-    .replace(/\*\*(.*?):\*\*/g, (match, name) => {
+    .replace(/\*\*(.*?):\*\*/g, (_match, name) => {
       const data = props.npcMetadata[name]
       if (data) {
         const iconOrImg = data.image_url 

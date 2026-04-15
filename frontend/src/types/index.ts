@@ -8,6 +8,7 @@ export interface ChatMessage {
 /** Character sheet snapshot pushed by the server after every action. */
 export interface CharacterSheet {
   name: string
+  adventure_title?: string | null
   role?: string | null
   description?: string | null
   profile_image?: string | null

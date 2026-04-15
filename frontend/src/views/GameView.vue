@@ -11,7 +11,6 @@ import ChatWindow from '@/components/ChatWindow.vue'
 import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
 import MapModal from '@/components/MapModal.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
-import type { WorldScene, WorldEntity, CharacterSheet, GameStatus } from '@/types'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
@@ -75,6 +74,7 @@ const npcs = computed(() => {
   return worldNpcs
 })
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
+const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 
 /**
  * Formats the session clock as a full datetime derived from the adventure start.
@@ -102,10 +102,6 @@ const gameTime = computed(() => {
 
   return { date, time }
 })
-
-const getTypeColorLocal = (type?: string) => {
-  return getTypeColor(type)
-}
 
 // Flash the clock on every update to give a living-time feel
 watch(() => sheet.value?.in_game_time, () => {
@@ -180,7 +176,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Center: Inventory 'Belt' (Wrapped in labeled panel) -->
-        <div v-if="sheet?.inventory?.length > 0" class="flex-grow flex justify-center items-center relative z-10 animate-fade-in px-4">
+        <div v-if="inventoryItems.length > 0" class="flex-grow flex justify-center items-center relative z-10 animate-fade-in px-4">
           <div class="relative bg-slate-900/30 border border-slate-700/30 rounded-2xl px-5 py-3 backdrop-blur-md shadow-2xl flex flex-col items-center max-w-full">
             <!-- Panel Label -->
             <div class="absolute -top-2 left-4 px-2 py-0.5 bg-slate-800 border border-slate-700 rounded-md flex items-center gap-1.5 shadow-lg">
@@ -191,7 +187,7 @@ onBeforeUnmount(() => {
             <!-- Items scrollable area -->
             <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar w-full py-1">
               <div 
-                v-for="(item, idx) in sheet.inventory" 
+                v-for="(item, idx) in inventoryItems" 
                 :key="idx" 
                 class="flex items-center gap-2 bg-slate-950/40 border border-slate-800/40 rounded-xl pl-1 pr-3 py-1 group cursor-pointer transition-all hover:border-emerald-500/50 hover:bg-slate-900/60 active:scale-95 shrink-0"
                 @click="chatWindow?.appendText(item.name)"

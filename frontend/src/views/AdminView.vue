@@ -130,6 +130,17 @@ onMounted(() => {
 watch(
   () => t2iForm.value.provider,
   (provider) => {
+    if (provider === 'black_forest_labs') {
+      const looksLikeCloudModel = (value: string) => value.startsWith('openai/') || value.startsWith('dall-e') || value.startsWith('openrouter/') || value.startsWith('midjourney/')
+      if (!t2iForm.value.simple_model || looksLikeCloudModel(t2iForm.value.simple_model)) {
+        t2iForm.value.simple_model = 'flux-dev'
+      }
+      if (!t2iForm.value.advanced_model || looksLikeCloudModel(t2iForm.value.advanced_model)) {
+        t2iForm.value.advanced_model = 'flux-pro-1.1'
+      }
+      return
+    }
+
     if (provider !== 'ollama') {
       return
     }
@@ -210,6 +221,7 @@ watch(
                   <option value="openai">OpenAI</option>
                   <option value="openrouter">OpenRouter</option>
                   <option value="midjourney">Midjourney / Proxy</option>
+                  <option value="black_forest_labs">Black Forest Labs</option>
                   <option value="anthropic">Anthropic</option>
                   <option value="ollama">Ollama (Local)</option>
                 </select>
@@ -293,8 +305,12 @@ watch(
                 <option value="openai">OpenAI (DALL-E)</option>
                 <option value="openrouter">OpenRouter (Various)</option>
                 <option value="midjourney">Midjourney (via Proxy)</option>
+                <option value="black_forest_labs">Black Forest Labs (FLUX)</option>
                 <option value="ollama">Ollama (Local, Experimental)</option>
               </select>
+              <p v-if="t2iForm.provider === 'black_forest_labs'" class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                BFL uses `black_forest_labs/flux-dev` for simple images and `black_forest_labs/flux-pro-1.1` for scenes unless you override them.
+              </p>
             </div>
 
             <div v-if="t2iForm.provider === 'ollama'" class="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-cyan-200 text-sm">
@@ -303,13 +319,23 @@ watch(
 
             <div class="space-y-2 font-mono">
               <label class="block text-sm font-semibold text-slate-300">Simple Image Model (NPCs & Objects)</label>
-              <input v-model="t2iForm.simple_model" type="text" placeholder="e.g. dall-e-2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+              <input
+                v-model="t2iForm.simple_model"
+                type="text"
+                :placeholder="t2iForm.provider === 'black_forest_labs' ? 'e.g. flux-dev' : 'e.g. dall-e-2'"
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
+              />
               <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Fast portraits during world gen.</p>
             </div>
 
             <div class="space-y-2 font-mono">
               <label class="block text-sm font-semibold text-slate-300">Advanced Image Model (Scenes)</label>
-              <input v-model="t2iForm.advanced_model" type="text" placeholder="e.g. dall-e-3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+              <input
+                v-model="t2iForm.advanced_model"
+                type="text"
+                :placeholder="t2iForm.provider === 'black_forest_labs' ? 'e.g. flux-pro-1.1' : 'e.g. dall-e-3'"
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
+              />
               <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">High-fidelity scene visualization.</p>
             </div>
 
