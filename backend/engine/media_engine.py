@@ -487,7 +487,8 @@ class MediaEngine:
         api_key = encryption_util.decrypt_key(api_keys[provider]) if provider in api_keys else None
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
-        filename = "cover.png"
+        # Use a versioned filename so clients never stay on a stale cached cover URL.
+        filename = f"cover_{uuid.uuid4().hex}.png"
         
         # Craft a prompt specifically requesting landscape/2:1 ratio
         prompt = (

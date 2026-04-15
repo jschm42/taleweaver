@@ -23,11 +23,12 @@ const showDebug = ref(false)
 const showPromptDialog = ref(false)
 const activeTab = ref<'settings' | 'visuals' | 'advanced'>('settings')
 const uploadInput = ref<HTMLInputElement | null>(null)
-const selectedVisual = ref<{ kind: 'protagonist' | 'scene' | 'npc' | 'object'; id: string; label: string; description: string; hint: string } | null>(null)
+const selectedVisual = ref<{ kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object'; id: string; label: string; description: string; hint: string } | null>(null)
 const visualPrompt = ref('')
 const visualsCacheVersion = ref(0)
 
 const VISUAL_UPLOAD_LIMITS = {
+  cover: { maxWidth: 2048, maxHeight: 1024, hint: 'Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.' },
   protagonist: { maxWidth: 1024, maxHeight: 1280, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
   scene: { maxWidth: 1600, maxHeight: 900, hint: 'Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.' },
   npc: { maxWidth: 1024, maxHeight: 1280, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
@@ -90,7 +91,27 @@ function buildVisualImageUrl(imagePath?: string | null) {
   return `http://localhost:8000${imagePath}?v=${visualsCacheVersion.value}`
 }
 
-function openRegenerateDialog(kind: 'protagonist' | 'scene' | 'npc' | 'object', id: string, label: string) {
+function getVisualKindLabel(kind?: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object' | null) {
+  if (!kind) {
+    return 'Visual'
+  }
+
+  if (kind === 'cover') {
+    return 'Cover'
+  }
+  if (kind === 'protagonist') {
+    return 'Protagonist'
+  }
+  if (kind === 'scene') {
+    return 'Scene'
+  }
+  if (kind === 'npc') {
+    return 'NPC'
+  }
+  return 'Object'
+}
+
+function openRegenerateDialog(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string, label: string) {
   const description = getVisualDescription(kind, id)
   const hint = VISUAL_UPLOAD_LIMITS[kind].hint
   selectedVisual.value = { kind, id, label, description, hint }
@@ -99,9 +120,13 @@ function openRegenerateDialog(kind: 'protagonist' | 'scene' | 'npc' | 'object', 
   showPromptDialog.value = true
 }
 
-function getVisualDescription(kind: 'protagonist' | 'scene' | 'npc' | 'object', id: string) {
+function getVisualDescription(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string) {
   if (!debugData.value) {
     return ''
+  }
+
+  if (kind === 'cover') {
+    return debugData.value.adventure?.context || ''
   }
 
   if (kind === 'protagonist') {
@@ -192,7 +217,7 @@ function readImageDimensions(file: File): Promise<{ width: number; height: numbe
   })
 }
 
-async function validateUploadFile(file: File, kind: 'protagonist' | 'scene' | 'npc' | 'object'): Promise<string | null> {
+async function validateUploadFile(file: File, kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object'): Promise<string | null> {
   const ext = getFileExtension(file.name)
   if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type) && !ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
     return 'Unsupported image format. Use PNG, JPEG, or WEBP.'
@@ -473,6 +498,25 @@ watch(
             <div v-else-if="activeTab === 'visuals'" class="space-y-8">
               <div v-if="!debugData" class="text-xs text-slate-500">No debug data available yet.</div>
               <div v-else class="space-y-8">
+                <section v-if="debugData.adventure">
+                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Adventure Cover</h3>
+                  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div class="relative group aspect-[2/1] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden col-span-2 lg:col-span-3">
+                      <img v-if="debugData.adventure.image_url" :src="buildVisualImageUrl(debugData.adventure.image_url)" class="absolute inset-0 w-full h-full object-cover" />
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px]">{{ debugData.adventure.title || 'Adventure Cover' }}</div>
+                        <div class="text-white/70">Cinematic title artwork</div>
+                      </div>
+                      <button
+                        @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title || 'Adventure Cover')"
+                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        {{ debugData.adventure.image_url ? 'Replace' : 'Generate' }}
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
                 <section v-if="debugData.protagonist">
                   <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Protagonist Portrait</h3>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -637,9 +681,14 @@ watch(
         <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" @click="() => closeRegenerateDialog()" />
         <div class="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden">
           <div class="px-6 py-5 border-b border-slate-800">
-            <h3 class="text-lg font-bold text-white">Replace Visual</h3>
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-lg font-bold text-white">Replace Visual</h3>
+              <span class="inline-flex items-center rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300">
+                {{ getVisualKindLabel(selectedVisual?.kind) }}
+              </span>
+            </div>
             <p class="text-xs text-slate-400 mt-1">{{ selectedVisual?.label || 'Selected visual' }}. Leave the prompt empty to use the default description.</p>
-            <p class="text-xs text-slate-300 mt-3 whitespace-pre-line">{{ selectedVisual?.description || 'No description available.' }}</p>
+            <p v-if="selectedVisual?.kind !== 'cover'" class="text-xs text-slate-300 mt-3 whitespace-pre-line">{{ selectedVisual?.description || 'No description available.' }}</p>
             <p class="text-[10px] text-slate-500 mt-2">{{ selectedVisual?.hint || '' }}</p>
           </div>
           <div class="p-6 space-y-4">

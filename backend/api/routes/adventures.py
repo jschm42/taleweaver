@@ -204,11 +204,22 @@ def _build_visual_prompt(target_type: str, target_data: Dict[str, Any], custom_p
         description = target_data.get("description") or "A detailed fantasy object."
         return f"Detailed illustration of object {name}. {description}. Fantasy item concept art, isolated and clearly readable."
 
+    if target_type == "cover":
+        title = target_data.get("title") or "Adventure"
+        context = target_data.get("context") or "A cinematic fantasy journey."
+        return f"Epic cinematic adventure cover: {title}. {context}. Landscape format, high fantasy art style, immersive atmosphere, detailed concept art."
+
     raise HTTPException(status_code=400, detail="Unsupported visual target type.")
 
 
 VISUAL_UPLOAD_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 VISUAL_UPLOAD_SPECS: Dict[str, Dict[str, Any]] = {
+    "cover": {
+        "folder": "",
+        "max_width": 2048,
+        "max_height": 1024,
+        "recommended": "Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.",
+    },
     "protagonist": {
         "folder": "protagonist",
         "max_width": 1024,
@@ -253,6 +264,14 @@ async def _resolve_visual_target(
     target_type: str,
     target_id: str,
 ) -> tuple[Any, Dict[str, Any], str]:
+    if target_type == "cover":
+        adventure = await db.get(Adventure, adventure_id)
+        if not adventure:
+            raise HTTPException(status_code=404, detail="Adventure not found.")
+        if target_id != adventure_id:
+            raise HTTPException(status_code=400, detail="Invalid cover target id.")
+        return adventure, _serialize_model(adventure), "image_url"
+
     if target_type == "protagonist":
         avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id, Avatar.id == target_id))
         avatar = avatar_res.scalars().first()
@@ -280,7 +299,7 @@ async def _resolve_visual_target(
 
 
 class VisualRegenerateRequest(BaseModel):
-    target_type: Literal["protagonist", "scene", "npc", "object"]
+    target_type: Literal["cover", "protagonist", "scene", "npc", "object"]
     target_id: str
     prompt: Optional[str] = None
 
@@ -963,7 +982,7 @@ async def regenerate_visual(
     payload: VisualRegenerateRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Regenerates a scene, NPC, object, or protagonist portrait for an adventure."""
+    """Regenerates a cover, scene, NPC, object, or protagonist portrait for an adventure."""
     state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
     state = state_res.scalars().first()
     if not state:
@@ -982,7 +1001,18 @@ async def regenerate_visual(
 
     image_url: Optional[str] = None
 
-    if payload.target_type == "protagonist":
+    if payload.target_type == "cover":
+        cover_context = payload.prompt.strip() if payload.prompt and payload.prompt.strip() else (target_data.get("context") or "")
+        image_url = await MediaEngine.generate_adventure_cover(
+            title=target_data.get("title") or "Adventure",
+            context=cover_context,
+            adventure_id=adventure_id,
+            user_config={"t2i_settings": user.t2i_settings},
+            api_keys=user.encrypted_api_keys or {},
+        )
+        if not image_url:
+            raise HTTPException(status_code=504, detail="Cover image generation timed out or failed.")
+    elif payload.target_type == "protagonist":
         prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
         image_url = await MediaEngine.generate_entity_image(
             prompt,
@@ -1036,7 +1066,7 @@ async def upload_visual(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Uploads a visual asset for a protagonist, scene, NPC, or object."""
+    """Uploads a visual asset for a cover, protagonist, scene, NPC, or object."""
     state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
     state = state_res.scalars().first()
     if not state:
@@ -1060,7 +1090,7 @@ async def upload_visual(
     target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, spec["folder"])
     os.makedirs(target_dir, exist_ok=True)
 
-    filename = f"{target_id}.{ext}"
+    filename = f"cover_{uuid.uuid4().hex}.{ext}" if target_type == "cover" else f"{target_id}.{ext}"
     filepath = os.path.join(target_dir, filename)
 
     try:

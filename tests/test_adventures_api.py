@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from io import BytesIO
 
 from PIL import Image
+from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity
 from backend.models.world_entity import WorldScene
@@ -221,6 +222,38 @@ async def test_regenerate_visual_uses_custom_prompt_for_scene(client: AsyncClien
     assert scene["image_url"] == "/data/adventures/generated/scene.png"
 
 
+async def test_regenerate_visual_updates_cover_image(client: AsyncClient, monkeypatch):
+    """Regenerating the cover should persist the generated adventure cover URL."""
+    ids = await _create_adventure(client, "Cover Regenerate Quest")
+
+    captured: dict[str, str] = {}
+
+    async def fake_generate_adventure_cover(title, context, adventure_id, **_kwargs):
+        captured["title"] = title
+        captured["context"] = context
+        captured["adventure_id"] = adventure_id
+        return "/data/adventures/generated/cover.png"
+
+    monkeypatch.setattr("backend.api.routes.adventures.MediaEngine.generate_adventure_cover", fake_generate_adventure_cover)
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/regenerate",
+        json={"target_type": "cover", "target_id": ids["adventure_id"], "prompt": "Stormbound citadel on a fractured moon."},
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["image_url"] == "/data/adventures/generated/cover.png"
+    assert captured["title"] == "Cover Regenerate Quest"
+    assert captured["context"] == "Stormbound citadel on a fractured moon."
+    assert captured["adventure_id"] == ids["adventure_id"]
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, ids["adventure_id"])
+        assert adventure is not None
+        assert adventure.image_url == "/data/adventures/generated/cover.png"
+
+
 def _make_png_bytes(width: int, height: int) -> bytes:
     buffer = BytesIO()
     image = Image.new("RGB", (width, height), color=(123, 45, 67))
@@ -264,6 +297,30 @@ async def test_upload_visual_rejects_oversized_image(client: AsyncClient):
 
     assert resp.status_code == 400
     assert "Max size for this asset" in resp.text
+
+
+async def test_upload_visual_updates_cover_image(client: AsyncClient):
+    """Uploading a valid cover image should persist the adventure image URL."""
+    ids = await _create_adventure(client, "Cover Upload Quest")
+    image_bytes = _make_png_bytes(1600, 800)
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/upload",
+        data={"target_type": "cover", "target_id": ids["adventure_id"]},
+        files={"file": ("cover.png", image_bytes, "image/png")},
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "uploaded"
+    assert data["target_type"] == "cover"
+    assert "/cover_" in data["image_url"]
+    assert data["image_url"].endswith(".png")
+
+    debug_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/debug")
+    assert debug_resp.status_code == 200
+    debug_data = debug_resp.json()
+    assert debug_data["adventure"]["image_url"] == data["image_url"]
 
 
 async def test_export_manifest_returns_original_manifest_only(client: AsyncClient):
