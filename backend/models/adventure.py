@@ -12,13 +12,18 @@ class Adventure(Base, TimestampMixin):
     context = Column(String(2000), nullable=True) # Story idea
     
     strict_rules = Column(Boolean, default=True, nullable=False)
+    rule_enforcement_mode = Column(String(16), default="strict", nullable=False)
     time_per_turn = Column(Integer, default=5, nullable=False) # Minutes advanced per action
+    pacing_minutes = Column(Integer, default=5, nullable=False)
+    clock_enabled = Column(Boolean, default=False, nullable=False)
     heartbeat_enabled = Column(Boolean, default=False, nullable=False) # Deprecated but kept for safety
     heartbeat_interval = Column(Integer, default=10, nullable=False)
     
     generate_scene_images = Column(Boolean, default=False, nullable=False)
     generate_npc_images = Column(Boolean, default=False, nullable=False)
     generate_item_images = Column(Boolean, default=False, nullable=False)
+    selected_image_styles = Column(JSON, nullable=True)
+    selected_tone = Column(String(100), nullable=True)
 
     game_over_rules = Column(JSON, nullable=True)
     original_manifest = Column(JSON, nullable=True) # Full blueprint for reset

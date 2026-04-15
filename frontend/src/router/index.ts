@@ -4,6 +4,7 @@ import AdminView from '@/views/AdminView.vue'
 import CharactersView from '@/views/CharactersView.vue'
 import CharacterEditorView from '@/views/CharacterEditorView.vue'
 import GameView from '@/views/GameView.vue'
+import CreateAdventureView from '@/views/CreateAdventureView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -33,6 +34,11 @@ const router = createRouter({
       name: 'character-edit',
       component: CharacterEditorView,
       props: true,
+    },
+    {
+      path: '/adventures/new',
+      name: 'adventure-create',
+      component: CreateAdventureView,
     },
     {
       path: '/game/:id',

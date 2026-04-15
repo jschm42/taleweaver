@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import type { CatalogTile } from '@/types'
 
 const router = useRouter()
 
 // NAVIGATION
-type Section = 'keys' | 'llm' | 't2i'
+type Section = 'keys' | 'llm' | 't2i' | 'styles' | 'tones'
 const activeSection = ref<Section>('keys')
 
 // FORMS
@@ -37,6 +38,10 @@ const t2iForm = ref({
 const configuredKeys = ref<Record<string, string>>({})
 const isSubmitting = ref(false)
 const statusMessage = ref<{ type: 'success' | 'error', text: string } | null>(null)
+const imageStylesCatalog = ref<CatalogTile[]>([])
+const toneCatalog = ref<CatalogTile[]>([])
+const newStyle = ref<CatalogTile>({ id: '', name: '', description: '', instruction: '', image_url: '' })
+const newTone = ref<CatalogTile>({ id: '', name: '', description: '', instruction: '', image_url: '' })
 
 const goBack = () => {
   router.push({ name: 'portal' })
@@ -50,9 +55,102 @@ const fetchSettings = async () => {
       configuredKeys.value = data.keys || {}
       if (data.llm_settings) llmForm.value = { ...data.llm_settings }
       if (data.t2i_settings) t2iForm.value = { ...data.t2i_settings }
+      imageStylesCatalog.value = data.image_styles_catalog || []
+      toneCatalog.value = data.tone_catalog || []
     }
   } catch (error) {
     console.error('Failed to fetch settings', error)
+  }
+}
+
+const slugify = (value: string): string =>
+  value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'item'
+
+const addStyleTile = () => {
+  if (!newStyle.value.name?.trim()) {
+    statusMessage.value = { type: 'error', text: 'Style name is required.' }
+    return
+  }
+  imageStylesCatalog.value = [
+    ...imageStylesCatalog.value,
+    {
+      id: newStyle.value.id?.trim() || slugify(newStyle.value.name),
+      name: newStyle.value.name.trim(),
+      description: (newStyle.value.description || '').trim(),
+      instruction: (newStyle.value.instruction || '').trim(),
+      image_url: (newStyle.value.image_url || '').trim() || null,
+    },
+  ]
+  newStyle.value = { id: '', name: '', description: '', instruction: '', image_url: '' }
+}
+
+const addToneTile = () => {
+  if (!newTone.value.name?.trim()) {
+    statusMessage.value = { type: 'error', text: 'Tone name is required.' }
+    return
+  }
+  toneCatalog.value = [
+    ...toneCatalog.value,
+    {
+      id: newTone.value.id?.trim() || slugify(newTone.value.name),
+      name: newTone.value.name.trim(),
+      description: (newTone.value.description || '').trim(),
+      instruction: (newTone.value.instruction || '').trim(),
+      image_url: (newTone.value.image_url || '').trim() || null,
+    },
+  ]
+  newTone.value = { id: '', name: '', description: '', instruction: '', image_url: '' }
+}
+
+const removeStyleTile = (index: number) => {
+  imageStylesCatalog.value = imageStylesCatalog.value.filter((_, i) => i !== index)
+}
+
+const removeToneTile = (index: number) => {
+  toneCatalog.value = toneCatalog.value.filter((_, i) => i !== index)
+}
+
+const saveStylesCatalog = async () => {
+  isSubmitting.value = true
+  statusMessage.value = null
+  try {
+    const res = await fetch('http://localhost:8000/api/settings/image-styles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: imageStylesCatalog.value }),
+    })
+    if (res.ok) {
+      statusMessage.value = { type: 'success', text: 'Image styles updated.' }
+      await fetchSettings()
+    } else {
+      statusMessage.value = { type: 'error', text: 'Failed to save image styles.' }
+    }
+  } catch {
+    statusMessage.value = { type: 'error', text: 'Network error while saving image styles.' }
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const saveToneCatalog = async () => {
+  isSubmitting.value = true
+  statusMessage.value = null
+  try {
+    const res = await fetch('http://localhost:8000/api/settings/tones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: toneCatalog.value }),
+    })
+    if (res.ok) {
+      statusMessage.value = { type: 'success', text: 'Tones updated.' }
+      await fetchSettings()
+    } else {
+      statusMessage.value = { type: 'error', text: 'Failed to save tones.' }
+    }
+  } catch {
+    statusMessage.value = { type: 'error', text: 'Network error while saving tones.' }
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -194,6 +292,20 @@ watch(
         >
           <i class="ra ra-camera"></i>
           <span class="font-bold text-xs font-mono">Visuals</span>
+        </button>
+        <button
+          @click="activeSection = 'styles'"
+          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'styles' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
+        >
+          <i class="ra ra-paint-brush"></i>
+          <span class="font-semibold text-sm">Image Styles</span>
+        </button>
+        <button
+          @click="activeSection = 'tones'"
+          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'tones' ? 'bg-pink-500/10 text-pink-300 border border-pink-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
+        >
+          <i class="ra ra-scroll-unfurled"></i>
+          <span class="font-semibold text-sm">World Tones</span>
         </button>
       </nav>
 
@@ -372,6 +484,76 @@ watch(
 
             <button @click="saveT2iSettings" :disabled="isSubmitting" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
                {{ isSubmitting ? 'Painting...' : 'Update Visual Artists' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- SECTION: IMAGE STYLES -->
+        <div v-if="activeSection === 'styles'" class="space-y-8 animate-fade-in">
+          <div>
+            <h1 class="text-4xl font-extrabold text-white mb-2">Image Style Catalog</h1>
+            <p class="text-slate-400">Define selectable visual styles used during adventure image generation.</p>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input v-model="newStyle.name" type="text" placeholder="Name (e.g. Gothic Ink)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              <input v-model="newStyle.id" type="text" placeholder="Optional ID (auto from name)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              <input v-model="newStyle.image_url" type="text" placeholder="Optional image URL" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white md:col-span-2" />
+              <textarea v-model="newStyle.description" rows="2" placeholder="Description" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
+              <textarea v-model="newStyle.instruction" rows="2" placeholder="Prompt instruction injected for selected styles" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
+            </div>
+            <button @click="addStyleTile" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl">Add Style Tile</button>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div v-for="(style, index) in imageStylesCatalog" :key="style.id + '-' + index" class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <img v-if="style.image_url" :src="style.image_url" class="w-full h-28 object-cover rounded-lg border border-slate-800" />
+                <input v-model="style.name" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
+                <input v-model="style.id" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
+                <input v-model="style.image_url" type="text" placeholder="Optional image URL" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
+                <textarea v-model="style.description" rows="2" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white resize-none"></textarea>
+                <textarea v-model="style.instruction" rows="2" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white resize-none"></textarea>
+                <button @click="removeStyleTile(index)" class="w-full py-2 text-sm rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 hover:bg-red-500/25">Remove</button>
+              </div>
+            </div>
+
+            <button @click="saveStylesCatalog" :disabled="isSubmitting" class="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl disabled:opacity-50">
+              {{ isSubmitting ? 'Saving...' : 'Save Image Styles' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- SECTION: TONES -->
+        <div v-if="activeSection === 'tones'" class="space-y-8 animate-fade-in">
+          <div>
+            <h1 class="text-4xl font-extrabold text-white mb-2">World Tone Catalog</h1>
+            <p class="text-slate-400">Define selectable tone presets used for story/world generation.</p>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input v-model="newTone.name" type="text" placeholder="Name (e.g. Horror, Sci-Fi, Sitcom)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              <input v-model="newTone.id" type="text" placeholder="Optional ID (auto from name)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+              <input v-model="newTone.image_url" type="text" placeholder="Optional image URL" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white md:col-span-2" />
+              <textarea v-model="newTone.description" rows="2" placeholder="Description" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
+              <textarea v-model="newTone.instruction" rows="2" placeholder="Tone instruction used in story generation" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
+            </div>
+            <button @click="addToneTile" class="w-full py-3 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl">Add Tone Tile</button>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div v-for="(tone, index) in toneCatalog" :key="tone.id + '-' + index" class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <img v-if="tone.image_url" :src="tone.image_url" class="w-full h-28 object-cover rounded-lg border border-slate-800" />
+                <input v-model="tone.name" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
+                <input v-model="tone.id" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
+                <input v-model="tone.image_url" type="text" placeholder="Optional image URL" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
+                <textarea v-model="tone.description" rows="2" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white resize-none"></textarea>
+                <textarea v-model="tone.instruction" rows="2" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white resize-none"></textarea>
+                <button @click="removeToneTile(index)" class="w-full py-2 text-sm rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 hover:bg-red-500/25">Remove</button>
+              </div>
+            </div>
+
+            <button @click="saveToneCatalog" :disabled="isSubmitting" class="w-full py-4 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl disabled:opacity-50">
+              {{ isSubmitting ? 'Saving...' : 'Save Tones' }}
             </button>
           </div>
         </div>

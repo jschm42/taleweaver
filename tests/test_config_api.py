@@ -141,3 +141,58 @@ async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
     assert llm["complex_model"] == "openai/gpt-4o-mini"
     assert llm["preferred_provider"] == "openai"
     assert llm["ollama_url"] == "http://localhost:11434"
+
+
+async def test_get_settings_returns_style_and_tone_catalogs(client: AsyncClient):
+    """Default settings should include selectable image styles and tones."""
+    resp = await client.get("/api/settings")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert isinstance(payload["image_styles_catalog"], list)
+    assert len(payload["image_styles_catalog"]) > 0
+    assert isinstance(payload["tone_catalog"], list)
+    assert len(payload["tone_catalog"]) > 0
+
+
+async def test_save_image_styles_catalog(client: AsyncClient):
+    """Admin can persist a custom image style catalog payload."""
+    catalog = [
+        {
+            "id": "chalk-noir",
+            "name": "Chalk Noir",
+            "description": "Monochrome chalk and smoke.",
+            "instruction": "chalk texture, noir composition",
+            "image_url": None,
+        }
+    ]
+
+    save_resp = await client.post("/api/settings/image-styles", json={"items": catalog})
+    assert save_resp.status_code == 200
+    assert save_resp.json()["status"] == "success"
+
+    settings_resp = await client.get("/api/settings")
+    assert settings_resp.status_code == 200
+    payload = settings_resp.json()
+    assert payload["image_styles_catalog"][0]["id"] == "chalk-noir"
+
+
+async def test_save_tone_catalog(client: AsyncClient):
+    """Admin can persist a custom world tone catalog payload."""
+    catalog = [
+        {
+            "id": "satire",
+            "name": "Satire",
+            "description": "Playful critique with sharp humor.",
+            "instruction": "Keep satirical framing with witty contrast.",
+            "image_url": None,
+        }
+    ]
+
+    save_resp = await client.post("/api/settings/tones", json={"items": catalog})
+    assert save_resp.status_code == 200
+    assert save_resp.json()["status"] == "success"
+
+    settings_resp = await client.get("/api/settings")
+    assert settings_resp.status_code == 200
+    payload = settings_resp.json()
+    assert payload["tone_catalog"][0]["id"] == "satire"

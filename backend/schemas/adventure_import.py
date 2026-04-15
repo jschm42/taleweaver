@@ -50,6 +50,8 @@ class AdventureImportPayload(BaseModel):
     story_idea: Optional[str] = None
     tone: Optional[str] = None
     image_style: Optional[str] = None
+    image_styles: Optional[List[str]] = None
+    rule_enforcement_mode: Optional[Literal["strict", "moderate", "loose"]] = None
     pacing: Optional[Pacing] = None
     protagonist: Optional[Protagonist] = None
     characters: Optional[List[CharacterSpec]] = None
@@ -57,6 +59,8 @@ class AdventureImportPayload(BaseModel):
     items: Optional[List[ItemSpec]] = None
     objects: Optional[List[ItemSpec]] = None
     time_per_turn: Optional[int] = None
+    pacing_minutes: Optional[int] = None
+    clock_enabled: Optional[bool] = None
     start_date: Optional[str] = None
     start_time: Optional[str] = None
     start_datetime: Optional[str] = None

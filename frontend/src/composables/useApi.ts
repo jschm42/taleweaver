@@ -4,7 +4,15 @@
  * All methods throw on non-2xx responses so callers can handle errors
  * with a simple try/catch.
  */
-import type { CreateAdventurePayload, GameSession, AdventureImportPayload } from '@/types'
+import type { CreateAdventurePayload, GameSession, AdventureImportPayload, CatalogTile } from '@/types'
+
+interface SettingsResponse {
+  keys: Record<string, string>
+  llm_settings: Record<string, unknown>
+  t2i_settings: Record<string, unknown>
+  image_styles_catalog: CatalogTile[]
+  tone_catalog: CatalogTile[]
+}
 
 // Use absolute backend URL during local development to avoid proxy/cache timing
 // issues (Vite already proxies `/api` to the backend, but in some dev setups
@@ -53,6 +61,27 @@ export const api = {
     return request('/settings/keys', {
       method: 'POST',
       body: JSON.stringify({ provider, api_key: apiKey }),
+    })
+  },
+
+  /** Retrieves full settings payload including generation catalogs. */
+  getSettings(): Promise<SettingsResponse> {
+    return request('/settings')
+  },
+
+  /** Saves admin-managed image style catalog. */
+  saveImageStylesCatalog(items: CatalogTile[]): Promise<{ status: string; message: string }> {
+    return request('/settings/image-styles', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    })
+  },
+
+  /** Saves admin-managed tone catalog. */
+  saveToneCatalog(items: CatalogTile[]): Promise<{ status: string; message: string }> {
+    return request('/settings/tones', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
     })
   },
 }

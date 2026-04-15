@@ -228,12 +228,7 @@ function displayLocationName(adventure: Adventure) {
 }
 
 function openCreateModal() {
-  resetCreateForm()
-  errorMsg.value = ''
-  advancedValidationError.value = ''
-  isSubmitting.value = false
-  creationStatus.value = ''
-  showCreateModal.value = true
+  router.push({ name: 'adventure-create' })
 }
 
 function openEditModal(adventureId: string) {
@@ -350,6 +345,7 @@ async function handleImageUpload(event: Event) {
     errorMsg.value = error?.message || 'Network error uploading image.'
   }
 }
+void handleImageUpload
 
 function buildAdvancedManifest() {
   const startDateTime = form.value.start_date && form.value.start_time
@@ -453,6 +449,7 @@ async function createAdventure() {
     isSubmitting.value = false
   }
 }
+void createAdventure
 
 async function pollAdventureStatus(
   adventureId: string,
@@ -771,175 +768,6 @@ onUnmounted(() => {
 
       <input ref="importInput" type="file" accept=".adv,application/json" @change="onImportFileSelected" class="hidden" />
     </main>
-
-    <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center pt-10">
-      <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="showCreateModal = false"></div>
-
-      <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative z-10 shadow-2xl p-8 flex flex-col">
-        <button @click="showCreateModal = false" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">X</button>
-
-        <h2 class="text-3xl font-extrabold text-white mb-2">Create New Adventure</h2>
-        <p class="text-slate-400 mb-6 text-base">Simple for quick starts, advanced for full prompt control.</p>
-
-        <div class="mb-6 flex gap-2 border-b border-slate-700 pb-4">
-          <button
-            @click="form.mode = 'simple'"
-            :class="[
-              'px-4 py-2 rounded-lg font-semibold transition-all',
-              form.mode === 'simple' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            ]"
-          >
-            Simple
-          </button>
-          <button
-            @click="form.mode = 'advanced'"
-            :class="[
-              'px-4 py-2 rounded-lg font-semibold transition-all',
-              form.mode === 'advanced' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            ]"
-          >
-            Advanced
-          </button>
-        </div>
-
-        <div class="space-y-5 max-h-[calc(90vh-280px)] overflow-y-auto custom-scrollbar">
-          <div>
-            <label class="block text-base font-semibold text-slate-300 mb-2">Adventure Title *</label>
-            <input v-model="form.title" type="text" maxlength="70" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
-          </div>
-
-          <div>
-            <label class="block text-base font-semibold text-slate-300 mb-2">Story Idea / Context</label>
-            <textarea v-model="form.context" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-          </div>
-
-          <template v-if="form.mode === 'advanced'">
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">Story Idea (Advanced)</label>
-              <textarea v-model="form.story_idea" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">Tone</label>
-              <textarea v-model="form.tone" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">Image Style</label>
-              <textarea v-model="form.image_style" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">Characters</label>
-              <textarea v-model="form.characters_text" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">NPCs</label>
-              <textarea v-model="form.npc_text" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">Scenes</label>
-              <textarea v-model="form.scenes_text" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">Items</label>
-              <textarea v-model="form.items_text" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-
-            <div>
-              <label class="block text-base font-semibold text-slate-300 mb-2">Objects</label>
-              <textarea v-model="form.objects_text" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-
-            <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
-              <div class="flex items-center gap-3">
-                <div class="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
-                  <i class="ra ra-hourglass text-xl"></i>
-                </div>
-                <div>
-                  <h3 class="text-sm font-bold text-white uppercase tracking-wider">Time Pacing</h3>
-                  <p class="text-[10px] text-slate-500">Minutes advanced per action.</p>
-                </div>
-              </div>
-
-              <div class="flex items-center gap-6">
-                <input type="range" v-model.number="form.time_per_turn" min="1" max="60" step="1" class="flex-grow accent-emerald-500" />
-                <div class="w-20 text-center">
-                  <span class="text-xl font-bold text-emerald-500">{{ form.time_per_turn }}</span>
-                  <span class="text-[10px] text-slate-500 block uppercase pt-0.5">Minutes</span>
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Pacing Notes</label>
-                <textarea v-model="form.pacing_text" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label class="block text-sm font-semibold text-slate-300 mb-2">Start Date</label>
-                <input v-model="form.start_date" type="date" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-slate-300 mb-2">Start Time</label>
-                <input v-model="form.start_time" type="time" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-slate-300 mb-2">Protagonist Role</label>
-                <input v-model="form.protagonist_role" type="text" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
-              </div>
-            </div>
-
-            <p v-if="advancedValidationError" class="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-              {{ advancedValidationError }}
-            </p>
-          </template>
-
-          <div>
-            <label class="block text-base font-semibold text-slate-300 mb-2">Adventure Cover Image</label>
-            <div class="relative w-full h-28 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/50 flex items-center justify-center overflow-hidden">
-              <img v-if="form.image_url" :src="'http://localhost:8000' + form.image_url" class="absolute inset-0 w-full h-full object-cover" />
-              <span class="text-xs text-slate-400">Click to upload (max 512x512)</span>
-              <input type="file" @change="handleImageUpload" accept="image/png, image/jpeg, image/webp" class="absolute inset-0 opacity-0 cursor-pointer" />
-            </div>
-          </div>
-
-          <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
-            <div class="flex items-center justify-between cursor-pointer" @click="form.generate_npc_images = !form.generate_npc_images">
-              <span class="text-sm font-bold text-white">Generate NPC Images</span>
-              <input type="checkbox" v-model="form.generate_npc_images" />
-            </div>
-            <div class="flex items-center justify-between cursor-pointer" @click="form.generate_item_images = !form.generate_item_images">
-              <span class="text-sm font-bold text-white">Generate Item Images</span>
-              <input type="checkbox" v-model="form.generate_item_images" />
-            </div>
-            <div class="flex items-center justify-between cursor-pointer" @click="form.generate_scene_images = !form.generate_scene_images">
-              <span class="text-sm font-bold text-white">Generate Scene Images</span>
-              <input type="checkbox" v-model="form.generate_scene_images" />
-            </div>
-            <div class="flex items-center justify-between cursor-pointer" @click="form.automatic_cover_generation = !form.automatic_cover_generation">
-              <span class="text-sm font-bold text-white">Automatic Cover Generation</span>
-              <input type="checkbox" v-model="form.automatic_cover_generation" />
-            </div>
-          </div>
-
-          <div v-if="errorMsg" class="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">
-            {{ errorMsg }}
-          </div>
-        </div>
-
-        <div class="mt-8 flex justify-end gap-4 border-t border-slate-700 pt-6">
-          <button @click="showCreateModal = false" class="px-6 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</button>
-          <button @click="createAdventure" :disabled="isSubmitting || !form.title" class="px-8 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl disabled:opacity-50">
-            {{ isSubmitting ? (creationStatus || 'Creating...') : 'Forge Adventure' }}
-          </button>
-        </div>
-      </div>
-    </div>
 
     <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center pt-10">
       <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="closeImportModal"></div>

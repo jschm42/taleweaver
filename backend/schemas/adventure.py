@@ -6,7 +6,12 @@ class AdventureBase(BaseModel):
     image_url: Optional[str] = None
     context: Optional[str] = Field(None, max_length=2000)
     strict_rules: Optional[bool] = True
+    rule_enforcement_mode: Optional[str] = "strict"
     time_per_turn: Optional[int] = 5
+    pacing_minutes: Optional[int] = 5
+    clock_enabled: Optional[bool] = False
+    selected_image_styles: Optional[List[str]] = None
+    selected_tone: Optional[str] = None
     game_over_rules: Optional[Dict[str, Any]] = None
 
 class AdventureCreate(AdventureBase):
@@ -15,7 +20,12 @@ class AdventureCreate(AdventureBase):
 class AdventureUpdate(BaseModel):
     title: Optional[str] = None
     strict_rules: Optional[bool] = None
+    rule_enforcement_mode: Optional[str] = None
     time_per_turn: Optional[int] = None
+    pacing_minutes: Optional[int] = None
+    clock_enabled: Optional[bool] = None
+    selected_image_styles: Optional[List[str]] = None
+    selected_tone: Optional[str] = None
     game_over_rules: Optional[Dict[str, Any]] = None
 
 class AdventureInDBBase(AdventureBase):

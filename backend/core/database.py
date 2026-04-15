@@ -79,6 +79,36 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added adventures.game_over_rules")
 
+        if "rule_enforcement_mode" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN rule_enforcement_mode TEXT NOT NULL DEFAULT 'strict'"
+            )
+            logger.info("SQLite migration: added adventures.rule_enforcement_mode")
+
+        if "pacing_minutes" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN pacing_minutes INTEGER NOT NULL DEFAULT 5"
+            )
+            logger.info("SQLite migration: added adventures.pacing_minutes")
+
+        if "clock_enabled" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN clock_enabled BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added adventures.clock_enabled")
+
+        if "selected_image_styles" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN selected_image_styles TEXT"
+            )
+            logger.info("SQLite migration: added adventures.selected_image_styles")
+
+        if "selected_tone" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN selected_tone TEXT"
+            )
+            logger.info("SQLite migration: added adventures.selected_tone")
+
         game_state_cols_result = await conn.exec_driver_sql("PRAGMA table_info(game_states)")
         game_state_cols = {row[1] for row in game_state_cols_result.fetchall()}
 
@@ -101,6 +131,18 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE users ADD COLUMN t2i_settings TEXT"
             )
             logger.info("SQLite migration: added users.t2i_settings")
+
+        if "image_styles_catalog" not in user_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN image_styles_catalog TEXT"
+            )
+            logger.info("SQLite migration: added users.image_styles_catalog")
+
+        if "tone_catalog" not in user_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN tone_catalog TEXT"
+            )
+            logger.info("SQLite migration: added users.tone_catalog")
 
         entity_cols_result = await conn.exec_driver_sql("PRAGMA table_info(world_entities)")
         entity_cols = {row[1] for row in entity_cols_result.fetchall()}

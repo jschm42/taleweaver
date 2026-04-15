@@ -231,35 +231,110 @@ async def _set_generation_state(
     await db.commit()
 
 
-def _build_visual_prompt(target_type: str, target_data: Dict[str, Any], custom_prompt: Optional[str]) -> str:
+def _normalize_rule_enforcement_mode(mode: Optional[str]) -> str:
+    candidate = (mode or "strict").strip().lower()
+    if candidate in {"strict", "strikt"}:
+        return "strict"
+    if candidate in {"moderate", "moderat"}:
+        return "moderate"
+    if candidate in {"loose", "locker"}:
+        return "loose"
+    return "strict"
+
+
+def _derive_strict_rules(mode: str) -> bool:
+    return _normalize_rule_enforcement_mode(mode) == "strict"
+
+
+def _resolve_catalog_instructions(catalog: Any, selected_ids: list[str]) -> list[str]:
+    if not isinstance(catalog, list):
+        return []
+
+    selected = {item.strip().lower() for item in selected_ids if item and item.strip()}
+    if not selected:
+        return []
+
+    instructions: list[str] = []
+    for raw in catalog:
+        if not isinstance(raw, dict):
+            continue
+        raw_id = str(raw.get("id") or "").strip().lower()
+        raw_name = str(raw.get("name") or "").strip().lower()
+        if raw_id not in selected and raw_name not in selected:
+            continue
+        instruction = str(raw.get("instruction") or "").strip()
+        if instruction:
+            instructions.append(instruction)
+    return instructions
+
+
+def _resolve_generation_instructions(
+    user: Optional[User],
+    selected_image_styles: Optional[list[str]],
+    selected_tone: Optional[str],
+) -> tuple[str, str]:
+    styles = [value.strip() for value in (selected_image_styles or []) if isinstance(value, str) and value.strip()]
+    tone_value = (selected_tone or "").strip()
+
+    style_parts = _resolve_catalog_instructions(
+        getattr(user, "image_styles_catalog", None),
+        styles,
+    )
+    if not style_parts:
+        style_parts = styles
+
+    tone_parts = _resolve_catalog_instructions(
+        getattr(user, "tone_catalog", None),
+        [tone_value] if tone_value else [],
+    )
+    if not tone_parts and tone_value:
+        tone_parts = [tone_value]
+
+    return "; ".join(style_parts), " ".join(tone_parts)
+
+
+def _build_visual_prompt(
+    target_type: str,
+    target_data: Dict[str, Any],
+    custom_prompt: Optional[str],
+    *,
+    style_instruction: Optional[str] = None,
+    tone_instruction: Optional[str] = None,
+) -> str:
     if custom_prompt and custom_prompt.strip():
         return custom_prompt.strip()
+
+    prompt_suffix = ""
+    if style_instruction:
+        prompt_suffix += f" Style constraints: {style_instruction}."
+    if tone_instruction:
+        prompt_suffix += f" Narrative tone reference: {tone_instruction}."
 
     if target_type == "protagonist":
         name = target_data.get("name") or "The protagonist"
         role = target_data.get("role") or "adventurer"
         description = target_data.get("description") or "A distinctive fantasy hero."
-        return f"Portrait of character {name}, {role}. {description}. Game character art style."
+        return f"Portrait of character {name}, {role}. {description}. Game character art style.{prompt_suffix}"
 
     if target_type == "scene":
         label = target_data.get("label") or target_data.get("name") or "Scene"
         description = target_data.get("description") or ""
-        return f"Atmospheric background: {label}. {description}. RPG visual novel style, high detail."
+        return f"Atmospheric background: {label}. {description}. RPG visual novel style, high detail.{prompt_suffix}"
 
     if target_type == "npc":
         name = target_data.get("name") or "NPC"
         description = target_data.get("description") or "A distinctive non-player character."
-        return f"Portrait of NPC {name}. {description}. Character portrait, high detail."
+        return f"Portrait of NPC {name}. {description}. Character portrait, high detail.{prompt_suffix}"
 
     if target_type == "object":
         name = target_data.get("name") or "Object"
         description = target_data.get("description") or "A detailed fantasy object."
-        return f"Detailed illustration of object {name}. {description}. Fantasy item concept art, isolated and clearly readable."
+        return f"Detailed illustration of object {name}. {description}. Fantasy item concept art, isolated and clearly readable.{prompt_suffix}"
 
     if target_type == "cover":
         title = target_data.get("title") or "Adventure"
         context = target_data.get("context") or "A cinematic fantasy journey."
-        return f"Epic cinematic adventure cover: {title}. {context}. Landscape format, high fantasy art style, immersive atmosphere, detailed concept art."
+        return f"Epic cinematic adventure cover: {title}. {context}. Landscape format, high fantasy art style, immersive atmosphere, detailed concept art.{prompt_suffix}"
 
     raise HTTPException(status_code=400, detail="Unsupported visual target type.")
 
@@ -411,13 +486,18 @@ class CreateAdventurePayload(BaseModel):
     image_url: Optional[str] = None
     context: Optional[str] = None
     strict_rules: bool = True
+    rule_enforcement_mode: Optional[Literal["strict", "moderate", "loose"]] = "strict"
     generate_scene_images: bool = False
     generate_npc_images: bool = False
     generate_item_images: bool = False
     time_per_turn: int = 5
+    pacing_minutes: Optional[int] = None
+    clock_enabled: Optional[bool] = False
     heartbeat_enabled: Optional[bool] = False
     heartbeat_interval: Optional[int] = None
     game_over_rules: Optional[Dict[str, Any]] = None
+    selected_image_styles: Optional[List[str]] = None
+    selected_tone: Optional[str] = None
     # Advanced/import fields
     original_manifest: Optional[Dict[str, Any]] = None
     automatic_cover_generation: Optional[bool] = False
@@ -429,10 +509,15 @@ class AdventureResponse(BaseModel):
     id: str
     title: str
     strict_rules: bool
+    rule_enforcement_mode: str
     time_per_turn: int
+    pacing_minutes: int
+    clock_enabled: bool
     heartbeat_enabled: bool
     heartbeat_interval: Optional[int] = None
     game_over_rules: Optional[Dict[str, Any]]
+    selected_image_styles: Optional[List[str]] = None
+    selected_tone: Optional[str] = None
     context: Optional[str] = None
 
     class Config:
@@ -480,11 +565,25 @@ async def create_adventure(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    if payload.time_per_turn < 1 or payload.time_per_turn > 30:
+        raise HTTPException(status_code=400, detail="time_per_turn must be between 1 and 30 minutes.")
+
+    if payload.pacing_minutes is not None and (payload.pacing_minutes < 1 or payload.pacing_minutes > 30):
+        raise HTTPException(status_code=400, detail="pacing_minutes must be between 1 and 30 minutes.")
+
+    rule_mode = _normalize_rule_enforcement_mode(payload.rule_enforcement_mode)
+    strict_rules = _derive_strict_rules(rule_mode)
+
     log_structured_event(
         "adventure.create.request",
         title=payload.title,
-        strict_rules=payload.strict_rules,
+        strict_rules=strict_rules,
+        rule_enforcement_mode=rule_mode,
         time_per_turn=payload.time_per_turn,
+        pacing_minutes=payload.pacing_minutes,
+        clock_enabled=payload.clock_enabled,
+        selected_image_styles=payload.selected_image_styles,
+        selected_tone=payload.selected_tone,
         generate_scene_images=payload.generate_scene_images,
         generate_npc_images=payload.generate_npc_images,
         generate_item_images=payload.generate_item_images,
@@ -505,15 +604,20 @@ async def create_adventure(
         title=payload.title,
         image_url=payload.image_url,
         context=payload.context,
-        strict_rules=payload.strict_rules,
+        strict_rules=strict_rules,
+        rule_enforcement_mode=rule_mode,
         time_per_turn=payload.time_per_turn,
+        pacing_minutes=payload.pacing_minutes if payload.pacing_minutes is not None else payload.time_per_turn,
+        clock_enabled=bool(payload.clock_enabled),
         game_over_rules=payload.game_over_rules,
         is_ready=False,
         creation_status="Initializing Foundations...",
         heartbeat_enabled=bool(payload.heartbeat_enabled),
         generate_scene_images=payload.generate_scene_images,
         generate_npc_images=payload.generate_npc_images,
-        generate_item_images=payload.generate_item_images
+        generate_item_images=payload.generate_item_images,
+        selected_image_styles=payload.selected_image_styles or [],
+        selected_tone=(payload.selected_tone.strip() if payload.selected_tone else None),
     )
 
     if payload.heartbeat_interval is not None:
@@ -609,15 +713,13 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 result = await db.execute(select(User).where(User.id == user_id))
                 user = result.scalars().first()
                 if not user:
-                    logger.warning("Background Gen: user not found for %s", user_id)
-                    await _set_generation_state(
-                        db,
-                        adventure_id,
-                        status="Generation Failed",
-                        is_ready=False,
-                        error="Background generation user not found.",
-                    )
-                    return
+                    logger.warning("Background Gen: user not found for %s; falling back to default user", user_id)
+                    fallback = await db.execute(select(User).limit(1))
+                    user = fallback.scalars().first()
+                    if not user:
+                        user = User(username="local_default_user")
+                        db.add(user)
+                        await db.commit()
             except Exception as e:
                 logger.error("Background Gen user fetch failed for %s: %s", user_id, e)
                 await _set_generation_state(
@@ -633,6 +735,34 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             complex_model = llm_settings.get("complex_model", "gpt-4o")
             preferred_provider = llm_settings.get("preferred_provider", "openai")
             adv_for_context = await db.get(Adventure, adventure_id)
+            if not adv_for_context:
+                fallback_rule_mode = _normalize_rule_enforcement_mode(payload_dict.get("rule_enforcement_mode"))
+                adv_for_context = Adventure(
+                    id=adventure_id,
+                    title=payload_dict.get("title") or "Adventure",
+                    context=payload_dict.get("context"),
+                    strict_rules=_derive_strict_rules(fallback_rule_mode),
+                    rule_enforcement_mode=fallback_rule_mode,
+                    time_per_turn=int(payload_dict.get("time_per_turn") or 5),
+                    pacing_minutes=int(payload_dict.get("pacing_minutes") or payload_dict.get("time_per_turn") or 5),
+                    clock_enabled=bool(payload_dict.get("clock_enabled")),
+                    heartbeat_enabled=False,
+                    generate_scene_images=bool(payload_dict.get("generate_scene_images", False)),
+                    generate_npc_images=bool(payload_dict.get("generate_npc_images", False)),
+                    generate_item_images=bool(payload_dict.get("generate_item_images", False)),
+                    selected_image_styles=payload_dict.get("selected_image_styles") or [],
+                    selected_tone=payload_dict.get("selected_tone"),
+                    is_ready=False,
+                    creation_status="Generating world structure",
+                )
+                db.add(adv_for_context)
+                await db.commit()
+
+            style_instruction, tone_instruction = _resolve_generation_instructions(
+                user,
+                adv_for_context.selected_image_styles if adv_for_context else None,
+                adv_for_context.selected_tone if adv_for_context else None,
+            )
             source_manifest = (adv_for_context.original_manifest if adv_for_context else None) or payload_dict.get("original_manifest")
             normalized_manifest = _normalize_manifest_for_world_generator(source_manifest)
             initial_scene_id = normalized_manifest["scenes"][0]["id"] if normalized_manifest else None
@@ -642,6 +772,9 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             if not adventure_context:
                 manifest = (adv_for_context.original_manifest or {}) if adv_for_context else {}
                 adventure_context = manifest.get('story_idea') or manifest.get('description') or "A standard fantasy world."
+
+            if tone_instruction:
+                adventure_context = f"{adventure_context}\n\nTone Guidance: {tone_instruction}"
 
             log_structured_event(
                 "adventure.generation.status",
@@ -676,9 +809,9 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 )
             else:
                 await WorldGenerator.generate_world(
-                    db=db,
-                    user=user,
-                    adventure_id=adventure_id,
+                    db,
+                    user,
+                    adventure_id,
                     title=payload_dict['title'],
                     context=adventure_context,
                     model=complex_model,
@@ -696,6 +829,31 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             # Get Avatar ID
             avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
             avatar = avatar_res.scalars().first()
+            if not avatar:
+                avatar = Avatar(
+                    user_id=user.id,
+                    adventure_id=adventure_id,
+                    name="You",
+                    hp=200,
+                    stamina=200,
+                    mana=200,
+                    stats={},
+                    inventory=[],
+                    equipment={
+                        "Head": None,
+                        "Chest": None,
+                        "Arms": None,
+                        "Legs": None,
+                        "Hands": None,
+                        "Feet": None,
+                        "Ring_1": None,
+                        "Ring_2": None,
+                        "Amulet": None,
+                    },
+                    status_effects=[],
+                )
+                db.add(avatar)
+                await db.commit()
             
             # create_adventure already seeds a GameState; update it instead of inserting a duplicate
             state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
@@ -723,9 +881,12 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     is_ready=False,
                 )
                 try:
+                    cover_context = adventure_context
+                    if style_instruction:
+                        cover_context = f"{cover_context}\nVisual Style Guidance: {style_instruction}"
                     cover_url = await MediaEngine.generate_adventure_cover(
                         title=adv_for_context.title,
-                        context=adventure_context,
+                        context=cover_context,
                         adventure_id=adventure_id,
                         user_config={"t2i_settings": user.t2i_settings},
                         api_keys=user.encrypted_api_keys
@@ -835,16 +996,25 @@ async def import_adventure(
         db.add(user)
         await db.flush()
 
+    import_rule_mode = _normalize_rule_enforcement_mode(payload.rule_enforcement_mode)
+    import_strict_rules = _derive_strict_rules(import_rule_mode)
+    selected_image_styles = payload.image_styles or ([payload.image_style] if payload.image_style else [])
+
     adv_kwargs = dict(
         title=payload.title,
         image_url=None,
         context=payload.story_idea or payload.description or payload.subtitle,
-        strict_rules=True,
+        strict_rules=import_strict_rules,
+        rule_enforcement_mode=import_rule_mode,
         time_per_turn=payload.time_per_turn or 5,
+        pacing_minutes=payload.pacing_minutes or payload.time_per_turn or 5,
+        clock_enabled=bool(payload.clock_enabled),
         game_over_rules=None,
         is_ready=False,
         creation_status="Importing Manifest...",
         heartbeat_enabled=False,
+        selected_image_styles=selected_image_styles,
+        selected_tone=payload.tone,
         original_manifest=payload.model_dump()
     )
 
@@ -895,6 +1065,11 @@ async def import_adventure(
         "generate_npc_images": payload.generate_npc_images,
         "generate_item_images": payload.generate_item_images,
         "automatic_cover_generation": payload.automatic_cover_generation,
+        "selected_image_styles": selected_image_styles,
+        "selected_tone": payload.tone,
+        "rule_enforcement_mode": import_rule_mode,
+        "clock_enabled": bool(payload.clock_enabled),
+        "pacing_minutes": payload.pacing_minutes or payload.time_per_turn,
         "pacing": payload.pacing.model_dump() if payload.pacing else None,
         "start_date": payload.start_date,
         "start_time": payload.start_time,
@@ -1088,6 +1263,13 @@ async def regenerate_visual(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
+    adv = await db.get(Adventure, adventure_id)
+    style_instruction, tone_instruction = _resolve_generation_instructions(
+        user,
+        adv.selected_image_styles if adv else None,
+        adv.selected_tone if adv else None,
+    )
+
     target_model, target_data, image_attr = await _resolve_visual_target(
         db=db,
         adventure_id=adventure_id,
@@ -1099,6 +1281,10 @@ async def regenerate_visual(
 
     if payload.target_type == "cover":
         cover_context = payload.prompt.strip() if payload.prompt and payload.prompt.strip() else (target_data.get("context") or "")
+        if style_instruction:
+            cover_context = f"{cover_context}\nVisual Style Guidance: {style_instruction}"
+        if tone_instruction:
+            cover_context = f"{cover_context}\nTone Guidance: {tone_instruction}"
         image_url = await MediaEngine.generate_adventure_cover(
             title=target_data.get("title") or "Adventure",
             context=cover_context,
@@ -1109,7 +1295,13 @@ async def regenerate_visual(
         if not image_url:
             raise HTTPException(status_code=504, detail="Cover image generation timed out or failed.")
     elif payload.target_type == "protagonist":
-        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
+        prompt = _build_visual_prompt(
+            payload.target_type,
+            target_data,
+            payload.prompt,
+            style_instruction=style_instruction,
+            tone_instruction=tone_instruction,
+        )
         image_url = await MediaEngine.generate_entity_image(
             prompt,
             adventure_id,
@@ -1121,7 +1313,13 @@ async def regenerate_visual(
         if not image_url:
             raise HTTPException(status_code=504, detail="Protagonist image generation timed out or failed.")
     elif payload.target_type == "scene":
-        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
+        prompt = _build_visual_prompt(
+            payload.target_type,
+            target_data,
+            payload.prompt,
+            style_instruction=style_instruction,
+            tone_instruction=tone_instruction,
+        )
         image_url = await MediaEngine.generate_scene_image(
             prompt,
             adventure_id,
@@ -1131,7 +1329,13 @@ async def regenerate_visual(
         if not image_url:
             raise HTTPException(status_code=504, detail="Scene image generation timed out or failed.")
     else:
-        prompt = _build_visual_prompt(payload.target_type, target_data, payload.prompt)
+        prompt = _build_visual_prompt(
+            payload.target_type,
+            target_data,
+            payload.prompt,
+            style_instruction=style_instruction,
+            tone_instruction=tone_instruction,
+        )
         image_url = await MediaEngine.generate_entity_image(
             prompt,
             adventure_id,
@@ -1308,9 +1512,17 @@ async def export_adventure_manifest(adventure_id: str, db: AsyncSession = Depend
     if not manifest.get("time_per_turn"):
         manifest["time_per_turn"] = adventure.time_per_turn
 
+    if not manifest.get("pacing_minutes"):
+        manifest["pacing_minutes"] = adventure.pacing_minutes
+
     manifest.setdefault("generate_npc_images", False)
     manifest.setdefault("generate_item_images", False)
     manifest.setdefault("automatic_cover_generation", False)
+    manifest.setdefault("clock_enabled", bool(adventure.clock_enabled))
+    manifest.setdefault("rule_enforcement_mode", adventure.rule_enforcement_mode)
+    manifest.setdefault("tone", adventure.selected_tone)
+    if adventure.selected_image_styles:
+        manifest.setdefault("image_styles", adventure.selected_image_styles)
 
     start_dt = _resolve_start_datetime(manifest)
     if start_dt:

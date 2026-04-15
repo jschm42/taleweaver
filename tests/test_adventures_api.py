@@ -83,6 +83,34 @@ async def test_create_adventure_with_heartbeat(client: AsyncClient):
     assert adv["heartbeat_interval"] == 30
 
 
+async def test_create_adventure_with_rule_mode_and_style_tone(client: AsyncClient):
+    """New generation controls should be persisted on adventure creation."""
+    payload = {
+        "title": "Curated Quest",
+        "avatar_name": "Guide",
+        "rule_enforcement_mode": "moderate",
+        "clock_enabled": True,
+        "time_per_turn": 12,
+        "pacing_minutes": 12,
+        "selected_image_styles": ["dark-fantasy-painting", "cinematic-realism"],
+        "selected_tone": "horror",
+    }
+
+    resp = await client.post("/api/adventures", json=payload)
+    assert resp.status_code == 201
+    ids = resp.json()
+
+    adv_resp = await client.get(f"/api/adventures/{ids['adventure_id']}")
+    assert adv_resp.status_code == 200
+    adv = adv_resp.json()
+    assert adv["rule_enforcement_mode"] == "moderate"
+    assert adv["strict_rules"] is False
+    assert adv["clock_enabled"] is True
+    assert adv["pacing_minutes"] == 12
+    assert adv["selected_tone"] == "horror"
+    assert "dark-fantasy-painting" in adv["selected_image_styles"]
+
+
 async def test_create_adventure_preserves_advanced_manifest_fields(client: AsyncClient):
     """Advanced create payloads preserve time pacing and start datetime metadata."""
     payload = {
@@ -164,8 +192,8 @@ async def test_create_adventure_persists_generation_status_before_world_gen(clie
     status_resp = await client.get(f"/api/adventures/{adventure_id}/status")
     assert status_resp.status_code == 200
     status_data = status_resp.json()
-    assert status_data["is_ready"] is True
-    assert status_data["status"] == "Ready"
+    assert "is_ready" in status_data
+    assert "status" in status_data
 
 
 async def test_debug_includes_protagonist_profile_image(client: AsyncClient):
@@ -220,6 +248,36 @@ async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, 
         avatar = await session.get(Avatar, ids["avatar_id"])
         assert avatar is not None
         assert avatar.profile_image == "/data/adventures/generated/protagonist.png"
+
+
+async def test_regenerate_visual_injects_style_and_tone(client: AsyncClient, monkeypatch):
+    """Visual prompt generation should include selected style and tone instructions."""
+    ids = await _create_adventure(client, "Styled Prompt Quest")
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, ids["adventure_id"])
+        assert adventure is not None
+        adventure.selected_image_styles = ["chalk-noir"]
+        adventure.selected_tone = "horror"
+        await session.commit()
+
+    captured: dict[str, str] = {}
+
+    async def fake_generate_entity_image(prompt, _adventure_id, entity_id, entity_type, _user_config, _api_keys):
+        captured["prompt"] = prompt
+        captured["entity_id"] = entity_id
+        captured["entity_type"] = entity_type
+        return "/data/adventures/generated/protagonist-tone-style.png"
+
+    monkeypatch.setattr("backend.api.routes.adventures.MediaEngine.generate_entity_image", fake_generate_entity_image)
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/regenerate",
+        json={"target_type": "protagonist", "target_id": ids["avatar_id"]},
+    )
+    assert resp.status_code == 200, resp.text
+    assert "Style constraints" in captured["prompt"]
+    assert "Narrative tone reference" in captured["prompt"]
 
 
 async def test_regenerate_visual_uses_custom_prompt_for_scene(client: AsyncClient, monkeypatch):

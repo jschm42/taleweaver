@@ -53,14 +53,27 @@ export interface CreateAdventurePayload {
   context?: string
   image_url?: string | null
   strict_rules?: boolean
+  rule_enforcement_mode?: 'strict' | 'moderate' | 'loose'
   generate_npc_images?: boolean
   generate_item_images?: boolean
   generate_scene_images?: boolean
+  selected_image_styles?: string[]
+  selected_tone?: string
+  clock_enabled?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean
   time_per_turn?: number
+  pacing_minutes?: number
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
+}
+
+export interface CatalogTile {
+  id: string
+  name: string
+  description?: string
+  instruction?: string
+  image_url?: string | null
 }
 
 /** Minimal import payload type for .ADV files (frontend-side). */

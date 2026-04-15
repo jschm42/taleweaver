@@ -16,3 +16,7 @@ class User(Base, TimestampMixin):
 
     # Store T2I preferences: {"simple_model": "...", "advanced_model": "...", "provider": "..."}
     t2i_settings = Column(JSON, nullable=True)
+
+    # Admin-managed catalogs for adventure generation selectors.
+    image_styles_catalog = Column(JSON, nullable=True)
+    tone_catalog = Column(JSON, nullable=True)
