@@ -36,8 +36,14 @@ export const getTypeColor = (type?: string) => {
 
 export const getImageUrl = (path?: string | null) => {
   if (!path) return ''
-  if (path.startsWith('http')) return path
+  const cacheVersion = localStorage.getItem('tw_visual_cache_version') || '0'
+
+  if (path.startsWith('http')) {
+    const separator = path.includes('?') ? '&' : '?'
+    return `${path}${separator}v=${cacheVersion}`
+  }
   // In dev, the frontend is on 5173 and backend on 8000
   const baseUrl = window.location.origin.replace('5173', '8000')
-  return `${baseUrl}${path}`
+  const separator = path.includes('?') ? '&' : '?'
+  return `${baseUrl}${path}${separator}v=${cacheVersion}`
 }

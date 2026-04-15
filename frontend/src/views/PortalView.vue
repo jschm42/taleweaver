@@ -710,7 +710,7 @@ onUnmounted(() => {
               </template>
               <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/75 via-black/42 to-transparent"></div>
               <div class="absolute inset-x-0 top-0 px-3 pt-3 pb-5">
-                <span class="block truncate text-lg font-extrabold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
+                <span class="block truncate text-lg font-extrabold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.95),0_0_10px_rgba(0,0,0,0.5)]">
                   {{ adv.adventure_title }}
                 </span>
               </div>

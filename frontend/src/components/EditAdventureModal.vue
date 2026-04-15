@@ -91,6 +91,10 @@ function buildVisualImageUrl(imagePath?: string | null) {
   return `http://localhost:8000${imagePath}?v=${visualsCacheVersion.value}`
 }
 
+function bumpGlobalVisualCacheVersion() {
+  localStorage.setItem('tw_visual_cache_version', String(Date.now()))
+}
+
 function getVisualKindLabel(kind?: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object' | null) {
   if (!kind) {
     return 'Visual'
@@ -177,6 +181,7 @@ async function regenerateVisual() {
       throw new Error(payload?.detail || 'Failed to regenerate image.')
     }
 
+    bumpGlobalVisualCacheVersion()
     isRegenerating.value = false
     closeRegenerateDialog(true)
     await fetchDebugInfo()
@@ -265,6 +270,7 @@ async function handleUploadChange(event: Event) {
       throw new Error(payload?.detail || 'Failed to upload image.')
     }
 
+    bumpGlobalVisualCacheVersion()
     isUploading.value = false
     closeRegenerateDialog(true)
     await fetchDebugInfo()
