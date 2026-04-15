@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 import uuid
 from copy import deepcopy
 from datetime import datetime
@@ -35,6 +36,37 @@ from backend.core.llm_logger import log_structured_event
 
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_narrative_response(text: str, *, fallback: Optional[str] = None) -> str:
+    """Remove leaked technical JSON blocks from player-visible narration."""
+    cleaned = (text or "").strip()
+
+    if not cleaned:
+        return (fallback or "").strip()
+
+    # If model returned only a raw JSON object, prefer a narrative fallback.
+    if cleaned.startswith("{") and cleaned.endswith("}"):
+        try:
+            json.loads(cleaned)
+            return (fallback or "").strip()
+        except json.JSONDecodeError:
+            pass
+
+    # If model appended structured metadata as a trailing JSON object, strip it.
+    json_start = cleaned.rfind("\n{")
+    if json_start != -1:
+        candidate = cleaned[json_start + 1 :].strip()
+        try:
+            json.loads(candidate)
+            cleaned = cleaned[:json_start].rstrip()
+        except json.JSONDecodeError:
+            pass
+
+    if not cleaned:
+        return (fallback or "").strip()
+
+    return cleaned
 
 
 def _resolve_start_datetime(manifest: dict[str, Any] | None) -> Optional[str]:
@@ -1890,6 +1922,10 @@ async def post_chat_message(
                 phase="narration",
                 metadata={"strict_rules": True, "is_new_scene": is_new_scene},
             )
+            response_text = _sanitize_narrative_response(
+                response_text,
+                fallback=game_event.narrative_description,
+            )
             
             # Apply mechanics to avatar, but use the complex narration for the final output
             try:
@@ -1911,6 +1947,7 @@ async def post_chat_message(
                 phase="freeform",
                 metadata={"strict_rules": False},
             )
+            response_text = _sanitize_narrative_response(response_text)
 
         # Record Assistant Message
         assistant_chat = ChatMessage(game_state_id=game_id, role="assistant", content=response_text)

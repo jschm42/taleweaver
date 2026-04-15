@@ -566,7 +566,7 @@ onUnmounted(() => {
         <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
       </div>
 
-      <div v-else-if="adventures.length === 0 && pendingImports.length === 0" class="text-center py-20 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
+      <div v-else-if="adventures.length === 0 && pendingImports.length === 0 && pendingCreations.length === 0" class="text-center py-20 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
         <h2 class="text-2xl font-bold text-white mb-2">No active adventures</h2>
         <p class="text-slate-400 mb-8 max-w-md mx-auto">Start your first world or import a prepared ADV manifest.</p>
         <div class="flex items-center justify-center gap-3">

@@ -45,6 +45,12 @@ class GameMasterLLM:
         if self.provider == "ollama":
             return normalized
 
+        if self.provider == "openrouter":
+            # Use raw model slug; provider routing is handled via api_base + custom_llm_provider.
+            if "/" in normalized:
+                normalized = normalized.split("/", 1)[1].strip()
+            return normalized
+
         if "/" in normalized:
             return normalized.split("/", 1)[1].strip()
 
@@ -114,6 +120,10 @@ class GameMasterLLM:
             kwargs["custom_llm_provider"] = "ollama"
         else:
             kwargs["api_key"] = self.api_key
+            if self.provider == "openrouter":
+                # Route through OpenAI-compatible chat endpoint to avoid provider-specific
+                # request fields that some local dependency combos reject (e.g. usage).
+                kwargs["custom_llm_provider"] = "openai"
         
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
@@ -190,6 +200,10 @@ class GameMasterLLM:
             kwargs["custom_llm_provider"] = "ollama"
         else:
             kwargs["api_key"] = self.api_key
+            if self.provider == "openrouter":
+                # Route through OpenAI-compatible chat endpoint to avoid provider-specific
+                # request fields that some local dependency combos reject (e.g. usage).
+                kwargs["custom_llm_provider"] = "openai"
 
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
