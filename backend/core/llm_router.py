@@ -1,11 +1,11 @@
 import json
 import litellm
 from pydantic import BaseModel
-from typing import TypeVar, Type
+from typing import TypeVar, Type, Any
 
 from backend.models.user import User
 from backend.core.security import encryption_util
-from backend.core.llm_logger import log_llm_interaction
+from backend.core.llm_logger import log_llm_interaction, log_structured_event
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -60,7 +60,18 @@ class GameMasterLLM:
                 "Configure a local Ollama model (for example: llama3.2, qwen2.5, mistral)."
             )
 
-    def execute_simple_task(self, system_prompt: str, user_prompt: str, model: str) -> str:
+    def execute_simple_task(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str,
+        *,
+        adventure_id: str | None = None,
+        game_id: str | None = None,
+        operation: str | None = None,
+        phase: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
         """
         Free narrative task (Hallucination Mode).
         Provides a plain text output from the model.
@@ -90,6 +101,17 @@ class GameMasterLLM:
             if model.startswith("openrouter/"):
                 kwargs["model"] = model.replace("openrouter/", "")
         
+        log_structured_event(
+            "gm.turn.request",
+            model=model,
+            provider=self.provider,
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata=metadata,
+        )
+
         response = litellm.completion(**kwargs)
         
         result = response.choices[0].message.content or ""
@@ -100,12 +122,30 @@ class GameMasterLLM:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_content=result,
-            raw_response=response.model_dump()
+            raw_response=response.model_dump(),
+            event_type="gm.turn.response",
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata=metadata,
         )
         
         return result
 
-    def execute_complex_task(self, system_prompt: str, user_prompt: str, response_model: Type[T], model: str) -> T:
+    def execute_complex_task(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_model: Type[T],
+        model: str,
+        *,
+        adventure_id: str | None = None,
+        game_id: str | None = None,
+        operation: str | None = None,
+        phase: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> T:
         """
         Strict mechanics task (Strict Mode).
         Uses 'response_format' to force the LLM to return standard JSON 
@@ -137,6 +177,18 @@ class GameMasterLLM:
             if model.startswith("openrouter/"):
                 kwargs["model"] = model.replace("openrouter/", "")
 
+        log_structured_event(
+            "gm.turn.request",
+            model=model,
+            provider=self.provider,
+            response_model=response_model.__name__,
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata=metadata,
+        )
+
         response = litellm.completion(**kwargs)
         
         content = response.choices[0].message.content
@@ -147,7 +199,16 @@ class GameMasterLLM:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_content=content or "",
-            raw_response=response.model_dump()
+            raw_response=response.model_dump(),
+            event_type="gm.turn.response",
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata={
+                **(metadata or {}),
+                "response_model": response_model.__name__,
+            },
         )
         
         if not content:
@@ -156,5 +217,5 @@ class GameMasterLLM:
         try:
             data = json.loads(content)
             return response_model(**data)
-        except json.JSONDecodeError:
-            raise ValueError(f"Failed to parse LLM response as JSON: {content}")
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Failed to parse LLM response as JSON: {content}") from exc
