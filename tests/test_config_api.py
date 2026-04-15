@@ -110,6 +110,28 @@ async def test_save_llm_settings_with_ollama_url(client: AsyncClient):
     assert settings_resp.json()["llm_settings"] == payload
 
 
+async def test_save_llm_settings_normalizes_openrouter_models(client: AsyncClient):
+    """OpenRouter LLM settings should not store stale provider prefixes."""
+    payload = {
+        "small_model": "openai/gpt-oss-120b",
+        "complex_model": "openai/gpt-5.4",
+        "preferred_provider": "openrouter",
+        "ollama_url": "http://localhost:11434",
+    }
+
+    save_resp = await client.post("/api/settings/llm", json=payload)
+    assert save_resp.status_code == 200
+    assert save_resp.json()["status"] == "success"
+
+    settings_resp = await client.get("/api/settings")
+    assert settings_resp.status_code == 200
+    data = settings_resp.json()["llm_settings"]
+    assert data["small_model"] == "gpt-oss-120b"
+    assert data["complex_model"] == "gpt-5.4"
+    assert data["preferred_provider"] == "openrouter"
+    assert data["ollama_url"] == "http://localhost:11434"
+
+
 async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
     """Default llm settings include ollama_url for local provider use."""
     resp = await client.get("/api/settings")

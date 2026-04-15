@@ -60,3 +60,46 @@ def test_ollama_simple_task_uses_local_base_without_api_key(monkeypatch):
     assert captured["custom_llm_provider"] == "ollama"
     assert captured["api_base"] == "http://localhost:11434"
     assert "api_key" not in captured
+
+
+def test_openrouter_normalizes_prefixed_model(monkeypatch):
+    user = _make_user(
+        llm_settings={"ollama_url": "http://localhost:11434"},
+        encrypted_api_keys={"openrouter": "encrypted-placeholder"},
+    )
+
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-or-v1-test")
+
+    router = GameMasterLLM(user, provider="openrouter")
+
+    captured = {}
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.completion", fake_completion)
+
+    out = router.execute_simple_task(
+        system_prompt="sys",
+        user_prompt="hello",
+        model="openai/gpt-5.4",
+    )
+
+    assert out == "ok"
+    assert captured["model"] == "gpt-5.4"
+    assert captured["api_base"] == "https://openrouter.ai/api/v1"
+    assert captured["api_key"] == "sk-or-v1-test"

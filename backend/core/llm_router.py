@@ -30,6 +30,20 @@ class GameMasterLLM:
         # Prevents litellm from passing 'usage' to OpenAI-compatible endpoints that don't support it
         litellm.add_usage = False 
 
+    def _normalize_model(self, model: str) -> str:
+        """Return a LiteLLM-friendly model slug for the configured provider."""
+        normalized = (model or "").strip()
+        if not normalized:
+            raise ValueError(f"No model configured for provider '{self.provider}'.")
+
+        if self.provider == "ollama":
+            return normalized
+
+        if "/" in normalized:
+            return normalized.split("/", 1)[1].strip()
+
+        return normalized
+
     def _get_decrypted_key(self, provider: str) -> str:
         if not self.user.encrypted_api_keys or provider not in self.user.encrypted_api_keys:
             raise ValueError(f"No API key configured for provider: {provider}")
@@ -81,8 +95,10 @@ class GameMasterLLM:
             {"role": "user", "content": user_prompt}
         ]
         
+        normalized_model = self._normalize_model(model)
+
         kwargs = {
-            "model": model,
+            "model": normalized_model,
             "messages": messages,
         }
 
@@ -96,14 +112,10 @@ class GameMasterLLM:
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
-            # Some models on OpenRouter prefer not having the openrouter/ prefix 
-            # when using it as an OpenAI-compatible endpoint.
-            if model.startswith("openrouter/"):
-                kwargs["model"] = model.replace("openrouter/", "")
         
         log_structured_event(
             "gm.turn.request",
-            model=model,
+            model=normalized_model,
             provider=self.provider,
             adventure_id=adventure_id,
             game_id=game_id,
@@ -158,8 +170,10 @@ class GameMasterLLM:
         
         # litellm will translate the Pydantic model into a JSON schema 
         # for providers that support structured outputs (e.g. OpenAI).
+        normalized_model = self._normalize_model(model)
+
         kwargs = {
-            "model": model,
+            "model": normalized_model,
             "messages": messages,
             "response_format": response_model
         }
@@ -174,12 +188,10 @@ class GameMasterLLM:
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
-            if model.startswith("openrouter/"):
-                kwargs["model"] = model.replace("openrouter/", "")
 
         log_structured_event(
             "gm.turn.request",
-            model=model,
+            model=normalized_model,
             provider=self.provider,
             response_model=response_model.__name__,
             adventure_id=adventure_id,

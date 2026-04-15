@@ -10,6 +10,40 @@ from backend.core.security import encryption_util
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
+
+def _normalize_openrouter_model(model: Optional[str]) -> Optional[str]:
+    """Strip provider prefixes from models stored for OpenRouter."""
+    if not isinstance(model, str):
+        return model
+
+    normalized = model.strip()
+    if not normalized:
+        return normalized
+
+    if "/" in normalized:
+        return normalized.split("/", 1)[1].strip()
+
+    return normalized
+
+
+def _normalize_llm_settings(settings: Optional[dict]) -> dict:
+    """Return LLM settings with OpenRouter-safe model names."""
+    fallback = {
+        "small_model": "openai/gpt-4o-mini",
+        "complex_model": "openai/gpt-4o-mini",
+        "preferred_provider": "openai",
+        "ollama_url": "http://localhost:11434",
+    }
+    if not settings:
+        return fallback
+
+    normalized = dict(settings)
+    if (normalized.get("preferred_provider") or "").lower() == "openrouter":
+        normalized["small_model"] = _normalize_openrouter_model(normalized.get("small_model"))
+        normalized["complex_model"] = _normalize_openrouter_model(normalized.get("complex_model"))
+
+    return normalized
+
 class ApiKeyPayload(BaseModel):
     provider: str
     api_key: str
@@ -62,12 +96,7 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
     configured_providers = list(user.encrypted_api_keys.keys()) if user.encrypted_api_keys else []
     return {
         "keys": {provider: "********" for provider in configured_providers},
-        "llm_settings": user.llm_settings or {
-            "small_model": "openai/gpt-4o-mini",
-            "complex_model": "openai/gpt-4o-mini",
-            "preferred_provider": "openai",
-            "ollama_url": "http://localhost:11434",
-        },
+        "llm_settings": _normalize_llm_settings(user.llm_settings),
         "t2i_settings": user.t2i_settings or {
             "simple_model": "openai/dall-e-2",
             "advanced_model": "openai/dall-e-3",
@@ -113,7 +142,7 @@ async def update_llm_settings(payload: SettingsPayload, db: AsyncSession = Depen
         db.add(user)
         await db.flush()
         
-    user.llm_settings = payload.model_dump()
+    user.llm_settings = _normalize_llm_settings(payload.model_dump())
     await db.commit()
     return {"status": "success", "message": "LLM settings updated."}
 
