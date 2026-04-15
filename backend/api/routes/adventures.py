@@ -28,6 +28,7 @@ from backend.engine.media_engine import MediaEngine
 from backend.engine.memory_manager import MemoryManager
 from backend.engine.debug_engine import DebugEngine
 from backend.core.llm_router import GameMasterLLM
+from backend.core.llm_logger import log_structured_event
 
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
 logger = logging.getLogger(__name__)
@@ -294,6 +295,18 @@ async def create_adventure(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    log_structured_event(
+        "adventure.create.request",
+        title=payload.title,
+        strict_rules=payload.strict_rules,
+        time_per_turn=payload.time_per_turn,
+        generate_scene_images=payload.generate_scene_images,
+        generate_npc_images=payload.generate_npc_images,
+        generate_item_images=payload.generate_item_images,
+        heartbeat_enabled=payload.heartbeat_enabled,
+        has_original_manifest=bool(payload.original_manifest),
+    )
+
     result = await db.execute(select(User).limit(1))
     user = result.scalars().first()
     if not user:
@@ -343,6 +356,12 @@ async def create_adventure(
     )
     db.add(avatar)
     await db.commit()
+    log_structured_event(
+        "adventure.create.placeholder_ready",
+        adventure_id=adv.id,
+        avatar_id=avatar.id,
+        user_id=user.id,
+    )
     # Create initial GameState so the session is visible immediately to clients/tests
     db.add(GameState(
         id=adv.id,
@@ -353,6 +372,12 @@ async def create_adventure(
         in_game_time=0
     ))
     await db.commit()
+    log_structured_event(
+        "adventure.create.session_seeded",
+        adventure_id=adv.id,
+        game_id=adv.id,
+        avatar_id=avatar.id,
+    )
 
     # Store original_manifest if provided and dispatch generation with payload
     if getattr(payload, 'original_manifest', None):
@@ -362,6 +387,13 @@ async def create_adventure(
 
     # Prepare payload for background generation; include original_manifest if present
     bg_payload = payload.model_dump()
+    log_structured_event(
+        "adventure.generation.scheduled",
+        adventure_id=adv.id,
+        title=payload.title,
+        background_task="run_background_generation",
+        has_original_manifest=bool(payload.original_manifest),
+    )
     background_tasks.add_task(run_background_generation, adv.id, user.id, bg_payload)
     
     # Return IDs expected by existing clients/tests
@@ -372,6 +404,15 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
     from backend.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         try:
+            log_structured_event(
+                "adventure.generation.started",
+                adventure_id=adventure_id,
+                user_id=user_id,
+                title=payload_dict.get("title"),
+                generate_scene_images=payload_dict.get("generate_scene_images", False),
+                generate_npc_images=payload_dict.get("generate_npc_images", False),
+                generate_item_images=payload_dict.get("generate_item_images", False),
+            )
             # Re-fetch user in this session; if DB schema isn't fully migrated, abort gracefully
             try:
                 result = await db.execute(select(User).where(User.id == user_id))
@@ -397,9 +438,22 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 manifest = (adv_for_context.original_manifest or {}) if adv_for_context else {}
                 adventure_context = manifest.get('story_idea') or manifest.get('description') or "A standard fantasy world."
 
+            log_structured_event(
+                "adventure.generation.status",
+                adventure_id=adventure_id,
+                status="Generating world structure",
+                phase="world_generation",
+            )
+
             if normalized_manifest:
                 if adv_for_context:
                     adv_for_context.creation_status = "Applying Imported Manifest..."
+                    log_structured_event(
+                        "adventure.generation.status",
+                        adventure_id=adventure_id,
+                        status=adv_for_context.creation_status,
+                        phase="apply_manifest",
+                    )
                     await db.commit()
 
                 await WorldGenerator.apply_manifest(
@@ -475,11 +529,22 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             if adv:
                 adv.is_ready = True
                 adv.creation_status = "Ready"
+                log_structured_event(
+                    "adventure.generation.completed",
+                    adventure_id=adventure_id,
+                    scene_count=len(scenes),
+                    avatar_id=avatar.id if avatar else None,
+                )
             
             await db.commit()
             
         except Exception as e:
             logger.error("Background Gen Failed for %s: %s", adventure_id, e)
+            log_structured_event(
+                "adventure.generation.failed",
+                adventure_id=adventure_id,
+                error=str(e),
+            )
             try:
                 await db.rollback()
                 # Do not auto-delete adventures during background failures in tests.
@@ -1436,7 +1501,12 @@ async def post_chat_message(
                 system_prompt=mechanics_system_prompt,
                 user_prompt=user_msg,
                 response_model=GameEvent,
-                model=small_model
+                model=small_model,
+                adventure_id=state.adventure_id,
+                game_id=game_id,
+                operation="chat_turn",
+                phase="mechanics",
+                metadata={"strict_rules": True},
             )
 
             # --- PASS 2: Atmospheric Narration (Complex Model) ---
@@ -1460,7 +1530,12 @@ async def post_chat_message(
             response_text = llm.execute_simple_task(
                 system_prompt=narration_system_prompt,
                 user_prompt=user_msg,
-                model=complex_model
+                model=complex_model,
+                adventure_id=state.adventure_id,
+                game_id=game_id,
+                operation="chat_turn",
+                phase="narration",
+                metadata={"strict_rules": True, "is_new_scene": is_new_scene},
             )
             
             # Apply mechanics to avatar, but use the complex narration for the final output
@@ -1473,7 +1548,16 @@ async def post_chat_message(
                 response_text = str(exc)
         else:
             # Free-form narrative always uses the high-quality complex model
-            response_text = llm.execute_simple_task(system_prompt, user_msg, complex_model)
+            response_text = llm.execute_simple_task(
+                system_prompt,
+                user_msg,
+                complex_model,
+                adventure_id=state.adventure_id,
+                game_id=game_id,
+                operation="chat_turn",
+                phase="freeform",
+                metadata={"strict_rules": False},
+            )
 
         # Record Assistant Message
         assistant_chat = ChatMessage(game_state_id=game_id, role="assistant", content=response_text)
