@@ -80,10 +80,10 @@ export function useGameSocket(): UseGameSocket {
       adventureImage.value = data.adventure_image
     }
     if (data.quests !== undefined) {
-      quests.value = data.quests
+      quests.value = data.quests || []
     }
     if (data.is_completed !== undefined) {
-      isCompleted.value = data.is_completed
+      isCompleted.value = !!data.is_completed
     }
   }
 

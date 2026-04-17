@@ -20,7 +20,6 @@ const emit = defineEmits<{
   npcLeave: []
   itemHover: [item: any, event: MouseEvent]
   itemLeave: []
-  openInventory: []
   openMap: []
 }>()
 
@@ -350,14 +349,6 @@ function normalizeLineBreaks(text: string): string {
           @click="emit('openMap')"
         >
           <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-7 w-7 brightness-110 group-hover:drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]" />
-        </button>
-
-        <button
-          class="w-12 h-12 shrink-0 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 transition-all active:scale-95 group flex items-center justify-center shadow-lg"
-          title="Inventory"
-          @click="emit('openInventory')"
-        >
-          <img src="@/assets/svg/medieval-leather-pouch.svg" class="h-7 w-7 brightness-125 group-hover:drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
         </button>
       </div>
       

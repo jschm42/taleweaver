@@ -10,7 +10,6 @@ import { useRouter } from 'vue-router'
 import ChatWindow from '@/components/ChatWindow.vue'
 import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
 import MapModal from '@/components/MapModal.vue'
-import InventoryModal from '@/components/InventoryModal.vue'
 import QuestsModal from '@/components/QuestsModal.vue'
 import SuccessScreen from '@/components/SuccessScreen.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
@@ -24,7 +23,6 @@ const router = useRouter()
 const chatWindow = ref<any>(null)
 const showSheet = ref(false)
 const showMap = ref(false)
-const showInventory = ref(false)
 const showQuests = ref(false)
 const showSuccess = ref(false)
 const trackedQuestId = ref<string | null>(null)
@@ -363,28 +361,26 @@ onBeforeUnmount(() => {
           :inventory="inventoryItems"
           @send="sendMessage"
           @open-sheet="showSheet = true"
-          @open-inventory="showInventory = true"
           @open-map="showMap = true"
           @npc-hover="handleChatNpcHover"
           @npc-leave="hoveredEntity = null"
           @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
           @item-leave="hoveredEntity = null"
-          :tracked-quest="quests.find(q => q.id === trackedQuestId)"
+          :tracked-quest="quests?.find(q => q.id === trackedQuestId)"
         />
       </div>
     </div>
 
     <!-- Modals -->
-    <CharacterSheetModal :open="showSheet" :sheet="sheet" @close="showSheet = false" />
-    <MapModal :open="showMap" :mermaid-src="mermaidData" :nodes="nodes" @close="showMap = false" />
-    <InventoryModal 
-      :open="showInventory" 
-      :inventory="inventoryItems" 
-      @close="showInventory = false" 
+    <CharacterSheetModal 
+      :open="showSheet" 
+      :sheet="sheet" 
+      @close="showSheet = false" 
       @item-click="(name) => chatWindow?.appendText(name)"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
     />
+    <MapModal :open="showMap" :mermaid-src="mermaidData" :nodes="nodes" @close="showMap = false" />
     <QuestsModal 
       :is-open="showQuests" 
       :quests="quests" 
