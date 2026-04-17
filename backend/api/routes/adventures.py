@@ -532,8 +532,7 @@ class AdventureResponse(BaseModel):
     quests: Optional[List[Dict[str, Any]]] = None
     is_completed: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class GameSessionResponse(BaseModel):
@@ -635,6 +634,8 @@ async def create_adventure(
         generate_item_images=payload.generate_item_images,
         selected_image_styles=payload.selected_image_styles or [],
         selected_tone=(payload.selected_tone.strip() if payload.selected_tone else None),
+        min_scenes=payload.min_scenes,
+        max_scenes=payload.max_scenes,
     )
 
     if payload.heartbeat_interval is not None:
@@ -1037,7 +1038,9 @@ async def import_adventure(
         heartbeat_enabled=False,
         selected_image_styles=selected_image_styles,
         selected_tone=payload.tone,
-        original_manifest=payload.model_dump()
+        original_manifest=payload.model_dump(),
+        min_scenes=payload.min_scenes,
+        max_scenes=payload.max_scenes,
     )
 
     adv = Adventure(**adv_kwargs)
@@ -2109,7 +2112,7 @@ async def post_chat_message(
     )
     # Add quest info to system prompt
     if adventure.quests:
-        quests_summary = "\n".join([f"- {q['title']}: {q['description']} (Status: {q['status']})" for q in adventure.quests])
+        quests_summary = "\n".join([f"- {q.get('title', 'Untitled')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
         context_messages[0]["content"] += f"\n\nACTIVE QUESTS:\n{quests_summary}"
     
     system_prompt = context_messages[0]["content"]
@@ -2347,17 +2350,17 @@ async def post_chat_message(
                 any_updated = False
                 for q_id in game_event.completed_quest_ids:
                     for q in updated_quests:
-                        if q["id"] == q_id and q["status"] == "open":
+                        if q.get("id") == q_id and q.get("status", "open") == "open":
                             q["status"] = "completed"
                             avatar.exp += q.get("exp_reward", 0)
-                            response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q['title']} (+{q.get('exp_reward', 0)} EXP)"})
+                            response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Untitled')} (+{q.get('exp_reward', 0)} EXP)"})
                             any_updated = True
                 
                 if any_updated:
                     adventure.quests = updated_quests
                     # Check if all main quests are done
                     main_quests = [q for q in updated_quests if q.get("is_main")]
-                    if main_quests and all(q["status"] == "completed" for q in main_quests):
+                    if main_quests and all(q.get("status", "open") == "completed" for q in main_quests):
                         adventure.is_completed = True
                         response_messages.append({"role": "system", "content": "[ADVENTURE COMPLETED] All main objectives achieved!"})
 

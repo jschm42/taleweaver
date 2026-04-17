@@ -36,8 +36,7 @@ class CharacterInDBBase(CharacterBase):
     id: str
     user_id: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class CharacterSchema(CharacterInDBBase):
     pass

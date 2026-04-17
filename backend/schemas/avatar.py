@@ -43,8 +43,7 @@ class AvatarInDBBase(AvatarBase):
     id: str
     user_id: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class Avatar(AvatarInDBBase):
     pass

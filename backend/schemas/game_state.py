@@ -20,8 +20,7 @@ class GameStateInDBBase(GameStateBase):
     avatar_id: str
     adventure_id: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class GameState(GameStateInDBBase):
     pass

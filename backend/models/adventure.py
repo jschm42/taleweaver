@@ -28,6 +28,10 @@ class Adventure(Base, TimestampMixin):
     game_over_rules = Column(JSON, nullable=True)
     original_manifest = Column(JSON, nullable=True) # Full blueprint for reset
     
+    # Generation Constraints
+    min_scenes = Column(Integer, default=1, nullable=False)
+    max_scenes = Column(Integer, default=5, nullable=False)
+    
     # Async Generation Status
     is_ready = Column(Boolean, default=True) # New ones start False, old ones remain ready
     creation_status = Column(String(100), nullable=True) # e.g., "Generating Plot..."

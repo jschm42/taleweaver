@@ -33,7 +33,6 @@ class Settings(BaseSettings):
     # Use existing key from environment or generate a temporary one
     ENCRYPTION_KEY: str = Field(default_factory=generate_temp_key)
     
-    class Config:
-        env_file = ".env"
+    model_config = {"env_file": ".env"}
 
 settings = Settings()

@@ -74,3 +74,5 @@ class AdventureImportPayload(BaseModel):
     generate_npc_images: bool = False
     generate_item_images: bool = False
     automatic_cover_generation: bool = False
+    min_scenes: Optional[int] = 1
+    max_scenes: Optional[int] = 5
