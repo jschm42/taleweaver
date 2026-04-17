@@ -182,7 +182,7 @@ onBeforeUnmount(() => {
 
         <!-- Right Actions: Clock + Buttons -->
         <div class="flex items-center gap-4 relative z-10 shrink-0">
-          <div class="hidden sm:flex flex-col items-end select-none game-clock mr-2" :class="{ 'clock-tick': clockTick }">
+          <div class="flex flex-col items-end select-none game-clock mr-2" :class="{ 'clock-tick': clockTick }">
             <template v-if="gameTime">
               <div class="flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-500/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -196,24 +196,6 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="flex items-center gap-2">
-            <button
-              class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700 border border-slate-700/50 rounded-lg text-slate-300 text-xs font-medium transition-colors backdrop-blur-sm shadow-md"
-              @click="showMap = true"
-            >
-              <i class="ra ra-map text-sm" :class="mermaidData ? 'text-emerald-500' : 'text-slate-400'"></i>
-              <span class="hidden xl:inline">Map</span>
-            </button>
-
-            <button
-              class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700 border border-slate-700/50 rounded-lg text-slate-300 text-xs font-medium transition-colors backdrop-blur-sm shadow-md"
-              @click="showSheet = true"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
-              </svg>
-              <span class="hidden xl:inline">Char</span>
-            </button>
-
             <div 
               class="flex items-center gap-2 px-2 py-1.5 bg-slate-800/60 border border-slate-700/50 rounded-lg cursor-pointer transition-all hover:bg-slate-700 backdrop-blur-sm shadow-md"
               :class="{ 'border-cyan-500/50': autoVisualize }"
@@ -366,6 +348,7 @@ onBeforeUnmount(() => {
         @send="sendMessage"
         @open-sheet="showSheet = true"
         @open-inventory="showInventory = true"
+        @open-map="showMap = true"
         @npc-hover="handleChatNpcHover"
         @npc-leave="hoveredEntity = null"
         @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"

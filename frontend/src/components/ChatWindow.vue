@@ -20,6 +20,7 @@ const emit = defineEmits<{
   itemHover: [item: any, event: MouseEvent]
   itemLeave: []
   openInventory: []
+  openMap: []
 }>()
 
 const inputText = ref('')
@@ -283,39 +284,60 @@ function normalizeLineBreaks(text: string): string {
 
     <!-- Input bar -->
     <div class="border-t border-slate-800 bg-slate-950 p-4 shrink-0">
-      <div class="relative flex items-center">
-        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-          </svg>
-        </div>
-        <input
-          v-model="inputText"
-          type="text"
-          :disabled="!isConnected"
-          placeholder="What do you do next?"
-          class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-16 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
-          @keydown="handleKeydown"
-        />
-        <div class="absolute inset-y-0 right-2 flex items-center gap-2">
-          <button
-            class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-all active:scale-95 group relative"
-            title="Inventory"
-            @click="emit('openInventory')"
-          >
-            <img src="@/assets/svg/medieval-leather-pouch.svg" class="h-6 w-6 brightness-125 group-hover:drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
-          </button>
-          
-          <button
-            :disabled="!isConnected || !inputText.trim()"
-            class="p-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white disabled:bg-slate-800 disabled:text-slate-600 transition-colors"
-            @click="handleSend"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+      <div class="flex items-center gap-2">
+        <!-- Text Input Wrapper -->
+        <div class="relative flex-grow">
+          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
             </svg>
-          </button>
+          </div>
+          <input
+            v-model="inputText"
+            type="text"
+            :disabled="!isConnected"
+            placeholder="What do you do next?"
+            class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
+            @keydown="handleKeydown"
+          />
         </div>
+
+        <!-- Send Button (Primary Action) -->
+        <button
+          :disabled="!isConnected || !inputText.trim()"
+          class="w-12 h-12 shrink-0 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white disabled:bg-slate-800 disabled:text-slate-600 transition-colors shadow-lg active:scale-95 flex items-center justify-center mr-4"
+          title="Send Command"
+          @click="handleSend"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+          </svg>
+        </button>
+
+        <!-- Tool Buttons -->
+        <button
+          class="w-12 h-12 shrink-0 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800 text-slate-400 hover:text-indigo-400 transition-all active:scale-95 group flex items-center justify-center shadow-lg"
+          title="Character Sheet"
+          @click="emit('openSheet')"
+        >
+          <img src="@/assets/svg/character-screen.svg" class="h-7 w-7 invert brightness-200 group-hover:drop-shadow-[0_0_8px_rgba(129,140,248,0.4)]" />
+        </button>
+
+        <button
+          class="w-12 h-12 shrink-0 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-all active:scale-95 group flex items-center justify-center shadow-lg"
+          title="World Map"
+          @click="emit('openMap')"
+        >
+          <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-7 w-7 brightness-110 group-hover:drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]" />
+        </button>
+
+        <button
+          class="w-12 h-12 shrink-0 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 transition-all active:scale-95 group flex items-center justify-center shadow-lg"
+          title="Inventory"
+          @click="emit('openInventory')"
+        >
+          <img src="@/assets/svg/medieval-leather-pouch.svg" class="h-7 w-7 brightness-125 group-hover:drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+        </button>
       </div>
       
       <div class="flex gap-4 mt-3 px-1 text-[11px] text-slate-500">

@@ -1706,6 +1706,10 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
     if adventure and adventure.original_manifest:
         start_datetime = _resolve_start_datetime(adventure.original_manifest)
     
+    # Fallback if clock is enabled but manifest lacks start time
+    if not start_datetime and adventure and adventure.clock_enabled:
+        start_datetime = "2026-04-17T08:00:00" # Consistent default start
+    
     # 1. Fetch current adventure entities that have image_urls to ensure the sheet is up to date
     res = await db.execute(
         select(WorldEntity.id, WorldEntity.image_url)
@@ -2163,7 +2167,8 @@ async def post_chat_message(
         # Record Assistant Message
         assistant_chat = ChatMessage(game_state_id=game_id, role="assistant", content=response_text)
         db.add(assistant_chat)
-        response_messages.append({"role": "assistant", "content": response_text})
+        # Prepare the list of messages for the response
+        final_response_messages = [{"role": "assistant", "content": response_text}]
 
         # --- Update World State ---
         if adventure.strict_rules and game_event:
@@ -2207,6 +2212,8 @@ async def post_chat_message(
                             ent_mv.is_in_inventory = False
                             if old_scene == "INVENTORY":
                                 response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' removed from inventory."})
+                            else:
+                                response_messages.append({"role": "system", "content": f"[System] NPC '{ent_mv.name}' moved to {move.to_scene_id}."})
 
                         if move.to_spatial_position:
                             ent_mv.spatial_position = move.to_spatial_position
@@ -2273,7 +2280,13 @@ async def post_chat_message(
 
             if game_event.extra_time_minutes:
                 state.in_game_time += game_event.extra_time_minutes
-                response_messages.append({"role": "system", "content": f"Gamemaster added +{game_event.extra_time_minutes} minutes."})
+                response_messages.append({"role": "system", "content": f"[System] Time advancement: +{game_event.extra_time_minutes} minutes."})
+
+        # --- Automatic Time Advancement ---
+        if adventure.clock_enabled:
+            state.in_game_time += adventure.time_per_turn
+            # We don't necessarily need a system message for every turn's base time, 
+            # as the clock itself updates. But we could add one if desired.
 
         # --- Update Map & Register Discovery ---
         map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
@@ -2338,7 +2351,7 @@ async def post_chat_message(
         curr_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in curr_ent_res.scalars().all()]
 
         return ChatResponse(
-            messages=[{"role": "system", "content": response_text}],
+            messages=response_messages + final_response_messages,
             sheet=await _build_sheet_snapshot(avatar, state, db),
             mermaid=mermaid_data,
             nodes=await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
