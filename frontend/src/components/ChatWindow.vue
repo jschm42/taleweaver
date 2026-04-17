@@ -336,19 +336,19 @@ function normalizeLineBreaks(text: string): string {
 
         <!-- Tool Buttons -->
         <button
-          class="w-12 h-12 shrink-0 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800 text-slate-400 hover:text-indigo-400 transition-all active:scale-95 group flex items-center justify-center shadow-lg"
+          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
           title="Character Sheet"
           @click="emit('openSheet')"
         >
-          <img src="@/assets/svg/character-screen.svg" class="h-7 w-7 invert brightness-200 group-hover:drop-shadow-[0_0_8px_rgba(129,140,248,0.4)]" />
+          <img src="@/assets/svg/warrior-upper-body-bust-silhouette.svg" class="h-12 w-12 invert opacity-30 brightness-200 contrast-75 group-hover:opacity-100 group-hover:drop-shadow-[0_0_15px_rgba(129,140,248,0.6)] transition-all" />
         </button>
 
         <button
-          class="w-12 h-12 shrink-0 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-all active:scale-95 group flex items-center justify-center shadow-lg"
+          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
           title="World Map"
           @click="emit('openMap')"
         >
-          <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-7 w-7 brightness-110 group-hover:drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]" />
+          <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-12 w-12 opacity-30 brightness-90 contrast-125 group-hover:opacity-100 group-hover:brightness-125 group-hover:drop-shadow-[0_0_15px_rgba(251,191,36,0.6)] transition-all" />
         </button>
       </div>
       
