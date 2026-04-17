@@ -17,6 +17,9 @@ interface Adventure {
   current_scene_name?: string | null
   in_game_time: number
   is_paused: boolean
+  is_ready: boolean
+  creation_status?: string | null
+  creation_error?: string | null
 }
 
 interface PendingAdventureCard {
@@ -199,7 +202,30 @@ function dismissPendingImportCard(adventureId: string) {
 
 async function fetchAdventures() {
   try {
-    adventures.value = await api.listAdventures()
+    const fetched = await api.listAdventures()
+    adventures.value = fetched
+
+    // Auto-poll any adventure that is not ready yet
+    for (const adv of fetched) {
+      if (!adv.is_ready) {
+        // Only add if not already in pending
+        const isAlreadyPending = pendingCreations.value.some((p) => p.adventureId === adv.adventure_id)
+        if (!isAlreadyPending) {
+          addPendingCreationCard(adv.adventure_id, adv.adventure_title)
+          updatePendingCreationStatus(adv.adventure_id, adv.creation_status || 'Wird vorbereitet...')
+          
+          void pollAdventureStatus(adv.adventure_id, {
+            navigateOnReady: false,
+            onStatus: (status) => updatePendingCreationStatus(adv.adventure_id, status),
+            onReady: async () => {
+              removePendingCreationCard(adv.adventure_id)
+              await fetchAdventures()
+            },
+            onFailure: (status) => updatePendingCreationStatus(adv.adventure_id, status, true),
+          })
+        }
+      }
+    }
   } catch (error) {
     console.error('API Error:', error)
   } finally {

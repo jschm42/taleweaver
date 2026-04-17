@@ -160,7 +160,9 @@ class WorldGenerator:
         provider: Optional[str] = None,
         generate_scene_images: bool = False,
         generate_npc_images: bool = False,
-        generate_item_images: bool = False
+        generate_item_images: bool = False,
+        min_scenes: int = 1,
+        max_scenes: int = 5
     ) -> None:
         """
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
@@ -188,7 +190,7 @@ class WorldGenerator:
         system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
         
         user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(
-            title=title, context=context
+            title=title, context=context, min_scenes=min_scenes, max_scenes=max_scenes
         )
         
         # 1. Update Status

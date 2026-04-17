@@ -66,6 +66,8 @@ export interface CreateAdventurePayload {
   generate_scene_images?: boolean
   selected_image_styles?: string[]
   selected_tone?: string
+  min_scenes?: number
+  max_scenes?: number
   clock_enabled?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean

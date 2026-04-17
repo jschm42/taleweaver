@@ -20,6 +20,8 @@ const form = ref({
   rule_enforcement_mode: 'strict' as RuleMode,
   selected_image_styles: [] as string[],
   selected_tone: '',
+  min_scenes: 1,
+  max_scenes: 5,
 })
 
 const imageStylesCatalog = ref<CatalogTile[]>([])
@@ -61,40 +63,7 @@ async function loadCatalogs() {
   }
 }
 
-async function pollAdventureStatus(adventureId: string): Promise<void> {
-  return new Promise((resolve) => {
-    const interval = window.setInterval(async () => {
-      try {
-        const res = await fetch(`http://localhost:8000/api/adventures/${adventureId}/status`)
-        if (!res.ok) {
-          clearInterval(interval)
-          errorMsg.value = 'Failed to load generation status.'
-          resolve()
-          return
-        }
 
-        const data = await res.json()
-        statusMsg.value = data.status || 'Constructing world...'
-        if (data.error) {
-          clearInterval(interval)
-          errorMsg.value = `Generation failed: ${data.error}`
-          resolve()
-          return
-        }
-
-        if (data.is_ready) {
-          clearInterval(interval)
-          router.push({ name: 'game', params: { id: adventureId } })
-          resolve()
-        }
-      } catch {
-        clearInterval(interval)
-        errorMsg.value = 'Lost connection during status polling.'
-        resolve()
-      }
-    }, 1500)
-  })
-}
 
 async function createAdventure() {
   if (!form.value.title.trim()) {
@@ -103,6 +72,18 @@ async function createAdventure() {
   }
   if (form.value.pacing_minutes < 1 || form.value.pacing_minutes > 30) {
     errorMsg.value = 'Pacing must be between 1 and 30 minutes.'
+    return
+  }
+  if (form.value.min_scenes < 1) {
+    errorMsg.value = 'Minimum scenes must be at least 1.'
+    return
+  }
+  if (form.value.max_scenes < form.value.min_scenes) {
+    errorMsg.value = 'Maximum scenes must be greater than or equal to minimum scenes.'
+    return
+  }
+  if (form.value.max_scenes > 20) {
+    errorMsg.value = 'Maximum scenes cannot exceed 20.'
     return
   }
 
@@ -125,14 +106,15 @@ async function createAdventure() {
     pacing_minutes: form.value.pacing_minutes,
     selected_image_styles: form.value.selected_image_styles,
     selected_tone: form.value.selected_tone || undefined,
+    min_scenes: form.value.min_scenes,
+    max_scenes: form.value.max_scenes,
   }
 
   try {
-    const result = await api.createAdventure(payload)
-    await pollAdventureStatus(result.adventure_id)
+    await api.createAdventure(payload)
+    router.push({ name: 'portal' })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to create adventure.'
-  } finally {
     isSubmitting.value = false
   }
 }
@@ -199,6 +181,41 @@ onMounted(() => {
             </button>
           </div>
           <p class="text-xs text-slate-400">{{ ruleModeHelp }}</p>
+        </div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
+          <h2 class="text-lg font-bold text-white">World Size</h2>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="flex items-center justify-between text-sm mb-2">
+                <span>Min Scenes</span>
+                <strong class="text-emerald-400">{{ form.min_scenes }}</strong>
+              </div>
+              <input
+                type="range"
+                v-model.number="form.min_scenes"
+                min="1"
+                max="10"
+                step="1"
+                class="w-full accent-emerald-500"
+              />
+            </div>
+            <div>
+              <div class="flex items-center justify-between text-sm mb-2">
+                <span>Max Scenes</span>
+                <strong class="text-emerald-400">{{ form.max_scenes }}</strong>
+              </div>
+              <input
+                type="range"
+                v-model.number="form.max_scenes"
+                min="1"
+                max="20"
+                step="1"
+                class="w-full accent-emerald-500"
+              />
+            </div>
+          </div>
+          <p class="text-[10px] text-slate-500 italic">Determines how many unique locations will be generated in the initial world.</p>
         </div>
 
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">

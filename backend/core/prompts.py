@@ -51,7 +51,9 @@ Used in WorldGenerator.generate_world.
 WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "Adventure Title: {title}\n"
     "Story Idea: {context}\n\n"
-    "Generate at least 3 scenes with a complex network of exits and interesting entities."
+    "WORLD SIZE REQUIREMENTS:\n"
+    "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
+    "- Create a complex network of exits and interesting entities connecting these locations."
 )
 """
 Template for the user message that kicks off world generation.

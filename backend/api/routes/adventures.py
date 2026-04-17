@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from PIL import Image
 
 from backend.core.database import get_db
@@ -504,6 +504,14 @@ class CreateAdventurePayload(BaseModel):
     original_manifest: Optional[Dict[str, Any]] = None
     automatic_cover_generation: Optional[bool] = False
     pacing: Optional[Dict[str, Any]] = None
+    min_scenes: int = 1
+    max_scenes: int = 5
+
+    @model_validator(mode='after')
+    def validate_scene_range(self) -> 'CreateAdventurePayload':
+        if self.max_scenes < self.min_scenes:
+            raise ValueError("max_scenes must be greater than or equal to min_scenes")
+        return self
 
 
 class AdventureResponse(BaseModel):
@@ -539,6 +547,9 @@ class GameSessionResponse(BaseModel):
     current_scene_name: Optional[str] = None
     in_game_time: int
     is_paused: bool
+    is_ready: bool = True
+    creation_status: Optional[str] = None
+    creation_error: Optional[str] = None
 
 class ChatResponse(BaseModel):
     """Unified response for a game turn."""
@@ -824,7 +835,9 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     provider=preferred_provider,
                     generate_scene_images=payload_dict.get('generate_scene_images', False),
                     generate_npc_images=payload_dict.get('generate_npc_images', False),
-                    generate_item_images=payload_dict.get('generate_item_images', False)
+                    generate_item_images=payload_dict.get('generate_item_images', False),
+                    min_scenes=payload_dict.get('min_scenes', 1),
+                    max_scenes=payload_dict.get('max_scenes', 5)
                 )
             
             # 2. Initial GameState
@@ -973,6 +986,9 @@ async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
             current_scene_name=scene_label,
             in_game_time=s.in_game_time,
             is_paused=s.is_paused,
+            is_ready=a.is_ready,
+            creation_status=a.creation_status,
+            creation_error=a.creation_error,
         )
         for s, a, scene_label in rows
     ]
@@ -1071,6 +1087,8 @@ async def import_adventure(
         "generate_npc_images": payload.generate_npc_images,
         "generate_item_images": payload.generate_item_images,
         "automatic_cover_generation": payload.automatic_cover_generation,
+        "min_scenes": payload.min_scenes,
+        "max_scenes": payload.max_scenes,
         "selected_image_styles": selected_image_styles,
         "selected_tone": payload.tone,
         "rule_enforcement_mode": import_rule_mode,
