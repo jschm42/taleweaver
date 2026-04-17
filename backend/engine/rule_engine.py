@@ -73,6 +73,9 @@ class GameEvent(BaseModel):
     
     # Time Management
     extra_time_minutes: int = 0 # Extra time this action takes (added to turn base)
+    
+    # Quest System
+    completed_quest_ids: Optional[List[str]] = None
 
 # Maximum resource cap
 RESOURCE_CAP = 200

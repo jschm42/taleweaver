@@ -21,6 +21,8 @@ export interface UseGameSocket {
   gameOverReason: Ref<string>
   autoVisualize: Ref<boolean>
   adventureImage: Ref<string | null>
+  quests: Ref<any[]>
+  isCompleted: Ref<boolean>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
@@ -39,6 +41,8 @@ export function useGameSocket(): UseGameSocket {
   const gameOverReason = ref('')
   const autoVisualize = ref(false)
   const adventureImage = ref<string | null>(null)
+  const quests = ref<any[]>([])
+  const isCompleted = ref(false)
   let currentGameId = ''
   let syncTimer: number | null = null
 
@@ -74,6 +78,12 @@ export function useGameSocket(): UseGameSocket {
     }
     if (data.adventure_image !== undefined) {
       adventureImage.value = data.adventure_image
+    }
+    if (data.quests !== undefined) {
+      quests.value = data.quests
+    }
+    if (data.is_completed !== undefined) {
+      isCompleted.value = data.is_completed
     }
   }
 
@@ -198,6 +208,8 @@ export function useGameSocket(): UseGameSocket {
     gameOverReason,
     autoVisualize,
     adventureImage,
+    quests,
+    isCompleted,
     connect,
     disconnect,
     sendMessage,

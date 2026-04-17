@@ -17,6 +17,7 @@ class Avatar(Base, TimestampMixin):
     hp = Column(Integer, default=200, nullable=False)
     stamina = Column(Integer, default=200, nullable=False)
     mana = Column(Integer, default=200, nullable=False)
+    exp = Column(Integer, default=0, nullable=False)
     
     # JSON fields for flexible data structures
     stats = Column(JSON, default=dict, nullable=False)

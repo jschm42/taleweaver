@@ -11,6 +11,8 @@ import ChatWindow from '@/components/ChatWindow.vue'
 import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
 import MapModal from '@/components/MapModal.vue'
 import InventoryModal from '@/components/InventoryModal.vue'
+import QuestsModal from '@/components/QuestsModal.vue'
+import SuccessScreen from '@/components/SuccessScreen.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
@@ -23,6 +25,9 @@ const chatWindow = ref<any>(null)
 const showSheet = ref(false)
 const showMap = ref(false)
 const showInventory = ref(false)
+const showQuests = ref(false)
+const showSuccess = ref(false)
+const trackedQuestId = ref<string | null>(null)
 const clockTick = ref(false)
 
 const {
@@ -37,6 +42,8 @@ const {
   nodes,
   npcMetadata,
   currentSceneImage,
+  quests,
+  isCompleted,
   connect,
   disconnect,
   sendMessage
@@ -111,6 +118,17 @@ watch(() => sheet.value?.in_game_time, () => {
   setTimeout(() => { clockTick.value = false }, 600)
 })
 
+watch(isCompleted, (val) => {
+  if (val) {
+    showSuccess.value = true
+  }
+})
+
+const handleTrackQuest = (questId: string | null) => {
+  trackedQuestId.value = questId
+  showQuests.value = false
+}
+
 const brokenImages = ref<Record<string, boolean>>({})
 
 const handleImageError = (path?: string | null) => {
@@ -158,7 +176,7 @@ onBeforeUnmount(() => {
       <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
     </div>
 
-    <!-- Header Navigation -->    <!-- Header Navigation -->
+    <!-- Header Navigation -->
     <header class="bg-transparent px-8 py-6 flex flex-col z-10 shrink-0 relative">
       <div class="flex justify-between items-center gap-4">
         <!-- Left: back + Adventure Title -->
@@ -197,6 +215,14 @@ onBeforeUnmount(() => {
 
           <div class="flex items-center gap-2">
             <div 
+              class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 border border-slate-700/50 rounded-lg cursor-pointer transition-all hover:bg-slate-700 backdrop-blur-sm shadow-md"
+              @click="showQuests = true"
+            >
+              <img src="@/assets/svg/fantasy-spellbook.svg" class="w-4 h-4 filter brightness-0 invert opacity-70" alt="Quests" />
+              <span class="hidden lg:inline text-[10px] font-bold uppercase tracking-wider text-slate-300">Quests</span>
+            </div>
+
+            <div 
               class="flex items-center gap-2 px-2 py-1.5 bg-slate-800/60 border border-slate-700/50 rounded-lg cursor-pointer transition-all hover:bg-slate-700 backdrop-blur-sm shadow-md"
               :class="{ 'border-cyan-500/50': autoVisualize }"
               @click="autoVisualize = !autoVisualize"
@@ -212,12 +238,9 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-
     <div class="flex-grow flex overflow-hidden relative">
-
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
       <aside v-if="entities.length > 0 || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar relative z-10 m-6 shadow-2xl">
-        
         <!-- CURRENT SCENE SECTION -->
         <div class="mb-8">
           <div class="flex items-center gap-2 mb-4">
@@ -268,13 +291,10 @@ onBeforeUnmount(() => {
               @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
               @mouseleave="hoveredEntity = null"
             >
-              <!-- Small Badge Icons -->
               <div class="absolute top-1 right-1 z-10 flex gap-1">
                 <i v-if="ent.id === 'PLAYER'" class="ra ra-pawn text-[8px] text-cyan-400 drop-shadow-md"></i>
                 <i v-else class="ra ra-speech-bubble text-[8px] text-slate-600 group-hover:text-cyan-500 transition-colors drop-shadow-md"></i>
               </div>
-
-              <!-- NPC Portrait (64x64) -->
               <div class="w-16 h-16 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
                 <img 
                   v-if="ent.image_url && showImage(ent.image_url)" 
@@ -286,8 +306,6 @@ onBeforeUnmount(() => {
                   <i :class="['ra text-2xl', getItemIcon('NPC'), 'text-cyan-500/40']"></i>
                 </div>
               </div>
-              
-              <!-- NPC Name -->
               <span class="text-[10px] font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
             </div>
           </div>
@@ -329,31 +347,30 @@ onBeforeUnmount(() => {
 
       <!-- Main Game Area -->
       <div class="flex-grow relative overflow-hidden flex flex-col items-stretch p-4 sm:p-6 w-full max-w-5xl mx-auto min-h-0">
-      <div v-if="gameOverReason" class="w-full bg-red-900/20 border border-red-500/30 p-4 rounded-xl mb-4 text-red-400 font-medium flex items-center gap-3 shadow-lg backdrop-blur-sm shrink-0">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <span>{{ gameOverReason }}</span>
-      </div>
+        <div v-if="gameOverReason" class="w-full bg-red-900/20 border border-red-500/30 p-4 rounded-xl mb-4 text-red-400 font-medium flex items-center gap-3 shadow-lg backdrop-blur-sm shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span>{{ gameOverReason }}</span>
+        </div>
 
-
-
-      <ChatWindow 
-        ref="chatWindow"
-        :messages="messages" 
-        :status="status"
-        :npc-metadata="npcMetadata"
-        :entities="entities"
-        :inventory="inventoryItems"
-        @send="sendMessage"
-        @open-sheet="showSheet = true"
-        @open-inventory="showInventory = true"
-        @open-map="showMap = true"
-        @npc-hover="handleChatNpcHover"
-        @npc-leave="hoveredEntity = null"
-        @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
-        @item-leave="hoveredEntity = null"
-      />
+        <ChatWindow 
+          ref="chatWindow"
+          :messages="messages" 
+          :status="status"
+          :npc-metadata="npcMetadata"
+          :entities="entities"
+          :inventory="inventoryItems"
+          @send="sendMessage"
+          @open-sheet="showSheet = true"
+          @open-inventory="showInventory = true"
+          @open-map="showMap = true"
+          @npc-hover="handleChatNpcHover"
+          @npc-leave="hoveredEntity = null"
+          @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
+          @item-leave="hoveredEntity = null"
+          :tracked-quest="quests.find(q => q.id === trackedQuestId)"
+        />
       </div>
     </div>
 
@@ -367,6 +384,18 @@ onBeforeUnmount(() => {
       @item-click="(name) => chatWindow?.appendText(name)"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
+    />
+    <QuestsModal 
+      :is-open="showQuests" 
+      :quests="quests" 
+      :tracked-quest-id="trackedQuestId" 
+      @close="showQuests = false" 
+      @track-quest="handleTrackQuest"
+    />
+    <SuccessScreen 
+      :show="showSuccess" 
+      :total-exp="sheet?.exp || 0" 
+      @close="goBack" 
     />
 
     <!-- HOVER TOOLTIP -->

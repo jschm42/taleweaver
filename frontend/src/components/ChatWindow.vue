@@ -10,6 +10,7 @@ const props = defineProps<{
   npcMetadata: Record<string, any>
   entities: any[]
   inventory: any[]
+  trackedQuest?: any
 }>()
 
 const emit = defineEmits<{
@@ -181,12 +182,32 @@ function normalizeLineBreaks(text: string): string {
     <!-- Message log -->
     <div
       ref="logEl"
-      class="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0 relative scroll-smooth"
+      class="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0 relative scroll-smooth custom-scrollbar"
       aria-live="polite"
       aria-label="Game log"
       @mousemove="handleMouseMove"
       @mouseleave="emit('npcLeave')"
     >
+      <!-- Tracked Quest Sticky Header -->
+      <div v-if="trackedQuest" class="sticky top-0 z-20 mb-8 animate-fade-in">
+        <div class="quest-tracker-bar glassmorphism">
+          <div class="quest-tracker-content">
+            <div class="quest-tracker-icon">
+              <i class="ra ra-scroll"></i>
+            </div>
+            <div class="quest-tracker-info">
+              <div class="quest-tracker-header">
+                <span class="quest-tracker-label">ACTIVE QUEST</span>
+                <span class="quest-tracker-reward">{{ trackedQuest.exp_reward }} EXP</span>
+              </div>
+              <div class="quest-tracker-title">{{ trackedQuest.title }}</div>
+              <div class="quest-tracker-goal">{{ trackedQuest.goal }}</div>
+            </div>
+          </div>
+          <div class="quest-tracker-progress"></div>
+        </div>
+      </div>
+
       <div
         v-for="(msg, idx) in messages"
         :key="idx"
@@ -377,6 +398,99 @@ function normalizeLineBreaks(text: string): string {
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Quest Tracker Styles */
+.quest-tracker-bar {
+  background: linear-gradient(90deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95));
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.quest-tracker-content {
+  padding: 12px 16px;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.quest-tracker-icon {
+  width: 36px;
+  height: 36px;
+  background: rgba(124, 58, 237, 0.15);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a78bfa;
+  font-size: 1.2rem;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+.quest-tracker-info {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.quest-tracker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.quest-tracker-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #7c3aed;
+  text-transform: uppercase;
+}
+
+.quest-tracker-reward {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.quest-tracker-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quest-tracker-goal {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quest-tracker-progress {
+  height: 2px;
+  background: #7c3aed;
+  width: 100%;
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
 }
 
 .item-card {

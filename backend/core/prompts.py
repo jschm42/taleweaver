@@ -34,9 +34,12 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "COMBINATIONS:\n"
     "- Use 'combination_ingredients: [item_id1, item_id2]' on a hidden result item to create a crafting recipe.\n"
     "- Use 'reveals_item_id: result_id' on a room object (e.g. a generator) and 'combination_ingredients: [fuel_id]' to allow using an item on it to reveal a new state.\n\n"
-    "PROTAGONIST GENERATION:\n"
     "Generate a specialized player character (Protagonist). "
-    "Define 'starting_inventory' and 'starting_equipment' using IDs from your objects list for items they already possess (e.g. a coin or their boots)."
+    "Define 'starting_inventory' and 'starting_equipment' using IDs from your objects list for items they already possess (e.g. a coin or their boots).\n\n"
+    "QUEST GENERATION:\n"
+    "Generate 1-2 Main Quests and 2-3 Side Quests that fit the story context. "
+    "Main Quests are required for adventure completion. Side Quests are optional. "
+    "Each quest should have a clear 'goal' (e.g. 'Defeat the dragon', 'Find the lost ring') and a 'exp_reward' (Main: 200-500, Side: 50-150)."
 )
 """
 The primary system prompt for generating a complete world manifest (scenes, NPCs, items, protagonist).
@@ -133,6 +136,9 @@ Variables: world_context, time_str, location_context, sheet_json.
 
 GM_MECHANICS_SUFFIX = (
     "CRITICAL: Focus on logical consistency and mechanics. "
+    "Evaluate if any of the following Quests have been completed based on the current action:\n"
+    "{quests_json}\n"
+    "If a quest is completed, return its ID in 'completed_quest_ids'. "
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """

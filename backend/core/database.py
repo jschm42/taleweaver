@@ -209,11 +209,19 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added adventures.creation_error")
 
-        if "generate_scene_images" not in adventure_cols:
-            await conn.exec_driver_sql(
-                "ALTER TABLE adventures ADD COLUMN generate_scene_images BOOLEAN NOT NULL DEFAULT 0"
-            )
             logger.info("SQLite migration: added adventures.generate_scene_images")
+
+        if "quests" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN quests TEXT"
+            )
+            logger.info("SQLite migration: added adventures.quests")
+
+        if "is_completed" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN is_completed BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added adventures.is_completed")
 
         if "generate_npc_images" not in adventure_cols:
             await conn.exec_driver_sql(
@@ -253,3 +261,9 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE avatars ADD COLUMN profile_image TEXT"
             )
             logger.info("SQLite migration: added avatars.profile_image")
+
+        if "exp" not in avatar_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE avatars ADD COLUMN exp INTEGER NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added avatars.exp")

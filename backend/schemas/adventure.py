@@ -1,5 +1,15 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
+
+class QuestSchema(BaseModel):
+    id: str
+    title: str
+    description: str
+    goal: str
+    impact: str
+    exp_reward: int
+    is_main: bool
+    status: Literal["open", "completed"] = "open"
 
 class AdventureBase(BaseModel):
     title: str = Field(..., max_length=50)
@@ -13,6 +23,9 @@ class AdventureBase(BaseModel):
     selected_image_styles: Optional[List[str]] = None
     selected_tone: Optional[str] = None
     game_over_rules: Optional[Dict[str, Any]] = None
+    quests: Optional[List[QuestSchema]] = None
+    is_completed: bool = False
+
 
 class AdventureCreate(AdventureBase):
     pass

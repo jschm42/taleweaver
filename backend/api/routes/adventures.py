@@ -520,6 +520,8 @@ class AdventureResponse(BaseModel):
     selected_image_styles: Optional[List[str]] = None
     selected_tone: Optional[str] = None
     context: Optional[str] = None
+    quests: Optional[List[Dict[str, Any]]] = None
+    is_completed: bool = False
 
     class Config:
         from_attributes = True
@@ -550,6 +552,8 @@ class ChatResponse(BaseModel):
     game_over: bool = False
     game_over_reason: Optional[str] = None
     adventure_image: Optional[str] = None
+    quests: Optional[List[Dict[str, Any]]] = None
+    is_completed: bool = False
 
 class ChatRequest(BaseModel):
     content: str
@@ -1757,7 +1761,8 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
         "start_datetime": start_datetime,
         "current_scene": current_scene.label if current_scene else state.scene_id,
         "scene_id": state.scene_id,
-        "adventure_title": adventure.title if adventure else "Unknown Adventure"
+        "adventure_title": adventure.title if adventure else "Unknown Adventure",
+        "exp": avatar.exp
     }
 
 async def _enrich_map_nodes(adventure_id: str, nodes: dict, db: AsyncSession) -> dict:
@@ -1851,7 +1856,9 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
         entities=entities,
         npc_metadata=await _get_npc_metadata(state.adventure_id, db),
         image_url=current_scene.image_url if current_scene else None,
-        adventure_image=adventure.image_url if adventure else None
+        adventure_image=adventure.image_url if adventure else None,
+        quests=adventure.quests,
+        is_completed=adventure.is_completed
     )
 
 @router.post("/{game_id}/chat", response_model=ChatResponse)
@@ -2081,6 +2088,11 @@ async def post_chat_message(
         avatar, adventure.context or "", history, 
         current_scene=current_scene, entities=entities, exits=exits, in_game_time=state.in_game_time
     )
+    # Add quest info to system prompt
+    if adventure.quests:
+        quests_summary = "\n".join([f"- {q['title']}: {q['description']} (Status: {q['status']})" for q in adventure.quests])
+        context_messages[0]["content"] += f"\n\nACTIVE QUESTS:\n{quests_summary}"
+    
     system_prompt = context_messages[0]["content"]
 
     # --- LLM Processing ---
@@ -2096,7 +2108,8 @@ async def post_chat_message(
     try:
         if adventure.strict_rules:
             # --- PASS 1: Technical Reasoning (Small Model) ---
-            mechanics_system_prompt = system_prompt + f"\n\n{prompts.GM_MECHANICS_SUFFIX}"
+            quests_json = json.dumps(adventure.quests or [], indent=2)
+            mechanics_system_prompt = system_prompt + f"\n\n{prompts.GM_MECHANICS_SUFFIX.format(quests_json=quests_json)}"
             game_event = llm.execute_complex_task(
                 system_prompt=mechanics_system_prompt,
                 user_prompt=user_msg,
@@ -2282,6 +2295,25 @@ async def post_chat_message(
                 state.in_game_time += game_event.extra_time_minutes
                 response_messages.append({"role": "system", "content": f"[System] Time advancement: +{game_event.extra_time_minutes} minutes."})
 
+            if game_event.completed_quest_ids:
+                updated_quests = list(adventure.quests or [])
+                any_updated = False
+                for q_id in game_event.completed_quest_ids:
+                    for q in updated_quests:
+                        if q["id"] == q_id and q["status"] == "open":
+                            q["status"] = "completed"
+                            avatar.exp += q.get("exp_reward", 0)
+                            response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q['title']} (+{q.get('exp_reward', 0)} EXP)"})
+                            any_updated = True
+                
+                if any_updated:
+                    adventure.quests = updated_quests
+                    # Check if all main quests are done
+                    main_quests = [q for q in updated_quests if q.get("is_main")]
+                    if main_quests and all(q["status"] == "completed" for q in main_quests):
+                        adventure.is_completed = True
+                        response_messages.append({"role": "system", "content": "[ADVENTURE COMPLETED] All main objectives achieved!"})
+
         # --- Automatic Time Advancement ---
         if adventure.clock_enabled:
             state.in_game_time += adventure.time_per_turn
@@ -2360,7 +2392,9 @@ async def post_chat_message(
             npc_metadata=await _get_npc_metadata(state.adventure_id, db),
             game_over=game_over,
             game_over_reason=game_over_reason,
-            adventure_image=adventure.image_url if adventure else None
+            adventure_image=adventure.image_url if adventure else None,
+            quests=adventure.quests,
+            is_completed=adventure.is_completed
         )
 
     except Exception as e:

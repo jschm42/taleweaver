@@ -32,3 +32,7 @@ class Adventure(Base, TimestampMixin):
     is_ready = Column(Boolean, default=True) # New ones start False, old ones remain ready
     creation_status = Column(String(100), nullable=True) # e.g., "Generating Plot..."
     creation_error = Column(String(500), nullable=True) # For failure reporting
+
+    # Quest System
+    quests = Column(JSON, nullable=True) # List of quest objects
+    is_completed = Column(Boolean, default=False, nullable=False)

@@ -121,6 +121,15 @@ class WorldEntitySchema(BaseModel):
     mana: Optional[int] = Field(None, description="Optional mana")
     stamina: Optional[int] = Field(None, description="Optional stamina")
 
+class QuestSchema(BaseModel):
+    id: str = Field(..., description="Unique slug for the quest, e.g., FIND_GOLDEN_KEY")
+    title: str = Field(..., description="Short, descriptive title")
+    description: str = Field(..., description="Narrative description of what needs to be done")
+    goal: str = Field(..., description="Technical condition for completion (for GM reference)")
+    impact: str = Field(..., description="How this affects the world when completed")
+    exp_reward: int = Field(..., description="EXP awarded for completion (e.g., 50, 100, 250)")
+    is_main: bool = Field(..., description="True if this quest is required to finish the adventure")
+
 class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
     role: str = Field(..., description="The professional or narrative role of the player, e.g. 'Royal Chef', 'Exiled Alchemist'.")
@@ -137,6 +146,7 @@ class WorldManifesto(BaseModel):
     exits: List[WorldExitSchema]
     npcs: List[WorldEntitySchema]
     objects: List[WorldEntitySchema]
+    quests: List[QuestSchema]
 
 class WorldGenerator:
     @staticmethod
@@ -313,6 +323,11 @@ class WorldGenerator:
         starting_equipped_ids: dict[str, str] = {}
         starting_inv_ids: set[str] = set()
         
+        # 0. Sync Quests
+        if adventure:
+            adventure.quests = manifest_dict.get("quests", [])
+            await db.flush()
+
         # 0. Sync Protagonist to Avatar
         prot = manifest_dict.get("protagonist", {})
         if prot and adventure:
