@@ -340,7 +340,7 @@ function normalizeLineBreaks(text: string): string {
           title="Character Sheet"
           @click="emit('openSheet')"
         >
-          <img src="@/assets/svg/warrior-upper-body-bust-silhouette.svg" class="h-12 w-12 invert opacity-30 brightness-200 contrast-75 group-hover:opacity-100 group-hover:drop-shadow-[0_0_15px_rgba(129,140,248,0.6)] transition-all" />
+          <img src="@/assets/svg/warrior-upper-body-bust-silhouette.svg" class="h-12 w-12 invert brightness-200 contrast-75 group-hover:drop-shadow-[0_0_20px_rgba(129,140,248,0.8)] transition-all" />
         </button>
 
         <button
@@ -348,7 +348,7 @@ function normalizeLineBreaks(text: string): string {
           title="World Map"
           @click="emit('openMap')"
         >
-          <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-12 w-12 opacity-30 brightness-90 contrast-125 group-hover:opacity-100 group-hover:brightness-125 group-hover:drop-shadow-[0_0_15px_rgba(251,191,36,0.6)] transition-all" />
+          <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-12 w-12 brightness-110 group-hover:brightness-125 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.8)] transition-all" />
         </button>
       </div>
       
