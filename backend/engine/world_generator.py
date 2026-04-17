@@ -113,6 +113,13 @@ class WorldEntitySchema(BaseModel):
     is_portable: bool = Field(True, description="Whether the item can be picked up. False for STATIC objects.")
     combination_ingredients: Optional[List[str]] = Field(None, description="Item IDs required to trigger a combination.")
     reveals_item_id: Optional[str] = Field(None, description="Item slug revealed when combination occurs.")
+    
+    # NPC Specific Fields (only for type='NPC')
+    npc_type: Optional[str] = Field(None, description="One of: HUMANOID, ANIMAL, MONSTER, BEING")
+    movement_type: Optional[str] = Field(None, description="One of: STATIONARY, MOVABLE")
+    hp: Optional[int] = Field(None, description="Optional hitpoints")
+    mana: Optional[int] = Field(None, description="Optional mana")
+    stamina: Optional[int] = Field(None, description="Optional stamina")
 
 class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
@@ -482,7 +489,13 @@ class WorldGenerator:
                 description=n["description"],
                 current_scene_id=n["start_scene_id"],
                 spatial_position=n.get("spatial_position"),
-                image_url=image_url
+                image_url=image_url,
+                npc_type=n.get("npc_type"),
+                movement_type=n.get("movement_type"),
+                hp=n.get("hp"),
+                mana=n.get("mana"),
+                stamina=n.get("stamina"),
+                is_hidden=n.get("is_hidden", False),
             ))
             
         # Persist Objects

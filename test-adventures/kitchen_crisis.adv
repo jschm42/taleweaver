@@ -53,6 +53,27 @@
       "role": "NPC",
       "description": "Periodically bursts through the back door asking to 'borrow' or 'sample' things.",
       "start_scene_id": "HALLWAY"
+    },
+    {
+      "id": "CAT_MITTENS",
+      "name": "Mittens the Cat",
+      "role": "NPC",
+      "description": "A chaotic orange cat that weaves between everyone's legs, looking for a treat.",
+      "start_scene_id": "MODERN_KITCHEN",
+      "npc_type": "ANIMAL",
+      "movement_type": "MOVABLE",
+      "hp": 20,
+      "stamina": 50
+    },
+    {
+      "id": "GOLDFISH_GLOOP",
+      "name": "Gloop the Goldfish",
+      "role": "NPC",
+      "description": "Staring judgmentally from a bowl on the counter, seemingly the only one aware of the impending doom.",
+      "start_scene_id": "MODERN_KITCHEN",
+      "npc_type": "ANIMAL",
+      "movement_type": "STATIONARY",
+      "hp": 5
     }
   ],
   "scenes": [

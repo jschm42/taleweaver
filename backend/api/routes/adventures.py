@@ -2220,6 +2220,9 @@ async def post_chat_message(
                         if upd.description: ent_upd.description = upd.description
                         if upd.spatial_position: ent_upd.spatial_position = upd.spatial_position
                         if upd.is_hidden is not None: ent_upd.is_hidden = upd.is_hidden
+                        if upd.hp is not None: ent_upd.hp = upd.hp
+                        if upd.mana is not None: ent_upd.mana = upd.mana
+                        if upd.stamina is not None: ent_upd.stamina = upd.stamina
 
             if game_event.deleted_entities:
                 for d_id in game_event.deleted_entities:

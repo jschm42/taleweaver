@@ -10,6 +10,7 @@ import { useRouter } from 'vue-router'
 import ChatWindow from '@/components/ChatWindow.vue'
 import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
 import MapModal from '@/components/MapModal.vue'
+import InventoryModal from '@/components/InventoryModal.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
@@ -21,6 +22,7 @@ const router = useRouter()
 const chatWindow = ref<any>(null)
 const showSheet = ref(false)
 const showMap = ref(false)
+const showInventory = ref(false)
 const clockTick = ref(false)
 
 const {
@@ -175,37 +177,8 @@ onBeforeUnmount(() => {
           </h1>
         </div>
 
-        <!-- Center: Inventory 'Belt' (Wrapped in labeled panel) -->
-        <div v-if="inventoryItems.length > 0" class="flex-grow flex justify-center items-center relative z-10 animate-fade-in px-4">
-          <div class="relative bg-slate-900/30 border border-slate-700/30 rounded-2xl px-5 py-3 backdrop-blur-md shadow-2xl flex flex-col items-center max-w-full">
-            <!-- Panel Label -->
-            <div class="absolute -top-2 left-4 px-2 py-0.5 bg-slate-800 border border-slate-700 rounded-md flex items-center gap-1.5 shadow-lg">
-              <i class="ra ra-pouch text-[9px] text-emerald-500"></i>
-              <span class="text-[8px] font-black text-emerald-400 uppercase tracking-[0.2em]">Inventory</span>
-            </div>
-            
-            <!-- Items scrollable area -->
-            <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar w-full py-1">
-              <div 
-                v-for="(item, idx) in inventoryItems" 
-                :key="idx" 
-                class="flex items-center gap-2 bg-slate-950/40 border border-slate-800/40 rounded-xl pl-1 pr-3 py-1 group cursor-pointer transition-all hover:border-emerald-500/50 hover:bg-slate-900/60 active:scale-95 shrink-0"
-                @click="chatWindow?.appendText(item.name)"
-                @mouseenter="handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, $event)"
-                @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
-                @mouseleave="hoveredEntity = null"
-              >
-                <div v-if="item.image_url" class="relative w-6 h-6 rounded-lg overflow-hidden border border-slate-800/50 shrink-0">
-                  <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
-                </div>
-                <div v-else class="w-6 h-6 rounded-lg border border-slate-800/50 bg-slate-900/50 flex items-center justify-center shrink-0">
-                  <i :class="['ra text-xs', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
-                </div>
-                <span class="text-[8px] font-black text-slate-100 uppercase tracking-wide group-hover:text-emerald-400 transition-colors truncate max-w-[60px]">{{ item.name }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- Center Spacer -->
+        <div class="flex-grow"></div>
 
         <!-- Right Actions: Clock + Buttons -->
         <div class="flex items-center gap-4 relative z-10 shrink-0">
@@ -389,10 +362,14 @@ onBeforeUnmount(() => {
         :status="status"
         :npc-metadata="npcMetadata"
         :entities="entities"
+        :inventory="inventoryItems"
         @send="sendMessage"
         @open-sheet="showSheet = true"
+        @open-inventory="showInventory = true"
         @npc-hover="handleChatNpcHover"
         @npc-leave="hoveredEntity = null"
+        @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
+        @item-leave="hoveredEntity = null"
       />
       </div>
     </div>
@@ -400,6 +377,14 @@ onBeforeUnmount(() => {
     <!-- Modals -->
     <CharacterSheetModal :open="showSheet" :sheet="sheet" @close="showSheet = false" />
     <MapModal :open="showMap" :mermaid-src="mermaidData" :nodes="nodes" @close="showMap = false" />
+    <InventoryModal 
+      :open="showInventory" 
+      :inventory="inventoryItems" 
+      @close="showInventory = false" 
+      @item-click="(name) => chatWindow?.appendText(name)"
+      @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
+      @item-leave="hoveredEntity = null"
+    />
 
     <!-- HOVER TOOLTIP -->
     <Teleport to="body">

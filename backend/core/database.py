@@ -152,6 +152,36 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added world_entities.image_url")
 
+        if "npc_type" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN npc_type TEXT"
+            )
+            logger.info("SQLite migration: added world_entities.npc_type")
+
+        if "movement_type" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN movement_type TEXT"
+            )
+            logger.info("SQLite migration: added world_entities.movement_type")
+
+        if "hp" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN hp INTEGER"
+            )
+            logger.info("SQLite migration: added world_entities.hp")
+
+        if "mana" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN mana INTEGER"
+            )
+            logger.info("SQLite migration: added world_entities.mana")
+
+        if "stamina" not in entity_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_entities ADD COLUMN stamina INTEGER"
+            )
+            logger.info("SQLite migration: added world_entities.stamina")
+
         scene_cols_result = await conn.exec_driver_sql("PRAGMA table_info(world_scenes)")
         scene_cols = {row[1] for row in scene_cols_result.fetchall()}
         if "image_url" not in scene_cols:

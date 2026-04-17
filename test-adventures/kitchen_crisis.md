@@ -18,6 +18,8 @@
 - **Mom Beatrice [ID: MOM_BEATRICE]:** (NPC) Trying to close a billion-dollar deal while holding a laundry basket.
 - **Grumpy Grandpa Joe [ID: GRAMPS_JOE]:** (NPC) Complaining about the "lack of grit" in modern furniture.
 - **Neighbor Kevin [ID: NEIGHBOR_KEVIN]:** (NPC) Periodically bursts through the back door asking to "borrow" or "sample" things.
+- **Mittens the Cat [ID: CAT_MITTENS]:** (NPC) A chaotic orange cat (ANIMAL, MOVABLE) that weaves between everyone's legs.
+- **Gloop the Goldfish [ID: GOLDFISH_GLOOP]:** (NPC) Staring judgmentally from a bowl (ANIMAL, STATIONARY) on the counter.
 
 ## Objects & Item Types (English)
 

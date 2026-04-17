@@ -23,6 +23,11 @@ class CharacterSpec(BaseModel):
     start_scene_id: Optional[str] = None
     is_npc: Optional[bool] = True
     image_hint: Optional[str] = None
+    npc_type: Optional[str] = None
+    movement_type: Optional[str] = None
+    hp: Optional[int] = None
+    mana: Optional[int] = None
+    stamina: Optional[int] = None
 
 
 class SceneSpec(BaseModel):

@@ -40,6 +40,9 @@ class WorldEntityUpdate(BaseModel):
     description: Optional[str] = None
     spatial_position: Optional[str] = None
     is_hidden: Optional[bool] = None
+    hp: Optional[int] = None
+    mana: Optional[int] = None
+    stamina: Optional[int] = None
 
 
 class GameEvent(BaseModel):

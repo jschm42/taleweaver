@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, JSON, Boolean, ForeignKey
+from sqlalchemy import Column, String, JSON, Boolean, ForeignKey, Integer
 from backend.models.base import Base, TimestampMixin
 
 class WorldScene(Base, TimestampMixin):
@@ -59,6 +59,15 @@ class WorldEntity(Base, TimestampMixin):
     reveals_item_id = Column(String(50), nullable=True)
     is_final_state = Column(Boolean, default=False, nullable=False)
     state_comment = Column(String(1000), nullable=True)
+
+    # NPC Specific Fields
+    npc_type = Column(String(50), nullable=True) # HUMANOID, ANIMAL, MONSTER, BEING
+    movement_type = Column(String(50), nullable=True) # STATIONARY, MOVABLE
+    hp = Column(JSON, nullable=True) # Store as JSON to allow for {current: 10, max: 10} or similar if needed, or just Integer. User asked for Hitpoints.
+    # Actually, let's keep it simple as Integers since user said "Hitpoints, Mana, Stamina"
+    hp = Column(Integer, nullable=True)
+    mana = Column(Integer, nullable=True)
+    stamina = Column(Integer, nullable=True)
 
     # Optional state, e.g. NPC inventory: [{"name": "Key", "id": "BRONZE_KEY"}]
     inventory = Column(JSON, default=list, nullable=False)

@@ -9,6 +9,7 @@ const props = defineProps<{
   status: ConnectionStatus
   npcMetadata: Record<string, any>
   entities: any[]
+  inventory: any[]
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +17,9 @@ const emit = defineEmits<{
   openSheet: []
   npcHover: [name: string, event: MouseEvent]
   npcLeave: []
+  itemHover: [item: any, event: MouseEvent]
+  itemLeave: []
+  openInventory: []
 }>()
 
 const inputText = ref('')
@@ -293,7 +297,15 @@ function normalizeLineBreaks(text: string): string {
           class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-16 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
           @keydown="handleKeydown"
         />
-        <div class="absolute inset-y-0 right-2 flex items-center">
+        <div class="absolute inset-y-0 right-2 flex items-center gap-2">
+          <button
+            class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-all active:scale-95 group relative"
+            title="Inventory"
+            @click="emit('openInventory')"
+          >
+            <img src="@/assets/svg/medieval-leather-pouch.svg" class="h-6 w-6 brightness-125 group-hover:drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+          </button>
+          
           <button
             :disabled="!isConnected || !inputText.trim()"
             class="p-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white disabled:bg-slate-800 disabled:text-slate-600 transition-colors"
