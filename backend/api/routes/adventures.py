@@ -26,7 +26,8 @@ from backend.schemas.game_state import GameStateUpdate
 from backend.schemas.adventure_import import AdventureImportPayload
 from backend.engine.world_generator import WorldGenerator
 from backend.engine.command_parser import CommandParser
-from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException
+from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException, SkillCheckResult
+from backend.engine.skill_check import roll_skill_check
 from backend.engine.map_engine import MapEngine
 from backend.engine.media_engine import MediaEngine
 from backend.engine.memory_manager import MemoryManager
@@ -2121,6 +2122,34 @@ async def post_chat_message(
                 phase="mechanics",
                 metadata={"strict_rules": True},
             )
+
+            # --- PASS 1.5: Resolve Skill Checks ---
+            if game_event.requested_skill_checks:
+                results = []
+                for req in game_event.requested_skill_checks:
+                    # Map stats to their internal keys if necessary
+                    stat_key = req.stat.lower().replace(" ", "_")
+                    res = roll_skill_check(avatar, stat_key, req.dc)
+                    check_res = SkillCheckResult(
+                        stat=req.stat,
+                        dc=req.dc,
+                        roll=res["d20"],
+                        modifier=res["modifier"],
+                        total=res["total"],
+                        success=res["success"],
+                        reason=req.reason
+                    )
+                    results.append(check_res)
+                    
+                    # Output result as system message
+                    status_text = "SUCCESS" if check_res.success else "FAILURE"
+                    outcome_msg = (
+                        f"[ROLL] {check_res.reason}: {check_res.stat.upper()} Check (DC {check_res.dc}) -> "
+                        f"Rolled {check_res.roll} + {check_res.modifier} = {check_res.total} ({status_text})"
+                    )
+                    response_messages.append({"role": "system", "content": outcome_msg})
+                    
+                game_event.skill_check_results = results
 
             # --- PASS 2: Atmospheric Narration (Complex Model) ---
             narration_system_prompt = system_prompt + "\n\n" + prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(

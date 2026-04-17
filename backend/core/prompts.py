@@ -140,6 +140,9 @@ Variables: world_context, time_str, location_context, sheet_json.
 
 GM_MECHANICS_SUFFIX = (
     "CRITICAL: Focus on logical consistency and mechanics. "
+    "If the action is uncertain, request a roll using `requested_skill_checks`. "
+    "You provide the `stat` (strength, dexterity, intelligence, wisdom, charisma, armor_class), a `dc` (Difficulty Class), and a `reason`. "
+    "The system will resolve the roll and provide the result for the final narration. "
     "Evaluate if any of the following Quests have been completed based on the current action:\n"
     "{quests_json}\n"
     "If a quest is completed, return its ID in 'completed_quest_ids'. "

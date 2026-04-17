@@ -44,6 +44,22 @@ class WorldEntityUpdate(BaseModel):
     mana: Optional[int] = None
     stamina: Optional[int] = None
 
+class SkillCheckRequest(BaseModel):
+    """Requested by the GM during the mechanics pass."""
+    stat: str  # strength, dexterity, intelligence, wisdom, charisma, armor_class
+    dc: int
+    reason: str
+
+class SkillCheckResult(BaseModel):
+    """Filled by the backend after performing the roll."""
+    stat: str
+    dc: int
+    roll: int
+    modifier: int
+    total: int
+    success: bool
+    reason: str
+
 
 class GameEvent(BaseModel):
     """
@@ -70,6 +86,10 @@ class GameEvent(BaseModel):
     updated_exits: Optional[List[ExitUpdate]] = None
     updated_entities: Optional[List[WorldEntityUpdate]] = None
     deleted_entities: Optional[List[str]] = None # List of IDs to remove
+    
+    # Skill Checks
+    requested_skill_checks: Optional[List[SkillCheckRequest]] = None
+    skill_check_results: Optional[List[SkillCheckResult]] = None
     
     # Time Management
     extra_time_minutes: int = 0 # Extra time this action takes (added to turn base)
