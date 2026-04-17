@@ -7,26 +7,25 @@ import os
 import uuid
 import asyncio
 import time
-import importlib
 import requests
 from typing import Optional, Any
 from backend.core.security import encryption_util
 from backend.core.config import settings
+from backend.core import prompts
+import litellm
 
 logger = logging.getLogger(__name__)
 
 BFL_DEFAULT_MODEL = "black_forest_labs/flux-pro-1.1"
 BFL_API_BASE = "https://api.bfl.ai/v1"
-NO_TEXT_IMAGE_PROMPT_SUFFIX = "Do not include any text, letters, captions, logos, watermarks, or signage unless the prompt explicitly asks for text."
+# Use centralized prompts
+NO_TEXT_IMAGE_PROMPT_SUFFIX = prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX
 
 class MediaEngine:
-    _litellm_module: Any = None
 
     @classmethod
     def _get_litellm(cls) -> Any:
-        if cls._litellm_module is None:
-            cls._litellm_module = importlib.import_module("litellm")
-        return cls._litellm_module
+        return litellm
 
     @staticmethod
     def _apply_no_text_instruction(prompt: str) -> str:
@@ -499,9 +498,8 @@ class MediaEngine:
         filename = f"cover_{uuid.uuid4().hex}.png"
         
         # Craft a prompt specifically requesting landscape/2:1 ratio
-        prompt = (
-            f"Epic cinematic adventure cover: {title}. {context}. "
-            "Landscape format, 2:1 aspect ratio, high fantasy art style, immersive atmosphere, detailed concept art."
+        prompt = prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
+            title=title, context=context
         )
         
         return await MediaEngine.generate_image(

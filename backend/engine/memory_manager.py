@@ -1,6 +1,7 @@
 import json
 from backend.models.avatar import Avatar
 from backend.engine.stat_aggregator import calculate_total_stats
+from backend.core import prompts
 
 class MemoryManager:
     """
@@ -80,22 +81,11 @@ class MemoryManager:
 
         sheet_json = json.dumps(character_sheet, indent=2)
         
-        system_instruction = (
-            "You are the Gamemaster (GM) of an AI Text Adventure RPG. "
-            "You dynamically generate world narratives, resolve choices, and act as NPCs. "
-            f"The world context/setting is:\n{world_context}\n\n"
-            f"CURRENT GAME TIME: {time_str}\n"
-            f"{location_context}\n"
-            "Below is the REAL-TIME character sheet of the player, including the narrative role and description so NPCs can reference the player's identity. "
-            "You MUST consider these stats, equipment, and HP in all your narratives:\n"
-            f"{sheet_json}\n\n"
-            "Respond organically. Use the pre-generated world description as the static reality. "
-            "If an exit is LOCKED, the player cannot pass unless they find a way to unlock it.\n"
-            "TIME ADVANCEMENT: Some complex actions take extra time. You can specify `extra_time_minutes` in your response.\n\n"
-            "FORMATTING RULES:\n"
-            "1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: **Character Name:** \"...\"\n"
-            "2. LINE BREAKS: Use double line breaks between narrative prose and dialogue or major shifts in focus.\n"
-            "3. READABILITY: Avoid walls of text. Keep paragraphs focused."
+        system_instruction = prompts.GAME_MASTER_SYSTEM_PROMPT_TEMPLATE.format(
+            world_context=world_context,
+            time_str=time_str,
+            location_context=location_context,
+            sheet_json=sheet_json
         )
         return system_instruction
 

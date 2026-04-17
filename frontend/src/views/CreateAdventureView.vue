@@ -6,7 +6,7 @@ import type { CatalogTile, CreateAdventurePayload } from '@/types'
 
 const router = useRouter()
 
-type RuleMode = 'strict' | 'moderate' | 'loose'
+type RuleMode = 'strict' | 'loose'
 
 const form = ref({
   title: '',
@@ -32,12 +32,9 @@ const statusMsg = ref('')
 
 const ruleModeHelp = computed(() => {
   if (form.value.rule_enforcement_mode === 'strict') {
-    return 'Der Gamemaster laesst keine Abweichung von den Regeln zu.'
+    return 'The Game Master enforces strict rules and mechanics. Best for a challenging RPG experience.'
   }
-  if (form.value.rule_enforcement_mode === 'moderate') {
-    return 'Der Gamemaster laesst einige kreative Ideen des Spielers zu.'
-  }
-  return 'Der Gamemaster kontrolliert Regeln locker und laesst kreative Loesungen zu.'
+  return 'The Game Master prioritizes narrative flow and player creativity. Best for immersive roleplay.'
 })
 
 function toggleImageStyle(styleId: string) {
@@ -58,7 +55,7 @@ async function loadCatalogs() {
       form.value.selected_tone = toneCatalog.value[0].id
     }
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Konfiguration konnte nicht geladen werden.'
+    errorMsg.value = error?.message || 'Failed to load configurations.'
   } finally {
     isLoadingCatalogs.value = false
   }
@@ -71,7 +68,7 @@ async function pollAdventureStatus(adventureId: string): Promise<void> {
         const res = await fetch(`http://localhost:8000/api/adventures/${adventureId}/status`)
         if (!res.ok) {
           clearInterval(interval)
-          errorMsg.value = 'Generierungsstatus konnte nicht geladen werden.'
+          errorMsg.value = 'Failed to load generation status.'
           resolve()
           return
         }
@@ -80,7 +77,7 @@ async function pollAdventureStatus(adventureId: string): Promise<void> {
         statusMsg.value = data.status || 'Constructing world...'
         if (data.error) {
           clearInterval(interval)
-          errorMsg.value = `Generierung fehlgeschlagen: ${data.error}`
+          errorMsg.value = `Generation failed: ${data.error}`
           resolve()
           return
         }
@@ -92,7 +89,7 @@ async function pollAdventureStatus(adventureId: string): Promise<void> {
         }
       } catch {
         clearInterval(interval)
-        errorMsg.value = 'Verbindung beim Status-Polling verloren.'
+        errorMsg.value = 'Lost connection during status polling.'
         resolve()
       }
     }, 1500)
@@ -101,11 +98,11 @@ async function pollAdventureStatus(adventureId: string): Promise<void> {
 
 async function createAdventure() {
   if (!form.value.title.trim()) {
-    errorMsg.value = 'Title ist erforderlich.'
+    errorMsg.value = 'Title is required.'
     return
   }
   if (form.value.pacing_minutes < 1 || form.value.pacing_minutes > 30) {
-    errorMsg.value = 'Pacing muss zwischen 1 und 30 Minuten liegen.'
+    errorMsg.value = 'Pacing must be between 1 and 30 minutes.'
     return
   }
 
@@ -134,7 +131,7 @@ async function createAdventure() {
     const result = await api.createAdventure(payload)
     await pollAdventureStatus(result.adventure_id)
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Adventure konnte nicht erstellt werden.'
+    errorMsg.value = error?.message || 'Failed to create adventure.'
   } finally {
     isSubmitting.value = false
   }
@@ -149,14 +146,14 @@ onMounted(() => {
   <div class="min-h-screen bg-slate-950 text-slate-200 font-sans p-8 md:p-10">
     <header class="w-full max-w-5xl mx-auto mb-8 flex items-center justify-between">
       <div>
-        <h1 class="text-3xl md:text-4xl font-extrabold text-white">Neue Adventure-Generierung</h1>
-        <p class="text-slate-400 mt-2">Ein Modus, klare Parameter, kontrollierbarer Stil und Tone.</p>
+        <h1 class="text-3xl md:text-4xl font-extrabold text-white">New Adventure Generation</h1>
+        <p class="text-slate-400 mt-2">One mode, clear parameters, controllable style and tone.</p>
       </div>
       <button
         @click="router.push({ name: 'portal' })"
         class="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800"
       >
-        Zurueck
+        Back
       </button>
     </header>
 
@@ -184,43 +181,36 @@ onMounted(() => {
         </div>
 
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
-          <h2 class="text-lg font-bold text-white">Regelmodus</h2>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <h2 class="text-lg font-bold text-white">Rule Mode</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <button
               @click="form.rule_enforcement_mode = 'strict'"
               :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'strict' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
             >
-              <div class="font-bold">Strikt</div>
-              <div class="text-xs mt-1">Keine Regelabweichung</div>
-            </button>
-            <button
-              @click="form.rule_enforcement_mode = 'moderate'"
-              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'moderate' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
-            >
-              <div class="font-bold">Moderat</div>
-              <div class="text-xs mt-1">Einige kreative Ausnahmen</div>
+              <div class="font-bold">Strict</div>
+              <div class="text-xs mt-1">No rule deviation</div>
             </button>
             <button
               @click="form.rule_enforcement_mode = 'loose'"
               :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'loose' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
             >
-              <div class="font-bold">Locker</div>
-              <div class="text-xs mt-1">Regeln nur leicht fuehren</div>
+              <div class="font-bold">Narrative</div>
+              <div class="text-xs mt-1">Flexible rules for immersive storytelling</div>
             </button>
           </div>
           <p class="text-xs text-slate-400">{{ ruleModeHelp }}</p>
         </div>
 
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
-          <h2 class="text-lg font-bold text-white">Spielzeit & Pacing</h2>
+          <h2 class="text-lg font-bold text-white">Game Time & Pacing</h2>
           <label class="flex items-center justify-between gap-3 text-sm">
-            <span>Spielzeituhr aktivieren</span>
+            <span>Enable in-game clock</span>
             <input type="checkbox" v-model="form.clock_enabled" />
           </label>
           <div>
             <div class="flex items-center justify-between text-sm mb-2">
-              <span>Pacing pro Aktion</span>
-              <strong class="text-emerald-400">{{ form.pacing_minutes }} Min</strong>
+              <span>Pacing per Action</span>
+              <strong class="text-emerald-400">{{ form.pacing_minutes }} min</strong>
             </div>
             <input
               type="range"
@@ -234,7 +224,7 @@ onMounted(() => {
         </div>
 
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-          <h2 class="text-lg font-bold text-white">Bildgenerierung</h2>
+          <h2 class="text-lg font-bold text-white">Image Generation</h2>
           <label class="flex items-center justify-between gap-3 text-sm">
             <span>Generate NPC Images</span>
             <input type="checkbox" v-model="form.generate_npc_images" />
@@ -256,11 +246,11 @@ onMounted(() => {
 
       <aside class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
         <div>
-          <h2 class="text-lg font-bold text-white">Bildstile</h2>
-          <p class="text-xs text-slate-400">Mehrfachauswahl moeglich. Alle gewaehlten Stile werden kombiniert.</p>
+          <h2 class="text-lg font-bold text-white">Visual Styles</h2>
+          <p class="text-xs text-slate-400">Multiple selection possible. All chosen styles will be combined.</p>
         </div>
 
-        <div v-if="isLoadingCatalogs" class="text-sm text-slate-500">Kataloge werden geladen...</div>
+        <div v-if="isLoadingCatalogs" class="text-sm text-slate-500">Loading catalogs...</div>
 
         <div v-else class="space-y-2 max-h-64 overflow-y-auto pr-1">
           <button
@@ -301,7 +291,7 @@ onMounted(() => {
             :disabled="isSubmitting"
             class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold disabled:opacity-50"
           >
-            {{ isSubmitting ? (statusMsg || 'Generating...') : 'Adventure generieren' }}
+            {{ isSubmitting ? (statusMsg || 'Generating...') : 'Generate Adventure' }}
           </button>
           <p v-if="statusMsg" class="text-xs text-slate-400">{{ statusMsg }}</p>
         </div>

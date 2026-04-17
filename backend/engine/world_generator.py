@@ -11,6 +11,7 @@ from backend.models.user import User
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.models.adventure import Adventure
 from backend.core.config import settings
+from backend.core import prompts
 
 logger = logging.getLogger(__name__)
 
@@ -167,30 +168,11 @@ class WorldGenerator:
             context_length=len(context or ""),
         )
         
-        system_prompt = (
-            "You are a master world-builder for a dark RPG. Your task is to generate a coherent, "
-            "interconnected game world based on a provided Story Idea. "
-            "The world must consist of unique scenes, connections (exits), NPCs, and interactable objects. "
-            "IMPORTANT: Every NPC and Object must have a specific 'spatial_position' relative to items in the room "
-            "(e.g., 'behind the bar counter', 'in the locked drawer'). "
-            "Ensure the logic of the world is consistent: if a door is locked, mention why. "
-            "For OBJECTS, assign a specific 'item_type':\n"
-            "- CONSUMABLE: Food, potions, herbs.\n"
-            "- WEARABLE: Armor, clothes, jewelry.\n"
-            "- STATIC: Fountains, heavy alters, attached machines (set is_portable: false).\n"
-            "- COMBINABLE: Parts of a machine, ingredients for a recipe.\n"
-            "- PICKABLE: Standard items without special traits.\n"
-            "- WEAPON / TOOL / KEY / READABLE: Self-explanatory.\n"
-            "Use 'is_hidden: true' for objects revealed by combinations or searching.\n"
-            "COMBINATIONS:\n"
-            "- Use 'combination_ingredients: [item_id1, item_id2]' on a hidden result item to create a crafting recipe.\n"
-            "- Use 'reveals_item_id: result_id' on a room object (e.g. a generator) and 'combination_ingredients: [fuel_id]' to allow using an item on it to reveal a new state.\n\n"
-            "PROTAGONIST GENERATION:\n"
-            "Generate a specialized player character (Protagonist). "
-            "Define 'starting_inventory' and 'starting_equipment' using IDs from your objects list for items they already possess (e.g. a coin or their boots)."
-        )
+        system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
         
-        user_prompt = f"Adventure Title: {title}\nStory Idea: {context}\n\nGenerate at least 5 scenes with a complex network of exits and interesting entities."
+        user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(
+            title=title, context=context
+        )
         
         # 1. Update Status
         adventure = await db.get(Adventure, adventure_id)
@@ -344,7 +326,9 @@ class WorldGenerator:
                 image_url = (existing_images or {}).get("PROTAGONIST")
                 if not image_url and user and gen_protagonist_image:
                     await _publish_generation_status(db, adventure, f"Envisioning You: {prot['name']}...")
-                    prompt = f"Portrait of character {prot['name']}, {prot['role']}. {prot['description']}. Game attribute art style."
+                    prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
+                        name=prot['name'], role=prot['role'], description=prot['description']
+                    )
                     image_attempts += 1
                     try:
                         image_url = await asyncio.wait_for(
@@ -392,7 +376,9 @@ class WorldGenerator:
                     adventure,
                     f"Envisioning Scene {scene_index}/{total_scenes}: {s['name']}...",
                 )
-                prompt = f"Atmospheric background: {s['name']}. {s['description']}. RPG visual novel style, high detail."
+                prompt = prompts.SCENE_IMAGE_PROMPT_TEMPLATE.format(
+                    name=s['name'], description=s['description']
+                )
                 image_attempts += 1
                 try:
                     image_url = await asyncio.wait_for(
@@ -455,7 +441,9 @@ class WorldGenerator:
                     adventure,
                     f"Envisioning Portrait {npc_index}/{total_npcs}: {n['name']}...",
                 )
-                prompt = f"Portrait of NPC {n['name']}. {n['description']}. Game attribute art style."
+                prompt = prompts.NPC_IMAGE_PROMPT_TEMPLATE.format(
+                    name=n['name'], description=n['description']
+                )
                 image_attempts += 1
                 try:
                     image_url = await asyncio.wait_for(
@@ -512,7 +500,9 @@ class WorldGenerator:
                     adventure,
                     f"Envisioning Item {object_index}/{total_objects}: {o['name']}...",
                 )
-                prompt = f"Highly detailed item: {o['name']}. {o['description']}. Isolated on simple background, RPG asset style."
+                prompt = prompts.ITEM_IMAGE_PROMPT_TEMPLATE.format(
+                    name=o['name'], description=o['description']
+                )
                 image_attempts += 1
                 try:
                     image_url = await asyncio.wait_for(

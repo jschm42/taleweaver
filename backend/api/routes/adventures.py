@@ -32,6 +32,7 @@ from backend.engine.media_engine import MediaEngine
 from backend.engine.memory_manager import MemoryManager
 from backend.engine.debug_engine import DebugEngine
 from backend.core.llm_router import GameMasterLLM
+from backend.core import prompts
 from backend.core.llm_logger import log_structured_event
 
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
@@ -2091,9 +2092,7 @@ async def post_chat_message(
     try:
         if adventure.strict_rules:
             # --- PASS 1: Technical Reasoning (Small Model) ---
-            # We ask the small model to decide the technical outcomes (GameEvent)
-            # focusing on IDs, resources, and world state.
-            mechanics_system_prompt = system_prompt + "\n\nCRITICAL: Focus on logical consistency and mechanics. Your 'narrative_description' will be used as a draft/log; keep it short."
+            mechanics_system_prompt = system_prompt + f"\n\n{prompts.GM_MECHANICS_SUFFIX}"
             game_event = llm.execute_complex_task(
                 system_prompt=mechanics_system_prompt,
                 user_prompt=user_msg,
@@ -2107,22 +2106,22 @@ async def post_chat_message(
             )
 
             # --- PASS 2: Atmospheric Narration (Complex Model) ---
-            # We use the complex model to turn the technical outcome into premium prose.
-            narration_system_prompt = system_prompt + f"\n\nTECHNICAL OUTCOME TO NARRATE: {game_event.model_dump_json(exclude={'narrative_description'})}\n"
+            narration_system_prompt = system_prompt + "\n\n" + prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
+                outcome_json=game_event.model_dump_json(exclude={'narrative_description'})
+            )
             
             # Determine target length
             is_new_scene = bool(game_event.new_scene_id and game_event.new_scene_id != state.scene_id)
             is_detailed_request = any(word in user_msg.lower() for word in ["look", "examine", "describe", "search", "details"])
             
             if is_new_scene:
-                narration_system_prompt += "The player moved to a NEW location. Write a rich, atmospheric introduction (2-3 paragraphs). Describe the architecture, smell, and general mood."
+                narration_system_prompt += prompts.GM_NARRATION_NEW_LOCATION_SUFFIX
             elif is_detailed_request:
-                narration_system_prompt += "The player is looking for details. Provide a very detailed physical description of the surroundings or objects mentioned."
+                narration_system_prompt += prompts.GM_NARRATION_DETAILED_REQUEST_SUFFIX
             else:
-                narration_system_prompt += "Keep the response snappy and punchy (1 short paragraph). Move the action forward without excessive flowery prose."
+                narration_system_prompt += prompts.GM_NARRATION_SNAPPY_SUFFIX
 
-            narration_system_prompt += "\nDo not mention numbers, IDs, or system terms. Use English. 1-3 paragraphs based on the context above."
-            narration_system_prompt += "\n\nMANDATORY FORMATTING: Start all character dialogue on a NEW LINE. Use the format: **Character Name:** \"Dialogue\". Separate narrative prose from speech with a blank line."
+            narration_system_prompt += f"\n{prompts.GM_NARRATION_MANDATORY_FORMATTING}"
             
             response_text = llm.execute_simple_task(
                 system_prompt=narration_system_prompt,

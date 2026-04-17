@@ -1,7 +1,7 @@
 import json
-import importlib
 from pydantic import BaseModel
 from typing import TypeVar, Type, Any
+import litellm
 
 from backend.models.user import User
 from backend.core.security import encryption_util
@@ -10,16 +10,13 @@ from backend.core.llm_logger import log_llm_interaction, log_structured_event
 T = TypeVar("T", bound=BaseModel)
 
 class GameMasterLLM:
-    _litellm_module: Any = None
 
     @classmethod
     def _get_litellm(cls) -> Any:
-        if cls._litellm_module is None:
-            cls._litellm_module = importlib.import_module("litellm")
-            cls._litellm_module.drop_params = True
-            # Prevents litellm from passing 'usage' to OpenAI-compatible endpoints that don't support it
-            cls._litellm_module.add_usage = False
-        return cls._litellm_module
+        # Configuration is handled once
+        litellm.drop_params = True
+        litellm.add_usage = False
+        return litellm
 
     def __init__(self, user: User, provider: str = "openai"):
         """
