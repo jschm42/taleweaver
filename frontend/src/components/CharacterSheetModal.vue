@@ -184,7 +184,7 @@ const showImage = (path?: string | null) => {
                     </div>
                     
                     <!-- Core Attributes (Vertical List) -->
-                    <div class="grid grid-cols-1 gap-y-3 shrink-0 py-1 border-l border-slate-800/30 pl-8">
+                    <div class="grid grid-cols-1 gap-y-1 shrink-0 py-0 border-l border-slate-800/30 pl-8">
                       <div v-for="attr in coreAttributes" :key="attr.label" class="flex items-center justify-between gap-6">
                         <span class="text-sm font-black text-slate-500 uppercase tracking-widest">{{ attr.label }}</span>
                         <span class="text-sm font-black text-white font-mono">{{ attr.value !== undefined && attr.value !== null ? attr.value : 'N/A' }}</span>
