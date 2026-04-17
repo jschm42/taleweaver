@@ -1,7 +1,7 @@
 import base64
 import logging
 import os
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -17,10 +17,17 @@ def generate_temp_key() -> str:
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "TaleWeaver"
-    DATABASE_URL: str = "sqlite+aiosqlite:///./taleweaver.db"
+    DATABASE_URL: str = ""
     
     # Storage configuration
     DATA_DIR: str = "data"
+    
+    @model_validator(mode="after")
+    def assemble_db_url(self) -> "Settings":
+        if not self.DATABASE_URL:
+            # Construct default path in data dir
+            self.DATABASE_URL = f"sqlite+aiosqlite:///./{self.DATA_DIR}/taleweaver.db"
+        return self
     IMAGE_GENERATION_TIMEOUT_SECONDS: int = 120
     
     # Use existing key from environment or generate a temporary one

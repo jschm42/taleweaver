@@ -19,6 +19,14 @@ class Avatar(Base, TimestampMixin):
     mana = Column(Integer, default=200, nullable=False)
     exp = Column(Integer, default=0, nullable=False)
     
+    # Core RPG Stats (1-99)
+    strength = Column(Integer, default=10, nullable=False)
+    intelligence = Column(Integer, default=10, nullable=False)
+    wisdom = Column(Integer, default=10, nullable=False)
+    dexterity = Column(Integer, default=10, nullable=False)
+    charisma = Column(Integer, default=10, nullable=False)
+    armor_class = Column(Integer, default=10, nullable=False)
+    
     # JSON fields for flexible data structures
     stats = Column(JSON, default=dict, nullable=False)
     inventory = Column(JSON, default=list, nullable=False)

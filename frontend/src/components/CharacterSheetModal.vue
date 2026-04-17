@@ -25,6 +25,18 @@ const inventoryList = computed(() => props.sheet?.inventory ?? [])
 const equipment = computed(() => props.sheet?.equipment ?? {})
 const statusEffects = computed(() => props.sheet?.status_effects ?? [])
 
+const coreAttributes = computed(() => {
+  if (!props.sheet) return []
+  return [
+    { label: 'STR', value: props.sheet.strength, icon: 'ra-muscle-up' },
+    { label: 'DEX', value: props.sheet.dexterity, icon: 'ra-fast-forward' },
+    { label: 'INT', value: props.sheet.intelligence, icon: 'ra-brain' },
+    { label: 'WIS', value: props.sheet.wisdom, icon: 'ra-book' },
+    { label: 'CHA', value: props.sheet.charisma, icon: 'ra-double-team' },
+    { label: 'AC', value: props.sheet.armor_class, icon: 'ra-shield' }
+  ]
+})
+
 const getSlotPlaceholderIcon = (slot: string) => {
   const map: Record<string, string> = {
     Head: 'ra-helmet',
@@ -48,14 +60,14 @@ const slotPositions: Record<string, { top: string, left: string }> = {
   Ring_2: { top: '75%', left: '10%' },
   
   // RIGHT COL 1
-  Head: { top: '15%', left: '80%' },
-  Chest: { top: '45%', left: '80%' },
-  Arms: { top: '75%', left: '80%' },
+  Head: { top: '15%', left: '76%' },
+  Chest: { top: '45%', left: '76%' },
+  Arms: { top: '75%', left: '76%' },
   
   // RIGHT COL 2
-  Hands: { top: '15%', left: '90%' },
-  Legs: { top: '45%', left: '90%' },
-  Feet: { top: '75%', left: '90%' },
+  Hands: { top: '15%', left: '92%' },
+  Legs: { top: '45%', left: '92%' },
+  Feet: { top: '75%', left: '92%' },
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -87,7 +99,7 @@ const showImage = (path?: string | null) => {
         class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4"
         @click.self="emit('close')"
       >
-        <div class="w-full max-w-7xl h-[95vh] flex flex-col bg-slate-900 border border-slate-800 rounded-3xl shadow-[0_0_100px_rgba(0,0,0,0.9)] relative animate-sheet-in overflow-hidden">
+        <div class="w-full max-w-7xl h-[95vh] md:h-[90vh] flex flex-col bg-slate-900 border border-slate-800 rounded-3xl shadow-[0_0_100px_rgba(0,0,0,0.9)] relative animate-sheet-in overflow-hidden">
           
           <!-- Close Button -->
           <button
@@ -102,23 +114,30 @@ const showImage = (path?: string | null) => {
           <!-- Main Content Split -->
           <div class="flex-grow flex flex-col md:flex-row min-h-0" v-if="sheet">
             
-            <!-- LEFT COLUMN (50%) -->
+            <!-- LEFT COLUMN -->
             <div class="w-full md:w-1/2 flex flex-col min-h-0 border-r border-slate-800/50 bg-slate-950/40">
-              <div class="flex-grow overflow-y-auto custom-scrollbar p-8 flex flex-col">
+              <div class="flex-grow overflow-y-auto custom-scrollbar p-4 md:p-8 flex flex-col">
                 <!-- Identity Header -->
-                <div class="flex items-center gap-6 mb-8 shrink-0">
-                  <div class="w-20 h-20 rounded-2xl bg-slate-800/40 border border-slate-700/50 overflow-hidden flex items-center justify-center shadow-2xl">
-                    <img v-if="sheet.profile_image && showImage(sheet.profile_image)" :src="getImageUrl(sheet.profile_image)" class="w-full h-full object-cover" @error="handleImageError(sheet.profile_image)" />
-                    <img v-else src="@/assets/svg/upper-body-bust-silhouette.svg" class="w-16 h-16 object-contain opacity-100 filter brightness-[800%] contrast-150 drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]" />
+                <div class="flex items-center gap-4 md:gap-6 mb-4 md:mb-8 shrink-0">
+                  <div class="relative group/avatar">
+                    <div class="w-20 h-20 rounded-2xl bg-slate-800/40 border border-slate-700/50 overflow-hidden flex items-center justify-center shadow-2xl">
+                      <img v-if="sheet.profile_image && showImage(sheet.profile_image)" :src="getImageUrl(sheet.profile_image)" class="w-full h-full object-cover" @error="handleImageError(sheet.profile_image)" />
+                      <img v-else src="@/assets/svg/upper-body-bust-silhouette.svg" class="w-16 h-16 object-contain opacity-100 filter brightness-[800%] contrast-150 drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]" />
+                    </div>
+                    <!-- Avatar Bio Hover Popup -->
+                    <div class="absolute top-0 left-full ml-4 w-64 p-4 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl opacity-0 invisible group-hover/avatar:opacity-100 group-hover/avatar:visible transition-all z-50 pointer-events-none">
+                      <div class="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">Biography</div>
+                      <p class="text-[11px] text-slate-300 leading-relaxed italic font-serif opacity-90 whitespace-pre-line">{{ sheet.description || 'No detailed records found.' }}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 class="text-3xl font-black text-white uppercase tracking-tighter leading-none">{{ sheet.name || 'Unnamed' }}</h3>
+                  <div class="identity-header">
+                    <h3 class="text-xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">{{ sheet.name || 'Unnamed' }}</h3>
                     <div class="text-[10px] font-black text-amber-500 uppercase tracking-[0.4em] mt-2">{{ sheet.role || 'Adventurer' }}</div>
                   </div>
                 </div>
 
                 <!-- Silhouette Container -->
-                <div class="relative w-full h-[420px] mb-10 bg-slate-900/10 rounded-3xl border border-slate-800/10 shadow-inner flex items-center justify-center overflow-hidden shrink-0">
+                <div class="relative w-full h-[280px] sm:h-[350px] lg:h-[420px] silhouette-container mb-6 md:mb-10 bg-slate-900/10 rounded-3xl border border-slate-800/10 shadow-inner flex items-center justify-center overflow-hidden shrink-0">
                   <img 
                     src="@/assets/svg/full-body-human-silhouette.svg" 
                     class="h-full w-full object-contain opacity-50 filter brightness-[300%] contrast-75 drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]"
@@ -133,7 +152,7 @@ const showImage = (path?: string | null) => {
                     @mouseleave="emit('itemLeave')"
                   >
                     <div 
-                      class="w-12 h-12 rounded-xl border flex items-center justify-center transition-all relative shadow-xl backdrop-blur-md"
+                      class="w-14 h-14 md:w-16 md:h-16 rounded-2xl border-2 flex items-center justify-center transition-all relative shadow-xl backdrop-blur-md"
                       :class="equipment[slot] ? 'bg-slate-900 border-amber-500/50 shadow-amber-500/20 scale-110 z-10' : 'bg-slate-950/40 border-slate-800 hover:border-slate-600'"
                     >
                       <!-- Slot Label Tooltip -->
@@ -145,80 +164,82 @@ const showImage = (path?: string | null) => {
                         <div v-if="showImage(equipment[slot].image_url)" class="w-full h-full p-1">
                           <img :src="getImageUrl(equipment[slot].image_url)" class="w-full h-full object-cover rounded-lg" @error="handleImageError(equipment[slot].image_url)" />
                         </div>
-                        <i v-else :class="['ra text-xl', getItemIcon(equipment[slot].item_type), getTypeColor(equipment[slot].item_type)]"></i>
+                        <i v-else :class="['ra text-lg md:text-xl', getItemIcon(equipment[slot].item_type), getTypeColor(equipment[slot].item_type)]"></i>
                       </template>
                       <div v-else class="opacity-10 group-hover/slot:opacity-30 transition-opacity">
-                        <i :class="['ra text-lg', getSlotPlaceholderIcon(slot)]"></i>
+                        <i :class="['ra text-sm md:text-lg', getSlotPlaceholderIcon(slot)]"></i>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <!-- Bottom Info (Stats & Bio) -->
-                <div class="flex gap-10 pt-8 border-t border-slate-800/50">
-                  <div class="w-1/2 space-y-6">
-                    <div class="space-y-3.5">
+                <!-- Bottom Info (Stats) -->
+                <div class="pt-6 border-t border-slate-800/50">
+                  <div class="flex flex-col lg:flex-row gap-8 lg:items-start">
+                    <!-- Status Bars -->
+                    <div class="flex-grow space-y-4">
                       <StatBar label="Health" :value="sheet.hp" color="crimson" />
                       <StatBar label="Stamina" :value="sheet.stamina" color="emerald" />
                       <StatBar label="Mana" :value="sheet.mana" color="sapphire" />
                     </div>
-                    <div class="grid grid-cols-1 gap-2">
-                      <div v-for="[key, value] in sortedStats" :key="key" class="flex items-center justify-between border-b border-slate-800/20 pb-1.5">
-                        <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{{ key }}</span>
-                        <span class="text-base font-black text-white font-mono">{{ value }}</span>
+                    
+                    <!-- Core Attributes (Vertical List) -->
+                    <div class="grid grid-cols-1 gap-y-3 shrink-0 py-1 border-l border-slate-800/30 pl-8">
+                      <div v-for="attr in coreAttributes" :key="attr.label" class="flex items-center justify-between gap-6">
+                        <span class="text-sm font-black text-slate-500 uppercase tracking-widest">{{ attr.label }}</span>
+                        <span class="text-sm font-black text-white font-mono">{{ attr.value !== undefined && attr.value !== null ? attr.value : 'N/A' }}</span>
                       </div>
                     </div>
                   </div>
-                  <div class="w-1/2 flex flex-col">
-                    <div class="flex-grow p-6 bg-slate-900/40 border border-slate-800/50 rounded-3xl shadow-inner min-h-[200px]">
-                      <p class="text-[12px] text-slate-300 leading-relaxed italic font-serif opacity-80 whitespace-pre-line">{{ sheet.description || 'No detailed records found.' }}</p>
+
+                  <!-- Secondary Stats List (e.g. from mods) -->
+                  <div v-if="sortedStats.length > 0" class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-2 border-t border-slate-800/20 pt-4">
+                    <div v-for="[key, value] in sortedStats" :key="key" class="flex items-center justify-between border-b border-slate-800/10 pb-1.5">
+                      <span class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{{ key }}</span>
+                      <span class="text-sm font-black text-white font-mono">{{ value }}</span>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- RIGHT COLUMN (50%) -->
+            <!-- RIGHT COLUMN -->
             <div class="w-full md:w-1/2 flex flex-col min-h-0 bg-slate-900/20">
-              <div class="flex-grow overflow-y-auto custom-scrollbar p-8">
-                <!-- Inventory -->
-                <div class="mb-12">
+              <div class="flex-grow overflow-hidden flex flex-col p-4 md:p-8">
+                <!-- Inventory (Scrollable) -->
+                <div class="flex-grow flex flex-col min-h-0 mb-8">
                   <div class="flex items-center justify-between mb-8">
                     <div class="flex items-center gap-4">
-                      <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                        <i class="ra ra-pouch text-emerald-500 text-xl"></i>
-                      </div>
                       <h4 class="text-lg font-black text-white uppercase tracking-widest">Backpack</h4>
                     </div>
                     <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">{{ inventoryList.length }} / 24</span>
                   </div>
-                  <div class="grid grid-cols-4 lg:grid-cols-6 gap-4">
-                    <div 
-                      v-for="idx in 24" 
-                      :key="idx"
-                      class="aspect-square rounded-2xl border-2 flex items-center justify-center transition-all relative group cursor-pointer"
-                      :class="inventoryList[idx-1] ? 'bg-slate-950 border-slate-700/50 hover:border-emerald-500/50 hover:bg-slate-900/60' : 'bg-slate-800/20 border-slate-800/60 border-dashed'"
-                      @click="inventoryList[idx-1] && emit('itemClick', inventoryList[idx-1].name)"
-                      @mouseenter="inventoryList[idx-1] && emit('itemHover', { ...inventoryList[idx-1], entity_type: 'ITEM' }, $event)"
-                      @mouseleave="emit('itemLeave')"
-                    >
-                      <template v-if="inventoryList[idx-1]">
-                        <div v-if="showImage(inventoryList[idx-1].image_url)" class="w-full h-full p-2">
-                          <img :src="getImageUrl(inventoryList[idx-1].image_url)" class="w-full h-full object-cover rounded-lg transition-transform group-hover:scale-110" @error="handleImageError(inventoryList[idx-1].image_url)" />
-                        </div>
-                        <i v-else :class="['ra text-3xl', getItemIcon(inventoryList[idx-1].item_type), getTypeColor(inventoryList[idx-1].item_type)]"></i>
-                      </template>
+                  <div class="flex-grow overflow-y-auto custom-scrollbar pr-2">
+                    <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-4">
+                      <div 
+                        v-for="idx in 24" 
+                        :key="idx"
+                        class="aspect-square rounded-2xl border-2 flex items-center justify-center transition-all relative group cursor-pointer"
+                        :class="inventoryList[idx-1] ? 'bg-slate-950 border-slate-700/50 hover:border-emerald-500/50 hover:bg-slate-900/60' : 'bg-slate-800/20 border-slate-800/60 border-dashed'"
+                        @click="inventoryList[idx-1] && emit('itemClick', inventoryList[idx-1].name)"
+                        @mouseenter="inventoryList[idx-1] && emit('itemHover', { ...inventoryList[idx-1], entity_type: 'ITEM' }, $event)"
+                        @mouseleave="emit('itemLeave')"
+                      >
+                        <template v-if="inventoryList[idx-1]">
+                          <div v-if="showImage(inventoryList[idx-1].image_url)" class="w-full h-full p-2">
+                            <img :src="getImageUrl(inventoryList[idx-1].image_url)" class="w-full h-full object-cover rounded-lg transition-transform group-hover:scale-110" @error="handleImageError(inventoryList[idx-1].image_url)" />
+                          </div>
+                          <i v-else :class="['ra text-3xl', getItemIcon(inventoryList[idx-1].item_type), getTypeColor(inventoryList[idx-1].item_type)]"></i>
+                        </template>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <!-- Status -->
-                <div class="mt-auto">
-                  <div class="flex items-center gap-4 mb-6">
-                    <div class="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                      <i class="ra ra-burning-embers text-orange-500 text-xl"></i>
-                    </div>
-                    <h4 class="text-lg font-black text-white uppercase tracking-widest">Ailments & Buffs</h4>
+                <div class="shrink-0">
+                  <div class="flex items-center gap-4 mb-4">
+                    <h4 class="text-sm md:text-lg font-black text-white uppercase tracking-widest">Ailments & Buffs</h4>
                   </div>
                   <div class="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
                     <table class="w-full text-left text-xs">
@@ -255,4 +276,17 @@ const showImage = (path?: string | null) => {
 .custom-scrollbar::-webkit-scrollbar { width: 3px; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
 .ra { font-family: 'rpgawesome' !important; display: inline-block; line-height: 1; text-align: center; }
+
+@media (max-height: 850px) {
+  .silhouette-container {
+    height: 300px !important;
+    margin-bottom: 1.5rem !important;
+  }
+  .bio-container {
+    min-height: 100px !important;
+  }
+  .identity-header h3 {
+    font-size: 1.25rem !important;
+  }
+}
 </style>

@@ -15,6 +15,13 @@ export interface CharacterSheet {
   hp: number
   stamina: number
   mana: number
+  exp: number
+  strength: number
+  intelligence: number
+  wisdom: number
+  dexterity: number
+  charisma: number
+  armor_class: number
   stats: Record<string, number>
   inventory: InventoryItem[]
   equipment: Record<string, InventoryItem | null>
