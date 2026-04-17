@@ -1,0 +1,37 @@
+flowchart TD
+    Start([User Interaction]) --> ReceiveMsg[Receive Message Content]
+    ReceiveMsg --> LoadContext[Load Game State, Avatar & History]
+    LoadContext --> TickSystem[Advance Time & Apply Status Ticks]
+    
+    TickSystem --> ModeCheck{Strict Rules Enabled?}
+    
+    subgraph StrictMode [Strict Mode: 2-Pass Logic]
+        direction TB
+        SmallLLM[Small LLM: Process Mechanics] --> Event[Generate GameEvent JSON]
+        Event --> ComplexLLM[Complex LLM: Narrative Generation]
+        ComplexLLM --> Prose[Atmospheric Narration]
+        Event --> ApplyRules[Rule Engine: Apply Event to Stats]
+        ApplyRules --> UpdateWorld[DB: Update Scene, Positions & Visibility]
+    end
+    
+    subgraph FreeformMode [Freeform Mode]
+        direction TB
+        NarrativeLLM[Complex LLM: Creative Narration] --> FreeProse[Narration based on textual context]
+    end
+    
+    ModeCheck -- Yes --> StrictMode
+    ModeCheck -- No --> FreeformMode
+    
+    StrictMode --> MapUpdate[MapEngine: Register Visit & Discovery]
+    FreeformMode --> MapUpdate
+    
+    MapUpdate --> VisualCheck{Auto-Visualize & Image Prompt?}
+    VisualCheck -- Yes --> GenImage[MediaEngine: Generate Scene Image]
+    GenImage --> SaveImage[Update Scene & Map Visuals]
+    VisualCheck -- No --> Finalize
+    SaveImage --> Finalize
+    
+    Finalize[Build ChatResponse] --> End([Return Response to Client])
+    
+    style StrictMode fill:#e1f5fe,stroke:#01579b
+    style FreeformMode fill:#fff3e0,stroke:#e65100

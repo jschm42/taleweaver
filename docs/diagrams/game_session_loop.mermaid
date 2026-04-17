@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant C as Client
+    participant B as Backend (API)
+    participant RE as Rule Engine
+    participant MM as Memory Manager
+    participant LLM as LLM (SM/CM)
+    participant DB as Database
+    participant ME as Media Engine
+
+    C->>B: POST /adventures/{game_id}/chat (msg)
+    B->>DB: Load State (Avatar, Adventure, History)
+    B->>RE: Apply Ticks (Advanced Time, Status Effects)
+    B->>MM: Build Context Prompt
+    
+    alt Strict Rules (2-Pass System)
+        B->>LLM: Pass 1: Technical Reasoning (Small Model)
+        LLM-->>B: GameEvent (Scene Change, Entity Moves, Stats)
+        B->>LLM: Pass 2: Atmospheric Narration (Complex Model)
+        LLM-->>B: Narrative Prose
+        B->>RE: Apply GameEvent to Avatar Stats
+        B->>DB: Update World State (Positions, Visibility, Scene)
+    else Free-form (1-Pass)
+        B->>LLM: Atmospheric Narration (Complex Model)
+        LLM-->>B: Narrative Prose
+    end
+
+    B->>DB: Register Visit & Exits in WorldMap
+    
+    opt On-demand Visuals (auto_visualize)
+        B->>ME: Generate Scene Image (if prompt in Event)
+        ME-->>B: image_url
+        B->>DB: Save Image & Update Map
+    end
+
+    B->>DB: Save Chat Messages
+    B-->>C: ChatResponse (Narration, Sheet, Map, Entities)

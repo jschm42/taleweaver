@@ -51,7 +51,13 @@ The `strict_rules` flag determines AI behavior:
 * **Strict Mode:** Forces state modifications (HP loss, debuffs) to return "Structured Outputs" (JSON) which the backend validates.
 * **Hallucination Mode:** Narrative freedom where the backend adapts to textual estimations.
 
-## 4. Technical Details & Setup
+## 4. Workflows & Internal Logic
+
+For a deeper look into the backend processes, check out the Mermaid diagrams in the `docs/diagrams` folder:
+* [Adventure Generation Workflow](docs/diagrams/adventure_generation.mermaid) ([Activity Diagram](docs/diagrams/adventure_generation_activity.mermaid))
+* [Game Session Loop Sequence](docs/diagrams/game_session_loop.mermaid) ([Activity Diagram](docs/diagrams/game_session_loop_activity.mermaid))
+
+## 5. Technical Details & Setup
 
 ### System Requirements
 * **Python:** 3.12 (specified via `.python-version` file)

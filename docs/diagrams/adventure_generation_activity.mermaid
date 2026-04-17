@@ -1,0 +1,26 @@
+flowchart TD
+    Start([Start Generation]) --> CreateShell[Create Adventure Shell & Avatar]
+    CreateShell --> StartBG[Launch Background Task]
+    
+    subgraph BackgroundTask [Background Generation]
+        direction TB
+        Init[Initialize Status & Context] --> CallLLM[LLM: Generate World Manifesto]
+        CallLLM --> ValidateManifest{Manifest Valid?}
+        ValidateManifest -- No --> Retry[Retry / Log Error]
+        ValidateManifest -- Yes --> ApplyManifest[Apply Manifest to Database]
+        
+        subgraph ApplyLogic [Application Logic]
+            direction TB
+            ClearDB[Clear Existing World Objects] --> Protagonist[Sync Protagonist & Generate Portrait]
+            Protagonist --> Scenes[Generate Scenes & Atmospheric Images]
+            Scenes --> Entities[Generate NPCs & Items with Visuals]
+            Entities --> Exits[Connect Map via World Exits]
+        end
+        
+        ApplyManifest --> Finalize[Set Adventure Status: Ready]
+    end
+    
+    Finalize --> End([Generation Complete])
+    
+    style BackgroundTask fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style ApplyLogic fill:#fff,stroke:#666,stroke-dasharray: 5 5

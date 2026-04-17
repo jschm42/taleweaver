@@ -45,3 +45,12 @@ Please adhere to the following rules for all implementations to ensure high code
   * Use them sparingly. They only make sense if a specific algorithm is extremely complex, a surprising fix was implemented, or an obscure workaround needs documentation.
 * **TODOs:**
   * Use `TODO: [Short Description]` for pending tasks in the code. These tasks should be tracked in issue trackers.
+
+---
+
+## 4. Workflows & Diagrams
+
+To understand the internal processes of TaleWeaver, refer to the following Mermaid diagrams:
+
+* **Adventure Generation:** [adventure_generation.mermaid](docs/diagrams/adventure_generation.mermaid) | [Activity Diagram](docs/diagrams/adventure_generation_activity.mermaid) - Detailed workflow of how worlds are created.
+* **Game Session Loop:** [game_session_loop.mermaid](docs/diagrams/game_session_loop.mermaid) | [Activity Diagram](docs/diagrams/game_session_loop_activity.mermaid) - Detailed flow of a single chat turn (user input to GM response).
