@@ -213,14 +213,6 @@ onBeforeUnmount(() => {
 
           <div class="flex items-center gap-2">
             <div 
-              class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 border border-slate-700/50 rounded-lg cursor-pointer transition-all hover:bg-slate-700 backdrop-blur-sm shadow-md"
-              @click="showQuests = true"
-            >
-              <img src="@/assets/svg/fantasy-spellbook.svg" class="w-4 h-4 filter brightness-0 invert opacity-70" alt="Quests" />
-              <span class="hidden lg:inline text-[10px] font-bold uppercase tracking-wider text-slate-300">Quests</span>
-            </div>
-
-            <div 
               class="flex items-center gap-2 px-2 py-1.5 bg-slate-800/60 border border-slate-700/50 rounded-lg cursor-pointer transition-all hover:bg-slate-700 backdrop-blur-sm shadow-md"
               :class="{ 'border-cyan-500/50': autoVisualize }"
               @click="autoVisualize = !autoVisualize"
@@ -362,6 +354,7 @@ onBeforeUnmount(() => {
           @send="sendMessage"
           @open-sheet="showSheet = true"
           @open-map="showMap = true"
+          @open-quests="showQuests = true"
           @npc-hover="handleChatNpcHover"
           @npc-leave="hoveredEntity = null"
           @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"

@@ -233,18 +233,18 @@ async def _set_generation_state(
 
 
 def _normalize_rule_enforcement_mode(mode: Optional[str]) -> str:
-    candidate = (mode or "strict").strip().lower()
-    if candidate in {"strict", "strikt"}:
-        return "strict"
-    if candidate in {"moderate", "moderat"}:
-        return "moderate"
-    if candidate in {"loose", "locker"}:
-        return "loose"
-    return "strict"
+    candidate = (mode or "rpg").strip().lower()
+    if candidate in {"rpg", "strict", "strikt"}:
+        return "rpg"
+    if candidate in {"story", "moderate", "moderat", "narrative"}:
+        return "story"
+    if candidate in {"chat", "loose", "locker"}:
+        return "chat"
+    return "rpg"
 
 
 def _derive_strict_rules(mode: str) -> bool:
-    return _normalize_rule_enforcement_mode(mode) == "strict"
+    return _normalize_rule_enforcement_mode(mode) in ["rpg", "story"]
 
 
 def _resolve_catalog_instructions(catalog: Any, selected_ids: list[str]) -> list[str]:
@@ -487,7 +487,7 @@ class CreateAdventurePayload(BaseModel):
     image_url: Optional[str] = None
     context: Optional[str] = None
     strict_rules: bool = True
-    rule_enforcement_mode: Optional[Literal["strict", "moderate", "loose"]] = "strict"
+    rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     generate_scene_images: bool = False
     generate_npc_images: bool = False
     generate_item_images: bool = False
@@ -2090,7 +2090,7 @@ async def post_chat_message(
     )
     # Add quest info to system prompt
     if adventure.quests:
-        quests_summary = "\n".join([f"- {q['title']}: {q['description']} (Status: {q['status']})" for q in adventure.quests])
+        quests_summary = "\n".join([f"- {q.get('title', 'Unknown')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
         context_messages[0]["content"] += f"\n\nACTIVE QUESTS:\n{quests_summary}"
     
     system_prompt = context_messages[0]["content"]
@@ -2109,7 +2109,11 @@ async def post_chat_message(
         if adventure.strict_rules:
             # --- PASS 1: Technical Reasoning (Small Model) ---
             quests_json = json.dumps(adventure.quests or [], indent=2)
-            mechanics_system_prompt = system_prompt + f"\n\n{prompts.GM_MECHANICS_SUFFIX.format(quests_json=quests_json)}"
+            if adventure.rule_enforcement_mode == "story":
+                mechanics_system_prompt = system_prompt + f"\n\n{prompts.GM_STORY_MECHANICS_SUFFIX.format(quests_json=quests_json)}"
+            else:
+                mechanics_system_prompt = system_prompt + f"\n\n{prompts.GM_MECHANICS_SUFFIX.format(quests_json=quests_json)}"
+            
             game_event = llm.execute_complex_task(
                 system_prompt=mechanics_system_prompt,
                 user_prompt=user_msg,
@@ -2119,7 +2123,7 @@ async def post_chat_message(
                 game_id=game_id,
                 operation="chat_turn",
                 phase="mechanics",
-                metadata={"strict_rules": True},
+                metadata={"strict_rules": True, "mode": adventure.rule_enforcement_mode},
             )
 
             # --- PASS 2: Atmospheric Narration (Complex Model) ---
@@ -2165,15 +2169,19 @@ async def post_chat_message(
                 response_text = str(exc)
         else:
             # Free-form narrative always uses the high-quality complex model
+            freeform_system_prompt = system_prompt
+            if adventure.rule_enforcement_mode == "chat":
+                freeform_system_prompt += f"\n\n{prompts.GM_CHAT_NARRATION_SUFFIX}"
+                
             response_text = llm.execute_simple_task(
-                system_prompt,
+                freeform_system_prompt,
                 user_msg,
                 complex_model,
                 adventure_id=state.adventure_id,
                 game_id=game_id,
                 operation="chat_turn",
                 phase="freeform",
-                metadata={"strict_rules": False},
+                metadata={"strict_rules": False, "mode": adventure.rule_enforcement_mode},
             )
             response_text = _sanitize_narrative_response(response_text)
 
@@ -2300,17 +2308,17 @@ async def post_chat_message(
                 any_updated = False
                 for q_id in game_event.completed_quest_ids:
                     for q in updated_quests:
-                        if q["id"] == q_id and q["status"] == "open":
+                        if q.get("id") == q_id and q.get("status", "open") == "open":
                             q["status"] = "completed"
                             avatar.exp += q.get("exp_reward", 0)
-                            response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q['title']} (+{q.get('exp_reward', 0)} EXP)"})
+                            response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Unknown Quest')} (+{q.get('exp_reward', 0)} EXP)"})
                             any_updated = True
                 
                 if any_updated:
                     adventure.quests = updated_quests
                     # Check if all main quests are done
                     main_quests = [q for q in updated_quests if q.get("is_main")]
-                    if main_quests and all(q["status"] == "completed" for q in main_quests):
+                    if main_quests and all(q.get("status", "open") == "completed" for q in main_quests):
                         adventure.is_completed = True
                         response_messages.append({"role": "system", "content": "[ADVENTURE COMPLETED] All main objectives achieved!"})
 

@@ -21,9 +21,9 @@
               </div>
               <p class="quest-desc">{{ quest.description }}</p>
               <div class="quest-footer">
-                <span class="quest-status">{{ quest.status.toUpperCase() }}</span>
+                <span class="quest-status">{{ (quest.status || 'open').toUpperCase() }}</span>
                 <button 
-                  v-if="quest.status === 'open'" 
+                  v-if="!quest.status || quest.status === 'open'" 
                   class="track-btn" 
                   :class="{ active: trackedQuestId === quest.id }"
                   @click="toggleTrack(quest.id)"
@@ -46,9 +46,9 @@
               </div>
               <p class="quest-desc">{{ quest.description }}</p>
               <div class="quest-footer">
-                <span class="quest-status">{{ quest.status.toUpperCase() }}</span>
+                <span class="quest-status">{{ (quest.status || 'open').toUpperCase() }}</span>
                 <button 
-                  v-if="quest.status === 'open'" 
+                  v-if="!quest.status || quest.status === 'open'" 
                   class="track-btn" 
                   :class="{ active: trackedQuestId === quest.id }"
                   @click="toggleTrack(quest.id)"

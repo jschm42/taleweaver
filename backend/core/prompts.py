@@ -145,6 +145,26 @@ GM_MECHANICS_SUFFIX = (
 Appended to the system prompt when the GM is running in 'Mechanics' mode (Pass 1 of strict rules).
 """
 
+GM_STORY_MECHANICS_SUFFIX = (
+    "CRITICAL: You are in Story Mode. Prioritize narrative and atmosphere over strict mechanics. "
+    "RPG elements (HP, items) are optional. Apply them only when it significantly enhances the story. "
+    "Evaluate if any of the following Quests have been completed based on the current action:\n"
+    "{quests_json}\n"
+    "If a quest is completed, return its ID in 'completed_quest_ids'. "
+    "Your 'narrative_description' will be used as a draft/log; keep it short."
+)
+"""
+Appended to the system prompt when the GM is running in 'Mechanics' mode but for 'Story Mode' adventures.
+"""
+
+GM_CHAT_NARRATION_SUFFIX = (
+    "CRITICAL: You are in Chat Mode. Focus heavily on dialogue, character interaction, and atmosphere. "
+    "Keep responses conversational, like a Sitcom or pure Roleplay."
+)
+"""
+Appended to the system prompt when the GM is running in 'Chat Mode' (loose rules/no mechanics).
+"""
+
 GM_NARRATION_TECHNICAL_OUTCOME_PREFIX = "TECHNICAL OUTCOME TO NARRATE: {outcome_json}\n"
 """
 Prefix for the narration prompt containing the mechanical results to be narrated.

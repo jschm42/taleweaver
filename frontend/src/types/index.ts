@@ -53,7 +53,7 @@ export interface CreateAdventurePayload {
   context?: string
   image_url?: string | null
   strict_rules?: boolean
-  rule_enforcement_mode?: 'strict' | 'moderate' | 'loose'
+  rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
   generate_npc_images?: boolean
   generate_item_images?: boolean
   generate_scene_images?: boolean

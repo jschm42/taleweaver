@@ -56,7 +56,7 @@ class AdventureImportPayload(BaseModel):
     tone: Optional[str] = None
     image_style: Optional[str] = None
     image_styles: Optional[List[str]] = None
-    rule_enforcement_mode: Optional[Literal["strict", "moderate", "loose"]] = None
+    rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
     pacing: Optional[Pacing] = None
     protagonist: Optional[Protagonist] = None
     characters: Optional[List[CharacterSpec]] = None

@@ -6,7 +6,7 @@ import type { CatalogTile, CreateAdventurePayload } from '@/types'
 
 const router = useRouter()
 
-type RuleMode = 'strict' | 'loose'
+type RuleMode = 'rpg' | 'story' | 'chat'
 
 const form = ref({
   title: '',
@@ -17,7 +17,7 @@ const form = ref({
   automatic_cover_generation: false,
   clock_enabled: false,
   pacing_minutes: 5,
-  rule_enforcement_mode: 'strict' as RuleMode,
+  rule_enforcement_mode: 'rpg' as RuleMode,
   selected_image_styles: [] as string[],
   selected_tone: '',
 })
@@ -31,10 +31,13 @@ const errorMsg = ref('')
 const statusMsg = ref('')
 
 const ruleModeHelp = computed(() => {
-  if (form.value.rule_enforcement_mode === 'strict') {
+  if (form.value.rule_enforcement_mode === 'rpg') {
     return 'The Game Master enforces strict rules and mechanics. Best for a challenging RPG experience.'
   }
-  return 'The Game Master prioritizes narrative flow and player creativity. Best for immersive roleplay.'
+  if (form.value.rule_enforcement_mode === 'story') {
+    return 'Story and atmosphere foreground. RPG elements optional.'
+  }
+  return 'Story, atmosphere, chatting with NPCs. No strict rules check. Best for sitcoms or pure roleplay.'
 })
 
 function toggleImageStyle(styleId: string) {
@@ -110,7 +113,7 @@ async function createAdventure() {
   errorMsg.value = ''
   statusMsg.value = 'Initializing...'
 
-  const strictRules = form.value.rule_enforcement_mode === 'strict'
+  const strictRules = form.value.rule_enforcement_mode === 'rpg' || form.value.rule_enforcement_mode === 'story'
   const payload: CreateAdventurePayload = {
     title: form.value.title.trim(),
     context: form.value.storyIdea.trim(),
@@ -182,20 +185,27 @@ onMounted(() => {
 
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
           <h2 class="text-lg font-bold text-white">Rule Mode</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <button
-              @click="form.rule_enforcement_mode = 'strict'"
-              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'strict' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
+              @click="form.rule_enforcement_mode = 'rpg'"
+              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'rpg' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
             >
-              <div class="font-bold">Strict</div>
-              <div class="text-xs mt-1">No rule deviation</div>
+              <div class="font-bold">RPG</div>
+              <div class="text-xs mt-1">Strict rules & stats</div>
             </button>
             <button
-              @click="form.rule_enforcement_mode = 'loose'"
-              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'loose' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
+              @click="form.rule_enforcement_mode = 'story'"
+              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'story' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
             >
-              <div class="font-bold">Narrative</div>
-              <div class="text-xs mt-1">Flexible rules for immersive storytelling</div>
+              <div class="font-bold">Story Mode</div>
+              <div class="text-xs mt-1">Narrative focus</div>
+            </button>
+            <button
+              @click="form.rule_enforcement_mode = 'chat'"
+              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'chat' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
+            >
+              <div class="font-bold">Chat Mode</div>
+              <div class="text-xs mt-1">Freeform roleplay</div>
             </button>
           </div>
           <p class="text-xs text-slate-400">{{ ruleModeHelp }}</p>

@@ -16,7 +16,7 @@ class AdventureBase(BaseModel):
     image_url: Optional[str] = None
     context: Optional[str] = Field(None, max_length=2000)
     strict_rules: Optional[bool] = True
-    rule_enforcement_mode: Optional[str] = "strict"
+    rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
     clock_enabled: Optional[bool] = False
@@ -33,7 +33,7 @@ class AdventureCreate(AdventureBase):
 class AdventureUpdate(BaseModel):
     title: Optional[str] = None
     strict_rules: Optional[bool] = None
-    rule_enforcement_mode: Optional[str] = None
+    rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = None

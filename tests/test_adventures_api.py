@@ -88,7 +88,7 @@ async def test_create_adventure_with_rule_mode_and_style_tone(client: AsyncClien
     payload = {
         "title": "Curated Quest",
         "avatar_name": "Guide",
-        "rule_enforcement_mode": "moderate",
+        "rule_enforcement_mode": "story",
         "clock_enabled": True,
         "time_per_turn": 12,
         "pacing_minutes": 12,
@@ -103,8 +103,8 @@ async def test_create_adventure_with_rule_mode_and_style_tone(client: AsyncClien
     adv_resp = await client.get(f"/api/adventures/{ids['adventure_id']}")
     assert adv_resp.status_code == 200
     adv = adv_resp.json()
-    assert adv["rule_enforcement_mode"] == "moderate"
-    assert adv["strict_rules"] is False
+    assert adv["rule_enforcement_mode"] == "story"
+    assert adv["strict_rules"] is True
     assert adv["clock_enabled"] is True
     assert adv["pacing_minutes"] == 12
     assert adv["selected_tone"] == "horror"
