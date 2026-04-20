@@ -14,6 +14,7 @@ const isBatchGenerating = ref<Record<string, boolean>>({})
 
 // Editor State
 const aiEditPrompt = ref('')
+const aiAutoVisualize = ref(true)
 const isAIEditing = ref(false)
 
 const isSavingText = ref(false)
@@ -158,7 +159,10 @@ async function runAIEdit() {
     const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/ai-edit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: aiEditPrompt.value })
+      body: JSON.stringify({ 
+        prompt: aiEditPrompt.value,
+        auto_visualize: aiAutoVisualize.value 
+      })
     })
     if (!res.ok) {
       const data = await res.json()
@@ -436,15 +440,36 @@ const goBack = () => router.push({ name: 'portal' })
               <div class="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
                 <i class="ra ra-player-teleport text-emerald-500 text-lg"></i>
               </div>
-              <div class="flex-grow relative">
-                <input 
-                  v-model="aiEditPrompt" 
-                  @keyup.enter="runAIEdit" 
-                  :disabled="isAIEditing"
-                  class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50" 
-                  placeholder="Tell the Weaver to change reality... (e.g. 'Add a dragon to the ruins')" 
-                />
-                <button @click="runAIEdit" :disabled="isAIEditing || !aiEditPrompt" class="absolute right-2 top-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase rounded-lg disabled:opacity-50 transition-all">
+
+              <div class="flex-grow flex items-center gap-3">
+                <div class="relative flex-grow">
+                  <input 
+                    v-model="aiEditPrompt" 
+                    @keyup.enter="runAIEdit" 
+                    :disabled="isAIEditing"
+                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50" 
+                    placeholder="Tell the Weaver to change reality... (e.g. 'Add a dragon to the ruins')" 
+                  />
+                </div>
+
+                <!-- Modern Segmented Toggle -->
+                <div class="flex bg-black/60 p-1 rounded-xl border border-white/5 shadow-inner shrink-0">
+                  <button 
+                    @click="aiAutoVisualize = false" 
+                    :class="['px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all', !aiAutoVisualize ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
+                  >
+                    Text Only
+                  </button>
+                  <button 
+                    @click="aiAutoVisualize = true" 
+                    :class="['px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-2', aiAutoVisualize ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
+                  >
+                    <i class="ra ra-eye-shield"></i>
+                    Visuals
+                  </button>
+                </div>
+
+                <button @click="runAIEdit" :disabled="isAIEditing || !aiEditPrompt" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all shadow-lg shadow-emerald-900/20 shrink-0">
                   {{ isAIEditing ? 'Weaving...' : 'Execute' }}
                 </button>
               </div>

@@ -1283,6 +1283,7 @@ class EntityUpdateRequest(BaseModel):
 
 class AIEditRequest(BaseModel):
     prompt: str
+    auto_visualize: bool = True
 
 @router.patch("/{adventure_id}/editor/entity")
 async def update_editor_entity(
@@ -1410,9 +1411,9 @@ async def ai_edit_adventure(
         adventure_id=adventure_id,
         manifest_dict=new_manifesto.model_dump(),
         user=user,
-        gen_npc=True,
-        gen_items=True,
-        gen_scenes=True,
+        gen_npc=payload.auto_visualize,
+        gen_items=payload.auto_visualize,
+        gen_scenes=payload.auto_visualize,
         gen_protagonist_image=False
     )
     
