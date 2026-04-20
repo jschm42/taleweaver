@@ -16,12 +16,18 @@
           <div v-for="quest in mainQuests" :key="quest.id" :class="['quest-card', quest.status]">
             <div class="quest-info">
               <div class="quest-header">
-                <span class="quest-title">{{ quest.title }}</span>
+                <div class="title-group">
+                  <i v-if="quest.status === 'completed'" class="ra ra-circle section-icon text-emerald-500 mr-2"></i>
+                  <span class="quest-title">{{ quest.title }}</span>
+                </div>
                 <span class="quest-reward">{{ quest.exp_reward }} EXP</span>
               </div>
               <p class="quest-desc">{{ quest.description }}</p>
               <div class="quest-footer">
-                <span class="quest-status">{{ (quest.status || 'open').toUpperCase() }}</span>
+                <div class="status-badge" :class="quest.status">
+                   <span class="status-dot"></span>
+                   {{ (quest.status || 'open').toUpperCase() }}
+                </div>
                 <button 
                   v-if="!quest.status || quest.status === 'open'" 
                   class="track-btn" 
@@ -41,12 +47,18 @@
           <div v-for="quest in sideQuests" :key="quest.id" :class="['quest-card', quest.status]">
             <div class="quest-info">
               <div class="quest-header">
-                <span class="quest-title">{{ quest.title }}</span>
+                <div class="title-group">
+                  <i v-if="quest.status === 'completed'" class="ra ra-circle section-icon text-emerald-500 mr-2"></i>
+                  <span class="quest-title">{{ quest.title }}</span>
+                </div>
                 <span class="quest-reward">{{ quest.exp_reward }} EXP</span>
               </div>
               <p class="quest-desc">{{ quest.description }}</p>
               <div class="quest-footer">
-                <span class="quest-status">{{ (quest.status || 'open').toUpperCase() }}</span>
+                <div class="status-badge" :class="quest.status">
+                   <span class="status-dot"></span>
+                   {{ (quest.status || 'open').toUpperCase() }}
+                </div>
                 <button 
                   v-if="!quest.status || quest.status === 'open'" 
                   class="track-btn" 
@@ -221,8 +233,38 @@ export default {
 
 .quest-card.completed {
   opacity: 0.6;
-  text-decoration: line-through;
   background: rgba(0, 0, 0, 0.2);
+}
+
+.title-group {
+  display: flex;
+  align-items: center;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.status-badge.completed {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
 }
 
 .quest-header {
@@ -258,17 +300,6 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.quest-status {
-  font-size: 0.75rem;
-  letter-spacing: 1px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.completed .quest-status {
-  color: #10b981;
 }
 
 .track-btn {

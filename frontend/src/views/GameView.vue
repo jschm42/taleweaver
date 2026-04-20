@@ -150,6 +150,23 @@ watch(() => sheet.value?.in_game_time, () => {
   setTimeout(() => { clockTick.value = false }, 600)
 })
 
+// Auto-untrack completed quests & Default tracking for new sessions
+watch(quests, (newQuests) => {
+  if (trackedQuestId.value) {
+    const tracked = newQuests.find(q => q.id === trackedQuestId.value)
+    if (tracked && tracked.status === 'completed') {
+      trackedQuestId.value = null
+    }
+  }
+  
+  if (!trackedQuestId.value && newQuests && newQuests.length > 0) {
+    const firstMain = newQuests.find(q => q.is_main && q.status === 'open')
+    if (firstMain) {
+      trackedQuestId.value = firstMain.id
+    }
+  }
+}, { immediate: true })
+
 watch(isCompleted, (val) => {
   if (val) {
     showSuccess.value = true
@@ -420,7 +437,7 @@ onBeforeUnmount(() => {
           @npc-leave="hoveredEntity = null"
           @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
           @item-leave="hoveredEntity = null"
-          :tracked-quest="null"
+          :tracked-quest="trackedQuest"
           :status-text="statusText"
           @open-debug="showDebug = true"
           @toggle-debug-log="(val) => showDebugLog = val"

@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
+from sqlalchemy.orm.attributes import flag_modified
 from pydantic import BaseModel, Field, model_validator
 from PIL import Image
 
@@ -2719,7 +2720,7 @@ async def post_chat_message(
                     response_messages.append({"role": "system", "content": f"[System] Calendar shift: adventure start time updated to {game_event.start_datetime_override}."})
 
                 if game_event.completed_quest_ids:
-                    updated_quests = list(adventure.quests or [])
+                    updated_quests = deepcopy(adventure.quests or [])
                     any_updated = False
                     for q_id in game_event.completed_quest_ids:
                         for q in updated_quests:
@@ -2730,6 +2731,7 @@ async def post_chat_message(
                                 any_updated = True
                     if any_updated:
                         adventure.quests = updated_quests
+                        flag_modified(adventure, "quests")
                         main_quests = [q for q in updated_quests if q.get("is_main")]
                         if main_quests and all(q.get("status", "open") == "completed" for q in main_quests):
                             adventure.is_completed = True
