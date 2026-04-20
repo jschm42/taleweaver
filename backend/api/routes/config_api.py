@@ -153,6 +153,8 @@ class T2ISettingsPayload(BaseModel):
     height: Optional[int] = None
     steps: Optional[int] = None
     seed: Optional[int] = None
+    image_format: Optional[str] = "jpeg"
+    image_quality: Optional[int] = 85
     negative_prompt: Optional[str] = None
 
 
@@ -190,6 +192,8 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
                 "height": None,
                 "steps": None,
                 "seed": None,
+                "image_format": "jpeg",
+                "image_quality": 85,
                 "negative_prompt": None,
             },
             "image_styles_catalog": _default_image_styles_catalog(),
@@ -210,6 +214,8 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
             "height": None,
             "steps": None,
             "seed": None,
+            "image_format": "jpeg",
+            "image_quality": 85,
             "negative_prompt": None,
         },
         "image_styles_catalog": _normalize_catalog(

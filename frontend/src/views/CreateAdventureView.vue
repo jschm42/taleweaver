@@ -106,7 +106,9 @@ async function createAdventure() {
   statusMsg.value = 'Initializing...'
 
   const strictRules = form.value.rule_enforcement_mode === 'rpg' || form.value.rule_enforcement_mode === 'story'
+  const adventureId = crypto.randomUUID()
   const payload: CreateAdventurePayload = {
+    id: adventureId,
     title: form.value.title.trim(),
     context: form.value.storyIdea.trim(),
     strict_rules: strictRules,
@@ -125,8 +127,17 @@ async function createAdventure() {
   }
 
   try {
+    // We await for reliability - the backend placeholder creation is very fast (<100ms)
     await api.createAdventure(payload)
-    router.push({ name: 'portal' })
+    
+    // Redirect to portal with query params so it can show the pending card and poll immediately
+    router.push({ 
+      name: 'portal', 
+      query: { 
+        new_id: adventureId, 
+        new_title: payload.title 
+      } 
+    })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to create adventure.'
     isSubmitting.value = false

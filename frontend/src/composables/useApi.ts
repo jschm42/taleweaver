@@ -106,4 +106,9 @@ export const api = {
     }
     return res.json()
   },
+
+  /** Retrieves the generation status and potential errors for an adventure. */
+  getAdventureStatus(adventureId: string): Promise<{ status: string; is_ready: boolean; error?: string }> {
+    return request(`/adventures/${adventureId}/status`)
+  },
 }

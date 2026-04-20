@@ -8,7 +8,9 @@ import uuid
 import asyncio
 import time
 import requests
+import io
 from typing import Optional, Any
+from PIL import Image
 from backend.core.security import encryption_util
 from backend.core.config import settings
 from backend.core import prompts
@@ -226,10 +228,14 @@ class MediaEngine:
             response = MediaEngine._get_litellm().image_generation(**kwargs)
             image_url, b64_json = MediaEngine._extract_image_payload(response)
             
+            provider_options = provider_options or {}
+            image_format = provider_options.get("image_format", "jpeg")
+            image_quality = provider_options.get("image_quality", 85)
+
             if image_url:
-                return await MediaEngine._save_remote_image(image_url, target_dir, filename)
+                return await MediaEngine._save_remote_image(image_url, target_dir, filename, image_format, image_quality)
             elif b64_json:
-                return await MediaEngine._save_b64_image(b64_json, target_dir, filename)
+                return await MediaEngine._save_b64_image(b64_json, target_dir, filename, image_format, image_quality)
             elif provider_key == "ollama":
                 logger.warning("LiteLLM returned no image payload for ollama; trying direct Ollama API fallback.")
                 direct_result = await MediaEngine._generate_image_ollama_direct(
@@ -358,10 +364,14 @@ class MediaEngine:
 
             body = response.json()
             image_url, b64_json = MediaEngine._extract_image_payload(body)
+            
+            image_format = "jpeg"
+            image_quality = 85
+            
             if image_url:
-                return await MediaEngine._save_remote_image(image_url, target_dir, filename)
+                return await MediaEngine._save_remote_image(image_url, target_dir, filename, image_format, image_quality)
             if b64_json:
-                return await MediaEngine._save_b64_image(b64_json, target_dir, filename)
+                return await MediaEngine._save_b64_image(b64_json, target_dir, filename, image_format, image_quality)
 
             logger.error("Ollama response did not include image payload: %s", body)
             return None
@@ -370,19 +380,28 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None) -> Optional[str]:
+    async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Decodes and saves a base64 image string."""
         import base64
         try:
             os.makedirs(target_dir, exist_ok=True)
-            final_filename = filename or f"{uuid.uuid4()}.png"
-            if not final_filename.endswith(".png"):
-                final_filename += ".png"
+            ext = "jpg" if image_format.lower() == "jpeg" else "png"
+            
+            final_filename = filename or f"{uuid.uuid4()}.{ext}"
+            if not any(final_filename.lower().endswith(e) for e in (".png", ".jpg", ".jpeg")):
+                final_filename += f".{ext}"
                 
             filepath = os.path.join(target_dir, final_filename)
+            image_bytes = base64.b64decode(b64_data)
             
-            with open(filepath, "wb") as f:
-                f.write(base64.b64decode(b64_data))
+            if image_format.lower() == "jpeg":
+                img = Image.open(io.BytesIO(image_bytes))
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(filepath, "JPEG", quality=quality, optimize=True)
+            else:
+                with open(filepath, "wb") as f:
+                    f.write(image_bytes)
             
             # Convert to relative path for URL
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
@@ -392,20 +411,28 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None) -> Optional[str]:
+    async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Downloads a remote image and persists it in the specified directory."""
         try:
             response = requests.get(url, timeout=30)
             if response.status_code == 200:
                 os.makedirs(target_dir, exist_ok=True)
-                final_filename = filename or f"{uuid.uuid4()}.png"
-                if not final_filename.endswith(".png"):
-                    final_filename += ".png"
+                ext = "jpg" if image_format.lower() == "jpeg" else "png"
+                
+                final_filename = filename or f"{uuid.uuid4()}.{ext}"
+                if not any(final_filename.lower().endswith(e) for e in (".png", ".jpg", ".jpeg")):
+                    final_filename += f".{ext}"
                     
                 filepath = os.path.join(target_dir, final_filename)
                 
-                with open(filepath, "wb") as f:
-                    f.write(response.content)
+                if image_format.lower() == "jpeg":
+                    img = Image.open(io.BytesIO(response.content))
+                    if img.mode in ("RGBA", "P"):
+                        img = img.convert("RGB")
+                    img.save(filepath, "JPEG", quality=quality, optimize=True)
+                else:
+                    with open(filepath, "wb") as f:
+                        f.write(response.content)
                 
                 # Convert absolute path to relative for frontend
                 rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
@@ -434,7 +461,8 @@ class MediaEngine:
         api_key = encryption_util.decrypt_key(api_keys[provider]) if provider in api_keys else None
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
-        filename = f"{uuid.uuid4().hex}.png"
+        ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
+        filename = f"{uuid.uuid4().hex}.{ext}"
         
         return await MediaEngine.generate_image(
             prompt=prompt, 
@@ -464,7 +492,8 @@ class MediaEngine:
         api_key = encryption_util.decrypt_key(api_keys[provider]) if provider in api_keys else None
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
-        filename = f"{entity_id}.png"
+        ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
+        filename = f"{entity_id}.{ext}"
         
         return await MediaEngine.generate_image(
             prompt=prompt, 
@@ -495,7 +524,8 @@ class MediaEngine:
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
         # Use a versioned filename so clients never stay on a stale cached cover URL.
-        filename = f"cover_{uuid.uuid4().hex}.png"
+        ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
+        filename = f"cover_{uuid.uuid4().hex}.{ext}"
         
         # Craft a prompt specifically requesting landscape/2:1 ratio
         prompt = prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(

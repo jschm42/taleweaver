@@ -218,7 +218,7 @@ function getVisualDescription(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 
   return (debugData.value.objects || []).find((o: any) => o.id === id)?.description || ''
 }
 
-async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string) {
+async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string, skipFetch: boolean = false) {
   const key = `${kind}_${id}`
   isQuickGenerating.value[key] = true
   try {
@@ -231,7 +231,7 @@ async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | '
       const data = await res.json()
       throw new Error(data.detail || 'Generation failed')
     }
-    await fetchDebugInfo()
+    if (!skipFetch) await fetchDebugInfo()
   } catch (error: any) {
     console.error('Quick regen error:', error)
     addNotification(error.message, 'error')
@@ -249,9 +249,12 @@ async function regenerateAll(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | '
   if (kind === 'npc') items = debugData.value?.npcs || []
   if (kind === 'object') items = debugData.value?.objects || []
 
-  for (const item of items) {
-    await quickRegenerateVisual(kind, item.id || props.adventureId)
-  }
+  // Run all in parallel for maximum performance
+  // We use skipFetch=true to avoid redundant refreshes, then refresh once at the end
+  const promises = items.map(item => quickRegenerateVisual(kind, item.id || props.adventureId, true))
+  await Promise.all(promises)
+  
+  await fetchDebugInfo()
   isBatchGenerating.value[kind] = false
 }
 

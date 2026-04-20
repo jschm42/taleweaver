@@ -31,6 +31,8 @@ const t2iForm = ref({
   height: null as number | null,
   steps: null as number | null,
   seed: null as number | null,
+  image_format: 'jpeg',
+  image_quality: 85,
   negative_prompt: '',
 })
 
@@ -449,6 +451,37 @@ watch(
                 class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
               />
               <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">High-fidelity scene visualization.</p>
+            </div>
+
+            <!-- STORAGE OPTIMIZATION -->
+            <div class="pt-6 border-t border-slate-800 space-y-6">
+              <div class="flex items-center gap-2 mb-2">
+                <i class="ra ra-save text-cyan-400"></i>
+                <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500">Storage Optimization</h3>
+              </div>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="block text-sm font-semibold text-slate-300">File Format</label>
+                  <select v-model="t2iForm.image_format" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none">
+                    <option value="jpeg">JPEG (Recommended)</option>
+                    <option value="png">PNG (Lossless)</option>
+                  </select>
+                  <p class="text-[10px] text-slate-500">JPEG significantly reduces file size for assets.</p>
+                </div>
+                
+                <div v-if="t2iForm.image_format === 'jpeg'" class="space-y-2">
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="block text-sm font-semibold text-slate-300">JPEG Quality</label>
+                    <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded">{{ t2iForm.image_quality }}%</span>
+                  </div>
+                  <input v-model.number="t2iForm.image_quality" type="range" min="10" max="100" step="5" class="w-full h-2 bg-slate-950 border border-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
+                  <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                    <span>Small File</span>
+                    <span>Best Quality</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <template v-if="t2iForm.provider === 'ollama'">

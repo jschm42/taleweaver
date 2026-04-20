@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import type { AdventureImportPayload, CreateAdventurePayload } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
 
 interface Adventure {
   game_id: string
@@ -100,6 +101,17 @@ function resetImportState() {
     generate_npc_images: false,
     generate_item_images: false,
     automatic_cover_generation: false,
+  }
+}
+
+const openMenuId = ref<string | null>(null)
+function toggleMenu(id: string) {
+  openMenuId.value = openMenuId.value === id ? null : id
+}
+
+const handleGlobalClick = (event: MouseEvent) => {
+  if (openMenuId.value && !(event.target as HTMLElement).closest('.menu-trigger')) {
+    openMenuId.value = null
   }
 }
 
@@ -529,19 +541,7 @@ async function pollAdventureStatus(
   return new Promise<void>((resolve) => {
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/adventures/${adventureId}/status`)
-        if (!res.ok) {
-          clearInterval(pollInterval)
-          const failStatus = 'Generierung fehlgeschlagen'
-          errorMsg.value = 'Generation failed. Please try again with a different setup.'
-          options?.onFailure?.(failStatus)
-          isSubmitting.value = false
-          isImporting.value = false
-          resolve()
-          return
-        }
-
-        const data = await res.json()
+        const data = await api.getAdventureStatus(adventureId)
         const statusText = data.status || 'Constructing world...'
         creationStatus.value = statusText
         options?.onStatus?.(statusText)
@@ -589,15 +589,37 @@ onMounted(() => {
   resetCreateForm()
   void fetchSettings()
   fetchAdventures()
+
+  // Check for newly created adventure from CreateAdventureView
+  const newId = route.query.new_id as string
+  const newTitle = route.query.new_title as string
+  if (newId && newTitle) {
+    addPendingCreationCard(newId, newTitle)
+    void pollAdventureStatus(newId, {
+      navigateOnReady: false,
+      onStatus: (status) => updatePendingCreationStatus(newId, status),
+      onReady: async () => {
+        removePendingCreationCard(newId)
+        await fetchAdventures()
+      },
+      onFailure: (status) => updatePendingCreationStatus(newId, status, true),
+    })
+    
+    // Clear query params to prevent re-adding on refresh
+    router.replace({ name: 'portal', query: {} })
+  }
+
   loadingWordTimer = window.setInterval(() => {
     loadingWordIndex.value = (loadingWordIndex.value + 1) % loadingWords.length
   }, 1300)
+  document.addEventListener('click', handleGlobalClick)
 })
 
 onUnmounted(() => {
   if (loadingWordTimer !== null) {
     clearInterval(loadingWordTimer)
   }
+  document.removeEventListener('click', handleGlobalClick)
 })
 </script>
 
@@ -626,11 +648,11 @@ onUnmounted(() => {
     </header>
 
     <main class="w-full max-w-6xl flex-grow px-4 relative">
-      <div v-if="isLoading" class="flex justify-center items-center h-64">
+      <div v-if="isLoading && adventures.length === 0 && pendingCreations.length === 0 && pendingImports.length === 0" class="flex justify-center items-center h-64">
         <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
       </div>
 
-      <div v-else-if="adventures.length === 0 && pendingImports.length === 0 && pendingCreations.length === 0" class="text-center py-20 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
+      <div v-else-if="!isLoading && adventures.length === 0 && pendingImports.length === 0 && pendingCreations.length === 0" class="text-center py-20 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
         <h2 class="text-2xl font-bold text-white mb-2">No active adventures</h2>
         <p class="text-slate-400 mb-8 max-w-md mx-auto">Start your first world or import a prepared ADV manifest.</p>
 
@@ -822,35 +844,65 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <div class="mt-4 grid grid-cols-[1fr_auto_auto] gap-2">
+              <div class="mt-4 flex gap-2 relative">
                 <button
                   @click="playAdventure(adv.game_id)"
-                  class="flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all duration-300"
+                  class="flex-grow flex items-center justify-center gap-3 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-emerald-900/20 active:scale-[0.98]"
                 >
-                  <span aria-hidden="true">▶</span>
+                  <span aria-hidden="true" class="text-sm">▶</span>
                   Play
                 </button>
-                <button
-                  @click="openEditModal(adv.adventure_id)"
-                  class="flex items-center justify-center px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all duration-300"
-                  title="Edit Adventure"
-                >
-                  <span aria-hidden="true">✎</span>
-                </button>
-                <button
-                  @click="exportAdz(adv.adventure_id)"
-                  class="flex items-center justify-center px-3 py-2.5 bg-slate-800 hover:bg-emerald-900/30 text-slate-400 hover:text-emerald-400 rounded-xl border border-slate-700 transition-all duration-300"
-                  title="Export as .ADZ (with Images)"
-                >
-                  <span aria-hidden="true">⇮</span>
-                </button>
-                <button
-                  @click="deleteAdventure(adv.adventure_id)"
-                  class="flex items-center justify-center px-3 py-2.5 bg-slate-800 hover:bg-red-900/30 text-slate-400 hover:text-red-400 rounded-xl border border-slate-700 transition-all duration-300"
-                  title="Delete Adventure"
-                >
-                  <span aria-hidden="true">🗑</span>
-                </button>
+                
+                <div class="relative">
+                  <button
+                    @click.stop="toggleMenu(adv.game_id)"
+                    class="menu-trigger flex items-center justify-center px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all duration-300 active:scale-95"
+                    title="Options"
+                  >
+                    <span aria-hidden="true" class="font-black">⋮</span>
+                  </button>
+
+                  <!-- Options Dropdown -->
+                  <Transition
+                    enter-active-class="transition duration-200 ease-out"
+                    enter-from-class="transform scale-95 opacity-0 translate-y-2"
+                    enter-to-class="transform scale-100 opacity-100 translate-y-0"
+                    leave-active-class="transition duration-150 ease-in"
+                    leave-from-class="transform scale-100 opacity-100 translate-y-0"
+                    leave-to-class="transform scale-95 opacity-0 translate-y-2"
+                  >
+                    <div 
+                      v-if="openMenuId === adv.game_id" 
+                      class="absolute bottom-full right-0 mb-3 w-52 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 py-2 overflow-hidden backdrop-blur-xl bg-slate-900/95"
+                    >
+                      <button
+                        @click="openEditModal(adv.adventure_id); openMenuId = null"
+                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors text-left group"
+                      >
+                        <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 group-hover:bg-slate-700 transition-colors">✎</span>
+                        Edit Adventure
+                      </button>
+                      
+                      <button
+                        @click="exportAdz(adv.adventure_id); openMenuId = null"
+                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-emerald-900/20 hover:text-emerald-400 transition-colors text-left group"
+                      >
+                        <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 group-hover:bg-emerald-900/30 transition-colors">⇮</span>
+                        Export (.ADZ)
+                      </button>
+
+                      <div class="h-px bg-slate-800 my-1 mx-2"></div>
+                      
+                      <button
+                        @click="deleteAdventure(adv.adventure_id); openMenuId = null"
+                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors text-left group"
+                      >
+                        <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 group-hover:bg-red-900/30 transition-colors text-red-400">🗑</span>
+                        Delete
+                      </button>
+                    </div>
+                  </Transition>
+                </div>
               </div>
             </div>
           </div>

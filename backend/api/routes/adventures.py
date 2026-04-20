@@ -621,6 +621,7 @@ async def create_adventure(
     # Create placeholder adventure
     # Allow server-side id generation if client didn't provide one
     adv_kwargs = dict(
+        id=payload.id if payload.id else None,
         title=payload.title,
         image_url=payload.image_url,
         context=payload.context,
@@ -935,13 +936,19 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 scene_count=len(scenes),
                 avatar_id=avatar.id if avatar else None,
             )
-            
         except Exception as e:
-            logger.error("Background Gen Failed for %s: %s", adventure_id, e)
+            logger.exception("Background Gen Failed for %s", adventure_id)
+            error_msg = str(e)
+            if len(error_msg) > 500:
+                error_msg = error_msg[:497] + "..."
+            # Remove potential JSON fragments or long traces
+            if "{" in error_msg and "}" in error_msg:
+                error_msg = "Validation failed or invalid model response format."
+
             log_structured_event(
                 "adventure.generation.failed",
                 adventure_id=adventure_id,
-                error=str(e),
+                error=error_msg,
             )
             try:
                 await db.rollback()
@@ -951,7 +958,7 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     adventure_id,
                     status="Generation Failed",
                     is_ready=False,
-                    error=str(e),
+                    error=error_msg,
                 )
             except Exception:
                 pass
