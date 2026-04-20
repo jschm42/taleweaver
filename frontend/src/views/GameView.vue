@@ -367,27 +367,30 @@ onBeforeUnmount(() => {
               <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500/80">Discovery</h3>
             </div>
           </div>
-          <div class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
             <div 
               v-for="ent in items" 
               :key="ent.id" 
-              class="p-3 bg-slate-950/40 border border-slate-800/40 rounded-2xl group cursor-help transition-all hover:border-amber-500/40 hover:bg-slate-900/50 shadow-lg"
+              class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group cursor-help transition-all hover:border-amber-500/40 hover:bg-slate-900/50 p-2 flex flex-col items-center shadow-lg"
               @mouseenter="handleHover(ent, $event)"
               @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
               @mouseleave="hoveredEntity = null"
             >
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2 overflow-hidden">
-                  <div v-if="ent.image_url && showImage(ent.image_url)" class="relative w-6 h-6 rounded-lg overflow-hidden border border-slate-800 shrink-0">
-                    <img :src="getImageUrl(ent.image_url)" class="w-full h-full object-cover" @error="handleImageError(ent.image_url)" />
-                  </div>
-                  <div v-else class="w-6 h-6 rounded-lg border border-slate-800/50 bg-slate-900/50 flex items-center justify-center shrink-0">
-                    <i :class="['ra text-[10px]', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
-                  </div>
-                  <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate">{{ ent.name }}</span>
-                </div>
-                <i class="ra ra-gem text-[10px] text-slate-800"></i>
+              <div class="absolute top-1 right-1 z-10">
+                <i class="ra ra-gem text-[8px] text-slate-800 group-hover:text-amber-500/40 transition-colors"></i>
               </div>
+              <div class="w-12 h-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
+                <img 
+                  v-if="ent.image_url && showImage(ent.image_url)" 
+                  :src="getImageUrl(ent.image_url)" 
+                  class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  @error="handleImageError(ent.image_url)"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
+                  <i :class="['ra text-xl', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
+                </div>
+              </div>
+              <span class="text-[9px] font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
             </div>
           </div>
         </div>
