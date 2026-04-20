@@ -437,7 +437,13 @@ const goBack = () => router.push({ name: 'portal' })
                 <i class="ra ra-player-teleport text-emerald-500 text-lg"></i>
               </div>
               <div class="flex-grow relative">
-                <input v-model="aiEditPrompt" @keyup.enter="runAIEdit" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 outline-none transition-all" placeholder="Tell the Weaver to change reality... (e.g. 'Add a dragon to the ruins')" />
+                <input 
+                  v-model="aiEditPrompt" 
+                  @keyup.enter="runAIEdit" 
+                  :disabled="isAIEditing"
+                  class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50" 
+                  placeholder="Tell the Weaver to change reality... (e.g. 'Add a dragon to the ruins')" 
+                />
                 <button @click="runAIEdit" :disabled="isAIEditing || !aiEditPrompt" class="absolute right-2 top-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase rounded-lg disabled:opacity-50 transition-all">
                   {{ isAIEditing ? 'Weaving...' : 'Execute' }}
                 </button>
@@ -819,6 +825,23 @@ const goBack = () => router.push({ name: 'portal' })
           </div>
         </TransitionGroup>
       </div>
+    </Teleport>
+
+    <!-- REALITY WEAVING OVERLAY (Global Lock) -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="isAIEditing" class="fixed inset-0 z-[500] flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-2xl">
+          <div class="relative w-32 h-32 mb-8">
+            <div class="absolute inset-0 rounded-full border-4 border-emerald-500/10 animate-pulse"></div>
+            <div class="absolute inset-2 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <i class="ra ra-player-teleport text-4xl text-emerald-500 animate-pulse"></i>
+            </div>
+          </div>
+          <h2 class="text-xl font-black text-white uppercase tracking-[0.4em] mb-2">Weaving Reality</h2>
+          <p class="text-xs font-bold text-emerald-500/60 uppercase tracking-widest animate-pulse">The Chronicles are being rewritten...</p>
+        </div>
+      </Transition>
     </Teleport>
   </div>
 </template>

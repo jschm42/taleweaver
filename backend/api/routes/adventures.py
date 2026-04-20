@@ -1380,8 +1380,16 @@ async def ai_edit_adventure(
     model = (user.llm_settings or {}).get("preferred_model", "gpt-4o")
     llm = GameMasterLLM(user, provider=provider)
     
-    system_prompt = "You are the AI assistant for TaleWeaver, an RPG game engine. Your task is to update the JSON world manifesto based on the user's instructions. You must return a valid WorldManifesto JSON object containing all the required fields. You can modify descriptions, names, add or remove items, but ensure the structure remains valid."
-    user_prompt = f"Here is the current World Manifesto in JSON format:\n```json\n{json.dumps(manifest_dict, indent=2)}\n```\n\nThe user wants the following changes: {payload.prompt}\n\nPlease output the completely updated World Manifesto JSON. Do NOT explain your reasoning, just output the JSON."
+    system_prompt = (
+        "You are the AI Architect for TaleWeaver. Your task is to update the JSON world manifesto based on the user's instructions.\n"
+        "1. If the user wants to add new NPCs, Items, or Scenes, you MUST generate a UNIQUE ID (slug) for them (e.g., 'NPC_MYSTERIOUS_STRANGER').\n"
+        "2. Ensure all new entities have a 'start_scene_id' that matches one of the existing or newly created scene IDs.\n"
+        "3. You must return the COMPLETE WorldManifesto JSON object.\n"
+        "4. Do not remove existing entities unless explicitly asked.\n"
+        "5. Maintain valid JSON structure at all times."
+    )
+    user_prompt = f"Current World Manifesto:\n```json\n{json.dumps(manifest_dict, indent=2)}\n```\n\nUser Change Request: {payload.prompt}\n\nOutput the updated JSON Manifesto now."
+
     
     try:
         new_manifesto: WorldManifesto = llm.execute_complex_task(
@@ -1401,13 +1409,14 @@ async def ai_edit_adventure(
         db=db,
         adventure_id=adventure_id,
         manifest_dict=new_manifesto.model_dump(),
-        user=None,
-        gen_npc=False,
-        gen_items=False,
-        gen_scenes=False,
+        user=user,
+        gen_npc=True,
+        gen_items=True,
+        gen_scenes=True,
         gen_protagonist_image=False
     )
     
+    await db.commit()
     return {"status": "success"}
 
 
