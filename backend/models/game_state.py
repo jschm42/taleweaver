@@ -13,3 +13,4 @@ class GameState(Base, TimestampMixin):
     scene_id = Column(String(255), nullable=False) # Reference to graph node
     in_game_time = Column(Integer, default=0, nullable=False) # e.g. minutes passed
     is_paused = Column(Boolean, default=False, nullable=False)
+    is_debug_enabled = Column(Boolean, default=False, nullable=False)

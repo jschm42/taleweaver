@@ -105,12 +105,8 @@ function handleSend(): void {
       } else if (sub === 'off') {
         emit('toggleDebugLog', false)
       }
-    } else {
-      // Default to session if no param
-      emit('openDebug')
     }
-    inputText.value = ''
-    return
+    // Continue so it reaches the backend too
   }
 
   emit('send', text)
@@ -129,15 +125,22 @@ function handleKeydown(e: KeyboardEvent): void {
  */
 function parseContent(content: string) {
   const parts: any[] = []
-  const imgRegex = /!\[(.*?)\]\((.*?)\)/g
+  // Matches ![alt](url) OR ```lang\ncode\n```
+  const combinedRegex = /!\[(.*?)\]\((.*?)\)|```([a-z]*)\n([\s\S]*?)```/g
   let lastIdx = 0
   let match
 
-  while ((match = imgRegex.exec(content)) !== null) {
+  while ((match = combinedRegex.exec(content)) !== null) {
     if (match.index > lastIdx) {
       parts.push({ type: 'text', value: content.slice(lastIdx, match.index) })
     }
-    parts.push({ type: 'image', alt: match[1], url: match[2] })
+    
+    if (match[1] !== undefined) {
+      parts.push({ type: 'image', alt: match[1], url: match[2] })
+    } else {
+      parts.push({ type: 'code', lang: match[3], value: match[4] })
+    }
+    
     lastIdx = match.index + match[0].length
   }
 
@@ -229,12 +232,13 @@ function normalizeLineBreaks(text: string): string {
           <span 
             :class="[
               'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded',
+              (msg as any).is_debug ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50' :
               msg.role === 'user' ? 'bg-cyan-500/20 text-cyan-400' :
               msg.role === 'assistant' ? 'bg-amber-500/20 text-amber-500' :
               'bg-emerald-500/20 text-emerald-500'
             ]"
           >
-            {{ msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Game Master' : 'System' }}
+            {{ (msg as any).is_debug ? 'Debug' : msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Game Master' : 'System' }}
           </span>
           <span class="text-xs text-slate-600 font-mono opacity-0 group-hover:opacity-100 transition-opacity">
             {{ formatTime(msg.timestamp) }}
@@ -256,6 +260,7 @@ function normalizeLineBreaks(text: string): string {
               <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />
               <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-[10px] text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>
             </div>
+            <pre v-else-if="part.type === 'code'" class="my-3 p-4 bg-slate-950 border border-slate-800 rounded-xl text-[11px] font-mono text-cyan-400 overflow-x-auto whitespace-pre custom-scrollbar shadow-inner">{{ part.value }}</pre>
           </template>
         </div>
 

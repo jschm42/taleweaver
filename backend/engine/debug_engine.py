@@ -50,5 +50,17 @@ class DebugEngine:
                 f"Total Entities: {len(e_count.scalars().all())}\n"
                 f"Total Connections: {len(ex_count.scalars().all())}"
             )
+            
+        elif sub == "log":
+            # Handle /debug log on/off
+            parts = args.split(" ")
+            if len(parts) >= 2:
+                cmd = parts[1].lower()
+                if cmd == "on":
+                    state.is_debug_enabled = True
+                    return "[DEBUG_LOG_ON] Technical logging enabled. You will now see GameEvent outcomes in chat."
+                elif cmd == "off":
+                    state.is_debug_enabled = False
+                    return "[DEBUG_LOG_OFF] Technical logging disabled."
 
-        return "DEBUG USAGE: /debug [szene | items | plot | map]"
+        return "DEBUG USAGE: /debug [szene | items | plot | map | log on/off]"

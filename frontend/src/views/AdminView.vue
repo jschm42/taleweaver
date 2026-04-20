@@ -20,6 +20,9 @@ const llmForm = ref({
   complex_model: 'openai/gpt-4o-mini',
   preferred_provider: 'openai',
   ollama_url: 'http://localhost:11434',
+  enable_thinking: false,
+  max_thinking_tokens: 1024,
+  max_tokens: 4096,
 })
 
 const t2iForm = ref({
@@ -413,6 +416,37 @@ watch(
               <label class="block text-sm font-semibold text-slate-300">Complex Model (Mechanics)</label>
               <input v-model="llmForm.complex_model" type="text" placeholder="e.g. gpt-4o" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
               <p class="text-[10px] text-slate-500">Heavy reasoning, complex math, and structured data state.</p>
+            </div>
+
+            <div class="pt-6 border-t border-slate-800 space-y-6">
+              <h4 class="text-xs font-black uppercase tracking-[0.2em] text-purple-400">Advanced Configuration</h4>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-2">
+                  <label class="block text-sm font-semibold text-slate-300">Max Response Tokens</label>
+                  <input v-model.number="llmForm.max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+                  <p class="text-[10px] text-slate-500">Global limit for LLM answers (e.g. 4096).</p>
+                </div>
+
+                <div class="space-y-4">
+                  <div class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-2xl">
+                    <div>
+                      <label class="block text-sm font-semibold text-slate-300">Thinking Mode</label>
+                      <p class="text-[10px] text-slate-500">Reasoning for supported models.</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" v-model="llmForm.enable_thinking" class="sr-only peer">
+                      <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
+                    </label>
+                  </div>
+
+                  <div v-if="llmForm.enable_thinking" class="space-y-2 animate-fade-in">
+                    <label class="block text-sm font-semibold text-slate-300">Thinking Token Budget</label>
+                    <input v-model.number="llmForm.max_thinking_tokens" type="number" step="1024" min="0" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+                    <p class="text-[10px] text-slate-500 text-purple-400 font-medium">Allocated for internal reasoning.</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <button @click="saveLlmSettings" :disabled="isSubmitting" class="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">

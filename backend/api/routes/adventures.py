@@ -2388,8 +2388,18 @@ async def post_chat_message(
             if user_msg.startswith("/debug"):
                 cmd_args = user_msg[7:].strip()
                 debug_info = await DebugEngine.handle_debug_command(db, state, cmd_args)
+                
+                # Check for special log toggle return markers
+                if "[DEBUG_LOG_ON]" in debug_info:
+                    msg = {"role": "system", "content": debug_info.replace("[DEBUG_LOG_ON]", "").strip()}
+                elif "[DEBUG_LOG_OFF]" in debug_info:
+                    msg = {"role": "system", "content": debug_info.replace("[DEBUG_LOG_OFF]", "").strip()}
+                else:
+                    msg = {"role": "system", "content": debug_info}
+
+                await db.commit() # Persist toggle state
                 yield f"event: final\ndata: {json.dumps(jsonable_encoder({
-                    'messages': [{'role': 'system', 'content': debug_info}],
+                    'messages': [msg],
                     'sheet': await _build_sheet_snapshot(avatar, state, db)
                 }))}\n\n"
                 return
@@ -2576,6 +2586,10 @@ async def post_chat_message(
                     else prompts.GM_MECHANICS_SUFFIX.format(quests_json=quests_json)
                 )
                 
+                if state.is_debug_enabled:
+                    req_content = f"**[DEBUG] MECHANICAL REQUEST (Pass 1):**\n**System Prompt:**\n```text\n{mechanics_system_prompt}\n```\n**User Prompt:**\n```text\n{user_msg}\n```"
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder({'role': 'assistant', 'content': req_content, 'is_debug': True}))}\n\n"
+
                 yield f"event: status\ndata: {json.dumps(jsonable_encoder({'content': 'Validating rules...'}))}\n\n"
                 
                 game_event = await llm.aexecute_complex_task(
@@ -2589,6 +2603,10 @@ async def post_chat_message(
                     phase="mechanics",
                 )
 
+                if state.is_debug_enabled:
+                    res_content = f"**[DEBUG] MECHANICAL RESPONSE (Pass 1):**\n```json\n{game_event.model_dump_json(indent=2)}\n```"
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder({'role': 'assistant', 'content': res_content, 'is_debug': True}))}\n\n"
+
                 if game_event.requested_skill_checks:
                     for req in game_event.requested_skill_checks:
                         stat_key = req.stat.lower().replace(" ", "_")
@@ -2599,6 +2617,8 @@ async def post_chat_message(
                         )
                         status_text = "SUCCESS" if check_res.success else "FAILURE"
                         outcome_msg = f"[ROLL] {check_res.reason}: {check_res.stat.upper()} Check (DC {check_res.dc}) -> Rolled {check_res.roll} + {check_res.modifier} = {check_res.total} ({status_text})"
+                        if state.is_debug_enabled:
+                            yield f"event: system\ndata: {json.dumps(jsonable_encoder({'role': 'assistant', 'content': f'**[DEBUG] TOOL CALL (Skill Check):**\n{outcome_msg}', 'is_debug': True}))}\n\n"
                         response_messages.append({"role": "system", "content": outcome_msg})
                         game_event.skill_check_results = (game_event.skill_check_results or []) + [check_res]
 
@@ -2715,6 +2735,11 @@ async def post_chat_message(
                             adventure.is_completed = True
                             response_messages.append({"role": "system", "content": "[ADVENTURE COMPLETED] All main objectives achieved!"})
 
+                if state.is_debug_enabled:
+                    debug_payload = game_event.model_dump(exclude={'narrative_description'})
+                    content = f"**[DEBUG] MECHANICAL OUTCOME:**\n```json\n{json.dumps(debug_payload, indent=2)}\n```"
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder({'role': 'assistant', 'content': content, 'is_debug': True}))}\n\n"
+
                 yield f"event: status\ndata: {json.dumps(jsonable_encoder({'content': 'Generating narrative...'}))}\n\n"
 
             # --- Pass 2: Atmospheric Narration ---
@@ -2730,6 +2755,10 @@ async def post_chat_message(
 
                 narration_system_prompt += f"\n{prompts.GM_NARRATION_MANDATORY_FORMATTING}"
                 
+                if state.is_debug_enabled:
+                    req_content = f"**[DEBUG] NARRATION REQUEST (Pass 2):**\n**System Prompt:**\n```text\n{narration_system_prompt}\n```\n**User Prompt:**\n```text\n{user_msg}\n```"
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder({'role': 'assistant', 'content': req_content, 'is_debug': True}))}\n\n"
+
                 for sys_msg in response_messages:
                     yield f"event: system\ndata: {json.dumps(jsonable_encoder(sys_msg))}\n\n"
 

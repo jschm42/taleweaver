@@ -52,8 +52,8 @@ export function useGameSocket(): UseGameSocket {
   let currentGameId = ''
   let syncTimer: number | null = null
 
-  function _pushMessage(role: ChatMessage['role'], content: string, itemIds?: string[]): void {
-    messages.value.push({ role, content, timestamp: new Date(), itemIds })
+  function _pushMessage(role: ChatMessage['role'], content: string, itemIds?: string[], is_debug?: boolean): void {
+    messages.value.push({ role, content, timestamp: new Date(), itemIds, is_debug } as any)
   }
 
   async function fetchSessionSnapshot(gameId: string): Promise<any | null> {
@@ -221,10 +221,11 @@ export function useGameSocket(): UseGameSocket {
               content: data.content
             })
           } else if (event === 'system') {
-            _pushMessage('system', data.content)
+            const role = data.role || 'system'
+            _pushMessage(role, data.content, undefined, data.is_debug)
           } else if (event === 'chunk') {
             let lastMsg = messages.value[messages.value.length - 1]
-            if (!lastMsg || lastMsg.role !== 'assistant') {
+            if (!lastMsg || lastMsg.role !== 'assistant' || (lastMsg as any).is_debug) {
               _pushMessage('assistant', '')
               lastMsg = messages.value[messages.value.length - 1]
             }

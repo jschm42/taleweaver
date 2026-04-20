@@ -27,8 +27,12 @@ class GameMasterLLM:
         self.provider = (provider or "openai").lower()
         self.api_key = None
         self.api_base = None
+        llm_settings = self.user.llm_settings or {}
+        self.enable_thinking = llm_settings.get("enable_thinking", False)
+        self.max_thinking_tokens = llm_settings.get("max_thinking_tokens", 1024)
+        self.max_tokens = llm_settings.get("max_tokens", 4096)
+
         if self.provider == "ollama":
-            llm_settings = self.user.llm_settings or {}
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")
         else:
             self.api_key = self._get_decrypted_key(self.provider)
@@ -58,6 +62,17 @@ class GameMasterLLM:
             return normalized.split("/", 1)[1].strip()
 
         return normalized
+    
+    def _apply_thinking_settings(self, kwargs: dict) -> None:
+        """Inject thinking parameters if enabled in user settings."""
+        if not self.enable_thinking:
+            return
+            
+        # LiteLLM maps 'thinking' to provider-specific params (budget_tokens for Anthropic, etc.)
+        kwargs["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": self.max_thinking_tokens
+        }
 
     def _get_decrypted_key(self, provider: str) -> str:
         if not self.user.encrypted_api_keys or provider not in self.user.encrypted_api_keys:
@@ -115,8 +130,9 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "max_tokens": 4096,
+            "max_tokens": self.max_tokens,
         }
+        self._apply_thinking_settings(kwargs)
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)
@@ -190,9 +206,10 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "max_tokens": 4096,
+            "max_tokens": self.max_tokens,
             "stream": True,
         }
+        self._apply_thinking_settings(kwargs)
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)
@@ -246,8 +263,9 @@ class GameMasterLLM:
             "model": normalized_model,
             "messages": messages,
             "response_format": response_model,
-            "max_tokens": 4096,
+            "max_tokens": self.max_tokens,
         }
+        self._apply_thinking_settings(kwargs)
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)
@@ -335,8 +353,9 @@ class GameMasterLLM:
             "model": normalized_model,
             "messages": messages,
             "response_format": response_model,
-            "max_tokens": 4096,
+            "max_tokens": self.max_tokens,
         }
+        self._apply_thinking_settings(kwargs)
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)

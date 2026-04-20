@@ -123,11 +123,21 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
         "complex_model": "openai/gpt-4o-mini",
         "preferred_provider": "openai",
         "ollama_url": "http://localhost:11434",
+        "enable_thinking": False,
+        "max_thinking_tokens": 1024,
+        "max_tokens": 4096,
     }
     if not settings:
         return fallback
 
     normalized = dict(settings)
+    if "enable_thinking" not in normalized:
+        normalized["enable_thinking"] = False
+    if "max_thinking_tokens" not in normalized:
+        normalized["max_thinking_tokens"] = 1024
+    if "max_tokens" not in normalized:
+        normalized["max_tokens"] = 4096
+
     if (normalized.get("preferred_provider") or "").lower() == "openrouter":
         normalized["small_model"] = _normalize_openrouter_model(normalized.get("small_model"))
         normalized["complex_model"] = _normalize_openrouter_model(normalized.get("complex_model"))
@@ -143,6 +153,9 @@ class SettingsPayload(BaseModel):
     complex_model: str
     preferred_provider: str # openai, openrouter, etc.
     ollama_url: Optional[str] = None
+    enable_thinking: Optional[bool] = False
+    max_thinking_tokens: Optional[int] = 1024
+    max_tokens: Optional[int] = 4096
 
 class T2ISettingsPayload(BaseModel):
     simple_model: str

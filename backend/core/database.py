@@ -118,6 +118,12 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added game_states.is_paused")
 
+        if "is_debug_enabled" not in game_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE game_states ADD COLUMN is_debug_enabled BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added game_states.is_debug_enabled")
+
         user_cols_result = await conn.exec_driver_sql("PRAGMA table_info(users)")
         user_cols = {row[1] for row in user_cols_result.fetchall()}
         if "llm_settings" not in user_cols:
@@ -143,6 +149,12 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE users ADD COLUMN tone_catalog TEXT"
             )
             logger.info("SQLite migration: added users.tone_catalog")
+
+        if "game_settings" not in user_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN game_settings TEXT"
+            )
+            logger.info("SQLite migration: added users.game_settings")
 
         entity_cols_result = await conn.exec_driver_sql("PRAGMA table_info(world_entities)")
         entity_cols = {row[1] for row in entity_cols_result.fetchall()}
