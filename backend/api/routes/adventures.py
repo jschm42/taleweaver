@@ -1305,74 +1305,83 @@ async def regenerate_visual(
     )
 
     image_url: Optional[str] = None
+    import litellm
 
-    if payload.target_type == "cover":
-        cover_context = payload.prompt.strip() if payload.prompt and payload.prompt.strip() else (target_data.get("context") or "")
-        if style_instruction:
-            cover_context = f"{cover_context}\nVisual Style Guidance: {style_instruction}"
-        if tone_instruction:
-            cover_context = f"{cover_context}\nTone Guidance: {tone_instruction}"
-        image_url = await MediaEngine.generate_adventure_cover(
-            title=target_data.get("title") or "Adventure",
-            context=cover_context,
-            adventure_id=adventure_id,
-            user_config={"t2i_settings": user.t2i_settings},
-            api_keys=user.encrypted_api_keys or {},
-        )
-        if not image_url:
-            raise HTTPException(status_code=504, detail="Cover image generation timed out or failed.")
-    elif payload.target_type == "protagonist":
-        prompt = _build_visual_prompt(
-            payload.target_type,
-            target_data,
-            payload.prompt,
-            style_instruction=style_instruction,
-            tone_instruction=tone_instruction,
-        )
-        image_url = await MediaEngine.generate_entity_image(
-            prompt,
-            adventure_id,
-            target_model.id,
-            "PROTAGONIST",
-            {"t2i_settings": user.t2i_settings},
-            user.encrypted_api_keys or {},
-        )
-        if not image_url:
-            raise HTTPException(status_code=504, detail="Protagonist image generation timed out or failed.")
-    elif payload.target_type == "scene":
-        prompt = _build_visual_prompt(
-            payload.target_type,
-            target_data,
-            payload.prompt,
-            style_instruction=style_instruction,
-            tone_instruction=tone_instruction,
-        )
-        image_url = await MediaEngine.generate_scene_image(
-            prompt,
-            adventure_id,
-            {"t2i_settings": user.t2i_settings},
-            user.encrypted_api_keys or {},
-        )
-        if not image_url:
-            raise HTTPException(status_code=504, detail="Scene image generation timed out or failed.")
-    else:
-        prompt = _build_visual_prompt(
-            payload.target_type,
-            target_data,
-            payload.prompt,
-            style_instruction=style_instruction,
-            tone_instruction=tone_instruction,
-        )
-        image_url = await MediaEngine.generate_entity_image(
-            prompt,
-            adventure_id,
-            target_model.id,
-            target_model.entity_type,
-            {"t2i_settings": user.t2i_settings},
-            user.encrypted_api_keys or {},
-        )
-        if not image_url:
-            raise HTTPException(status_code=504, detail="Image generation timed out or failed.")
+    try:
+        if payload.target_type == "cover":
+            cover_context = payload.prompt.strip() if payload.prompt and payload.prompt.strip() else (target_data.get("context") or "")
+            if style_instruction:
+                cover_context = f"{cover_context}\nVisual Style Guidance: {style_instruction}"
+            if tone_instruction:
+                cover_context = f"{cover_context}\nTone Guidance: {tone_instruction}"
+            image_url = await MediaEngine.generate_adventure_cover(
+                title=target_data.get("title") or "Adventure",
+                context=cover_context,
+                adventure_id=adventure_id,
+                user_config={"t2i_settings": user.t2i_settings},
+                api_keys=user.encrypted_api_keys or {},
+            )
+            if not image_url:
+                raise HTTPException(status_code=504, detail="Cover image generation timed out or failed.")
+        elif payload.target_type == "protagonist":
+            prompt = _build_visual_prompt(
+                payload.target_type,
+                target_data,
+                payload.prompt,
+                style_instruction=style_instruction,
+                tone_instruction=tone_instruction,
+            )
+            image_url = await MediaEngine.generate_entity_image(
+                prompt,
+                adventure_id,
+                target_model.id,
+                "PROTAGONIST",
+                {"t2i_settings": user.t2i_settings},
+                user.encrypted_api_keys or {},
+            )
+            if not image_url:
+                raise HTTPException(status_code=504, detail="Protagonist image generation timed out or failed.")
+        elif payload.target_type == "scene":
+            prompt = _build_visual_prompt(
+                payload.target_type,
+                target_data,
+                payload.prompt,
+                style_instruction=style_instruction,
+                tone_instruction=tone_instruction,
+            )
+            image_url = await MediaEngine.generate_scene_image(
+                prompt,
+                adventure_id,
+                {"t2i_settings": user.t2i_settings},
+                user.encrypted_api_keys or {},
+            )
+            if not image_url:
+                raise HTTPException(status_code=504, detail="Scene image generation timed out or failed.")
+        else:
+            prompt = _build_visual_prompt(
+                payload.target_type,
+                target_data,
+                payload.prompt,
+                style_instruction=style_instruction,
+                tone_instruction=tone_instruction,
+            )
+            image_url = await MediaEngine.generate_entity_image(
+                prompt,
+                adventure_id,
+                target_model.id,
+                target_model.entity_type,
+                {"t2i_settings": user.t2i_settings},
+                user.encrypted_api_keys or {},
+            )
+            if not image_url:
+                raise HTTPException(status_code=504, detail="Image generation timed out or failed.")
+            
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image generation error: {str(e)}")
 
     setattr(target_model, image_attr, image_url)
     await db.commit()

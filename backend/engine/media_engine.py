@@ -275,7 +275,7 @@ class MediaEngine:
                 )
             if "Content Moderated" in error_str or "Safety Filter" in error_str:
                 logger.warning(f"Image generation was moderated (Safety Filter) for prompt: '{prompt}'. Error: {error_str}")
-                return None
+                raise ValueError("Bild-Generierung wurde vom Safety-Filter des KI-Anbieters blockiert. Bitte passe die Beschreibung an.")
             logger.error(f"Image generation failed for prompt: '{prompt}'. Error: {error_str}")
             # Instead of raising, we return None to allow the engine to use placeholders
             return None

@@ -17,6 +17,8 @@ const isLoading = ref(false)
 const isSaving = ref(false)
 const isRegenerating = ref(false)
 const isUploading = ref(false)
+const isQuickGenerating = ref<Record<string, boolean>>({})
+const isBatchGenerating = ref<Record<string, boolean>>({})
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
@@ -194,6 +196,54 @@ async function regenerateVisual() {
   } finally {
     isRegenerating.value = false
   }
+}
+
+async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string) {
+  if (!props.adventureId) return
+  
+  const key = `${kind}_${id}`
+  isQuickGenerating.value[key] = true
+  
+  try {
+    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/visuals/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_type: kind,
+        target_id: id,
+        prompt: null,
+      }),
+    })
+
+    if (res.ok) {
+      bumpGlobalVisualCacheVersion()
+      await fetchDebugInfo()
+    } else {
+      console.error('Failed to quick-regenerate image')
+    }
+  } catch (error) {
+    console.error('Network error during quick regeneration', error)
+  } finally {
+    isQuickGenerating.value[key] = false
+  }
+}
+
+async function regenerateAll(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object') {
+  isBatchGenerating.value[kind] = true
+  
+  let items: any[] = []
+  if (kind === 'cover' && debugData.value?.adventure) items = [debugData.value.adventure]
+  if (kind === 'protagonist' && debugData.value?.protagonist) items = [debugData.value.protagonist]
+  if (kind === 'scene' && debugData.value?.scenes) items = debugData.value.scenes
+  if (kind === 'npc' && debugData.value?.npcs) items = debugData.value.npcs
+  if (kind === 'object' && debugData.value?.objects) items = debugData.value.objects
+
+  for (const item of items) {
+    if (!item.id) continue
+    await quickRegenerateVisual(kind, item.id)
+  }
+  
+  isBatchGenerating.value[kind] = false
 }
 
 function triggerUpload() {
@@ -538,7 +588,14 @@ watch(
               <div v-if="!debugData" class="text-xs text-slate-500">No debug data available yet.</div>
               <div v-else class="space-y-8">
                 <section v-if="debugData.adventure">
-                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Adventure Cover</h3>
+                  <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                    <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Adventure Cover</h3>
+                    <button @click="regenerateAll('cover')" :disabled="isBatchGenerating['cover']" class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 disabled:opacity-50 transition-colors flex items-center gap-1">
+                      <i v-if="isBatchGenerating['cover']" class="ra ra-cycle animate-spin"></i>
+                      <i v-else class="ra ra-cycle"></i>
+                      Generate
+                    </button>
+                  </div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative group aspect-[2/1] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden col-span-2 lg:col-span-3">
                       <img v-if="debugData.adventure.image_url" :src="buildVisualImageUrl(debugData.adventure.image_url)" class="absolute inset-0 w-full h-full object-cover" />
@@ -546,18 +603,42 @@ watch(
                         <div class="font-bold text-[11px]">{{ debugData.adventure.title || 'Adventure Cover' }}</div>
                         <div class="text-white/70">Cinematic title artwork</div>
                       </div>
-                      <button
-                        @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title || 'Adventure Cover')"
-                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        {{ debugData.adventure.image_url ? 'Replace' : 'Generate' }}
-                      </button>
+                      
+                      <!-- Loading Overlay -->
+                      <div v-if="isQuickGenerating['cover_' + debugData.adventure.id]" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mb-2"></div>
+                        <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest animate-pulse">Generating...</span>
+                      </div>
+
+                      <div v-if="!isQuickGenerating['cover_' + debugData.adventure.id]" class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          @click="quickRegenerateVisual('cover', debugData.adventure.id)"
+                          :disabled="isQuickGenerating['cover_' + debugData.adventure.id]"
+                          class="px-2 py-1 rounded-md bg-emerald-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-emerald-500/50 hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <i v-if="isQuickGenerating['cover_' + debugData.adventure.id]" class="ra ra-cycle animate-spin"></i>
+                          <span>Fast Gen</span>
+                        </button>
+                        <button
+                          @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title || 'Adventure Cover')"
+                          class="px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 hover:bg-black/90 transition-colors"
+                        >
+                          Custom
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>
 
                 <section v-if="debugData.protagonist">
-                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Protagonist Portrait</h3>
+                  <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                    <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Protagonist Portrait</h3>
+                    <button @click="regenerateAll('protagonist')" :disabled="isBatchGenerating['protagonist']" class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 disabled:opacity-50 transition-colors flex items-center gap-1">
+                      <i v-if="isBatchGenerating['protagonist']" class="ra ra-cycle animate-spin"></i>
+                      <i v-else class="ra ra-cycle"></i>
+                      Generate
+                    </button>
+                  </div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
                       <img v-if="debugData.protagonist.profile_image" :src="buildVisualImageUrl(debugData.protagonist.profile_image)" class="absolute inset-0 w-full h-full object-cover" />
@@ -565,18 +646,42 @@ watch(
                         <div class="font-bold text-[11px]">{{ debugData.protagonist.name || 'Protagonist' }}</div>
                         <div class="text-white/70">{{ debugData.protagonist.role || 'Player character' }}</div>
                       </div>
-                      <button
-                        @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name || 'Protagonist')"
-                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        {{ debugData.protagonist.profile_image ? 'Replace' : 'Generate' }}
-                      </button>
+
+                      <!-- Loading Overlay -->
+                      <div v-if="isQuickGenerating['protagonist_' + debugData.protagonist.id]" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mb-2"></div>
+                        <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest animate-pulse">Generating...</span>
+                      </div>
+
+                      <div v-if="!isQuickGenerating['protagonist_' + debugData.protagonist.id]" class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          @click="quickRegenerateVisual('protagonist', debugData.protagonist.id)"
+                          :disabled="isQuickGenerating['protagonist_' + debugData.protagonist.id]"
+                          class="px-2 py-1 rounded-md bg-emerald-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-emerald-500/50 hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <i v-if="isQuickGenerating['protagonist_' + debugData.protagonist.id]" class="ra ra-cycle animate-spin"></i>
+                          <span>Fast Gen</span>
+                        </button>
+                        <button
+                          @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name || 'Protagonist')"
+                          class="px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 hover:bg-black/90 transition-colors"
+                        >
+                          Custom
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>
 
                 <section>
-                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Scene Visuals</h3>
+                  <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                    <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Scene Visuals</h3>
+                    <button @click="regenerateAll('scene')" :disabled="isBatchGenerating['scene']" class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 disabled:opacity-50 transition-colors flex items-center gap-1">
+                      <i v-if="isBatchGenerating['scene']" class="ra ra-cycle animate-spin"></i>
+                      <i v-else class="ra ra-cycle"></i>
+                      Generate All
+                    </button>
+                  </div>
                   <div v-if="(debugData.scenes ? debugData.scenes.length : 0) === 0" class="text-xs text-slate-600 italic">No scene visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div v-for="scene in (debugData.scenes || [])" :key="scene.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
@@ -584,18 +689,42 @@ watch(
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ scene.label || scene.name || scene.id }}</div>
                       </div>
-                      <button
-                        @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name || scene.id)"
-                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        {{ scene.image_url ? 'Replace' : 'Generate' }}
-                      </button>
+
+                      <!-- Loading Overlay -->
+                      <div v-if="isQuickGenerating['scene_' + scene.id]" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mb-2"></div>
+                        <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest animate-pulse">Generating...</span>
+                      </div>
+
+                      <div v-if="!isQuickGenerating['scene_' + scene.id]" class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          @click="quickRegenerateVisual('scene', scene.id)"
+                          :disabled="isQuickGenerating['scene_' + scene.id]"
+                          class="px-2 py-1 rounded-md bg-emerald-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-emerald-500/50 hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <i v-if="isQuickGenerating['scene_' + scene.id]" class="ra ra-cycle animate-spin"></i>
+                          <span>Fast Gen</span>
+                        </button>
+                        <button
+                          @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name || scene.id)"
+                          class="px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 hover:bg-black/90 transition-colors"
+                        >
+                          Custom
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>
 
                 <section>
-                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Population Portraits</h3>
+                  <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                    <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Population Portraits</h3>
+                    <button @click="regenerateAll('npc')" :disabled="isBatchGenerating['npc']" class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 disabled:opacity-50 transition-colors flex items-center gap-1">
+                      <i v-if="isBatchGenerating['npc']" class="ra ra-cycle animate-spin"></i>
+                      <i v-else class="ra ra-cycle"></i>
+                      Generate All
+                    </button>
+                  </div>
                   <div v-if="(debugData.npcs ? debugData.npcs.length : 0) === 0" class="text-xs text-slate-600 italic">No inhabitant visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
@@ -603,18 +732,42 @@ watch(
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ npc.name }}</div>
                       </div>
-                      <button
-                        @click="openRegenerateDialog('npc', npc.id, npc.name || npc.id)"
-                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        {{ npc.image_url ? 'Replace' : 'Generate' }}
-                      </button>
+
+                      <!-- Loading Overlay -->
+                      <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mb-2"></div>
+                        <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest animate-pulse">Generating...</span>
+                      </div>
+
+                      <div v-if="!isQuickGenerating['npc_' + npc.id]" class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          @click="quickRegenerateVisual('npc', npc.id)"
+                          :disabled="isQuickGenerating['npc_' + npc.id]"
+                          class="px-2 py-1 rounded-md bg-emerald-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-emerald-500/50 hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <i v-if="isQuickGenerating['npc_' + npc.id]" class="ra ra-cycle animate-spin"></i>
+                          <span>Fast Gen</span>
+                        </button>
+                        <button
+                          @click="openRegenerateDialog('npc', npc.id, npc.name || npc.id)"
+                          class="px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 hover:bg-black/90 transition-colors"
+                        >
+                          Custom
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>
 
                 <section>
-                  <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-800 pb-2">Artifact Illustrations</h3>
+                  <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
+                    <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Artifact Illustrations</h3>
+                    <button @click="regenerateAll('object')" :disabled="isBatchGenerating['object']" class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 disabled:opacity-50 transition-colors flex items-center gap-1">
+                      <i v-if="isBatchGenerating['object']" class="ra ra-cycle animate-spin"></i>
+                      <i v-else class="ra ra-cycle"></i>
+                      Generate All
+                    </button>
+                  </div>
                   <div v-if="(debugData.objects ? debugData.objects.length : 0) === 0" class="text-xs text-slate-600 italic">No object visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div v-for="obj in (debugData.objects || [])" :key="obj.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
@@ -622,12 +775,29 @@ watch(
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ obj.name }}</div>
                       </div>
-                      <button
-                        @click="openRegenerateDialog('object', obj.id, obj.name || obj.id)"
-                        class="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        {{ obj.image_url ? 'Replace' : 'Generate' }}
-                      </button>
+
+                      <!-- Loading Overlay -->
+                      <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mb-2"></div>
+                        <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest animate-pulse">Generating...</span>
+                      </div>
+
+                      <div v-if="!isQuickGenerating['object_' + obj.id]" class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          @click="quickRegenerateVisual('object', obj.id)"
+                          :disabled="isQuickGenerating['object_' + obj.id]"
+                          class="px-2 py-1 rounded-md bg-emerald-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-emerald-500/50 hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                          <i v-if="isQuickGenerating['object_' + obj.id]" class="ra ra-cycle animate-spin"></i>
+                          <span>Fast Gen</span>
+                        </button>
+                        <button
+                          @click="openRegenerateDialog('object', obj.id, obj.name || obj.id)"
+                          class="px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 hover:bg-black/90 transition-colors"
+                        >
+                          Custom
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>
