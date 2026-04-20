@@ -2112,11 +2112,7 @@ async def post_chat_message(
     )
     # Add quest info to system prompt
     if adventure.quests:
-<<<<<<< HEAD
         quests_summary = "\n".join([f"- {q.get('title', 'Unknown')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
-=======
-        quests_summary = "\n".join([f"- {q.get('title', 'Untitled')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
->>>>>>> 61a3a41fdd1d47dd3fa27ead3cb0ae1fde0e0f50
         context_messages[0]["content"] += f"\n\nACTIVE QUESTS:\n{quests_summary}"
     
     system_prompt = context_messages[0]["content"]
@@ -2365,11 +2361,7 @@ async def post_chat_message(
                         if q.get("id") == q_id and q.get("status", "open") == "open":
                             q["status"] = "completed"
                             avatar.exp += q.get("exp_reward", 0)
-<<<<<<< HEAD
                             response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Unknown Quest')} (+{q.get('exp_reward', 0)} EXP)"})
-=======
-                            response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Untitled')} (+{q.get('exp_reward', 0)} EXP)"})
->>>>>>> 61a3a41fdd1d47dd3fa27ead3cb0ae1fde0e0f50
                             any_updated = True
                 
                 if any_updated:
