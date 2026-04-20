@@ -218,7 +218,7 @@ onBeforeUnmount(() => {
                      <span v-else class="text-[10px] font-black text-indigo-400 tabular-nums uppercase tracking-widest">{{ trackedQuest.exp_reward }} XP</span>
                   </div>
                 </div>
-                <div :class="['text-[11px] text-slate-400 leading-relaxed line-clamp-3', trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
+                <div :class="['text-xs text-slate-400 leading-relaxed line-clamp-3', trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
                   {{ trackedQuest.description }}
                 </div>
               </div>
