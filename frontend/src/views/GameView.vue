@@ -28,6 +28,7 @@ const showMap = ref(false)
 const showQuests = ref(false)
 const showSuccess = ref(false)
 const showDebug = ref(false)
+const showDebugLog = ref(false)
 const trackedQuestId = ref<string | null>(null)
 const clockTick = ref(false)
 const { notifications, removeNotification } = useNotifications()
@@ -47,6 +48,7 @@ const {
   quests,
   isCompleted,
   statusText,
+  debugLogs,
   connect,
   disconnect,
   sendMessage
@@ -181,68 +183,67 @@ onBeforeUnmount(() => {
       <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
     </div>
 
-    <!-- Header Navigation -->
-    <header class="bg-transparent px-8 py-6 flex flex-col z-10 shrink-0 relative">
-      <div class="flex justify-between items-center gap-4">
-        <!-- Left: back + Adventure Title -->
-        <div class="flex items-center gap-6 relative z-10 shrink-0">
-          <button 
-            @click="goBack" 
-            class="p-2.5 rounded-full bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 transition-colors backdrop-blur-md shadow-xl"
-            title="Return to Portal"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-100" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-            </svg>
-          </button>
-          <h1 class="text-3xl md:text-4xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide" style="font-family: 'Acme', sans-serif;">
-            {{ sheet?.adventure_title || 'Chronicle' }}
-          </h1>
-        </div>
+    <!-- Header Navigation -->    <header class="bg-transparent px-8 py-6 flex items-start justify-center z-10 shrink-0 relative">
+      <!-- Left: back + Adventure Title (Absolute) -->
+      <div class="absolute left-8 top-8 flex items-center gap-4 z-10">
+        <button 
+          @click="goBack" 
+          class="p-2 rounded-full bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 transition-colors backdrop-blur-md shadow-xl"
+          title="Return to Portal"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-100" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+        <h1 class="text-2xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide whitespace-nowrap" style="font-family: 'Acme', sans-serif;">
+          {{ sheet?.adventure_title || 'Chronicle' }}
+        </h1>
+      </div>
 
-        <!-- Center: Active Quest Tracker (Transparent Panel) -->
-        <div class="flex-grow flex justify-center px-4">
-          <transition name="fade">
-            <div v-if="trackedQuest" class="animate-fade-in pointer-events-none max-w-md w-full">
-              <div :class="['quest-panel-header glassmorphism flex items-center gap-3 px-4 py-2 rounded-xl border border-white/5 pointer-events-auto', trackedQuest.status === 'completed' ? 'opacity-60' : '']">
-                <div class="w-8 h-8 flex items-center justify-center bg-indigo-500/10 rounded-lg border border-indigo-500/20 text-indigo-400 shrink-0">
-                  <i :class="['ra text-xs', trackedQuest.status === 'completed' ? 'ra-check' : 'ra-scroll']"></i>
-                </div>
-                <div class="flex-grow min-w-0">
-                  <div :class="['text-xs font-bold text-white truncate', trackedQuest.status === 'completed' ? 'line-through text-slate-400' : '']">
+      <!-- Center: Active Quest Tracker (Matches Chat Width) -->
+      <div class="w-full max-w-5xl mx-auto px-4">
+        <transition name="fade">
+          <div v-if="trackedQuest" class="animate-fade-in pointer-events-none w-full">
+            <div :class="['quest-panel-header glassmorphism flex items-start gap-4 px-5 py-4 rounded-2xl border border-white/5 pointer-events-auto shadow-2xl', trackedQuest.status === 'completed' ? 'opacity-60' : '']">
+              <div class="w-10 h-10 flex items-center justify-center bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400 shrink-0 mt-0.5 shadow-inner">
+                <i :class="['ra text-sm', trackedQuest.status === 'completed' ? 'ra-check' : 'ra-scroll']"></i>
+              </div>
+              <div class="flex-grow min-w-0">
+                <div class="flex items-center justify-between mb-1">
+                  <div :class="['text-sm font-black text-white uppercase tracking-tight truncate', trackedQuest.status === 'completed' ? 'line-through text-slate-400' : '']">
                     {{ trackedQuest.title }}
                   </div>
-                  <div :class="['text-[10px] text-slate-400 truncate leading-tight', trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
-                    {{ trackedQuest.goal }}
+                  <div class="shrink-0 text-right ml-4">
+                     <span v-if="trackedQuest.status === 'completed'" class="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">Completed</span>
+                     <span v-else class="text-[10px] font-black text-indigo-400 tabular-nums uppercase tracking-widest">{{ trackedQuest.exp_reward }} XP</span>
                   </div>
                 </div>
-                <div class="shrink-0 text-right">
-                   <span v-if="trackedQuest.status === 'completed'" class="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">DONE</span>
-                   <span v-else class="text-[9px] font-black text-indigo-400 tabular-nums">{{ trackedQuest.exp_reward }} XP</span>
+                <div :class="['text-[11px] text-slate-400 leading-relaxed line-clamp-3', trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
+                  {{ trackedQuest.description }}
                 </div>
               </div>
             </div>
-          </transition>
-        </div>
-
-        <!-- Right: Clock -->
-        <div class="flex items-center gap-4 relative z-10 shrink-0">
-          <div class="flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': clockTick }">
-            <template v-if="gameTime">
-              <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-500/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span class="clock-time text-lg font-black text-amber-300 tracking-widest leading-none">
-                  {{ gameTime.time }}
-                </span>
-              </div>
-            </template>
           </div>
-        </div>
+        </transition>
+      </div>
 
+      <!-- Right: Clock (Absolute) -->
+      <div class="absolute right-8 top-8 z-10">
+        <div class="flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': clockTick }">
+          <template v-if="gameTime">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-500/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="clock-time text-lg font-black text-amber-300 tracking-widest leading-none">
+                {{ gameTime.time }}
+              </span>
+            </div>
+          </template>
+        </div>
       </div>
     </header>
+
 
     <div class="flex-grow flex overflow-hidden relative">
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
@@ -378,6 +379,9 @@ onBeforeUnmount(() => {
           :tracked-quest="null"
           :status-text="statusText"
           @open-debug="showDebug = true"
+          @toggle-debug-log="(val) => showDebugLog = val"
+          :show-debug-log="showDebugLog"
+          :debug-logs="debugLogs"
         />
 
         <!-- XP Badge (Bottom Right Overlaid on Chat) -->

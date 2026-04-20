@@ -25,6 +25,7 @@ export interface UseGameSocket {
   quests: Ref<any[]>
   isCompleted: Ref<boolean>
   statusText: Ref<string>
+  debugLogs: Ref<{ timestamp: string, content: string }[]>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
@@ -47,6 +48,7 @@ export function useGameSocket(): UseGameSocket {
   const quests = ref<any[]>([])
   const isCompleted = ref(false)
   const statusText = ref('')
+  const debugLogs = ref<{ timestamp: string, content: string }[]>([])
   let currentGameId = ''
   let syncTimer: number | null = null
 
@@ -214,6 +216,10 @@ export function useGameSocket(): UseGameSocket {
 
           if (event === 'status') {
             statusText.value = data.content
+            debugLogs.value.push({
+              timestamp: new Date().toLocaleTimeString(),
+              content: data.content
+            })
           } else if (event === 'system') {
             _pushMessage('system', data.content)
           } else if (event === 'chunk') {
@@ -263,6 +269,7 @@ export function useGameSocket(): UseGameSocket {
     quests,
     isCompleted,
     statusText,
+    debugLogs,
     connect,
     disconnect,
     sendMessage,

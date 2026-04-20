@@ -12,6 +12,8 @@ const props = defineProps<{
   inventory: any[]
   trackedQuest?: any
   statusText?: string
+  showDebugLog?: boolean
+  debugLogs?: { timestamp: string, content: string }[]
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +26,7 @@ const emit = defineEmits<{
   itemLeave: []
   openMap: []
   openDebug: []
+  toggleDebugLog: [enabled: boolean]
 }>()
 
 const inputText = ref('')
@@ -89,8 +92,23 @@ function handleSend(): void {
   const text = inputText.value.trim()
   if (!text) return
 
-  if (text === '/debug') {
-    emit('openDebug')
+  if (text.startsWith('/debug')) {
+    const parts = text.split(' ')
+    const cmd = parts[1] // session, log
+    const sub = parts[2] // on, off
+
+    if (cmd === 'session') {
+      emit('openDebug')
+    } else if (cmd === 'log') {
+      if (sub === 'on') {
+        emit('toggleDebugLog', true)
+      } else if (sub === 'off') {
+        emit('toggleDebugLog', false)
+      }
+    } else {
+      // Default to session if no param
+      emit('openDebug')
+    }
     inputText.value = ''
     return
   }
@@ -294,6 +312,22 @@ function normalizeLineBreaks(text: string): string {
           <p>Awaiting game start...</p>
         </div>
       </div>
+
+      <!-- Debug Logs (Technical) -->
+      <template v-if="showDebugLog && debugLogs?.length">
+        <div 
+          v-for="(log, lidx) in debugLogs" 
+          :key="'debug-' + lidx"
+          class="flex items-center gap-3 py-1 opacity-40 hover:opacity-100 transition-opacity"
+        >
+          <div class="shrink-0 w-12 text-[9px] font-mono text-slate-600 tabular-nums">{{ log.timestamp }}</div>
+          <div class="flex-grow h-px bg-slate-800/50"></div>
+          <div class="shrink-0 text-[9px] font-mono text-cyan-500 uppercase tracking-widest bg-cyan-500/5 px-2 py-0.5 rounded border border-cyan-500/10">
+            [DEBUG] {{ log.content }}
+          </div>
+          <div class="flex-grow h-px bg-slate-800/50"></div>
+        </div>
+      </template>
     </div>
 
     <!-- Input bar -->
