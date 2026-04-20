@@ -15,6 +15,13 @@ export interface CharacterSheet {
   hp: number
   stamina: number
   mana: number
+  exp: number
+  strength: number
+  intelligence: number
+  wisdom: number
+  dexterity: number
+  charisma: number
+  armor_class: number
   stats: Record<string, number>
   inventory: InventoryItem[]
   equipment: Record<string, InventoryItem | null>
@@ -59,6 +66,8 @@ export interface CreateAdventurePayload {
   generate_scene_images?: boolean
   selected_image_styles?: string[]
   selected_tone?: string
+  min_scenes?: number
+  max_scenes?: number
   clock_enabled?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean

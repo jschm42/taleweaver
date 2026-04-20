@@ -25,6 +25,8 @@ class AdventureBase(BaseModel):
     game_over_rules: Optional[Dict[str, Any]] = None
     quests: Optional[List[QuestSchema]] = None
     is_completed: bool = False
+    min_scenes: Optional[int] = 1
+    max_scenes: Optional[int] = 5
 
 
 class AdventureCreate(AdventureBase):
@@ -40,12 +42,12 @@ class AdventureUpdate(BaseModel):
     selected_image_styles: Optional[List[str]] = None
     selected_tone: Optional[str] = None
     game_over_rules: Optional[Dict[str, Any]] = None
+    min_scenes: Optional[int] = None
+    max_scenes: Optional[int] = None
 
 class AdventureInDBBase(AdventureBase):
     id: str
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class Adventure(AdventureInDBBase):
     pass

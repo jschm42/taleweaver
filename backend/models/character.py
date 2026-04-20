@@ -18,11 +18,20 @@ class Character(Base, TimestampMixin):
     # We initialize them statically to 10 as per rules.
     stats = Column(JSON, default=lambda: {
         "strength": 10,
-        "endurance": 10,
-        "agility": 10,
         "intelligence": 10,
-        "charisma": 10
+        "wisdom": 10,
+        "dexterity": 10,
+        "charisma": 10,
+        "armor_class": 10
     }, nullable=False)
+    
+    # Core RPG Stats (explicit columns for consistency with Avatar)
+    strength = Column(Integer, default=10, nullable=False)
+    intelligence = Column(Integer, default=10, nullable=False)
+    wisdom = Column(Integer, default=10, nullable=False)
+    dexterity = Column(Integer, default=10, nullable=False)
+    charisma = Column(Integer, default=10, nullable=False)
+    armor_class = Column(Integer, default=10, nullable=False)
     
     # Empty starting gear and stuff
     inventory = Column(JSON, default=list, nullable=False)

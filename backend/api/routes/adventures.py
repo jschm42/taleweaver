@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from PIL import Image
 
 from backend.core.database import get_db
@@ -26,7 +26,8 @@ from backend.schemas.game_state import GameStateUpdate
 from backend.schemas.adventure_import import AdventureImportPayload
 from backend.engine.world_generator import WorldGenerator
 from backend.engine.command_parser import CommandParser
-from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException
+from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException, SkillCheckResult
+from backend.engine.skill_check import roll_skill_check
 from backend.engine.map_engine import MapEngine
 from backend.engine.media_engine import MediaEngine
 from backend.engine.memory_manager import MemoryManager
@@ -503,6 +504,14 @@ class CreateAdventurePayload(BaseModel):
     original_manifest: Optional[Dict[str, Any]] = None
     automatic_cover_generation: Optional[bool] = False
     pacing: Optional[Dict[str, Any]] = None
+    min_scenes: int = 1
+    max_scenes: int = 5
+
+    @model_validator(mode='after')
+    def validate_scene_range(self) -> 'CreateAdventurePayload':
+        if self.max_scenes < self.min_scenes:
+            raise ValueError("max_scenes must be greater than or equal to min_scenes")
+        return self
 
 
 class AdventureResponse(BaseModel):
@@ -523,8 +532,7 @@ class AdventureResponse(BaseModel):
     quests: Optional[List[Dict[str, Any]]] = None
     is_completed: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class GameSessionResponse(BaseModel):
@@ -538,6 +546,9 @@ class GameSessionResponse(BaseModel):
     current_scene_name: Optional[str] = None
     in_game_time: int
     is_paused: bool
+    is_ready: bool = True
+    creation_status: Optional[str] = None
+    creation_error: Optional[str] = None
 
 class ChatResponse(BaseModel):
     """Unified response for a game turn."""
@@ -623,6 +634,8 @@ async def create_adventure(
         generate_item_images=payload.generate_item_images,
         selected_image_styles=payload.selected_image_styles or [],
         selected_tone=(payload.selected_tone.strip() if payload.selected_tone else None),
+        min_scenes=payload.min_scenes,
+        max_scenes=payload.max_scenes,
     )
 
     if payload.heartbeat_interval is not None:
@@ -823,7 +836,9 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     provider=preferred_provider,
                     generate_scene_images=payload_dict.get('generate_scene_images', False),
                     generate_npc_images=payload_dict.get('generate_npc_images', False),
-                    generate_item_images=payload_dict.get('generate_item_images', False)
+                    generate_item_images=payload_dict.get('generate_item_images', False),
+                    min_scenes=payload_dict.get('min_scenes', 1),
+                    max_scenes=payload_dict.get('max_scenes', 5)
                 )
             
             # 2. Initial GameState
@@ -972,6 +987,9 @@ async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
             current_scene_name=scene_label,
             in_game_time=s.in_game_time,
             is_paused=s.is_paused,
+            is_ready=a.is_ready,
+            creation_status=a.creation_status,
+            creation_error=a.creation_error,
         )
         for s, a, scene_label in rows
     ]
@@ -1020,7 +1038,9 @@ async def import_adventure(
         heartbeat_enabled=False,
         selected_image_styles=selected_image_styles,
         selected_tone=payload.tone,
-        original_manifest=payload.model_dump()
+        original_manifest=payload.model_dump(),
+        min_scenes=payload.min_scenes,
+        max_scenes=payload.max_scenes,
     )
 
     adv = Adventure(**adv_kwargs)
@@ -1070,6 +1090,8 @@ async def import_adventure(
         "generate_npc_images": payload.generate_npc_images,
         "generate_item_images": payload.generate_item_images,
         "automatic_cover_generation": payload.automatic_cover_generation,
+        "min_scenes": payload.min_scenes,
+        "max_scenes": payload.max_scenes,
         "selected_image_styles": selected_image_styles,
         "selected_tone": payload.tone,
         "rule_enforcement_mode": import_rule_mode,
@@ -2090,7 +2112,11 @@ async def post_chat_message(
     )
     # Add quest info to system prompt
     if adventure.quests:
+<<<<<<< HEAD
         quests_summary = "\n".join([f"- {q.get('title', 'Unknown')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
+=======
+        quests_summary = "\n".join([f"- {q.get('title', 'Untitled')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
+>>>>>>> 61a3a41fdd1d47dd3fa27ead3cb0ae1fde0e0f50
         context_messages[0]["content"] += f"\n\nACTIVE QUESTS:\n{quests_summary}"
     
     system_prompt = context_messages[0]["content"]
@@ -2125,6 +2151,34 @@ async def post_chat_message(
                 phase="mechanics",
                 metadata={"strict_rules": True, "mode": adventure.rule_enforcement_mode},
             )
+
+            # --- PASS 1.5: Resolve Skill Checks ---
+            if game_event.requested_skill_checks:
+                results = []
+                for req in game_event.requested_skill_checks:
+                    # Map stats to their internal keys if necessary
+                    stat_key = req.stat.lower().replace(" ", "_")
+                    res = roll_skill_check(avatar, stat_key, req.dc)
+                    check_res = SkillCheckResult(
+                        stat=req.stat,
+                        dc=req.dc,
+                        roll=res["d20"],
+                        modifier=res["modifier"],
+                        total=res["total"],
+                        success=res["success"],
+                        reason=req.reason
+                    )
+                    results.append(check_res)
+                    
+                    # Output result as system message
+                    status_text = "SUCCESS" if check_res.success else "FAILURE"
+                    outcome_msg = (
+                        f"[ROLL] {check_res.reason}: {check_res.stat.upper()} Check (DC {check_res.dc}) -> "
+                        f"Rolled {check_res.roll} + {check_res.modifier} = {check_res.total} ({status_text})"
+                    )
+                    response_messages.append({"role": "system", "content": outcome_msg})
+                    
+                game_event.skill_check_results = results
 
             # --- PASS 2: Atmospheric Narration (Complex Model) ---
             narration_system_prompt = system_prompt + "\n\n" + prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
@@ -2311,7 +2365,11 @@ async def post_chat_message(
                         if q.get("id") == q_id and q.get("status", "open") == "open":
                             q["status"] = "completed"
                             avatar.exp += q.get("exp_reward", 0)
+<<<<<<< HEAD
                             response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Unknown Quest')} (+{q.get('exp_reward', 0)} EXP)"})
+=======
+                            response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Untitled')} (+{q.get('exp_reward', 0)} EXP)"})
+>>>>>>> 61a3a41fdd1d47dd3fa27ead3cb0ae1fde0e0f50
                             any_updated = True
                 
                 if any_updated:

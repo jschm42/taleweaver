@@ -13,8 +13,7 @@ class UserUpdate(BaseModel):
 class UserInDBBase(UserBase):
     id: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class User(UserInDBBase):
     pass

@@ -98,7 +98,9 @@ export function useGameSocket(): UseGameSocket {
       }
 
       const snapshot = await fetchSessionSnapshot(currentGameId)
-      applySessionSnapshot(snapshot, false)
+      if (currentGameId && status.value !== 'disconnected') {
+        applySessionSnapshot(snapshot, false)
+      }
     }, 5000)
   }
 

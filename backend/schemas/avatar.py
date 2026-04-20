@@ -9,6 +9,12 @@ class AvatarBase(BaseModel):
     hp: Optional[int] = 200
     stamina: Optional[int] = 200
     mana: Optional[int] = 200
+    strength: Optional[int] = 10
+    intelligence: Optional[int] = 10
+    wisdom: Optional[int] = 10
+    dexterity: Optional[int] = 10
+    charisma: Optional[int] = 10
+    armor_class: Optional[int] = 10
     stats: Optional[Dict[str, Any]] = None
     inventory: Optional[List[Dict[str, Any]]] = None
     equipment: Optional[Dict[str, Any]] = None
@@ -22,6 +28,12 @@ class AvatarUpdate(BaseModel):
     hp: Optional[int] = None
     stamina: Optional[int] = None
     mana: Optional[int] = None
+    strength: Optional[int] = None
+    intelligence: Optional[int] = None
+    wisdom: Optional[int] = None
+    dexterity: Optional[int] = None
+    charisma: Optional[int] = None
+    armor_class: Optional[int] = None
     stats: Optional[Dict[str, Any]] = None
     inventory: Optional[List[Dict[str, Any]]] = None
     equipment: Optional[Dict[str, Any]] = None
@@ -31,8 +43,7 @@ class AvatarInDBBase(AvatarBase):
     id: str
     user_id: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class Avatar(AvatarInDBBase):
     pass

@@ -43,6 +43,8 @@ const form = ref({
   context: '',
   strict_rules: true,
   time_per_turn: 5,
+  min_scenes: 1,
+  max_scenes: 5,
 })
 
 async function fetchAdventure() {
@@ -62,6 +64,8 @@ async function fetchAdventure() {
     form.value.context = data.context || ''
     form.value.strict_rules = data.strict_rules
     form.value.time_per_turn = data.time_per_turn || 5
+    form.value.min_scenes = data.min_scenes || 1
+    form.value.max_scenes = data.max_scenes || 5
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -496,6 +500,35 @@ watch(
                   <div class="w-20 text-center">
                     <span class="text-xl font-bold text-emerald-500">{{ form.time_per_turn }}</span>
                     <span class="text-[10px] text-slate-500 block uppercase pt-0.5">Minutes</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
+                <div class="flex items-center gap-3">
+                  <div class="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
+                    <i class="ra ra-scroll-unfurled text-xl"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">World Size</h3>
+                    <p class="text-[10px] text-slate-500">Min/Max scenes for regeneration</p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-6">
+                  <div>
+                    <div class="flex items-center justify-between text-[10px] mb-2 uppercase tracking-widest text-slate-500">
+                      <span>Min Scenes</span>
+                      <strong class="text-emerald-400">{{ form.min_scenes }}</strong>
+                    </div>
+                    <input type="range" v-model.number="form.min_scenes" min="1" max="10" step="1" class="w-full accent-emerald-500" />
+                  </div>
+                  <div>
+                    <div class="flex items-center justify-between text-[10px] mb-2 uppercase tracking-widest text-slate-500">
+                      <span>Max Scenes</span>
+                      <strong class="text-emerald-400">{{ form.max_scenes }}</strong>
+                    </div>
+                    <input type="range" v-model.number="form.max_scenes" min="1" max="20" step="1" class="w-full accent-emerald-500" />
                   </div>
                 </div>
               </div>

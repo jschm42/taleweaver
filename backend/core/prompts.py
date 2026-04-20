@@ -35,6 +35,8 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "- Use 'combination_ingredients: [item_id1, item_id2]' on a hidden result item to create a crafting recipe.\n"
     "- Use 'reveals_item_id: result_id' on a room object (e.g. a generator) and 'combination_ingredients: [fuel_id]' to allow using an item on it to reveal a new state.\n\n"
     "Generate a specialized player character (Protagonist). "
+    "Define 'strength', 'intelligence', 'wisdom', 'dexterity', 'charisma', and 'armor_class' (range 1-99) "
+    "based on their role and background. "
     "Define 'starting_inventory' and 'starting_equipment' using IDs from your objects list for items they already possess (e.g. a coin or their boots).\n\n"
     "QUEST GENERATION:\n"
     "Generate 1-2 Main Quests and 2-3 Side Quests that fit the story context. "
@@ -49,7 +51,9 @@ Used in WorldGenerator.generate_world.
 WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "Adventure Title: {title}\n"
     "Story Idea: {context}\n\n"
-    "Generate at least 3 scenes with a complex network of exits and interesting entities."
+    "WORLD SIZE REQUIREMENTS:\n"
+    "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
+    "- Create a complex network of exits and interesting entities connecting these locations."
 )
 """
 Template for the user message that kicks off world generation.
@@ -119,6 +123,8 @@ GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
     "You MUST consider these stats, equipment, and HP in all your narratives:\n"
     "{sheet_json}\n\n"
     "Respond organically. Use the pre-generated world description as the static reality. "
+    "When a player attempts a difficult or uncertain action, you can use their Core Attributes (STR, DEX, INT, etc.) to resolve the outcome. "
+    "For example, a Strength check for breaking a door, or a Charisma check for persuasion. "
     "NPCs with `movement_type: MOVABLE` can change their `current_scene_id` or `spatial_position` if it makes sense in the narrative. "
     "You can also update NPC stats (HP, Mana, Stamina) if events warrant it.\n"
     "If an exit is LOCKED, the player cannot pass unless they find a way to unlock it.\n"
@@ -136,6 +142,9 @@ Variables: world_context, time_str, location_context, sheet_json.
 
 GM_MECHANICS_SUFFIX = (
     "CRITICAL: Focus on logical consistency and mechanics. "
+    "If the action is uncertain, request a roll using `requested_skill_checks`. "
+    "You provide the `stat` (strength, dexterity, intelligence, wisdom, charisma, armor_class), a `dc` (Difficulty Class), and a `reason`. "
+    "The system will resolve the roll and provide the result for the final narration. "
     "Evaluate if any of the following Quests have been completed based on the current action:\n"
     "{quests_json}\n"
     "If a quest is completed, return its ID in 'completed_quest_ids'. "
