@@ -58,6 +58,7 @@ from backend.core.config import settings
 # Ensure storage directories exist
 os.makedirs(os.path.join(settings.DATA_DIR, "characters"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "adventures"), exist_ok=True)
+os.makedirs(os.path.join(settings.DATA_DIR, "logs"), exist_ok=True)
 
 app.mount("/data", StaticFiles(directory=settings.DATA_DIR), name="data")
 # Keep /uploads mount temporarily for backward compatibility if needed, 

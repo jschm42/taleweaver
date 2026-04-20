@@ -42,6 +42,12 @@ class GameMasterLLM:
         if self.provider == "ollama":
             return normalized
 
+        if self.provider == "google" or self.provider == "gemini":
+            # LiteLLM expects 'gemini/...' for Google Gemini models.
+            if not normalized.startswith("gemini/"):
+                return f"gemini/{normalized}"
+            return normalized
+
         if self.provider == "openrouter":
             # Use raw model slug; provider routing is handled via api_base + custom_llm_provider.
             if "/" in normalized:
@@ -158,6 +164,145 @@ class GameMasterLLM:
         )
         
         return result
+
+    async def stream_simple_task(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str,
+        *,
+        adventure_id: str | None = None,
+        game_id: str | None = None,
+        operation: str | None = None,
+        phase: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ):
+        """
+        Streams a free narrative task.
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        normalized_model = self._normalize_model(model)
+
+        kwargs = {
+            "model": normalized_model,
+            "messages": messages,
+            "max_tokens": 4096,
+            "stream": True,
+        }
+
+        if self.provider == "ollama":
+            self._validate_ollama_model(model)
+            kwargs["api_base"] = self.api_base
+            kwargs["custom_llm_provider"] = "ollama"
+        else:
+            kwargs["api_key"] = self.api_key
+            if self.provider == "openrouter":
+                kwargs["custom_llm_provider"] = "openai"
+        
+        if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
+            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+        
+        log_structured_event(
+            "gm.turn.stream.request",
+            model=normalized_model,
+            provider=self.provider,
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata=metadata,
+        )
+
+        return await self._get_litellm().acompletion(**kwargs)
+
+    async def aexecute_complex_task(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_model: Type[T],
+        model: str,
+        *,
+        adventure_id: str | None = None,
+        game_id: str | None = None,
+        operation: str | None = None,
+        phase: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> T:
+        """
+        Async version of execute_complex_task.
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        normalized_model = self._normalize_model(model)
+
+        kwargs = {
+            "model": normalized_model,
+            "messages": messages,
+            "response_format": response_model,
+            "max_tokens": 4096,
+        }
+
+        if self.provider == "ollama":
+            self._validate_ollama_model(model)
+            kwargs["api_base"] = self.api_base
+            kwargs["custom_llm_provider"] = "ollama"
+        else:
+            kwargs["api_key"] = self.api_key
+            if self.provider == "openrouter":
+                kwargs["custom_llm_provider"] = "openai"
+
+        if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
+            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+
+        log_structured_event(
+            "gm.turn.request",
+            model=normalized_model,
+            provider=self.provider,
+            response_model=response_model.__name__,
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata=metadata,
+        )
+
+        response = await self._get_litellm().acompletion(**kwargs)
+        
+        content = response.choices[0].message.content
+        
+        log_llm_interaction(
+            model=model,
+            provider=self.provider,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_content=content or "",
+            raw_response=response.model_dump(),
+            event_type="gm.turn.response",
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata={
+                **(metadata or {}),
+                "response_model": response_model.__name__,
+            },
+        )
+        
+        if not content:
+            raise ValueError("No content returned from LLM for complex task.")
+            
+        try:
+            data = json.loads(content)
+            return response_model(**data)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Failed to parse LLM response as JSON: {content}") from exc
 
     def execute_complex_task(
         self,

@@ -333,6 +333,7 @@ watch(
                 <label class="block text-sm font-semibold text-slate-300">Provider</label>
                 <select v-model="keyForm.provider" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none">
                   <option value="openai">OpenAI</option>
+                  <option value="google">Google Gemini</option>
                   <option value="openrouter">OpenRouter</option>
                   <option value="midjourney">Midjourney / Proxy</option>
                   <option value="black_forest_labs">Black Forest Labs</option>
@@ -375,6 +376,7 @@ watch(
               <label class="block text-sm font-semibold text-slate-300">Preferred Provider (Routing)</label>
               <select v-model="llmForm.preferred_provider" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-purple-500/50 outline-none font-bold">
                 <option value="openai">OpenAI</option>
+                <option value="google">Google Gemini</option>
                 <option value="openrouter">OpenRouter</option>
                 <option value="anthropic">Anthropic</option>
                 <option value="ollama">Ollama (Local)</option>

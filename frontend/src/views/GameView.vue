@@ -12,7 +12,9 @@ import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
 import MapModal from '@/components/MapModal.vue'
 import QuestsModal from '@/components/QuestsModal.vue'
 import SuccessScreen from '@/components/SuccessScreen.vue'
+import DebugModal from '@/components/DebugModal.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
+import { useNotifications } from '@/composables/useNotifications'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
@@ -25,8 +27,10 @@ const showSheet = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
 const showSuccess = ref(false)
+const showDebug = ref(false)
 const trackedQuestId = ref<string | null>(null)
 const clockTick = ref(false)
+const { notifications, removeNotification } = useNotifications()
 
 const {
   sheet,
@@ -42,10 +46,13 @@ const {
   currentSceneImage,
   quests,
   isCompleted,
+  statusText,
   connect,
   disconnect,
   sendMessage
 } = useGameSocket()
+
+const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQuestId.value))
 
 // Tooltip & Hover State
 const hoveredEntity = ref<any>(null)
@@ -193,47 +200,47 @@ onBeforeUnmount(() => {
           </h1>
         </div>
 
-        <!-- Center Spacer -->
-        <div class="flex-grow"></div>
+        <!-- Center: Active Quest Tracker (Transparent Panel) -->
+        <div class="flex-grow flex justify-center px-4">
+          <transition name="fade">
+            <div v-if="trackedQuest" class="animate-fade-in pointer-events-none max-w-md w-full">
+              <div :class="['quest-panel-header glassmorphism flex items-center gap-3 px-4 py-2 rounded-xl border border-white/5 pointer-events-auto', trackedQuest.status === 'completed' ? 'opacity-60' : '']">
+                <div class="w-8 h-8 flex items-center justify-center bg-indigo-500/10 rounded-lg border border-indigo-500/20 text-indigo-400 shrink-0">
+                  <i :class="['ra text-xs', trackedQuest.status === 'completed' ? 'ra-check' : 'ra-scroll']"></i>
+                </div>
+                <div class="flex-grow min-w-0">
+                  <div :class="['text-xs font-bold text-white truncate', trackedQuest.status === 'completed' ? 'line-through text-slate-400' : '']">
+                    {{ trackedQuest.title }}
+                  </div>
+                  <div :class="['text-[10px] text-slate-400 truncate leading-tight', trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
+                    {{ trackedQuest.goal }}
+                  </div>
+                </div>
+                <div class="shrink-0 text-right">
+                   <span v-if="trackedQuest.status === 'completed'" class="text-[8px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">DONE</span>
+                   <span v-else class="text-[9px] font-black text-indigo-400 tabular-nums">{{ trackedQuest.exp_reward }} XP</span>
+                </div>
+              </div>
+            </div>
+          </transition>
+        </div>
 
-        <!-- Right Actions: Clock + Buttons -->
+        <!-- Right: Clock -->
         <div class="flex items-center gap-4 relative z-10 shrink-0">
-          <div class="flex flex-col items-end select-none game-clock mr-2" :class="{ 'clock-tick': clockTick }">
+          <div class="flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': clockTick }">
             <template v-if="gameTime">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-500/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span class="clock-time text-xl font-black text-amber-300 tracking-widest leading-none">
+                <span class="clock-time text-lg font-black text-amber-300 tracking-widest leading-none">
                   {{ gameTime.time }}
                 </span>
               </div>
             </template>
           </div>
-
-          <div class="flex items-center gap-2">
-            <div 
-              class="flex items-center gap-2 px-2 py-1.5 bg-slate-800/60 border border-slate-700/50 rounded-lg cursor-pointer transition-all hover:bg-slate-700 backdrop-blur-sm shadow-md"
-              :class="{ 'border-cyan-500/50': autoVisualize }"
-              @click="autoVisualize = !autoVisualize"
-            >
-              <i class="ra ra-camera-shot text-sm" :class="autoVisualize ? 'text-cyan-400' : 'text-slate-500'"></i>
-              <span class="hidden 2xl:inline text-[10px] font-bold uppercase tracking-tighter" :class="autoVisualize ? 'text-cyan-400' : 'text-slate-500'">Vis</span>
-              <div :class="['w-5 h-2.5 rounded-full relative transition-colors duration-300', autoVisualize ? 'bg-cyan-600' : 'bg-slate-900']">
-                <div :class="['absolute top-0.5 w-1.5 h-1.5 bg-white rounded-full transition-all duration-300', autoVisualize ? 'left-3' : 'left-0.5']"></div>
-              </div>
-            </div>
-          </div>
-
-          <button
-            @click="router.push({ name: 'adventure-editor', params: { adventureId: sheet?.adventure_id } })"
-            class="p-2.5 rounded-full bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 transition-colors backdrop-blur-md shadow-xl"
-            title="Edit Adventure"
-            v-if="sheet?.adventure_id"
-          >
-            <i class="ra ra-gear-hammer text-slate-100"></i>
-          </button>
         </div>
+
       </div>
     </header>
 
@@ -368,8 +375,17 @@ onBeforeUnmount(() => {
           @npc-leave="hoveredEntity = null"
           @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
           @item-leave="hoveredEntity = null"
-          :tracked-quest="quests?.find(q => q.id === trackedQuestId)"
+          :tracked-quest="null"
+          :status-text="statusText"
+          @open-debug="showDebug = true"
         />
+
+        <!-- XP Badge (Bottom Right Overlaid on Chat) -->
+        <div class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">
+          <span class="text-sm font-black text-slate-300/60 uppercase tracking-[0.2em] tabular-nums">
+            {{ sheet?.exp || 0 }} XP
+          </span>
+        </div>
       </div>
     </div>
 
@@ -394,6 +410,21 @@ onBeforeUnmount(() => {
       :show="showSuccess" 
       :total-exp="sheet?.exp || 0" 
       @close="goBack" 
+    />
+    <DebugModal 
+      :open="showDebug" 
+      :data="{ 
+        sheet, 
+        messages, 
+        status, 
+        entities, 
+        quests, 
+        nodes, 
+        npcMetadata, 
+        currentSceneImage,
+        adventureImage
+      }" 
+      @close="showDebug = false" 
     />
 
     <!-- HOVER TOOLTIP -->
@@ -427,6 +458,37 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </Transition>
+    </Teleport>
+  
+    <!-- TOAST NOTIFICATIONS -->
+    <Teleport to="body">
+      <div class="fixed bottom-8 right-8 z-[300] flex flex-col gap-3 pointer-events-none">
+        <TransitionGroup name="notif">
+          <div 
+            v-for="n in notifications" 
+            :key="n.id"
+            :class="[
+              'pointer-events-auto px-6 py-4 rounded-2xl border backdrop-blur-2xl shadow-2xl flex items-center gap-4 min-w-[320px] max-w-md animate-notif-in',
+              n.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 
+              n.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+              'bg-blue-500/10 border-blue-500/20 text-blue-400'
+            ]"
+          >
+            <i :class="[
+              'text-lg',
+              n.type === 'error' ? 'ra ra-cancel' : 
+              n.type === 'success' ? 'ra ra-circle' : 'ra ra-light-bulb'
+            ]"></i>
+            <div class="flex-grow">
+              <p class="text-[10px] font-black uppercase tracking-widest opacity-50">{{ n.type }}</p>
+              <p class="text-xs font-bold leading-relaxed">{{ n.message }}</p>
+            </div>
+            <button @click="removeNotification(n.id)" class="opacity-50 hover:opacity-100 transition-opacity">
+              <i class="ra ra-cancel text-xs"></i>
+            </button>
+          </div>
+        </TransitionGroup>
+      </div>
     </Teleport>
   </main>
 </template>
@@ -480,5 +542,32 @@ onBeforeUnmount(() => {
   display: inline-block;
   line-height: 1;
   vertical-align: middle;
+}
+
+/* Notification Animations */
+.notif-enter-active, .notif-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.notif-enter-from { opacity: 0; transform: translateX(50px) scale(0.9); }
+.notif-leave-to { opacity: 0; transform: translateX(50px) scale(0.9); }
+
+@keyframes notifIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-notif-in {
+  animation: notifIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.quest-panel-header {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
 }
 </style>

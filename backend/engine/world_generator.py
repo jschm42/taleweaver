@@ -129,6 +129,7 @@ class QuestSchema(BaseModel):
     impact: str = Field(..., description="How this affects the world when completed")
     exp_reward: int = Field(..., description="EXP awarded for completion (e.g., 50, 100, 250)")
     is_main: bool = Field(..., description="True if this quest is required to finish the adventure")
+    status: str = Field("open", description="Current state: open, completed, failed")
 
 class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
@@ -327,7 +328,11 @@ class WorldGenerator:
         
         # 0. Sync Quests
         if adventure:
-            adventure.quests = manifest_dict.get("quests", [])
+            quests = manifest_dict.get("quests", [])
+            for q in quests:
+                if "status" not in q:
+                    q["status"] = "open"
+            adventure.quests = quests
             await db.flush()
 
         # 0. Sync Protagonist to Avatar

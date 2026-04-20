@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import json
 import uuid
 import zipfile
@@ -9,6 +10,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from pydantic import BaseModel, Field, model_validator
@@ -1165,6 +1167,16 @@ async def delete_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)
 
     await db.delete(adv)
     await db.commit()
+    
+    # 3. Clean up physical assets
+    adventure_assets_path = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
+    if os.path.exists(adventure_assets_path):
+        try:
+            shutil.rmtree(adventure_assets_path)
+            logger.info("Deleted assets directory for adventure %s", adventure_id)
+        except Exception as e:
+            logger.error("Failed to delete assets for adventure %s: %s", adventure_id, e)
+
     logger.info("Deleted adventure %s", adventure_id)
 
 
@@ -2319,581 +2331,497 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
         is_completed=adventure.is_completed
     )
 
-@router.post("/{game_id}/chat", response_model=ChatResponse)
+@router.post("/{game_id}/chat")
 async def post_chat_message(
     game_id: str,
     payload: ChatRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Unified game turn endpoint. Processes user input (natural language or slash command),
-    advances world state, and returns all updates.
+    Unified game turn endpoint. Processes user input, advances world state,
+    and returns a stream of events (system messages, narrative chunks, final state).
     """
-    user_msg = payload.content.strip()
-    
-    # 1. Load context
-    state_res = await db.execute(select(GameState).where(GameState.id == game_id))
-    state = state_res.scalars().first()
-    if not state:
-        raise HTTPException(status_code=404, detail="Game session not found.")
+    async def event_generator():
+        try:
+            user_msg = payload.content.strip()
+            
+            # Immediately notify the user that we are processing via status event
+            yield f"event: status\ndata: {json.dumps(jsonable_encoder({'content': 'Considering...'}))}\n\n"
+            
+            # 1. Load context
+            state_res = await db.execute(select(GameState).where(GameState.id == game_id))
+            state = state_res.scalars().first()
+            if not state:
+                yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Game session not found.'}))}\n\n"
+                return
 
-    if state.is_paused:
-        # We need to fetch the avatar if it's not already there for the snapshot
-        if 'avatar' not in locals():
+            if state.is_paused:
+                av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+                avatar = av_res.scalars().first()
+                yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                    'messages': [{'role': 'system', 'content': 'The game is currently paused.'}],
+                    'sheet': await _build_sheet_snapshot(avatar, state, db) if avatar else {}
+                }))}\n\n"
+                return
+
             av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
             avatar = av_res.scalars().first()
+            
+            u_res = await db.execute(select(User).where(User.id == state.user_id))
+            user = u_res.scalars().first()
 
-        return ChatResponse(
-            messages=[{"role": "system", "content": "The game is currently paused."}],
-            sheet=await _build_sheet_snapshot(avatar, state, db) if avatar else {},
-            adventure_image=getattr(adventure, 'image_url', None) if 'adventure' in locals() else None
-        )
+            adv_res = await db.execute(select(Adventure).where(Adventure.id == state.adventure_id))
+            adventure = adv_res.scalars().first()
 
-    av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
-    avatar = av_res.scalars().first()
-    
-    u_res = await db.execute(select(User).where(User.id == state.user_id))
-    user = u_res.scalars().first()
+            response_messages = []
+            image_url = None
+            game_over = False
+            game_over_reason = None
+            discovered_item_ids = []
 
-    adv_res = await db.execute(select(Adventure).where(Adventure.id == state.adventure_id))
-    adventure = adv_res.scalars().first()
+            # --- Fresh Entry / Re-orientation Check ---
+            actual_user_input = user_msg
+            if not user_msg:
+                user_msg = "[LOOK AROUND]"
 
-    response_messages = []
-    mermaid_data = None
-    image_url = None
-    game_over = False
-    game_over_reason = None
+            # --- Handle Debug Commands ---
+            if user_msg.startswith("/debug"):
+                cmd_args = user_msg[7:].strip()
+                debug_info = await DebugEngine.handle_debug_command(db, state, cmd_args)
+                yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                    'messages': [{'role': 'system', 'content': debug_info}],
+                    'sheet': await _build_sheet_snapshot(avatar, state, db)
+                }))}\n\n"
+                return
 
-    # --- Fresh Entry / Re-orientation Check ---
-    msg_count_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == game_id).limit(1))
-    is_first_message = msg_count_res.scalars().first() is None
-    
-    # If it's a [LOOK AROUND] trigger or a completely new start
-    actual_user_input = user_msg
-    if not user_msg:
-        user_msg = "[LOOK AROUND]"
+            # --- Slash-command fast path ---
+            if user_msg.startswith("/"):
+                if user_msg.strip().lower() == "/map":
+                    map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
+                    world_map = map_res.scalars().first()
+                    mermaid_data = MapEngine.to_mermaid(world_map) if world_map else None
+                    yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                        'messages': [], 
+                        'sheet': await _build_sheet_snapshot(avatar, state, db), 
+                        'mermaid': mermaid_data,
+                        'nodes': await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db)
+                    }))}\n\n"
+                    return
+                
+                response = CommandParser.parse_command(avatar, user_msg)
+                
+                if response.startswith("[TRIGGER_TAKE]"):
+                    item_name = response[14:].strip()
+                    ent_res = await db.execute(select(WorldEntity).where(
+                        WorldEntity.adventure_id == state.adventure_id,
+                        WorldEntity.current_scene_id == state.scene_id,
+                        func.lower(WorldEntity.name) == item_name.lower(),
+                        WorldEntity.entity_type == "OBJECT",
+                        WorldEntity.is_hidden == False
+                    ))
+                    target_item = ent_res.scalars().first()
+                    
+                    if not target_item:
+                        yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                            'messages': [{'role': 'system', 'content': f"You don't see any '{item_name}' here or it is hidden."}],
+                            'sheet': await _build_sheet_snapshot(avatar, state, db)
+                        }))}\n\n"
+                        return
+                    
+                    if not target_item.is_portable:
+                        yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                            'messages': [{'role': 'system', 'content': f"The '{target_item.name}' is not something you can just carry with you."}],
+                            'sheet': await _build_sheet_snapshot(avatar, state, db)
+                        }))}\n\n"
+                        return
+                        
+                    target_item.is_in_inventory = True
+                    target_item.current_scene_id = "INVENTORY"
+                    
+                    item_dict = {
+                        "id": target_item.id,
+                        "name": target_item.name,
+                        "description": target_item.description,
+                        "image_url": target_item.image_url,
+                        "item_type": target_item.item_type,
+                        "slot": (target_item.wearable_slots or ["Hands"])[0] if target_item.item_type == "WEARABLE" else "Hands"
+                    }
+                    new_inv = list(avatar.inventory)
+                    new_inv.append(item_dict)
+                    avatar.inventory = new_inv
+                    
+                    await db.commit()
+                    yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                        'messages': [{'role': 'system', 'content': f"You added the {target_item.name} to your inventory."}],
+                        'sheet': await _build_sheet_snapshot(avatar, state, db),
+                        'discovered_item_ids': [target_item.id]
+                    }))}\n\n"
+                    return
 
-    # --- Handle Debug Commands ---
-    if user_msg.startswith("/debug"):
-        cmd_args = user_msg[7:].strip()
-        debug_info = await DebugEngine.handle_debug_command(db, state, cmd_args)
-        return ChatResponse(
-            messages=[{"role": "system", "content": debug_info}],
-            sheet=await _build_sheet_snapshot(avatar, state, db)
-        )
+                if response.startswith("[TRIGGER_COMBINE]"):
+                    args = response[17:].strip()
+                    parts = args.lower().split(" with ") if " with " in args.lower() else args.split(" ", 1)
+                    if len(parts) >= 2:
+                        name1, name2 = parts[0].strip(), parts[1].strip()
+                        all_entities_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == state.adventure_id))
+                        all_entities = list(all_entities_res.scalars().all())
+                        
+                        item1 = next((e for e in all_entities if e.is_in_inventory and e.name.lower() == name1), None)
+                        item2 = next((e for e in all_entities if e.is_in_inventory and e.name.lower() == name2), None)
+                        if not item2:
+                            item2 = next((e for e in all_entities if e.current_scene_id == state.scene_id and e.name.lower() == name2 and not e.is_hidden), None)
 
-    # --- Slash-command fast path ---
-    if user_msg.startswith("/"):
-        if user_msg.strip().lower() == "/map":
+                        if item1 and item2:
+                            result_item = next((e for e in all_entities if e.is_hidden and e.combination_ingredients and 
+                                                set(e.combination_ingredients) == {item1.id, item2.id}), None)
+                            
+                            if result_item:
+                                result_item.is_hidden = False
+                                if result_item.is_portable:
+                                    result_item.is_in_inventory = True
+                                    result_item.current_scene_id = "INVENTORY"
+                                    new_inv = [i for i in avatar.inventory if i["id"] not in [item1.id, item2.id]]
+                                    new_inv.append({
+                                        "id": result_item.id,
+                                        "name": result_item.name,
+                                        "description": result_item.description,
+                                        "image_url": result_item.image_url,
+                                        "item_type": result_item.item_type,
+                                        "slot": "Hands"
+                                    })
+                                    avatar.inventory = new_inv
+                                
+                                await db.commit()
+                                yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                                    'messages': [{'role': 'system', 'content': f"SUCCESS! You combined {item1.name} and {item2.name} into: {result_item.name}."}],
+                                    'sheet': await _build_sheet_snapshot(avatar, state, db),
+                                    'discovered_item_ids': [result_item.id]
+                                }))}\n\n"
+                                return
+                            
+                            if item2.reveals_item_id and item2.combination_ingredients and item1.id in item2.combination_ingredients:
+                                real_result = next((e for e in all_entities if e.id == item2.reveals_item_id), None)
+                                if real_result:
+                                    real_result.is_hidden = False
+                                    item2.is_final_state = True
+                                    item2.state_comment = f"Revealed {real_result.name} using {item1.name}."
+                                    await db.commit()
+                                    yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                                        'messages': [{'role': 'system', 'content': f"Logic match: Using {item1.name} on {item2.name} revealed the {real_result.name}!"}],
+                                        'sheet': await _build_sheet_snapshot(avatar, state, db),
+                                        'discovered_item_ids': [real_result.id]
+                                    }))}\n\n"
+                                    return
+
+                    user_msg = f"[COMBINE ACTION] {user_msg}" 
+                
+                else:
+                    await db.commit()
+                    yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                        'messages': [{'role': 'system', 'content': response}],
+                        'sheet': await _build_sheet_snapshot(avatar, state, db)
+                    }))}\n\n"
+                    return
+
+            # --- Turn-based Logic: Advance Time & Status Effects ---
+            state.in_game_time += adventure.time_per_turn
+            tick_msgs = RuleEngine.apply_ticks(avatar)
+            for tm in tick_msgs:
+                response_messages.append({"role": "system", "content": tm})
+
+            # Record User Message
+            if actual_user_input:
+                user_chat_rec = ChatMessage(game_state_id=game_id, role="user", content=actual_user_input)
+                db.add(user_chat_rec)
+                await db.flush()
+
+            # --- History & Context ---
+            hist_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == game_id).order_by(ChatMessage.created_at.asc()))
+            history = [{"role": m.role, "content": m.content} for m in hist_res.scalars().all()]
+
+            scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.scene_id, WorldScene.adventure_id == state.adventure_id))
+            current_scene = scene_res.scalars().first()
+            
+            entity_res = await db.execute(select(WorldEntity).where(WorldEntity.current_scene_id == state.scene_id, WorldEntity.adventure_id == state.adventure_id))
+            entities = entity_res.scalars().all()
+            
+            exit_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == state.scene_id, WorldExit.adventure_id == state.adventure_id))
+            exits = exit_res.scalars().all()
+
+            context_messages = MemoryManager.build_context(
+                avatar, adventure.context or "", history, 
+                current_scene=current_scene, entities=entities, exits=exits, in_game_time=state.in_game_time
+            )
+            if adventure.quests:
+                quests_summary = "\n".join([f"- {q.get('title', 'Unknown')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
+                context_messages[0]["content"] += f"\n\nACTIVE QUESTS:\n{quests_summary}"
+            
+            system_prompt = context_messages[0]["content"]
+
+            # --- LLM Processing ---
+            settings = user.llm_settings or {}
+            small_model = settings.get("small_model", "openai/gpt-4o-mini")
+            complex_model = settings.get("complex_model", "openai/gpt-4o-mini")
+            provider = settings.get("preferred_provider", "openai")
+            
+            llm = GameMasterLLM(user, provider=provider)
+            game_event = None
+            response_text = ""
+
+            if adventure.strict_rules:
+                # --- Pass 1: Technical Reasoning ---
+                quests_json = json.dumps(adventure.quests or [], indent=2)
+                mechanics_system_prompt = system_prompt + "\n\n" + (
+                    prompts.GM_STORY_MECHANICS_SUFFIX.format(quests_json=quests_json) if adventure.rule_enforcement_mode == "story" 
+                    else prompts.GM_MECHANICS_SUFFIX.format(quests_json=quests_json)
+                )
+                
+                yield f"event: status\ndata: {json.dumps(jsonable_encoder({'content': 'Validating rules...'}))}\n\n"
+                
+                game_event = await llm.aexecute_complex_task(
+                    system_prompt=mechanics_system_prompt,
+                    user_prompt=user_msg,
+                    response_model=GameEvent,
+                    model=small_model,
+                    adventure_id=state.adventure_id,
+                    game_id=game_id,
+                    operation="chat_turn",
+                    phase="mechanics",
+                )
+
+                if game_event.requested_skill_checks:
+                    for req in game_event.requested_skill_checks:
+                        stat_key = req.stat.lower().replace(" ", "_")
+                        res = roll_skill_check(avatar, stat_key, req.dc)
+                        check_res = SkillCheckResult(
+                            stat=req.stat, dc=req.dc, roll=res["d20"], modifier=res["modifier"], 
+                            total=res["total"], success=res["success"], reason=req.reason
+                        )
+                        status_text = "SUCCESS" if check_res.success else "FAILURE"
+                        outcome_msg = f"[ROLL] {check_res.reason}: {check_res.stat.upper()} Check (DC {check_res.dc}) -> Rolled {check_res.roll} + {check_res.modifier} = {check_res.total} ({status_text})"
+                        response_messages.append({"role": "system", "content": outcome_msg})
+                        game_event.skill_check_results = (game_event.skill_check_results or []) + [check_res]
+
+                # --- Apply World State Updates (Move before narration) ---
+                try:
+                    RuleEngine.apply_event(avatar, game_event)
+                except GameOverException as exc:
+                    game_over = True
+                    game_over_reason = str(exc)
+
+                if game_event.new_scene_id:
+                    resolved_scene_id = await _resolve_scene_id(db, state.adventure_id, game_event.new_scene_id)
+                    if resolved_scene_id: state.scene_id = resolved_scene_id
+
+                if game_event.moved_entities:
+                    for move in game_event.moved_entities:
+                        ent_mv_res = await db.execute(select(WorldEntity).where(WorldEntity.id == move.entity_id, WorldEntity.adventure_id == state.adventure_id))
+                        ent_mv = ent_mv_res.scalars().first()
+                        if ent_mv:
+                            if move.to_scene_id == "INVENTORY":
+                                ent_mv.is_in_inventory = True
+                                response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' added to inventory."})
+                                discovered_item_ids.append(ent_mv.id)
+                            else:
+                                old_scene = ent_mv.current_scene_id
+                                resolved_target_scene_id = await _resolve_scene_id(db, state.adventure_id, move.to_scene_id)
+                                ent_mv.current_scene_id = resolved_target_scene_id or ent_mv.current_scene_id
+                                ent_mv.is_in_inventory = False
+                                if old_scene == "INVENTORY":
+                                    response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' removed from inventory."})
+                                else:
+                                    response_messages.append({"role": "system", "content": f"[System] NPC '{ent_mv.name}' moved to {move.to_scene_id}."})
+                            if move.to_spatial_position: ent_mv.spatial_position = move.to_spatial_position
+
+                if game_event.updated_entities:
+                    for upd in game_event.updated_entities:
+                        ent_upd_res = await db.execute(select(WorldEntity).where(WorldEntity.id == upd.entity_id, WorldEntity.adventure_id == state.adventure_id))
+                        ent_upd = ent_upd_res.scalars().first()
+                        if ent_upd:
+                            if upd.name: ent_upd.name = upd.name
+                            if upd.description: ent_upd.description = upd.description
+                            if upd.spatial_position: ent_upd.spatial_position = upd.spatial_position
+                            if upd.is_hidden is not None: ent_upd.is_hidden = upd.is_hidden
+                            if upd.hp is not None: ent_upd.hp = upd.hp
+                            if upd.mana is not None: ent_upd.mana = upd.mana
+                            if upd.stamina is not None: ent_upd.stamina = upd.stamina
+
+                if game_event.deleted_entities:
+                    for d_id in game_event.deleted_entities:
+                        await db.execute(delete(WorldEntity).where(WorldEntity.id == d_id, WorldEntity.adventure_id == state.adventure_id))
+
+                if game_event.new_inventory_items:
+                    for item in game_event.new_inventory_items:
+                        ent_sync_res = await db.execute(select(WorldEntity).where(WorldEntity.id == item.id, WorldEntity.adventure_id == state.adventure_id))
+                        ent_sync = ent_sync_res.scalars().first()
+                        if ent_sync:
+                            ent_sync.is_in_inventory = True
+                            ent_sync.is_hidden = False
+                            new_inv = []
+                            for inv_item in avatar.inventory:
+                                updated_item = dict(inv_item)
+                                if updated_item.get('id') == item.id and not updated_item.get('image_url'):
+                                    updated_item['image_url'] = ent_sync.image_url
+                                new_inv.append(updated_item)
+                            avatar.inventory = new_inv
+                            response_messages.append({"role": "system", "content": f"[System] Item '{item.name}' added to inventory."})
+                            discovered_item_ids.append(ent_sync.id)
+                        else:
+                            new_ent = WorldEntity(
+                                id=item.id or str(uuid.uuid4()), adventure_id=state.adventure_id,
+                                entity_type="OBJECT", name=item.name, description=item.description,
+                                current_scene_id="INVENTORY", is_in_inventory=True,
+                                item_type=item.item_type or "PICKABLE", image_url=item.image_url
+                            )
+                            db.add(new_ent)
+                            response_messages.append({"role": "system", "content": f"[System] New discovery: '{item.name}' added to inventory."})
+
+                if game_event.updated_exits:
+                    for upd in game_event.updated_exits:
+                        ex_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == upd.from_scene_id, WorldExit.to_scene_id == upd.to_scene_id, WorldExit.adventure_id == state.adventure_id))
+                        world_exit = ex_res.scalars().first()
+                        if world_exit: world_exit.is_locked = upd.is_locked
+
+                if game_event.extra_time_minutes:
+                    state.in_game_time += game_event.extra_time_minutes
+                    response_messages.append({"role": "system", "content": f"[System] Time advancement: +{game_event.extra_time_minutes} minutes."})
+
+                if game_event.completed_quest_ids:
+                    updated_quests = list(adventure.quests or [])
+                    any_updated = False
+                    for q_id in game_event.completed_quest_ids:
+                        for q in updated_quests:
+                            if q.get("id") == q_id and q.get("status", "open") == "open":
+                                q["status"] = "completed"
+                                avatar.exp += q.get("exp_reward", 0)
+                                response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Unknown Quest')} (+{q.get('exp_reward', 0)} EXP)"})
+                                any_updated = True
+                    if any_updated:
+                        adventure.quests = updated_quests
+                        main_quests = [q for q in updated_quests if q.get("is_main")]
+                        if main_quests and all(q.get("status", "open") == "completed" for q in main_quests):
+                            adventure.is_completed = True
+                            response_messages.append({"role": "system", "content": "[ADVENTURE COMPLETED] All main objectives achieved!"})
+
+                yield f"event: status\ndata: {json.dumps(jsonable_encoder({'content': 'Generating narrative...'}))}\n\n"
+
+            # --- Pass 2: Atmospheric Narration ---
+                narration_system_prompt = system_prompt + "\n\n" + prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
+                    outcome_json=game_event.model_dump_json(exclude={'narrative_description'})
+                )
+                is_new_scene = bool(game_event.new_scene_id and game_event.new_scene_id != state.scene_id)
+                is_detailed_request = any(word in user_msg.lower() for word in ["look", "examine", "describe", "search", "details"])
+                
+                if is_new_scene: narration_system_prompt += prompts.GM_NARRATION_NEW_LOCATION_SUFFIX
+                elif is_detailed_request: narration_system_prompt += prompts.GM_NARRATION_DETAILED_REQUEST_SUFFIX
+                else: narration_system_prompt += prompts.GM_NARRATION_SNAPPY_SUFFIX
+
+                narration_system_prompt += f"\n{prompts.GM_NARRATION_MANDATORY_FORMATTING}"
+                
+                for sys_msg in response_messages:
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder(sys_msg))}\n\n"
+
+                if game_over:
+                    response_text = game_over_reason
+                    yield f"event: chunk\ndata: {json.dumps(jsonable_encoder({'content': response_text}))}\n\n"
+                else:
+                    stream = await llm.stream_simple_task(
+                        system_prompt=narration_system_prompt, user_prompt=user_msg, model=complex_model,
+                        adventure_id=state.adventure_id, game_id=game_id, operation="chat_turn", phase="narration"
+                    )
+                    async for chunk in stream:
+                        delta = chunk.choices[0].delta.content or ""
+                        if delta:
+                            response_text += delta
+                            yield f"event: chunk\ndata: {json.dumps(jsonable_encoder({'content': delta}))}\n\n"
+                    
+                response_text = _sanitize_narrative_response(response_text, fallback=game_event.narrative_description)
+
+            else:
+                freeform_system_prompt = system_prompt
+                if adventure.rule_enforcement_mode == "chat":
+                    freeform_system_prompt += f"\n\n{prompts.GM_CHAT_NARRATION_SUFFIX}"
+                
+                for sys_msg in response_messages:
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder(sys_msg))}\n\n"
+
+                stream = await llm.stream_simple_task(
+                    freeform_system_prompt, user_msg, complex_model,
+                    adventure_id=state.adventure_id, game_id=game_id, operation="chat_turn", phase="freeform"
+                )
+                async for chunk in stream:
+                    delta = chunk.choices[0].delta.content or ""
+                    if delta:
+                        response_text += delta
+                        yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
+                response_text = _sanitize_narrative_response(response_text)
+
+            assistant_chat = ChatMessage(game_state_id=game_id, role="assistant", content=response_text)
+            db.add(assistant_chat)
+
             map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
             world_map = map_res.scalars().first()
-            mermaid_data = MapEngine.to_mermaid(world_map) if world_map else None
-            return ChatResponse(messages=[], sheet=await _build_sheet_snapshot(avatar, state, db), mermaid=mermaid_data)
-        
-        response = CommandParser.parse_command(avatar, user_msg)
-        
-        # 1. Handle [TRIGGER_TAKE]
-        if response.startswith("[TRIGGER_TAKE]"):
-            item_name = response[14:].strip()
-            # Find item in current scene
-            ent_res = await db.execute(select(WorldEntity).where(
-                WorldEntity.adventure_id == state.adventure_id,
-                WorldEntity.current_scene_id == state.scene_id,
-                func.lower(WorldEntity.name) == item_name.lower(),
-                WorldEntity.entity_type == "OBJECT",
-                WorldEntity.is_hidden == False
-            ))
-            target_item = ent_res.scalars().first()
-            
-            if not target_item:
-                return ChatResponse(
-                    messages=[{"role": "system", "content": f"You don't see any '{item_name}' here or it is hidden."}],
-                    sheet=await _build_sheet_snapshot(avatar, state, db)
-                )
-            
-            if not target_item.is_portable:
-                return ChatResponse(
-                    messages=[{"role": "system", "content": f"The '{target_item.name}' is not something you can just carry with you."}],
-                    sheet=await _build_sheet_snapshot(avatar, state, db)
-                )
-                
-            # Move to inventory
-            target_item.is_in_inventory = True
-            target_item.current_scene_id = "INVENTORY"
-            
-            # Update Avatar inventory snapshot
-            item_dict = {
-                "id": target_item.id,
-                "name": target_item.name,
-                "description": target_item.description,
-                "image_url": target_item.image_url,
-                "item_type": target_item.item_type,
-                "slot": (target_item.wearable_slots or ["Hands"])[0] if target_item.item_type == "WEARABLE" else "Hands"
-            }
-            new_inv = list(avatar.inventory)
-            new_inv.append(item_dict)
-            avatar.inventory = new_inv
-            
-            await db.commit()
-            return ChatResponse(
-                messages=[{"role": "system", "content": f"You added the {target_item.name} to your inventory."}],
-                sheet=await _build_sheet_snapshot(avatar, state, db),
-                discovered_item_ids=[target_item.id]
-            )
+            if not world_map:
+                world_map = WorldMap(adventure_id=state.adventure_id)
+                db.add(world_map)
 
-        # 2. Handle [TRIGGER_COMBINE]
-        if response.startswith("[TRIGGER_COMBINE]"):
-            args = response[17:].strip()
-            # Simple split logic
-            parts = args.lower().split(" with ") if " with " in args.lower() else args.split(" ", 1)
-            if len(parts) >= 2:
-                name1, name2 = parts[0].strip(), parts[1].strip()
-                
-                # Fetch all potential candidates
-                all_entities_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == state.adventure_id))
-                all_entities = list(all_entities_res.scalars().all())
-                
-                item1 = next((e for e in all_entities if e.is_in_inventory and e.name.lower() == name1), None)
-                item2 = next((e for e in all_entities if e.is_in_inventory and e.name.lower() == name2), None)
-                
-                # Also allow using an item on a visible room object
-                if not item2:
-                    item2 = next((e for e in all_entities if e.current_scene_id == state.scene_id and e.name.lower() == name2 and not e.is_hidden), None)
-
-                if item1 and item2:
-                    # Check for hidden result item that matches these ingredients (Recipe match)
-                    result_item = next((e for e in all_entities if e.is_hidden and e.combination_ingredients and 
-                                        set(e.combination_ingredients) == {item1.id, item2.id}), None)
-                    
-                    if result_item:
-                        result_item.is_hidden = False
-                        # If the recipe produces a portable item, add it to inventory immediately
-                        if result_item.is_portable:
-                            result_item.is_in_inventory = True
-                            result_item.current_scene_id = "INVENTORY"
-                            
-                            # Remove ingredients (standard crafting logic)
-                            new_inv = [i for i in avatar.inventory if i["id"] not in [item1.id, item2.id]]
-                            new_inv.append({
-                                "id": result_item.id,
-                                "name": result_item.name,
-                                "description": result_item.description,
-                                "image_url": result_item.image_url,
-                                "item_type": result_item.item_type,
-                                "slot": "Hands"
-                            })
-                            avatar.inventory = new_inv
-                        
-                        await db.commit()
-                        return ChatResponse(
-                            messages=[{"role": "system", "content": f"SUCCESS! You combined {item1.name} and {item2.name} into: {result_item.name}."}],
-                            sheet=await _build_sheet_snapshot(avatar, state, db),
-                            discovered_item_ids=[result_item.id]
-                        )
-                    
-                    # Check for transformation (reveals_item_id on target)
-                    if item2.reveals_item_id and item2.combination_ingredients and item1.id in item2.combination_ingredients:
-                        real_result = next((e for e in all_entities if e.id == item2.reveals_item_id), None)
-                        if real_result:
-                            real_result.is_hidden = False
-                            item2.is_final_state = True
-                            item2.state_comment = f"Revealed {real_result.name} using {item1.name}."
-                            
-                            await db.commit()
-                            return ChatResponse(
-                                messages=[{"role": "system", "content": f"Logic match: Using {item1.name} on {item2.name} revealed the {real_result.name}!"}],
-                                sheet=await _build_sheet_snapshot(avatar, state, db),
-                                discovered_item_ids=[real_result.id]
-                            )
-
-            # Fall through if no deterministic match found
-            user_msg = f"[COMBINE ACTION] {user_msg}" 
-        
-        else:
-            await db.commit()
-            return ChatResponse(
-                messages=[{"role": "system", "content": response}],
-                sheet=await _build_sheet_snapshot(avatar, state, db)
-            )
-
-    # --- Turn-based Logic: Advance Time & Status Effects ---
-    state.in_game_time += adventure.time_per_turn
-    tick_msgs = RuleEngine.apply_ticks(avatar)
-    for tm in tick_msgs:
-        response_messages.append({"role": "system", "content": tm})
-
-    # Record User Message
-    if actual_user_input:
-        user_chat_rec = ChatMessage(game_state_id=game_id, role="user", content=actual_user_input)
-        db.add(user_chat_rec)
-        await db.flush()
-
-    # --- History & Context ---
-    hist_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == game_id).order_by(ChatMessage.created_at.asc()))
-    history = [{"role": m.role, "content": m.content} for m in hist_res.scalars().all()]
-
-    # Fetch pre-generated entities for context
-    scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.scene_id, WorldScene.adventure_id == state.adventure_id))
-    current_scene = scene_res.scalars().first()
-    
-    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.current_scene_id == state.scene_id, WorldEntity.adventure_id == state.adventure_id))
-    entities = entity_res.scalars().all()
-    
-    exit_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == state.scene_id, WorldExit.adventure_id == state.adventure_id))
-    exits = exit_res.scalars().all()
-
-    context_messages = MemoryManager.build_context(
-        avatar, adventure.context or "", history, 
-        current_scene=current_scene, entities=entities, exits=exits, in_game_time=state.in_game_time
-    )
-    # Add quest info to system prompt
-    if adventure.quests:
-        quests_summary = "\n".join([f"- {q.get('title', 'Unknown')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
-        context_messages[0]["content"] += f"\n\nACTIVE QUESTS:\n{quests_summary}"
-    
-    system_prompt = context_messages[0]["content"]
-
-    # --- LLM Processing ---
-    settings = user.llm_settings or {}
-    small_model = settings.get("small_model", "openai/gpt-4o-mini")
-    complex_model = settings.get("complex_model", "openai/gpt-4o-mini")
-    provider = settings.get("preferred_provider", "openai")
-    
-    llm = GameMasterLLM(user, provider=provider)
-    game_event = None
-    response_text = ""
-
-    try:
-        if adventure.strict_rules:
-            # --- PASS 1: Technical Reasoning (Small Model) ---
-            quests_json = json.dumps(adventure.quests or [], indent=2)
-            if adventure.rule_enforcement_mode == "story":
-                mechanics_system_prompt = system_prompt + f"\n\n{prompts.GM_STORY_MECHANICS_SUFFIX.format(quests_json=quests_json)}"
-            else:
-                mechanics_system_prompt = system_prompt + f"\n\n{prompts.GM_MECHANICS_SUFFIX.format(quests_json=quests_json)}"
-            
-            game_event = llm.execute_complex_task(
-                system_prompt=mechanics_system_prompt,
-                user_prompt=user_msg,
-                response_model=GameEvent,
-                model=small_model,
-                adventure_id=state.adventure_id,
-                game_id=game_id,
-                operation="chat_turn",
-                phase="mechanics",
-                metadata={"strict_rules": True, "mode": adventure.rule_enforcement_mode},
-            )
-
-            # --- PASS 1.5: Resolve Skill Checks ---
-            if game_event.requested_skill_checks:
-                results = []
-                for req in game_event.requested_skill_checks:
-                    # Map stats to their internal keys if necessary
-                    stat_key = req.stat.lower().replace(" ", "_")
-                    res = roll_skill_check(avatar, stat_key, req.dc)
-                    check_res = SkillCheckResult(
-                        stat=req.stat,
-                        dc=req.dc,
-                        roll=res["d20"],
-                        modifier=res["modifier"],
-                        total=res["total"],
-                        success=res["success"],
-                        reason=req.reason
-                    )
-                    results.append(check_res)
-                    
-                    # Output result as system message
-                    status_text = "SUCCESS" if check_res.success else "FAILURE"
-                    outcome_msg = (
-                        f"[ROLL] {check_res.reason}: {check_res.stat.upper()} Check (DC {check_res.dc}) -> "
-                        f"Rolled {check_res.roll} + {check_res.modifier} = {check_res.total} ({status_text})"
-                    )
-                    response_messages.append({"role": "system", "content": outcome_msg})
-                    
-                game_event.skill_check_results = results
-
-            # --- PASS 2: Atmospheric Narration (Complex Model) ---
-            narration_system_prompt = system_prompt + "\n\n" + prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
-                outcome_json=game_event.model_dump_json(exclude={'narrative_description'})
-            )
-            
-            # Determine target length
-            is_new_scene = bool(game_event.new_scene_id and game_event.new_scene_id != state.scene_id)
-            is_detailed_request = any(word in user_msg.lower() for word in ["look", "examine", "describe", "search", "details"])
-            
-            if is_new_scene:
-                narration_system_prompt += prompts.GM_NARRATION_NEW_LOCATION_SUFFIX
-            elif is_detailed_request:
-                narration_system_prompt += prompts.GM_NARRATION_DETAILED_REQUEST_SUFFIX
-            else:
-                narration_system_prompt += prompts.GM_NARRATION_SNAPPY_SUFFIX
-
-            narration_system_prompt += f"\n{prompts.GM_NARRATION_MANDATORY_FORMATTING}"
-            
-            response_text = llm.execute_simple_task(
-                system_prompt=narration_system_prompt,
-                user_prompt=user_msg,
-                model=complex_model,
-                adventure_id=state.adventure_id,
-                game_id=game_id,
-                operation="chat_turn",
-                phase="narration",
-                metadata={"strict_rules": True, "is_new_scene": is_new_scene},
-            )
-            response_text = _sanitize_narrative_response(
-                response_text,
-                fallback=game_event.narrative_description,
-            )
-            
-            # Apply mechanics to avatar, but use the complex narration for the final output
-            try:
-                # We ignore the small model's narrative draft and use the complex one
-                RuleEngine.apply_event(avatar, game_event)
-            except GameOverException as exc:
-                game_over = True
-                game_over_reason = str(exc)
-                response_text = str(exc)
-        else:
-            # Free-form narrative always uses the high-quality complex model
-            freeform_system_prompt = system_prompt
-            if adventure.rule_enforcement_mode == "chat":
-                freeform_system_prompt += f"\n\n{prompts.GM_CHAT_NARRATION_SUFFIX}"
-                
-            response_text = llm.execute_simple_task(
-                freeform_system_prompt,
-                user_msg,
-                complex_model,
-                adventure_id=state.adventure_id,
-                game_id=game_id,
-                operation="chat_turn",
-                phase="freeform",
-                metadata={"strict_rules": False, "mode": adventure.rule_enforcement_mode},
-            )
-            response_text = _sanitize_narrative_response(response_text)
-
-        # Record Assistant Message
-        assistant_chat = ChatMessage(game_state_id=game_id, role="assistant", content=response_text)
-        db.add(assistant_chat)
-        # Prepare the list of messages for the response
-        final_response_messages = [{"role": "assistant", "content": response_text}]
-
-        # --- Update World State ---
-        if adventure.strict_rules and game_event:
-            if game_event.new_scene_id:
-                resolved_scene_id = await _resolve_scene_id(db, state.adventure_id, game_event.new_scene_id)
-                if resolved_scene_id:
-                    state.scene_id = resolved_scene_id
-                else:
-                    logger.warning(
-                        "Unresolved new_scene_id '%s' for adventure %s; staying in scene %s",
-                        game_event.new_scene_id,
-                        state.adventure_id,
-                        state.scene_id,
-                    )
-
-            if game_event.moved_entities:
-                for move in game_event.moved_entities:
-                    ent_mv_res = await db.execute(
-                        select(WorldEntity).where(
-                            WorldEntity.id == move.entity_id,
-                            WorldEntity.adventure_id == state.adventure_id,
-                        )
-                    )
-                    ent_mv = ent_mv_res.scalars().first()
-                    if ent_mv:
-                        if move.to_scene_id == "INVENTORY":
-                            ent_mv.is_in_inventory = True
-                            response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' added to inventory."})
-                        else:
-                            old_scene = ent_mv.current_scene_id
-                            resolved_target_scene_id = await _resolve_scene_id(db, state.adventure_id, move.to_scene_id)
-                            if move.to_scene_id and not resolved_target_scene_id:
-                                logger.warning(
-                                    "Unresolved move target '%s' for entity %s in adventure %s; keeping current scene %s",
-                                    move.to_scene_id,
-                                    move.entity_id,
-                                    state.adventure_id,
-                                    ent_mv.current_scene_id,
-                                )
-                            ent_mv.current_scene_id = resolved_target_scene_id or ent_mv.current_scene_id
-                            ent_mv.is_in_inventory = False
-                            if old_scene == "INVENTORY":
-                                response_messages.append({"role": "system", "content": f"[System] Item '{ent_mv.name}' removed from inventory."})
-                            else:
-                                response_messages.append({"role": "system", "content": f"[System] NPC '{ent_mv.name}' moved to {move.to_scene_id}."})
-
-                        if move.to_spatial_position:
-                            ent_mv.spatial_position = move.to_spatial_position
-
-            if game_event.updated_entities:
-                for upd in game_event.updated_entities:
-                    ent_upd_res = await db.execute(select(WorldEntity).where(WorldEntity.id == upd.entity_id, WorldEntity.adventure_id == state.adventure_id))
-                    ent_upd = ent_upd_res.scalars().first()
-                    if ent_upd:
-                        if upd.name: ent_upd.name = upd.name
-                        if upd.description: ent_upd.description = upd.description
-                        if upd.spatial_position: ent_upd.spatial_position = upd.spatial_position
-                        if upd.is_hidden is not None: ent_upd.is_hidden = upd.is_hidden
-                        if upd.hp is not None: ent_upd.hp = upd.hp
-                        if upd.mana is not None: ent_upd.mana = upd.mana
-                        if upd.stamina is not None: ent_upd.stamina = upd.stamina
-
-            if game_event.deleted_entities:
-                for d_id in game_event.deleted_entities:
-                    await db.execute(delete(WorldEntity).where(WorldEntity.id == d_id, WorldEntity.adventure_id == state.adventure_id))
-
-            if game_event.new_inventory_items:
-                # If the LLM generates a brand NEW item (not an existing world entity), 
-                # we should still consider syncing it if it has an ID
-                for item in game_event.new_inventory_items:
-                    ent_sync_res = await db.execute(select(WorldEntity).where(WorldEntity.id == item.id, WorldEntity.adventure_id == state.adventure_id))
-                    ent_sync = ent_sync_res.scalars().first()
-                    
-                    if ent_sync:
-                        ent_sync.is_in_inventory = True
-                        ent_sync.is_hidden = False
-
-                        # BACKFILL image_url into the avatar's inventory if missing (with persistence fix)
-                        new_inv = []
-                        for inv_item in avatar.inventory:
-                            updated_item = dict(inv_item) # Copy to ensure change detection
-                            if updated_item.get('id') == item.id and not updated_item.get('image_url'):
-                                updated_item['image_url'] = ent_sync.image_url
-                            new_inv.append(updated_item)
-                        avatar.inventory = new_inv
-
-                        response_messages.append({"role": "system", "content": f"[System] Item '{item.name}' added to inventory."})
-                    else:
-                        # CREATE brand new entity for runtime items
-                        new_ent = WorldEntity(
-                            id=item.id or str(uuid.uuid4()),
-                            adventure_id=state.adventure_id,
-                            entity_type="OBJECT",
-                            name=item.name,
-                            description=item.description,
-                            current_scene_id="INVENTORY", # Mark as in inventory
-                            is_in_inventory=True,
-                            item_type=item.item_type or "PICKABLE",
-                            image_url=item.image_url
-                        )
-                        db.add(new_ent)
-                        response_messages.append({"role": "system", "content": f"[System] New discovery: '{item.name}' added to inventory."})
-
-            if game_event.updated_exits:
-                for upd in game_event.updated_exits:
-                    ex_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == upd.from_scene_id, WorldExit.to_scene_id == upd.to_scene_id, WorldExit.adventure_id == state.adventure_id))
-                    world_exit = ex_res.scalars().first()
-                    if world_exit: world_exit.is_locked = upd.is_locked
-
-            if game_event.extra_time_minutes:
-                state.in_game_time += game_event.extra_time_minutes
-                response_messages.append({"role": "system", "content": f"[System] Time advancement: +{game_event.extra_time_minutes} minutes."})
-
-            if game_event.completed_quest_ids:
-                updated_quests = list(adventure.quests or [])
-                any_updated = False
-                for q_id in game_event.completed_quest_ids:
-                    for q in updated_quests:
-                        if q.get("id") == q_id and q.get("status", "open") == "open":
-                            q["status"] = "completed"
-                            avatar.exp += q.get("exp_reward", 0)
-                            response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Unknown Quest')} (+{q.get('exp_reward', 0)} EXP)"})
-                            any_updated = True
-                
-                if any_updated:
-                    adventure.quests = updated_quests
-                    # Check if all main quests are done
-                    main_quests = [q for q in updated_quests if q.get("is_main")]
-                    if main_quests and all(q.get("status", "open") == "completed" for q in main_quests):
-                        adventure.is_completed = True
-                        response_messages.append({"role": "system", "content": "[ADVENTURE COMPLETED] All main objectives achieved!"})
-
-        # --- Automatic Time Advancement ---
-        if adventure.clock_enabled:
-            state.in_game_time += adventure.time_per_turn
-            # We don't necessarily need a system message for every turn's base time, 
-            # as the clock itself updates. But we could add one if desired.
-
-        # --- Update Map & Register Discovery ---
-        map_res = await db.execute(select(WorldMap).where(WorldMap.adventure_id == state.adventure_id))
-        world_map = map_res.scalars().first()
-        if not world_map:
-            world_map = WorldMap(adventure_id=state.adventure_id)
-            db.add(world_map)
-
-        # If we moved, refresh the current_scene record to get proper labels/images for the map
-        if game_event and game_event.new_scene_id:
             scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.scene_id, WorldScene.adventure_id == state.adventure_id))
             current_scene = scene_res.scalars().first()
 
-        MapEngine.register_visit(
-            world_map, 
-            state.scene_id, 
-            label=(game_event.scene_label if game_event and game_event.scene_label else (current_scene.label if current_scene else None)),
-            description=(current_scene.description if current_scene else None),
-            image_url=(current_scene.image_url if current_scene else None)
-        )
-        room_exits_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == state.scene_id, WorldExit.adventure_id == state.adventure_id))
-        for ex in room_exits_res.scalars().all():
-            MapEngine.register_exit(world_map, ex.from_scene_id, ex.to_scene_id, exit_label=ex.label, is_locked=ex.is_locked)
-        
-        mermaid_data = MapEngine.to_mermaid(world_map)
-        
-        # --- Media Generation ---
-        if adventure.strict_rules and game_event and game_event.image_prompt and payload.auto_visualize:
-            try:
-                image_url = await MediaEngine.generate_scene_image(
-                    game_event.image_prompt, 
-                    adventure.id,  
-                    {"t2i_settings": user.t2i_settings}, 
-                    user.encrypted_api_keys
-                )
-                # Persist image to the world scene record
-                if current_scene:
-                    current_scene.image_url = image_url
+            MapEngine.register_visit(
+                world_map, state.scene_id, 
+                label=(game_event.scene_label if game_event and game_event.scene_label else (current_scene.label if current_scene else None)),
+                description=(current_scene.description if current_scene else None),
+                image_url=(current_scene.image_url if current_scene else None)
+            )
+            room_exits_res = await db.execute(select(WorldExit).where(WorldExit.from_scene_id == state.scene_id, WorldExit.adventure_id == state.adventure_id))
+            for ex in room_exits_res.scalars().all():
+                MapEngine.register_exit(world_map, ex.from_scene_id, ex.to_scene_id, exit_label=ex.label, is_locked=ex.is_locked)
+            
+            if adventure.strict_rules and game_event and game_event.image_prompt and payload.auto_visualize:
+                try:
+                    image_url = await MediaEngine.generate_scene_image(
+                        game_event.image_prompt, adventure.id, {"t2i_settings": user.t2i_settings}, user.encrypted_api_keys
+                    )
+                    if current_scene: current_scene.image_url = image_url
+                    MapEngine.register_visit(world_map, state.scene_id, image_url=image_url)
+                except Exception as e:
+                    logger.error(f"On-demand scene generation failed: {e}")
+
+            await db.commit()
+            
+            curr_ent_res = await db.execute(select(WorldEntity).where(
+                WorldEntity.adventure_id == state.adventure_id, 
+                WorldEntity.current_scene_id == state.scene_id,
+                WorldEntity.is_in_inventory == False,
+                WorldEntity.is_hidden == False
+            ))
+            curr_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in curr_ent_res.scalars().all()]
+
+            yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                'sheet': await _build_sheet_snapshot(avatar, state, db),
+                'mermaid': MapEngine.to_mermaid(world_map),
+                'nodes': await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
+                'image_url': image_url or (current_scene.image_url if current_scene else None),
+                'entities': curr_entities,
+                'npc_metadata': await _get_npc_metadata(state.adventure_id, db),
+                'game_over': game_over,
+                'game_over_reason': game_over_reason,
+                'adventure_image': adventure.image_url if adventure else None,
+                'quests': adventure.quests,
+                'is_completed': adventure.is_completed,
+                'discovered_item_ids': discovered_item_ids
+            }))}\n\n"
+
+        except Exception as e:
+            logger.exception("Chat processing error")
+            msg = str(e)
+            # If it's a known LLM/Provider error, send the specific message
+            if any(x in msg.lower() for x in ["litellm", "openai", "provider", "model", "notfounderror"]):
+                detail = msg
+            else:
+                detail = "The Game Master is momentarily unavailable."
                 
-                # Update map node immediately
-                MapEngine.register_visit(world_map, state.scene_id, image_url=image_url)
-                
-            except Exception as e:
-                t2i_settings = user.t2i_settings or {}
-                if (t2i_settings.get("provider") or "").lower() == "ollama":
-                    raise RuntimeError(
-                        f"On-demand scene generation failed with local Ollama configuration: {e}"
-                    ) from e
-                logger.error(f"On-demand scene generation failed: {e}")
-                # We do NOT fail the turn for cloud providers, just return no image
-                image_url = None
-
-        await db.commit()
-        
-        # Fetch current entities for the response (only show what is logically 'there')
-        curr_ent_res = await db.execute(select(WorldEntity).where(
-            WorldEntity.adventure_id == state.adventure_id, 
-            WorldEntity.current_scene_id == state.scene_id,
-            WorldEntity.is_in_inventory == False,
-            WorldEntity.is_hidden == False
-        ))
-        curr_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in curr_ent_res.scalars().all()]
-
-        return ChatResponse(
-            messages=response_messages + final_response_messages,
-            sheet=await _build_sheet_snapshot(avatar, state, db),
-            mermaid=mermaid_data,
-            nodes=await _enrich_map_nodes(state.adventure_id, world_map.nodes if world_map else {}, db),
-            image_url=image_url,
-            entities=curr_entities,
-            npc_metadata=await _get_npc_metadata(state.adventure_id, db),
-            game_over=game_over,
-            game_over_reason=game_over_reason,
-            adventure_image=adventure.image_url if adventure else None,
-            quests=adventure.quests,
-            is_completed=adventure.is_completed
-        )
-
-    except Exception as e:
-        logger.exception("Chat processing error")
-        return ChatResponse(
-            messages=[{"role": "system", "content": "The Game Master is momentarily unavailable. Please try again."}],
-            sheet=await _build_sheet_snapshot(avatar, state, db) if 'avatar' in locals() else {}
-        )
+            yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': detail}))}\n\n"
+    
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -5,6 +5,7 @@
  * Manages chat history fetching, message posting, and state synchronization.
  */
 import { ref, type Ref } from 'vue'
+import { useNotifications } from '@/composables/useNotifications'
 import type { ChatMessage, CharacterSheet } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading'
@@ -23,6 +24,7 @@ export interface UseGameSocket {
   adventureImage: Ref<string | null>
   quests: Ref<any[]>
   isCompleted: Ref<boolean>
+  statusText: Ref<string>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
@@ -30,6 +32,7 @@ export interface UseGameSocket {
 }
 
 export function useGameSocket(): UseGameSocket {
+  const { addNotification } = useNotifications()
   const messages = ref<ChatMessage[]>([])
   const sheet = ref<CharacterSheet | null>(null)
   const mermaidData = ref<string>('')
@@ -43,6 +46,7 @@ export function useGameSocket(): UseGameSocket {
   const adventureImage = ref<string | null>(null)
   const quests = ref<any[]>([])
   const isCompleted = ref(false)
+  const statusText = ref('')
   let currentGameId = ''
   let syncTimer: number | null = null
 
@@ -157,6 +161,7 @@ export function useGameSocket(): UseGameSocket {
     if (wasGameOver) return
 
     status.value = 'connecting' 
+    statusText.value = 'Considering...'
 
     try {
       const res = await fetch(`http://localhost:8000/api/adventures/${currentGameId}/chat`, {
@@ -168,29 +173,74 @@ export function useGameSocket(): UseGameSocket {
         })
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        // Append only the messages produced by this turn.
-        // The server response is authoritative for the latest scene snapshot.
-        if (data.messages) {
-          data.messages.forEach((m: any, idx: number) => {
-            const isLast = idx === data.messages.length - 1
-            _pushMessage(m.role as any, m.content, isLast ? data.discovered_item_ids : undefined)
-          })
-        }
-
-        applySessionSnapshot(data, false)
-        
-        if (data.game_over) {
-          status.value = 'game_over'
-          gameOverReason.value = data.game_over_reason
-          stopSyncTimer()
-        } else {
-          status.value = 'connected'
-        }
-      } else {
+      if (!res.ok) {
         _pushMessage('system', 'The Game Master is currently over capacity. Try once more.')
         status.value = 'connected'
+        return
+      }
+
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No reader available')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+
+        for (const part of parts) {
+          if (!part.trim()) continue
+          const lines = part.split('\n')
+          let event = 'message'
+          let data = null
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) event = line.slice(6).trim()
+            else if (line.startsWith('data:')) {
+              try {
+                data = JSON.parse(line.slice(5).trim())
+              } catch (e) {
+                console.error('Failed to parse SSE data', e)
+              }
+            }
+          }
+
+          if (!data) continue
+
+          if (event === 'status') {
+            statusText.value = data.content
+          } else if (event === 'system') {
+            _pushMessage('system', data.content)
+          } else if (event === 'chunk') {
+            let lastMsg = messages.value[messages.value.length - 1]
+            if (!lastMsg || lastMsg.role !== 'assistant') {
+              _pushMessage('assistant', '')
+              lastMsg = messages.value[messages.value.length - 1]
+            }
+            lastMsg.content += data.content
+          } else if (event === 'final') {
+            applySessionSnapshot(data, false)
+            if (data.game_over) {
+              status.value = 'game_over'
+              gameOverReason.value = data.game_over_reason
+              stopSyncTimer()
+            } else {
+              status.value = 'connected'
+              statusText.value = ''
+            }
+          } else if (event === 'error') {
+            const detail = data.detail || 'An error occurred.'
+            _pushMessage('system', detail)
+            addNotification(detail, 'error')
+            status.value = 'connected'
+            statusText.value = ''
+          }
+        }
       }
     } catch (err) {
       console.error('[Session] Chat error:', err)
@@ -212,6 +262,7 @@ export function useGameSocket(): UseGameSocket {
     adventureImage,
     quests,
     isCompleted,
+    statusText,
     connect,
     disconnect,
     sendMessage,

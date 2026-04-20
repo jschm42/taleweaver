@@ -4,7 +4,9 @@ import datetime
 import logging
 from typing import Any
 
-LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+from backend.core.config import settings
+
+LOG_DIR = os.path.join(settings.DATA_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "llm_debug.jsonl")
 
 logger = logging.getLogger(__name__)
