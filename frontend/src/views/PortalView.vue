@@ -279,6 +279,14 @@ async function onImportFileSelected(event: Event) {
   }
 
   const file = target.files[0]
+  const isAdz = file.name.toLowerCase().endsWith('.adz')
+
+  if (isAdz) {
+    await executeAdzImport(file)
+    target.value = ''
+    return
+  }
+
   try {
     const parsed = JSON.parse(await file.text()) as AdventureImportPayload
     if (!parsed.version || !parsed.title) {
@@ -299,6 +307,36 @@ async function onImportFileSelected(event: Event) {
   } finally {
     target.value = ''
   }
+}
+
+async function executeAdzImport(file: File) {
+  isImporting.value = true
+  errorMsg.value = ''
+  
+  // Use a temporary entry in pending
+  const tempId = `adz-import-${Date.now()}`
+  addPendingImportCard(tempId, file.name)
+  updatePendingImportStatus(tempId, 'Entpacke Archiv...')
+
+  try {
+    const result = await api.importAdz(file)
+    // Replace temp entry with real one
+    removePendingImportCard(tempId)
+    addPendingImportCard(result.adventure_id, file.name)
+    updatePendingImportStatus(result.adventure_id, 'Wiederherstellung abgeschlossen')
+    
+    await fetchAdventures()
+    setTimeout(() => removePendingImportCard(result.adventure_id), 3000)
+  } catch (error: any) {
+    updatePendingImportStatus(tempId, error?.message || 'ADZ Import fehlgeschlagen', true)
+  } finally {
+    isImporting.value = false
+  }
+}
+
+function exportAdz(adventureId: string) {
+  const url = api.exportAdzUrl(adventureId)
+  window.location.href = url
 }
 
 async function executeImport(userInitiated = false) {
@@ -800,6 +838,13 @@ onUnmounted(() => {
                   <span aria-hidden="true">✎</span>
                 </button>
                 <button
+                  @click="exportAdz(adv.adventure_id)"
+                  class="flex items-center justify-center px-3 py-2.5 bg-slate-800 hover:bg-emerald-900/30 text-slate-400 hover:text-emerald-400 rounded-xl border border-slate-700 transition-all duration-300"
+                  title="Export as .ADZ (with Images)"
+                >
+                  <span aria-hidden="true">⇮</span>
+                </button>
+                <button
                   @click="deleteAdventure(adv.adventure_id)"
                   class="flex items-center justify-center px-3 py-2.5 bg-slate-800 hover:bg-red-900/30 text-slate-400 hover:text-red-400 rounded-xl border border-slate-700 transition-all duration-300"
                   title="Delete Adventure"
@@ -812,7 +857,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <input ref="importInput" type="file" accept=".adv,application/json" @change="onImportFileSelected" class="hidden" />
+      <input ref="importInput" type="file" accept=".adv,.adz,application/json,application/zip" @change="onImportFileSelected" class="hidden" />
     </main>
 
     <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center pt-10">

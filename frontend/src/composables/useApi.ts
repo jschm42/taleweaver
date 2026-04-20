@@ -84,4 +84,26 @@ export const api = {
       body: JSON.stringify({ items }),
     })
   },
+
+  /** Returns the URL for exporting an adventure as ADZ. */
+  exportAdzUrl(adventureId: string): string {
+    return `${BASE}/adventures/${adventureId}/export/adz`
+  },
+
+  /** Import an ADZ file via FormData. */
+  async importAdz(file: File): Promise<{ status: string; adventure_id: string }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const res = await fetch(`${BASE}/adventures/import/adz`, {
+      method: 'POST',
+      body: formData,
+    })
+    
+    if (!res.ok) {
+      const detail = await res.text()
+      throw new Error(`ADZ Import ${res.status}: ${detail}`)
+    }
+    return res.json()
+  },
 }

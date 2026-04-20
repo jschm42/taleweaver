@@ -2,10 +2,13 @@ import logging
 import os
 import json
 import uuid
+import zipfile
+import io
 from copy import deepcopy
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, Form, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from pydantic import BaseModel, Field, model_validator
@@ -1755,6 +1758,275 @@ async def export_adventure_session(adventure_id: str, db: AsyncSession = Depends
         "avatar": {c.name: getattr(avatar, c.name) for c in avatar.__table__.columns} if avatar else None,
         "chat_history": [{c.name: getattr(msg, c.name) for c in msg.__table__.columns} for msg in chat_logs]
     }
+
+
+@router.get("/{adventure_id}/export/adz")
+async def export_adventure_adz(adventure_id: str, db: AsyncSession = Depends(get_db)):
+    """Exports the adventure as a ZIP archive (ADZ) including all asset images."""
+    adv_res = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
+    adventure = adv_res.scalars().first()
+    if not adventure:
+        raise HTTPException(status_code=404, detail="Adventure not found")
+        
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+    scenes = scene_res.scalars().all()
+    
+    exit_res = await db.execute(select(WorldExit).where(WorldExit.adventure_id == adventure_id))
+    exits = exit_res.scalars().all()
+    
+    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+    entities = entity_res.scalars().all()
+
+    avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
+    avatar = avatar_res.scalars().first()
+
+    # Build the manifest with schema-compatible keys
+    manifest = {
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {c.name: getattr(adventure, c.name) for c in adventure.__table__.columns},
+        "protagonist": {c.name: getattr(avatar, c.name) for c in avatar.__table__.columns} if avatar else None,
+        "scenes": [{
+            "id": s.id,
+            "name": s.label,
+            "description": s.description,
+            "image_url": s.image_url
+        } for s in scenes],
+        "npcs": [{
+            **{c.name: getattr(ent, c.name) for c in ent.__table__.columns},
+            "start_scene_id": ent.current_scene_id
+        } for ent in entities if ent.entity_type == "NPC"],
+        "objects": [{
+            **{c.name: getattr(ent, c.name) for c in ent.__table__.columns},
+            "start_scene_id": ent.current_scene_id
+        } for ent in entities if ent.entity_type == "OBJECT"],
+        "exits": [{
+            "from_scene_id": e.from_scene_id,
+            "to_scene_id": e.to_scene_id,
+            "label": e.label,
+            "is_locked": e.is_locked,
+            "lock_description": e.lock_description
+        } for e in exits]
+    }
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+        image_mapping = {} # original_url -> zip_path
+        
+        def add_image_to_zip(url: str):
+            if not url or url.startswith("http") or url in image_mapping:
+                return image_mapping.get(url, url)
+            
+            if url.startswith("/data/"):
+                rel_path = url.removeprefix("/data/")
+                abs_path = os.path.join(settings.DATA_DIR, rel_path)
+                
+                if os.path.exists(abs_path):
+                    zip_path = f"assets/{os.path.basename(abs_path)}"
+                    counter = 1
+                    original_zip_path = zip_path
+                    while zip_path in zip_file.namelist():
+                        name, ext = os.path.splitext(original_zip_path)
+                        zip_path = f"{name}_{counter}{ext}"
+                        counter += 1
+                        
+                    zip_file.write(abs_path, zip_path)
+                    image_mapping[url] = zip_path
+                    return zip_path
+            return url
+
+        # Process all image fields
+        if adventure.image_url:
+            manifest["adventure"]["image_url"] = add_image_to_zip(adventure.image_url)
+            
+        if avatar and avatar.profile_image:
+            if manifest["protagonist"]:
+                manifest["protagonist"]["profile_image"] = add_image_to_zip(avatar.profile_image)
+
+        for i, s in enumerate(scenes):
+            if s.image_url:
+                manifest["scenes"][i]["image_url"] = add_image_to_zip(s.image_url)
+
+        for i, ent in enumerate(manifest["npcs"]):
+            if ent["image_url"]:
+                manifest["npcs"][i]["image_url"] = add_image_to_zip(ent["image_url"])
+
+        for i, ent in enumerate(manifest["objects"]):
+            if ent["image_url"]:
+                manifest["objects"][i]["image_url"] = add_image_to_zip(ent["image_url"])
+
+        # Use a custom serializer to handle datetime objects from the DB
+        def json_serial(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
+        zip_file.writestr("adventure.adv", json.dumps(manifest, indent=2, default=json_serial))
+
+    zip_buffer.seek(0)
+    safe_title = "".join([c for c in adventure.title if c.isalnum() or c in (" ", "_")]).strip().replace(" ", "_")
+    filename = f"{safe_title}.adz"
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@router.post("/import/adz", status_code=201)
+async def import_adventure_adz(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Imports an adventure from an ADZ archive, including all asset images."""
+    if not file.filename.lower().endswith(".adz"):
+        raise HTTPException(status_code=400, detail="Invalid file format. Expected .adz")
+
+    zip_content = await file.read()
+    zip_buffer = io.BytesIO(zip_content)
+    
+    try:
+        with zipfile.ZipFile(zip_buffer, "r") as zip_file:
+            if "adventure.adv" not in zip_file.namelist():
+                raise HTTPException(status_code=400, detail="Invalid ADZ archive. Missing adventure.adv")
+            
+            manifest_data = json.loads(zip_file.read("adventure.adv").decode("utf-8"))
+            
+            # Create new adventure ID
+            new_adv_id = str(uuid.uuid4())
+            adv_data = manifest_data["adventure"]
+            
+            # Create Adventure record
+            new_adv = Adventure(
+                id=new_adv_id,
+                title=adv_data["title"],
+                context=adv_data["context"],
+                strict_rules=adv_data.get("strict_rules", True),
+                rule_enforcement_mode=adv_data.get("rule_enforcement_mode", "strict"),
+                time_per_turn=adv_data.get("time_per_turn", 5),
+                pacing_minutes=adv_data.get("pacing_minutes", 5),
+                clock_enabled=adv_data.get("clock_enabled", False),
+                heartbeat_enabled=adv_data.get("heartbeat_enabled", False),
+                generate_scene_images=adv_data.get("generate_scene_images", False),
+                generate_npc_images=adv_data.get("generate_npc_images", False),
+                generate_item_images=adv_data.get("generate_item_images", False),
+                selected_image_styles=adv_data.get("selected_image_styles", []),
+                selected_tone=adv_data.get("selected_tone"),
+                is_ready=True,
+                creation_status="Ready",
+            )
+            db.add(new_adv)
+            
+            target_base_dir = os.path.join(settings.DATA_DIR, "adventures", new_adv_id)
+            os.makedirs(target_base_dir, exist_ok=True)
+            
+            existing_images_mapping = {} # zip_path -> local_url
+            for zip_path in zip_file.namelist():
+                if zip_path.startswith("assets/"):
+                    filename = os.path.basename(zip_path)
+                    target_path = os.path.join(target_base_dir, filename)
+                    with open(target_path, "wb") as f:
+                        f.write(zip_file.read(zip_path))
+                    
+                    rel_path = os.path.relpath(target_path, settings.DATA_DIR).replace("\\", "/")
+                    existing_images_mapping[zip_path] = f"/data/{rel_path}"
+
+            # Create Avatar
+            prot = manifest_data.get("protagonist")
+            if prot:
+                result = await db.execute(select(User).limit(1))
+                user = result.scalars().first()
+                if not user:
+                    user = User(username="local_default_user")
+                    db.add(user)
+                    await db.flush()
+                
+                profile_image = existing_images_mapping.get(prot.get("profile_image")) if prot.get("profile_image") else None
+                
+                new_avatar = Avatar(
+                    user_id=user.id,
+                    adventure_id=new_adv_id,
+                    name=prot["name"],
+                    role=prot.get("role"),
+                    description=prot.get("description"),
+                    profile_image=profile_image,
+                    hp=prot.get("hp", 200),
+                    stamina=prot.get("stamina", 200),
+                    mana=prot.get("mana", 200),
+                    inventory=prot.get("inventory", []),
+                    equipment=prot.get("equipment", {}),
+                    stats=prot.get("stats", {}),
+                )
+                db.add(new_avatar)
+                await db.flush()
+
+                db.add(GameState(
+                    id=new_adv_id,
+                    user_id=user.id,
+                    adventure_id=new_adv_id,
+                    avatar_id=new_avatar.id,
+                    scene_id="START",
+                    in_game_time=0
+                ))
+
+            # Reconstruct world using apply_manifest
+            world_manifest = {
+                "protagonist": {
+                    "name": prot["name"] if prot else "You",
+                    "role": prot.get("role") if prot else "Adventurer",
+                    "description": prot.get("description") if prot else "",
+                    "starting_inventory": [],
+                    "starting_equipment": {}
+                },
+                "scenes": manifest_data["scenes"],
+                "exits": manifest_data["exits"],
+                "npcs": manifest_data["npcs"],
+                "objects": manifest_data["objects"],
+                "quests": adv_data.get("quests", [])
+            }
+
+            # Fallback for old ADZs that use current_scene_id instead of start_scene_id
+            for n in world_manifest["npcs"]:
+                if "start_scene_id" not in n and "current_scene_id" in n:
+                    n["start_scene_id"] = n["current_scene_id"]
+            for o in world_manifest["objects"]:
+                if "start_scene_id" not in o and "current_scene_id" in o:
+                    o["start_scene_id"] = o["current_scene_id"]
+            
+            image_urls = {}
+            if prot and prot.get("profile_image") in existing_images_mapping:
+                image_urls["PROTAGONIST"] = existing_images_mapping[prot["profile_image"]]
+            
+            for s in manifest_data["scenes"]:
+                if s.get("image_url") in existing_images_mapping:
+                    image_urls[s["id"]] = existing_images_mapping[s["image_url"]]
+            
+            for n in manifest_data["npcs"]:
+                if n.get("image_url") in existing_images_mapping:
+                    image_urls[n["id"]] = existing_images_mapping[n["image_url"]]
+
+            for o in manifest_data["objects"]:
+                if o.get("image_url") in existing_images_mapping:
+                    image_urls[o["id"]] = existing_images_mapping[o["image_url"]]
+
+            await WorldGenerator.apply_manifest(
+                db=db,
+                adventure_id=new_adv_id,
+                manifest_dict=world_manifest,
+                user=None,
+                existing_images=image_urls
+            )
+            
+            if adv_data.get("image_url") in existing_images_mapping:
+                new_adv.image_url = existing_images_mapping[adv_data["image_url"]]
+
+            await db.commit()
+            return {"status": "success", "adventure_id": new_adv_id}
+
+    except Exception as e:
+        logger.exception("ADZ Import failed")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 @router.post("/import/session-bundle")
 async def import_adventure_session_bundle(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
