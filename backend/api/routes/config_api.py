@@ -156,6 +156,9 @@ class T2ISettingsPayload(BaseModel):
     image_format: Optional[str] = "jpeg"
     image_quality: Optional[int] = 85
     negative_prompt: Optional[str] = None
+class GameSettingsPayload(BaseModel):
+    clock_24h: bool = False
+    date_format: str = "DD.MM.YY"
 
 
 class CatalogTilePayload(BaseModel):
@@ -198,6 +201,10 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
             },
             "image_styles_catalog": _default_image_styles_catalog(),
             "tone_catalog": _default_tone_catalog(),
+            "game_settings": {
+                "clock_24h": False,
+                "date_format": "DD.MM.YY"
+            },
         }
     
     # Return providers that have keys, but not the actual keys
@@ -226,6 +233,10 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
             user.tone_catalog,
             fallback=_default_tone_catalog(),
         ),
+        "game_settings": user.game_settings or {
+            "clock_24h": False,
+            "date_format": "DD.MM.YY"
+        },
     }
 
 @router.post("/keys")
@@ -312,4 +323,18 @@ async def update_tone_catalog(payload: CatalogUpdatePayload, db: AsyncSession = 
     user.tone_catalog = _normalize_catalog(raw_items, fallback=_default_tone_catalog())
     await db.commit()
     return {"status": "success", "message": "Tone catalog updated."}
+@router.post("/game")
+async def update_game_settings(payload: GameSettingsPayload, db: AsyncSession = Depends(get_db)):
+    """Updates the general game preferences."""
+    result = await db.execute(select(User).limit(1))
+    user = result.scalars().first()
+    
+    if not user:
+        user = User(username="local_default_user")
+        db.add(user)
+        await db.flush()
+        
+    user.game_settings = payload.model_dump()
+    await db.commit()
+    return {"status": "success", "message": "Game settings updated."}
 

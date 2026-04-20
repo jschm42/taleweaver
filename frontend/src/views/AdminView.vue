@@ -6,7 +6,7 @@ import type { CatalogTile } from '@/types'
 const router = useRouter()
 
 // NAVIGATION
-type Section = 'keys' | 'llm' | 't2i' | 'styles' | 'tones'
+type Section = 'keys' | 'llm' | 't2i' | 'styles' | 'tones' | 'game'
 const activeSection = ref<Section>('keys')
 
 // FORMS
@@ -36,6 +36,11 @@ const t2iForm = ref({
   negative_prompt: '',
 })
 
+const gameForm = ref({
+  clock_24h: false,
+  date_format: 'DD.MM.YY',
+})
+
 // STATE
 const configuredKeys = ref<Record<string, string>>({})
 const isSubmitting = ref(false)
@@ -57,6 +62,7 @@ const fetchSettings = async () => {
       configuredKeys.value = data.keys || {}
       if (data.llm_settings) llmForm.value = { ...data.llm_settings }
       if (data.t2i_settings) t2iForm.value = { ...data.t2i_settings }
+      if (data.game_settings) gameForm.value = { ...data.game_settings }
       imageStylesCatalog.value = data.image_styles_catalog || []
       toneCatalog.value = data.tone_catalog || []
     }
@@ -302,12 +308,20 @@ watch(
           <i class="ra ra-paint-brush"></i>
           <span class="font-semibold text-sm">Image Styles</span>
         </button>
-        <button
+        <button 
           @click="activeSection = 'tones'"
-          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'tones' ? 'bg-pink-500/10 text-pink-300 border border-pink-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
+          :class="['w-full text-left px-4 py-3 rounded-xl transition-all duration-300 flex items-center gap-3', activeSection === 'tones' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800 text-slate-400']"
         >
-          <i class="ra ra-scroll-unfurled"></i>
-          <span class="font-semibold text-sm">World Tones</span>
+          <i class="ra ra-scroll"></i>
+          <span class="font-bold uppercase tracking-widest text-xs">Narrative Tones</span>
+        </button>
+
+        <button 
+          @click="activeSection = 'game'"
+          :class="['w-full text-left px-4 py-3 rounded-xl transition-all duration-300 flex items-center gap-3', activeSection === 'game' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800 text-slate-400']"
+        >
+          <i class="ra ra-gear"></i>
+          <span class="font-bold uppercase tracking-widest text-xs">Game Settings</span>
         </button>
       </nav>
 
@@ -479,8 +493,8 @@ watch(
                   </div>
                   <input v-model.number="t2iForm.image_quality" type="range" min="10" max="100" step="5" class="w-full h-2 bg-slate-950 border border-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
                   <div class="flex justify-between text-[10px] text-slate-500 font-mono">
-                    <span>Small File</span>
-                    <span>Best Quality</span>
+                    <span>Low</span>
+                    <span>High</span>
                   </div>
                 </div>
               </div>
@@ -589,6 +603,50 @@ watch(
 
             <button @click="saveToneCatalog" :disabled="isSubmitting" class="w-full py-4 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl disabled:opacity-50">
               {{ isSubmitting ? 'Saving...' : 'Save Tones' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- SECTION: GAME SETTINGS -->
+        <div v-if="activeSection === 'game'" class="space-y-8 animate-fade-in">
+          <div>
+            <h1 class="text-4xl font-extrabold text-white mb-2">Game Preferences</h1>
+            <p class="text-slate-400">Configure global interface and gameplay options.</p>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
+            <div class="p-6 bg-slate-950/40 border border-slate-800/40 rounded-2xl space-y-6">
+              <!-- Clock Settings -->
+              <div class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5">
+                <div>
+                  <div class="text-sm font-bold text-white">24-Hour Format</div>
+                  <div class="text-xs text-slate-500">Enable to use 24h clock, otherwise 12h (AM/PM) is used.</div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" v-model="gameForm.clock_24h" class="sr-only peer">
+                  <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              <!-- Date Format Settings -->
+              <div class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5">
+                <div>
+                  <div class="text-sm font-bold text-white">Date Format</div>
+                  <div class="text-xs text-slate-500">Choose how the in-game date is presented.</div>
+                </div>
+                <select 
+                  v-model="gameForm.date_format"
+                  class="bg-slate-950 border border-slate-800 text-white text-xs rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 px-4"
+                >
+                  <option value="DD.MM.YY">DD.MM.YY (e.g. 24.12.26)</option>
+                  <option value="MM/DD/YY">MM/DD/YY (e.g. 12/24/26)</option>
+                  <option value="YY-MM-DD">YY-MM-DD (e.g. 26-12-24)</option>
+                </select>
+              </div>
+            </div>
+
+            <button @click="saveGameSettings" :disabled="isSubmitting" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg shadow-indigo-500/20">
+              {{ isSubmitting ? 'Saving...' : 'Apply Game Settings' }}
             </button>
           </div>
         </div>

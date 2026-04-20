@@ -93,6 +93,8 @@ class GameEvent(BaseModel):
     
     # Time Management
     extra_time_minutes: int = 0 # Extra time this action takes (added to turn base)
+    time_override_minutes: Optional[int] = None # Absolute override for in_game_time (minutes since start)
+    start_datetime_override: Optional[str] = None # ISO string for start_datetime (shifts the entire calendar)
     
     # Quest System
     completed_quest_ids: Optional[List[str]] = None

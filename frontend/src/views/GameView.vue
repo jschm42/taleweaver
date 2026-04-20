@@ -32,6 +32,7 @@ const showDebugLog = ref(false)
 const trackedQuestId = ref<string | null>(null)
 const clockTick = ref(false)
 const { notifications, removeNotification } = useNotifications()
+const gameSettings = ref({ clock_24h: false })
 
 const {
   sheet,
@@ -110,13 +111,37 @@ const gameTime = computed(() => {
     month: '2-digit',
     day: '2-digit',
   })
-  const time = current.toLocaleTimeString('de-DE', {
+
+  const dateShort = (() => {
+    const d = current.getDate().toString().padStart(2, '0')
+    const m = (current.getMonth() + 1).toString().padStart(2, '0')
+    const y = current.getFullYear().toString().slice(-2)
+    
+    switch (gameSettings.value.date_format) {
+      case 'MM/DD/YY': return `${m}/${d}/${y}`
+      case 'YY-MM-DD': return `${y}-${m}-${d}`
+      default: return `${d}.${m}.${y}`
+    }
+  })()
+
+  const time = current.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: !gameSettings.value.clock_24h,
+  }).replace(/^0/, '') // Strip leading zero for cleaner look in 12h
+
+  // In 24h mode, ensure 2-digit hour
+  const time24 = current.toLocaleTimeString('de-DE', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   })
 
-  return { date, time }
+  return { 
+    date, 
+    dateShort,
+    time: gameSettings.value.clock_24h ? time24 : time 
+  }
 })
 
 // Flash the clock on every update to give a living-time feel
@@ -152,7 +177,20 @@ const goBack = () => {
   router.push({ name: 'portal' })
 }
 
+const fetchGameSettings = async () => {
+  try {
+    const res = await fetch('http://localhost:8000/api/settings')
+    if (res.ok) {
+      const data = await res.json()
+      if (data.game_settings) gameSettings.value = data.game_settings
+    }
+  } catch (e) {
+    console.error('Failed to fetch game settings', e)
+  }
+}
+
 onMounted(() => {
+  fetchGameSettings()
   if (props.id) {
     connect(props.id)
   }
@@ -183,7 +221,7 @@ onBeforeUnmount(() => {
       <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
     </div>
 
-    <!-- Header Navigation -->    <header class="bg-transparent px-8 py-2 flex items-start justify-center z-10 shrink-0 relative">
+    <!-- Header Navigation -->    <header class="bg-transparent px-8 pt-8 pb-4 flex items-start justify-center z-10 shrink-0 relative min-h-[110px]">
       <!-- Left: back + Adventure Title (Absolute) -->
       <div class="absolute left-8 top-8 flex items-center gap-4 z-10">
         <button 
@@ -231,13 +269,16 @@ onBeforeUnmount(() => {
       <div class="absolute right-8 top-8 z-10">
         <div class="flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': clockTick }">
           <template v-if="gameTime">
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-500/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="flex items-center gap-3 px-4 py-2 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md shadow-lg transition-all">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500/80 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span class="clock-time text-lg font-black text-amber-300 tracking-widest leading-none">
-                {{ gameTime.time }}
-              </span>
+              <div class="flex flex-col items-end">
+                <span class="text-[11px] font-black text-amber-500/60 uppercase tracking-widest leading-none mb-1.5">{{ gameTime.dateShort }}</span>
+                <span class="clock-time text-2xl font-black text-amber-300 tracking-widest leading-none tabular-nums">
+                  {{ gameTime.time }}
+                </span>
+              </div>
             </div>
           </template>
         </div>

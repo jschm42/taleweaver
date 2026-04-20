@@ -148,6 +148,10 @@ class WorldManifesto(BaseModel):
     npcs: List[WorldEntitySchema]
     objects: List[WorldEntitySchema]
     quests: List[QuestSchema]
+    
+    # Optional Time Initialization
+    start_date: Optional[str] = Field(None, description="Initial in-game date, e.g. '2026-04-17'")
+    start_time: Optional[str] = Field(None, description="Initial in-game time, e.g. '08:00'")
 
 class WorldGenerator:
     @staticmethod

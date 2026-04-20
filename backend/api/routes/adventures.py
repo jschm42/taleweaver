@@ -2686,6 +2686,18 @@ async def post_chat_message(
                     state.in_game_time += game_event.extra_time_minutes
                     response_messages.append({"role": "system", "content": f"[System] Time advancement: +{game_event.extra_time_minutes} minutes."})
 
+                if game_event.time_override_minutes is not None:
+                    state.in_game_time = game_event.time_override_minutes
+                    response_messages.append({"role": "system", "content": f"[System] Time jump: clock set to {game_event.time_override_minutes} minutes from start."})
+
+                if game_event.start_datetime_override:
+                    if adventure.original_manifest:
+                        # Update the manifest so it persists across resets/reloads
+                        manifest = dict(adventure.original_manifest)
+                        manifest["start_datetime"] = game_event.start_datetime_override
+                        adventure.original_manifest = manifest
+                    response_messages.append({"role": "system", "content": f"[System] Calendar shift: adventure start time updated to {game_event.start_datetime_override}."})
+
                 if game_event.completed_quest_ids:
                     updated_quests = list(adventure.quests or [])
                     any_updated = False
