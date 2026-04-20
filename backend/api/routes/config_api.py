@@ -110,8 +110,8 @@ def _normalize_openrouter_model(model: Optional[str]) -> Optional[str]:
     if not normalized:
         return normalized
 
-    if "/" in normalized:
-        return normalized.split("/", 1)[1].strip()
+    if normalized.lower().startswith("openrouter/"):
+        return normalized[len("openrouter/"):].strip()
 
     return normalized
 

@@ -31,6 +31,7 @@ interface PendingAdventureCard {
 
 const adventures = ref<Adventure[]>([])
 const isLoading = ref(true)
+const isLlmConfigured = ref(true)
 
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
@@ -230,6 +231,16 @@ async function fetchAdventures() {
     console.error('API Error:', error)
   } finally {
     isLoading.value = false
+  }
+}
+
+async function fetchSettings() {
+  try {
+    const settings = await api.getSettings()
+    const llmProvider = settings.llm_settings?.preferred_provider as string || 'openai'
+    isLlmConfigured.value = llmProvider === 'ollama' || !!settings.keys[llmProvider]
+  } catch (error) {
+    console.error('Settings API Error:', error)
   }
 }
 
@@ -547,6 +558,7 @@ function goToAdmin() {
 
 onMounted(() => {
   resetCreateForm()
+  void fetchSettings()
   fetchAdventures()
   loadingWordTimer = window.setInterval(() => {
     loadingWordIndex.value = (loadingWordIndex.value + 1) % loadingWords.length
@@ -592,16 +604,25 @@ onUnmounted(() => {
       <div v-else-if="adventures.length === 0 && pendingImports.length === 0 && pendingCreations.length === 0" class="text-center py-20 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
         <h2 class="text-2xl font-bold text-white mb-2">No active adventures</h2>
         <p class="text-slate-400 mb-8 max-w-md mx-auto">Start your first world or import a prepared ADV manifest.</p>
+
+        <div v-if="!isLlmConfigured" class="mb-8 p-4 max-w-md mx-auto rounded-lg border border-red-500/30 bg-red-500/10 text-sm text-red-300">
+          No LLM model configured! Please configure an LLM provider in the 
+          <router-link :to="{ name: 'admin' }" class="text-emerald-400 font-bold underline hover:text-emerald-300">Settings</router-link> 
+          before generating or importing adventures.
+        </div>
+
         <div class="flex items-center justify-center gap-3">
           <button
             @click="openCreateModal"
-            class="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold rounded-xl transition-all duration-300"
+            :disabled="!isLlmConfigured"
+            :class="['px-8 py-3 font-bold rounded-xl transition-all duration-300', isLlmConfigured ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed']"
           >
             Begin New Adventure
           </button>
           <button
             @click="triggerImportPicker"
-            class="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all duration-300"
+            :disabled="!isLlmConfigured"
+            :class="['px-8 py-3 font-bold rounded-xl transition-all duration-300', isLlmConfigured ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50']"
           >
             Import .ADV
           </button>
@@ -609,24 +630,32 @@ onUnmounted(() => {
       </div>
 
       <div v-else>
-        <div class="flex justify-between items-end mb-8">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4">
           <div>
             <h2 class="text-2xl font-bold text-white">Your Journeys</h2>
             <p class="text-slate-400 text-sm mt-1">Continue where you left off</p>
           </div>
-          <div class="flex gap-2">
-            <button
-              @click="openCreateModal"
-              class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-lg"
-            >
-              New Adventure
-            </button>
-            <button
-              @click="triggerImportPicker"
-              class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-lg"
-            >
-              Import
-            </button>
+
+          <div class="flex flex-col items-end gap-2">
+            <div v-if="!isLlmConfigured" class="text-xs text-red-400 max-w-[250px] text-right mb-1">
+              No LLM configured! Go to <router-link :to="{ name: 'admin' }" class="underline font-bold text-red-300 hover:text-white">Settings</router-link>.
+            </div>
+            <div class="flex gap-2">
+              <button
+                @click="openCreateModal"
+                :disabled="!isLlmConfigured"
+                :class="['px-5 py-2.5 font-semibold rounded-lg transition-colors', isLlmConfigured ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-400 hover:to-teal-400' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50']"
+              >
+                New Adventure
+              </button>
+              <button
+                @click="triggerImportPicker"
+                :disabled="!isLlmConfigured"
+                :class="['px-5 py-2.5 font-semibold rounded-lg transition-colors', isLlmConfigured ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-400 hover:to-teal-400' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50']"
+              >
+                Import
+              </button>
+            </div>
           </div>
         </div>
 

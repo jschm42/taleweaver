@@ -31,6 +31,7 @@ const isLoadingCatalogs = ref(true)
 const isSubmitting = ref(false)
 const errorMsg = ref('')
 const statusMsg = ref('')
+const isImageLlmConfigured = ref(true)
 
 const ruleModeHelp = computed(() => {
   if (form.value.rule_enforcement_mode === 'rpg') {
@@ -58,6 +59,16 @@ async function loadCatalogs() {
     toneCatalog.value = settings.tone_catalog || []
     if (!form.value.selected_tone && toneCatalog.value.length > 0) {
       form.value.selected_tone = toneCatalog.value[0].id
+    }
+    
+    const t2iProvider = settings.t2i_settings?.provider as string || 'openai'
+    isImageLlmConfigured.value = t2iProvider === 'ollama' || !!settings.keys[t2iProvider]
+    
+    if (!isImageLlmConfigured.value) {
+      form.value.generate_npc_images = false
+      form.value.generate_item_images = false
+      form.value.generate_scene_images = false
+      form.value.automatic_cover_generation = false
     }
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to load configurations.'
@@ -251,22 +262,28 @@ onMounted(() => {
         </div>
 
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-          <h2 class="text-lg font-bold text-white">Image Generation</h2>
-          <label class="flex items-center justify-between gap-3 text-sm">
+          <h2 class="text-lg font-bold text-white mb-2">Image Generation</h2>
+          
+          <div v-if="!isImageLlmConfigured" class="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-300">
+            No Image Generation model configured! Please configure a Text-to-Image provider in the 
+            <router-link :to="{ name: 'admin' }" class="text-emerald-400 font-bold underline hover:text-emerald-300">Settings</router-link>.
+          </div>
+
+          <label :class="['flex items-center justify-between gap-3 text-sm transition-opacity', !isImageLlmConfigured ? 'opacity-50 cursor-not-allowed' : '']">
             <span>Generate NPC Images</span>
-            <input type="checkbox" v-model="form.generate_npc_images" />
+            <input type="checkbox" v-model="form.generate_npc_images" :disabled="!isImageLlmConfigured" />
           </label>
-          <label class="flex items-center justify-between gap-3 text-sm">
+          <label :class="['flex items-center justify-between gap-3 text-sm transition-opacity', !isImageLlmConfigured ? 'opacity-50 cursor-not-allowed' : '']">
             <span>Generate Item Images</span>
-            <input type="checkbox" v-model="form.generate_item_images" />
+            <input type="checkbox" v-model="form.generate_item_images" :disabled="!isImageLlmConfigured" />
           </label>
-          <label class="flex items-center justify-between gap-3 text-sm">
+          <label :class="['flex items-center justify-between gap-3 text-sm transition-opacity', !isImageLlmConfigured ? 'opacity-50 cursor-not-allowed' : '']">
             <span>Generate Scene Images</span>
-            <input type="checkbox" v-model="form.generate_scene_images" />
+            <input type="checkbox" v-model="form.generate_scene_images" :disabled="!isImageLlmConfigured" />
           </label>
-          <label class="flex items-center justify-between gap-3 text-sm">
+          <label :class="['flex items-center justify-between gap-3 text-sm transition-opacity', !isImageLlmConfigured ? 'opacity-50 cursor-not-allowed' : '']">
             <span>Automatic Cover Generation</span>
-            <input type="checkbox" v-model="form.automatic_cover_generation" />
+            <input type="checkbox" v-model="form.automatic_cover_generation" :disabled="!isImageLlmConfigured" />
           </label>
         </div>
       </section>

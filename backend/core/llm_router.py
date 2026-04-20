@@ -109,6 +109,7 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
+            "max_tokens": 4096,
         }
 
         if self.provider == "ollama":
@@ -188,7 +189,8 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "response_format": response_model
+            "response_format": response_model,
+            "max_tokens": 4096,
         }
 
         if self.provider == "ollama":
