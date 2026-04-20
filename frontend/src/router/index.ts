@@ -47,6 +47,12 @@ const router = createRouter({
       // Pass the route params as props to the component easily
       props: true, 
     },
+    {
+      path: '/adventures/:adventureId/editor',
+      name: 'adventure-editor',
+      component: () => import('@/views/AdventureEditorView.vue'),
+      props: true,
+    },
   ],
 })
 

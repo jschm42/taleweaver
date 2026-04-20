@@ -9,6 +9,7 @@ export interface ChatMessage {
 export interface CharacterSheet {
   name: string
   adventure_title?: string | null
+  adventure_id?: string | null
   role?: string | null
   description?: string | null
   profile_image?: string | null

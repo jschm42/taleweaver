@@ -303,14 +303,15 @@ def _build_visual_prompt(
     style_instruction: Optional[str] = None,
     tone_instruction: Optional[str] = None,
 ) -> str:
-    if custom_prompt and custom_prompt.strip():
-        return custom_prompt.strip()
-
     prompt_suffix = ""
     if style_instruction:
         prompt_suffix += f" Style constraints: {style_instruction}."
     if tone_instruction:
         prompt_suffix += f" Narrative tone reference: {tone_instruction}."
+
+    if custom_prompt and custom_prompt.strip():
+        return f"{custom_prompt.strip()} {prompt_suffix}".strip()
+
 
     if target_type == "protagonist":
         name = target_data.get("name") or "The protagonist"
@@ -1274,6 +1275,142 @@ async def get_adventure_debug(adventure_id: str, db: AsyncSession = Depends(get_
     )
 
 
+class EntityUpdateRequest(BaseModel):
+    target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
+    target_id: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class AIEditRequest(BaseModel):
+    prompt: str
+
+@router.patch("/{adventure_id}/editor/entity")
+async def update_editor_entity(
+    adventure_id: str,
+    payload: EntityUpdateRequest,
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    adv = await db.get(Adventure, adventure_id)
+    if not adv:
+        raise HTTPException(status_code=404, detail="Adventure not found")
+        
+    if payload.target_type == "cover":
+        if payload.name is not None:
+            adv.title = payload.name
+        if payload.description is not None:
+            adv.context = payload.description
+    elif payload.target_type == "protagonist":
+        av_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
+        avatar = av_res.scalars().first()
+        if not avatar:
+            raise HTTPException(status_code=404, detail="Protagonist not found")
+        if payload.name is not None:
+            avatar.name = payload.name
+        if payload.description is not None:
+            avatar.description = payload.description
+    elif payload.target_type == "scene":
+        sc_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id, WorldScene.id == payload.target_id))
+        scene = sc_res.scalars().first()
+        if not scene:
+            raise HTTPException(status_code=404, detail="Scene not found")
+        if payload.name is not None:
+            scene.label = payload.name
+        if payload.description is not None:
+            scene.description = payload.description
+    else:
+        en_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id, WorldEntity.id == payload.target_id))
+        ent = en_res.scalars().first()
+        if not ent:
+            raise HTTPException(status_code=404, detail="Entity not found")
+        if payload.name is not None:
+            ent.name = payload.name
+        if payload.description is not None:
+            ent.description = payload.description
+            
+    await db.commit()
+    return {"status": "success"}
+
+@router.post("/{adventure_id}/editor/ai-edit")
+async def ai_edit_adventure(
+    adventure_id: str,
+    payload: AIEditRequest,
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Game state not found")
+        
+    user = await db.get(User, state.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    adv = await db.get(Adventure, adventure_id)
+    if not adv:
+        raise HTTPException(status_code=404, detail="Adventure not found")
+        
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+    scenes = scene_res.scalars().all()
+    
+    exit_res = await db.execute(select(WorldExit).where(WorldExit.adventure_id == adventure_id))
+    exits = exit_res.scalars().all()
+    
+    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+    entities = entity_res.scalars().all()
+
+    avatar_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
+    avatar = avatar_res.scalars().first()
+
+    manifest_dict = {
+        "protagonist": {
+            "name": avatar.name if avatar else "You",
+            "role": avatar.role if avatar else "Adventurer",
+            "description": avatar.description if avatar else ""
+        },
+        "scenes": [{"id": s.id, "name": s.label, "description": s.description} for s in scenes],
+        "npcs": [{"id": n.id, "name": n.name, "description": n.description, "type": "NPC", "start_scene_id": n.current_scene_id, "spatial_position": n.spatial_position or "nearby"} for n in entities if n.entity_type == "NPC"],
+        "objects": [{"id": o.id, "name": o.name, "description": o.description, "type": "OBJECT", "start_scene_id": o.current_scene_id, "spatial_position": o.spatial_position or "nearby", "item_type": o.item_type} for o in entities if o.entity_type == "OBJECT"],
+        "exits": [{"from_scene_id": e.from_scene_id, "to_scene_id": e.to_scene_id, "label": e.label, "is_locked": e.is_locked, "lock_description": e.lock_description} for e in exits],
+        "quests": adv.quests or []
+    }
+    
+    from backend.engine.world_generator import WorldManifesto
+    
+    provider = (user.llm_settings or {}).get("preferred_provider", "openai")
+    model = (user.llm_settings or {}).get("preferred_model", "gpt-4o")
+    llm = GameMasterLLM(user, provider=provider)
+    
+    system_prompt = "You are the AI assistant for TaleWeaver, an RPG game engine. Your task is to update the JSON world manifesto based on the user's instructions. You must return a valid WorldManifesto JSON object containing all the required fields. You can modify descriptions, names, add or remove items, but ensure the structure remains valid."
+    user_prompt = f"Here is the current World Manifesto in JSON format:\n```json\n{json.dumps(manifest_dict, indent=2)}\n```\n\nThe user wants the following changes: {payload.prompt}\n\nPlease output the completely updated World Manifesto JSON. Do NOT explain your reasoning, just output the JSON."
+    
+    try:
+        new_manifesto: WorldManifesto = llm.execute_complex_task(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_model=WorldManifesto,
+            model=model,
+            adventure_id=adventure_id,
+            operation="ai_edit_world",
+            phase="edit"
+        )
+    except Exception as e:
+        logger.error(f"AI Edit failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AI Edit failed: {str(e)}")
+        
+    await WorldGenerator.apply_manifest(
+        db=db,
+        adventure_id=adventure_id,
+        manifest_dict=new_manifesto.model_dump(),
+        user=None,
+        gen_npc=False,
+        gen_items=False,
+        gen_scenes=False,
+        gen_protagonist_image=False
+    )
+    
+    return {"status": "success"}
+
+
 @router.post("/{adventure_id}/visuals/regenerate")
 async def regenerate_visual(
     adventure_id: str,
@@ -1793,6 +1930,7 @@ async def _build_sheet_snapshot(avatar: Avatar, state: GameState, db: AsyncSessi
         "current_scene": current_scene.label if current_scene else state.scene_id,
         "scene_id": state.scene_id,
         "adventure_title": adventure.title if adventure else "Unknown Adventure",
+        "adventure_id": state.adventure_id,
         "exp": avatar.exp
     }
 

@@ -224,6 +224,15 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+
+          <button
+            @click="router.push({ name: 'adventure-editor', params: { adventureId: sheet?.adventure_id } })"
+            class="p-2.5 rounded-full bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 transition-colors backdrop-blur-md shadow-xl"
+            title="Edit Adventure"
+            v-if="sheet?.adventure_id"
+          >
+            <i class="ra ra-gear-hammer text-slate-100"></i>
+          </button>
         </div>
       </div>
     </header>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import EditAdventureModal from '@/components/EditAdventureModal.vue'
 import { api } from '@/composables/useApi'
 import type { AdventureImportPayload, CreateAdventurePayload } from '@/types'
 
@@ -35,9 +34,6 @@ const isLlmConfigured = ref(true)
 
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
-const showEditModal = ref(false)
-const selectedAdventureId = ref<string | null>(null)
-
 const isSubmitting = ref(false)
 const isImporting = ref(false)
 const errorMsg = ref('')
@@ -269,12 +265,7 @@ function openCreateModal() {
 }
 
 function openEditModal(adventureId: string) {
-  selectedAdventureId.value = adventureId
-  showEditModal.value = true
-}
-
-function handleAdventureUpdate() {
-  fetchAdventures()
+  router.push({ name: 'adventure-editor', params: { adventureId } })
 }
 
 function triggerImportPicker() {
@@ -674,7 +665,7 @@ onUnmounted(() => {
               <div class="flex items-center justify-between mb-4">
                 <span class="text-xs font-mono text-emerald-400/90 bg-emerald-500/10 px-2 py-1 rounded">WIRD ERZEUGT</span>
                 <span :class="['text-[10px] px-2 py-1 rounded uppercase tracking-wider font-bold', pending.hasError ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200']">
-                  {{ pending.hasError ? 'Fehler' : 'Create' }}
+                  {{ pending.hasError ? 'Error' : 'Create' }}
                 </span>
               </div>
 
@@ -716,15 +707,15 @@ onUnmounted(() => {
             class="relative bg-slate-900 rounded-2xl border border-cyan-500/40 overflow-hidden flex flex-col"
           >
               <div class="aspect-[2/1] bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
-              <div v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="absolute inset-0 loading-placeholder-shimmer"></div>
+              <div v-if="!pending.hasError && pending.status !== 'Generation Complete'" class="absolute inset-0 loading-placeholder-shimmer"></div>
               <i class="ra ra-quill-ink text-4xl text-cyan-300/80 z-10"></i>
             </div>
 
             <div class="p-6 flex-grow flex flex-col">
               <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-mono text-cyan-400/90 bg-cyan-500/10 px-2 py-1 rounded">WIRD ERZEUGT</span>
+                <span class="text-xs font-mono text-cyan-400/90 bg-cyan-500/10 px-2 py-1 rounded uppercase">GENERATING</span>
                 <span :class="['text-[10px] px-2 py-1 rounded uppercase tracking-wider font-bold', pending.hasError ? 'bg-red-500/20 text-red-300' : 'bg-cyan-500/20 text-cyan-200']">
-                  {{ pending.hasError ? 'Fehler' : 'Import' }}
+                  {{ pending.hasError ? 'Error' : 'Import' }}
                 </span>
               </div>
 
@@ -868,12 +859,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <EditAdventureModal
-      :open="showEditModal"
-      :adventure-id="selectedAdventureId"
-      @close="showEditModal = false"
-      @updated="handleAdventureUpdate"
-    />
+
   </div>
 </template>
 

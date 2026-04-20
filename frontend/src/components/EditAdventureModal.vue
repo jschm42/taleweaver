@@ -11,19 +11,81 @@ const emit = defineEmits<{
   (e: 'updated'): void
 }>()
 
+// Visuals state
+const isQuickGenerating = ref<Record<string, boolean>>({})
+const isBatchGenerating = ref<Record<string, boolean>>({})
+
+// Editor State
+const aiEditPrompt = ref('')
+const isAIEditing = ref(false)
+
+const editingEntityId = ref<string | null>(null)
+const editForm = ref({ name: '', description: '' })
+const isSavingText = ref(false)
+
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string) {
+  editingEntityId.value = `${type}_${id}`
+  editForm.value = { name: currentName || '', description: currentDesc || '' }
+}
+
+async function saveEntityText(type: string, id: string) {
+  isSavingText.value = true
+  promptError.value = ''
+  try {
+    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/entity`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_type: type,
+        target_id: id,
+        name: editForm.value.name,
+        description: editForm.value.description
+      })
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to save entity text')
+    }
+    
+    editingEntityId.value = null
+    await fetchDebugInfo()
+  } catch (error: any) {
+    promptError.value = error.message
+  } finally {
+    isSavingText.value = false
+  }
+}
+
+async function runAIEdit() {
+  if (!aiEditPrompt.value) return
+  isAIEditing.value = true
+  promptError.value = ''
+  try {
+    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/ai-edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: aiEditPrompt.value })
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to apply AI changes')
+    }
+    aiEditPrompt.value = ''
+    await fetchDebugInfo()
+  } catch (error: any) {
+    promptError.value = error.message
+  } finally {
+    isAIEditing.value = false
+  }
+}
+
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
 const isLoading = ref(false)
 const isSaving = ref(false)
-const isRegenerating = ref(false)
-const isUploading = ref(false)
-const isQuickGenerating = ref<Record<string, boolean>>({})
-const isBatchGenerating = ref<Record<string, boolean>>({})
 const errorMsg = ref('')
-const promptError = ref('')
 const showDebug = ref(false)
-const showPromptDialog = ref(false)
-const activeTab = ref<'settings' | 'visuals' | 'advanced'>('settings')
+const activeTab = ref<'settings' | 'editor' | 'advanced'>('settings')
 const uploadInput = ref<HTMLInputElement | null>(null)
 const selectedVisual = ref<{ kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object'; id: string; label: string; description: string; hint: string } | null>(null)
 const visualPrompt = ref('')
@@ -89,6 +151,20 @@ async function fetchDebugInfo() {
     console.error('Failed to fetch debug info:', error)
   }
 }
+
+watch(() => props.adventureId, (newId) => {
+  if (newId) {
+    fetchAdventure()
+    fetchDebugInfo()
+  }
+}, { immediate: true })
+
+watch(() => props.open, (isOpen) => {
+  if (isOpen && props.adventureId) {
+    fetchAdventure()
+    fetchDebugInfo()
+  }
+})
 
 function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) {
@@ -502,7 +578,7 @@ watch(
 
           <div class="flex px-8 border-b border-slate-800 bg-slate-950/30">
             <button
-              v-for="tab in ['settings', 'visuals', 'advanced']"
+              v-for="tab in ['settings', 'editor', 'advanced']"
               :key="tab"
               @click="activeTab = tab as any"
               :class="[
@@ -584,9 +660,25 @@ watch(
               </div>
             </div>
 
-            <div v-else-if="activeTab === 'visuals'" class="space-y-8">
+            <div v-else-if="activeTab === 'editor'" class="space-y-8">
               <div v-if="!debugData" class="text-xs text-slate-500">No debug data available yet.</div>
               <div v-else class="space-y-8">
+                
+                <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl">
+                  <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                    <i class="ra ra-player-teleport text-emerald-500"></i> AI World Editor
+                  </h3>
+                  <p class="text-[11px] text-slate-400 mb-3">Describe what you want to change in the adventure (e.g. "Add a hacker NPC", "Change the sword to a laser rifle"). The AI will adjust the texts. Images are not re-generated automatically.</p>
+                  <textarea v-model="aiEditPrompt" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mb-3 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors" placeholder="Your instructions..."></textarea>
+                  <div class="flex justify-end">
+                    <button @click="runAIEdit" :disabled="isAIEditing || !aiEditPrompt" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors">
+                      <i v-if="isAIEditing" class="ra ra-cycle animate-spin"></i>
+                      <i v-else class="ra ra-light-bulb"></i>
+                      Apply AI Changes
+                    </button>
+                  </div>
+                </div>
+
                 <section v-if="debugData.adventure">
                   <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
                     <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Adventure Cover</h3>
@@ -625,6 +717,30 @@ watch(
                         >
                           Custom
                         </button>
+                        <button
+                          @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context)"
+                          class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
+                        >
+                          <i class="ra ra-quill-ink"></i>
+                          <span>Edit Text</span>
+                        </button>
+                      </div>
+
+                      <!-- Text Edit Overlay -->
+                      <div v-if="editingEntityId === 'cover_' + debugData.adventure.id" class="absolute inset-0 bg-slate-900 z-30 p-4 flex flex-col gap-3">
+                        <div class="flex justify-between items-center mb-1">
+                          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Edit Cover Text</span>
+                          <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
+                        </div>
+                        <input v-model="editForm.name" placeholder="Title" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        <textarea v-model="editForm.description" placeholder="Context / Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
+                        <div class="flex justify-end gap-2 mt-1">
+                          <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>
+                          <button @click="saveEntityText('cover', debugData.adventure.id)" :disabled="isSavingText" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-md disabled:opacity-50 transition-colors flex items-center gap-2">
+                            <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
+                            <span>Save</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -668,6 +784,30 @@ watch(
                         >
                           Custom
                         </button>
+                        <button
+                          @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description)"
+                          class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
+                        >
+                          <i class="ra ra-quill-ink"></i>
+                          <span>Edit Text</span>
+                        </button>
+                      </div>
+
+                      <!-- Text Edit Overlay -->
+                      <div v-if="editingEntityId === 'protagonist_' + debugData.protagonist.id" class="absolute inset-0 bg-slate-900 z-30 p-4 flex flex-col gap-3">
+                        <div class="flex justify-between items-center mb-1">
+                          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Edit Protagonist</span>
+                          <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
+                        </div>
+                        <input v-model="editForm.name" placeholder="Name" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        <textarea v-model="editForm.description" placeholder="Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
+                        <div class="flex justify-end gap-2 mt-1">
+                          <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>
+                          <button @click="saveEntityText('protagonist', debugData.protagonist.id)" :disabled="isSavingText" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-md disabled:opacity-50 transition-colors flex items-center gap-2">
+                            <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
+                            <span>Save</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -711,6 +851,30 @@ watch(
                         >
                           Custom
                         </button>
+                        <button
+                          @click="openTextEdit('scene', scene.id, scene.label || scene.name, scene.description)"
+                          class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
+                        >
+                          <i class="ra ra-quill-ink"></i>
+                          <span>Edit Text</span>
+                        </button>
+                      </div>
+
+                      <!-- Text Edit Overlay -->
+                      <div v-if="editingEntityId === 'scene_' + scene.id" class="absolute inset-0 bg-slate-900 z-30 p-4 flex flex-col gap-3">
+                        <div class="flex justify-between items-center mb-1">
+                          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Edit Scene</span>
+                          <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
+                        </div>
+                        <input v-model="editForm.name" placeholder="Name" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        <textarea v-model="editForm.description" placeholder="Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
+                        <div class="flex justify-end gap-2 mt-1">
+                          <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>
+                          <button @click="saveEntityText('scene', scene.id)" :disabled="isSavingText" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-md disabled:opacity-50 transition-colors flex items-center gap-2">
+                            <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
+                            <span>Save</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -754,6 +918,30 @@ watch(
                         >
                           Custom
                         </button>
+                        <button
+                          @click="openTextEdit('npc', npc.id, npc.name, npc.description)"
+                          class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
+                        >
+                          <i class="ra ra-quill-ink"></i>
+                          <span>Edit Text</span>
+                        </button>
+                      </div>
+
+                      <!-- Text Edit Overlay -->
+                      <div v-if="editingEntityId === 'npc_' + npc.id" class="absolute inset-0 bg-slate-900 z-30 p-4 flex flex-col gap-3">
+                        <div class="flex justify-between items-center mb-1">
+                          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Edit NPC</span>
+                          <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
+                        </div>
+                        <input v-model="editForm.name" placeholder="Name" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        <textarea v-model="editForm.description" placeholder="Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
+                        <div class="flex justify-end gap-2 mt-1">
+                          <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>
+                          <button @click="saveEntityText('npc', npc.id)" :disabled="isSavingText" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-md disabled:opacity-50 transition-colors flex items-center gap-2">
+                            <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
+                            <span>Save</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -797,6 +985,30 @@ watch(
                         >
                           Custom
                         </button>
+                        <button
+                          @click="openTextEdit('object', obj.id, obj.name, obj.description)"
+                          class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
+                        >
+                          <i class="ra ra-quill-ink"></i>
+                          <span>Edit Text</span>
+                        </button>
+                      </div>
+
+                      <!-- Text Edit Overlay -->
+                      <div v-if="editingEntityId === 'object_' + obj.id" class="absolute inset-0 bg-slate-900 z-30 p-4 flex flex-col gap-3">
+                        <div class="flex justify-between items-center mb-1">
+                          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Edit Object</span>
+                          <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
+                        </div>
+                        <input v-model="editForm.name" placeholder="Name" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        <textarea v-model="editForm.description" placeholder="Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
+                        <div class="flex justify-end gap-2 mt-1">
+                          <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>
+                          <button @click="saveEntityText('object', obj.id)" :disabled="isSavingText" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-md disabled:opacity-50 transition-colors flex items-center gap-2">
+                            <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
+                            <span>Save</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
