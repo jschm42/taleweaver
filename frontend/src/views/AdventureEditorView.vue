@@ -377,10 +377,6 @@ const goBack = () => router.push({ name: 'portal' })
             {{ tab }}
           </button>
         </nav>
-        <button @click="saveChanges" :disabled="isSaving" class="group px-6 py-2 bg-white text-slate-950 text-[9px] font-black uppercase tracking-[0.2em] rounded-lg disabled:opacity-50 hover:bg-emerald-400 transition-all duration-300 shadow-xl flex items-center gap-2">
-          <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
-          <span>{{ isSaving ? 'Syncing...' : 'Save World' }}</span>
-        </button>
       </div>
     </header>
 
@@ -398,12 +394,24 @@ const goBack = () => router.push({ name: 'portal' })
         <div v-if="activeTab === 'world'" class="space-y-10 animate-page-in">
           <!-- Quick Settings Row -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
-            <div class="space-y-2">
-              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
+           <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
+                <div v-if="form.title !== adventure?.title" class="flex gap-2 animate-fade-in">
+                  <button @click="form.title = adventure.title" class="text-[8px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+                  <button @click="saveChanges" class="text-[8px] font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
+                </div>
+              </div>
               <input v-model="form.title" type="text" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all" />
             </div>
             <div class="space-y-2">
-              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Game Mode</label>
+              <div class="flex justify-between items-center">
+                <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Game Mode</label>
+                <div v-if="form.rule_enforcement_mode !== adventure?.rule_enforcement_mode" class="flex gap-2 animate-fade-in">
+                  <button @click="form.rule_enforcement_mode = adventure.rule_enforcement_mode" class="text-[8px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+                  <button @click="saveChanges" class="text-[8px] font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
+                </div>
+              </div>
               <select v-model="form.rule_enforcement_mode" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all appearance-none">
                 <option value="rpg">RPG (Strict)</option>
                 <option value="story">Story (Balanced)</option>
@@ -411,7 +419,13 @@ const goBack = () => router.push({ name: 'portal' })
               </select>
             </div>
             <div class="space-y-2">
-              <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Pacing ({{ form.time_per_turn }}m)</label>
+              <div class="flex justify-between items-center">
+                <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Pacing ({{ form.time_per_turn }}m)</label>
+                <div v-if="form.time_per_turn !== adventure?.time_per_turn" class="flex gap-2 animate-fade-in">
+                  <button @click="form.time_per_turn = adventure.time_per_turn" class="text-[8px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+                  <button @click="saveChanges" class="text-[8px] font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
+                </div>
+              </div>
               <input v-model.number="form.time_per_turn" type="range" min="1" max="60" class="w-full accent-emerald-500 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer mt-3" />
             </div>
           </div>
