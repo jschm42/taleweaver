@@ -1,4 +1,5 @@
 import json
+import logging
 from pydantic import BaseModel
 from typing import TypeVar, Type, Any
 import litellm
@@ -8,6 +9,7 @@ from backend.core.security import encryption_util
 from backend.core.llm_logger import log_llm_interaction, log_structured_event
 
 T = TypeVar("T", bound=BaseModel)
+logger = logging.getLogger(__name__)
 
 class GameMasterLLM:
 
@@ -39,6 +41,8 @@ class GameMasterLLM:
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")
         else:
             self.api_key = self._get_decrypted_key(self.provider)
+            
+        logger.info(f"Router initialized: category={model_category}, provider={self.provider}, thinking={self.enable_thinking}, max_tokens={self.max_tokens}")
 
     def _normalize_model(self, model: str) -> str:
         """Return a LiteLLM-friendly model slug for the configured provider."""
@@ -133,7 +137,7 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "max_tokens": self.max_tokens,
+            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)
 
@@ -209,7 +213,7 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "max_tokens": self.max_tokens,
+            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
             "stream": True,
         }
         self._apply_thinking_settings(kwargs)
@@ -266,7 +270,7 @@ class GameMasterLLM:
             "model": normalized_model,
             "messages": messages,
             "response_format": response_model,
-            "max_tokens": self.max_tokens,
+            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)
 
@@ -317,6 +321,9 @@ class GameMasterLLM:
         )
         
         if not content:
+            logger.error(f"LLM returned empty content. Raw response: {response.model_dump()}")
+            if response.choices[0].finish_reason == "length":
+                raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
             raise ValueError("No content returned from LLM for complex task.")
             
         try:
@@ -356,7 +363,7 @@ class GameMasterLLM:
             "model": normalized_model,
             "messages": messages,
             "response_format": response_model,
-            "max_tokens": self.max_tokens,
+            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)
 
@@ -410,6 +417,9 @@ class GameMasterLLM:
         )
         
         if not content:
+            logger.error(f"LLM returned empty content. Raw response: {response.model_dump()}")
+            if response.choices[0].finish_reason == "length":
+                raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
             raise ValueError("No content returned from LLM for complex task.")
             
         try:

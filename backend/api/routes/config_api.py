@@ -196,9 +196,9 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
         "small_max_thinking_tokens": 1024,
         "complex_model": "gpt-4o",
         "complex_model_provider": "openai",
-        "complex_max_tokens": 4096,
+        "complex_max_tokens": 8192,
         "complex_enable_thinking": False,
-        "complex_max_thinking_tokens": 1024,
+        "complex_max_thinking_tokens": 2048,
         "preferred_provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
     }

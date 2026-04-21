@@ -245,8 +245,16 @@ async function fetchAdventures() {
 async function fetchSettings() {
   try {
     const settings = await api.getSettings()
-    const llmProvider = settings.llm_settings?.preferred_provider as string || 'openai'
-    isLlmConfigured.value = llmProvider === 'ollama' || !!settings.keys[llmProvider]
+    const llm = settings.llm_settings
+    const keys = settings.keys || {}
+
+    const smallProvider = llm?.small_model_provider || 'openai'
+    const complexProvider = llm?.complex_model_provider || 'openai'
+
+    const isSmallOk = smallProvider === 'ollama' || !!keys[smallProvider]
+    const isComplexOk = complexProvider === 'ollama' || !!keys[complexProvider]
+
+    isLlmConfigured.value = isSmallOk && isComplexOk
   } catch (error) {
     console.error('Settings API Error:', error)
   }
