@@ -952,23 +952,23 @@ watch(
                     <button @click.stop="openMenuId = openMenuId === 'style-' + index ? null : 'style-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors text-lg font-bold leading-none flex items-center justify-center min-w-[32px] h-8" title="Options">
                       <span class="mb-0.5">...</span>
                     </button>
-                    <!-- Popup Menu -->
+                    <div v-if="openMenuId === 'style-' + index" class="fixed inset-0 z-[90]" @click="openMenuId = null"></div>
                     <div v-if="openMenuId === 'style-' + index" class="absolute right-0 bottom-full mb-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[100] py-1 overflow-hidden">
-                      <button @click="openCatalogModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                        <i class="ra ra-quill-ink"></i> Rename
+                      <button @click="openCatalogModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                        Rename
                       </button>
-                      <button @click="openCatalogModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                        <i class="ra ra-gear"></i> Edit
+                      <button @click="openCatalogModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                        Edit
                       </button>
-                      <button @click="openPromptModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                        <i class="ra ra-quill-ink"></i> Custom Prompt
+                      <button @click="openPromptModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                        Custom Prompt
                       </button>
-                      <button @click="triggerFileUpload('style-upload-' + index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                        <i class="ra ra-camera"></i> Upload Image
+                      <button @click="triggerFileUpload('style-upload-' + index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                        Upload Image
                       </button>
-
-                      <button @click="removeCatalogItem('styles', index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 flex items-center gap-2">
-                        <i class="ra ra-trash"></i> Delete
+                      <div class="h-px bg-slate-700 my-1"></div>
+                      <button @click="removeCatalogItem('styles', index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20">
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -1035,23 +1035,23 @@ watch(
                     <button @click.stop="openMenuId = openMenuId === 'tone-' + index ? null : 'tone-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors text-lg font-bold leading-none flex items-center justify-center min-w-[32px] h-8" title="Options">
                       <span class="mb-0.5">...</span>
                     </button>
-                    <!-- Popup Menu -->
+                    <div v-if="openMenuId === 'tone-' + index" class="fixed inset-0 z-[90]" @click="openMenuId = null"></div>
                     <div v-if="openMenuId === 'tone-' + index" class="absolute right-0 bottom-full mb-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[100] py-1 overflow-hidden">
-                      <button @click="openCatalogModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                        <i class="ra ra-quill-ink"></i> Rename
+                      <button @click="openCatalogModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                        Rename
                       </button>
-                      <button @click="openCatalogModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                        <i class="ra ra-gear"></i> Edit
+                      <button @click="openCatalogModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                        Edit
                       </button>
-                      <button @click="openPromptModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                        <i class="ra ra-quill-ink"></i> Custom Prompt
+                      <button @click="openPromptModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                        Custom Prompt
                       </button>
-                      <button @click="triggerFileUpload('tone-upload-' + index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
-                        <i class="ra ra-camera"></i> Upload Image
+                      <button @click="triggerFileUpload('tone-upload-' + index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white">
+                        Upload Image
                       </button>
-
-                      <button @click="removeCatalogItem('tones', index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 flex items-center gap-2">
-                        <i class="ra ra-trash"></i> Delete
+                      <div class="h-px bg-slate-700 my-1"></div>
+                      <button @click="removeCatalogItem('tones', index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20">
+                        Delete
                       </button>
                     </div>
                   </div>

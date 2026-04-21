@@ -314,9 +314,9 @@ onMounted(() => {
             @click="toggleImageStyle(style.id)"
             :class="['w-full text-left border rounded-lg p-2 transition-colors flex items-center gap-3', form.selected_image_styles.includes(style.id) ? 'border-cyan-500 bg-cyan-500/10 text-cyan-100' : 'border-slate-700 bg-slate-950 text-slate-300']"
           >
-            <div class="w-12 h-12 rounded bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden">
+            <div class="w-20 h-20 rounded-lg bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden">
               <img v-if="style.image_url" :src="style.image_url.startsWith('http') ? style.image_url : 'http://localhost:8000' + style.image_url" class="w-full h-full object-cover" />
-              <div v-else class="w-full h-full flex items-center justify-center text-slate-700">
+              <div v-else class="w-full h-full flex items-center justify-center text-slate-700 text-xl">
                 <i class="ra ra-paint-brush"></i>
               </div>
             </div>
@@ -337,9 +337,9 @@ onMounted(() => {
               class="flex items-center gap-3 border border-slate-700 rounded-lg p-2 bg-slate-950 cursor-pointer"
             >
               <input type="radio" name="tone" :value="tone.id" v-model="form.selected_tone" />
-              <div class="w-10 h-10 rounded bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden">
+              <div class="w-16 h-16 rounded-lg bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden">
                 <img v-if="tone.image_url" :src="tone.image_url.startsWith('http') ? tone.image_url : 'http://localhost:8000' + tone.image_url" class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full flex items-center justify-center text-slate-700">
+                <div v-else class="w-full h-full flex items-center justify-center text-slate-700 text-lg">
                   <i class="ra ra-quill-ink"></i>
                 </div>
               </div>
