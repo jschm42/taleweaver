@@ -18,19 +18,22 @@ class GameMasterLLM:
         litellm.add_usage = False
         return litellm
 
-    def __init__(self, user: User, provider: str = "openai"):
+    def __init__(self, user: User, provider: str = "openai", model_category: str = "small"):
         """
-        Initialize the router for a specific user and their preferred provider.
-        The `provider` prefix is used to locate the specific key in the user's config.
+        Initialize the router for a specific user, provider and model category (small/complex).
         """
         self.user = user
         self.provider = (provider or "openai").lower()
         self.api_key = None
         self.api_base = None
+        
         llm_settings = self.user.llm_settings or {}
-        self.enable_thinking = llm_settings.get("enable_thinking", False)
-        self.max_thinking_tokens = llm_settings.get("max_thinking_tokens", 1024)
-        self.max_tokens = llm_settings.get("max_tokens", 4096)
+        prefix = "small_" if model_category == "small" else "complex_"
+        
+        # Pull granular settings with fallbacks to global/legacy names
+        self.enable_thinking = llm_settings.get(f"{prefix}enable_thinking", llm_settings.get("enable_thinking", False))
+        self.max_thinking_tokens = llm_settings.get(f"{prefix}max_thinking_tokens", llm_settings.get("max_thinking_tokens", 1024))
+        self.max_tokens = llm_settings.get(f"{prefix}max_tokens", llm_settings.get("max_tokens", 4096))
 
         if self.provider == "ollama":
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")

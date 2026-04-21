@@ -16,18 +16,27 @@ const keyForm = ref({
 })
 
 const llmForm = ref({
-  small_model: 'openai/gpt-4o-mini',
-  complex_model: 'openai/gpt-4o-mini',
+  small_model: 'gpt-4o-mini',
+  small_model_provider: 'openai',
+  small_max_tokens: 4096,
+  small_enable_thinking: false,
+  small_max_thinking_tokens: 1024,
+  
+  complex_model: 'gpt-4o',
+  complex_model_provider: 'openai',
+  complex_max_tokens: 4096,
+  complex_enable_thinking: false,
+  complex_max_thinking_tokens: 1024,
+  
   preferred_provider: 'openai',
   ollama_url: 'http://localhost:11434',
-  enable_thinking: false,
-  max_thinking_tokens: 1024,
-  max_tokens: 4096,
 })
 
 const t2iForm = ref({
-  simple_model: 'openai/dall-e-2',
-  advanced_model: 'openai/dall-e-3',
+  simple_model: 'dall-e-2',
+  simple_model_provider: 'openai',
+  advanced_model: 'dall-e-3',
+  advanced_model_provider: 'openai',
   provider: 'openai',
   ollama_url: 'http://localhost:11434',
   width: null as number | null,
@@ -44,14 +53,37 @@ const gameForm = ref({
   date_format: 'DD.MM.YY',
 })
 
+// CONSTANTS FROM BACKEND
+const availableConstants = ref({
+  llm_providers: [] as { id: string, name: string }[],
+  image_providers: [] as { id: string, name: string }[],
+  predefined_llm_models: {} as Record<string, string[]>,
+  predefined_image_models: {} as Record<string, string[]>,
+})
+
+// TEST STATE
+const testResults = ref<Record<string, { status: 'loading' | 'success' | 'error', message: string, image_url?: string }>>({})
+
 // STATE
 const configuredKeys = ref<Record<string, string>>({})
 const isSubmitting = ref(false)
 const statusMessage = ref<{ type: 'success' | 'error', text: string } | null>(null)
 const imageStylesCatalog = ref<CatalogTile[]>([])
 const toneCatalog = ref<CatalogTile[]>([])
-const newStyle = ref<CatalogTile>({ id: '', name: '', description: '', instruction: '', image_url: '' })
-const newTone = ref<CatalogTile>({ id: '', name: '', description: '', instruction: '', image_url: '' })
+
+// MODAL STATE
+const isCatalogModalOpen = ref(false)
+const catalogModalType = ref<'styles' | 'tones'>('styles')
+const editingItem = ref<CatalogTile>({ id: '', name: '', description: '', instruction: '', image_url: '' })
+const isEditingExisting = ref(false)
+const editingIndex = ref<number | null>(null)
+
+const isPromptModalOpen = ref(false)
+const promptModalData = ref<{ type: 'styles' | 'tones', item: CatalogTile, index: number } | null>(null)
+const customPrompt = ref('')
+
+const isGeneratingItem = ref<Record<string, boolean>>({})
+const openMenuId = ref<string | null>(null)
 
 const goBack = () => {
   router.push({ name: 'portal' })
@@ -66,6 +98,7 @@ const fetchSettings = async () => {
       if (data.llm_settings) llmForm.value = { ...data.llm_settings }
       if (data.t2i_settings) t2iForm.value = { ...data.t2i_settings }
       if (data.game_settings) gameForm.value = { ...data.game_settings }
+      if (data.available_constants) availableConstants.value = data.available_constants
       imageStylesCatalog.value = data.image_styles_catalog || []
       toneCatalog.value = data.tone_catalog || []
     }
@@ -77,48 +110,57 @@ const fetchSettings = async () => {
 const slugify = (value: string): string =>
   value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'item'
 
-const addStyleTile = () => {
-  if (!newStyle.value.name?.trim()) {
-    statusMessage.value = { type: 'error', text: 'Style name is required.' }
+const openCatalogModal = (type: 'styles' | 'tones', item?: CatalogTile, index?: number) => {
+  catalogModalType.value = type
+  if (item) {
+    editingItem.value = JSON.parse(JSON.stringify(item))
+    isEditingExisting.value = true
+    editingIndex.value = index ?? null
+  } else {
+    editingItem.value = { id: '', name: '', description: '', instruction: '', image_url: '' }
+    isEditingExisting.value = false
+    editingIndex.value = null
+  }
+  isCatalogModalOpen.value = true
+}
+
+const saveCatalogItem = () => {
+  if (!editingItem.value.name?.trim()) {
+    statusMessage.value = { type: 'error', text: 'Name is required.' }
     return
   }
-  imageStylesCatalog.value = [
-    ...imageStylesCatalog.value,
-    {
-      id: newStyle.value.id?.trim() || slugify(newStyle.value.name),
-      name: newStyle.value.name.trim(),
-      description: (newStyle.value.description || '').trim(),
-      instruction: (newStyle.value.instruction || '').trim(),
-      image_url: (newStyle.value.image_url || '').trim() || null,
-    },
-  ]
-  newStyle.value = { id: '', name: '', description: '', instruction: '', image_url: '' }
-}
 
-const addToneTile = () => {
-  if (!newTone.value.name?.trim()) {
-    statusMessage.value = { type: 'error', text: 'Tone name is required.' }
-    return
+  const item: CatalogTile = {
+    ...editingItem.value,
+    id: editingItem.value.id?.trim() || slugify(editingItem.value.name),
+    name: editingItem.value.name.trim(),
+    description: (editingItem.value.description || '').trim(),
+    instruction: (editingItem.value.instruction || '').trim(),
+    image_url: (editingItem.value.image_url || '').trim() || null,
   }
-  toneCatalog.value = [
-    ...toneCatalog.value,
-    {
-      id: newTone.value.id?.trim() || slugify(newTone.value.name),
-      name: newTone.value.name.trim(),
-      description: (newTone.value.description || '').trim(),
-      instruction: (newTone.value.instruction || '').trim(),
-      image_url: (newTone.value.image_url || '').trim() || null,
-    },
-  ]
-  newTone.value = { id: '', name: '', description: '', instruction: '', image_url: '' }
+
+  const catalog = catalogModalType.value === 'styles' ? imageStylesCatalog : toneCatalog
+  
+  if (isEditingExisting.value && editingIndex.value !== null) {
+    catalog.value[editingIndex.value] = item
+  } else {
+    catalog.value.push(item)
+  }
+
+  isCatalogModalOpen.value = false
+  saveCurrentCatalog()
 }
 
-const removeStyleTile = (index: number) => {
-  imageStylesCatalog.value = imageStylesCatalog.value.filter((_, i) => i !== index)
+const removeCatalogItem = (type: 'styles' | 'tones', index: number) => {
+  if (!confirm('Are you sure you want to delete this item?')) return
+  const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
+  catalog.value.splice(index, 1)
+  saveCurrentCatalog()
 }
 
-const removeToneTile = (index: number) => {
-  toneCatalog.value = toneCatalog.value.filter((_, i) => i !== index)
+const saveCurrentCatalog = async () => {
+  if (catalogModalType.value === 'styles') await saveStylesCatalog()
+  else await saveToneCatalog()
 }
 
 const saveStylesCatalog = async () => {
@@ -132,7 +174,6 @@ const saveStylesCatalog = async () => {
     })
     if (res.ok) {
       statusMessage.value = { type: 'success', text: 'Image styles updated.' }
-      await fetchSettings()
     } else {
       statusMessage.value = { type: 'error', text: 'Failed to save image styles.' }
     }
@@ -154,7 +195,6 @@ const saveToneCatalog = async () => {
     })
     if (res.ok) {
       statusMessage.value = { type: 'success', text: 'Tones updated.' }
-      await fetchSettings()
     } else {
       statusMessage.value = { type: 'error', text: 'Failed to save tones.' }
     }
@@ -162,6 +202,76 @@ const saveToneCatalog = async () => {
     statusMessage.value = { type: 'error', text: 'Network error while saving tones.' }
   } finally {
     isSubmitting.value = false
+  }
+}
+
+const openPromptModal = (type: 'styles' | 'tones', item: CatalogTile, index: number) => {
+  promptModalData.value = { type, item, index }
+  customPrompt.value = ''
+  isPromptModalOpen.value = true
+}
+
+const generateCatalogImage = async (type: 'styles' | 'tones', item: CatalogTile, index: number, prompt: string | null = null) => {
+  const key = `${type}_${index}`
+  isGeneratingItem.value[key] = true
+  try {
+    const res = await fetch('http://localhost:8000/api/settings/catalog/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_id: item.id || slugify(item.name),
+        catalog_type: type,
+        prompt: prompt
+      })
+    })
+    const data = await res.json()
+    if (data.status === 'success') {
+      const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
+      catalog.value[index].image_url = data.image_url
+      await saveCurrentCatalog()
+      isPromptModalOpen.value = false
+    } else {
+      statusMessage.value = { type: 'error', text: data.message || 'Generation failed.' }
+    }
+  } catch (error) {
+    statusMessage.value = { type: 'error', text: 'Network error during generation.' }
+  } finally {
+    isGeneratingItem.value[key] = false
+  }
+}
+
+const triggerFileUpload = (id: string) => {
+  const input = document.getElementById(id) as HTMLInputElement
+  input?.click()
+}
+
+const onUploadFile = async (event: Event, type: 'styles' | 'tones', item: CatalogTile, index: number) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('catalog_type', type)
+  formData.append('target_id', item.id || slugify(item.name))
+
+  try {
+    const res = await fetch('http://localhost:8000/api/settings/catalog/upload', {
+      method: 'POST',
+      body: formData
+    })
+    const data = await res.json()
+    if (data.status === 'success') {
+      const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
+      catalog.value[index].image_url = data.image_url
+      await saveCurrentCatalog()
+    } else {
+      statusMessage.value = { type: 'error', text: data.message || 'Upload failed.' }
+    }
+  } catch (error) {
+    statusMessage.value = { type: 'error', text: 'Network error during upload.' }
+  } finally {
+    input.value = ''
   }
 }
 
@@ -232,39 +342,94 @@ const saveT2iSettings = async () => {
   }
 }
 
+const testLlm = async (key: string, model: string, provider: string) => {
+  testResults.value[key] = { status: 'loading', message: 'Testing connection...' }
+  try {
+    const res = await fetch('http://localhost:8000/api/settings/test-llm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, provider, ollama_url: llmForm.value.ollama_url })
+    })
+    const data = await res.json()
+    testResults.value[key] = { 
+      status: data.status === 'success' ? 'success' : 'error', 
+      message: data.response_time ? `${data.message} (${data.response_time}s)` : data.message 
+    }
+  } catch (err) {
+    testResults.value[key] = { status: 'error', message: 'Network error during test.' }
+  }
+}
+
+const testVision = async (key: string, model: string, provider: string) => {
+  testResults.value[key] = { status: 'loading', message: 'Generating test image...' }
+  try {
+    const res = await fetch('http://localhost:8000/api/settings/test-vision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, provider, ollama_url: t2iForm.value.ollama_url })
+    })
+    const data = await res.json()
+    testResults.value[key] = { 
+      status: data.status === 'success' ? 'success' : 'error', 
+      message: data.message,
+      image_url: data.image_url
+    }
+  } catch (err) {
+    testResults.value[key] = { status: 'error', message: 'Network error during test.' }
+  }
+}
+
+const isModelCustom = (model: string, provider: string, type: 'llm' | 'image') => {
+  if (!model) return false
+  const predefined = type === 'llm' 
+    ? availableConstants.value.predefined_llm_models[provider] 
+    : availableConstants.value.predefined_image_models[provider]
+  if (!predefined) return true
+  return !predefined.includes(model)
+}
+
 onMounted(() => {
   fetchSettings()
 })
 
 watch(
-  () => t2iForm.value.provider,
+  () => t2iForm.value.simple_model_provider,
   (provider) => {
-    if (provider === 'black_forest_labs') {
-      const looksLikeCloudModel = (value: string) => value.startsWith('openai/') || value.startsWith('dall-e') || value.startsWith('openrouter/') || value.startsWith('midjourney/')
-      if (!t2iForm.value.simple_model || looksLikeCloudModel(t2iForm.value.simple_model)) {
-        t2iForm.value.simple_model = 'flux-dev'
-      }
-      if (!t2iForm.value.advanced_model || looksLikeCloudModel(t2iForm.value.advanced_model)) {
-        t2iForm.value.advanced_model = 'flux-pro-1.1'
-      }
-      return
+    const predefined = availableConstants.value.predefined_image_models[provider] || []
+    if (predefined.length > 0) {
+      t2iForm.value.simple_model = predefined[0]
     }
+  }
+)
 
-    if (provider !== 'ollama') {
-      return
+watch(
+  () => t2iForm.value.advanced_model_provider,
+  (provider) => {
+    const predefined = availableConstants.value.predefined_image_models[provider] || []
+    if (predefined.length > 0) {
+      t2iForm.value.advanced_model = predefined[0]
     }
+  }
+)
 
-    const looksLikeCloudModel = (value: string) => value.startsWith('openai/') || value.startsWith('dall-e')
-    if (!t2iForm.value.simple_model || looksLikeCloudModel(t2iForm.value.simple_model)) {
-      t2iForm.value.simple_model = 'x/flux2-klein'
+watch(
+  () => llmForm.value.small_model_provider,
+  (provider) => {
+    const predefined = availableConstants.value.predefined_llm_models[provider] || []
+    if (predefined.length > 0) {
+      llmForm.value.small_model = predefined[0]
     }
-    if (!t2iForm.value.advanced_model || looksLikeCloudModel(t2iForm.value.advanced_model)) {
-      t2iForm.value.advanced_model = 'x/flux2-klein'
+  }
+)
+
+watch(
+  () => llmForm.value.complex_model_provider,
+  (provider) => {
+    const predefined = availableConstants.value.predefined_llm_models[provider] || []
+    if (predefined.length > 0) {
+      llmForm.value.complex_model = predefined[0]
     }
-    if (!t2iForm.value.ollama_url) {
-      t2iForm.value.ollama_url = 'http://localhost:11434'
-    }
-  },
+  }
 )
 </script>
 
@@ -388,63 +553,164 @@ watch(
             <p class="text-slate-400">Configure how the game handles simple narrative vs complex mechanics.</p>
           </div>
 
-          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-            <div class="space-y-2">
-              <label class="block text-sm font-semibold text-slate-300">Preferred Provider (Routing)</label>
-              <select v-model="llmForm.preferred_provider" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-purple-500/50 outline-none font-bold">
-                <option value="openai">OpenAI</option>
-                <option value="google">Google Gemini</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="ollama">Ollama (Local)</option>
-              </select>
-            </div>
-
-            <div v-if="llmForm.preferred_provider === 'ollama'" class="space-y-2">
-              <label class="block text-sm font-semibold text-slate-300">Ollama URL</label>
-              <input v-model="llmForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
-              <p class="text-[10px] text-slate-500">Local endpoint used for chat completions.</p>
-            </div>
-
-            <div class="space-y-2">
-              <label class="block text-sm font-semibold text-slate-300">Simple Model (Narratives)</label>
-              <input v-model="llmForm.small_model" type="text" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
-              <p class="text-[10px] text-slate-500">Efficient logic and low-latency chatter.</p>
-            </div>
-
-            <div class="space-y-2">
-              <label class="block text-sm font-semibold text-slate-300">Complex Model (Mechanics)</label>
-              <input v-model="llmForm.complex_model" type="text" placeholder="e.g. gpt-4o" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
-              <p class="text-[10px] text-slate-500">Heavy reasoning, complex math, and structured data state.</p>
-            </div>
-
-            <div class="pt-6 border-t border-slate-800 space-y-6">
-              <h4 class="text-xs font-black uppercase tracking-[0.2em] text-purple-400">Advanced Configuration</h4>
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
+            
+            <!-- SIMPLE MODEL -->
+            <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
+                  <i class="ra ra-gear-hammer"></i> Simple Model (Mechanics)
+                </h3>
+                <button 
+                  @click="testLlm('simple', llmForm.small_model, llmForm.small_model_provider)"
+                  class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+                >
+                  <i class="ra ra-gear-hammer"></i> Test Connection
+                </button>
+              </div>
               
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="space-y-2">
-                  <label class="block text-sm font-semibold text-slate-300">Max Response Tokens</label>
-                  <input v-model.number="llmForm.max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
-                  <p class="text-[10px] text-slate-500">Global limit for LLM answers (e.g. 4096).</p>
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
+                  <select v-model="llmForm.small_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+                    <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
                 </div>
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
+                  <select 
+                    :value="isModelCustom(llmForm.small_model, llmForm.small_model_provider, 'llm') ? 'custom' : llmForm.small_model"
+                    @change="(e) => { 
+                      const val = (e.target as HTMLSelectElement).value; 
+                      if(val !== 'custom') llmForm.small_model = val;
+                      else if(!isModelCustom(llmForm.small_model, llmForm.small_model_provider, 'llm')) llmForm.small_model = '';
+                    }"
+                    class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
+                  >
+                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.small_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option value="custom">-- Custom Model String --</option>
+                  </select>
+                </div>
+              </div>
 
-                <div class="space-y-4">
-                  <div class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-2xl">
-                    <div>
-                      <label class="block text-sm font-semibold text-slate-300">Thinking Mode</label>
-                      <p class="text-[10px] text-slate-500">Reasoning for supported models.</p>
+              <div v-if="isModelCustom(llmForm.small_model, llmForm.small_model_provider, 'llm') || llmForm.small_model === ''" class="space-y-2 animate-fade-in">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
+                <input v-model="llmForm.small_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+              </div>
+              <p class="text-[10px] text-slate-500">Efficient logic for rule enforcement and mechanical reasoning (Pass 1).</p>
+
+              <div v-if="testResults.simple" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.simple.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.simple.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+                 <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <div v-if="testResults.simple.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                      <i v-else :class="testResults.simple.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+                      {{ testResults.simple.message }}
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" v-model="llmForm.enable_thinking" class="sr-only peer">
+                 </div>
+              </div>
+
+              <!-- PER-MODEL SETTINGS -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+                  <input v-model.number="llmForm.small_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+                </div>
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
+                    <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
+                      <input type="checkbox" v-model="llmForm.small_enable_thinking" class="sr-only peer">
                       <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
                     </label>
                   </div>
+                  <input v-if="llmForm.small_enable_thinking" v-model.number="llmForm.small_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Thinking tokens" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+                </div>
+              </div>
+            </div>
 
-                  <div v-if="llmForm.enable_thinking" class="space-y-2 animate-fade-in">
-                    <label class="block text-sm font-semibold text-slate-300">Thinking Token Budget</label>
-                    <input v-model.number="llmForm.max_thinking_tokens" type="number" step="1024" min="0" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
-                    <p class="text-[10px] text-slate-500 text-purple-400 font-medium">Allocated for internal reasoning.</p>
+            <!-- COMPLEX MODEL -->
+            <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
+                  <i class="ra ra-feather-wing"></i> Complex Model (Narratives & World Gen)
+                </h3>
+                <button 
+                  @click="testLlm('complex', llmForm.complex_model, llmForm.complex_model_provider)"
+                  class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+                >
+                  <i class="ra ra-gear-hammer"></i> Test Connection
+                </button>
+              </div>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
+                  <select v-model="llmForm.complex_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+                    <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
+                  <select 
+                    :value="isModelCustom(llmForm.complex_model, llmForm.complex_model_provider, 'llm') ? 'custom' : llmForm.complex_model"
+                    @change="(e) => { 
+                      const val = (e.target as HTMLSelectElement).value; 
+                      if(val !== 'custom') llmForm.complex_model = val;
+                      else if(!isModelCustom(llmForm.complex_model, llmForm.complex_model_provider, 'llm')) llmForm.complex_model = '';
+                    }"
+                    class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
+                  >
+                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.complex_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option value="custom">-- Custom Model String --</option>
+                  </select>
+                </div>
+              </div>
+
+              <div v-if="isModelCustom(llmForm.complex_model, llmForm.complex_model_provider, 'llm') || llmForm.complex_model === ''" class="space-y-2 animate-fade-in">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
+                <input v-model="llmForm.complex_model" type="text" maxlength="100" placeholder="e.g. gpt-4o" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+              </div>
+              <p class="text-[10px] text-slate-500">Rich storytelling, complex world-building, and high-fidelity prose (Pass 2).</p>
+
+              <!-- Test Result Feedback -->
+              <div v-if="testResults.complex" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.complex.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.complex.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+                 <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <div v-if="testResults.complex.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                      <i v-else :class="testResults.complex.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+                      {{ testResults.complex.message }}
+                    </div>
+                 </div>
+              </div>
+
+              <!-- PER-MODEL SETTINGS -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+                  <input v-model.number="llmForm.complex_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+                </div>
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
+                    <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
+                      <input type="checkbox" v-model="llmForm.complex_enable_thinking" class="sr-only peer">
+                      <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
+                    </label>
                   </div>
+                  <input v-if="llmForm.complex_enable_thinking" v-model.number="llmForm.complex_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Thinking tokens" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+                </div>
+              </div>
+            </div>
+
+            <!-- GLOBAL LLM SETTINGS -->
+            <div class="pt-6 border-t border-slate-800 space-y-6">
+              <h4 class="text-xs font-black uppercase tracking-[0.2em] text-purple-400">Global Infrastructure</h4>
+              
+              <div class="space-y-4">
+                <div v-if="llmForm.small_model_provider === 'ollama' || llmForm.complex_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
+                  <label class="block text-sm font-semibold text-slate-300">Ollama API Base URL</label>
+                  <input v-model="llmForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+                  <p class="text-[10px] text-slate-500">Local endpoint used for local model execution.</p>
                 </div>
               </div>
             </div>
@@ -462,108 +728,164 @@ watch(
             <p class="text-slate-400">Set up AI artists for your world portraits and scene visualizations.</p>
           </div>
 
-          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-            <div class="space-y-2">
-              <label class="block text-sm font-semibold text-slate-300">Image Provider</label>
-              <select v-model="t2iForm.provider" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none font-bold">
-                <option value="openai">OpenAI (DALL-E)</option>
-                <option value="openrouter">OpenRouter (Various)</option>
-                <option value="midjourney">Midjourney (via Proxy)</option>
-                <option value="black_forest_labs">Black Forest Labs (FLUX)</option>
-                <option value="ollama">Ollama (Local, Experimental)</option>
-              </select>
-              <p v-if="t2iForm.provider === 'black_forest_labs'" class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
-                BFL uses `black_forest_labs/flux-dev` for simple images and `black_forest_labs/flux-pro-1.1` for scenes unless you override them.
-              </p>
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
+            
+            <!-- SIMPLE VISUALS -->
+            <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-cyan-500/10">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-bold text-cyan-400 flex items-center gap-2">
+                  <i class="ra ra-camera"></i> Simple Visuals (NPCs & Items)
+                </h3>
+                <button 
+                  @click="testVision('simple_v', t2iForm.simple_model, t2iForm.simple_model_provider)"
+                  class="px-3 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 text-xs font-bold rounded-lg border border-cyan-600/30 transition-all flex items-center gap-2"
+                >
+                  <i class="ra ra-eye-shield"></i> Test Connection
+                </button>
+              </div>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
+                  <select v-model="t2iForm.simple_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50">
+                    <option v-for="p in availableConstants.image_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
+                  <select 
+                    :value="isModelCustom(t2iForm.simple_model, t2iForm.simple_model_provider, 'image') ? 'custom' : t2iForm.simple_model"
+                    @change="(e) => { 
+                      const val = (e.target as HTMLSelectElement).value; 
+                      if(val !== 'custom') t2iForm.simple_model = val;
+                      else if(!isModelCustom(t2iForm.simple_model, t2iForm.simple_model_provider, 'image')) t2iForm.simple_model = '';
+                    }"
+                    class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono"
+                  >
+                    <option v-for="m in availableConstants.predefined_image_models[t2iForm.simple_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option value="custom">-- Custom Model String --</option>
+                  </select>
+                </div>
+              </div>
+
+              <div v-if="isModelCustom(t2iForm.simple_model, t2iForm.simple_model_provider, 'image') || t2iForm.simple_model === ''" class="space-y-2 animate-fade-in">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
+                <input v-model="t2iForm.simple_model" type="text" maxlength="100" placeholder="e.g. dall-e-2" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono" />
+              </div>
+
+              <!-- Test Result Feedback -->
+              <div v-if="testResults.simple_v" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.simple_v.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.simple_v.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+                 <div class="flex flex-col gap-3">
+                    <div class="flex items-center gap-2">
+                      <div v-if="testResults.simple_v.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                      <i v-else :class="testResults.simple_v.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+                      {{ testResults.simple_v.message }}
+                    </div>
+                    <img v-if="testResults.simple_v.image_url" :src="'http://localhost:8000' + testResults.simple_v.image_url" class="w-full max-w-xs rounded-lg border border-white/10 shadow-lg" />
+                 </div>
+              </div>
             </div>
 
-            <div v-if="t2iForm.provider === 'ollama'" class="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-cyan-200 text-sm">
-              Experimental: Local image generation with Ollama. Make sure your Ollama server is running and the model is pulled.
+            <!-- ADVANCED VISUALS -->
+            <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-cyan-500/10">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-bold text-cyan-400 flex items-center gap-2">
+                  <i class="ra ra-brandy-glass"></i> Advanced Visuals (Scenes)
+                </h3>
+                <button 
+                  @click="testVision('advanced_v', t2iForm.advanced_model, t2iForm.advanced_model_provider)"
+                  class="px-3 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 text-xs font-bold rounded-lg border border-cyan-600/30 transition-all flex items-center gap-2"
+                >
+                  <i class="ra ra-eye-shield"></i> Test Connection
+                </button>
+              </div>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
+                  <select v-model="t2iForm.advanced_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50">
+                    <option v-for="p in availableConstants.image_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
+                  <select 
+                    :value="isModelCustom(t2iForm.advanced_model, t2iForm.advanced_model_provider, 'image') ? 'custom' : t2iForm.advanced_model"
+                    @change="(e) => { 
+                      const val = (e.target as HTMLSelectElement).value; 
+                      if(val !== 'custom') t2iForm.advanced_model = val;
+                      else if(!isModelCustom(t2iForm.advanced_model, t2iForm.advanced_model_provider, 'image')) t2iForm.advanced_model = '';
+                    }"
+                    class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono"
+                  >
+                    <option v-for="m in availableConstants.predefined_image_models[t2iForm.advanced_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option value="custom">-- Custom Model String --</option>
+                  </select>
+                </div>
+              </div>
+
+              <div v-if="isModelCustom(t2iForm.advanced_model, t2iForm.advanced_model_provider, 'image') || t2iForm.advanced_model === ''" class="space-y-2 animate-fade-in">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
+                <input v-model="t2iForm.advanced_model" type="text" maxlength="100" placeholder="e.g. dall-e-3" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono" />
+              </div>
+
+              <!-- Test Result Feedback -->
+              <div v-if="testResults.advanced_v" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.advanced_v.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.advanced_v.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+                 <div class="flex flex-col gap-3">
+                    <div class="flex items-center gap-2">
+                      <div v-if="testResults.advanced_v.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                      <i v-else :class="testResults.advanced_v.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+                      {{ testResults.advanced_v.message }}
+                    </div>
+                    <img v-if="testResults.advanced_v.image_url" :src="'http://localhost:8000' + testResults.advanced_v.image_url" class="w-full max-w-xs rounded-lg border border-white/10 shadow-lg" />
+                 </div>
+              </div>
             </div>
 
-            <div class="space-y-2 font-mono">
-              <label class="block text-sm font-semibold text-slate-300">Simple Image Model (NPCs & Objects)</label>
-              <input
-                v-model="t2iForm.simple_model"
-                type="text"
-                :placeholder="t2iForm.provider === 'black_forest_labs' ? 'e.g. flux-dev' : 'e.g. dall-e-2'"
-                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
-              />
-              <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Fast portraits during world gen.</p>
-            </div>
-
-            <div class="space-y-2 font-mono">
-              <label class="block text-sm font-semibold text-slate-300">Advanced Image Model (Scenes)</label>
-              <input
-                v-model="t2iForm.advanced_model"
-                type="text"
-                :placeholder="t2iForm.provider === 'black_forest_labs' ? 'e.g. flux-pro-1.1' : 'e.g. dall-e-3'"
-                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50"
-              />
-              <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">High-fidelity scene visualization.</p>
-            </div>
-
-            <!-- STORAGE OPTIMIZATION -->
+            <!-- GLOBAL VISUAL SETTINGS -->
             <div class="pt-6 border-t border-slate-800 space-y-6">
               <div class="flex items-center gap-2 mb-2">
                 <i class="ra ra-save text-cyan-400"></i>
-                <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500">Storage Optimization</h3>
+                <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500">Global Visual Parameters</h3>
               </div>
               
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="space-y-2">
-                  <label class="block text-sm font-semibold text-slate-300">File Format</label>
-                  <select v-model="t2iForm.image_format" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none">
-                    <option value="jpeg">JPEG (Recommended)</option>
-                    <option value="png">PNG (Lossless)</option>
-                  </select>
-                  <p class="text-[10px] text-slate-500">JPEG significantly reduces file size for assets.</p>
+              <div class="space-y-4">
+                <div v-if="t2iForm.simple_model_provider === 'ollama' || t2iForm.advanced_model_provider === 'ollama'" class="space-y-2 p-4 bg-cyan-500/5 rounded-xl border border-cyan-500/20">
+                  <label class="block text-sm font-semibold text-slate-300">Ollama API Base URL</label>
+                  <input v-model="t2iForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono" />
                 </div>
-                
-                <div v-if="t2iForm.image_format === 'jpeg'" class="space-y-2">
-                  <div class="flex justify-between items-center mb-1">
-                    <label class="block text-sm font-semibold text-slate-300">JPEG Quality</label>
-                    <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded">{{ t2iForm.image_quality }}%</span>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-slate-300">File Format</label>
+                    <select v-model="t2iForm.image_format" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none">
+                      <option value="jpeg">JPEG (Recommended)</option>
+                      <option value="png">PNG (Lossless)</option>
+                    </select>
+                    <p class="text-[10px] text-slate-500">JPEG significantly reduces file size for assets.</p>
                   </div>
-                  <input v-model.number="t2iForm.image_quality" type="range" min="10" max="100" step="5" class="w-full h-2 bg-slate-950 border border-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
-                  <div class="flex justify-between text-[10px] text-slate-500 font-mono">
-                    <span>Low</span>
-                    <span>High</span>
+                  
+                  <div v-if="t2iForm.image_format === 'jpeg'" class="space-y-2">
+                    <div class="flex justify-between items-center mb-1">
+                      <label class="block text-sm font-semibold text-slate-300">JPEG Quality</label>
+                      <span class="text-xs font-mono font-bold text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded">{{ t2iForm.image_quality }}%</span>
+                    </div>
+                    <input v-model.number="t2iForm.image_quality" type="range" min="10" max="100" step="5" class="w-full h-2 bg-slate-950 border border-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="space-y-2 font-mono">
+                    <label class="block text-sm font-semibold text-slate-300">Width (optional)</label>
+                    <input v-model.number="t2iForm.width" type="number" min="64" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                  </div>
+                  <div class="space-y-2 font-mono">
+                    <label class="block text-sm font-semibold text-slate-300">Height (optional)</label>
+                    <input v-model.number="t2iForm.height" type="number" min="64" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
                   </div>
                 </div>
               </div>
             </div>
-
-            <template v-if="t2iForm.provider === 'ollama'">
-              <div class="space-y-2 font-mono">
-                <label class="block text-sm font-semibold text-slate-300">Ollama URL</label>
-                <input v-model="t2iForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="space-y-2 font-mono">
-                  <label class="block text-sm font-semibold text-slate-300">Width (optional)</label>
-                  <input v-model.number="t2iForm.width" type="number" min="64" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                </div>
-                <div class="space-y-2 font-mono">
-                  <label class="block text-sm font-semibold text-slate-300">Height (optional)</label>
-                  <input v-model.number="t2iForm.height" type="number" min="64" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                </div>
-                <div class="space-y-2 font-mono">
-                  <label class="block text-sm font-semibold text-slate-300">Steps (optional)</label>
-                  <input v-model.number="t2iForm.steps" type="number" min="1" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                </div>
-                <div class="space-y-2 font-mono">
-                  <label class="block text-sm font-semibold text-slate-300">Seed (optional)</label>
-                  <input v-model.number="t2iForm.seed" type="number" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                </div>
-              </div>
-
-              <div class="space-y-2 font-mono">
-                <label class="block text-sm font-semibold text-slate-300">Negative Prompt (optional)</label>
-                <input v-model="t2iForm.negative_prompt" type="text" placeholder="e.g. blurry, artifacts, low quality" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
-              </div>
-            </template>
 
             <button @click="saveT2iSettings" :disabled="isSubmitting" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
                {{ isSubmitting ? 'Painting...' : 'Update Visual Artists' }}
@@ -573,71 +895,155 @@ watch(
 
         <!-- SECTION: IMAGE STYLES -->
         <div v-if="activeSection === 'styles'" class="space-y-8 animate-fade-in">
-          <div>
-            <h1 class="text-4xl font-extrabold text-white mb-2">Image Style Catalog</h1>
-            <p class="text-slate-400">Define selectable visual styles used during adventure image generation.</p>
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-4xl font-extrabold text-white mb-2">Image Style Catalog</h1>
+              <p class="text-slate-400 text-sm">Define selectable visual styles used during adventure image generation.</p>
+            </div>
+            <button @click="openCatalogModal('styles')" class="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-lg shadow-amber-900/20 flex items-center gap-2 transition-all">
+              <i class="ra ra-plus"></i> Add Style
+            </button>
           </div>
 
-          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input v-model="newStyle.name" type="text" placeholder="Name (e.g. Gothic Ink)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
-              <input v-model="newStyle.id" type="text" placeholder="Optional ID (auto from name)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
-              <input v-model="newStyle.image_url" type="text" placeholder="Optional image URL" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white md:col-span-2" />
-              <textarea v-model="newStyle.description" rows="2" placeholder="Description" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-              <textarea v-model="newStyle.instruction" rows="2" placeholder="Prompt instruction injected for selected styles" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-            <button @click="addStyleTile" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl">Add Style Tile</button>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div v-for="(style, index) in imageStylesCatalog" :key="style.id + '-' + index" class="group relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-amber-500/50 transition-all shadow-xl">
+              <!-- Image Section -->
+              <div class="relative aspect-[4/3] bg-slate-950 overflow-hidden">
+                <img v-if="style.image_url" :src="style.image_url.startsWith('http') ? style.image_url : 'http://localhost:8000' + style.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <div v-else class="w-full h-full flex items-center justify-center text-slate-800">
+                  <i class="ra ra-paint-brush text-5xl"></i>
+                </div>
+                
+                <!-- Overlay Buttons -->
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button @click="generateCatalogImage('styles', style, index)" :disabled="isGeneratingItem['styles_' + index]" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg disabled:opacity-50">
+                    <i v-if="isGeneratingItem['styles_' + index]" class="ra ra-cycle animate-spin"></i>
+                    <i v-else class="ra ra-cycle" title="Quick Generate"></i>
+                  </button>
+                  <button @click="openPromptModal('styles', style, index)" class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg">
+                    <i class="ra ra-quill-ink" title="Custom Prompt"></i>
+                  </button>
+                  <button @click="triggerFileUpload('style-upload-' + index)" class="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg shadow-lg">
+                    <i class="ra ra-camera" title="Upload Image"></i>
+                  </button>
+                  <input :id="'style-upload-' + index" type="file" class="hidden" accept="image/*" @change="(e) => onUploadFile(e, 'styles', style, index)" />
+                </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div v-for="(style, index) in imageStylesCatalog" :key="style.id + '-' + index" class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
-                <img v-if="style.image_url" :src="style.image_url" class="w-full h-28 object-cover rounded-lg border border-slate-800" />
-                <input v-model="style.name" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
-                <input v-model="style.id" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
-                <input v-model="style.image_url" type="text" placeholder="Optional image URL" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
-                <textarea v-model="style.description" rows="2" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white resize-none"></textarea>
-                <textarea v-model="style.instruction" rows="2" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white resize-none"></textarea>
-                <button @click="removeStyleTile(index)" class="w-full py-2 text-sm rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 hover:bg-red-500/25">Remove</button>
+                <!-- Loading Overlay -->
+                <div v-if="isGeneratingItem['styles_' + index]" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500"></div>
+                </div>
+              </div>
+
+              <!-- Content Section -->
+              <div class="p-4">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <h3 class="text-white font-bold truncate">{{ style.name }}</h3>
+                    <p class="text-slate-500 text-[10px] uppercase font-mono truncate">{{ style.id }}</p>
+                  </div>
+                  <div class="relative">
+                    <button @click="openMenuId = openMenuId === 'style-' + index ? null : 'style-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors">
+                      <i class="ra ra-dots-vertical"></i>
+                    </button>
+                    <!-- Popup Menu -->
+                    <div v-if="openMenuId === 'style-' + index" class="absolute right-0 top-full mt-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 py-1 overflow-hidden">
+                      <button @click="openCatalogModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <i class="ra ra-quill-ink"></i> Rename
+                      </button>
+                      <button @click="openCatalogModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <i class="ra ra-gear"></i> Edit
+                      </button>
+                      <button @click="removeCatalogItem('styles', index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 flex items-center gap-2">
+                        <i class="ra ra-trash"></i> Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p class="text-slate-400 text-xs mt-2 line-clamp-2 min-h-[2.5em]">{{ style.description || 'No description provided.' }}</p>
               </div>
             </div>
-
-            <button @click="saveStylesCatalog" :disabled="isSubmitting" class="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl disabled:opacity-50">
-              {{ isSubmitting ? 'Saving...' : 'Save Image Styles' }}
-            </button>
+            
+            <div v-if="imageStylesCatalog.length === 0" class="col-span-full py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl text-slate-600 italic">
+              No styles in catalog yet. Click "Add Style" to begin.
+            </div>
           </div>
         </div>
 
         <!-- SECTION: TONES -->
         <div v-if="activeSection === 'tones'" class="space-y-8 animate-fade-in">
-          <div>
-            <h1 class="text-4xl font-extrabold text-white mb-2">World Tone Catalog</h1>
-            <p class="text-slate-400">Define selectable tone presets used for story/world generation.</p>
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-4xl font-extrabold text-white mb-2">World Tone Catalog</h1>
+              <p class="text-slate-400 text-sm">Define selectable tone presets used for story/world generation.</p>
+            </div>
+            <button @click="openCatalogModal('tones')" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-900/20 flex items-center gap-2 transition-all">
+              <i class="ra ra-plus"></i> Add Tone
+            </button>
           </div>
 
-          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input v-model="newTone.name" type="text" placeholder="Name (e.g. Horror, Sci-Fi, Sitcom)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
-              <input v-model="newTone.id" type="text" placeholder="Optional ID (auto from name)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
-              <input v-model="newTone.image_url" type="text" placeholder="Optional image URL" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white md:col-span-2" />
-              <textarea v-model="newTone.description" rows="2" placeholder="Description" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-              <textarea v-model="newTone.instruction" rows="2" placeholder="Tone instruction used in story generation" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
-            </div>
-            <button @click="addToneTile" class="w-full py-3 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl">Add Tone Tile</button>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div v-for="(tone, index) in toneCatalog" :key="tone.id + '-' + index" class="group relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-indigo-500/50 transition-all shadow-xl">
+              <!-- Image Section -->
+              <div class="relative aspect-[4/3] bg-slate-950 overflow-hidden">
+                <img v-if="tone.image_url" :src="tone.image_url.startsWith('http') ? tone.image_url : 'http://localhost:8000' + tone.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <div v-else class="w-full h-full flex items-center justify-center text-slate-800">
+                  <i class="ra ra-scroll text-5xl"></i>
+                </div>
+                
+                <!-- Overlay Buttons -->
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button @click="generateCatalogImage('tones', tone, index)" :disabled="isGeneratingItem['tones_' + index]" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg disabled:opacity-50">
+                    <i v-if="isGeneratingItem['tones_' + index]" class="ra ra-cycle animate-spin"></i>
+                    <i v-else class="ra ra-cycle" title="Quick Generate"></i>
+                  </button>
+                  <button @click="openPromptModal('tones', tone, index)" class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg">
+                    <i class="ra ra-quill-ink" title="Custom Prompt"></i>
+                  </button>
+                  <button @click="triggerFileUpload('tone-upload-' + index)" class="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg shadow-lg">
+                    <i class="ra ra-camera" title="Upload Image"></i>
+                  </button>
+                  <input :id="'tone-upload-' + index" type="file" class="hidden" accept="image/*" @change="(e) => onUploadFile(e, 'tones', tone, index)" />
+                </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div v-for="(tone, index) in toneCatalog" :key="tone.id + '-' + index" class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
-                <img v-if="tone.image_url" :src="tone.image_url" class="w-full h-28 object-cover rounded-lg border border-slate-800" />
-                <input v-model="tone.name" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
-                <input v-model="tone.id" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
-                <input v-model="tone.image_url" type="text" placeholder="Optional image URL" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white" />
-                <textarea v-model="tone.description" rows="2" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white resize-none"></textarea>
-                <textarea v-model="tone.instruction" rows="2" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white resize-none"></textarea>
-                <button @click="removeToneTile(index)" class="w-full py-2 text-sm rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 hover:bg-red-500/25">Remove</button>
+                <!-- Loading Overlay -->
+                <div v-if="isGeneratingItem['tones_' + index]" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500"></div>
+                </div>
+              </div>
+
+              <!-- Content Section -->
+              <div class="p-4">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <h3 class="text-white font-bold truncate">{{ tone.name }}</h3>
+                    <p class="text-slate-500 text-[10px] uppercase font-mono truncate">{{ tone.id }}</p>
+                  </div>
+                  <div class="relative">
+                    <button @click="openMenuId = openMenuId === 'tone-' + index ? null : 'tone-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors">
+                      <i class="ra ra-dots-vertical"></i>
+                    </button>
+                    <!-- Popup Menu -->
+                    <div v-if="openMenuId === 'tone-' + index" class="absolute right-0 top-full mt-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 py-1 overflow-hidden">
+                      <button @click="openCatalogModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <i class="ra ra-quill-ink"></i> Rename
+                      </button>
+                      <button @click="openCatalogModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <i class="ra ra-gear"></i> Edit
+                      </button>
+                      <button @click="removeCatalogItem('tones', index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 flex items-center gap-2">
+                        <i class="ra ra-trash"></i> Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p class="text-slate-400 text-xs mt-2 line-clamp-2 min-h-[2.5em]">{{ tone.description || 'No description provided.' }}</p>
               </div>
             </div>
 
-            <button @click="saveToneCatalog" :disabled="isSubmitting" class="w-full py-4 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl disabled:opacity-50">
-              {{ isSubmitting ? 'Saving...' : 'Save Tones' }}
-            </button>
+            <div v-if="toneCatalog.length === 0" class="col-span-full py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl text-slate-600 italic">
+              No tones in catalog yet. Click "Add Tone" to begin.
+            </div>
           </div>
         </div>
 
@@ -687,7 +1093,7 @@ watch(
 
         <!-- STATUS MESSAGE FLOATER -->
         <div v-if="statusMessage" 
-          :class="['fixed bottom-12 right-12 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border max-w-sm animate-slide-in', 
+          :class="['fixed bottom-12 right-12 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border max-w-sm animate-slide-in z-[100]', 
           statusMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20']"
         >
           <div class="flex items-center gap-3">
@@ -698,6 +1104,72 @@ watch(
 
       </div>
     </main>
+
+    <!-- CATALOG ADD/EDIT MODAL -->
+    <Teleport to="body">
+      <div v-if="isCatalogModalOpen" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="isCatalogModalOpen = false"></div>
+        <div class="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-8 animate-fade-in">
+          <div class="flex items-center justify-between mb-8">
+            <h2 class="text-2xl font-bold text-white flex items-center gap-3 capitalize">
+              <i :class="catalogModalType === 'styles' ? 'ra ra-paint-brush text-amber-500' : 'ra ra-scroll text-indigo-500'"></i>
+              {{ isEditingExisting ? 'Edit' : 'Add' }} {{ catalogModalType.replace('s', '') }}
+            </h2>
+            <button @click="isCatalogModalOpen = false" class="text-slate-500 hover:text-white transition-colors">
+              <i class="ra ra-cancel"></i>
+            </button>
+          </div>
+
+          <div class="space-y-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Display Name</label>
+              <input v-model="editingItem.name" type="text" placeholder="e.g. Dark Fantasy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Technical ID (Optional)</label>
+              <input v-model="editingItem.id" type="text" :placeholder="slugify(editingItem.name || 'id')" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none font-mono text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Description</label>
+              <textarea v-model="editingItem.description" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-none"></textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">System Instruction / Prompt Prefix</label>
+              <textarea v-model="editingItem.instruction" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-none font-mono text-xs"></textarea>
+            </div>
+            
+            <button @click="saveCatalogItem" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg">
+              Save Entry
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- CUSTOM PROMPT MODAL -->
+    <Teleport to="body">
+      <div v-if="isPromptModalOpen" class="fixed inset-0 z-[90] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="isPromptModalOpen = false"></div>
+        <div class="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-8 animate-fade-in">
+          <h2 class="text-xl font-bold text-white mb-6 flex items-center gap-3">
+            <i class="ra ra-quill-ink text-blue-500"></i>
+            Custom Image Generation
+          </h2>
+          <p class="text-slate-400 text-sm mb-4">Provide a specific prompt for the profile image of <strong>{{ promptModalData?.item.name }}</strong>.</p>
+          <textarea v-model="customPrompt" rows="4" placeholder="A dark moody oil painting of..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500/50 outline-none resize-none mb-6"></textarea>
+          <div class="flex gap-4">
+            <button @click="isPromptModalOpen = false" class="flex-1 py-3 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors font-bold">Cancel</button>
+            <button 
+              @click="generateCatalogImage(promptModalData!.type, promptModalData!.item, promptModalData!.index, customPrompt)" 
+              :disabled="!customPrompt.trim()"
+              class="flex-grow py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all font-bold shadow-lg shadow-blue-900/20 disabled:opacity-50"
+            >
+              Generate
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 

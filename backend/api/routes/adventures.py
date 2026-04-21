@@ -758,8 +758,9 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 return
 
             llm_settings = user.llm_settings or {}
+            # Use complex model and its provider for world generation
             complex_model = llm_settings.get("complex_model", "gpt-4o")
-            preferred_provider = llm_settings.get("preferred_provider", "openai")
+            provider = llm_settings.get("complex_model_provider") or llm_settings.get("preferred_provider", "openai")
             adv_for_context = await db.get(Adventure, adventure_id)
             if not adv_for_context:
                 fallback_rule_mode = _normalize_rule_enforcement_mode(payload_dict.get("rule_enforcement_mode"))
@@ -841,7 +842,7 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     title=payload_dict['title'],
                     context=adventure_context,
                     model=complex_model,
-                    provider=preferred_provider,
+                    provider=provider,
                     generate_scene_images=payload_dict.get('generate_scene_images', False),
                     generate_npc_images=payload_dict.get('generate_npc_images', False),
                     generate_item_images=payload_dict.get('generate_item_images', False),
@@ -1400,8 +1401,9 @@ async def ai_edit_adventure(
     
     from backend.engine.world_generator import WorldManifesto
     
-    provider = (user.llm_settings or {}).get("preferred_provider", "openai")
-    model = (user.llm_settings or {}).get("preferred_model", "gpt-4o")
+    llm_settings = user.llm_settings or {}
+    provider = llm_settings.get("complex_model_provider") or llm_settings.get("preferred_provider", "openai")
+    model = llm_settings.get("complex_model", "gpt-4o")
     llm = GameMasterLLM(user, provider=provider)
     
     system_prompt = (
@@ -2571,11 +2573,13 @@ async def post_chat_message(
 
             # --- LLM Processing ---
             settings = user.llm_settings or {}
-            small_model = settings.get("small_model", "openai/gpt-4o-mini")
-            complex_model = settings.get("complex_model", "openai/gpt-4o-mini")
-            provider = settings.get("preferred_provider", "openai")
+            small_model = settings.get("small_model", "gpt-4o-mini")
+            small_model_provider = settings.get("small_model_provider") or settings.get("preferred_provider", "openai")
+            complex_model = settings.get("complex_model", "gpt-4o")
+            complex_model_provider = settings.get("complex_model_provider") or settings.get("preferred_provider", "openai")
             
-            llm = GameMasterLLM(user, provider=provider)
+            # Initial LLM instance for Pass 1 (Mechanics)
+            llm = GameMasterLLM(user, provider=small_model_provider, model_category="small")
             game_event = None
             response_text = ""
 
@@ -2744,7 +2748,10 @@ async def post_chat_message(
 
                 yield f"event: status\ndata: {json.dumps(jsonable_encoder({'content': 'Generating narrative...'}))}\n\n"
 
-            # --- Pass 2: Atmospheric Narration ---
+                # --- Pass 2: Atmospheric Narration ---
+                # Ensure LLM uses complex model settings for Pass 2 (Narration)
+                llm = GameMasterLLM(user, provider=complex_model_provider, model_category="complex")
+                
                 narration_system_prompt = system_prompt + "\n\n" + prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
                     outcome_json=game_event.model_dump_json(exclude={'narrative_description'})
                 )

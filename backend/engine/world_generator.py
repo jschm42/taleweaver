@@ -47,27 +47,28 @@ def _validate_t2i_prerequisites(
             "Open Settings and configure Text-to-Image provider and models."
         )
 
-    provider = (t2i_settings.get("provider") or "").strip().lower()
-    if not provider:
-        raise ValueError("Image generation is enabled, but no image provider is configured.")
+    # Note: We don't check for a global 'provider' anymore as each model path can have its own.
+    # However, we'll validate the specific ones needed.
 
-    needs_advanced_model = need_scene_images
-    needs_simple_model = need_npc_images or need_item_images or need_protagonist_image
+    if needs_advanced_model:
+        model = (t2i_settings.get("advanced_model") or "").strip()
+        if not model:
+            raise ValueError("Image generation is enabled for scenes, but advanced_model is missing.")
+        provider = (t2i_settings.get("advanced_model_provider") or t2i_settings.get("provider", "openai")).lower()
+        if provider != "ollama":
+            encrypted_api_keys = user.encrypted_api_keys or {}
+            if provider not in encrypted_api_keys:
+                raise ValueError(f"API key missing for advanced image provider '{provider}'.")
 
-    if needs_advanced_model and not (t2i_settings.get("advanced_model") or "").strip():
-        raise ValueError("Image generation is enabled for scenes, but advanced_model is missing.")
-
-    if needs_simple_model and not (t2i_settings.get("simple_model") or "").strip():
-        raise ValueError(
-            "Image generation is enabled for portraits/items, but simple_model is missing."
-        )
-
-    if provider != "ollama":
-        encrypted_api_keys = user.encrypted_api_keys or {}
-        if provider not in encrypted_api_keys:
-            raise ValueError(
-                f"Image generation provider '{provider}' is configured, but its API key is missing."
-            )
+    if needs_simple_model:
+        model = (t2i_settings.get("simple_model") or "").strip()
+        if not model:
+            raise ValueError("Image generation is enabled for portraits/items, but simple_model is missing.")
+        provider = (t2i_settings.get("simple_model_provider") or t2i_settings.get("provider", "openai")).lower()
+        if provider != "ollama":
+            encrypted_api_keys = user.encrypted_api_keys or {}
+            if provider not in encrypted_api_keys:
+                raise ValueError(f"API key missing for simple image provider '{provider}'.")
 
 
 async def _publish_generation_status(db: AsyncSession, adventure: Optional[Adventure], status: str) -> None:
@@ -176,9 +177,9 @@ class WorldGenerator:
         # If no provider is given, use the one from user settings
         if not provider:
             llm_settings = user.llm_settings or {}
-            provider = llm_settings.get("preferred_provider", "openai")
+            provider = llm_settings.get("complex_model_provider") or llm_settings.get("preferred_provider", "openai")
 
-        llm = GameMasterLLM(user, provider=provider)
+        llm = GameMasterLLM(user, provider=provider, model_category="complex")
 
         log_structured_event(
             "adventure.generation.start",

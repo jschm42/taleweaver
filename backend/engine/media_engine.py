@@ -188,6 +188,57 @@ class MediaEngine:
         try:
             provider_options = provider_options or {}
 
+            # SPECIAL CASE: OpenRouter does not support /v1/images/generations.
+            # It uses /v1/chat/completions with modalities=["image"].
+            if provider_key == "openrouter":
+                logger.info(f"Using OpenRouter specialized image generation for model {model}")
+                kwargs: dict[str, Any] = {
+                    "model": f"openrouter/{model}" if not model.startswith("openrouter/") else model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "modalities": ["image"],
+                    "api_base": "https://openrouter.ai/api/v1",
+                }
+                if api_key:
+                    kwargs["api_key"] = api_key
+                
+                # Pass image config if available
+                image_config = {}
+                if provider_options.get("width") and provider_options.get("height"):
+                    image_config["image_size"] = f"{provider_options['width']}x{provider_options['height']}"
+                if image_config:
+                    kwargs["image_config"] = image_config
+
+                # Use completion instead of image_generation
+                response = MediaEngine._get_litellm().completion(**kwargs)
+                logger.info(f"OpenRouter completion response: {response}")
+                
+                # OpenRouter returns images in the message content or as a specific field in some versions.
+                # Usually it's in response.choices[0].message.content or a dedicated field.
+                # Based on LiteLLM/OpenRouter docs, we need to find the image URL.
+                image_url = None
+                
+                # Try to find URL in message content or attachments
+                message = response.choices[0].message
+                content = getattr(message, "content", "")
+                
+                # Check for image URL in content (OpenRouter often returns Markdown or just the URL)
+                import re
+                url_match = re.search(r'https?://[^\s)"]+\.(?:jpg|jpeg|png|webp)', str(content))
+                if url_match:
+                    image_url = url_match.group(0)
+                
+                # Check for base64 or other data in hidden params or specific OpenRouter fields if available
+                if not image_url:
+                    # Fallback or check other fields
+                    logger.warning(f"Could not find image URL in OpenRouter response content: {content}")
+                
+                if image_url:
+                    image_format = provider_options.get("image_format", "jpeg")
+                    image_quality = provider_options.get("image_quality", 85)
+                    return await MediaEngine._save_remote_image(image_url, target_dir, filename, image_format, image_quality)
+                
+                raise RuntimeError(f"OpenRouter generation failed to return an image URL. Response: {response}")
+
             if provider_key == "black_forest_labs":
                 return await MediaEngine._generate_image_black_forest_labs_direct(
                     prompt=prompt,
@@ -213,22 +264,16 @@ class MediaEngine:
                 if value is not None:
                     kwargs[field] = value
             
-            # Handle OpenRouter specifics
-            if provider_key == "openrouter":
-                if not model.startswith("openrouter/"):
-                    kwargs["model"] = f"openrouter/{model}"
-                # Remove provider override to let LiteLLM use the prefix-based routing
-                kwargs.pop("custom_llm_provider", None)
-
             if provider_key == "ollama":
                 ollama_url = (provider_options.get("ollama_url") or "http://localhost:11434").rstrip("/")
                 kwargs["api_base"] = ollama_url
+
+            logger.info(f"Final image generation kwargs: {kwargs}")
 
             # Call LiteLLM first
             response = MediaEngine._get_litellm().image_generation(**kwargs)
             image_url, b64_json = MediaEngine._extract_image_payload(response)
             
-            provider_options = provider_options or {}
             image_format = provider_options.get("image_format", "jpeg")
             image_quality = provider_options.get("image_quality", 85)
 
@@ -450,7 +495,7 @@ class MediaEngine:
         t2i = user_config.get("t2i_settings")
         if not t2i: return None
         
-        provider = (t2i.get("provider", "openai") or "openai").lower()
+        provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
         model = t2i.get("advanced_model")
         
         if not model:
@@ -481,7 +526,7 @@ class MediaEngine:
         t2i = user_config.get("t2i_settings")
         if not t2i: return None
         
-        provider = (t2i.get("provider", "openai") or "openai").lower()
+        provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
         model = t2i.get("simple_model")
         
         if not model:
