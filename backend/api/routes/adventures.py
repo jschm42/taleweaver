@@ -41,6 +41,7 @@ from backend.engine.debug_engine import DebugEngine
 from backend.core.llm_router import GameMasterLLM
 from backend.core import prompts
 from backend.core.llm_logger import log_structured_event
+from backend.utils.svg_generator import SVGPlaceholderGenerator
 
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
 logger = logging.getLogger(__name__)
@@ -645,6 +646,26 @@ async def create_adventure(
         min_scenes=payload.min_scenes,
         max_scenes=payload.max_scenes,
     )
+
+    # Generate placeholder if no image is provided
+    if not adv_kwargs.get("image_url"):
+        try:
+            # Ensure the adventure directory exists
+            adv_id = adv_kwargs.get("id") or str(uuid.uuid4())
+            adv_kwargs["id"] = adv_id # Ensure ID is set for path construction
+            
+            adv_dir = os.path.join(settings.DATA_DIR, "adventures", adv_id)
+            os.makedirs(adv_dir, exist_ok=True)
+            
+            placeholder_filename = "cover_placeholder.svg"
+            placeholder_path = os.path.join(adv_dir, placeholder_filename)
+            
+            generator = SVGPlaceholderGenerator(width=800, height=400, num_shapes=12)
+            generator.save(placeholder_path, title=payload.title)
+            
+            adv_kwargs["image_url"] = f"/data/adventures/{adv_id}/{placeholder_filename}"
+        except Exception as e:
+            logger.error(f"Failed to generate SVG placeholder for adventure: {e}")
 
     if payload.heartbeat_interval is not None:
         adv_kwargs["heartbeat_interval"] = int(payload.heartbeat_interval)

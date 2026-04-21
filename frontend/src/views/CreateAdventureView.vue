@@ -299,7 +299,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <aside class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+      <aside class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5 w-full lg:w-96 flex-shrink-0 self-start">
         <div>
           <h2 class="text-lg font-bold text-white">Visual Styles</h2>
           <p class="text-xs text-slate-400">Multiple selection possible. All chosen styles will be combined.</p>
@@ -320,9 +320,9 @@ onMounted(() => {
                 <i class="ra ra-paint-brush"></i>
               </div>
             </div>
-            <div class="min-w-0">
-              <div class="font-semibold text-sm truncate">{{ style.name }}</div>
-              <div class="text-[10px] text-slate-400 line-clamp-2 leading-tight">{{ style.description }}</div>
+            <div class="min-w-0 flex-grow">
+              <div class="font-semibold text-sm truncate pr-2">{{ style.name }}</div>
+              <div class="text-[10px] text-slate-400 line-clamp-2 leading-tight break-all">{{ style.description }}</div>
             </div>
           </button>
 
@@ -343,9 +343,9 @@ onMounted(() => {
                   <i class="ra ra-quill-ink"></i>
                 </div>
               </div>
-              <div class="min-w-0">
-                <div class="font-semibold text-sm text-slate-100 truncate">{{ tone.name }}</div>
-                <div class="text-[10px] text-slate-400 line-clamp-1 truncate">{{ tone.description }}</div>
+              <div class="min-w-0 flex-grow">
+                <div class="font-semibold text-sm text-slate-100 truncate pr-2">{{ tone.name }}</div>
+                <div class="text-[10px] text-slate-400 line-clamp-2 break-all leading-tight">{{ tone.description }}</div>
               </div>
             </label>
           </div>
