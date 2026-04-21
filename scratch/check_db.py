@@ -1,13 +1,19 @@
 import sqlite3
+import os
 
-def check_schema():
-    conn = sqlite3.connect('taleweaver.db')
+db_path = "data/taleweaver.db"
+if os.path.exists(db_path):
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(adventures);")
-    columns = cursor.fetchall()
-    for col in columns:
-        print(col)
-    conn.close()
-
-if __name__ == "__main__":
-    check_schema()
+    try:
+        cursor.execute("SELECT title FROM adventures")
+        rows = cursor.fetchall()
+        print("Adventures in DB:")
+        for row in rows:
+            print(f"- {row[0]}")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        conn.close()
+else:
+    print(f"Database {db_path} not found.")

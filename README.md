@@ -166,3 +166,24 @@ ollama pull x/flux2-klein
 Notes:
 - No cloud API key is required for local Ollama image generation.
 - TaleWeaver first tries image generation via LiteLLM integration and falls back to direct Ollama HTTP calls when needed.
+
+## 6. Automated Adventure Import
+
+TaleWeaver features an automated pipeline to seed the database with adventures or import shared content on startup.
+
+### Supported Formats
+* **`.adv` (JSON):** Contains the adventure blueprint (manifest) or a complete session bundle.
+* **`.adz` (ZIP):** An "Adventure Zip" containing the manifest (`adventure.adv`) and associated media assets (images) in an `assets/` folder.
+
+### Watch Directories
+The backend monitors three specific directories relative to the project root:
+
+1.  **`adventures/`**: Bundled adventures that are **committed to the repository**. This is the primary location for core adventures that should be available on every installation. Files are **never deleted**.
+2.  **`data/presets/adventures/`**: Local presets or examples. This folder is ignored by git. Files are **never deleted**.
+3.  **`data/imports/adventures/`**: For manual "drop-in" imports. Files in this folder are **automatically deleted** once successfully imported to keep the workspace clean.
+
+### How it Works
+* The import process runs every time the FastAPI backend starts.
+* **One-Time Seed:** Adventures in the root `adventures/` folder are only imported if the database is currently empty (e.g., first start or after a reset). This allows users to delete bundled adventures from the UI without them reappearing on every restart.
+* **Deduplication:** For other folders, the system checks the adventure title. If an adventure with the same title already exists, the import is skipped.
+* **Asset Handling:** For `.adz` files, assets are automatically extracted and remapped to the local storage, ensuring images are available immediately.

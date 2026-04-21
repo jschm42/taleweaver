@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+from sqlalchemy import select
 
 from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
@@ -26,6 +27,23 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     await apply_sqlite_compat_migrations()
+
+    # Auto-import adventures
+    from backend.core.database import AsyncSessionLocal
+    from backend.engine.adventure_importer import AdventureImporter
+    from backend.models.adventure import Adventure
+    
+    async with AsyncSessionLocal() as db:
+        # 0. Import bundled adventures (committed to repo) 
+        # ONLY if the database is empty (e.g., after initial creation or reset)
+        result = await db.execute(select(Adventure).limit(1))
+        if not result.scalars().first():
+            await AdventureImporter.import_from_directory(db, "adventures", delete_after=False)
+            
+        # 1. Import presets (examples) - always checked for new titles, do not delete
+        await AdventureImporter.import_from_directory(db, "data/presets/adventures", delete_after=False)
+        # 2. Import manual drops - always checked, delete after success
+        await AdventureImporter.import_from_directory(db, "data/imports/adventures", delete_after=True)
 
     yield
 
@@ -59,6 +77,9 @@ from backend.core.config import settings
 os.makedirs(os.path.join(settings.DATA_DIR, "characters"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "adventures"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "logs"), exist_ok=True)
+os.makedirs("data/imports/adventures", exist_ok=True)
+os.makedirs("data/presets/adventures", exist_ok=True)
+os.makedirs("adventures", exist_ok=True)
 
 app.mount("/data", StaticFiles(directory=settings.DATA_DIR), name="data")
 app.mount("/assets", StaticFiles(directory="backend/static/assets"), name="assets")
