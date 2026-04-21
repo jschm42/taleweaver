@@ -158,8 +158,9 @@ const removeCatalogItem = (type: 'styles' | 'tones', index: number) => {
   saveCurrentCatalog()
 }
 
-const saveCurrentCatalog = async () => {
-  if (catalogModalType.value === 'styles') await saveStylesCatalog()
+const saveCurrentCatalog = async (type?: 'styles' | 'tones') => {
+  const targetType = type || catalogModalType.value
+  if (targetType === 'styles') await saveStylesCatalog()
   else await saveToneCatalog()
 }
 
@@ -212,8 +213,13 @@ const openPromptModal = (type: 'styles' | 'tones', item: CatalogTile, index: num
 }
 
 const generateCatalogImage = async (type: 'styles' | 'tones', item: CatalogTile, index: number, prompt: string | null = null) => {
+  if (!t2iForm.value.simple_model) {
+    statusMessage.value = { type: 'error', text: 'Please configure and save the "Simple Model" in Visual Preferences before generating catalog images.' }
+    return
+  }
   const key = `${type}_${index}`
   isGeneratingItem.value[key] = true
+  isPromptModalOpen.value = false // Close modal immediately
   try {
     const res = await fetch('http://localhost:8000/api/settings/catalog/generate', {
       method: 'POST',
@@ -221,15 +227,16 @@ const generateCatalogImage = async (type: 'styles' | 'tones', item: CatalogTile,
       body: JSON.stringify({
         target_id: item.id || slugify(item.name),
         catalog_type: type,
-        prompt: prompt
+        prompt: prompt,
+        name: item.name,
+        description: item.description
       })
     })
     const data = await res.json()
     if (data.status === 'success') {
       const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
       catalog.value[index].image_url = data.image_url
-      await saveCurrentCatalog()
-      isPromptModalOpen.value = false
+      await saveCurrentCatalog(type)
     } else {
       statusMessage.value = { type: 'error', text: data.message || 'Generation failed.' }
     }
@@ -916,17 +923,16 @@ watch(
                 
                 <!-- Overlay Buttons -->
                 <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <button @click="generateCatalogImage('styles', style, index)" :disabled="isGeneratingItem['styles_' + index]" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg disabled:opacity-50">
+                  <button @click="generateCatalogImage('styles', style, index)" :disabled="isGeneratingItem['styles_' + index]" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg disabled:opacity-50" :title="'Quick Generate using ' + t2iForm.simple_model">
                     <i v-if="isGeneratingItem['styles_' + index]" class="ra ra-cycle animate-spin"></i>
-                    <i v-else class="ra ra-cycle" title="Quick Generate"></i>
+                    <i v-else class="ra ra-cycle"></i>
                   </button>
                   <button @click="openPromptModal('styles', style, index)" class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg">
                     <i class="ra ra-quill-ink" title="Custom Prompt"></i>
                   </button>
-                  <button @click="triggerFileUpload('style-upload-' + index)" class="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg shadow-lg">
-                    <i class="ra ra-camera" title="Upload Image"></i>
-                  </button>
                   <input :id="'style-upload-' + index" type="file" class="hidden" accept="image/*" @change="(e) => onUploadFile(e, 'styles', style, index)" />
+
+
                 </div>
 
                 <!-- Loading Overlay -->
@@ -943,17 +949,24 @@ watch(
                     <p class="text-slate-500 text-[10px] uppercase font-mono truncate">{{ style.id }}</p>
                   </div>
                   <div class="relative">
-                    <button @click="openMenuId = openMenuId === 'style-' + index ? null : 'style-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors">
-                      <i class="ra ra-dots-vertical"></i>
+                    <button @click.stop="openMenuId = openMenuId === 'style-' + index ? null : 'style-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors text-lg font-bold leading-none flex items-center justify-center min-w-[32px] h-8" title="Options">
+                      <span class="mb-0.5">...</span>
                     </button>
                     <!-- Popup Menu -->
-                    <div v-if="openMenuId === 'style-' + index" class="absolute right-0 top-full mt-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 py-1 overflow-hidden">
+                    <div v-if="openMenuId === 'style-' + index" class="absolute right-0 bottom-full mb-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[100] py-1 overflow-hidden">
                       <button @click="openCatalogModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
                         <i class="ra ra-quill-ink"></i> Rename
                       </button>
                       <button @click="openCatalogModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
                         <i class="ra ra-gear"></i> Edit
                       </button>
+                      <button @click="openPromptModal('styles', style, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <i class="ra ra-quill-ink"></i> Custom Prompt
+                      </button>
+                      <button @click="triggerFileUpload('style-upload-' + index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <i class="ra ra-camera"></i> Upload Image
+                      </button>
+
                       <button @click="removeCatalogItem('styles', index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 flex items-center gap-2">
                         <i class="ra ra-trash"></i> Delete
                       </button>
@@ -993,17 +1006,16 @@ watch(
                 
                 <!-- Overlay Buttons -->
                 <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <button @click="generateCatalogImage('tones', tone, index)" :disabled="isGeneratingItem['tones_' + index]" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg disabled:opacity-50">
+                  <button @click="generateCatalogImage('tones', tone, index)" :disabled="isGeneratingItem['tones_' + index]" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg disabled:opacity-50" :title="'Quick Generate using ' + t2iForm.simple_model">
                     <i v-if="isGeneratingItem['tones_' + index]" class="ra ra-cycle animate-spin"></i>
-                    <i v-else class="ra ra-cycle" title="Quick Generate"></i>
+                    <i v-else class="ra ra-cycle"></i>
                   </button>
                   <button @click="openPromptModal('tones', tone, index)" class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg">
                     <i class="ra ra-quill-ink" title="Custom Prompt"></i>
                   </button>
-                  <button @click="triggerFileUpload('tone-upload-' + index)" class="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg shadow-lg">
-                    <i class="ra ra-camera" title="Upload Image"></i>
-                  </button>
                   <input :id="'tone-upload-' + index" type="file" class="hidden" accept="image/*" @change="(e) => onUploadFile(e, 'tones', tone, index)" />
+
+
                 </div>
 
                 <!-- Loading Overlay -->
@@ -1020,17 +1032,24 @@ watch(
                     <p class="text-slate-500 text-[10px] uppercase font-mono truncate">{{ tone.id }}</p>
                   </div>
                   <div class="relative">
-                    <button @click="openMenuId = openMenuId === 'tone-' + index ? null : 'tone-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-colors">
-                      <i class="ra ra-dots-vertical"></i>
+                    <button @click.stop="openMenuId = openMenuId === 'tone-' + index ? null : 'tone-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors text-lg font-bold leading-none flex items-center justify-center min-w-[32px] h-8" title="Options">
+                      <span class="mb-0.5">...</span>
                     </button>
                     <!-- Popup Menu -->
-                    <div v-if="openMenuId === 'tone-' + index" class="absolute right-0 top-full mt-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 py-1 overflow-hidden">
+                    <div v-if="openMenuId === 'tone-' + index" class="absolute right-0 bottom-full mb-1 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[100] py-1 overflow-hidden">
                       <button @click="openCatalogModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
                         <i class="ra ra-quill-ink"></i> Rename
                       </button>
                       <button @click="openCatalogModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
                         <i class="ra ra-gear"></i> Edit
                       </button>
+                      <button @click="openPromptModal('tones', tone, index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <i class="ra ra-quill-ink"></i> Custom Prompt
+                      </button>
+                      <button @click="triggerFileUpload('tone-upload-' + index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2">
+                        <i class="ra ra-camera"></i> Upload Image
+                      </button>
+
                       <button @click="removeCatalogItem('tones', index); openMenuId = null" class="w-full text-left px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/20 flex items-center gap-2">
                         <i class="ra ra-trash"></i> Delete
                       </button>
@@ -1126,16 +1145,12 @@ watch(
               <input v-model="editingItem.name" type="text" placeholder="e.g. Dark Fantasy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Technical ID (Optional)</label>
-              <input v-model="editingItem.id" type="text" :placeholder="slugify(editingItem.name || 'id')" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none font-mono text-sm" />
-            </div>
-            <div>
               <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Description</label>
-              <textarea v-model="editingItem.description" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-none"></textarea>
+              <textarea v-model="editingItem.description" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-y"></textarea>
             </div>
             <div>
               <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">System Instruction / Prompt Prefix</label>
-              <textarea v-model="editingItem.instruction" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-none font-mono text-xs"></textarea>
+              <textarea v-model="editingItem.instruction" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-y font-mono text-xs"></textarea>
             </div>
             
             <button @click="saveCatalogItem" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg">

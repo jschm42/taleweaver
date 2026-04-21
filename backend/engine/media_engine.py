@@ -216,28 +216,81 @@ class MediaEngine:
                 # Usually it's in response.choices[0].message.content or a dedicated field.
                 # Based on LiteLLM/OpenRouter docs, we need to find the image URL.
                 image_url = None
-                
-                # Try to find URL in message content or attachments
+                b64_data = None
+
+                # Try to find URL in message content or the 'images' field (specific to some OpenRouter models)
                 message = response.choices[0].message
                 content = getattr(message, "content", "")
+                images_field = getattr(message, "images", [])
                 
-                # Check for image URL in content (OpenRouter often returns Markdown or just the URL)
-                import re
-                url_match = re.search(r'https?://[^\s)"]+\.(?:jpg|jpeg|png|webp)', str(content))
-                if url_match:
-                    image_url = url_match.group(0)
+                # Case 1: Look in 'images' field first (newer OpenRouter format)
+                if isinstance(images_field, list) and len(images_field) > 0:
+                    for img_item in images_field:
+                        # Extract URL from {'image_url': {'url': '...'}}
+                        if isinstance(img_item, dict):
+                            img_url_obj = img_item.get("image_url") or img_item
+                            if isinstance(img_url_obj, dict):
+                                url_val = img_url_obj.get("url")
+                                if url_val:
+                                    if url_val.startswith("data:image/"):
+                                        b64_data = url_val
+                                    else:
+                                        image_url = url_val
+                                    break
+
+                # Case 2: Look in 'content' list (standard LiteLLM/OpenAI format)
+                if not image_url and not b64_data and isinstance(content, list):
+                    for item in content:
+                        # Item might be a dict or a Pydantic model
+                        if hasattr(item, "model_dump"):
+                            item_dict = item.model_dump()
+                        elif hasattr(item, "dict"):
+                            item_dict = item.dict()
+                        elif isinstance(item, dict):
+                            item_dict = item
+                        else:
+                            item_dict = getattr(item, "__dict__", {})
+                            
+                        if item_dict.get("type") == "image_url":
+                            image_obj = item_dict.get("image_url", {})
+                            if isinstance(image_obj, dict):
+                                url_val = image_obj.get("url")
+                            else:
+                                url_val = getattr(image_obj, "url", None)
+                                
+                            if not url_val:
+                                url_val = item_dict.get("url")
+                                
+                            if url_val:
+                                if url_val.startswith("data:image/"):
+                                    b64_data = url_val
+                                else:
+                                    image_url = url_val
+                                break
                 
-                # Check for base64 or other data in hidden params or specific OpenRouter fields if available
-                if not image_url:
-                    # Fallback or check other fields
-                    logger.warning(f"Could not find image URL in OpenRouter response content: {content}")
+                if not image_url and not b64_data:
+                    # Fallback for string content
+                    import re
+                    url_match = re.search(r'https?://[^\s)"\']+\.(?:jpg|jpeg|png|webp)', str(content))
+                    if url_match:
+                        image_url = url_match.group(0)
+                    elif "data:image/" in str(content):
+                        # Extract data URI from string with strict base64 character matching
+                        data_match = re.search(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', str(content))
+                        if data_match:
+                            b64_data = data_match.group(0)
                 
+                image_format = provider_options.get("image_format", "jpeg")
+                image_quality = provider_options.get("image_quality", 85)
+
                 if image_url:
-                    image_format = provider_options.get("image_format", "jpeg")
-                    image_quality = provider_options.get("image_quality", 85)
                     return await MediaEngine._save_remote_image(image_url, target_dir, filename, image_format, image_quality)
+                if b64_data:
+                    return await MediaEngine._save_b64_image(b64_data, target_dir, filename, image_format, image_quality)
                 
-                raise RuntimeError(f"OpenRouter generation failed to return an image URL. Response: {response}")
+                logger.info(f"OpenRouter content type: {type(content)}, value: {repr(content)[:500]}")
+                logger.warning(f"Could not find image URL or data in OpenRouter response content: {content}")
+                raise RuntimeError(f"OpenRouter generation failed to return an image. Response: {response}")
 
             if provider_key == "black_forest_labs":
                 return await MediaEngine._generate_image_black_forest_labs_direct(
@@ -328,8 +381,8 @@ class MediaEngine:
                 logger.warning(f"Image generation was moderated (Safety Filter) for prompt: '{prompt}'. Error: {error_str}")
                 raise ValueError("Image generation was blocked by the AI provider's safety filter. Please adjust the description to avoid sensitive content.")
             logger.error(f"Image generation failed for prompt: '{prompt}'. Error: {error_str}")
-            # Instead of raising, we return None to allow the engine to use placeholders
-            return None
+            # Raise the exception so config_api can report it to the frontend
+            raise
 
     @staticmethod
     def _extract_image_payload(response: Any) -> tuple[Optional[str], Optional[str]]:
@@ -342,11 +395,21 @@ class MediaEngine:
             image_data = data[0]
             image_url = getattr(image_data, "url", None)
             b64_json = getattr(image_data, "b64_json", None)
+            
+            # Handle case where base64 is in the url field (common with some providers)
+            if image_url and image_url.startswith("data:image/"):
+                b64_json = image_url
+                image_url = None
+
             if image_url or b64_json:
                 return image_url, b64_json
 
             if isinstance(image_data, dict):
-                return image_data.get("url"), image_data.get("b64_json")
+                url = image_data.get("url")
+                b64 = image_data.get("b64_json")
+                if url and url.startswith("data:image/"):
+                    return None, url
+                return url, b64
 
         if isinstance(response, dict):
             images = response.get("images")
@@ -428,6 +491,7 @@ class MediaEngine:
     async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Decodes and saves a base64 image string."""
         import base64
+        import re
         try:
             os.makedirs(target_dir, exist_ok=True)
             ext = "jpg" if image_format.lower() == "jpeg" else "png"
@@ -437,6 +501,23 @@ class MediaEngine:
                 final_filename += f".{ext}"
                 
             filepath = os.path.join(target_dir, final_filename)
+            
+            # Strip data URI prefix if present
+            if b64_data.startswith("data:image/"):
+                if ";base64," in b64_data:
+                    b64_data = b64_data.split(";base64,", 1)[1]
+                elif "," in b64_data:
+                    b64_data = b64_data.split(",", 1)[1]
+
+            # Clean up the base64 string
+            b64_data = re.sub(r'[^A-Za-z0-9+/=]', '', b64_data)
+            
+            # Fix padding
+            padding_needed = len(b64_data) % 4
+            if padding_needed:
+                b64_data += '=' * (4 - padding_needed)
+
+            logger.info(f"Decoding b64 image (length: {len(b64_data)}, starts with: {b64_data[:30]}...)")
             image_bytes = base64.b64decode(b64_data)
             
             if image_format.lower() == "jpeg":
@@ -452,7 +533,7 @@ class MediaEngine:
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"
         except Exception as e:
-            logger.exception("Error saving b64 image")
+            logger.exception(f"Error saving b64 image: {str(e)}")
             return None
 
     @staticmethod

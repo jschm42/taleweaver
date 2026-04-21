@@ -312,11 +312,20 @@ onMounted(() => {
             v-for="style in imageStylesCatalog"
             :key="style.id"
             @click="toggleImageStyle(style.id)"
-            :class="['w-full text-left border rounded-lg p-3 transition-colors', form.selected_image_styles.includes(style.id) ? 'border-cyan-500 bg-cyan-500/10 text-cyan-100' : 'border-slate-700 bg-slate-950 text-slate-300']"
+            :class="['w-full text-left border rounded-lg p-2 transition-colors flex items-center gap-3', form.selected_image_styles.includes(style.id) ? 'border-cyan-500 bg-cyan-500/10 text-cyan-100' : 'border-slate-700 bg-slate-950 text-slate-300']"
           >
-            <div class="font-semibold">{{ style.name }}</div>
-            <div class="text-xs mt-1 text-slate-400">{{ style.description }}</div>
+            <div class="w-12 h-12 rounded bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden">
+              <img v-if="style.image_url" :src="style.image_url.startsWith('http') ? style.image_url : 'http://localhost:8000' + style.image_url" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex items-center justify-center text-slate-700">
+                <i class="ra ra-paint-brush"></i>
+              </div>
+            </div>
+            <div class="min-w-0">
+              <div class="font-semibold text-sm truncate">{{ style.name }}</div>
+              <div class="text-[10px] text-slate-400 line-clamp-2 leading-tight">{{ style.description }}</div>
+            </div>
           </button>
+
         </div>
 
         <div>
@@ -325,12 +334,18 @@ onMounted(() => {
             <label
               v-for="tone in toneCatalog"
               :key="tone.id"
-              class="flex items-start gap-3 border border-slate-700 rounded-lg p-3 bg-slate-950"
+              class="flex items-center gap-3 border border-slate-700 rounded-lg p-2 bg-slate-950 cursor-pointer"
             >
-              <input type="radio" name="tone" :value="tone.id" v-model="form.selected_tone" class="mt-1" />
-              <div>
-                <div class="font-semibold text-slate-100">{{ tone.name }}</div>
-                <div class="text-xs text-slate-400">{{ tone.description }}</div>
+              <input type="radio" name="tone" :value="tone.id" v-model="form.selected_tone" />
+              <div class="w-10 h-10 rounded bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden">
+                <img v-if="tone.image_url" :src="tone.image_url.startsWith('http') ? tone.image_url : 'http://localhost:8000' + tone.image_url" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex items-center justify-center text-slate-700">
+                  <i class="ra ra-quill-ink"></i>
+                </div>
+              </div>
+              <div class="min-w-0">
+                <div class="font-semibold text-sm text-slate-100 truncate">{{ tone.name }}</div>
+                <div class="text-[10px] text-slate-400 line-clamp-1 truncate">{{ tone.description }}</div>
               </div>
             </label>
           </div>

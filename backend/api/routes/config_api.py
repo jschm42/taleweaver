@@ -1,11 +1,14 @@
 import re
 import os
 import uuid
+import logging
 from fastapi import APIRouter, Depends, File, UploadFile, Form
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, Any
+
+logger = logging.getLogger(__name__)
 
 from backend.core.database import get_db
 from backend.models.user import User
@@ -206,6 +209,12 @@ def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
     if "advanced_model_provider" not in normalized:
         normalized["advanced_model_provider"] = normalized.get("provider") or "openai"
 
+    # OpenRouter normalization
+    if normalized.get("simple_model_provider") == "openrouter":
+        normalized["simple_model"] = _normalize_openrouter_model(normalized.get("simple_model"))
+    if normalized.get("advanced_model_provider") == "openrouter":
+        normalized["advanced_model"] = _normalize_openrouter_model(normalized.get("advanced_model"))
+
     return normalized
 
 class ApiKeyPayload(BaseModel):
@@ -263,6 +272,8 @@ class CatalogGeneratePayload(BaseModel):
     target_id: str
     catalog_type: str  # 'styles' or 'tones'
     prompt: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
 
 @router.get("")
 async def get_settings(db: AsyncSession = Depends(get_db)):
@@ -495,7 +506,7 @@ async def generate_catalog_image(payload: CatalogGeneratePayload, db: AsyncSessi
     model = t2i.get("simple_model")
     
     if not model:
-        return {"status": "error", "message": "Missing image model configuration."}
+        return {"status": "error", "message": "The 'Simple Model' for image generation is not configured. Please set it in Visual Preferences."}
         
     api_key = None
     if provider != "ollama":
@@ -508,8 +519,17 @@ async def generate_catalog_image(payload: CatalogGeneratePayload, db: AsyncSessi
         os.makedirs(catalog_dir, exist_ok=True)
         
         # Use simple model for catalog items (consistent with NPC/Items)
+        # Construct a rich prompt using name and description if available
+        base_prompt = payload.prompt
+        if not base_prompt:
+            item_name = payload.name or payload.target_id.replace('-', ' ')
+            base_prompt = f"A visual representation of the visual style '{item_name}'."
+            if payload.description:
+                base_prompt += f" Context: {payload.description}"
+            base_prompt += " High quality, professional digital art, no text."
+
         img_url = await MediaEngine.generate_image(
-            prompt=payload.prompt or f"A visual representation of {payload.target_id.replace('-', ' ')}",
+            prompt=base_prompt,
             model=model,
             api_key=api_key,
             provider=provider,
@@ -518,12 +538,24 @@ async def generate_catalog_image(payload: CatalogGeneratePayload, db: AsyncSessi
             provider_options=t2i
         )
         
+        logger.info(f"Catalog generate result for '{payload.target_id}': img_url={img_url!r}")
         if img_url:
             return {"status": "success", "image_url": img_url}
         else:
-            return {"status": "error", "message": "Generation failed."}
+            return {"status": "error", "message": "Generation failed: The provider returned no image data. Check your API logs or model configuration."}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        logger.exception(f"Catalog generate exception for '{payload.target_id}'")
+        error_msg = str(e)
+        # Clean up some common LiteLLM/OpenRouter error strings to be more readable
+        if "OpenrouterException" in error_msg:
+             try:
+                 import json
+                 err_json = error_msg.split("-", 1)[1].strip()
+                 err_data = json.loads(err_json)
+                 error_msg = err_data.get("error", {}).get("message", error_msg)
+             except:
+                 pass
+        return {"status": "error", "message": f"Generation Error: {error_msg}"}
 
 
 @router.post("/catalog/upload")
