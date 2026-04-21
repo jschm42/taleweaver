@@ -50,25 +50,29 @@ def _validate_t2i_prerequisites(
     # Note: We don't check for a global 'provider' anymore as each model path can have its own.
     # However, we'll validate the specific ones needed.
 
-    if needs_advanced_model:
+    if need_scene_images:
         model = (t2i_settings.get("advanced_model") or "").strip()
         if not model:
             raise ValueError("Image generation is enabled for scenes, but advanced_model is missing.")
         provider = (t2i_settings.get("advanced_model_provider") or t2i_settings.get("provider", "openai")).lower()
         if provider != "ollama":
-            encrypted_api_keys = user.encrypted_api_keys or {}
-            if provider not in encrypted_api_keys:
-                raise ValueError(f"API key missing for advanced image provider '{provider}'.")
+            # Check environment and then DB
+            if not settings.get_env_api_key(provider):
+                encrypted_api_keys = user.encrypted_api_keys or {}
+                if provider not in encrypted_api_keys:
+                    raise ValueError(f"API key missing for advanced image provider '{provider}'.")
 
-    if needs_simple_model:
+    if need_npc_images or need_item_images or need_protagonist_image:
         model = (t2i_settings.get("simple_model") or "").strip()
         if not model:
             raise ValueError("Image generation is enabled for portraits/items, but simple_model is missing.")
         provider = (t2i_settings.get("simple_model_provider") or t2i_settings.get("provider", "openai")).lower()
         if provider != "ollama":
-            encrypted_api_keys = user.encrypted_api_keys or {}
-            if provider not in encrypted_api_keys:
-                raise ValueError(f"API key missing for simple image provider '{provider}'.")
+            # Check environment and then DB
+            if not settings.get_env_api_key(provider):
+                encrypted_api_keys = user.encrypted_api_keys or {}
+                if provider not in encrypted_api_keys:
+                    raise ValueError(f"API key missing for simple image provider '{provider}'.")
 
 
 async def _publish_generation_status(db: AsyncSession, adventure: Optional[Adventure], status: str) -> None:
@@ -357,7 +361,7 @@ class WorldGenerator:
                 avatar.description = prot["description"]
                 
                 # Generate Portrait for Protagonist if requested
-                image_url = (existing_images or {}).get("PROTAGONIST")
+                image_url = (existing_images or {}).get("PROTAGONIST") or prot.get("profile_image")
                 if not image_url and user and gen_protagonist_image:
                     await _publish_generation_status(db, adventure, f"Envisioning You: {prot['name']}...")
                     prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
@@ -395,7 +399,7 @@ class WorldGenerator:
                 continue
             seen_scene_ids.add(s["id"])
             
-            image_url = (existing_images or {}).get(s["id"])
+            image_url = (existing_images or {}).get(s["id"]) or s.get("image_url")
             if not image_url and user and gen_scenes:
                 await _publish_generation_status(
                     db,
@@ -452,7 +456,7 @@ class WorldGenerator:
                 continue
             seen_entity_ids.add(n["id"])
             
-            image_url = (existing_images or {}).get(n["id"])
+            image_url = (existing_images or {}).get(n["id"]) or n.get("image_url")
             if not image_url and user and gen_npc:
                 await _publish_generation_status(
                     db,
@@ -509,7 +513,7 @@ class WorldGenerator:
                 continue
             seen_entity_ids.add(o["id"])
             
-            image_url = (existing_images or {}).get(o["id"])
+            image_url = (existing_images or {}).get(o["id"]) or o.get("image_url")
             if not image_url and user and gen_items:
                 await _publish_generation_status(
                     db,

@@ -82,6 +82,14 @@ class GameMasterLLM:
         }
 
     def _get_decrypted_key(self, provider: str) -> str:
+        from backend.core.config import settings
+        
+        # 1. Check environment variables first (precedence)
+        env_key = settings.get_env_api_key(provider)
+        if env_key:
+            return env_key
+
+        # 2. Fallback to database
         if not self.user.encrypted_api_keys or provider not in self.user.encrypted_api_keys:
             raise ValueError(f"No API key configured for provider: {provider}")
         

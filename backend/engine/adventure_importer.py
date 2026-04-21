@@ -270,14 +270,36 @@ class AdventureImporter:
                 await db.flush()
                 
                 for s in data.get("scenes", []):
-                    db.add(WorldScene(id=s["id"], adventure_id=new_adv.id, label=s["label"], description=s["description"]))
+                    db.add(WorldScene(
+                        id=s["id"], 
+                        adventure_id=new_adv.id, 
+                        label=s["label"], 
+                        description=s["description"],
+                        image_url=s.get("image_url")
+                    ))
                     
                 for ent in data.get("entities", []):
                     db.add(WorldEntity(
-                        id=ent["id"], adventure_id=new_adv.id, entity_type=ent["entity_type"],
-                        name=ent["name"], description=ent["description"],
-                        current_scene_id=ent["current_scene_id"], spatial_position=ent.get("spatial_position"),
-                        inventory=ent.get("inventory", []), stats=ent.get("stats", {})
+                        id=ent["id"], 
+                        adventure_id=new_adv.id, 
+                        entity_type=ent["entity_type"],
+                        name=ent["name"], 
+                        description=ent["description"],
+                        current_scene_id=ent["current_scene_id"], 
+                        spatial_position=ent.get("spatial_position"),
+                        image_url=ent.get("image_url"),
+                        hp=ent.get("hp"),
+                        mana=ent.get("mana"),
+                        stamina=ent.get("stamina"),
+                        item_type=ent.get("item_type"),
+                        wearable_slots=ent.get("wearable_slots"),
+                        is_hidden=ent.get("is_hidden", False),
+                        is_in_inventory=ent.get("is_in_inventory", False),
+                        is_portable=ent.get("is_portable", True),
+                        npc_type=ent.get("npc_type"),
+                        movement_type=ent.get("movement_type"),
+                        inventory=ent.get("inventory", []), 
+                        stats=ent.get("stats", {})
                     ))
                     
                 for ex in data.get("exits", []):
@@ -290,10 +312,19 @@ class AdventureImporter:
                 old_avatar = data.get("avatar")
                 if old_state and old_avatar:
                     new_avatar = Avatar(
-                        user_id=user.id, adventure_id=new_adv.id, name=old_avatar["name"],
-                        hp=old_avatar["hp"], stamina=old_avatar["stamina"], mana=old_avatar["mana"],
-                        stats=old_avatar["stats"], inventory=old_avatar["inventory"],
-                        equipment=old_avatar["equipment"], status_effects=old_avatar["status_effects"]
+                        user_id=user.id, 
+                        adventure_id=new_adv.id, 
+                        name=old_avatar["name"],
+                        role=old_avatar.get("role"),
+                        description=old_avatar.get("description"),
+                        profile_image=old_avatar.get("profile_image"),
+                        hp=old_avatar["hp"], 
+                        stamina=old_avatar["stamina"], 
+                        mana=old_avatar["mana"],
+                        stats=old_avatar["stats"], 
+                        inventory=old_avatar["inventory"],
+                        equipment=old_avatar["equipment"], 
+                        status_effects=old_avatar["status_effects"]
                     )
                     db.add(new_avatar)
                     await db.flush()
@@ -307,31 +338,55 @@ class AdventureImporter:
                 await db.commit()
                 return True
             else:
-                # Pure Manifest Import
+                # Pure Manifest Import (handles raw blueprints or session exports)
+                manifest = payload.get("original_manifest") or payload.get("manifest") or payload
+                adv_meta = payload.get("adventure") or payload
+                
                 new_adv = Adventure(
-                    title=payload.get("name") or payload.get("title") or "Imported Blueprint",
-                    context=payload.get("description") or payload.get("context") or "Restored from blueprint.",
-                    original_manifest=payload,
+                    title=adv_meta.get("title") or manifest.get("title") or "Imported Blueprint",
+                    context=adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
+                    image_url=adv_meta.get("image_url") or manifest.get("image_url"),
+                    original_manifest=manifest,
                     is_ready=True,
                     creation_status="Ready"
                 )
                 db.add(new_adv)
                 await db.flush()
                 
-                # We need a minimal Avatar to start
+                # Identify the starting scene (default to the first scene defined)
+                start_scene_id = "START"
+                if manifest.get("scenes"):
+                    start_scene_id = manifest["scenes"][0]["id"]
+
+                # Extract protagonist info for the initial avatar
+                prot = manifest.get("protagonist", {})
                 avatar = Avatar(
-                    user_id=user.id, adventure_id=new_adv.id, name="Hero",
-                    hp=200, stamina=200, mana=200, stats={}, inventory=[], equipment={}
+                    user_id=user.id, 
+                    adventure_id=new_adv.id, 
+                    name=prot.get("name", "Hero"),
+                    role=prot.get("role"),
+                    description=prot.get("description"),
+                    profile_image=prot.get("profile_image"),
+                    hp=prot.get("hp", 200), 
+                    stamina=prot.get("stamina", 200), 
+                    mana=prot.get("mana", 200), 
+                    stats=prot.get("stats", {}), 
+                    inventory=prot.get("inventory", []), 
+                    equipment=prot.get("equipment", {})
                 )
                 db.add(avatar)
                 await db.flush()
 
                 db.add(GameState(
-                    id=new_adv.id, user_id=user.id, adventure_id=new_adv.id,
-                    avatar_id=avatar.id, scene_id="START", in_game_time=0
+                    id=new_adv.id, 
+                    user_id=user.id, 
+                    adventure_id=new_adv.id,
+                    avatar_id=avatar.id, 
+                    scene_id=start_scene_id, 
+                    in_game_time=0
                 ))
 
-                await WorldGenerator.apply_manifest(db, new_adv.id, payload)
+                await WorldGenerator.apply_manifest(db, new_adv.id, manifest)
                 await db.commit()
                 return True
         except Exception as e:

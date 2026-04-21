@@ -141,6 +141,22 @@ class MediaEngine:
         return None
 
     @staticmethod
+    def _resolve_api_key(provider: str, api_keys_dict: dict) -> Optional[str]:
+        """Resolves API key by checking environment variables first, then the provided dictionary."""
+        provider_key = (provider or "").lower()
+        
+        # 1. Check environment variables first
+        env_key = settings.get_env_api_key(provider_key)
+        if env_key:
+            return env_key
+            
+        # 2. Fallback to database-stored (and encrypted) keys
+        if api_keys_dict and provider_key in api_keys_dict:
+            return encryption_util.decrypt_key(api_keys_dict[provider_key])
+            
+        return None
+
+    @staticmethod
     async def generate_image(
         prompt: str, 
         model: str, 
@@ -155,6 +171,14 @@ class MediaEngine:
         provider_key = (provider or "openai").lower()
         if not prompt or not model:
             raise ValueError("Missing prompt or model for image generation.")
+        
+        # Ensure we have a key (might have been passed as None if caller relies on resolution)
+        if provider_key != "ollama" and not api_key:
+            # Try to resolve from ENV if not passed
+            api_key = settings.get_env_api_key(provider_key)
+            if not api_key:
+                raise ValueError(f"Missing API key for image generation provider '{provider_key}'.")
+
         if provider_key == "ollama":
             remote_prefixes = (
                 "openai/",
@@ -171,8 +195,6 @@ class MediaEngine:
                     f"Provider is 'ollama' but image model '{model}' looks like a remote/cloud model. "
                     "Configure a local Ollama image model (for example: x/flux2-klein)."
                 )
-        if provider_key != "ollama" and not api_key:
-            raise ValueError(f"Missing API key for image generation provider '{provider_key}'.")
 
         prompt = MediaEngine._apply_no_text_instruction(prompt)
             
@@ -213,12 +235,9 @@ class MediaEngine:
                 logger.info(f"OpenRouter completion response: {response}")
                 
                 # OpenRouter returns images in the message content or as a specific field in some versions.
-                # Usually it's in response.choices[0].message.content or a dedicated field.
-                # Based on LiteLLM/OpenRouter docs, we need to find the image URL.
                 image_url = None
                 b64_data = None
 
-                # Try to find URL in message content or the 'images' field (specific to some OpenRouter models)
                 message = response.choices[0].message
                 content = getattr(message, "content", "")
                 images_field = getattr(message, "images", [])
@@ -226,7 +245,6 @@ class MediaEngine:
                 # Case 1: Look in 'images' field first (newer OpenRouter format)
                 if isinstance(images_field, list) and len(images_field) > 0:
                     for img_item in images_field:
-                        # Extract URL from {'image_url': {'url': '...'}}
                         if isinstance(img_item, dict):
                             img_url_obj = img_item.get("image_url") or img_item
                             if isinstance(img_url_obj, dict):
@@ -241,7 +259,6 @@ class MediaEngine:
                 # Case 2: Look in 'content' list (standard LiteLLM/OpenAI format)
                 if not image_url and not b64_data and isinstance(content, list):
                     for item in content:
-                        # Item might be a dict or a Pydantic model
                         if hasattr(item, "model_dump"):
                             item_dict = item.model_dump()
                         elif hasattr(item, "dict"):
@@ -275,7 +292,6 @@ class MediaEngine:
                     if url_match:
                         image_url = url_match.group(0)
                     elif "data:image/" in str(content):
-                        # Extract data URI from string with strict base64 character matching
                         data_match = re.search(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', str(content))
                         if data_match:
                             b64_data = data_match.group(0)
@@ -381,7 +397,6 @@ class MediaEngine:
                 logger.warning(f"Image generation was moderated (Safety Filter) for prompt: '{prompt}'. Error: {error_str}")
                 raise ValueError("Image generation was blocked by the AI provider's safety filter. Please adjust the description to avoid sensitive content.")
             logger.error(f"Image generation failed for prompt: '{prompt}'. Error: {error_str}")
-            # Raise the exception so config_api can report it to the frontend
             raise
 
     @staticmethod
@@ -396,7 +411,6 @@ class MediaEngine:
             image_url = getattr(image_data, "url", None)
             b64_json = getattr(image_data, "b64_json", None)
             
-            # Handle case where base64 is in the url field (common with some providers)
             if image_url and image_url.startswith("data:image/"):
                 b64_json = image_url
                 image_url = None
@@ -502,17 +516,14 @@ class MediaEngine:
                 
             filepath = os.path.join(target_dir, final_filename)
             
-            # Strip data URI prefix if present
             if b64_data.startswith("data:image/"):
                 if ";base64," in b64_data:
                     b64_data = b64_data.split(";base64,", 1)[1]
                 elif "," in b64_data:
                     b64_data = b64_data.split(",", 1)[1]
 
-            # Clean up the base64 string
             b64_data = re.sub(r'[^A-Za-z0-9+/=]', '', b64_data)
             
-            # Fix padding
             padding_needed = len(b64_data) % 4
             if padding_needed:
                 b64_data += '=' * (4 - padding_needed)
@@ -529,7 +540,6 @@ class MediaEngine:
                 with open(filepath, "wb") as f:
                     f.write(image_bytes)
             
-            # Convert to relative path for URL
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"
         except Exception as e:
@@ -560,7 +570,6 @@ class MediaEngine:
                     with open(filepath, "wb") as f:
                         f.write(response.content)
                 
-                # Convert absolute path to relative for frontend
                 rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
                 return f"/data/{rel_path}"
             else:
@@ -581,10 +590,10 @@ class MediaEngine:
         
         if not model:
             raise ValueError("Missing image model configuration.")
-        if provider != "ollama" and provider not in api_keys:
-            raise ValueError(f"Missing image configuration or API key for {provider}")
 
-        api_key = encryption_util.decrypt_key(api_keys[provider]) if provider in api_keys else None
+        api_key = MediaEngine._resolve_api_key(provider, api_keys)
+        if provider != "ollama" and not api_key:
+            raise ValueError(f"Missing image configuration or API key for {provider}")
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
@@ -612,10 +621,10 @@ class MediaEngine:
         
         if not model:
             raise ValueError("Missing image model configuration.")
-        if provider != "ollama" and provider not in api_keys:
-            raise ValueError(f"Missing image configuration or API key for {provider}")
 
-        api_key = encryption_util.decrypt_key(api_keys[provider]) if provider in api_keys else None
+        api_key = MediaEngine._resolve_api_key(provider, api_keys)
+        if provider != "ollama" and not api_key:
+            raise ValueError(f"Missing image configuration or API key for {provider}")
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
@@ -643,17 +652,15 @@ class MediaEngine:
         
         if not model:
             raise ValueError("Missing image model configuration.")
-        if provider != "ollama" and provider not in api_keys:
-            raise ValueError(f"Missing image configuration or API key for {provider}")
 
-        api_key = encryption_util.decrypt_key(api_keys[provider]) if provider in api_keys else None
+        api_key = MediaEngine._resolve_api_key(provider, api_keys)
+        if provider != "ollama" and not api_key:
+            raise ValueError(f"Missing image configuration or API key for {provider}")
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
-        # Use a versioned filename so clients never stay on a stale cached cover URL.
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
         filename = f"cover_{uuid.uuid4().hex}.{ext}"
         
-        # Craft a prompt specifically requesting landscape/2:1 ratio
         prompt = prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
             title=title, context=context
         )

@@ -65,7 +65,7 @@ const availableConstants = ref({
 const testResults = ref<Record<string, { status: 'loading' | 'success' | 'error', message: string, image_url?: string }>>({})
 
 // STATE
-const configuredKeys = ref<Record<string, string>>({})
+const configuredKeys = ref<Record<string, { masked: string, is_env: boolean }>>({})
 const isSubmitting = ref(false)
 const statusMessage = ref<{ type: 'success' | 'error', text: string } | null>(null)
 const imageStylesCatalog = ref<CatalogTile[]>([])
@@ -553,12 +553,16 @@ watch(
               </div>
               <div class="space-y-2">
                  <label class="block text-sm font-semibold text-slate-300">Set New API Key</label>
-                 <input v-if="keyForm.provider !== 'ollama'" v-model="keyForm.api_key" type="password" placeholder="sk-..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
+                 <input v-if="keyForm.provider !== 'ollama' && !configuredKeys[keyForm.provider]?.is_env" v-model="keyForm.api_key" type="password" placeholder="sk-..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
+                 <div v-else-if="configuredKeys[keyForm.provider]?.is_env" class="w-full bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 text-amber-500/70 text-sm italic flex items-center gap-2">
+                   <i class="ra ra-locked"></i>
+                   This key is managed via environment variables.
+                 </div>
                  <p v-else class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-400 text-sm">No API key needed for local Ollama.</p>
               </div>
             </div>
-            <button @click="saveApiKey" :disabled="isSubmitting || (keyForm.provider !== 'ollama' && !keyForm.api_key)" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
-              {{ isSubmitting ? 'Encrypting...' : 'Lock API Key' }}
+            <button @click="saveApiKey" :disabled="isSubmitting || (keyForm.provider !== 'ollama' && !keyForm.api_key) || configuredKeys[keyForm.provider]?.is_env" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
+              {{ isSubmitting ? 'Encrypting...' : configuredKeys[keyForm.provider]?.is_env ? 'Key Managed via ENV' : 'Lock API Key' }}
             </button>
           </div>
 
@@ -566,9 +570,14 @@ watch(
             <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Configured Vaults</h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div v-if="Object.keys(configuredKeys).length === 0" class="col-span-2 text-slate-600 italic py-4 text-center border border-dashed border-slate-800 rounded-xl">No keys secured yet.</div>
-              <div v-for="(_, provider) in configuredKeys" :key="provider" class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-xl">
-                 <span class="capitalize font-bold text-slate-300">{{ provider }}</span>
-                 <span class="text-emerald-500 text-[10px] font-mono font-black tracking-widest bg-emerald-500/10 px-2 py-1 rounded">SECURED</span>
+              <div v-for="(info, provider) in configuredKeys" :key="provider" class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-xl">
+                 <div class="flex flex-col">
+                   <span class="capitalize font-bold text-slate-300">{{ provider }}</span>
+                   <span v-if="info.is_env" class="text-[9px] text-amber-500/80 uppercase font-black tracking-tighter">Imported from ENV</span>
+                 </div>
+                 <span :class="[info.is_env ? 'text-amber-500 bg-amber-500/10' : 'text-emerald-500 bg-emerald-500/10', 'text-[10px] font-mono font-black tracking-widest px-2 py-1 rounded']">
+                   {{ info.is_env ? 'READ-ONLY' : 'SECURED' }}
+                 </span>
               </div>
             </div>
           </div>

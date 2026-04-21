@@ -2,7 +2,7 @@ import re
 import os
 import uuid
 import logging
-from fastapi import APIRouter, Depends, File, UploadFile, Form
+from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -341,9 +341,20 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
     default_llm = _normalize_llm_settings(None)
     default_t2i = _normalize_t2i_settings(None)
     
+    def get_keys_status(db_keys):
+        status = {}
+        all_providers = {p["id"] for p in LLM_PROVIDERS} | {p["id"] for p in IMAGE_PROVIDERS}
+        for p in all_providers:
+            # Check environment first
+            if settings.get_env_api_key(p):
+                status[p] = {"masked": "********", "is_env": True}
+            elif db_keys and p in db_keys:
+                status[p] = {"masked": "********", "is_env": False}
+        return status
+
     if not user:
         return {
-            "keys": {},
+            "keys": get_keys_status({}),
             "llm_settings": default_llm,
             "t2i_settings": default_t2i,
             "image_styles_catalog": _default_image_styles_catalog(),
@@ -360,10 +371,8 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
             }
         }
     
-    # Return providers that have keys, but not the actual keys
-    configured_providers = list(user.encrypted_api_keys.keys()) if user.encrypted_api_keys else []
     return {
-        "keys": {provider: "********" for provider in configured_providers},
+        "keys": get_keys_status(user.encrypted_api_keys),
         "llm_settings": _normalize_llm_settings(user.llm_settings),
         "t2i_settings": _normalize_t2i_settings(user.t2i_settings),
         "image_styles_catalog": _normalize_catalog(
@@ -389,6 +398,15 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
 @router.post("/keys")
 async def update_api_key(payload: ApiKeyPayload, db: AsyncSession = Depends(get_db)):
     """Saves an encrypted API key for the default local user."""
+    provider_lower = payload.provider.lower()
+    
+    # Block updates for environment-configured keys
+    if settings.get_env_api_key(provider_lower):
+        raise HTTPException(
+            status_code=403, 
+            detail=f"The API key for {payload.provider} is managed via environment variables and cannot be modified here."
+        )
+
     result = await db.execute(select(User).limit(1))
     user = result.scalars().first()
     
@@ -401,7 +419,7 @@ async def update_api_key(payload: ApiKeyPayload, db: AsyncSession = Depends(get_
     
     current_keys = user.encrypted_api_keys or {}
     new_keys = dict(current_keys)
-    new_keys[payload.provider.lower()] = encrypted_key
+    new_keys[provider_lower] = encrypted_key
     user.encrypted_api_keys = new_keys
     
     await db.commit()
@@ -485,8 +503,10 @@ async def test_vision_connection(payload: TestVisionPayload, db: AsyncSession = 
         return {"status": "error", "message": "No user found to fetch API keys."}
 
     provider_key = payload.provider.lower()
-    api_key = None
-    if provider_key != "ollama":
+    
+    # Resolve API Key (check ENV first)
+    api_key = settings.get_env_api_key(provider_key)
+    if not api_key and provider_key != "ollama":
         if not user.encrypted_api_keys or provider_key not in user.encrypted_api_keys:
              return {"status": "error", "message": f"No API key for {payload.provider}"}
         api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider_key])
@@ -564,18 +584,14 @@ async def generate_catalog_image(payload: CatalogGeneratePayload, db: AsyncSessi
     if not model:
         return {"status": "error", "message": "The 'Simple Model' for image generation is not configured. Please set it in Visual Preferences."}
         
-    api_key = None
-    if provider != "ollama":
-        if not user.encrypted_api_keys or provider not in user.encrypted_api_keys:
-             return {"status": "error", "message": f"No API key for {provider}"}
-        api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider])
+    api_key = MediaEngine._resolve_api_key(provider, user.encrypted_api_keys)
+    if provider != "ollama" and not api_key:
+         return {"status": "error", "message": f"No API key for {provider}"}
 
     try:
         catalog_dir = os.path.join(settings.DATA_DIR, "catalog", payload.catalog_type)
         os.makedirs(catalog_dir, exist_ok=True)
         
-        # Use simple model for catalog items (consistent with NPC/Items)
-        # Construct a rich prompt using name and description if available
         base_prompt = payload.prompt
         if not base_prompt:
             item_name = payload.name or payload.target_id.replace('-', ' ')
@@ -602,7 +618,6 @@ async def generate_catalog_image(payload: CatalogGeneratePayload, db: AsyncSessi
     except Exception as e:
         logger.exception(f"Catalog generate exception for '{payload.target_id}'")
         error_msg = str(e)
-        # Clean up some common LiteLLM/OpenRouter error strings to be more readable
         if "OpenrouterException" in error_msg:
              try:
                  import json
@@ -653,4 +668,3 @@ async def update_game_settings(payload: GameSettingsPayload, db: AsyncSession = 
     user.game_settings = payload.model_dump()
     await db.commit()
     return {"status": "success", "message": "Game settings updated."}
-

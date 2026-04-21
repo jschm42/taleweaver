@@ -3,10 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+import logging
 from sqlalchemy import select
 
 from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
+
+logger = logging.getLogger(__name__)
 
 # Import all models so SQLAlchemy metadata registers them before create_all
 import backend.models.user
@@ -34,15 +37,21 @@ async def lifespan(app: FastAPI):
     from backend.models.adventure import Adventure
     
     async with AsyncSessionLocal() as db:
-        # 0. Import bundled adventures (committed to repo) 
-        # ONLY if the database is empty (e.g., after initial creation or reset)
+        # Check if we have any adventures in the database
         result = await db.execute(select(Adventure).limit(1))
-        if not result.scalars().first():
+        is_empty_db = result.scalars().first() is None
+
+        if is_empty_db:
+            # 0. Import bundled adventures (committed to repo) 
+            # These are only imported ONCE when the database is first created/empty
+            logger.info("Fresh database detected. Importing bundled adventures from /adventures...")
             await AdventureImporter.import_from_directory(db, "adventures", delete_after=False)
             
-        # 1. Import presets (examples) - always checked for new titles, do not delete
-        await AdventureImporter.import_from_directory(db, "data/presets/adventures", delete_after=False)
-        # 2. Import manual drops - always checked, delete after success
+            # 1. Also seed with presets (examples) on first start
+            await AdventureImporter.import_from_directory(db, "data/presets/adventures", delete_after=False)
+            
+        # 2. Always check for manual drops in the import folder (useful for migrations/sharing)
+        # These are deleted after successful import to keep the folder clean
         await AdventureImporter.import_from_directory(db, "data/imports/adventures", delete_after=True)
 
     yield
