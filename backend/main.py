@@ -61,6 +61,7 @@ os.makedirs(os.path.join(settings.DATA_DIR, "adventures"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "logs"), exist_ok=True)
 
 app.mount("/data", StaticFiles(directory=settings.DATA_DIR), name="data")
+app.mount("/assets", StaticFiles(directory="backend/static/assets"), name="assets")
 # Keep /uploads mount temporarily for backward compatibility if needed, 
 # but the plan said rename folder and I'll update the URLs.
 # app.mount("/uploads", StaticFiles(directory=settings.DATA_DIR), name="uploads")
