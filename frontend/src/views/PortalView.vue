@@ -624,26 +624,41 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-950 text-slate-200 font-sans p-8 flex flex-col items-center">
-    <header class="w-full max-w-6xl mb-12 flex justify-between items-center px-4">
-      <h1 class="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-500">
-        TaleWeaver
-      </h1>
-      <div class="flex items-center gap-4">
-        <button
-          @click="router.push({ name: 'characters' })"
-          class="group flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-emerald-500/50 transition-all duration-300"
-        >
-          <span class="text-sm font-medium">Characters</span>
-          <i class="ra ra-helmet text-emerald-400"></i>
-        </button>
-        <button
-          @click="goToAdmin"
-          class="group flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300"
-        >
-          <span class="text-sm font-medium">Settings</span>
-          <i class="ra ra-gear text-emerald-400"></i>
-        </button>
+  <div class="min-h-screen bg-slate-950 text-slate-200 font-sans p-8 pt-44 flex flex-col items-center">
+    <!-- Main Header -->
+    <header class="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 px-8 py-4">
+      <div class="max-w-7xl mx-auto flex justify-between items-center">
+        <div class="flex items-center gap-6">
+          <div class="w-24 h-24 bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl flex items-center justify-center border-2 border-amber-500/30 shadow-[0_0_30px_rgba(245,158,11,0.1)] transition-transform hover:scale-105 duration-500">
+            <img src="@/assets/svg/app-logo.svg" class="w-16 h-16 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]" alt="Logo" />
+          </div>
+          <div class="flex flex-col">
+            <h1 class="text-4xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-white via-amber-200/80 to-amber-500/60">
+              TaleWeaver
+            </h1>
+            <div class="flex items-center gap-2">
+              <span class="h-[1px] w-8 bg-amber-500/30"></span>
+              <span class="text-xs font-mono font-bold text-amber-500/60 tracking-[0.4em] uppercase">Reality Weaver v0.1.0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button
+            @click="router.push({ name: 'characters' })"
+            class="group flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-emerald-500/50 transition-all duration-300"
+          >
+            <i class="ra ra-helmet text-emerald-400"></i>
+            <span class="text-xs font-bold font-mono uppercase tracking-widest hidden sm:block">Characters</span>
+          </button>
+          <button
+            @click="goToAdmin"
+            class="group flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300"
+          >
+            <i class="ra ra-gear text-slate-400 group-hover:text-emerald-400 transition-colors"></i>
+            <span class="text-xs font-bold font-mono uppercase tracking-widest hidden sm:block">Admin</span>
+          </button>
+        </div>
       </div>
     </header>
 

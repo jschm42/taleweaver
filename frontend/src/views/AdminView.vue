@@ -212,20 +212,29 @@ const openPromptModal = (type: 'styles' | 'tones', item: CatalogTile, index: num
   isPromptModalOpen.value = true
 }
 
-const generateCatalogImage = async (type: 'styles' | 'tones', item: CatalogTile, index: number, prompt: string | null = null) => {
+const generateCatalogImage = async (type: 'styles' | 'tones', item: CatalogTile, index: number | null = null, prompt: string | null = null) => {
   if (!t2iForm.value.simple_model) {
     statusMessage.value = { type: 'error', text: 'Please configure and save the "Simple Model" in Visual Preferences before generating catalog images.' }
     return
   }
-  const key = `${type}_${index}`
+  
+  // If in modal and we have a name but no id, slugify it now
+  const targetId = item.id || slugify(item.name)
+  if (!targetId) {
+    statusMessage.value = { type: 'error', text: 'Please provide a name before generating an image.' }
+    return
+  }
+
+  const key = index !== null ? `${type}_${index}` : 'modal_generating'
   isGeneratingItem.value[key] = true
-  isPromptModalOpen.value = false // Close modal immediately
+  isPromptModalOpen.value = false // Close prompt modal if it was open
+  
   try {
     const res = await fetch('http://localhost:8000/api/settings/catalog/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        target_id: item.id || slugify(item.name),
+        target_id: targetId,
         catalog_type: type,
         prompt: prompt,
         name: item.name,
@@ -234,9 +243,15 @@ const generateCatalogImage = async (type: 'styles' | 'tones', item: CatalogTile,
     })
     const data = await res.json()
     if (data.status === 'success') {
-      const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
-      catalog.value[index].image_url = data.image_url
-      await saveCurrentCatalog(type)
+      // Update the item itself (for modal or direct use)
+      item.image_url = data.image_url
+      
+      // If we have an index, update the catalog and save
+      if (index !== null) {
+        const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
+        catalog.value[index].image_url = data.image_url
+        await saveCurrentCatalog(type)
+      }
     } else {
       statusMessage.value = { type: 'error', text: data.message || 'Generation failed.' }
     }
@@ -252,7 +267,7 @@ const triggerFileUpload = (id: string) => {
   input?.click()
 }
 
-const onUploadFile = async (event: Event, type: 'styles' | 'tones', item: CatalogTile, index: number) => {
+const onUploadFile = async (event: Event, type: 'styles' | 'tones', item: CatalogTile, index: number | null = null) => {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
@@ -269,14 +284,20 @@ const onUploadFile = async (event: Event, type: 'styles' | 'tones', item: Catalo
     })
     const data = await res.json()
     if (data.status === 'success') {
-      const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
-      catalog.value[index].image_url = data.image_url
-      await saveCurrentCatalog()
+      // Update item itself
+      item.image_url = data.image_url
+      
+      // Update catalog if index is present
+      if (index !== null) {
+        const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
+        catalog.value[index].image_url = data.image_url
+        await saveCurrentCatalog(type)
+      }
     } else {
       statusMessage.value = { type: 'error', text: data.message || 'Upload failed.' }
     }
   } catch (error) {
-    statusMessage.value = { type: 'error', text: 'Network error during upload.' }
+    statusMessage.value = { type: 'error', text: 'Network error or file too large during upload.' }
   } finally {
     input.value = ''
   }
@@ -460,43 +481,43 @@ watch(
           :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'keys' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
         >
           <i class="ra ra-locked"></i>
-          <span class="font-semibold text-sm">Provider Keys</span>
+          <span class="font-bold text-md font-mono uppercase tracking-widest">Provider Keys</span>
         </button>
         <button 
           @click="activeSection = 'llm'"
-          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 uppercase tracking-tight', activeSection === 'llm' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
+          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'llm' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
         >
           <i class="ra ra-brain"></i>
-          <span class="font-bold text-xs font-mono">Intelligence</span>
+          <span class="font-bold text-md font-mono uppercase tracking-widest">Intelligence</span>
         </button>
         <button 
           @click="activeSection = 't2i'"
-          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 uppercase tracking-tight', activeSection === 't2i' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
+          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 't2i' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
         >
           <i class="ra ra-camera"></i>
-          <span class="font-bold text-xs font-mono">Visuals</span>
+          <span class="font-bold text-md font-mono uppercase tracking-widest">Visuals</span>
         </button>
         <button
           @click="activeSection = 'styles'"
           :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'styles' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
         >
           <i class="ra ra-paint-brush"></i>
-          <span class="font-semibold text-sm">Image Styles</span>
+          <span class="font-bold text-md font-mono uppercase tracking-widest">Image Styles</span>
         </button>
         <button 
           @click="activeSection = 'tones'"
-          :class="['w-full text-left px-4 py-3 rounded-xl transition-all duration-300 flex items-center gap-3', activeSection === 'tones' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800 text-slate-400']"
+          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'tones' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
         >
           <i class="ra ra-scroll"></i>
-          <span class="font-bold uppercase tracking-widest text-xs">Narrative Tones</span>
+          <span class="font-bold text-md font-mono uppercase tracking-widest">Narrative Tones</span>
         </button>
 
         <button 
           @click="activeSection = 'game'"
-          :class="['w-full text-left px-4 py-3 rounded-xl transition-all duration-300 flex items-center gap-3', activeSection === 'game' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800 text-slate-400']"
+          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'game' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
         >
           <i class="ra ra-gear"></i>
-          <span class="font-bold uppercase tracking-widest text-xs">Game Settings</span>
+          <span class="font-bold text-md font-mono uppercase tracking-widest">Game Settings</span>
         </button>
       </nav>
 
@@ -917,8 +938,13 @@ watch(
               <!-- Image Section -->
               <div class="relative aspect-[4/3] bg-slate-950 overflow-hidden">
                 <img v-if="style.image_url" :src="style.image_url.startsWith('http') ? style.image_url : 'http://localhost:8000' + style.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                <div v-else class="w-full h-full flex items-center justify-center text-slate-800">
-                  <i class="ra ra-paint-brush text-5xl"></i>
+                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 text-slate-700">
+                  <svg class="w-16 h-16 opacity-30 mb-2 animate-pulse-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+                    <path d="M12 8v4l3 3" />
+                    <path d="M9 3v2" /><path d="M5 5L6.5 6.5" /><path d="M3 9h2" /><path d="M3 15h2" /><path d="M5 19l1.5-1.5" /><path d="M9 21v-2" /><path d="M15 21v-2" /><path d="M19 19l-1.5-1.5" /><path d="M21 15h-2" /><path d="M21 9h-2" /><path d="M19 5L17.5 6.5" /><path d="M15 3v2" />
+                  </svg>
+                  <span class="text-[10px] uppercase tracking-widest font-bold opacity-30">No Style Image</span>
                 </div>
                 
                 <!-- Overlay Buttons -->
@@ -1000,8 +1026,12 @@ watch(
               <!-- Image Section -->
               <div class="relative aspect-[4/3] bg-slate-950 overflow-hidden">
                 <img v-if="tone.image_url" :src="tone.image_url.startsWith('http') ? tone.image_url : 'http://localhost:8000' + tone.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                <div v-else class="w-full h-full flex items-center justify-center text-slate-800">
-                  <i class="ra ra-scroll text-5xl"></i>
+                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 text-slate-700">
+                  <svg class="w-16 h-16 opacity-30 mb-2 animate-pulse-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  <span class="text-[10px] uppercase tracking-widest font-bold opacity-30">No Tone Image</span>
                 </div>
                 
                 <!-- Overlay Buttons -->
@@ -1129,7 +1159,7 @@ watch(
       <div v-if="isCatalogModalOpen" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="isCatalogModalOpen = false"></div>
         <div class="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-8 animate-fade-in">
-          <div class="flex items-center justify-between mb-8">
+          <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-bold text-white flex items-center gap-3 capitalize">
               <i :class="catalogModalType === 'styles' ? 'ra ra-paint-brush text-amber-500' : 'ra ra-scroll text-indigo-500'"></i>
               {{ isEditingExisting ? 'Edit' : 'Add' }} {{ catalogModalType.replace('s', '') }}
@@ -1139,18 +1169,59 @@ watch(
             </button>
           </div>
 
+          <!-- Image Preview & Actions in Modal -->
+          <div class="mb-8 flex items-center gap-6 bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+            <div class="w-24 h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0 relative group">
+              <img v-if="editingItem.image_url" :src="editingItem.image_url.startsWith('http') ? editingItem.image_url : 'http://localhost:8000' + editingItem.image_url" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 text-slate-800">
+                <svg v-if="catalogModalType === 'styles'" class="w-10 h-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" /><path d="M12 8v4l3 3" /><path d="M9 3v2" /><path d="M5 5L6.5 6.5" /><path d="M3 9h2" /><path d="M3 15h2" /><path d="M5 19l1.5-1.5" /><path d="M9 21v-2" /><path d="M15 21v-2" /><path d="M19 19l-1.5-1.5" /><path d="M21 15h-2" /><path d="M21 9h-2" /><path d="M19 5L17.5 6.5" /><path d="M15 3v2" /></svg>
+                <svg v-else class="w-10 h-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+              </div>
+              <div v-if="isGeneratingItem.modal_generating" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                <div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-emerald-500"></div>
+              </div>
+            </div>
+            <div class="flex flex-col gap-2 flex-grow">
+              <button 
+                @click="generateCatalogImage(catalogModalType, editingItem, isEditingExisting ? editingIndex : null)" 
+                :disabled="!editingItem.name || isGeneratingItem.modal_generating"
+                class="flex items-center justify-center gap-2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-all disabled:opacity-50"
+              >
+                <i class="ra ra-cycle" :class="{'animate-spin': isGeneratingItem.modal_generating}"></i>
+                AI Generate Image
+              </button>
+              <button 
+                @click="triggerFileUpload('modal-upload')"
+                class="flex items-center justify-center gap-2 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-all"
+              >
+                <i class="ra ra-camera"></i>
+                Upload Manually
+              </button>
+              <input id="modal-upload" type="file" class="hidden" accept="image/*" @change="(e) => onUploadFile(e, catalogModalType, editingItem, isEditingExisting ? editingIndex : null)" />
+            </div>
+          </div>
+
           <div class="space-y-6">
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Display Name</label>
-              <input v-model="editingItem.name" type="text" placeholder="e.g. Dark Fantasy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
+              <div class="flex justify-between items-center mb-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">Display Name</label>
+                <span class="text-[10px] font-mono text-slate-600">{{ (editingItem.name || '').length }} / 30</span>
+              </div>
+              <input v-model="editingItem.name" type="text" maxlength="30" placeholder="e.g. Dark Fantasy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Description</label>
-              <textarea v-model="editingItem.description" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-y"></textarea>
+              <div class="flex justify-between items-center mb-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">Description</label>
+                <span class="text-[10px] font-mono text-slate-600">{{ (editingItem.description || '').length }} / 200</span>
+              </div>
+              <textarea v-model="editingItem.description" rows="2" maxlength="200" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-y"></textarea>
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">System Instruction / Prompt Prefix</label>
-              <textarea v-model="editingItem.instruction" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-y font-mono text-xs"></textarea>
+              <div class="flex justify-between items-center mb-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">System Instruction / Prompt Prefix</label>
+                <span class="text-[10px] font-mono text-slate-600">{{ (editingItem.instruction || '').length }} / 500</span>
+              </div>
+              <textarea v-model="editingItem.instruction" rows="3" maxlength="500" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-y font-mono text-xs"></textarea>
             </div>
             
             <button @click="saveCatalogItem" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg">
