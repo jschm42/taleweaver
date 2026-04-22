@@ -20,6 +20,7 @@ const emit = defineEmits<{
   send: [content: string]
   openSheet: []
   openQuests: []
+  openWalkthrough: []
   npcHover: [name: string, event: MouseEvent]
   npcLeave: []
   itemHover: [item: any, event: MouseEvent]
@@ -378,6 +379,14 @@ function normalizeLineBreaks(text: string): string {
 
         <button
           class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+          title="Walkthrough"
+          @click="emit('openWalkthrough')"
+        >
+          <i class="ra ra-crystal-ball h-14 w-14 text-3xl text-fuchsia-300/80 group-hover:text-fuchsia-200 group-hover:drop-shadow-[0_0_20px_rgba(217,70,239,0.8)] transition-all flex items-center justify-center"></i>
+        </button>
+
+        <button
+          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
           title="Character Sheet"
           @click="emit('openSheet')"
         >
@@ -396,6 +405,8 @@ function normalizeLineBreaks(text: string): string {
       <div class="flex gap-4 mt-3 px-1 text-[11px] text-slate-500">
         <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/sheet</kbd> to view character</span>
         <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/equip</kbd> to equip</span>
+        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/hint</kbd> 50 XP</span>
+        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/walkthrough</kbd> reveal 200 XP</span>
       </div>
     </div>
   </div>

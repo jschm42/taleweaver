@@ -6,6 +6,7 @@
  */
 import { ref, type Ref } from 'vue'
 import { useNotifications } from '@/composables/useNotifications'
+import { authState } from '@/store/auth'
 import type { ChatMessage, CharacterSheet } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading'
@@ -33,6 +34,7 @@ export interface UseGameSocket {
 }
 
 export function useGameSocket(): UseGameSocket {
+  const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
   const { addNotification } = useNotifications()
   const messages = ref<ChatMessage[]>([])
   const sheet = ref<CharacterSheet | null>(null)
@@ -56,9 +58,26 @@ export function useGameSocket(): UseGameSocket {
     messages.value.push({ role, content, timestamp: new Date(), itemIds, is_debug } as any)
   }
 
+  function authHeaders(includeJson = false): Record<string, string> {
+    const headers: Record<string, string> = {}
+    if (includeJson) {
+      headers['Content-Type'] = 'application/json'
+    }
+    if (authState.token) {
+      headers['Authorization'] = `Bearer ${authState.token}`
+    }
+    return headers
+  }
+
   async function fetchSessionSnapshot(gameId: string): Promise<any | null> {
     try {
-      const res = await fetch(`http://localhost:8000/api/adventures/${gameId}/chat`)
+      const res = await fetch(`${BASE}/adventures/${gameId}/chat`, {
+        headers: authHeaders(false)
+      })
+      if (res.status === 401 && authState.isAuthenticated) {
+        window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+        return null
+      }
       if (!res.ok) return null
       return await res.json()
     } catch (err) {
@@ -166,14 +185,21 @@ export function useGameSocket(): UseGameSocket {
     statusText.value = 'Considering...'
 
     try {
-      const res = await fetch(`http://localhost:8000/api/adventures/${currentGameId}/chat`, {
+      const res = await fetch(`${BASE}/adventures/${currentGameId}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(true),
         body: JSON.stringify({ 
           content,
           auto_visualize: autoVisualize.value
         })
       })
+
+      if (res.status === 401 && authState.isAuthenticated) {
+        window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+        status.value = 'error'
+        statusText.value = ''
+        return
+      }
 
       if (!res.ok) {
         _pushMessage('system', 'The Game Master is currently over capacity. Try once more.')

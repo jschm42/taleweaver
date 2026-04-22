@@ -17,6 +17,10 @@ class CommandParser:
             return CommandParser._handle_drop(avatar, args)
         elif command == "/help":
             return CommandParser._handle_help()
+        elif command == "/walkthrough":
+            return "[TRIGGER_WALKTHROUGH_REVEAL]" if args.strip().lower() == "reveal" else "[TRIGGER_WALKTHROUGH]"
+        elif command == "/hint":
+            return "[TRIGGER_HINT]"
         elif command == "/combine" or command == "/use":
             return f"[TRIGGER_COMBINE] {args}"
         elif command == "/take":
@@ -37,7 +41,11 @@ class CommandParser:
             "- `/take <item>`: Pick up an item from the room.\n"
             "- `/combine <item1> <item2>`: Attempt to combine two objects.\n"
             "- `/use <item1> [on] <item2>`: Use/Combine objects.\n"
+            "- `/walkthrough`: Open the secret walkthrough panel.\n"
+            "- `/walkthrough reveal`: Reveal all steps for 200 XP.\n"
+            "- `/hint`: Buy one tactical hint for 50 XP.\n"
             "- `/sheet`: Open your character sheet.\n"
+            "- `/debug walkthrough`: Reveal walkthrough without XP cost (debug).\n"
             "- `/debug <cmd>`: Engine debug commands.\n\n"
             "*Alternatively, just type your actions naturally!*"
         )

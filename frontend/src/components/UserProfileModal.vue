@@ -9,10 +9,24 @@ const isSaving = ref(false)
 const isGeneratingBio = ref(false)
 const isGeneratingImage = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const canGenerateProfileImage = ref(false)
 
-function handleOpen() {
+async function refreshProfileImageGenerationAvailability() {
+  canGenerateProfileImage.value = false
+  try {
+    const settings = await api.getSettings()
+    const t2i = (settings?.t2i_settings || {}) as Record<string, unknown>
+    const simpleModel = String(t2i.simple_model || '').trim()
+    canGenerateProfileImage.value = simpleModel.length > 0
+  } catch (err) {
+    console.error('Failed to load settings for profile image generation:', err)
+  }
+}
+
+async function handleOpen() {
   bio.value = authState.user?.bio || ''
   isOpen.value = true
+  await refreshProfileImageGenerationAvailability()
 }
 
 onMounted(() => {
@@ -26,7 +40,7 @@ onUnmounted(() => {
 async function saveProfile() {
   isSaving.value = true
   try {
-    const updated = await api.updateUser(authState.user!.id, { bio: bio.value })
+    const updated = await api.updateMyBio(bio.value)
     authState.user = updated
     isOpen.value = false
   } catch (err) {
@@ -63,7 +77,7 @@ async function generateBio() {
 async function generateImage() {
   isGeneratingImage.value = true
   try {
-    const updated = await api.generateMyProfileImage()
+    const updated = await api.generateMyProfileImage(bio.value)
     authState.user = updated
   } catch (err) {
     console.error('Image generation failed:', err)
@@ -114,7 +128,8 @@ async function generateImage() {
               </div>
               <input ref="fileInput" type="file" hidden accept="image/*" @change="handleImageUpload" />
               
-              <button 
+              <button
+                v-if="canGenerateProfileImage"
                 @click="generateImage"
                 :disabled="isGeneratingImage"
                 class="text-[9px] font-black text-slate-500 hover:text-aether-primary uppercase tracking-[0.2em] transition-all flex items-center gap-2"

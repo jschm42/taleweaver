@@ -47,6 +47,9 @@ from backend.utils.svg_generator import SVGPlaceholderGenerator
 router = APIRouter(prefix="/adventures", tags=["Adventures"])
 logger = logging.getLogger(__name__)
 
+WALKTHROUGH_REVEAL_COST = 200
+WALKTHROUGH_HINT_COST = 50
+
 
 def _sanitize_narrative_response(text: str, *, fallback: Optional[str] = None) -> str:
     """Remove leaked technical JSON blocks from player-visible narration."""
@@ -219,6 +222,145 @@ def _normalize_manifest_for_world_generator(manifest: dict[str, Any] | None) -> 
 
 def _serialize_model(instance: Any) -> dict[str, Any]:
     return {column.name: getattr(instance, column.name) for column in instance.__table__.columns}
+
+
+def _compact_text(value: Any, limit: int = 220) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "..."
+
+
+def _get_walkthrough_source(adventure: Adventure) -> Optional[dict[str, Any]]:
+    manifest = adventure.original_manifest or {}
+    if not isinstance(manifest, dict):
+        return None
+    walkthrough = manifest.get("walkthrough")
+    if not isinstance(walkthrough, dict):
+        return None
+    steps = walkthrough.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return None
+    return walkthrough
+
+
+def _extract_walkthrough_steps(adventure: Adventure) -> list[dict[str, str]]:
+    walkthrough = _get_walkthrough_source(adventure)
+    if not walkthrough:
+        return []
+    result: list[dict[str, str]] = []
+    for raw in walkthrough.get("steps", []):
+        if not isinstance(raw, dict):
+            continue
+        title = _compact_text(raw.get("title") or raw.get("step") or "Step")
+        content = _compact_text(raw.get("content") or raw.get("hint") or raw.get("description"), 480)
+        if not title and not content:
+            continue
+        result.append({"title": title or "Step", "content": content or "Follow the current objective."})
+    return result
+
+
+def _hint_for_step(step: dict[str, str]) -> str:
+    return _compact_text(step.get("content") or step.get("title") or "Keep exploring.", 160)
+
+
+def _walkthrough_fallback_payload(current_xp: int) -> dict[str, Any]:
+    message = "No walkthrough available for this adventure yet. Keep exploring and use /hint for tactical nudges when available."
+    return {
+        "available": False,
+        "revealed": False,
+        "preview": message,
+        "steps": [],
+        "hints_used": 0,
+        "latest_hint": None,
+        "next_hint": None,
+        "reveal_cost": WALKTHROUGH_REVEAL_COST,
+        "hint_cost": WALKTHROUGH_HINT_COST,
+        "current_xp": current_xp,
+        "message": message,
+    }
+
+
+def _build_walkthrough_payload(adventure: Adventure, avatar: Avatar) -> dict[str, Any]:
+    steps = _extract_walkthrough_steps(adventure)
+    if not steps:
+        return _walkthrough_fallback_payload(avatar.exp)
+
+    stats = dict(avatar.stats or {})
+    revealed = bool(stats.get("walkthrough_revealed", False))
+    hints_used = max(0, int(stats.get("walkthrough_hint_index", 0)))
+
+    walkthrough = _get_walkthrough_source(adventure) or {}
+    preview = _compact_text(
+        walkthrough.get("preview")
+        or "A hidden strategy exists. Reveal it when you are ready.",
+        260,
+    )
+    latest_hint = _hint_for_step(steps[min(hints_used - 1, len(steps) - 1)]) if hints_used > 0 else None
+    next_hint = _hint_for_step(steps[min(hints_used, len(steps) - 1)]) if hints_used < len(steps) else None
+
+    return {
+        "available": True,
+        "revealed": revealed,
+        "preview": preview,
+        "steps": steps if revealed else [],
+        "hints_used": hints_used,
+        "latest_hint": latest_hint,
+        "next_hint": next_hint,
+        "reveal_cost": WALKTHROUGH_REVEAL_COST,
+        "hint_cost": WALKTHROUGH_HINT_COST,
+        "current_xp": avatar.exp,
+        "message": "Walkthrough ready." if revealed else "Walkthrough is hidden. Reveal it to unlock all steps.",
+    }
+
+
+async def _seed_compact_walkthrough(db: AsyncSession, adventure_id: str) -> None:
+    adventure = await db.get(Adventure, adventure_id)
+    if not adventure:
+        return
+
+    manifest = adventure.original_manifest if isinstance(adventure.original_manifest, dict) else {}
+    existing = manifest.get("walkthrough") if isinstance(manifest, dict) else None
+    if isinstance(existing, dict) and isinstance(existing.get("steps"), list) and existing.get("steps"):
+        return
+
+    steps: list[dict[str, str]] = []
+
+    quests = adventure.quests or []
+    if isinstance(quests, list) and quests:
+        ordered_quests = sorted(quests, key=lambda q: 0 if q.get("is_main") else 1)
+        for index, quest in enumerate(ordered_quests[:8], start=1):
+            if not isinstance(quest, dict):
+                continue
+            title = _compact_text(quest.get("title") or quest.get("id") or f"Objective {index}", 90)
+            goal = _compact_text(quest.get("goal") or quest.get("description") or "Advance this objective.", 220)
+            impact = _compact_text(quest.get("impact") or "", 180)
+            content = goal if not impact else f"{goal} Outcome target: {impact}"
+            steps.append({"title": title or f"Objective {index}", "content": content or "Advance this objective."})
+
+    if not steps:
+        scene_res = await db.execute(
+            select(WorldScene).where(WorldScene.adventure_id == adventure_id).order_by(WorldScene.created_at.asc())
+        )
+        for index, scene in enumerate(scene_res.scalars().all()[:8], start=1):
+            title = _compact_text(scene.label or f"Scene {index}", 90)
+            content = _compact_text(scene.description or "Explore this location and gather clues.", 260)
+            steps.append({"title": title or f"Scene {index}", "content": content or "Explore this location."})
+
+    if not steps:
+        return
+
+    summary_title = _compact_text(adventure.title or "this adventure", 80)
+    preview = f"Hidden path for {summary_title}: {steps[0]['title']} -> {steps[min(1, len(steps)-1)]['title']}"
+
+    next_manifest = dict(manifest)
+    next_manifest["walkthrough"] = {
+        "version": "compact-v1",
+        "preview": _compact_text(preview, 240),
+        "steps": steps,
+    }
+    adventure.original_manifest = next_manifest
+    await db.flush()
 
 
 async def _set_generation_state(
@@ -946,6 +1088,7 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     await db.commit()
 
             # 3. Mark Ready
+            await _seed_compact_walkthrough(db, adventure_id)
             await _set_generation_state(
                 db,
                 adventure_id,
@@ -962,6 +1105,13 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
         except Exception as e:
             logger.exception("Background Gen Failed for %s", adventure_id)
             error_msg = str(e)
+            lowered_error = error_msg.lower()
+
+            if "truncated (token limit)" in lowered_error or "token limit" in lowered_error:
+                error_msg = "Generation failed: LLM output was truncated. Increase Complex Max Tokens in Admin settings and retry."
+            elif "failed to parse llm response as json" in lowered_error:
+                error_msg = "Generation failed: LLM returned invalid JSON for world generation. Please retry."
+
             if len(error_msg) > 500:
                 error_msg = error_msg[:497] + "..."
             # Remove potential JSON fragments or long traces
@@ -985,6 +1135,40 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 )
             except Exception:
                 pass
+
+
+@router.get("/{game_id}/walkthrough")
+async def get_walkthrough_state(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    state_res = await db.execute(select(GameState).where(GameState.id == game_id))
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    adv_res = await db.execute(
+        select(Adventure).where(
+            (Adventure.id == state.adventure_id)
+            & (Adventure.owner_id == current_user.id)
+        )
+    )
+    adventure = adv_res.scalars().first()
+    if not adventure:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if state.user_id != current_user.id:
+        state.user_id = current_user.id
+
+    av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+    avatar = av_res.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+
+    payload = _build_walkthrough_payload(adventure, avatar)
+    await db.commit()
+    return payload
 
 @router.get("/{game_id}/status")
 async def get_adventure_status(game_id: str, db: AsyncSession = Depends(get_db)):
@@ -2007,6 +2191,7 @@ async def export_adventure_adz(adventure_id: str, db: AsyncSession = Depends(get
 async def import_adventure_adz(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Imports an adventure from an ADZ archive, including all asset images."""
     if not file.filename.lower().endswith(".adz"):
@@ -2029,6 +2214,7 @@ async def import_adventure_adz(
             # Create Adventure record
             new_adv = Adventure(
                 id=new_adv_id,
+                owner_id=current_user.id,
                 title=adv_data["title"],
                 context=adv_data["context"],
                 strict_rules=adv_data.get("strict_rules", True),
@@ -2064,17 +2250,10 @@ async def import_adventure_adz(
             # Create Avatar
             prot = manifest_data.get("protagonist")
             if prot:
-                result = await db.execute(select(User).limit(1))
-                user = result.scalars().first()
-                if not user:
-                    user = User(username="local_default_user")
-                    db.add(user)
-                    await db.flush()
-                
                 profile_image = existing_images_mapping.get(prot.get("profile_image")) if prot.get("profile_image") else None
                 
                 new_avatar = Avatar(
-                    user_id=user.id,
+                    user_id=current_user.id,
                     adventure_id=new_adv_id,
                     name=prot["name"],
                     role=prot.get("role"),
@@ -2092,7 +2271,7 @@ async def import_adventure_adz(
 
                 db.add(GameState(
                     id=new_adv_id,
-                    user_id=user.id,
+                    user_id=current_user.id,
                     adventure_id=new_adv_id,
                     avatar_id=new_avatar.id,
                     scene_id="START",
@@ -2159,17 +2338,16 @@ async def import_adventure_adz(
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 @router.post("/import/session-bundle")
-async def import_adventure_session_bundle(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
+async def import_adventure_session_bundle(
+    payload: Dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Imports an adventure from JSON.
     Supports either a Raw Manifest or a Full Session Bundle.
     """
-    res = await db.execute(select(User).limit(1))
-    user = res.scalars().first()
-    if not user:
-        user = User(username="default_player")
-        db.add(user)
-        await db.flush()
+    user = current_user
 
     # Determine if this is a Session Bundle or just a Manifest
     is_session = payload.get("type") == "SESSION_BUNDLE"
@@ -2181,6 +2359,7 @@ async def import_adventure_session_bundle(payload: Dict[str, Any], db: AsyncSess
         
         # 1. Recreate Adventure
         new_adv = Adventure(
+            owner_id=user.id,
             title=f"{old_adv['title']} (Imported)",
             context=old_adv.get("context"),
             image_url=old_adv.get("image_url"),
@@ -2271,6 +2450,7 @@ async def import_adventure_session_bundle(payload: Dict[str, Any], db: AsyncSess
         # Assume payload IS the manifest
         # We need a title and context to create the shell first
         new_adv = Adventure(
+            owner_id=user.id,
             title="Imported Blueprint",
             context="Restored from blueprint.",
             original_manifest=payload
@@ -2395,18 +2575,35 @@ async def _get_npc_metadata(adventure_id: str, db: AsyncSession) -> dict:
     }
 
 @router.get("/{game_id}/chat", response_model=ChatResponse)
-async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
+async def get_chat_history(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Retrieves full chat history and current session state."""
     state_res = await db.execute(select(GameState).where(GameState.id == game_id))
     state = state_res.scalars().first()
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
+
+    adv_res = await db.execute(
+        select(Adventure).where(
+            (Adventure.id == state.adventure_id)
+            & (Adventure.owner_id == current_user.id)
+        )
+    )
+    adventure = adv_res.scalars().first()
+    if not adventure:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    # Migrate legacy sessions created before strict user ownership checks.
+    if state.user_id != current_user.id:
+        state.user_id = current_user.id
+        await db.commit()
+        await db.refresh(state)
         
     av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
     avatar = av_res.scalars().first()
-    
-    adv_res = await db.execute(select(Adventure).where(Adventure.id == state.adventure_id))
-    adventure = adv_res.scalars().first()
     
     chat_res = await db.execute(select(ChatMessage).where(ChatMessage.game_state_id == game_id).order_by(ChatMessage.created_at.asc()))
     history = [{"role": m.role, "content": m.content} for m in chat_res.scalars().all()]
@@ -2446,7 +2643,8 @@ async def get_chat_history(game_id: str, db: AsyncSession = Depends(get_db)):
 async def post_chat_message(
     game_id: str,
     payload: ChatRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Unified game turn endpoint. Processes user input, advances world state,
@@ -2466,6 +2664,22 @@ async def post_chat_message(
                 yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Game session not found.'}))}\n\n"
                 return
 
+            adv_res = await db.execute(
+                select(Adventure).where(
+                    (Adventure.id == state.adventure_id)
+                    & (Adventure.owner_id == current_user.id)
+                )
+            )
+            adventure = adv_res.scalars().first()
+            if not adventure:
+                yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Game session not found.'}))}\n\n"
+                return
+
+            # Migrate legacy sessions created before strict user ownership checks.
+            if state.user_id != current_user.id:
+                state.user_id = current_user.id
+                await db.flush()
+
             if state.is_paused:
                 av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
                 avatar = av_res.scalars().first()
@@ -2477,12 +2691,8 @@ async def post_chat_message(
 
             av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
             avatar = av_res.scalars().first()
-            
-            u_res = await db.execute(select(User).where(User.id == state.user_id))
-            user = u_res.scalars().first()
 
-            adv_res = await db.execute(select(Adventure).where(Adventure.id == state.adventure_id))
-            adventure = adv_res.scalars().first()
+            user = current_user
 
             response_messages = []
             image_url = None
@@ -2498,6 +2708,19 @@ async def post_chat_message(
             # --- Handle Debug Commands ---
             if user_msg.startswith("/debug"):
                 cmd_args = user_msg[7:].strip()
+
+                if cmd_args.lower() == "walkthrough":
+                    avatar_stats = dict(avatar.stats or {})
+                    avatar_stats["walkthrough_revealed"] = True
+                    avatar.stats = avatar_stats
+
+                    await db.commit()
+                    yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+                        'messages': [{'role': 'system', 'content': '[Debug] Walkthrough revealed without XP cost.'}],
+                        'sheet': await _build_sheet_snapshot(avatar, state, db)
+                    }))}\n\n"
+                    return
+
                 debug_info = await DebugEngine.handle_debug_command(db, state, cmd_args)
                 
                 # Check for special log toggle return markers
@@ -2530,6 +2753,55 @@ async def post_chat_message(
                     return
                 
                 response = CommandParser.parse_command(avatar, user_msg)
+
+                if response == "[TRIGGER_WALKTHROUGH]":
+                    walkthrough_state = _build_walkthrough_payload(adventure, avatar)
+                    message = walkthrough_state.get("message") or "Walkthrough panel opened."
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder({'role': 'system', 'content': message}))}\n\n"
+                    await db.commit()
+                    yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await _build_sheet_snapshot(avatar, state, db)}))}\n\n"
+                    return
+
+                if response == "[TRIGGER_WALKTHROUGH_REVEAL]":
+                    walkthrough_steps = _extract_walkthrough_steps(adventure)
+                    if not walkthrough_steps:
+                        message = "No walkthrough available for this adventure yet."
+                    elif avatar.exp < WALKTHROUGH_REVEAL_COST:
+                        missing = WALKTHROUGH_REVEAL_COST - avatar.exp
+                        message = f"Not enough XP to reveal walkthrough. Need {missing} more XP."
+                    else:
+                        avatar.exp -= WALKTHROUGH_REVEAL_COST
+                        avatar_stats = dict(avatar.stats or {})
+                        avatar_stats["walkthrough_revealed"] = True
+                        avatar.stats = avatar_stats
+                        message = f"Walkthrough revealed for {WALKTHROUGH_REVEAL_COST} XP."
+
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder({'role': 'system', 'content': message}))}\n\n"
+                    await db.commit()
+                    yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await _build_sheet_snapshot(avatar, state, db)}))}\n\n"
+                    return
+
+                if response == "[TRIGGER_HINT]":
+                    walkthrough_steps = _extract_walkthrough_steps(adventure)
+                    if not walkthrough_steps:
+                        hint_message = "No walkthrough available yet, so hints cannot be generated right now."
+                    elif avatar.exp < WALKTHROUGH_HINT_COST:
+                        missing = WALKTHROUGH_HINT_COST - avatar.exp
+                        hint_message = f"Not enough XP for a hint. Need {missing} more XP."
+                    else:
+                        avatar.exp -= WALKTHROUGH_HINT_COST
+                        avatar_stats = dict(avatar.stats or {})
+                        hint_index = max(0, int(avatar_stats.get("walkthrough_hint_index", 0)))
+                        step_idx = min(hint_index, len(walkthrough_steps) - 1)
+                        hint_message = _hint_for_step(walkthrough_steps[step_idx])
+                        avatar_stats["walkthrough_hint_index"] = min(hint_index + 1, len(walkthrough_steps))
+                        avatar.stats = avatar_stats
+                        hint_message = f"[Hint - {WALKTHROUGH_HINT_COST} XP] {hint_message}"
+
+                    yield f"event: system\ndata: {json.dumps(jsonable_encoder({'role': 'system', 'content': hint_message}))}\n\n"
+                    await db.commit()
+                    yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await _build_sheet_snapshot(avatar, state, db)}))}\n\n"
+                    return
                 
                 if response.startswith("[TRIGGER_TAKE]"):
                     item_name = response[14:].strip()

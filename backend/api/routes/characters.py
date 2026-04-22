@@ -3,21 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from backend.core.database import get_db
+from backend.core.auth import get_current_user
 from backend.models.character import Character
 from backend.models.user import User
 from backend.schemas.character import CharacterCreate, CharacterUpdate, CharacterSchema
 
 router = APIRouter()
-
-# Simple mock user implementation as existing in adventures/avatars
-async def get_current_user(db: AsyncSession = Depends(get_db)) -> User:
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    if not user:
-        user = User(username="default_player")
-        db.add(user)
-        await db.commit()
-    return user
 
 @router.get("/characters", response_model=list[CharacterSchema])
 async def list_characters(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):

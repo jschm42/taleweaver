@@ -7,6 +7,10 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 
+from backend.core.auth import create_access_token, get_password_hash
+from backend.models.user import User
+from tests.conftest import TestSessionLocal
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -221,3 +225,43 @@ async def test_save_tone_catalog(client: AsyncClient):
     assert settings_resp.status_code == 200
     payload = settings_resp.json()
     assert payload["tone_catalog"][0]["id"] == "satire"
+
+
+async def test_settings_are_global_for_all_users(client: AsyncClient):
+    """Updating settings as one admin user should apply to all users globally."""
+    user_a = "settings_user_a"
+    user_b = "settings_user_b"
+
+    async with TestSessionLocal() as session:
+        session.add(User(username=user_a, hashed_password=get_password_hash("pw-a"), role="admin"))
+        session.add(User(username=user_b, hashed_password=get_password_hash("pw-b"), role="admin"))
+        await session.commit()
+
+    headers_a = {"Authorization": f"Bearer {create_access_token({'sub': user_a})}"}
+    headers_b = {"Authorization": f"Bearer {create_access_token({'sub': user_b})}"}
+
+    payload_a = {
+        "small_model": "llama3.2",
+        "small_model_provider": "ollama",
+        "small_max_tokens": 1024,
+        "small_enable_thinking": False,
+        "small_max_thinking_tokens": 256,
+        "complex_model": "qwen2.5",
+        "complex_model_provider": "ollama",
+        "complex_max_tokens": 4096,
+        "complex_enable_thinking": False,
+        "complex_max_thinking_tokens": 512,
+        "preferred_provider": "ollama",
+        "ollama_url": "http://localhost:11434",
+    }
+
+    save_resp = await client.post("/api/settings/llm", json=payload_a, headers=headers_a)
+    assert save_resp.status_code == 200
+
+    a_settings = await client.get("/api/settings", headers=headers_a)
+    assert a_settings.status_code == 200
+    assert a_settings.json()["llm_settings"]["small_model"] == "llama3.2"
+
+    b_settings = await client.get("/api/settings", headers=headers_b)
+    assert b_settings.status_code == 200
+    assert b_settings.json()["llm_settings"]["small_model"] == "llama3.2"

@@ -5,12 +5,13 @@ import logging
 from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
 from backend.core.database import get_db
-from backend.core.auth import get_current_user
+from backend.core.auth import get_current_user, get_current_admin
 from backend.models.user import User
 from backend.core.security import encryption_util
 from backend.core.models_config import (
@@ -24,6 +25,26 @@ from backend.engine.media_engine import MediaEngine
 from backend.core.config import settings
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
+
+
+async def _resolve_global_settings_owner(db: AsyncSession, fallback_user: User) -> User:
+    """Return the user that acts as global settings source (prefer admin)."""
+    admin_res = await db.execute(select(User).where(User.role == "admin").limit(1))
+    admin_user = admin_res.scalars().first()
+    return admin_user or fallback_user
+
+
+async def _broadcast_global_settings(db: AsyncSession, source_user: User) -> None:
+    """Copy global settings from source user to all users."""
+    users_res = await db.execute(select(User))
+    users = users_res.scalars().all()
+    for user in users:
+        user.encrypted_api_keys = dict(source_user.encrypted_api_keys or {})
+        user.llm_settings = dict(source_user.llm_settings or {})
+        user.t2i_settings = dict(source_user.t2i_settings or {})
+        user.image_styles_catalog = list(source_user.image_styles_catalog or [])
+        user.tone_catalog = list(source_user.tone_catalog or [])
+        user.game_settings = dict(source_user.game_settings or {})
 
 
 def _slugify(value: str) -> str:
@@ -337,8 +358,7 @@ async def get_settings(
     current_user: User = Depends(get_current_user),
 ):
     """Returns the current settings (sanitized keys)."""
-    _ = db
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
     
     # Common defaults if no user/settings
     default_llm = _normalize_llm_settings(None)
@@ -402,7 +422,7 @@ async def get_settings(
 async def update_api_key(
     payload: ApiKeyPayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """Saves an encrypted API key for the authenticated user."""
     provider_lower = payload.provider.lower()
@@ -414,7 +434,7 @@ async def update_api_key(
             detail=f"The API key for {payload.provider} is managed via environment variables and cannot be modified here."
         )
 
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
     
     encrypted_key = encryption_util.encrypt_key(payload.api_key)
     
@@ -422,7 +442,8 @@ async def update_api_key(
     new_keys = dict(current_keys)
     new_keys[provider_lower] = encrypted_key
     user.encrypted_api_keys = new_keys
-    
+
+    await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": f"{payload.provider} key saved securely."}
 
@@ -430,12 +451,13 @@ async def update_api_key(
 async def update_llm_settings(
     payload: SettingsPayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """Updates the LLM model preferences."""
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
         
     user.llm_settings = _normalize_llm_settings(payload.model_dump())
+    await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "LLM settings updated."}
 
@@ -443,12 +465,13 @@ async def update_llm_settings(
 async def update_t2i_settings(
     payload: T2ISettingsPayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """Updates the Text-to-Image model preferences."""
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
         
     user.t2i_settings = _normalize_t2i_settings(payload.model_dump())
+    await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "Image generation settings updated."}
 
@@ -465,8 +488,7 @@ async def test_llm_connection(
     current_user: User = Depends(get_current_user),
 ):
     """Tests the connection to an LLM provider with a simple prompt and measures latency."""
-    _ = db
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
 
     # Inject temporary ollama_url if provided
     if payload.provider == "ollama" and payload.ollama_url:
@@ -500,8 +522,7 @@ async def test_vision_connection(
     current_user: User = Depends(get_current_user),
 ):
     """Tests the connection to an Image provider by generating a wizard."""
-    _ = db
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
 
     provider_key = payload.provider.lower()
     
@@ -540,13 +561,14 @@ async def test_vision_connection(
 async def update_image_styles_catalog(
     payload: CatalogUpdatePayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """Updates the admin-managed image styles catalog for adventure generation."""
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
 
     raw_items = [item.model_dump() for item in payload.items]
     user.image_styles_catalog = _normalize_catalog(raw_items, fallback=_default_image_styles_catalog())
+    await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "Image styles catalog updated."}
 
@@ -555,13 +577,14 @@ async def update_image_styles_catalog(
 async def update_tone_catalog(
     payload: CatalogUpdatePayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """Updates the admin-managed tone catalog for world generation."""
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
 
     raw_items = [item.model_dump() for item in payload.items]
     user.tone_catalog = _normalize_catalog(raw_items, fallback=_default_tone_catalog())
+    await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "Tone catalog updated."}
 
@@ -573,7 +596,7 @@ async def generate_catalog_image(
     current_user: User = Depends(get_current_user),
 ):
     """Generates an image for a catalog tile (style or tone)."""
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
 
     t2i = user.t2i_settings or {}
     provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
@@ -659,11 +682,12 @@ async def upload_catalog_image(
 async def update_game_settings(
     payload: GameSettingsPayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """Updates the general game preferences."""
-    user = current_user
+    user = await _resolve_global_settings_owner(db, current_user)
         
     user.game_settings = payload.model_dump()
+    await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "Game settings updated."}

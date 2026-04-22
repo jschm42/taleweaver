@@ -210,11 +210,19 @@ export const api = {
     })
   },
 
+  updateMyBio(bio: string): Promise<any> {
+    return request('/users/me/bio', {
+      method: 'PUT',
+      body: JSON.stringify({ bio })
+    })
+  },
+
   generateMyBio(): Promise<{ bio: string }> {
     return request('/users/me/bio/generate', { method: 'POST' })
   },
 
-  generateMyProfileImage(): Promise<any> {
-    return request('/users/me/profile-image/generate', { method: 'POST' })
+  generateMyProfileImage(bio?: string): Promise<any> {
+    const body = bio !== undefined ? JSON.stringify({ bio }) : undefined
+    return request('/users/me/profile-image/generate', { method: 'POST', body })
   }
 }

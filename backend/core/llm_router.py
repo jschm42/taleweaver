@@ -328,9 +328,11 @@ class GameMasterLLM:
             },
         )
         
+        finish_reason = response.choices[0].finish_reason
+
         if not content:
             logger.error(f"LLM returned empty content. Raw response: {response.model_dump()}")
-            if response.choices[0].finish_reason == "length":
+            if finish_reason == "length":
                 raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
             raise ValueError("No content returned from LLM for complex task.")
             
@@ -338,7 +340,13 @@ class GameMasterLLM:
             data = json.loads(content)
             return response_model(**data)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Failed to parse LLM response as JSON: {content}") from exc
+            if finish_reason == "length":
+                raise ValueError(
+                    "LLM response was truncated (token limit) while generating structured JSON. "
+                    "Increase Complex Max Tokens in Settings and retry."
+                ) from exc
+            preview = content[:280].replace("\n", " ").strip()
+            raise ValueError(f"Failed to parse LLM response as JSON. Preview: {preview}") from exc
 
     def execute_complex_task(
         self,
@@ -424,9 +432,11 @@ class GameMasterLLM:
             },
         )
         
+        finish_reason = response.choices[0].finish_reason
+
         if not content:
             logger.error(f"LLM returned empty content. Raw response: {response.model_dump()}")
-            if response.choices[0].finish_reason == "length":
+            if finish_reason == "length":
                 raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
             raise ValueError("No content returned from LLM for complex task.")
             
@@ -434,4 +444,10 @@ class GameMasterLLM:
             data = json.loads(content)
             return response_model(**data)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Failed to parse LLM response as JSON: {content}") from exc
+            if finish_reason == "length":
+                raise ValueError(
+                    "LLM response was truncated (token limit) while generating structured JSON. "
+                    "Increase Complex Max Tokens in Settings and retry."
+                ) from exc
+            preview = content[:280].replace("\n", " ").strip()
+            raise ValueError(f"Failed to parse LLM response as JSON. Preview: {preview}") from exc

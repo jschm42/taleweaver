@@ -28,6 +28,10 @@ class UserUpdateRequest(BaseModel):
 class BioUpdateRequest(BaseModel):
     bio: str
 
+
+class ProfileImageGenerateRequest(BaseModel):
+    bio: str | None = None
+
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User))
@@ -131,35 +135,30 @@ async def generate_my_bio(current_user: User = Depends(get_current_user), db: As
         raise HTTPException(status_code=500, detail=f"Bio generation failed: {str(e)}")
 
 @router.post("/users/me/profile-image/generate", response_model=UserResponse)
-async def generate_my_profile_image(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def generate_my_profile_image(
+    payload: ProfileImageGenerateRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     from backend.engine.media_engine import MediaEngine
-    from backend.core.config import settings
-    from backend.models.settings import SystemSettings
-    
-    # Get admin config for image generation
-    settings_res = await db.execute(select(SystemSettings))
-    system_settings = settings_res.scalars().first()
-    if not system_settings:
-        raise HTTPException(status_code=500, detail="System settings not found")
-        
-    user_config = system_settings.config
-    api_keys = system_settings.api_keys
-    
-    t2i = user_config.get("t2i_settings")
+
+    admin_res = await db.execute(select(User).where(User.role == "admin").limit(1))
+    settings_owner = admin_res.scalars().first() or current_user
+
+    t2i = settings_owner.t2i_settings or {}
     if not t2i:
-        raise HTTPException(status_code=400, detail="Visual preferences not configured in Admin settings")
-        
-    provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
+        raise HTTPException(status_code=400, detail="Visual preferences are not configured by admin.")
+
+    provider = (t2i.get("simple_model_provider") or "openai").lower()
     model = t2i.get("simple_model")
-    
+
     if not model:
         raise HTTPException(status_code=400, detail="Simple image model not configured")
-        
-    api_key = MediaEngine._resolve_api_key(provider, api_keys)
-    
-    prompt = f"A high-quality fantasy portrait avatar of a legendary storyteller. Theme: Aether weaver, mystical hood, glowing accents. Based on user: {current_user.username}. Style: Digital art, clean background, epic lighting."
-    if current_user.bio:
-        prompt += f" Reference: {current_user.bio[:200]}"
+
+    api_key = MediaEngine._resolve_api_key(provider, settings_owner.encrypted_api_keys or {})
+
+    prompt_source = payload.bio if payload and payload.bio is not None else current_user.bio
+    prompt = (prompt_source or "").strip() or "A fantasy roleplaying avatar"
         
     target_dir = os.path.join(settings.DATA_DIR, "users")
     ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"

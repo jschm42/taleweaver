@@ -11,10 +11,12 @@ import ChatWindow from '@/components/ChatWindow.vue'
 import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
 import MapModal from '@/components/MapModal.vue'
 import QuestsModal from '@/components/QuestsModal.vue'
+import WalkthroughModal from '@/components/WalkthroughModal.vue'
 import SuccessScreen from '@/components/SuccessScreen.vue'
 import DebugModal from '@/components/DebugModal.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
+import { authState } from '@/store/auth'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
@@ -26,9 +28,11 @@ const chatWindow = ref<any>(null)
 const showSheet = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
+const showWalkthrough = ref(false)
 const showSuccess = ref(false)
 const showDebug = ref(false)
 const showDebugLog = ref(false)
+const walkthroughData = ref<any | null>(null)
 const trackedQuestId = ref<string | null>(null)
 const clockTick = ref(false)
 const { notifications, removeNotification } = useNotifications()
@@ -179,6 +183,15 @@ const handleTrackQuest = (questId: string | null) => {
 }
 
 const brokenImages = ref<Record<string, boolean>>({})
+const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
+
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (authState.token) {
+    headers.Authorization = `Bearer ${authState.token}`
+  }
+  return headers
+}
 
 const handleImageError = (path?: string | null) => {
   if (!path) return
@@ -194,9 +207,81 @@ const goBack = () => {
   router.push({ name: 'portal' })
 }
 
+const loadWalkthrough = async () => {
+  if (!props.id) return
+  try {
+    const res = await fetch(`${BASE}/adventures/${props.id}/walkthrough`, { headers: authHeaders() })
+    if (!res.ok) {
+      walkthroughData.value = {
+        available: false,
+        preview: 'No walkthrough available for this adventure yet.',
+        message: 'No walkthrough available for this adventure yet.',
+        current_xp: sheet.value?.exp || 0,
+        reveal_cost: 200,
+        hint_cost: 50,
+      }
+      return
+    }
+    walkthroughData.value = await res.json()
+  } catch (error) {
+    console.error('Failed to load walkthrough', error)
+    walkthroughData.value = {
+      available: false,
+      preview: 'No walkthrough available for this adventure yet.',
+      message: 'No walkthrough available for this adventure yet.',
+      current_xp: sheet.value?.exp || 0,
+      reveal_cost: 200,
+      hint_cost: 50,
+    }
+  }
+}
+
+const openWalkthroughPanel = async () => {
+  await loadWalkthrough()
+  showWalkthrough.value = true
+}
+
+const revealWalkthrough = async () => {
+  await sendMessage('/walkthrough reveal')
+  await loadWalkthrough()
+}
+
+const buyHint = async () => {
+  await sendMessage('/hint')
+  await loadWalkthrough()
+}
+
+const handlePlayerInput = async (content: string) => {
+  const normalized = content.trim().toLowerCase()
+  if (normalized === '/walkthrough') {
+    await openWalkthroughPanel()
+    return
+  }
+
+  if (normalized === '/walkthrough reveal') {
+    await revealWalkthrough()
+    showWalkthrough.value = true
+    return
+  }
+
+  if (normalized === '/hint') {
+    await buyHint()
+    return
+  }
+
+  if (normalized === '/debug walkthrough') {
+    await sendMessage('/debug walkthrough')
+    await loadWalkthrough()
+    showWalkthrough.value = true
+    return
+  }
+
+  await sendMessage(content)
+}
+
 const fetchGameSettings = async () => {
   try {
-    const res = await fetch('http://localhost:8000/api/settings')
+    const res = await fetch(`${BASE}/settings`, { headers: authHeaders() })
     if (res.ok) {
       const data = await res.json()
       if (data.game_settings) gameSettings.value = data.game_settings
@@ -429,10 +514,11 @@ onBeforeUnmount(() => {
           :npc-metadata="npcMetadata"
           :entities="entities"
           :inventory="inventoryItems"
-          @send="sendMessage"
+          @send="handlePlayerInput"
           @open-sheet="showSheet = true"
           @open-map="showMap = true"
           @open-quests="showQuests = true"
+          @open-walkthrough="openWalkthroughPanel"
           @npc-hover="handleChatNpcHover"
           @npc-leave="hoveredEntity = null"
           @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
@@ -470,6 +556,13 @@ onBeforeUnmount(() => {
       :tracked-quest-id="trackedQuestId" 
       @close="showQuests = false" 
       @track-quest="handleTrackQuest"
+    />
+    <WalkthroughModal
+      :open="showWalkthrough"
+      :data="walkthroughData"
+      @close="showWalkthrough = false"
+      @reveal="revealWalkthrough"
+      @hint="buyHint"
     />
     <SuccessScreen 
       :show="showSuccess" 

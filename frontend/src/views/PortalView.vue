@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
+import { authState } from '@/store/auth'
 import type { AdventureImportPayload, CreateAdventurePayload } from '@/types'
 
 const router = useRouter()
@@ -32,6 +33,20 @@ interface PendingAdventureCard {
   title: string
   status: string
   hasError: boolean
+}
+
+function prettifyStatus(status: string): string {
+  if (!status) return 'Wird vorbereitet...'
+  const spaced = status
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .trim()
+  return spaced || status
+}
+
+function isFailureStatus(status: string): boolean {
+  const value = (status || '').toLowerCase()
+  return value.includes('failed') || value.includes('error')
 }
 
 const adventures = ref<Adventure[]>([])
@@ -105,6 +120,13 @@ const visibleAdventures = computed(() => {
   ])
   return adventures.value.filter((adv) => !pendingIds.has(adv.adventure_id))
 })
+
+const pendingCards = computed(() => [
+  ...pendingCreations.value.map((entry) => ({ ...entry, kind: 'creation' as const })),
+  ...pendingImports.value.map((entry) => ({ ...entry, kind: 'import' as const })),
+])
+
+const isAdmin = computed(() => authState.user?.role === 'admin')
 
 const form = ref({
   id: '',
@@ -201,7 +223,7 @@ function addPendingCreationCard(adventureId: string, title: string) {
     {
       adventureId,
       title,
-      status: 'Generierung gestartet',
+      status: 'Starting generation...',
       hasError: false,
     },
   ]
@@ -212,7 +234,7 @@ function updatePendingImportStatus(adventureId: string, status: string, hasError
     entry.adventureId === adventureId
       ? {
           ...entry,
-          status,
+          status: prettifyStatus(status),
           hasError,
         }
       : entry,
@@ -224,7 +246,7 @@ function updatePendingCreationStatus(adventureId: string, status: string, hasErr
     entry.adventureId === adventureId
       ? {
           ...entry,
-          status,
+          status: prettifyStatus(status),
           hasError,
         }
       : entry,
@@ -237,6 +259,26 @@ function removePendingImportCard(adventureId: string) {
 
 function removePendingCreationCard(adventureId: string) {
   pendingCreations.value = pendingCreations.value.filter((entry) => entry.adventureId !== adventureId)
+}
+
+async function removeFailedPendingCard(adventureId: string, kind: 'creation' | 'import') {
+  const isTemporaryImport = kind === 'import' && adventureId.startsWith('adz-import-')
+
+  try {
+    if (!isTemporaryImport) {
+      await api.deleteAdventure(adventureId)
+      adventures.value = adventures.value.filter((a) => a.adventure_id !== adventureId)
+    }
+  } catch (error) {
+    console.error('Error deleting failed pending adventure:', error)
+    return
+  }
+
+  if (kind === 'import') {
+    removePendingImportCard(adventureId)
+    return
+  }
+  removePendingCreationCard(adventureId)
 }
 
 async function fetchAdventures() {
@@ -253,7 +295,11 @@ async function fetchAdventures() {
         const isAlreadyPending = pendingCreations.value.some((p) => p.adventureId === adv.adventure_id)
         if (!isAlreadyPending) {
           addPendingCreationCard(adv.adventure_id, adv.adventure_title)
-          updatePendingCreationStatus(adv.adventure_id, adv.creation_status || 'Wird vorbereitet...')
+          updatePendingCreationStatus(
+            adv.adventure_id,
+            adv.creation_error || adv.creation_status || 'Wird vorbereitet...',
+            Boolean(adv.creation_error) || isFailureStatus(adv.creation_status || ''),
+          )
           
           void pollAdventureStatus(adv.adventure_id, {
             navigateOnReady: false,
@@ -265,6 +311,8 @@ async function fetchAdventures() {
             onFailure: (status) => updatePendingCreationStatus(adv.adventure_id, status, true),
           })
         }
+      } else {
+        removePendingCreationCard(adv.adventure_id)
       }
     }
   } catch (error) {
@@ -343,7 +391,17 @@ async function pollAdventureStatus(adventureId: string, options?: any) {
     const pollInterval = setInterval(async () => {
       try {
         const data = await api.getAdventureStatus(adventureId)
-        options?.onStatus?.(data.status || 'Constructing world...')
+        const statusText = data.status || 'Constructing world...'
+        options?.onStatus?.(statusText)
+
+        if (isFailureStatus(statusText) || data.error) {
+          clearInterval(pollInterval)
+          const detail = data.error || statusText || 'Generation failed.'
+          options?.onFailure?.(detail)
+          resolve()
+          return
+        }
+
         if (data.is_ready) {
           clearInterval(pollInterval)
           options?.onReady?.()
@@ -361,11 +419,37 @@ onMounted(() => {
   resetCreateForm()
   void fetchSettings()
   fetchAdventures()
+
+  loadingWordTimer = window.setInterval(() => {
+    loadingWordIndex.value = (loadingWordIndex.value + 1) % loadingWords.length
+  }, 1200)
+
+  const newId = typeof route.query.new_id === 'string' ? route.query.new_id : ''
+  const newTitle = typeof route.query.new_title === 'string' ? route.query.new_title : 'New Adventure'
+  if (newId) {
+    addPendingCreationCard(newId, newTitle)
+    updatePendingCreationStatus(newId, 'Starting generation...')
+    void pollAdventureStatus(newId, {
+      navigateOnReady: false,
+      onStatus: (status: string) => updatePendingCreationStatus(newId, status || 'Wird vorbereitet...'),
+      onReady: async () => {
+        removePendingCreationCard(newId)
+        await fetchAdventures()
+      },
+      onFailure: (status: string) => updatePendingCreationStatus(newId, status || 'Generierung fehlgeschlagen', true),
+    })
+    router.replace({ name: 'portal', query: {} })
+  }
+
   window.addEventListener('click', handleGlobalClick)
 })
 
 onUnmounted(() => {
   window.removeEventListener('click', handleGlobalClick)
+  if (loadingWordTimer !== null) {
+    clearInterval(loadingWordTimer)
+    loadingWordTimer = null
+  }
 })
 </script>
 
@@ -389,6 +473,13 @@ onUnmounted(() => {
           </button>
           <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
             <span class="text-sm font-bold tracking-wide">Profile</span>
+          </button>
+          <button
+            v-if="isAdmin"
+            @click="router.push('/admin')"
+            class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all"
+          >
+            <span class="text-sm font-bold tracking-wide">Administration</span>
           </button>
         </nav>
       </div>
@@ -417,12 +508,6 @@ onUnmounted(() => {
         </div>
 
         <div class="flex items-center gap-4">
-          <button class="text-slate-400 hover:text-white transition-colors">
-            <i class="ra ra-bell"></i>
-          </button>
-          <button @click="router.push('/admin')" class="text-slate-400 hover:text-white transition-colors" title="Administration">
-            <i class="ra ra-cog"></i>
-          </button>
         </div>
       </header>
 
@@ -441,7 +526,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Loading State -->
-        <div v-if="isLoading && adventures.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
+        <div v-if="isLoading && adventures.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
           <div class="w-16 h-16 border-4 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
           <p class="text-aether-primary font-bold uppercase tracking-[0.3em] text-[10px]">Accessing Archives...</p>
         </div>
@@ -457,9 +542,60 @@ onUnmounted(() => {
             <p class="text-slate-500 text-sm max-w-[140px] text-center opacity-60">Begin your legend.</p>
           </button>
 
+          <div
+            v-for="pending in pendingCards"
+            :key="`pending-${pending.adventureId}`"
+            class="adventure-card flex flex-col rounded-xl border border-white/10 bg-aether-surface/30 p-6 relative overflow-hidden"
+          >
+            <div class="absolute inset-0 animate-shimmer opacity-60"></div>
+            <div class="relative z-10 flex-1 flex flex-col">
+              <div class="flex items-center justify-between mb-4">
+                <span
+                  :class="[
+                    'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border',
+                    pending.hasError
+                      ? 'bg-red-500/15 border-red-500/30 text-red-400'
+                      : 'bg-aether-primary/15 border-aether-primary/30 text-aether-primary',
+                  ]"
+                >
+                  {{ pending.hasError ? 'Failed' : (pending.kind === 'import' ? 'Import' : 'Generating') }}
+                </span>
+                <i
+                  :class="[
+                    'ra text-lg',
+                    pending.hasError ? 'ra-burning-embers text-red-400' : 'ra-cog text-aether-primary animate-spin',
+                  ]"
+                ></i>
+              </div>
+
+              <h3 class="text-xl font-black text-white mb-2 font-display line-clamp-2">{{ pending.title }}</h3>
+              <p class="text-sm text-slate-300/90 mb-5">{{ pending.status }}</p>
+
+              <div class="mt-auto">
+                <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    :class="[
+                      'h-full rounded-full',
+                      pending.hasError ? 'bg-red-500/70' : 'bg-gradient-to-r from-aether-primary/30 to-aether-primary',
+                    ]"
+                    :style="{ width: pending.hasError ? '100%' : `${40 + loadingWordIndex * 15}%` }"
+                  ></div>
+                </div>
+
+                <button
+                  v-if="pending.hasError"
+                  class="mt-4 w-full px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[11px] font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
+                  @click="removeFailedPendingCard(pending.adventureId, pending.kind)"
+                >
+                  Delete Failed Adventure
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Adventure Cards -->
           <div 
-            v-for="adv in adventures" 
+            v-for="adv in visibleAdventures" 
             :key="adv.adventure_id"
             class="adventure-card flex flex-col group cursor-pointer relative rounded-xl"
             @click="playAdventure(adv.game_id)"
