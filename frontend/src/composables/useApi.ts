@@ -191,6 +191,10 @@ export const api = {
     return request('/auth/me')
   },
 
+  getBootstrapStatus(): Promise<{ has_admin: boolean; has_users: boolean }> {
+    return request('/auth/bootstrap-status')
+  },
+
   setupRootAdmin(payload: any): Promise<any> {
     return request('/auth/setup-root', { method: 'POST', body: JSON.stringify(payload) })
   },

@@ -26,6 +26,11 @@ class SetupRootRequest(BaseModel):
     username: str
     password: str
 
+
+class BootstrapStatusResponse(BaseModel):
+    has_admin: bool
+    has_users: bool
+
 @router.post("/auth/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).filter(User.username == form_data.username))
@@ -66,3 +71,14 @@ async def setup_root_admin(request: SetupRootRequest, db: AsyncSession = Depends
     await db.commit()
     await db.refresh(new_admin)
     return {"message": "Root admin created successfully"}
+
+
+@router.get("/auth/bootstrap-status", response_model=BootstrapStatusResponse)
+async def get_bootstrap_status(db: AsyncSession = Depends(get_db)):
+    """Public bootstrap status used by frontend to choose setup vs login."""
+    admin_result = await db.execute(select(User).filter(User.role == "admin").limit(1))
+    user_result = await db.execute(select(User.id).limit(1))
+    return BootstrapStatusResponse(
+        has_admin=admin_result.scalars().first() is not None,
+        has_users=user_result.first() is not None,
+    )

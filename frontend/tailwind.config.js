@@ -4,10 +4,10 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['Epilogue', 'sans-serif'],
+        display: ['Acme', 'sans-serif'],
         narrative: ['Newsreader', 'serif'],
-        ui: ['Manrope', 'sans-serif'],
-        sans: ['Manrope', 'sans-serif'], // Default to UI font
+        ui: ['Acme', 'sans-serif'],
+        sans: ['Acme', 'sans-serif'], // Default to UI font
       },
       colors: {
         aether: {

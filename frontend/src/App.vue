@@ -12,17 +12,15 @@ const route = useRoute()
 async function checkAuth() {
   if (!authState.token) {
     authState.isInitialized = true
-    // If no token, we might need setup or login
     try {
-      // Check if any user exists at all (setup check)
-      const users = await api.listUsers().catch(() => [])
-      if (users.length === 0) {
+      const bootstrap = await api.getBootstrapStatus()
+      if (!bootstrap.has_admin) {
         router.push('/setup')
       } else {
-        if (route.name !== 'setup') router.push('/login')
+        router.push('/login')
       }
     } catch (e) {
-      // If listUsers fails because of 401, it means users exist but we aren't one of them
+      // Fallback safely to login if bootstrap status cannot be determined.
       if (route.name !== 'setup') router.push('/login')
     }
     return
