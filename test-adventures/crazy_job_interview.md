@@ -7,7 +7,7 @@ Goal: Sign the employment contract without losing your mind first.
 
 1. Plot Overview
 
-Arthur enters the office building of AquaTech Synergies LLC for his job interview. Even in the waiting room, he realizes that nothing here is normal. After managing to get into the conference room, he is interviewed by a three-person panel. Instead of asking about his plumbing qualifications, they confront him with esoteric, military, and technological absurdities. To get the job, Arthur must pass a completely ridiculous "practical exam" for each of the three interviewers by combining his classic plumbing knowledge with absurd everyday objects.
+Arthur enters the office building of AquaTech Synergies LLC for his job interview. Even in the waiting room, he realizes that nothing here is normal. After managing to get into the conference room, he is interviewed by a three-person panel. Instead of asking about his plumbing qualifications, they confront him with esoteric, military, and technological absurdities. To get the job, Arthur must pass a completely ridiculous "practical exam" for each of the three interviewers by combining his classic plumbing knowledge with absurd everyday objects. The interview is additionally complicated by bizarre interruptions from the office's "support staff."
 
 2. NPCs (Characters)
 
@@ -26,6 +26,10 @@ Finnley (The Tech-Bro): Chief Innovation Officer. Wears a turtleneck and drinks 
 Supporting Characters
 
 Receptionist Crystal: Chews gum loudly, files her nails, and refuses to let Arthur pass until he has filled out the "Form for Intergalactic Vibrational Compatibility (Permit A38)."
+
+Captain Squawk (The Sarcastic Parrot): A parrot residing in the conference room. He sporadically interrupts the interview by repeating everything people say, but constantly adds sarcastic remarks or insults, making it hard for Arthur to tell who is actually talking.
+
+Ed the Zombie Butler: An actual, undead zombie in a tattered tuxedo who serves the company. He sporadically shuffles into the room groaning to serve refreshments. Unfortunately, he constantly spills hot coffee all over the table, the floor, and sometimes Arthur, creating an ongoing physical hazard.
 
 3. Scenes (Rooms)
 
@@ -65,7 +69,29 @@ Miller's Test ("Bomb Defusal"): Stop the ticking, leaking boiler before it "deto
 
 Finnley's Test ("Disruptive Innovation"): Present a smart-home plumbing concept on the spot.
 
-6. Puzzle Design (Solutions)
+6. The Interview Questions (Dialogue Interactions)
+
+Throughout the interview, the panel fires completely unanswerable questions at Arthur regarding his resume. To progress, the player must choose the most absurd, dryly literal, or confusing dialog option to "satisfy" the interviewers' warped logic.
+
+Gwendolyn's Question: * The Question: "Arthur, I see a dark aura surrounding your 2018 employment at 'Bob's Plumbing'. Was this a period of karmic stagnation, or were you merely struggling to align the root chakras of the city's sewage system?"
+
+Arthur's Best Answer: "Bob had a bad back. I had to carry the heavy chakras... I mean, toilets... myself." (Gwendolyn interprets this as taking on the world's spiritual burdens).
+
+Major Miller's Question:
+
+The Question: "There is an unexplained two-month gap in your resume from 2021, soldier! Were you deep undercover in a black-ops mission against the Calcium Buildup Cartel? What's your confirmed leak-kill count?!"
+
+Arthur's Best Answer: "That information is classified above your paygrade, Major." (Arthur was actually just unemployed, but Miller is deeply impressed by his "operational security".)
+
+Finnley's Question:
+
+The Question: "Explain your previous plumbing experience in terms of a decentralized, peer-to-peer ecosystem. How would you tokenize a clogged U-bend to maximize synergy?"
+
+Arthur's Best Answer: "I decentralize the clog by unscrewing the pipe, and I tokenize the hairball by throwing it directly into the trash-cloud." (Finnley nods vigorously, calling it "brilliant, disruptive physical NFT minting.")
+
+The Parrot's Interference: During these questions, Captain Squawk will often scream things like: "He's lying! Squawk! His wrench is from a discount store! Squawk!" Arthur has the option to feed the parrot the vegan matcha muffin to keep it quiet for a few turns.
+
+7. Puzzle Design (Solutions)
 
 Puzzle 1: Filling out the Form (Waiting Room)
 
