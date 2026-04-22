@@ -150,7 +150,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-950 text-slate-200 font-sans p-8 md:p-10">
+  <div class="h-full min-h-0 overflow-y-auto bg-slate-950 text-slate-200 font-sans p-8 pb-12 md:p-10 md:pb-14">
     <header class="w-full max-w-5xl mx-auto mb-8 flex items-center justify-between">
       <div>
         <h1 class="text-3xl md:text-4xl font-extrabold text-white">New Adventure Generation</h1>

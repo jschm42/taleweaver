@@ -16,7 +16,8 @@ def test_world_manifesto_parsing_and_dump():
         ],
         "exits": [],
         "npcs": [],
-        "objects": []
+        "objects": [],
+        "quests": []
     }
 
     WM = world_generator.WorldManifesto

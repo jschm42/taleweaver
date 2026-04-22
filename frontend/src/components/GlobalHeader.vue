@@ -23,11 +23,11 @@ function openProfile() {
 </script>
 
 <template>
-  <header v-if="authState.isAuthenticated" class="h-12 bg-[#050b14] border-b border-white/5 px-6 flex items-center justify-between z-[100] relative">
+  <header v-if="authState.isAuthenticated" class="h-12 bg-[#050b14] border-b border-white/5 px-6 my-1 flex items-center justify-between z-[100] relative">
     <!-- Left: Branding -->
     <div class="flex items-center gap-3 select-none">
-      <div class="w-6 h-6 rounded-lg bg-aether-primary/20 border border-aether-primary/30 flex items-center justify-center">
-        <i class="ra ra-quill-ink text-xs text-aether-primary"></i>
+      <div class="w-12 h-12 flex items-center justify-center">
+        <img src="@/assets/svg/app-logo.svg" class="w-10 h-10 drop-shadow-[0_0_8px_rgba(78,222,163,0.4)]" alt="Logo" />
       </div>
       <div class="flex items-baseline gap-2">
         <span class="text-sm font-black text-white font-display tracking-tight">TaleWeaver</span>
@@ -41,10 +41,10 @@ function openProfile() {
         @click="toggleMenu"
         class="flex items-center gap-3 hover:bg-white/5 px-2 py-1 rounded-lg transition-colors group"
       >
-        <span class="text-[10px] font-black text-slate-400 group-hover:text-white uppercase tracking-widest hidden sm:block">
+        <span class="text-[12px] font-black text-slate-400 group-hover:text-white uppercase tracking-widest hidden sm:block">
           {{ authState.user?.username }}
         </span>
-        <div class="w-7 h-7 rounded-full bg-white/5 border border-white/10 overflow-hidden shadow-inner p-0.5">
+        <div class="w-12 h-12 rounded-full bg-white/5 border border-white/10 overflow-hidden shadow-inner p-0.5">
           <img 
             v-if="authState.user?.profile_image_url" 
             :src="authState.user.profile_image_url" 

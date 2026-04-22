@@ -55,7 +55,7 @@ onMounted(() => {
 <template>
   <div class="h-screen flex flex-col bg-[#050b14] overflow-hidden">
     <GlobalHeader />
-    <main class="flex-1 relative overflow-hidden">
+    <main class="flex-1 min-h-0 relative overflow-hidden">
       <RouterView />
     </main>
     <UserProfileModal />

@@ -5,6 +5,7 @@ Covers: create, list, get, update, delete, pause/resume, and game-state
 sub-routes. All tests follow the Arrange-Act-Assert pattern.
 """
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 from io import BytesIO
 
@@ -16,6 +17,12 @@ from backend.models.world_entity import WorldScene
 from tests.conftest import TestSessionLocal
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest_asyncio.fixture
+async def client(auth_client: AsyncClient) -> AsyncClient:
+    """Adventures endpoints require authentication."""
+    return auth_client
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +161,19 @@ async def test_create_adventure_preserves_advanced_manifest_fields(client: Async
 async def test_create_adventure_persists_generation_status_before_world_gen(client: AsyncClient, monkeypatch):
     """The background job writes an intermediate status before the world generator starts."""
     captured: dict[str, str] = {}
+
+    llm_config_resp = await client.post(
+        "/api/settings/llm",
+        json={
+            "small_model": "llama3.2",
+            "small_model_provider": "ollama",
+            "complex_model": "qwen2.5",
+            "complex_model_provider": "ollama",
+            "preferred_provider": "ollama",
+            "ollama_url": "http://localhost:11434",
+        },
+    )
+    assert llm_config_resp.status_code == 200, llm_config_resp.text
 
     async def fake_generate_world(
         db,

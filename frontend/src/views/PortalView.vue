@@ -370,39 +370,24 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-[#050b14] text-slate-200 font-ui overflow-hidden">
+  <div class="flex h-full min-h-0 bg-[#050b14] text-slate-200 font-ui overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-72 bg-aether-background/95 backdrop-blur-2xl border-r border-white/5 flex flex-col z-50">
+    <aside class="w-72 bg-aether-background/95 backdrop-blur-2xl border-r border-white/5 flex flex-col z-50 overflow-y-auto">
       <!-- Sidebar Header -->
       <div class="p-8 pb-4">
-        <div class="flex items-center gap-3 mb-8">
-          <div class="w-10 h-10 bg-aether-primary/10 rounded-lg flex items-center justify-center border border-aether-primary/20 shadow-ambient-emerald">
-            <img src="@/assets/svg/app-logo.svg" class="w-6 h-6 drop-shadow-[0_0_8px_rgba(78,222,163,0.4)]" alt="Logo" />
-          </div>
-          <div>
-            <h1 class="text-xl font-black text-white font-display tracking-tight">TaleWeaver</h1>
-            <span class="text-[8px] font-bold text-aether-primary/40 tracking-[0.3em] uppercase">v2.4.0-Aether</span>
-          </div>
-        </div>
-
-        <div class="mb-8"></div>
 
         <!-- Navigation Links -->
         <nav class="space-y-1">
           <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl bg-aether-primary/10 text-aether-primary border-l-4 border-aether-primary transition-all">
-            <i class="ra ra-scroll-unfurled text-lg"></i>
             <span class="text-sm font-bold tracking-wide">My Library</span>
           </button>
           <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-            <i class="ra ra-crystal-ball text-lg"></i>
             <span class="text-sm font-bold tracking-wide">Community Stories</span>
           </button>
           <button @click="triggerImportPicker" class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-            <i class="ra ra-quill-ink text-lg"></i>
             <span class="text-sm font-bold tracking-wide">Import .adv / .adz</span>
           </button>
           <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-            <i class="ra ra-person text-lg"></i>
             <span class="text-sm font-bold tracking-wide">Profile</span>
           </button>
         </nav>

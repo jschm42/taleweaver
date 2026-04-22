@@ -1,11 +1,12 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Boolean, JSON
+from sqlalchemy import Column, String, Integer, Boolean, JSON, ForeignKey
 from backend.models.base import Base, TimestampMixin
 
 class Adventure(Base, TimestampMixin):
     __tablename__ = "adventures"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id = Column(String(36), ForeignKey("users.id"), nullable=True) # Linked to User
     title = Column(String(50), nullable=False)
     
     image_url = Column(String(255), nullable=True) # Max 512x512

@@ -5,12 +5,12 @@ import logging
 from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
 from backend.core.database import get_db
+from backend.core.auth import get_current_user
 from backend.models.user import User
 from backend.core.security import encryption_util
 from backend.core.models_config import (
@@ -332,10 +332,13 @@ class CatalogGeneratePayload(BaseModel):
     description: Optional[str] = None
 
 @router.get("")
-async def get_settings(db: AsyncSession = Depends(get_db)):
+async def get_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Returns the current settings (sanitized keys)."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
+    _ = db
+    user = current_user
     
     # Common defaults if no user/settings
     default_llm = _normalize_llm_settings(None)
@@ -396,8 +399,12 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
     }
 
 @router.post("/keys")
-async def update_api_key(payload: ApiKeyPayload, db: AsyncSession = Depends(get_db)):
-    """Saves an encrypted API key for the default local user."""
+async def update_api_key(
+    payload: ApiKeyPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Saves an encrypted API key for the authenticated user."""
     provider_lower = payload.provider.lower()
     
     # Block updates for environment-configured keys
@@ -407,13 +414,7 @@ async def update_api_key(payload: ApiKeyPayload, db: AsyncSession = Depends(get_
             detail=f"The API key for {payload.provider} is managed via environment variables and cannot be modified here."
         )
 
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    
-    if not user:
-        user = User(username="local_default_user")
-        db.add(user)
-        await db.flush()
+    user = current_user
     
     encrypted_key = encryption_util.encrypt_key(payload.api_key)
     
@@ -426,30 +427,26 @@ async def update_api_key(payload: ApiKeyPayload, db: AsyncSession = Depends(get_
     return {"status": "success", "message": f"{payload.provider} key saved securely."}
 
 @router.post("/llm")
-async def update_llm_settings(payload: SettingsPayload, db: AsyncSession = Depends(get_db)):
+async def update_llm_settings(
+    payload: SettingsPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Updates the LLM model preferences."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    
-    if not user:
-        user = User(username="local_default_user")
-        db.add(user)
-        await db.flush()
+    user = current_user
         
     user.llm_settings = _normalize_llm_settings(payload.model_dump())
     await db.commit()
     return {"status": "success", "message": "LLM settings updated."}
 
 @router.post("/t2i")
-async def update_t2i_settings(payload: T2ISettingsPayload, db: AsyncSession = Depends(get_db)):
+async def update_t2i_settings(
+    payload: T2ISettingsPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Updates the Text-to-Image model preferences."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    
-    if not user:
-        user = User(username="local_default_user")
-        db.add(user)
-        await db.flush()
+    user = current_user
         
     user.t2i_settings = _normalize_t2i_settings(payload.model_dump())
     await db.commit()
@@ -462,12 +459,14 @@ class TestLLMPayload(BaseModel):
     ollama_url: Optional[str] = None
 
 @router.post("/test-llm")
-async def test_llm_connection(payload: TestLLMPayload, db: AsyncSession = Depends(get_db)):
+async def test_llm_connection(
+    payload: TestLLMPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Tests the connection to an LLM provider with a simple prompt and measures latency."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    if not user:
-        return {"status": "error", "message": "No user found to fetch API keys."}
+    _ = db
+    user = current_user
 
     # Inject temporary ollama_url if provided
     if payload.provider == "ollama" and payload.ollama_url:
@@ -495,12 +494,14 @@ class TestVisionPayload(BaseModel):
     ollama_url: Optional[str] = None
 
 @router.post("/test-vision")
-async def test_vision_connection(payload: TestVisionPayload, db: AsyncSession = Depends(get_db)):
+async def test_vision_connection(
+    payload: TestVisionPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Tests the connection to an Image provider by generating a wizard."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    if not user:
-        return {"status": "error", "message": "No user found to fetch API keys."}
+    _ = db
+    user = current_user
 
     provider_key = payload.provider.lower()
     
@@ -508,7 +509,7 @@ async def test_vision_connection(payload: TestVisionPayload, db: AsyncSession = 
     api_key = settings.get_env_api_key(provider_key)
     if not api_key and provider_key != "ollama":
         if not user.encrypted_api_keys or provider_key not in user.encrypted_api_keys:
-             return {"status": "error", "message": f"No API key for {payload.provider}"}
+            return {"status": "error", "message": f"No API key for {payload.provider}"}
         api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider_key])
 
     try:
@@ -536,15 +537,13 @@ async def test_vision_connection(payload: TestVisionPayload, db: AsyncSession = 
 
 
 @router.post("/image-styles")
-async def update_image_styles_catalog(payload: CatalogUpdatePayload, db: AsyncSession = Depends(get_db)):
+async def update_image_styles_catalog(
+    payload: CatalogUpdatePayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Updates the admin-managed image styles catalog for adventure generation."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-
-    if not user:
-        user = User(username="local_default_user")
-        db.add(user)
-        await db.flush()
+    user = current_user
 
     raw_items = [item.model_dump() for item in payload.items]
     user.image_styles_catalog = _normalize_catalog(raw_items, fallback=_default_image_styles_catalog())
@@ -553,15 +552,13 @@ async def update_image_styles_catalog(payload: CatalogUpdatePayload, db: AsyncSe
 
 
 @router.post("/tones")
-async def update_tone_catalog(payload: CatalogUpdatePayload, db: AsyncSession = Depends(get_db)):
+async def update_tone_catalog(
+    payload: CatalogUpdatePayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Updates the admin-managed tone catalog for world generation."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-
-    if not user:
-        user = User(username="local_default_user")
-        db.add(user)
-        await db.flush()
+    user = current_user
 
     raw_items = [item.model_dump() for item in payload.items]
     user.tone_catalog = _normalize_catalog(raw_items, fallback=_default_tone_catalog())
@@ -570,12 +567,13 @@ async def update_tone_catalog(payload: CatalogUpdatePayload, db: AsyncSession = 
 
 
 @router.post("/catalog/generate")
-async def generate_catalog_image(payload: CatalogGeneratePayload, db: AsyncSession = Depends(get_db)):
+async def generate_catalog_image(
+    payload: CatalogGeneratePayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Generates an image for a catalog tile (style or tone)."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    if not user:
-        return {"status": "error", "message": "No user found."}
+    user = current_user
 
     t2i = user.t2i_settings or {}
     provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
@@ -586,7 +584,7 @@ async def generate_catalog_image(payload: CatalogGeneratePayload, db: AsyncSessi
         
     api_key = MediaEngine._resolve_api_key(provider, user.encrypted_api_keys)
     if provider != "ollama" and not api_key:
-         return {"status": "error", "message": f"No API key for {provider}"}
+        return {"status": "error", "message": f"No API key for {provider}"}
 
     try:
         catalog_dir = os.path.join(settings.DATA_DIR, "catalog", payload.catalog_type)
@@ -619,13 +617,13 @@ async def generate_catalog_image(payload: CatalogGeneratePayload, db: AsyncSessi
         logger.exception(f"Catalog generate exception for '{payload.target_id}'")
         error_msg = str(e)
         if "OpenrouterException" in error_msg:
-             try:
-                 import json
-                 err_json = error_msg.split("-", 1)[1].strip()
-                 err_data = json.loads(err_json)
-                 error_msg = err_data.get("error", {}).get("message", error_msg)
-             except:
-                 pass
+            try:
+                import json
+                err_json = error_msg.split("-", 1)[1].strip()
+                err_data = json.loads(err_json)
+                error_msg = err_data.get("error", {}).get("message", error_msg)
+            except:
+                pass
         return {"status": "error", "message": f"Generation Error: {error_msg}"}
 
 
@@ -634,9 +632,12 @@ async def upload_catalog_image(
     catalog_type: str = Form(...), 
     target_id: str = Form(...), 
     file: UploadFile = File(...), 
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Uploads a manual image for a catalog tile."""
+    _ = db
+    _ = current_user
     try:
         catalog_dir = os.path.join(settings.DATA_DIR, "catalog", catalog_type)
         os.makedirs(catalog_dir, exist_ok=True)
@@ -655,15 +656,13 @@ async def upload_catalog_image(
 
 
 @router.post("/game")
-async def update_game_settings(payload: GameSettingsPayload, db: AsyncSession = Depends(get_db)):
+async def update_game_settings(
+    payload: GameSettingsPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Updates the general game preferences."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    
-    if not user:
-        user = User(username="local_default_user")
-        db.add(user)
-        await db.flush()
+    user = current_user
         
     user.game_settings = payload.model_dump()
     await db.commit()

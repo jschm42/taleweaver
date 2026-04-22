@@ -4,9 +4,16 @@ Tests for the Settings / Config REST API (Package 4).
 Covers: saving encrypted API keys for different providers.
 """
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest_asyncio.fixture
+async def client(auth_client: AsyncClient) -> AsyncClient:
+    """Settings endpoints require authentication."""
+    return auth_client
 
 
 async def test_save_api_key_creates_user(client: AsyncClient):
@@ -53,13 +60,17 @@ async def test_save_t2i_settings_with_ollama_fields(client: AsyncClient):
     """Saving Ollama image settings persists optional local generation controls."""
     payload = {
         "simple_model": "x/flux2-klein",
+        "simple_model_provider": "ollama",
         "advanced_model": "x/flux2-klein",
+        "advanced_model_provider": "ollama",
         "provider": "ollama",
         "ollama_url": "http://localhost:11434",
         "width": 1024,
         "height": 768,
         "steps": 30,
         "seed": 42,
+        "image_format": "jpeg",
+        "image_quality": 85,
         "negative_prompt": "blurry, artifacts",
     }
 
@@ -81,9 +92,11 @@ async def test_get_settings_returns_extended_t2i_defaults(client: AsyncClient):
     assert "t2i_settings" in data
 
     t2i = data["t2i_settings"]
-    assert t2i["simple_model"] == "openai/dall-e-2"
-    assert t2i["advanced_model"] == "openai/dall-e-3"
+    assert t2i["simple_model"] == "dall-e-2"
+    assert t2i["advanced_model"] == "dall-e-3"
     assert t2i["provider"] == "openai"
+    assert t2i["simple_model_provider"] == "openai"
+    assert t2i["advanced_model_provider"] == "openai"
     assert t2i["ollama_url"] == "http://localhost:11434"
     assert t2i["width"] is None
     assert t2i["height"] is None
@@ -96,7 +109,9 @@ async def test_save_llm_settings_with_ollama_url(client: AsyncClient):
     """Saving LLM settings should persist local Ollama endpoint configuration."""
     payload = {
         "small_model": "llama3.2",
+        "small_model_provider": "ollama",
         "complex_model": "qwen2.5",
+        "complex_model_provider": "ollama",
         "preferred_provider": "ollama",
         "ollama_url": "http://localhost:11434",
     }
@@ -107,14 +122,22 @@ async def test_save_llm_settings_with_ollama_url(client: AsyncClient):
 
     settings_resp = await client.get("/api/settings")
     assert settings_resp.status_code == 200
-    assert settings_resp.json()["llm_settings"] == payload
+    llm = settings_resp.json()["llm_settings"]
+    assert llm["small_model"] == "llama3.2"
+    assert llm["small_model_provider"] == "ollama"
+    assert llm["complex_model"] == "qwen2.5"
+    assert llm["complex_model_provider"] == "ollama"
+    assert llm["preferred_provider"] == "ollama"
+    assert llm["ollama_url"] == "http://localhost:11434"
 
 
 async def test_save_llm_settings_normalizes_openrouter_models(client: AsyncClient):
     """OpenRouter LLM settings should not store stale provider prefixes."""
     payload = {
         "small_model": "openai/gpt-oss-120b",
+        "small_model_provider": "openrouter",
         "complex_model": "openai/gpt-5.4",
+        "complex_model_provider": "openrouter",
         "preferred_provider": "openrouter",
         "ollama_url": "http://localhost:11434",
     }
@@ -126,8 +149,8 @@ async def test_save_llm_settings_normalizes_openrouter_models(client: AsyncClien
     settings_resp = await client.get("/api/settings")
     assert settings_resp.status_code == 200
     data = settings_resp.json()["llm_settings"]
-    assert data["small_model"] == "gpt-oss-120b"
-    assert data["complex_model"] == "gpt-5.4"
+    assert data["small_model"] == "openai/gpt-oss-120b"
+    assert data["complex_model"] == "openai/gpt-5.4"
     assert data["preferred_provider"] == "openrouter"
     assert data["ollama_url"] == "http://localhost:11434"
 
@@ -137,8 +160,10 @@ async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
     resp = await client.get("/api/settings")
     assert resp.status_code == 200
     llm = resp.json()["llm_settings"]
-    assert llm["small_model"] == "openai/gpt-4o-mini"
-    assert llm["complex_model"] == "openai/gpt-4o-mini"
+    assert llm["small_model"] == "gpt-4o-mini"
+    assert llm["complex_model"] == "gpt-4o"
+    assert llm["small_model_provider"] == "openai"
+    assert llm["complex_model_provider"] == "openai"
     assert llm["preferred_provider"] == "openai"
     assert llm["ollama_url"] == "http://localhost:11434"
 

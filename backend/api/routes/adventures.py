@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, model_validator
 from PIL import Image
 
 from backend.core.database import get_db
+from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.models.user import User
 from backend.models.adventure import Adventure
@@ -591,6 +592,7 @@ async def create_adventure(
     payload: CreateAdventurePayload,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     if payload.time_per_turn < 1 or payload.time_per_turn > 30:
         raise HTTPException(status_code=400, detail="time_per_turn must be between 1 and 30 minutes.")
@@ -604,6 +606,7 @@ async def create_adventure(
     log_structured_event(
         "adventure.create.request",
         title=payload.title,
+        user_id=current_user.id,
         strict_rules=strict_rules,
         rule_enforcement_mode=rule_mode,
         time_per_turn=payload.time_per_turn,
@@ -618,17 +621,11 @@ async def create_adventure(
         has_original_manifest=bool(payload.original_manifest),
     )
 
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    if not user:
-        user = User(username="local_default_user")
-        db.add(user)
-        await db.flush()
-
     # Create placeholder adventure
     # Allow server-side id generation if client didn't provide one
     adv_kwargs = dict(
         id=payload.id if payload.id else None,
+        owner_id=current_user.id,
         title=payload.title,
         image_url=payload.image_url,
         context=payload.context,
@@ -667,7 +664,7 @@ async def create_adventure(
     # Create a minimal placeholder Avatar which will be populated by WorldGenerator
     avatar_name = payload.avatar_name or "You"
     avatar = Avatar(
-        user_id=user.id,
+        user_id=current_user.id,
         adventure_id=adv.id, # Link early for background tasks
         name=avatar_name,
         hp=200,
@@ -687,12 +684,12 @@ async def create_adventure(
         "adventure.create.placeholder_ready",
         adventure_id=adv.id,
         avatar_id=avatar.id,
-        user_id=user.id,
+        user_id=current_user.id,
     )
     # Create initial GameState so the session is visible immediately to clients/tests
     db.add(GameState(
         id=adv.id,
-        user_id=user.id,
+        user_id=current_user.id,
         adventure_id=adv.id,
         avatar_id=avatar.id,
         scene_id="START",
@@ -721,7 +718,7 @@ async def create_adventure(
         background_task="run_background_generation",
         has_original_manifest=bool(payload.original_manifest),
     )
-    background_tasks.add_task(run_background_generation, adv.id, user.id, bg_payload)
+    background_tasks.add_task(run_background_generation, adv.id, current_user.id, bg_payload)
     
     # Return IDs expected by existing clients/tests
     return {"game_id": adv.id, "adventure_id": adv.id, "avatar_id": avatar.id}
@@ -751,13 +748,7 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                 result = await db.execute(select(User).where(User.id == user_id))
                 user = result.scalars().first()
                 if not user:
-                    logger.warning("Background Gen: user not found for %s; falling back to default user", user_id)
-                    fallback = await db.execute(select(User).limit(1))
-                    user = fallback.scalars().first()
-                    if not user:
-                        user = User(username="local_default_user")
-                        db.add(user)
-                        await db.commit()
+                    raise ValueError(f"User context not found for generation (user_id={user_id}).")
             except Exception as e:
                 logger.error("Background Gen user fetch failed for %s: %s", user_id, e)
                 await _set_generation_state(
@@ -772,7 +763,12 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
             llm_settings = user.llm_settings or {}
             # Use complex model and its provider for world generation
             complex_model = llm_settings.get("complex_model", "gpt-4o")
-            provider = llm_settings.get("complex_model_provider") or llm_settings.get("preferred_provider", "openai")
+            provider = llm_settings.get("complex_model_provider") or llm_settings.get("preferred_provider")
+            if not provider:
+                raise ValueError(
+                    "No complex LLM provider configured for this user. "
+                    "Open Settings -> LLM and set Complex Model Provider."
+                )
             adv_for_context = await db.get(Adventure, adventure_id)
             if not adv_for_context:
                 fallback_rule_mode = _normalize_rule_enforcement_mode(payload_dict.get("rule_enforcement_mode"))
@@ -1013,14 +1009,21 @@ def _calculate_quest_progress(quests: Optional[List[Dict[str, Any]]]) -> int:
 
 
 @router.get("", response_model=List[GameSessionResponse])
-async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
-    """Returns all game sessions with their linked adventure and avatar IDs."""
+async def list_adventures(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list:
+    """Returns all game sessions for the current user."""
     result = await db.execute(
         select(GameState, Adventure, WorldScene.label)
         .join(Adventure, GameState.adventure_id == Adventure.id)
         .outerjoin(
             WorldScene,
             (WorldScene.adventure_id == GameState.adventure_id) & (WorldScene.id == GameState.scene_id),
+        )
+        .where(
+            (Adventure.owner_id == current_user.id) & 
+            (GameState.user_id == current_user.id)
         )
     )
     rows = result.all()
@@ -1047,9 +1050,18 @@ async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
 
 
 @router.get("/{adventure_id}", response_model=AdventureResponse)
-async def get_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)) -> Adventure:
+async def get_adventure(
+    adventure_id: str, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Adventure:
     """Returns the details of a single adventure by its ID."""
-    result = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
+    result = await db.execute(
+        select(Adventure).where(
+            (Adventure.id == adventure_id) & 
+            (Adventure.owner_id == current_user.id)
+        )
+    )
     adv = result.scalars().first()
     if not adv:
         raise HTTPException(status_code=404, detail="Adventure not found.")
@@ -1061,20 +1073,15 @@ async def import_adventure(
     payload: AdventureImportPayload,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     """Import an adventure manifest (versioned .ADV JSON). Opens an adventure scaffold and starts background generation."""
-    result = await db.execute(select(User).limit(1))
-    user = result.scalars().first()
-    if not user:
-        user = User(username="local_default_user")
-        db.add(user)
-        await db.flush()
-
     import_rule_mode = _normalize_rule_enforcement_mode(payload.rule_enforcement_mode)
     import_strict_rules = _derive_strict_rules(import_rule_mode)
     selected_image_styles = payload.image_styles or ([payload.image_style] if payload.image_style else [])
 
     adv_kwargs = dict(
+        owner_id=current_user.id,
         title=payload.title,
         image_url=None,
         context=payload.story_idea or payload.description or payload.subtitle,
@@ -1111,7 +1118,7 @@ async def import_adventure(
     avatar_name = avatar_name or "You"
 
     avatar = Avatar(
-        user_id=user.id,
+        user_id=current_user.id,
         adventure_id=adv.id,
         name=avatar_name,
         role=(payload.protagonist.role if payload.protagonist else None),
@@ -1132,7 +1139,7 @@ async def import_adventure(
 
     db.add(GameState(
         id=adv.id,
-        user_id=user.id,
+        user_id=current_user.id,
         adventure_id=adv.id,
         avatar_id=avatar.id,
         scene_id="START",
@@ -1162,7 +1169,7 @@ async def import_adventure(
         "original_manifest": payload.model_dump(),
     }
 
-    background_tasks.add_task(run_background_generation, adv.id, user.id, payload_dict)
+    background_tasks.add_task(run_background_generation, adv.id, current_user.id, payload_dict)
 
     return {"game_id": adv.id, "adventure_id": adv.id, "avatar_id": avatar.id}
 
@@ -1172,12 +1179,18 @@ async def update_adventure(
     adventure_id: str,
     payload: AdventureUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Adventure:
     """
     Partially updates an adventure's configuration (title, rules, heartbeat settings).
     Only provided fields are updated.
     """
-    result = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
+    result = await db.execute(
+        select(Adventure).where(
+            (Adventure.id == adventure_id) & 
+            (Adventure.owner_id == current_user.id)
+        )
+    )
     adv = result.scalars().first()
     if not adv:
         raise HTTPException(status_code=404, detail="Adventure not found.")
@@ -1188,17 +1201,26 @@ async def update_adventure(
 
     await db.commit()
     await db.refresh(adv)
-    logger.info("Updated adventure %s: %s", adventure_id, update_data)
+    logger.info("Updated adventure %s for user %s: %s", adventure_id, current_user.id, update_data)
     return adv
 
 
 @router.delete("/{adventure_id}", status_code=204)
-async def delete_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)) -> None:
+async def delete_adventure(
+    adventure_id: str, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
     """
     Deletes an adventure and its associated game state.
     Returns 204 No Content on success.
     """
-    result = await db.execute(select(Adventure).where(Adventure.id == adventure_id))
+    result = await db.execute(
+        select(Adventure).where(
+            (Adventure.id == adventure_id) & 
+            (Adventure.owner_id == current_user.id)
+        )
+    )
     adv = result.scalars().first()
     if not adv:
         raise HTTPException(status_code=404, detail="Adventure not found.")
@@ -1230,10 +1252,17 @@ async def delete_adventure(adventure_id: str, db: AsyncSession = Depends(get_db)
 # ---------------------------------------------------------------------------
 
 @router.get("/{adventure_id}/state", response_model=GameSessionResponse)
-async def get_game_state(adventure_id: str, db: AsyncSession = Depends(get_db)) -> GameSessionResponse:
+async def get_game_state(
+    adventure_id: str, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> GameSessionResponse:
     """Returns the current game state for a given adventure."""
     result = await db.execute(
-        select(GameState).where(GameState.adventure_id == adventure_id)
+        select(GameState).where(
+            (GameState.adventure_id == adventure_id) & 
+            (GameState.user_id == current_user.id)
+        )
     )
     state = result.scalars().first()
     if not state:
@@ -1269,10 +1298,14 @@ async def update_game_state(
     adventure_id: str,
     payload: GameStateUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     """Updates scene_id or in_game_time for the active game state of an adventure."""
     result = await db.execute(
-        select(GameState).where(GameState.adventure_id == adventure_id)
+        select(GameState).where(
+            (GameState.adventure_id == adventure_id) & 
+            (GameState.user_id == current_user.id)
+        )
     )
     state = result.scalars().first()
     if not state:
@@ -1287,10 +1320,17 @@ async def update_game_state(
 
 
 @router.post("/{adventure_id}/pause")
-async def pause_game(adventure_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def pause_game(
+    adventure_id: str, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
     """Pauses the heartbeat processing for a game session."""
     result = await db.execute(
-        select(GameState).where(GameState.adventure_id == adventure_id)
+        select(GameState).where(
+            (GameState.adventure_id == adventure_id) & 
+            (GameState.user_id == current_user.id)
+        )
     )
     state = result.scalars().first()
     if not state:
@@ -1301,10 +1341,17 @@ async def pause_game(adventure_id: str, db: AsyncSession = Depends(get_db)) -> d
 
 
 @router.post("/{adventure_id}/resume")
-async def resume_game(adventure_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def resume_game(
+    adventure_id: str, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
     """Resumes heartbeat processing for a paused game session."""
     result = await db.execute(
-        select(GameState).where(GameState.adventure_id == adventure_id)
+        select(GameState).where(
+            (GameState.adventure_id == adventure_id) & 
+            (GameState.user_id == current_user.id)
+        )
     )
     state = result.scalars().first()
     if not state:
@@ -1360,10 +1407,11 @@ class AIEditRequest(BaseModel):
 async def update_editor_entity(
     adventure_id: str,
     payload: EntityUpdateRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     adv = await db.get(Adventure, adventure_id)
-    if not adv:
+    if not adv or adv.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Adventure not found")
         
     if payload.target_type == "cover":
@@ -1406,19 +1454,23 @@ async def update_editor_entity(
 async def ai_edit_adventure(
     adventure_id: str,
     payload: AIEditRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state_res = await db.execute(
+        select(GameState).where(
+            (GameState.adventure_id == adventure_id) & 
+            (GameState.user_id == current_user.id)
+        )
+    )
     state = state_res.scalars().first()
     if not state:
         raise HTTPException(status_code=404, detail="Game state not found")
         
-    user = await db.get(User, state.user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = current_user
         
     adv = await db.get(Adventure, adventure_id)
-    if not adv:
+    if not adv or adv.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Adventure not found")
         
     scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))

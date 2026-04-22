@@ -30,7 +30,7 @@ async def test_generate_image_ollama_uses_litellm_payload(monkeypatch):
         captured_kwargs.update(kwargs)
         return _FakeLiteLLMResponse([{"b64_json": "ZmFrZQ=="}])
 
-    async def fake_save_b64(_b64, _target_dir, _filename):
+    async def fake_save_b64(_b64, _target_dir, _filename, _image_format="jpeg", _image_quality=85):
         return "/data/adventures/test/generated.png"
 
     monkeypatch.setattr("backend.engine.media_engine.litellm.image_generation", fake_image_generation)

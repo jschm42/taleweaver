@@ -4,9 +4,16 @@ Tests for the Avatars REST API (Package 4).
 Covers: get avatar, get aggregated stats, patch avatar, remove status effect.
 """
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest_asyncio.fixture
+async def client(auth_client: AsyncClient) -> AsyncClient:
+    """Avatar endpoints require authentication."""
+    return auth_client
 
 
 async def _create_adventure(client: AsyncClient) -> dict:
