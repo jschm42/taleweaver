@@ -559,6 +559,7 @@ class GameSessionResponse(BaseModel):
     creation_error: Optional[str] = None
     progress: int = 0
     quest_count: int = 0
+    completed_quest_count: int = 0
 
 class ChatResponse(BaseModel):
     """Unified response for a game turn."""
@@ -1039,6 +1040,7 @@ async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
             creation_error=a.creation_error,
             progress=_calculate_quest_progress(a.quests),
             quest_count=len(a.quests or []),
+            completed_quest_count=len([q for q in (a.quests or []) if q.get("status") == "completed"]),
         )
         for s, a, scene_label in rows
     ]

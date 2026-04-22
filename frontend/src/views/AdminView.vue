@@ -6,8 +6,10 @@ import type { CatalogTile } from '@/types'
 const router = useRouter()
 
 // NAVIGATION
-type Section = 'keys' | 'llm' | 't2i' | 'styles' | 'tones' | 'game'
+type Section = 'keys' | 'llm' | 't2i' | 'styles' | 'tones' | 'game' | 'users'
 const activeSection = ref<Section>('keys')
+
+import { api } from '@/composables/useApi'
 
 // FORMS
 const keyForm = ref({
@@ -78,6 +80,12 @@ const editingItem = ref<CatalogTile>({ id: '', name: '', description: '', instru
 const isEditingExisting = ref(false)
 const editingIndex = ref<number | null>(null)
 
+// USER MGMT STATE
+const usersList = ref<any[]>([])
+const isUserModalOpen = ref(false)
+const editingUser = ref<any>({ username: '', password: '', role: 'user', bio: '' })
+const isEditingExistingUser = ref(false)
+
 const isPromptModalOpen = ref(false)
 const promptModalData = ref<{ type: 'styles' | 'tones', item: CatalogTile, index: number } | null>(null)
 const customPrompt = ref('')
@@ -91,19 +99,66 @@ const goBack = () => {
 
 const fetchSettings = async () => {
   try {
-    const res = await fetch('http://localhost:8000/api/settings')
-    if (res.ok) {
-      const data = await res.json()
-      configuredKeys.value = data.keys || {}
-      if (data.llm_settings) llmForm.value = { ...data.llm_settings }
-      if (data.t2i_settings) t2iForm.value = { ...data.t2i_settings }
-      if (data.game_settings) gameForm.value = { ...data.game_settings }
-      if (data.available_constants) availableConstants.value = data.available_constants
-      imageStylesCatalog.value = data.image_styles_catalog || []
-      toneCatalog.value = data.tone_catalog || []
-    }
+    const data = await api.getSettings()
+    configuredKeys.value = data.keys || {}
+    if (data.llm_settings) llmForm.value = { ...data.llm_settings as any }
+    if (data.t2i_settings) t2iForm.value = { ...data.t2i_settings as any }
+    if (data.game_settings) gameForm.value = { ...data.game_settings as any }
+    if ((data as any).available_constants) availableConstants.value = (data as any).available_constants
+    imageStylesCatalog.value = data.image_styles_catalog || []
+    toneCatalog.value = data.tone_catalog || []
   } catch (error) {
     console.error('Failed to fetch settings', error)
+  }
+}
+
+const fetchUsers = async () => {
+  try {
+    usersList.value = await api.listUsers()
+  } catch (error) {
+    console.error('Failed to fetch users', error)
+  }
+}
+
+const openUserModal = (user?: any) => {
+  if (user) {
+    editingUser.value = { ...user, password: '' }
+    isEditingExistingUser.value = true
+  } else {
+    editingUser.value = { username: '', password: '', role: 'user', bio: '' }
+    isEditingExistingUser.value = false
+  }
+  isUserModalOpen.value = true
+}
+
+const saveUser = async () => {
+  if (!editingUser.value.username) return
+  isSubmitting.value = true
+  try {
+    if (isEditingExistingUser.value) {
+      await api.updateUser(editingUser.value.id, editingUser.value)
+      statusMessage.value = { type: 'success', text: 'User updated.' }
+    } else {
+      await api.createUser(editingUser.value)
+      statusMessage.value = { type: 'success', text: 'User created.' }
+    }
+    isUserModalOpen.value = false
+    fetchUsers()
+  } catch (err: any) {
+    statusMessage.value = { type: 'error', text: 'Operation failed: ' + err.message }
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const removeUser = async (user: any) => {
+  if (!confirm(`Are you sure you want to delete user "${user.username}"?`)) return
+  try {
+    await api.deleteUser(user.id)
+    fetchUsers()
+    statusMessage.value = { type: 'success', text: 'User removed.' }
+  } catch (err: any) {
+    statusMessage.value = { type: 'error', text: 'Delete failed: ' + err.message }
   }
 }
 
@@ -168,18 +223,10 @@ const saveStylesCatalog = async () => {
   isSubmitting.value = true
   statusMessage.value = null
   try {
-    const res = await fetch('http://localhost:8000/api/settings/image-styles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: imageStylesCatalog.value }),
-    })
-    if (res.ok) {
-      statusMessage.value = { type: 'success', text: 'Image styles updated.' }
-    } else {
-      statusMessage.value = { type: 'error', text: 'Failed to save image styles.' }
-    }
+    await api.saveImageStylesCatalog(imageStylesCatalog.value)
+    statusMessage.value = { type: 'success', text: 'Image styles updated.' }
   } catch {
-    statusMessage.value = { type: 'error', text: 'Network error while saving image styles.' }
+    statusMessage.value = { type: 'error', text: 'Failed to save image styles.' }
   } finally {
     isSubmitting.value = false
   }
@@ -189,18 +236,10 @@ const saveToneCatalog = async () => {
   isSubmitting.value = true
   statusMessage.value = null
   try {
-    const res = await fetch('http://localhost:8000/api/settings/tones', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: toneCatalog.value }),
-    })
-    if (res.ok) {
-      statusMessage.value = { type: 'success', text: 'Tones updated.' }
-    } else {
-      statusMessage.value = { type: 'error', text: 'Failed to save tones.' }
-    }
+    await api.saveToneCatalog(toneCatalog.value)
+    statusMessage.value = { type: 'success', text: 'Tones updated.' }
   } catch {
-    statusMessage.value = { type: 'error', text: 'Network error while saving tones.' }
+    statusMessage.value = { type: 'error', text: 'Failed to save tones.' }
   } finally {
     isSubmitting.value = false
   }
@@ -230,23 +269,16 @@ const generateCatalogImage = async (type: 'styles' | 'tones', item: CatalogTile,
   isPromptModalOpen.value = false // Close prompt modal if it was open
   
   try {
-    const res = await fetch('http://localhost:8000/api/settings/catalog/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        target_id: targetId,
-        catalog_type: type,
-        prompt: prompt,
-        name: item.name,
-        description: item.description
-      })
+    const data = await api.generateCatalogImage({
+      target_id: targetId,
+      catalog_type: type,
+      prompt: prompt,
+      name: item.name,
+      description: item.description
     })
-    const data = await res.json()
+    
     if (data.status === 'success') {
-      // Update the item itself (for modal or direct use)
       item.image_url = data.image_url
-      
-      // If we have an index, update the catalog and save
       if (index !== null) {
         const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
         catalog.value[index].image_url = data.image_url
@@ -256,7 +288,7 @@ const generateCatalogImage = async (type: 'styles' | 'tones', item: CatalogTile,
       statusMessage.value = { type: 'error', text: data.message || 'Generation failed.' }
     }
   } catch (error) {
-    statusMessage.value = { type: 'error', text: 'Network error during generation.' }
+    statusMessage.value = { type: 'error', text: 'Error during generation.' }
   } finally {
     isGeneratingItem.value[key] = false
   }
@@ -278,16 +310,9 @@ const onUploadFile = async (event: Event, type: 'styles' | 'tones', item: Catalo
   formData.append('target_id', item.id || slugify(item.name))
 
   try {
-    const res = await fetch('http://localhost:8000/api/settings/catalog/upload', {
-      method: 'POST',
-      body: formData
-    })
-    const data = await res.json()
+    const data = await api.uploadCatalogImage(formData)
     if (data.status === 'success') {
-      // Update item itself
       item.image_url = data.image_url
-      
-      // Update catalog if index is present
       if (index !== null) {
         const catalog = type === 'styles' ? imageStylesCatalog : toneCatalog
         catalog.value[index].image_url = data.image_url
@@ -297,7 +322,7 @@ const onUploadFile = async (event: Event, type: 'styles' | 'tones', item: Catalo
       statusMessage.value = { type: 'error', text: data.message || 'Upload failed.' }
     }
   } catch (error) {
-    statusMessage.value = { type: 'error', text: 'Network error or file too large during upload.' }
+    statusMessage.value = { type: 'error', text: 'Error during upload.' }
   } finally {
     input.value = ''
   }
@@ -313,24 +338,12 @@ const saveApiKey = async () => {
   statusMessage.value = null
 
   try {
-    const res = await fetch('http://localhost:8000/api/settings/keys', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: keyForm.value.provider,
-        api_key: keyForm.value.api_key
-      })
-    })
-
-    if (res.ok) {
-      statusMessage.value = { type: 'success', text: `${keyForm.value.provider} key saved securely.` }
-      keyForm.value.api_key = ''
-      fetchSettings()
-    } else {
-      statusMessage.value = { type: 'error', text: 'Failed to save key.' }
-    }
+    await api.saveApiKey(keyForm.value.provider, keyForm.value.api_key)
+    statusMessage.value = { type: 'success', text: `${keyForm.value.provider} key saved securely.` }
+    keyForm.value.api_key = ''
+    fetchSettings()
   } catch (error) {
-    statusMessage.value = { type: 'error', text: 'Network error.' }
+    statusMessage.value = { type: 'error', text: 'Failed to save key.' }
   } finally {
     isSubmitting.value = false
   }
@@ -340,14 +353,10 @@ const saveLlmSettings = async () => {
   isSubmitting.value = true
   statusMessage.value = null
   try {
-    const res = await fetch('http://localhost:8000/api/settings/llm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(llmForm.value)
-    })
-    if (res.ok) statusMessage.value = { type: 'success', text: 'Intelligence preferences updated.' }
+    await api.saveLlmSettings(llmForm.value)
+    statusMessage.value = { type: 'success', text: 'Intelligence preferences updated.' }
   } catch (error) {
-    statusMessage.value = { type: 'error', text: 'Network error.' }
+    statusMessage.value = { type: 'error', text: 'Failed to save intelligence preferences.' }
   } finally {
     isSubmitting.value = false
   }
@@ -357,14 +366,10 @@ const saveT2iSettings = async () => {
   isSubmitting.value = true
   statusMessage.value = null
   try {
-    const res = await fetch('http://localhost:8000/api/settings/t2i', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(t2iForm.value)
-    })
-    if (res.ok) statusMessage.value = { type: 'success', text: 'Visual preferences updated.' }
+    await api.saveT2iSettings(t2iForm.value)
+    statusMessage.value = { type: 'success', text: 'Visual preferences updated.' }
   } catch (error) {
-    statusMessage.value = { type: 'error', text: 'Network error.' }
+    statusMessage.value = { type: 'error', text: 'Failed to save visual preferences.' }
   } finally {
     isSubmitting.value = false
   }
@@ -373,37 +378,27 @@ const saveT2iSettings = async () => {
 const testLlm = async (key: string, model: string, provider: string) => {
   testResults.value[key] = { status: 'loading', message: 'Testing connection...' }
   try {
-    const res = await fetch('http://localhost:8000/api/settings/test-llm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, provider, ollama_url: llmForm.value.ollama_url })
-    })
-    const data = await res.json()
+    const data = await api.testLlm({ model, provider, ollama_url: llmForm.value.ollama_url })
     testResults.value[key] = { 
       status: data.status === 'success' ? 'success' : 'error', 
       message: data.response_time ? `${data.message} (${data.response_time}s)` : data.message 
     }
   } catch (err) {
-    testResults.value[key] = { status: 'error', message: 'Network error during test.' }
+    testResults.value[key] = { status: 'error', message: 'Test failed.' }
   }
 }
 
 const testVision = async (key: string, model: string, provider: string) => {
   testResults.value[key] = { status: 'loading', message: 'Generating test image...' }
   try {
-    const res = await fetch('http://localhost:8000/api/settings/test-vision', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, provider, ollama_url: t2iForm.value.ollama_url })
-    })
-    const data = await res.json()
+    const data = await api.testVision({ model, provider, ollama_url: t2iForm.value.ollama_url })
     testResults.value[key] = { 
       status: data.status === 'success' ? 'success' : 'error', 
       message: data.message,
       image_url: data.image_url
     }
   } catch (err) {
-    testResults.value[key] = { status: 'error', message: 'Network error during test.' }
+    testResults.value[key] = { status: 'error', message: 'Test failed.' }
   }
 }
 
@@ -418,6 +413,7 @@ const isModelCustom = (model: string, provider: string, type: 'llm' | 'image') =
 
 onMounted(() => {
   fetchSettings()
+  fetchUsers()
 })
 
 watch(
@@ -519,6 +515,14 @@ watch(
           <i class="ra ra-gear"></i>
           <span class="font-bold text-md font-mono uppercase tracking-widest">Game Settings</span>
         </button>
+
+        <button 
+          @click="activeSection = 'users'"
+          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'users' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
+        >
+          <i class="ra ra-person"></i>
+          <span class="font-bold text-md font-mono uppercase tracking-widest">User Management</span>
+        </button>
       </nav>
 
       <div class="mt-auto pt-6 border-t border-slate-800 opacity-50">
@@ -527,8 +531,8 @@ watch(
     </aside>
 
     <!-- CONTENT AREA -->
-    <main class="flex-grow p-12 overflow-y-auto max-h-screen custom-scrollbar">
-      <div class="max-w-3xl mx-auto">
+    <main class="flex-grow p-12 overflow-y-auto max-h-screen custom-scrollbar relative">
+      <div class="max-w-4xl mx-auto">
         
         <!-- SECTION: KEYS -->
         <div v-if="activeSection === 'keys'" class="space-y-8 animate-fade-in">
@@ -1143,25 +1147,122 @@ watch(
               </div>
             </div>
 
-            <button @click="saveGameSettings" :disabled="isSubmitting" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg shadow-indigo-500/20">
+            <button @click="saveGameSettings" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg shadow-blue-500/20">
               {{ isSubmitting ? 'Saving...' : 'Apply Game Settings' }}
             </button>
           </div>
         </div>
 
-        <!-- STATUS MESSAGE FLOATER -->
-        <div v-if="statusMessage" 
-          :class="['fixed bottom-12 right-12 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border max-w-sm animate-slide-in z-[100]', 
-          statusMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20']"
-        >
-          <div class="flex items-center gap-3">
-            <i :class="statusMessage.type === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
-            {{ statusMessage.text }}
+        <!-- SECTION: USERS -->
+        <div v-if="activeSection === 'users'" class="space-y-8 animate-fade-in">
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-4xl font-extrabold text-white mb-2">User Management</h1>
+              <p class="text-slate-400 text-sm">Create and manage accounts for your TaleWeaver domain.</p>
+            </div>
+            <button @click="openUserModal()" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-900/20 flex items-center gap-2 transition-all">
+              <i class="ra ra-plus"></i> Add User
+            </button>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="border-b border-slate-800 bg-slate-950/50">
+                  <th class="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">User</th>
+                  <th class="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Role</th>
+                  <th class="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800">
+                <tr v-for="user in usersList" :key="user.id" class="hover:bg-white/[0.02] transition-colors group">
+                  <td class="px-6 py-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 overflow-hidden">
+                        <img v-if="user.profile_image_url" :src="user.profile_image_url" class="w-full h-full object-cover" />
+                        <div v-else class="w-full h-full flex items-center justify-center text-slate-600">
+                          <i class="ra ra-hood"></i>
+                        </div>
+                      </div>
+                      <span class="font-bold text-white">{{ user.username }}</span>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4">
+                    <span :class="['px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter', user.role === 'admin' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400']">
+                      {{ user.role }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <button @click="openUserModal(user)" class="p-2 text-slate-500 hover:text-white transition-colors" title="Edit">
+                        <i class="ra ra-quill-ink"></i>
+                      </button>
+                      <button @click="removeUser(user)" class="p-2 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
+                        <i class="ra ra-cancel"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-
       </div>
     </main>
+
+    <!-- STATUS MESSAGE FLOATER -->
+    <div v-if="statusMessage" 
+      :class="['fixed bottom-12 right-12 px-6 py-4 rounded-2xl shadow-2xl text-sm font-bold border max-w-sm animate-slide-in z-[100]', 
+      statusMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20']"
+    >
+      <div class="flex items-center gap-3">
+        <i :class="statusMessage.type === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+        {{ statusMessage.text }}
+      </div>
+    </div>
+
+    <!-- USER MODAL -->
+    <Teleport to="body">
+      <div v-if="isUserModalOpen" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/90 backdrop-blur-md" @click="isUserModalOpen = false"></div>
+        <div class="relative w-full max-w-lg bg-[#0a111c] border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden animate-fade-in">
+          <div class="p-10">
+            <h2 class="text-2xl font-black text-white font-display mb-8">
+              {{ isEditingExistingUser ? 'Edit Domain Dweller' : 'Summon New Dweller' }}
+            </h2>
+
+            <form @submit.prevent="saveUser" class="space-y-6">
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Username</label>
+                <input v-model="editingUser.username" type="text" required class="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:border-red-500/50" />
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  {{ isEditingExistingUser ? 'Reset Password (optional)' : 'Master Password' }}
+                </label>
+                <input v-model="editingUser.password" type="password" :required="!isEditingExistingUser" class="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:border-red-500/50" />
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Role</label>
+                <select v-model="editingUser.role" class="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:border-red-500/50">
+                  <option value="user">User (Storyteller)</option>
+                  <option value="admin">Admin (World Weaver)</option>
+                </select>
+              </div>
+
+              <div class="flex gap-4 pt-4">
+                <button type="button" @click="isUserModalOpen = false" class="flex-1 py-3 text-slate-500 font-bold hover:text-white transition-colors">Cancel</button>
+                <button type="submit" :disabled="isSubmitting" class="flex-[2] btn-primary !bg-red-600 hover:!bg-red-500 shadow-red-900/20">
+                  {{ isSubmitting ? 'Weaving...' : 'Save Soul' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- CATALOG ADD/EDIT MODAL -->
     <Teleport to="body">

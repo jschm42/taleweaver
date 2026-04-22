@@ -5,6 +5,7 @@
  * with a simple try/catch.
  */
 import type { CreateAdventurePayload, GameSession, AdventureImportPayload, CatalogTile } from '@/types'
+import { authState } from '@/store/auth'
 
 interface SettingsResponse {
   keys: Record<string, string>
@@ -22,12 +23,26 @@ interface SettingsResponse {
 const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { ...init?.headers }
+  
+  if (!(init?.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json'
+  }
+  
+  if (authState.token) {
+    headers['Authorization'] = `Bearer ${authState.token}`
+  }
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
     ...init,
+    headers,
   })
   if (!res.ok) {
     const detail = await res.text()
+    if (res.status === 401 && authState.isAuthenticated) {
+       // Token might have expired
+       window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+    }
     throw new Error(`API ${res.status}: ${detail}`)
   }
   // 204 No Content has no body
@@ -111,4 +126,95 @@ export const api = {
   getAdventureStatus(adventureId: string): Promise<{ status: string; is_ready: boolean; error?: string }> {
     return request(`/adventures/${adventureId}/status`)
   },
+
+  /** Admin Settings */
+  saveLlmSettings(payload: any): Promise<any> {
+    return request('/settings/llm', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  saveT2iSettings(payload: any): Promise<any> {
+    return request('/settings/t2i', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  saveGameSettings(payload: any): Promise<any> {
+    return request('/settings/game', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  /** Testing */
+  testLlm(payload: any): Promise<any> {
+    return request('/settings/test-llm', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  testVision(payload: any): Promise<any> {
+    return request('/settings/test-vision', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  /** Catalog */
+  generateCatalogImage(payload: any): Promise<any> {
+    return request('/settings/catalog/generate', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  async uploadCatalogImage(formData: FormData): Promise<any> {
+    const res = await fetch(`${BASE}/settings/catalog/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${authState.token}` },
+      body: formData,
+    })
+    if (!res.ok) throw new Error('Upload failed')
+    return res.json()
+  },
+
+  /** --- AUTH & USER MGMT --- **/
+
+  login(username: string, password: string): Promise<{ access_token: string; token_type: string }> {
+    const params = new URLSearchParams()
+    params.append('username', username)
+    params.append('password', password)
+    return request('/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    })
+  },
+
+  getMe(): Promise<any> {
+    return request('/auth/me')
+  },
+
+  setupRootAdmin(payload: any): Promise<any> {
+    return request('/auth/setup-root', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  listUsers(): Promise<any[]> {
+    return request('/users')
+  },
+
+  createUser(payload: any): Promise<any> {
+    return request('/users', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  updateUser(userId: string, payload: any): Promise<any> {
+    return request(`/users/${userId}`, { method: 'PUT', body: JSON.stringify(payload) })
+  },
+
+  deleteUser(userId: string): Promise<void> {
+    return request(`/users/${userId}`, { method: 'DELETE' })
+  },
+
+  uploadProfileImage(file: File): Promise<any> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request('/users/me/profile-image', {
+      method: 'POST',
+      body: formData
+    })
+  },
+
+  generateMyBio(): Promise<{ bio: string }> {
+    return request('/users/me/bio/generate', { method: 'POST' })
+  },
+
+  generateMyProfileImage(): Promise<any> {
+    return request('/users/me/profile-image/generate', { method: 'POST' })
+  }
 }

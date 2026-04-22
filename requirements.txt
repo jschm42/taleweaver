@@ -9,6 +9,8 @@ litellm
 alembic
 Pillow
 python-multipart
+passlib[bcrypt]
+pyjwt
 
 # Testing
 pytest

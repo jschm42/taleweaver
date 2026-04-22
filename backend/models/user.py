@@ -6,7 +6,12 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    username = Column(String(50), nullable=False, unique=True, default="local_default_user")
+    username = Column(String(50), nullable=False, unique=True)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default="user") # "admin" or "user"
+    
+    profile_image_url = Column(String(255), nullable=True)
+    bio = Column(String(1000), nullable=True)
 
     # Store encrypted keys mapping, e.g., {"openai": "gAAAAAB...", "anthropic": "..."}
     encrypted_api_keys = Column(JSON, nullable=True)
@@ -23,3 +28,4 @@ class User(Base, TimestampMixin):
 
     # General game preferences: {"clock_24h": false}
     game_settings = Column(JSON, nullable=True)
+

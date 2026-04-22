@@ -23,6 +23,8 @@ interface Adventure {
   genre?: string // Mocked for design
   progress?: number // Mocked for design
   description?: string // Mocked for design
+  quest_count?: number
+  completed_quest_count?: number
 }
 
 interface PendingAdventureCard {
@@ -383,16 +385,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- User Profile Card -->
-        <div class="p-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-4 mb-8">
-          <div class="w-10 h-10 rounded-full bg-aether-surface-bright flex items-center justify-center border border-white/10">
-             <i class="ra ra-hood text-xl text-aether-primary"></i>
-          </div>
-          <div class="flex flex-col">
-            <span class="text-xs font-bold text-white">Story Engine</span>
-            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Level 12 Loremaster</span>
-          </div>
-        </div>
+        <div class="mb-8"></div>
 
         <!-- Navigation Links -->
         <nav class="space-y-1">
@@ -425,30 +418,26 @@ onUnmounted(() => {
 
     <!-- Main Content Area -->
     <main class="flex-1 flex flex-col relative overflow-hidden">
-      <!-- Top Header -->
-      <header class="h-20 flex items-center justify-between px-10 border-b border-white/5 bg-[#050b14]/80 backdrop-blur-xl z-40">
+      <!-- Page Header -->
+      <header class="h-16 flex items-center justify-between px-10 border-b border-white/5 bg-[#050b14]/40 backdrop-blur-md z-40">
         <div class="flex-1 max-w-xl">
           <div class="relative group">
             <i class="ra ra-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-aether-primary transition-colors"></i>
             <input 
               type="text" 
               placeholder="Search your library..." 
-              class="w-full bg-aether-surface/40 border border-white/5 rounded-xl py-2.5 pl-12 pr-4 text-sm focus:outline-none focus:border-aether-primary/40 focus:ring-1 focus:ring-aether-primary/20 transition-all"
+              class="w-full bg-aether-surface/40 border border-white/5 rounded-xl py-2 px-12 text-sm focus:outline-none focus:border-aether-primary/40 transition-all"
             />
           </div>
         </div>
 
-        <div class="flex items-center gap-6">
-          <button class="relative text-slate-400 hover:text-white transition-colors">
-            <i class="ra ra-bell text-xl"></i>
-            <span class="absolute top-0 right-0 w-2 h-2 bg-aether-primary rounded-full border-2 border-[#050b14]"></span>
+        <div class="flex items-center gap-4">
+          <button class="text-slate-400 hover:text-white transition-colors">
+            <i class="ra ra-bell"></i>
           </button>
           <button @click="router.push('/admin')" class="text-slate-400 hover:text-white transition-colors" title="Administration">
-            <i class="ra ra-cog text-xl"></i>
+            <i class="ra ra-cog"></i>
           </button>
-          <div class="w-10 h-10 rounded-full bg-aether-primary/20 border border-aether-primary/30 p-0.5">
-             <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" class="w-full h-full rounded-full" alt="Avatar" />
-          </div>
         </div>
       </header>
 
@@ -566,7 +555,10 @@ onUnmounted(() => {
                 <div v-if="adv.quest_count > 0" class="space-y-2">
                   <div class="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
                     <span class="text-slate-500">Progress</span>
-                    <span class="text-aether-primary">{{ adv.progress }}%</span>
+                    <span class="text-aether-primary">
+                      {{ adv.completed_quest_count || 0 }} / {{ adv.quest_count }} Quests 
+                      ({{ adv.progress }}%)
+                    </span>
                   </div>
                   <div class="h-1 bg-white/5 rounded-full overflow-hidden">
                     <div 
@@ -574,6 +566,10 @@ onUnmounted(() => {
                       :style="{ width: `${adv.progress}%` }"
                     ></div>
                   </div>
+                </div>
+                <div v-else class="text-[10px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                  <i class="ra ra-scroll text-[8px] opacity-40"></i>
+                  No Quests active
                 </div>
               </div>
             </div>
