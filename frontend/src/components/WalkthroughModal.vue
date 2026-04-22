@@ -1,14 +1,110 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
+type WorldEntity = {
+  id?: string
+  name?: string
+  description?: string
+  entity_type?: string
+  [key: string]: unknown
+}
+
+type WalkthroughPart =
+  | { type: 'text'; text: string }
+  | { type: 'item'; item: WorldEntity; label: string }
+
 const props = defineProps<{
   open: boolean
   data: any | null
+  entities?: WorldEntity[]
 }>()
 
 const emit = defineEmits<{
   close: []
   reveal: []
   hint: []
+  itemHover: [item: WorldEntity, event: MouseEvent]
+  itemLeave: []
 }>()
+
+const itemTokenRegex = /\[\[ITEM:([A-Z0-9_]+)\|([^\]]+)\]\]/g
+
+const itemById = computed(() => {
+  const map = new Map<string, WorldEntity>()
+  const source = props.entities ?? []
+  for (const entity of source) {
+    if (!entity || entity.entity_type !== 'OBJECT' || !entity.id) continue
+    map.set(entity.id.toUpperCase(), entity)
+  }
+  return map
+})
+
+const knownItemIds = computed(() => {
+  return [...itemById.value.keys()].sort((a, b) => b.length - a.length)
+})
+
+const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const replaceLegacyIdsInText = (text: string): WalkthroughPart[] => {
+  if (!text || knownItemIds.value.length === 0) {
+    return text ? [{ type: 'text', text }] : []
+  }
+
+  const idPattern = new RegExp(`\\b(${knownItemIds.value.map(escapeRegex).join('|')})\\b`, 'g')
+  const parts: WalkthroughPart[] = []
+  let lastIndex = 0
+
+  text.replace(idPattern, (match, id, offset) => {
+    if (offset > lastIndex) {
+      parts.push({ type: 'text', text: text.slice(lastIndex, offset) })
+    }
+
+    const item = itemById.value.get(String(id).toUpperCase())
+    if (item) {
+      parts.push({ type: 'item', item, label: item.name || match })
+    } else {
+      parts.push({ type: 'text', text: match })
+    }
+
+    lastIndex = offset + match.length
+    return match
+  })
+
+  if (lastIndex < text.length) {
+    parts.push({ type: 'text', text: text.slice(lastIndex) })
+  }
+
+  return parts.length ? parts : [{ type: 'text', text }]
+}
+
+const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
+  const parts: WalkthroughPart[] = []
+  let lastIndex = 0
+
+  content.replace(itemTokenRegex, (match, rawId, rawLabel, offset) => {
+    if (offset > lastIndex) {
+      parts.push(...replaceLegacyIdsInText(content.slice(lastIndex, offset)))
+    }
+
+    const itemId = String(rawId || '').toUpperCase()
+    const tokenLabel = String(rawLabel || '').trim()
+    const item = itemById.value.get(itemId)
+    if (item) {
+      parts.push({ type: 'item', item, label: tokenLabel || item.name || itemId })
+    } else {
+      parts.push({ type: 'text', text: tokenLabel || itemId || match })
+    }
+
+    lastIndex = offset + match.length
+    return match
+  })
+
+  if (lastIndex < content.length) {
+    parts.push(...replaceLegacyIdsInText(content.slice(lastIndex)))
+  }
+
+  return parts.length ? parts : [{ type: 'text', text: content }]
+}
 </script>
 
 <template>
@@ -62,7 +158,20 @@ const emit = defineEmits<{
                 <li v-for="(step, index) in data?.steps || []" :key="index" class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                   <p class="text-[10px] uppercase tracking-widest text-slate-500 font-black">Step {{ index + 1 }}</p>
                   <p class="text-sm text-slate-100 font-bold mt-1">{{ step.title }}</p>
-                  <p class="text-sm text-slate-300 mt-1 leading-relaxed">{{ step.content }}</p>
+                  <p class="text-sm text-slate-300 mt-1 leading-relaxed">
+                    <template v-for="(part, partIndex) in parseWalkthroughContent(step.content || '')" :key="`${index}-${partIndex}`">
+                      <span v-if="part.type === 'text'">{{ part.text }}</span>
+                      <span
+                        v-else
+                        class="font-semibold text-amber-300/90 underline decoration-dotted underline-offset-4 cursor-help hover:text-amber-200"
+                        @mouseenter="emit('itemHover', part.item, $event)"
+                        @mousemove="emit('itemHover', part.item, $event)"
+                        @mouseleave="emit('itemLeave')"
+                      >
+                        {{ part.label }}
+                      </span>
+                    </template>
+                  </p>
                 </li>
               </ol>
             </div>

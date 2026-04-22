@@ -435,9 +435,12 @@ onBeforeUnmount(() => {
     <WalkthroughModal
       :open="showWalkthrough"
       :data="walkthroughData"
+      :entities="entities"
       @close="showWalkthrough = false"
       @reveal="revealWalkthrough"
       @hint="buyHint"
+      @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
+      @item-leave="hoveredEntity = null"
     />
     <SuccessScreen 
       :show="showSuccess" 

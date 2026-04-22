@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import json
+import re
 import uuid
 import zipfile
 import io
@@ -49,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 WALKTHROUGH_REVEAL_COST = 200
 WALKTHROUGH_HINT_COST = 50
+WALKTHROUGH_ITEM_TOKEN_PATTERN = re.compile(r"\[\[ITEM:([A-Z0-9_]+)\|([^\]]+)\]\]")
 
 
 def _sanitize_narrative_response(text: str, *, fallback: Optional[str] = None) -> str:
@@ -264,6 +266,33 @@ def _hint_for_step(step: dict[str, str]) -> str:
     return _compact_text(step.get("content") or step.get("title") or "Keep exploring.", 160)
 
 
+def _safe_item_label(label: str) -> str:
+    """Ensure token labels cannot break token syntax."""
+    return (label or "Item").replace("|", "/").replace("]", "").strip() or "Item"
+
+
+def _tokenize_walkthrough_items(content: str, item_names_by_id: dict[str, str]) -> str:
+    """Replace raw item IDs in walkthrough prose with stable ITEM tokens."""
+    if not content or not item_names_by_id:
+        return content
+
+    tokenized = content
+
+    # Skip IDs that are already present as explicit ITEM tokens.
+    existing_ids = {match.group(1).upper() for match in WALKTHROUGH_ITEM_TOKEN_PATTERN.finditer(tokenized)}
+
+    for item_id in sorted(item_names_by_id.keys(), key=len, reverse=True):
+        upper_id = item_id.upper()
+        if upper_id in existing_ids:
+            continue
+
+        label = _safe_item_label(item_names_by_id[item_id])
+        token = f"[[ITEM:{upper_id}|{label}]]"
+        tokenized = re.sub(rf"\b{re.escape(item_id)}\b", token, tokenized)
+
+    return tokenized
+
+
 def _walkthrough_fallback_payload(current_xp: int) -> dict[str, Any]:
     message = "No walkthrough available for this adventure yet. Keep exploring and use /hint for tactical nudges when available."
     return {
@@ -324,6 +353,18 @@ async def _seed_compact_walkthrough(db: AsyncSession, adventure_id: str) -> None
     if isinstance(existing, dict) and isinstance(existing.get("steps"), list) and existing.get("steps"):
         return
 
+    item_res = await db.execute(
+        select(WorldEntity)
+        .where(WorldEntity.adventure_id == adventure_id)
+        .where(func.upper(WorldEntity.entity_type) == "OBJECT")
+    )
+    item_names_by_id: dict[str, str] = {}
+    for item in item_res.scalars().all():
+        item_id = (item.id or "").strip().upper()
+        if not item_id:
+            continue
+        item_names_by_id[item_id] = item.name or item_id
+
     steps: list[dict[str, str]] = []
 
     quests = adventure.quests or []
@@ -336,6 +377,7 @@ async def _seed_compact_walkthrough(db: AsyncSession, adventure_id: str) -> None
             goal = _compact_text(quest.get("goal") or quest.get("description") or "Advance this objective.", 220)
             impact = _compact_text(quest.get("impact") or "", 180)
             content = goal if not impact else f"{goal} Outcome target: {impact}"
+            content = _tokenize_walkthrough_items(content, item_names_by_id)
             steps.append({"title": title or f"Objective {index}", "content": content or "Advance this objective."})
 
     if not steps:
@@ -345,6 +387,7 @@ async def _seed_compact_walkthrough(db: AsyncSession, adventure_id: str) -> None
         for index, scene in enumerate(scene_res.scalars().all()[:8], start=1):
             title = _compact_text(scene.label or f"Scene {index}", 90)
             content = _compact_text(scene.description or "Explore this location and gather clues.", 260)
+            content = _tokenize_walkthrough_items(content, item_names_by_id)
             steps.append({"title": title or f"Scene {index}", "content": content or "Explore this location."})
 
     if not steps:
@@ -355,7 +398,7 @@ async def _seed_compact_walkthrough(db: AsyncSession, adventure_id: str) -> None
 
     next_manifest = dict(manifest)
     next_manifest["walkthrough"] = {
-        "version": "compact-v1",
+        "version": "compact-v2",
         "preview": _compact_text(preview, 240),
         "steps": steps,
     }
