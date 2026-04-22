@@ -186,6 +186,13 @@ function normalizeLineBreaks(text: string): string {
   // Keep intentional paragraph breaks, but cap excessive blank lines.
   return text.replace(/\n{3,}/g, '\n\n')
 }
+
+function displayMessageContent(msg: ChatMessage): string {
+  if (msg.role === 'system') {
+    return msg.content.replace(/^\s*\[system\]\s*/i, '')
+  }
+  return msg.content
+}
 </script>
 
 <template>
@@ -255,7 +262,7 @@ function normalizeLineBreaks(text: string): string {
             'text-emerald-300 border-emerald-500/50 italic opacity-80'
           ]"
         >
-          <template v-for="(part, pIdx) in parseContent(msg.content)" :key="pIdx">
+          <template v-for="(part, pIdx) in parseContent(displayMessageContent(msg))" :key="pIdx">
             <span v-if="part.type === 'text'" v-html="formatBolds(normalizeLineBreaks(part.value))"></span>
             <div v-else-if="part.type === 'image'" class="my-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
               <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />

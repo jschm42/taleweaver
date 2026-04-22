@@ -13,6 +13,45 @@ logger = logging.getLogger(__name__)
 
 class GameMasterLLM:
 
+    @staticmethod
+    def _is_supported_bool_value(value: Any) -> bool:
+        """Return True when the value is a supported persisted bool representation."""
+        if isinstance(value, bool):
+            return True
+        if isinstance(value, (int, float)):
+            return True
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            return normalized in {
+                "1", "true", "yes", "on", "enabled",
+                "0", "false", "no", "off", "disabled", "", "none", "null",
+            }
+        return False
+
+    @staticmethod
+    def _coerce_bool(value: Any, default: bool = False) -> bool:
+        """Safely coerce persisted setting values to booleans."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "enabled"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "disabled", "", "none", "null"}:
+                return False
+        return default
+
+    @staticmethod
+    def _coerce_int(value: Any, default: int) -> int:
+        """Safely coerce persisted setting values to ints with sane fallback."""
+        try:
+            coerced = int(value)
+            return coerced if coerced > 0 else default
+        except (TypeError, ValueError):
+            return default
+
     @classmethod
     def _get_litellm(cls) -> Any:
         # Configuration is handled once
@@ -32,10 +71,34 @@ class GameMasterLLM:
         llm_settings = self.user.llm_settings or {}
         prefix = "small_" if model_category == "small" else "complex_"
         
-        # Pull granular settings with fallbacks to global/legacy names
-        self.enable_thinking = llm_settings.get(f"{prefix}enable_thinking", llm_settings.get("enable_thinking", False))
-        self.max_thinking_tokens = llm_settings.get(f"{prefix}max_thinking_tokens", llm_settings.get("max_thinking_tokens", 1024))
-        self.max_tokens = llm_settings.get(f"{prefix}max_tokens", llm_settings.get("max_tokens", 4096))
+        # Pull granular settings with fallbacks to global/legacy names.
+        # Thinking must stay disabled unless explicitly configured truthy.
+        enable_thinking_key = f"{prefix}enable_thinking"
+        raw_enable_thinking = llm_settings.get(enable_thinking_key)
+        if raw_enable_thinking is None:
+            enable_thinking_key = "enable_thinking"
+            raw_enable_thinking = llm_settings.get(enable_thinking_key)
+
+        if raw_enable_thinking is not None and not self._is_supported_bool_value(raw_enable_thinking):
+            logger.warning(
+                "Invalid thinking setting '%s'=%r for user '%s'. Falling back to False.",
+                enable_thinking_key,
+                raw_enable_thinking,
+                getattr(self.user, "username", "unknown"),
+            )
+            self.enable_thinking = False
+        else:
+            self.enable_thinking = self._coerce_bool(raw_enable_thinking, default=False)
+
+        raw_max_thinking_tokens = llm_settings.get(f"{prefix}max_thinking_tokens")
+        if raw_max_thinking_tokens is None:
+            raw_max_thinking_tokens = llm_settings.get("max_thinking_tokens")
+        self.max_thinking_tokens = self._coerce_int(raw_max_thinking_tokens, default=1024)
+
+        raw_max_tokens = llm_settings.get(f"{prefix}max_tokens")
+        if raw_max_tokens is None:
+            raw_max_tokens = llm_settings.get("max_tokens")
+        self.max_tokens = self._coerce_int(raw_max_tokens, default=4096)
 
         if self.provider == "ollama":
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")

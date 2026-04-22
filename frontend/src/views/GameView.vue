@@ -7,24 +7,29 @@
  */
 import { onBeforeUnmount, onMounted, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import ChatWindow from '@/components/ChatWindow.vue'
 import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
 import MapModal from '@/components/MapModal.vue'
 import QuestsModal from '@/components/QuestsModal.vue'
 import WalkthroughModal from '@/components/WalkthroughModal.vue'
 import SuccessScreen from '@/components/SuccessScreen.vue'
 import DebugModal from '@/components/DebugModal.vue'
+import GameScenePanel from '@/components/GameScenePanel.vue'
+import GameNpcsPanel from '@/components/GameNpcsPanel.vue'
+import GameItemsPanel from '@/components/GameItemsPanel.vue'
+import GameQuestTracker from '@/components/GameQuestTracker.vue'
+import GameClockWidget from '@/components/GameClockWidget.vue'
+import GameDialogPanel from '@/components/GameDialogPanel.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
-import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
+import { getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
   id: string
 }>()
 
 const router = useRouter()
-const chatWindow = ref<any>(null)
+const dialogPanel = ref<any>(null)
 const showSheet = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
@@ -96,6 +101,7 @@ const npcs = computed(() => {
 })
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
+const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
 
 /**
  * Formats the session clock as a full datetime derived from the adventure start.
@@ -341,203 +347,72 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Center: Active Quest Tracker (Matches Chat Width) -->
-      <div class="w-full max-w-5xl mx-auto px-4">
-        <transition name="fade">
-          <div v-if="trackedQuest" class="animate-fade-in pointer-events-none w-full">
-            <div :class="['quest-panel-header glassmorphism flex items-start gap-4 px-5 py-4 rounded-2xl border border-white/5 pointer-events-auto shadow-2xl', trackedQuest.status === 'completed' ? 'opacity-60' : '']">
-              <div class="w-10 h-10 flex items-center justify-center bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400 shrink-0 mt-0.5 shadow-inner">
-                <i :class="['ra text-sm', trackedQuest.status === 'completed' ? 'ra-check' : 'ra-scroll']"></i>
-              </div>
-              <div class="flex-grow min-w-0">
-                <div class="flex items-center justify-between mb-1">
-                  <div :class="['text-sm font-black text-white uppercase tracking-tight truncate', trackedQuest.status === 'completed' ? 'line-through text-slate-400' : '']">
-                    {{ trackedQuest.title }}
-                  </div>
-                  <div class="shrink-0 text-right ml-4">
-                     <span v-if="trackedQuest.status === 'completed'" class="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">Completed</span>
-                     <span v-else class="text-[10px] font-black text-indigo-400 tabular-nums uppercase tracking-widest">{{ trackedQuest.exp_reward }} XP</span>
-                  </div>
-                </div>
-                <div :class="['text-xs text-slate-400 leading-relaxed line-clamp-3', trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
-                  {{ trackedQuest.description }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </transition>
-      </div>
+      <GameQuestTracker :tracked-quest="trackedQuest" />
 
       <!-- Right: Clock (Absolute) -->
-      <div class="absolute right-8 top-8 z-10">
-        <div class="flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': clockTick }">
-          <template v-if="gameTime">
-            <div class="flex items-center gap-3 px-4 py-2 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md shadow-lg transition-all">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500/80 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div class="flex flex-col items-end">
-                <span class="text-[11px] font-black text-amber-500/60 uppercase tracking-widest leading-none mb-1.5">{{ gameTime.dateShort }}</span>
-                <span class="clock-time text-2xl font-black text-amber-300 tracking-widest leading-none tabular-nums">
-                  {{ gameTime.time }}
-                </span>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
+      <GameClockWidget :game-time="gameTime" :clock-tick="clockTick" />
     </header>
 
 
     <div class="flex-grow min-h-0 flex overflow-hidden relative">
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
       <aside v-if="entities.length > 0 || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar relative z-10 m-6 shadow-2xl">
-        <!-- CURRENT SCENE SECTION -->
-        <div class="mb-8">
-          <div class="flex items-center gap-2 mb-4">
-            <i class="ra ra-mountain-cave text-indigo-500"></i>
-            <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500/80">Location</h3>
-          </div>
-          <div 
-            class="relative group cursor-help overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 transition-all hover:border-indigo-500/50"
-            @mouseenter="handleHover({ 
-              name: sheet?.current_scene || 'Current Scene', 
-              description: nodes[sheet?.scene_id || '']?.description || 'The current location of your adventure.',
-              image_url: currentSceneImage
-            }, $event)"
-            @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
-            @mouseleave="hoveredEntity = null"
-          >
-            <div class="aspect-video w-full relative overflow-hidden bg-slate-900 flex items-center justify-center">
-              <img 
-                v-if="currentSceneImage && showImage(currentSceneImage)" 
-                :src="getImageUrl(currentSceneImage)" 
-                class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                @error="handleImageError(currentSceneImage)"
-              />
-              <div v-else class="w-full h-full flex items-center justify-center bg-slate-800">
-                <i :class="['ra text-7xl opacity-20', getItemIcon('SCENE'), 'text-indigo-400']"></i>
-              </div>
-              <div class="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-slate-950 to-transparent">
-                <span class="text-xs font-bold text-white uppercase tracking-wider truncate block overflow-hidden shadow-sm">{{ sheet?.current_scene || 'Unknown' }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GameScenePanel
+          :scene-name="sheet?.current_scene"
+          :scene-description="currentSceneDescription"
+          :scene-image="currentSceneImage"
+          :show-image="showImage"
+          @hover="(payload, event) => handleHover(payload, event)"
+          @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
+          @leave="hoveredEntity = null"
+          @image-error="(path) => handleImageError(path)"
+        />
 
-        <!-- NPCs SECTION -->
-        <div v-if="npcs.length > 0">
-          <div class="flex items-center justify-between gap-2 mb-4">
-            <div class="flex items-center gap-2">
-              <i class="ra ra-venoms-trap text-cyan-500"></i>
-              <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-500/80">Population</h3>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3 mb-8">
-            <div 
-              v-for="ent in npcs" 
-              :key="ent.id" 
-              class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group cursor-help transition-all hover:border-cyan-500/40 hover:bg-slate-900/50 p-2 flex flex-col items-center shadow-lg"
-              @mouseenter="handleHover(ent, $event)"
-              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
-              @mouseleave="hoveredEntity = null"
-            >
-              <div class="absolute top-1 right-1 z-10 flex gap-1">
-                <i v-if="ent.id === 'PLAYER'" class="ra ra-pawn text-[8px] text-cyan-400 drop-shadow-md"></i>
-                <i v-else class="ra ra-speech-bubble text-[8px] text-slate-600 group-hover:text-cyan-500 transition-colors drop-shadow-md"></i>
-              </div>
-              <div class="w-16 h-16 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
-                <img 
-                  v-if="ent.image_url && showImage(ent.image_url)" 
-                  :src="getImageUrl(ent.image_url)" 
-                  class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  @error="handleImageError(ent.image_url)"
-                />
-                <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
-                  <i :class="['ra text-2xl', getItemIcon('NPC'), 'text-cyan-500/40']"></i>
-                </div>
-              </div>
-              <span class="text-[10px] font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
-            </div>
-          </div>
-        </div>
+        <GameNpcsPanel
+          :npcs="npcs"
+          :show-image="showImage"
+          @hover="(entity, event) => handleHover(entity, event)"
+          @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
+          @leave="hoveredEntity = null"
+          @image-error="(path) => handleImageError(path)"
+        />
 
-        <!-- ITEMS SECTION -->
-        <div v-if="items.length > 0">
-          <div class="flex items-center justify-between gap-2 mb-4">
-            <div class="flex items-center gap-2">
-              <i class="ra ra-locked-fortress text-amber-500"></i>
-              <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500/80">Discovery</h3>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div 
-              v-for="ent in items" 
-              :key="ent.id" 
-              class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group cursor-help transition-all hover:border-amber-500/40 hover:bg-slate-900/50 p-2 flex flex-col items-center shadow-lg"
-              @mouseenter="handleHover(ent, $event)"
-              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
-              @mouseleave="hoveredEntity = null"
-            >
-              <div class="absolute top-1 right-1 z-10">
-                <i class="ra ra-gem text-[8px] text-slate-800 group-hover:text-amber-500/40 transition-colors"></i>
-              </div>
-              <div class="w-12 h-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
-                <img 
-                  v-if="ent.image_url && showImage(ent.image_url)" 
-                  :src="getImageUrl(ent.image_url)" 
-                  class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  @error="handleImageError(ent.image_url)"
-                />
-                <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
-                  <i :class="['ra text-xl', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
-                </div>
-              </div>
-              <span class="text-[9px] font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
-            </div>
-          </div>
-        </div>
+        <GameItemsPanel
+          :items="items"
+          :show-image="showImage"
+          @hover="(entity, event) => handleHover(entity, event)"
+          @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
+          @leave="hoveredEntity = null"
+          @image-error="(path) => handleImageError(path)"
+        />
       </aside>
 
       <!-- Main Game Area -->
-      <div class="flex-grow relative overflow-hidden flex flex-col items-stretch px-4 pb-4 sm:px-6 sm:pb-6 pt-2 w-full max-w-5xl mx-auto min-h-0">
-        <div v-if="gameOverReason" class="w-full bg-red-900/20 border border-red-500/30 p-4 rounded-xl mb-4 text-red-400 font-medium flex items-center gap-3 shadow-lg backdrop-blur-sm shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <span>{{ gameOverReason }}</span>
-        </div>
-
-        <ChatWindow 
-          ref="chatWindow"
-          :messages="messages" 
-          :status="status"
-          :npc-metadata="npcMetadata"
-          :entities="entities"
-          :inventory="inventoryItems"
-          @send="handlePlayerInput"
-          @open-sheet="showSheet = true"
-          @open-map="showMap = true"
-          @open-quests="showQuests = true"
-          @open-walkthrough="openWalkthroughPanel"
-          @npc-hover="handleChatNpcHover"
-          @npc-leave="hoveredEntity = null"
-          @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
-          @item-leave="hoveredEntity = null"
-          :tracked-quest="trackedQuest"
-          :status-text="statusText"
-          @open-debug="showDebug = true"
-          @toggle-debug-log="(val) => showDebugLog = val"
-          :show-debug-log="showDebugLog"
-          :debug-logs="debugLogs"
-        />
-
-        <!-- XP Badge (Bottom Right Overlaid on Chat) -->
-        <div class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">
-          <span class="text-sm font-black text-slate-300/60 uppercase tracking-[0.2em] tabular-nums">
-            {{ sheet?.exp || 0 }} XP
-          </span>
-        </div>
-      </div>
+      <GameDialogPanel
+        ref="dialogPanel"
+        :messages="messages"
+        :status="status"
+        :npc-metadata="npcMetadata"
+        :entities="entities"
+        :inventory-items="inventoryItems"
+        :tracked-quest="trackedQuest"
+        :status-text="statusText"
+        :show-debug-log="showDebugLog"
+        :debug-logs="debugLogs"
+        :game-over-reason="gameOverReason"
+        :exp="sheet?.exp || 0"
+        @send="handlePlayerInput"
+        @open-sheet="showSheet = true"
+        @open-map="showMap = true"
+        @open-quests="showQuests = true"
+        @open-walkthrough="openWalkthroughPanel"
+        @npc-hover="handleChatNpcHover"
+        @npc-leave="hoveredEntity = null"
+        @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
+        @item-leave="hoveredEntity = null"
+        @open-debug="showDebug = true"
+        @toggle-debug-log="(val) => showDebugLog = val"
+      />
     </div>
 
     <!-- Modals -->
@@ -545,7 +420,7 @@ onBeforeUnmount(() => {
       :open="showSheet" 
       :sheet="sheet" 
       @close="showSheet = false" 
-      @item-click="(name) => chatWindow?.appendText(name)"
+      @item-click="(name) => dialogPanel?.appendText(name)"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
     />

@@ -103,3 +103,35 @@ def test_openrouter_normalizes_prefixed_model(monkeypatch):
     assert captured["model"] == "gpt-5.4"
     assert captured["api_base"] == "https://openrouter.ai/api/v1"
     assert captured["api_key"] == "sk-or-v1-test"
+
+
+def test_thinking_defaults_to_disabled_when_not_configured(monkeypatch):
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
+    user = _make_user(llm_settings={"small_model": "gpt-4o-mini"})
+    router = GameMasterLLM(user, provider="openai", model_category="small")
+    assert router.enable_thinking is False
+
+
+def test_thinking_string_false_is_treated_as_disabled(monkeypatch):
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
+    user = _make_user(llm_settings={"small_enable_thinking": "false"})
+    router = GameMasterLLM(user, provider="openai", model_category="small")
+    assert router.enable_thinking is False
+
+
+def test_thinking_string_true_is_treated_as_enabled(monkeypatch):
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
+    user = _make_user(llm_settings={"small_enable_thinking": "true"})
+    router = GameMasterLLM(user, provider="openai", model_category="small")
+    assert router.enable_thinking is True
+
+
+def test_invalid_thinking_value_logs_warning_and_falls_back_to_false(monkeypatch, caplog):
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
+    user = _make_user(llm_settings={"small_enable_thinking": "definitely"})
+
+    caplog.set_level("WARNING")
+    router = GameMasterLLM(user, provider="openai", model_category="small")
+
+    assert router.enable_thinking is False
+    assert "Invalid thinking setting" in caplog.text
