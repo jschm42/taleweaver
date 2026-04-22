@@ -226,7 +226,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="h-screen bg-slate-950 flex flex-col font-sans overflow-hidden relative">
+  <main class="h-full min-h-0 bg-slate-950 flex flex-col font-sans overflow-hidden relative">
     <!-- Full-Width Adventure Background (Top Third) -->
     <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
       <img 
@@ -303,7 +303,7 @@ onBeforeUnmount(() => {
     </header>
 
 
-    <div class="flex-grow flex overflow-hidden relative">
+    <div class="flex-grow min-h-0 flex overflow-hidden relative">
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
       <aside v-if="entities.length > 0 || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar relative z-10 m-6 shadow-2xl">
         <!-- CURRENT SCENE SECTION -->

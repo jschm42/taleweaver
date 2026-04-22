@@ -181,7 +181,11 @@ class WorldGenerator:
         # If no provider is given, use the one from user settings
         if not provider:
             llm_settings = user.llm_settings or {}
-            provider = llm_settings.get("complex_model_provider") or llm_settings.get("preferred_provider")
+            provider = (
+                llm_settings.get("complex_model_provider")
+                or llm_settings.get("small_model_provider")
+                or llm_settings.get("preferred_provider")
+            )
         if not provider:
             raise ValueError(
                 "No complex LLM provider configured for this user. "

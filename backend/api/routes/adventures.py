@@ -1501,7 +1501,16 @@ async def ai_edit_adventure(
     from backend.engine.world_generator import WorldManifesto
     
     llm_settings = user.llm_settings or {}
-    provider = llm_settings.get("complex_model_provider") or llm_settings.get("preferred_provider", "openai")
+    provider = (
+        llm_settings.get("complex_model_provider")
+        or llm_settings.get("small_model_provider")
+        or llm_settings.get("preferred_provider")
+    )
+    if not provider:
+        raise HTTPException(
+            status_code=400,
+            detail="No complex LLM provider configured for this user. Open Settings -> LLM and set Complex Model Provider.",
+        )
     model = llm_settings.get("complex_model", "gpt-4o")
     llm = GameMasterLLM(user, provider=provider)
     
@@ -2673,9 +2682,22 @@ async def post_chat_message(
             # --- LLM Processing ---
             settings = user.llm_settings or {}
             small_model = settings.get("small_model", "gpt-4o-mini")
-            small_model_provider = settings.get("small_model_provider") or settings.get("preferred_provider", "openai")
+            small_model_provider = (
+                settings.get("small_model_provider")
+                or settings.get("complex_model_provider")
+                or settings.get("preferred_provider")
+            )
             complex_model = settings.get("complex_model", "gpt-4o")
-            complex_model_provider = settings.get("complex_model_provider") or settings.get("preferred_provider", "openai")
+            complex_model_provider = (
+                settings.get("complex_model_provider")
+                or settings.get("small_model_provider")
+                or settings.get("preferred_provider")
+            )
+            if not small_model_provider or not complex_model_provider:
+                raise ValueError(
+                    "No LLM provider configured for this user. "
+                    "Open Settings -> LLM and set Small/Complex Model Provider."
+                )
             
             # Initial LLM instance for Pass 1 (Mechanics)
             llm = GameMasterLLM(user, provider=small_model_provider, model_category="small")
