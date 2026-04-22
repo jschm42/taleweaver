@@ -45,7 +45,10 @@ const promptError = ref('')
 const showDebug = ref(false)
 const activeTab = ref<'world' | 'advanced'>('world')
 
-const selectedVisual = ref<{ kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object'; id: string; label: string; description: string; hint: string } | null>(null)
+type VisualKind = 'cover' | 'protagonist' | 'scene' | 'npc' | 'object'
+
+const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
+const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
 const visualPrompt = ref('')
 const showPromptDialog = ref(false)
 const isRegenerating = ref(false)
@@ -77,11 +80,11 @@ function clearHover() {
 }
 
 const VISUAL_UPLOAD_LIMITS = {
-  cover: { maxWidth: 2048, maxHeight: 1024, hint: 'Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.' },
-  protagonist: { maxWidth: 1024, maxHeight: 1280, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
-  scene: { maxWidth: 1600, maxHeight: 900, hint: 'Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.' },
-  npc: { maxWidth: 1024, maxHeight: 1280, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
-  object: { maxWidth: 1024, maxHeight: 1024, hint: 'Optimal: square 1:1, max 1024x1024. PNG, JPEG, or WEBP.' },
+  cover: { maxWidth: 2048, maxHeight: 1024, maxBytes: 4 * 1024 * 1024, hint: 'Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.' },
+  protagonist: { maxWidth: 1024, maxHeight: 1280, maxBytes: 2 * 1024 * 1024, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
+  scene: { maxWidth: 1600, maxHeight: 900, maxBytes: 3 * 1024 * 1024, hint: 'Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.' },
+  npc: { maxWidth: 1024, maxHeight: 1280, maxBytes: 2 * 1024 * 1024, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
+  object: { maxWidth: 1024, maxHeight: 1024, maxBytes: 2 * 1024 * 1024, hint: 'Optimal: square 1:1, max 1024x1024. PNG, JPEG, or WEBP.' },
 } as const
 
 const ALLOWED_UPLOAD_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
@@ -289,7 +292,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
   return `${ASSET_BASE}${imagePath}?v=${visualsCacheVersion.value}`
 }
 
-function openRegenerateDialog(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string, label: string) {
+function openRegenerateDialog(kind: VisualKind, id: string, label: string) {
   const description = getVisualDescription(kind, id)
   const hint = VISUAL_UPLOAD_LIMITS[kind].hint
   selectedVisual.value = { kind, id, label, description, hint }
@@ -298,7 +301,7 @@ function openRegenerateDialog(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 
   showPromptDialog.value = true
 }
 
-function getVisualDescription(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string) {
+function getVisualDescription(kind: VisualKind, id: string) {
   if (!debugData.value) return ''
   if (kind === 'cover') return debugData.value.adventure?.context || ''
   if (kind === 'protagonist') return debugData.value.protagonist?.description || ''
@@ -307,7 +310,121 @@ function getVisualDescription(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 
   return (debugData.value.objects || []).find((o: any) => o.id === id)?.description || ''
 }
 
-async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string, skipFetch: boolean = false) {
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+  return `${Math.ceil(bytes / 1024)} KB`
+}
+
+function getUploadHint(kind: VisualKind): string {
+  const spec = VISUAL_UPLOAD_LIMITS[kind]
+  return `${spec.hint} Max file size: ${formatBytes(spec.maxBytes)}.`
+}
+
+async function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const image = new Image()
+      image.onload = () => resolve({ width: image.width, height: image.height })
+      image.onerror = () => reject(new Error('Could not read image dimensions.'))
+      image.src = objectUrl
+    })
+    return dimensions
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+function openUploadPicker(kind: VisualKind, id: string, label: string) {
+  selectedUploadTarget.value = { kind, id, label }
+  promptError.value = ''
+  addNotification(`Upload ${label}: ${getUploadHint(kind)}`, 'info')
+  if (uploadInput.value) {
+    uploadInput.value.value = ''
+    uploadInput.value.click()
+  }
+}
+
+async function uploadSelectedVisual(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  const target = selectedUploadTarget.value
+  if (!file || !target) {
+    return
+  }
+
+  const spec = VISUAL_UPLOAD_LIMITS[target.kind]
+  const ext = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() || '' : ''
+  if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type)) {
+    addNotification('Unsupported file type. Please use PNG, JPEG, or WEBP.', 'error')
+    input.value = ''
+    return
+  }
+  if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+    addNotification('Unsupported file extension. Please use .png, .jpg, .jpeg, or .webp.', 'error')
+    input.value = ''
+    return
+  }
+  if (file.size > spec.maxBytes) {
+    addNotification(`File too large. Max file size is ${formatBytes(spec.maxBytes)}.`, 'error')
+    input.value = ''
+    return
+  }
+
+  try {
+    const { width, height } = await getImageDimensions(file)
+    if (width > spec.maxWidth || height > spec.maxHeight) {
+      addNotification(
+        `Image too large: ${width}x${height}. Max is ${spec.maxWidth}x${spec.maxHeight}.`,
+        'error'
+      )
+      input.value = ''
+      return
+    }
+  } catch (error: any) {
+    addNotification(error?.message || 'Unable to validate image dimensions.', 'error')
+    input.value = ''
+    return
+  }
+
+  isUploading.value = true
+  try {
+    const payload = new FormData()
+    payload.append('target_type', target.kind)
+    payload.append('target_id', target.id)
+    payload.append('file', file)
+
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/upload`, {
+      method: 'POST',
+      headers: authHeaders(false),
+      body: payload,
+    })
+
+    if (!res.ok) {
+      let detail = 'Upload failed.'
+      try {
+        const data = await res.json()
+        detail = data?.detail || detail
+      } catch {
+        // Keep default error text if response is not JSON.
+      }
+      throw new Error(detail)
+    }
+
+    await fetchDebugInfo()
+    addNotification(`Image uploaded for ${target.label}.`, 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Upload failed.', 'error')
+  } finally {
+    isUploading.value = false
+    selectedUploadTarget.value = null
+    input.value = ''
+  }
+}
+
+async function quickRegenerateVisual(kind: VisualKind, id: string, skipFetch: boolean = false) {
   const key = `${kind}_${id}`
   isQuickGenerating.value[key] = true
   try {
@@ -329,7 +446,7 @@ async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | '
   }
 }
 
-async function regenerateAll(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object') {
+async function regenerateAll(kind: VisualKind) {
   isBatchGenerating.value[kind] = true
   let items: any[] = []
   if (kind === 'cover' && debugData.value?.adventure) items = [debugData.value.adventure]
@@ -582,6 +699,7 @@ const goBack = () => router.push({ name: 'portal' })
                     <div class="flex gap-3 shrink-0">
                        <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all">Fast Gen</button>
                        <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
+                        <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
                     </div>
                   </div>
@@ -607,6 +725,7 @@ const goBack = () => router.push({ name: 'portal' })
                         <div class="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all scale-75 origin-top-right">
                           <button @click="quickRegenerateVisual('protagonist', debugData.protagonist.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
                           <button @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
+                          <button @click="openUploadPicker('protagonist', debugData.protagonist.id, debugData.protagonist.name)" :disabled="isUploading" :title="getUploadHint('protagonist')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-player"></i></button>
                           <button @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
                         </div>
                       </div>
@@ -634,6 +753,7 @@ const goBack = () => router.push({ name: 'portal' })
                       <div class="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0">
                         <button @click="quickRegenerateVisual('scene', scene.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
                         <button @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name, scene.description)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
+                        <button @click="openUploadPicker('scene', scene.id, scene.label || scene.name)" :disabled="isUploading" :title="getUploadHint('scene')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-layer-group"></i></button>
                         <button @click="openTextEdit('scene', scene.id, scene.label || scene.name, scene.description)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
                       </div>
                     </div>
@@ -661,6 +781,7 @@ const goBack = () => router.push({ name: 'portal' })
                       <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0 scale-75 origin-top-right">
                         <button @click="quickRegenerateVisual('npc', npc.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
                         <button @click="openRegenerateDialog('npc', npc.id, npc.name, npc.description)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
+                        <button @click="openUploadPicker('npc', npc.id, npc.name)" :disabled="isUploading" :title="getUploadHint('npc')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-player"></i></button>
                         <button @click="openTextEdit('npc', npc.id, npc.name, npc.description)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
                       </div>
                     </div>
@@ -688,6 +809,7 @@ const goBack = () => router.push({ name: 'portal' })
                       <div class="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-75 origin-top-right">
                         <button @click="quickRegenerateVisual('object', obj.id)" class="p-1.5 bg-black/60 backdrop-blur-md text-emerald-400 rounded border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle text-xs"></i></button>
                         <button @click="openRegenerateDialog('object', obj.id, obj.name, obj.description)" class="p-1.5 bg-black/60 backdrop-blur-md text-cyan-400 rounded border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield text-xs"></i></button>
+                        <button @click="openUploadPicker('object', obj.id, obj.name)" :disabled="isUploading" :title="getUploadHint('object')" class="p-1.5 bg-black/60 backdrop-blur-md text-amber-300 rounded border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-chest text-xs"></i></button>
                         <button @click="openTextEdit('object', obj.id, obj.name, obj.description)" class="p-1.5 bg-black/60 backdrop-blur-md text-blue-400 rounded border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink text-xs"></i></button>
                       </div>
                     </div>
@@ -829,6 +951,7 @@ const goBack = () => router.push({ name: 'portal' })
 
                 <div class="space-y-3">
                   <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Override Prompt</label>
+                  <p class="text-[10px] text-amber-300/80 leading-relaxed">Upload hint: {{ selectedVisual.hint }} Max file size: {{ formatBytes(VISUAL_UPLOAD_LIMITS[selectedVisual.kind].maxBytes) }}.</p>
                   <textarea 
                     v-model="visualPrompt" 
                     rows="5" 
@@ -889,6 +1012,14 @@ const goBack = () => router.push({ name: 'portal' })
         </div>
       </Transition>
     </Teleport>
+
+    <input
+      ref="uploadInput"
+      type="file"
+      accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+      class="hidden"
+      @change="uploadSelectedVisual"
+    />
 
     <!-- TOAST NOTIFICATIONS -->
     <Teleport to="body">

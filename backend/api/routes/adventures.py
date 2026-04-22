@@ -562,30 +562,35 @@ VISUAL_UPLOAD_SPECS: Dict[str, Dict[str, Any]] = {
         "folder": "",
         "max_width": 2048,
         "max_height": 1024,
+        "max_bytes": 4 * 1024 * 1024,
         "recommended": "Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.",
     },
     "protagonist": {
         "folder": "protagonist",
         "max_width": 1024,
         "max_height": 1280,
+        "max_bytes": 2 * 1024 * 1024,
         "recommended": "Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.",
     },
     "scene": {
         "folder": "scenes",
         "max_width": 1600,
         "max_height": 900,
+        "max_bytes": 3 * 1024 * 1024,
         "recommended": "Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.",
     },
     "npc": {
         "folder": "entities",
         "max_width": 1024,
         "max_height": 1280,
+        "max_bytes": 2 * 1024 * 1024,
         "recommended": "Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.",
     },
     "object": {
         "folder": "entities",
         "max_width": 1024,
         "max_height": 1024,
+        "max_bytes": 2 * 1024 * 1024,
         "recommended": "Optimal: square 1:1, max 1024x1024. PNG, JPEG, or WEBP.",
     },
 }
@@ -2048,6 +2053,14 @@ async def upload_visual(
     if file.content_type and file.content_type not in {"image/png", "image/jpeg", "image/webp"}:
         raise HTTPException(status_code=400, detail="Unsupported file type. Use png, jpeg, or webp.")
 
+    file_bytes = await file.read()
+    if len(file_bytes) > spec["max_bytes"]:
+        max_mb = spec["max_bytes"] / (1024 * 1024)
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Max file size for this asset is {max_mb:.1f} MB.",
+        )
+
     target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, spec["folder"])
     os.makedirs(target_dir, exist_ok=True)
 
@@ -2055,7 +2068,7 @@ async def upload_visual(
     filepath = os.path.join(target_dir, filename)
 
     try:
-        image = Image.open(file.file)
+        image = Image.open(io.BytesIO(file_bytes))
         image.load()
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid image file: {exc}") from exc

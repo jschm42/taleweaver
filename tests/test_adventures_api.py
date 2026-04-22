@@ -8,6 +8,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from io import BytesIO
+import os
 
 from PIL import Image
 from backend.models.adventure import Adventure
@@ -384,6 +385,15 @@ def _make_png_bytes(width: int, height: int) -> bytes:
     return buffer.getvalue()
 
 
+def _make_noisy_png_bytes(width: int, height: int) -> bytes:
+    """Creates a PNG that is likely large in byte-size due to low compressibility."""
+    buffer = BytesIO()
+    pixels = os.urandom(width * height * 3)
+    image = Image.frombytes("RGB", (width, height), pixels)
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 async def test_upload_visual_updates_protagonist_image(client: AsyncClient):
     """Uploading a valid visual should persist the new protagonist image URL."""
     ids = await _create_adventure(client, "Upload Quest")
@@ -420,6 +430,22 @@ async def test_upload_visual_rejects_oversized_image(client: AsyncClient):
 
     assert resp.status_code == 400
     assert "Max size for this asset" in resp.text
+
+
+async def test_upload_visual_rejects_oversized_file_bytes(client: AsyncClient):
+    """Uploads that exceed file byte limits should fail before persisting anything."""
+    ids = await _create_adventure(client, "Upload File Size Validation Quest")
+    image_bytes = _make_noisy_png_bytes(1024, 1280)
+    assert len(image_bytes) > 2 * 1024 * 1024
+
+    resp = await client.post(
+        f"/api/adventures/{ids['adventure_id']}/visuals/upload",
+        data={"target_type": "protagonist", "target_id": ids["avatar_id"]},
+        files={"file": ("too-heavy.png", image_bytes, "image/png")},
+    )
+
+    assert resp.status_code == 400
+    assert "Max file size for this asset" in resp.text
 
 
 async def test_upload_visual_updates_cover_image(client: AsyncClient):
