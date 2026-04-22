@@ -142,7 +142,7 @@ async function fetchDebugInfo() {
     return
   }
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/debug`)
+    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/assets`)
     if (res.ok) {
       debugData.value = await res.json()
       visualsCacheVersion.value += 1
@@ -490,53 +490,16 @@ async function removeAdventure() {
   }
 }
 
-async function exportBlueprint() {
-  if (!props.adventureId) {
-    return
-  }
-  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/manifest`)
-  if (!res.ok) {
-    return
-  }
-  const data = await res.json()
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `blueprint_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-async function exportSession() {
-  if (!props.adventureId) {
-    return
-  }
-  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/session`)
-  if (!res.ok) {
-    return
-  }
-  const data = await res.json()
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `session_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-async function exportADV() {
+async function exportADZ() {
   if (!props.adventureId) return
-  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/manifest`)
+  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/adz`)
   if (!res.ok) return
-  const data = await res.json()
 
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `adv_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.adv`
+  a.download = `${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.adz`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -561,11 +524,11 @@ watch(
 <template>
   <Teleport to="body">
     <Transition name="fade">
-      <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div v-if="open" class="fixed inset-0 z-[60] flex items-start md:items-center justify-center p-4 md:p-6 overflow-y-auto">
         <div class="absolute inset-0 bg-black/80 backdrop-blur-md" @click="emit('close')" />
 
-        <div class="relative z-10 w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-          <div class="px-8 py-6 border-b border-slate-800 flex justify-between items-center">
+        <div class="relative z-10 my-4 md:my-0 w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col min-h-0 max-h-[calc(100dvh-2rem)] overflow-hidden">
+          <div class="px-8 py-6 border-b border-slate-800 flex justify-between items-center shrink-0">
             <div>
               <h2 class="text-2xl font-bold text-white flex items-center gap-3">
                 <i class="ra ra-gear-hammer text-emerald-500"></i>
@@ -576,7 +539,7 @@ watch(
             <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors p-2">X</button>
           </div>
 
-          <div class="flex px-8 border-b border-slate-800 bg-slate-950/30">
+          <div class="flex px-8 border-b border-slate-800 bg-slate-950/30 shrink-0">
             <button
               v-for="tab in ['settings', 'editor', 'advanced']"
               :key="tab"
@@ -590,7 +553,7 @@ watch(
             </button>
           </div>
 
-          <div class="flex-grow overflow-y-auto p-8 custom-scrollbar">
+          <div class="flex-grow min-h-0 overflow-y-auto p-8 custom-scrollbar">
             <div v-if="isLoading" class="flex justify-center py-12">
               <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-emerald-500"></div>
             </div>
@@ -1037,17 +1000,9 @@ watch(
               </div>
 
               <div class="grid grid-cols-3 gap-4">
-                <button @click="exportBlueprint" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 text-left">
-                  <div class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Blueprint</div>
-                  <div class="text-[10px] text-slate-500 mt-1">Export world manifest.</div>
-                </button>
-                <button @click="exportSession" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 text-left">
-                  <div class="text-xs font-bold text-cyan-400 uppercase tracking-widest">Session</div>
-                  <div class="text-[10px] text-slate-500 mt-1">Export complete runtime session.</div>
-                </button>
-                <button @click="exportADV" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-violet-500/50 text-left">
-                  <div class="text-xs font-bold text-violet-400 uppercase tracking-widest">ADV</div>
-                  <div class="text-[10px] text-slate-500 mt-1">Export vanilla ADV (all items).</div>
+                <button @click="exportADZ" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 text-left col-span-3">
+                  <div class="text-xs font-bold text-emerald-400 uppercase tracking-widest">ADZ Package</div>
+                  <div class="text-[10px] text-slate-500 mt-1">Single versioned exchange format.</div>
                 </button>
               </div>
 
@@ -1074,7 +1029,7 @@ watch(
             </div>
           </div>
 
-          <div class="p-8 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
+          <div class="p-8 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center shrink-0">
             <button
               @click="removeAdventure"
               :disabled="isSaving || isLoading"

@@ -1,12 +1,26 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { authState } from '@/store/auth'
 
 const props = defineProps<{
   adventureId: string
 }>()
 
 const router = useRouter()
+const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
+const ASSET_BASE = import.meta.env.DEV ? 'http://localhost:8000' : ''
+
+function authHeaders(includeJson = false): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (includeJson) {
+    headers['Content-Type'] = 'application/json'
+  }
+  if (authState.token) {
+    headers.Authorization = `Bearer ${authState.token}`
+  }
+  return headers
+}
 
 // Visuals state
 const isQuickGenerating = ref<Record<string, boolean>>({})
@@ -82,12 +96,79 @@ const form = ref({
   max_scenes: 5,
 })
 
+function normalizeEntityType(entity: any): string {
+  return String(entity?.entity_type || entity?.type || '').trim().toUpperCase()
+}
+
+function isNpcEntity(entity: any): boolean {
+  const kind = normalizeEntityType(entity)
+  return kind === 'NPC' || kind === 'CHARACTER'
+}
+
+function isObjectEntity(entity: any): boolean {
+  const kind = normalizeEntityType(entity)
+  return kind === 'OBJECT' || kind === 'ITEM'
+}
+
+function mergeUniqueById(primary: any[], extra: any[]): any[] {
+  const seen = new Set<string>()
+  const merged: any[] = []
+  for (const item of [...primary, ...extra]) {
+    if (!item || !item.id) continue
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    merged.push(item)
+  }
+  return merged
+}
+
+function normalizeDebugPayload(raw: any): any {
+  if (!raw || typeof raw !== 'object') {
+    return raw
+  }
+
+  const payload = { ...raw }
+  const allEntities = Array.isArray(raw.entities_all) ? raw.entities_all : []
+  if (allEntities.length === 0) {
+    return payload
+  }
+
+  const inferredNpcs = allEntities.filter((entity: any) => isNpcEntity(entity))
+  const inferredObjects = allEntities.filter((entity: any) => isObjectEntity(entity))
+
+  payload.npcs = mergeUniqueById(Array.isArray(raw.npcs) ? raw.npcs : [], inferredNpcs)
+  payload.objects = mergeUniqueById(Array.isArray(raw.objects) ? raw.objects : [], inferredObjects)
+  return payload
+}
+
+const editorNpcs = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.npcs) ? debugData.value.npcs : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isNpcEntity(entity))
+  return mergeUniqueById(source, inferred)
+})
+
+const editorScenes = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.scenes) ? debugData.value.scenes : []
+  return source.filter((scene: any) => !!scene?.id)
+})
+
+const editorObjects = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
+  return mergeUniqueById(source, inferred)
+})
+
+
 async function fetchAdventure() {
   if (!props.adventureId) return
   isLoading.value = true
   errorMsg.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`)
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}`, {
+      headers: authHeaders(false),
+    })
     if (!res.ok) throw new Error('Failed to load adventure configuration.')
     const data = await res.json()
     adventure.value = data
@@ -107,13 +188,21 @@ async function fetchAdventure() {
 async function fetchDebugInfo() {
   if (!props.adventureId) return
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/debug`)
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}/editor/assets`, {
+      headers: authHeaders(false),
+    })
     if (res.ok) {
-      debugData.value = await res.json()
+      const payload = await res.json()
+      debugData.value = normalizeDebugPayload(payload)
       visualsCacheVersion.value += 1
+    } else {
+      debugData.value = null
+      errorMsg.value = 'Failed to load world assets/debug data.'
     }
   } catch (error) {
     console.error('Failed to fetch debug info:', error)
+    debugData.value = null
+    errorMsg.value = 'Network error while loading world assets/debug data.'
   }
 }
 
@@ -127,9 +216,9 @@ async function saveEntityText(type: string, id: string) {
   isSavingText.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/entity`, {
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}/editor/entity`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(true),
       body: JSON.stringify({
         target_type: type,
         target_id: id,
@@ -156,9 +245,9 @@ async function runAIEdit() {
   isAIEditing.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/ai-edit`, {
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}/editor/ai-edit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(true),
       body: JSON.stringify({ 
         prompt: aiEditPrompt.value,
         auto_visualize: aiAutoVisualize.value 
@@ -181,9 +270,9 @@ async function saveChanges() {
   isSaving.value = true
   errorMsg.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`, {
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(true),
       body: JSON.stringify(form.value),
     })
     if (!res.ok) throw new Error('Failed to save changes.')
@@ -197,7 +286,7 @@ async function saveChanges() {
 
 function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) return ''
-  return `http://localhost:8000${imagePath}?v=${visualsCacheVersion.value}`
+  return `${ASSET_BASE}${imagePath}?v=${visualsCacheVersion.value}`
 }
 
 function openRegenerateDialog(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string, label: string) {
@@ -222,9 +311,9 @@ async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | '
   const key = `${kind}_${id}`
   isQuickGenerating.value[key] = true
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/visuals/regenerate`, {
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/regenerate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(true),
       body: JSON.stringify({ target_type: kind, target_id: id, prompt: null }),
     })
     if (!res.ok) {
@@ -245,9 +334,9 @@ async function regenerateAll(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | '
   let items: any[] = []
   if (kind === 'cover' && debugData.value?.adventure) items = [debugData.value.adventure]
   if (kind === 'protagonist' && debugData.value?.protagonist) items = [debugData.value.protagonist]
-  if (kind === 'scene') items = debugData.value?.scenes || []
-  if (kind === 'npc') items = debugData.value?.npcs || []
-  if (kind === 'object') items = debugData.value?.objects || []
+  if (kind === 'scene') items = editorScenes.value
+  if (kind === 'npc') items = editorNpcs.value
+  if (kind === 'object') items = editorObjects.value
 
   // Run all in parallel for maximum performance
   // We use skipFetch=true to avoid redundant refreshes, then refresh once at the end
@@ -262,9 +351,9 @@ async function regenerateVisual() {
   if (!selectedVisual.value) return
   isRegenerating.value = true
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/visuals/regenerate`, {
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/regenerate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(true),
       body: JSON.stringify({
         target_type: selectedVisual.value.kind,
         target_id: selectedVisual.value.id,
@@ -281,17 +370,26 @@ async function regenerateVisual() {
   }
 }
 
-onMounted(() => {
-  fetchAdventure()
-  fetchDebugInfo()
-})
+watch(
+  () => props.adventureId,
+  async (newAdventureId) => {
+    if (!newAdventureId) {
+      adventure.value = null
+      debugData.value = null
+      return
+    }
+    await Promise.all([fetchAdventure(), fetchDebugInfo()])
+  },
+  { immediate: true }
+)
 
 async function resetAdventure() {
   if (!confirm('Are you sure? This will reset all story progress and character stats.')) return
   isSaving.value = true
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/reset`, {
-      method: 'POST'
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}/reset`, {
+      method: 'POST',
+      headers: authHeaders(false),
     })
     if (!res.ok) throw new Error('Reset failed')
     await fetchDebugInfo()
@@ -303,41 +401,17 @@ async function resetAdventure() {
   }
 }
 
-async function exportBlueprint() {
-  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/manifest`)
+async function exportAdz() {
+  const res = await fetch(`${BASE}/adventures/${props.adventureId}/export/adz`, {
+    headers: authHeaders(false),
+  })
   if (!res.ok) return
-  const data = await res.json()
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `blueprint_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
-async function exportSession() {
-  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/session`)
-  if (!res.ok) return
-  const data = await res.json()
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `session_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-async function exportADV() {
-  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/manifest`)
-  if (!res.ok) return
-  const data = await res.json()
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `adv_${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.adv`
+  a.download = `${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.adz`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -346,10 +420,10 @@ const goBack = () => router.push({ name: 'portal' })
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-950 text-slate-200 font-sans flex flex-col relative overflow-hidden">
+  <div class="h-screen bg-slate-950 text-slate-200 font-sans flex flex-col relative overflow-x-hidden overflow-y-auto">
     <!-- Ambient Background -->
     <div v-if="debugData?.adventure?.image_url" class="absolute inset-0 pointer-events-none z-0 opacity-20">
-      <img :src="'http://localhost:8000' + debugData.adventure.image_url" class="w-full h-full object-cover blur-3xl scale-110" />
+      <img :src="ASSET_BASE + debugData.adventure.image_url" class="w-full h-full object-cover blur-3xl scale-110" />
       <div class="absolute inset-0 bg-slate-950/60"></div>
     </div>
 
@@ -387,7 +461,7 @@ const goBack = () => router.push({ name: 'portal' })
       </div>
     </header>
 
-    <main class="flex-grow p-6 max-w-[1400px] mx-auto w-full relative z-10">
+    <main class="flex-grow p-6 max-w-[1400px] mx-auto w-full relative z-10 pb-16">
       <div v-if="isLoading" class="flex flex-col justify-center items-center py-40 gap-6">
         <div class="relative w-20 h-20">
           <div class="absolute inset-0 rounded-full border-4 border-emerald-500/20"></div>
@@ -540,15 +614,15 @@ const goBack = () => router.push({ name: 'portal' })
                </section>
 
                <!-- Scenes -->
-               <section v-if="debugData.scenes?.length" class="space-y-6">
+               <section v-if="editorScenes.length" class="space-y-6">
                  <div class="flex items-center justify-between">
-                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">World Locations ({{ debugData.scenes.length }})</h3>
+                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">World Locations ({{ editorScenes.length }})</h3>
                    <button @click="regenerateAll('scene')" :disabled="isBatchGenerating['scene']" class="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Regenerate All
                    </button>
                  </div>
                   <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    <div v-for="scene in debugData.scenes" :key="'scene_' + scene.id" @mouseenter="handleHover({ name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="clearHover" class="relative group aspect-[1.8/1] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
+                    <div v-for="scene in editorScenes" :key="'scene_' + scene.id" @mouseenter="handleHover({ name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="clearHover" class="relative group aspect-[1.8/1] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
                       <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                       <div v-if="isQuickGenerating['scene_' + scene.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                          <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
@@ -567,15 +641,15 @@ const goBack = () => router.push({ name: 'portal' })
                </section>
 
                <!-- NPCs -->
-               <section v-if="debugData.npcs?.length" class="space-y-6">
+               <section v-if="editorNpcs.length" class="space-y-6">
                  <div class="flex items-center justify-between">
-                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Notable Inhabitants ({{ debugData.npcs.length }})</h3>
+                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Notable Inhabitants ({{ editorNpcs.length }})</h3>
                    <button @click="regenerateAll('npc')" :disabled="isBatchGenerating['npc']" class="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
                    </button>
                  </div>
                   <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                    <div v-for="npc in debugData.npcs" :key="'npc_' + npc.id" @mouseenter="handleHover({ name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC' }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg">
+                    <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="handleHover({ name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC' }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg">
                       <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                          <i class="ra ra-cycle animate-spin text-xl text-emerald-500"></i>
@@ -594,15 +668,15 @@ const goBack = () => router.push({ name: 'portal' })
                </section>
 
                <!-- Items -->
-               <section v-if="debugData.objects?.length" class="space-y-6">
+               <section v-if="editorObjects.length" class="space-y-6">
                  <div class="flex items-center justify-between">
-                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Mystical Objects ({{ debugData.objects.length }})</h3>
+                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Mystical Objects ({{ editorObjects.length }})</h3>
                    <button @click="regenerateAll('object')" :disabled="isBatchGenerating['object']" class="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['object'] }"></i> Regenerate All
                    </button>
                  </div>
                   <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-                    <div v-for="obj in debugData.objects" :key="'obj_' + obj.id" @mouseenter="handleHover({ name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM' }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
+                    <div v-for="obj in editorObjects" :key="'obj_' + obj.id" @mouseenter="handleHover({ name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM' }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
                       <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                          <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
@@ -659,19 +733,11 @@ const goBack = () => router.push({ name: 'portal' })
               <h4 class="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
                 <i class="ra ra-save text-emerald-500"></i> Archival & Export
               </h4>
-              <p class="text-xs text-slate-400 leading-relaxed">Download this adventure for external use, backup, or sharing with others.</p>
+              <p class="text-xs text-slate-400 leading-relaxed">Single exchange format: export as versioned ADZ package.</p>
               <div class="grid grid-cols-1 gap-3">
-                <button @click="exportADV" class="flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 rounded-2xl transition-all group">
-                  <span class="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-emerald-400">Export as .ADV Manifest</span>
+                <button @click="exportAdz" class="flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 rounded-2xl transition-all group">
+                  <span class="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-emerald-400">Export as .ADZ Package</span>
                   <i class="ra ra-save text-emerald-500"></i>
-                </button>
-                <button @click="exportBlueprint" class="flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-blue-500/10 border border-white/5 hover:border-blue-500/30 rounded-2xl transition-all group">
-                  <span class="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-blue-400">Download Blueprint (JSON)</span>
-                  <i class="ra ra-quill-ink text-blue-500"></i>
-                </button>
-                <button @click="exportSession" class="flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-amber-500/10 border border-white/5 hover:border-amber-500/30 rounded-2xl transition-all group">
-                  <span class="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-amber-400">Full Session Snapshot</span>
-                  <i class="ra ra-scroll-unfurled text-amber-500"></i>
                 </button>
               </div>
             </div>

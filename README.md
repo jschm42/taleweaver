@@ -172,8 +172,18 @@ Notes:
 TaleWeaver features an automated pipeline to seed the database with adventures or import shared content on startup.
 
 ### Supported Formats
-* **`.adv` (JSON):** Contains the adventure blueprint (manifest) or a complete session bundle.
-* **`.adz` (ZIP):** An "Adventure Zip" containing the manifest (`adventure.adv`) and associated media assets (images) in an `assets/` folder.
+* **`.adv` (JSON):** Adventure blueprint as plain JSON (no bundled assets).
+* **`.adz` (ZIP):** "Adventure Zip" containing the same blueprint JSON as `adventure.adv` plus optional bundled assets in `assets/`.
+
+Both formats use the same top-level blueprint structure and must include format metadata:
+* `format`: `taleweaver.adz`
+* `version`: currently `1.0`
+
+### Format Versioning
+* Every exported file is versioned.
+* On import, the backend validates `format` and `version`.
+* If a file version is below the minimum supported version, import is rejected with an explicit error (HTTP 400), e.g.:
+	* `Import version 0.9 is too old. Minimum supported version is 1.0.`
 
 ### Watch Directories
 The backend monitors three specific directories relative to the project root:
@@ -187,3 +197,9 @@ The backend monitors three specific directories relative to the project root:
 * **One-Time Seed:** Adventures in the root `adventures/` folder are only imported if the database is currently empty (e.g., first start or after a reset). This allows users to delete bundled adventures from the UI without them reappearing on every restart.
 * **Deduplication:** For other folders, the system checks the adventure title. If an adventure with the same title already exists, the import is skipped.
 * **Asset Handling:** For `.adz` files, assets are automatically extracted and remapped to the local storage, ensuring images are available immediately.
+
+### Portal Import/Export
+* In the portal adventure card menu, each adventure can be exported as both `.adv` and `.adz`.
+* The portal import action accepts both `.adv` and `.adz`:
+	* Use `.adv` when you only need the blueprint JSON.
+	* Use `.adz` when you also want to include packaged assets.

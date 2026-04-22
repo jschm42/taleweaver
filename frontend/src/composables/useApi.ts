@@ -105,21 +105,31 @@ export const api = {
     return `${BASE}/adventures/${adventureId}/export/adz`
   },
 
+  /** Returns the URL for exporting an adventure as ADV (JSON blueprint). */
+  exportAdvUrl(adventureId: string): string {
+    return `${BASE}/adventures/${adventureId}/export/adv`
+  },
+
   /** Import an ADZ file via FormData. */
   async importAdz(file: File): Promise<{ status: string; adventure_id: string }> {
     const formData = new FormData()
     formData.append('file', file)
-    
-    const res = await fetch(`${BASE}/adventures/import/adz`, {
+
+    return request('/adventures/import/adz', {
       method: 'POST',
       body: formData,
     })
-    
-    if (!res.ok) {
-      const detail = await res.text()
-      throw new Error(`ADZ Import ${res.status}: ${detail}`)
-    }
-    return res.json()
+  },
+
+  /** Import an ADV blueprint file via FormData. */
+  async importAdv(file: File): Promise<{ status: string; adventure_id: string }> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    return request('/adventures/import/adv', {
+      method: 'POST',
+      body: formData,
+    })
   },
 
   /** Retrieves the generation status and potential errors for an adventure. */

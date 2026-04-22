@@ -59,3 +59,4 @@ class AdventureDebugResponse(BaseModel):
     npcs: List[Dict[str, Any]]
     objects: List[Dict[str, Any]]
     exits: List[Dict[str, Any]]
+    entities_all: Optional[List[Dict[str, Any]]] = None

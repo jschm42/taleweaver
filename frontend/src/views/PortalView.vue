@@ -3,7 +3,6 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
-import type { AdventureImportPayload, CreateAdventurePayload } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -353,21 +352,39 @@ async function onImportFileSelected(event: Event) {
   const target = event.target as HTMLInputElement
   if (!target.files || target.files.length === 0) return
   const file = target.files[0]
-  if (file.name.toLowerCase().endsWith('.adz')) {
-    await executeAdzImport(file)
+
+  const lower = file.name.toLowerCase()
+  if (!lower.endsWith('.adz') && !lower.endsWith('.adv')) {
+    errorMsg.value = 'Nur .adv und .adz werden als Importformat unterstützt.'
     target.value = ''
     return
   }
+
   try {
-    const parsed = JSON.parse(await file.text()) as AdventureImportPayload
-    resetImportState()
-    importState.value.manifest = parsed
-    importState.value.titleOverride = parsed.title
-    showImportModal.value = true
+    if (lower.endsWith('.adz')) {
+      await executeAdzImport(file)
+    } else {
+      await executeAdvImport(file)
+    }
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Failed to parse .adv file.'
+    errorMsg.value = error?.message || 'Import fehlgeschlagen.'
   } finally {
     target.value = ''
+  }
+}
+
+async function executeAdvImport(file: File) {
+  isImporting.value = true
+  const tempId = `adv-import-${Date.now()}`
+  addPendingImportCard(tempId, file.name)
+  try {
+    await api.importAdv(file)
+    removePendingImportCard(tempId)
+    await fetchAdventures()
+  } catch (error: any) {
+    updatePendingImportStatus(tempId, error?.message || 'ADV Import fehlgeschlagen', true)
+  } finally {
+    isImporting.value = false
   }
 }
 
@@ -376,13 +393,50 @@ async function executeAdzImport(file: File) {
   const tempId = `adz-import-${Date.now()}`
   addPendingImportCard(tempId, file.name)
   try {
-    const result = await api.importAdz(file)
+    await api.importAdz(file)
     removePendingImportCard(tempId)
     await fetchAdventures()
   } catch (error: any) {
     updatePendingImportStatus(tempId, error?.message || 'ADZ Import fehlgeschlagen', true)
   } finally {
     isImporting.value = false
+  }
+}
+
+async function downloadAdventureExport(url: string, filename: string) {
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error('Export fehlgeschlagen')
+  }
+  const blob = await res.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(blobUrl)
+}
+
+function makeSafeFilename(title: string, ext: string) {
+  const safe = (title || 'adventure').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_')
+  return `${safe || 'adventure'}.${ext}`
+}
+
+async function exportAdventureAdz(adventureId: string, title: string) {
+  activeMenuId.value = null
+  try {
+    await downloadAdventureExport(api.exportAdzUrl(adventureId), makeSafeFilename(title, 'adz'))
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'ADZ Export fehlgeschlagen'
+  }
+}
+
+async function exportAdventureAdv(adventureId: string, title: string) {
+  activeMenuId.value = null
+  try {
+    await downloadAdventureExport(api.exportAdvUrl(adventureId), makeSafeFilename(title, 'adv'))
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'ADV Export fehlgeschlagen'
   }
 }
 
@@ -601,7 +655,7 @@ onUnmounted(() => {
             @click="playAdventure(adv.game_id)"
           >
             <!-- Image Area -->
-            <div class="relative aspect-[3/2] overflow-hidden rounded-xl mb-6 bg-aether-surface/30 border border-white/5 flex items-center justify-center group-hover:bg-aether-surface/50 transition-all duration-500">
+            <div class="relative aspect-[3/2] overflow-visible rounded-xl mb-6 bg-aether-surface/30 border border-white/5 flex items-center justify-center group-hover:bg-aether-surface/50 transition-all duration-500">
               <!-- Menu Button -->
               <button 
                 @click.stop="toggleMenu($event, adv.adventure_id)" 
@@ -632,6 +686,20 @@ onUnmounted(() => {
                   Play Chronicle
                 </button>
                 <button 
+                  @click.stop="exportAdventureAdz(adv.adventure_id, adv.adventure_title)"
+                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-cyan-500/20 hover:text-cyan-300 transition-colors flex items-center gap-3 border-b border-white/5"
+                >
+                  <i class="ra ra-save text-sm"></i>
+                  Export ADZ
+                </button>
+                <button 
+                  @click.stop="exportAdventureAdv(adv.adventure_id, adv.adventure_title)"
+                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-blue-500/20 hover:text-blue-300 transition-colors flex items-center gap-3 border-b border-white/5"
+                >
+                  <i class="ra ra-scroll-unfurled text-sm"></i>
+                  Export ADV
+                </button>
+                <button 
                   @click.stop="confirmDelete(adv)"
                   class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-3"
                 >
@@ -640,14 +708,16 @@ onUnmounted(() => {
                 </button>
               </div>
 
-              <img 
-                v-if="adv.image_url"
-                :src="adv.image_url" 
-                class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                alt="Cover"
-              />
+              <div class="absolute inset-0 overflow-hidden rounded-xl">
+                <img 
+                  v-if="adv.image_url"
+                  :src="adv.image_url" 
+                  class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  alt="Cover"
+                />
 
-              <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+              </div>
               
               <!-- Category Tag -->
               <div class="absolute top-4 left-4">

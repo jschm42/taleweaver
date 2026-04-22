@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Literal
 
+from backend.core.adventure_format import FORMAT_NAME, CURRENT_VERSION
+
 
 class Pacing(BaseModel):
     scene_length: Optional[Literal["short", "normal", "long"]] = Field(None, description="short|normal|long")
@@ -47,7 +49,8 @@ class ItemSpec(BaseModel):
 
 
 class AdventureImportPayload(BaseModel):
-    version: str = Field(..., description="Import format version, e.g. '1.0'")
+    format: str = Field(default=FORMAT_NAME, description="Canonical TaleWeaver import format")
+    version: str = Field(default=CURRENT_VERSION, description="Import format version, e.g. '1.0'")
     id: Optional[str] = None
     title: str
     subtitle: Optional[str] = None

@@ -17,8 +17,19 @@ from backend.models.avatar import Avatar
 from backend.models.game_state import GameState
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.engine.world_generator import WorldGenerator
+from backend.core.auth import get_password_hash
+from backend.core.adventure_format import validate_manifest_version
 
 logger = logging.getLogger(__name__)
+
+
+def _build_local_default_user() -> User:
+    # Import-only fallback user; password is intentionally random and unknown.
+    return User(
+        username="local_default_user",
+        hashed_password=get_password_hash(uuid.uuid4().hex),
+        role="user",
+    )
 
 class AdventureImporter:
     @staticmethod
@@ -72,6 +83,12 @@ class AdventureImporter:
                     return False
                 
                 manifest_data = json.loads(zip_file.read("adventure.adv").decode("utf-8"))
+                try:
+                    validate_manifest_version(manifest_data, require_format=True)
+                except ValueError as exc:
+                    logger.error("Invalid ADZ format for %s: %s", file_path, exc)
+                    return False
+
                 adv_data = manifest_data.get("adventure")
                 if not adv_data:
                     logger.error(f"Invalid ADZ {file_path}: Missing adventure section in manifest")
@@ -128,7 +145,7 @@ class AdventureImporter:
                     result = await db.execute(select(User).limit(1))
                     user = result.scalars().first()
                     if not user:
-                        user = User(username="local_default_user")
+                        user = _build_local_default_user()
                         db.add(user)
                         await db.flush()
                     
@@ -236,6 +253,12 @@ class AdventureImporter:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 payload = json.load(f)
+
+            try:
+                validate_manifest_version(payload, require_format=True)
+            except ValueError as exc:
+                logger.error("Invalid ADV format for %s: %s", file_path, exc)
+                return False
             
             # Check if this is a session bundle or a raw manifest
             # For auto-import, we mostly expect raw manifests or session exports
@@ -252,7 +275,7 @@ class AdventureImporter:
             res = await db.execute(select(User).limit(1))
             user = res.scalars().first()
             if not user:
-                user = User(username="local_default_user")
+                user = _build_local_default_user()
                 db.add(user)
                 await db.flush()
 

@@ -37,6 +37,7 @@ const showWalkthrough = ref(false)
 const showSuccess = ref(false)
 const showDebug = ref(false)
 const showDebugLog = ref(false)
+const fullWorldDebug = ref<any | null>(null)
 const walkthroughData = ref<any | null>(null)
 const trackedQuestId = ref<string | null>(null)
 const clockTick = ref(false)
@@ -211,6 +212,29 @@ const showImage = (path?: string | null) => {
 const goBack = () => {
   disconnect()
   router.push({ name: 'portal' })
+}
+
+const openDebugInspector = async () => {
+  showDebug.value = true
+
+  if (!props.id) {
+    fullWorldDebug.value = null
+    return
+  }
+
+  try {
+    const res = await fetch(`${BASE}/adventures/${props.id}/chat?include_full_world=true`, {
+      headers: authHeaders()
+    })
+    if (!res.ok) {
+      fullWorldDebug.value = null
+      return
+    }
+    const data = await res.json()
+    fullWorldDebug.value = data.full_world || null
+  } catch {
+    fullWorldDebug.value = null
+  }
 }
 
 const loadWalkthrough = async () => {
@@ -410,7 +434,7 @@ onBeforeUnmount(() => {
         @npc-leave="hoveredEntity = null"
         @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
         @item-leave="hoveredEntity = null"
-        @open-debug="showDebug = true"
+        @open-debug="openDebugInspector"
         @toggle-debug-log="(val) => showDebugLog = val"
       />
     </div>
@@ -458,7 +482,8 @@ onBeforeUnmount(() => {
         nodes, 
         npcMetadata, 
         currentSceneImage,
-        adventureImage
+        adventureImage,
+        fullWorld: fullWorldDebug
       }" 
       @close="showDebug = false" 
     />
