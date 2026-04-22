@@ -389,6 +389,11 @@ class WorldGenerator:
                         image_url = None
                     if image_url:
                         image_successes += 1
+                    else:
+                        # Fallback to procedural SVG
+                        image_url = await MediaEngine.generate_svg_placeholder(
+                            adventure_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", adventure_id)
+                        )
                     avatar.profile_image = image_url
             
         # Persist Scenes
@@ -428,6 +433,11 @@ class WorldGenerator:
                     image_url = None
                 if image_url:
                     image_successes += 1
+                else:
+                    # Fallback to procedural SVG
+                    image_url = await MediaEngine.generate_svg_placeholder(
+                        adventure_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
+                    )
 
             db.add(WorldScene(
                 id=s["id"],
@@ -487,6 +497,11 @@ class WorldGenerator:
                     image_url = None
                 if image_url:
                     image_successes += 1
+                else:
+                    # Fallback to procedural SVG
+                    image_url = await MediaEngine.generate_svg_placeholder(
+                        adventure_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
+                    )
 
             db.add(WorldEntity(
                 id=n["id"],
@@ -544,6 +559,11 @@ class WorldGenerator:
                     image_url = None
                 if image_url:
                     image_successes += 1
+                else:
+                    # Fallback to procedural SVG
+                    image_url = await MediaEngine.generate_svg_placeholder(
+                        adventure_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
+                    )
 
             is_starting_inv = o["id"] in starting_inv_ids
             starting_slot = starting_equipped_ids.get(o["id"])

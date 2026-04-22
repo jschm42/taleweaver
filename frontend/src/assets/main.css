@@ -1,93 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Epilogue:wght@400;600;700;900&family=Manrope:wght@400;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Global resets & base ─────────────────────────────────────────────── */
 @layer base {
-  @font-face {
-    font-family: 'Acme';
-    src: url('./fonts/Acme-Regular.ttf') format('truetype');
-    font-weight: normal;
-    font-style: normal;
+  body {
+    @apply bg-aether-background text-slate-200 font-ui selection:bg-aether-primary/30;
   }
 
-  *, *::before, *::after {
-    box-sizing: border-box;
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
   }
-
-  html, body, #app {
-    @apply h-full m-0 p-0 bg-panel-bg text-parchment;
-    font-family: 'Acme', sans-serif;
-    font-size: clamp(14px, 1vw + 10px, 18px);
-    line-height: 1.6;
-    image-rendering: auto;
-  }
-
-  /* Scrollbar — retro dark style */
-  ::-webkit-scrollbar { width: 8px; }
-  ::-webkit-scrollbar-track { background: #1a0a00; }
-  ::-webkit-scrollbar-thumb { background: #8b6914; border-radius: 0; }
-  ::-webkit-scrollbar-thumb:hover { background: #c9a84c; }
 }
 
-/* ─── Utility component classes ─────────────────────────────────────────── */
 @layer components {
-  /* Retro panel with double-border gold frame */
-  .rpg-panel {
-    @apply relative bg-panel-bg border-2 border-panel-border;
-    box-shadow: 0 0 0 2px #8b6914, inset 0 0 30px rgba(0, 0, 0, 0.7);
+  .glass-panel {
+    @apply bg-aether-surface/60 backdrop-blur-xl border border-white/5 shadow-glass;
   }
 
-  .rpg-panel-gold {
-    @apply relative bg-panel-bg border-2 border-gold;
-    box-shadow: 0 0 0 2px #c9a84c, 0 0 12px rgba(201, 168, 76, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.7);
+  .adventure-card {
+    background-image: linear-gradient(to bottom right, #121212, #081425);
+    @apply relative overflow-hidden rounded-2xl border border-white/5 transition-all duration-500 hover:border-aether-primary/30 hover:shadow-ambient-emerald;
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
   }
 
-  /* Corner ornaments via pseudo-elements */
-  .rpg-panel::before,
-  .rpg-panel-gold::before {
-    content: '✦';
-    @apply absolute -top-2 -left-2 text-gold text-xs leading-none;
+  .adventure-card-emerald {
+    background-image: linear-gradient(135deg, #121212 0%, #06201a 100%);
+    @apply hover:shadow-ambient-emerald hover:border-aether-primary/40;
   }
 
-  /* Retro button */
-  .rpg-btn {
-    @apply px-4 py-2 bg-ink border-2 border-gold text-gold font-pixel text-xs
-           cursor-pointer select-none transition-all duration-100
-           hover:bg-gold hover:text-ink active:scale-95;
-    image-rendering: pixelated;
-    text-shadow: 1px 1px 0 rgba(0,0,0,0.8);
+  .adventure-card-purple {
+    background-image: linear-gradient(135deg, #121212 0%, #150a25 100%);
+    @apply hover:shadow-ambient-purple hover:border-aether-secondary/40;
+  }
+  
+  .btn-primary {
+    @apply px-6 py-3 bg-aether-primary text-aether-background font-bold rounded-xl transition-all duration-300 hover:shadow-ambient-emerald hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 font-ui uppercase tracking-widest text-xs;
   }
 
-  .rpg-btn-danger {
-    @apply rpg-btn border-crimson text-crimson hover:bg-crimson hover:text-parchment;
+  .btn-secondary {
+    @apply px-6 py-3 bg-white/5 border border-white/10 text-white font-bold rounded-xl transition-all duration-300 hover:bg-white/10 hover:border-aether-primary/30 font-ui uppercase tracking-widest text-xs;
   }
 
-  /* HP / Stamina / Mana progress bars */
-  .stat-bar {
-    @apply relative h-4 w-full overflow-hidden border border-panel-border bg-ink;
+  .nav-link {
+    @apply relative px-4 py-2 text-sm font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-aether-primary transition-colors duration-300;
   }
 
-  .stat-bar-fill {
-    @apply h-full transition-all duration-500;
+  .nav-link.active {
+    @apply text-white;
   }
 
-  /* Chat message bubbles */
-  .msg-assistant {
-    @apply text-parchment;
-  }
-
-  .msg-user {
-    @apply text-gold-light;
-  }
-
-  .msg-system {
-    @apply text-emerald-light italic;
-  }
-
-  /* Blinking text cursor */
-  .cursor::after {
-    content: '█';
-    @apply animate-blink-cursor text-gold;
+  .nav-link.active::after {
+    content: '';
+    @apply absolute bottom-0 left-4 right-4 h-0.5 bg-aether-primary shadow-ambient-emerald;
   }
 }
+

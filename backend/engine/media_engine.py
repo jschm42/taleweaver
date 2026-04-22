@@ -14,6 +14,7 @@ from PIL import Image
 from backend.core.security import encryption_util
 from backend.core.config import settings
 from backend.core import prompts
+from backend.utils.svg_generator import SVGPlaceholderGenerator
 import litellm
 
 logger = logging.getLogger(__name__)
@@ -152,7 +153,11 @@ class MediaEngine:
             
         # 2. Fallback to database-stored (and encrypted) keys
         if api_keys_dict and provider_key in api_keys_dict:
-            return encryption_util.decrypt_key(api_keys_dict[provider_key])
+            try:
+                return encryption_util.decrypt_key(api_keys_dict[provider_key])
+            except Exception as e:
+                logger.error(f"Failed to decrypt API key for {provider_key}: {e}")
+                return None
             
         return None
 
@@ -583,17 +588,22 @@ class MediaEngine:
     async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict) -> Optional[str]:
         """High-level wrapper for gameplay scene generation (uses Advanced Model)."""
         t2i = user_config.get("t2i_settings")
-        if not t2i: return None
+        if not t2i: 
+            logger.warning("No T2I settings found in user_config")
+            return None
         
         provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
         model = t2i.get("advanced_model")
         
+        logger.info(f"Resolving scene generation: provider={provider}, model={model}")
+        
         if not model:
-            raise ValueError("Missing image model configuration.")
+            raise ValueError("Missing image model configuration for scenes.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider != "ollama" and not api_key:
-            raise ValueError(f"Missing image configuration or API key for {provider}")
+            logger.error(f"API key resolution failed for provider: {provider} (Advanced Model/Scenes). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
+            raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model). Please check your Visual Preferences in Admin settings.")
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
@@ -614,17 +624,22 @@ class MediaEngine:
     async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict) -> Optional[str]:
         """High-level wrapper for NPC/Object generation (uses Simple Model)."""
         t2i = user_config.get("t2i_settings")
-        if not t2i: return None
+        if not t2i: 
+            logger.warning("No T2I settings found in user_config")
+            return None
         
         provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
         model = t2i.get("simple_model")
         
+        logger.info(f"Resolving entity generation: provider={provider}, model={model}")
+        
         if not model:
-            raise ValueError("Missing image model configuration.")
+            raise ValueError("Missing image model configuration for entities.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider != "ollama" and not api_key:
-            raise ValueError(f"Missing image configuration or API key for {provider}")
+            logger.error(f"API key resolution failed for provider: {provider} (Simple Model/Entities). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
+            raise ValueError(f"Missing image configuration or API key for {provider} (Simple Model). Please check your Visual Preferences in Admin settings.")
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
@@ -645,17 +660,22 @@ class MediaEngine:
     async def generate_adventure_cover(title: str, context: str, adventure_id: str, user_config: dict, api_keys: dict) -> Optional[str]:
         """High-level wrapper for adventure cover generation (uses Advanced Model, 2:1 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
-        if not t2i: return None
+        if not t2i: 
+            logger.warning("No T2I settings found in user_config")
+            return None
         
-        provider = (t2i.get("provider", "openai") or "openai").lower()
+        provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
         model = t2i.get("advanced_model")
         
+        logger.info(f"Resolving adventure cover generation: provider={provider}, model={model}")
+        
         if not model:
-            raise ValueError("Missing image model configuration.")
+            raise ValueError("Missing image model configuration for adventure cover.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider != "ollama" and not api_key:
-            raise ValueError(f"Missing image configuration or API key for {provider}")
+            logger.error(f"API key resolution failed for provider: {provider} (Advanced Model/Cover). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
+            raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model/Cover). Please check your Visual Preferences in Admin settings.")
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
@@ -675,3 +695,29 @@ class MediaEngine:
             filename=filename,
             provider_options=t2i,
         )
+
+    @staticmethod
+    async def generate_svg_placeholder(
+        adventure_id: str,
+        entity_id: str,
+        target_dir: str,
+        filename: str = "placeholder.svg"
+    ) -> str:
+        """
+        Generates a procedural SVG placeholder as a fallback.
+        Ensures consistent visual style for 'unmanifested' content.
+        """
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            if not filename.endswith(".svg"):
+                filename += ".svg"
+            
+            filepath = os.path.join(target_dir, filename)
+            generator = SVGPlaceholderGenerator(width=1200, height=800, num_shapes=15)
+            generator.save(filepath, title=entity_id)
+            
+            rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
+            return f"/data/{rel_path}"
+        except Exception as e:
+            logger.error(f"Failed to generate SVG placeholder: {e}")
+            return ""

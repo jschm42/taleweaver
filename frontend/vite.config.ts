@@ -23,6 +23,11 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // Proxy media assets from backend data directory
+      '/data': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
 })

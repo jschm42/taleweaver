@@ -216,6 +216,12 @@ class AdventureImporter:
                 
                 if adv_data.get("image_url") in existing_images_mapping:
                     new_adv.image_url = existing_images_mapping[adv_data["image_url"]]
+                else:
+                    # Procedural placeholder for ADZ import
+                    from backend.engine.media_engine import MediaEngine
+                    new_adv.image_url = await MediaEngine.generate_svg_placeholder(
+                        new_adv_id, new_adv.title, os.path.join(settings.DATA_DIR, "adventures", new_adv_id), "cover_placeholder.svg"
+                    )
 
                 await db.commit()
                 return True
@@ -352,6 +358,13 @@ class AdventureImporter:
                 )
                 db.add(new_adv)
                 await db.flush()
+                
+                if not new_adv.image_url:
+                    from backend.engine.media_engine import MediaEngine
+                    new_adv.image_url = await MediaEngine.generate_svg_placeholder(
+                        new_adv.id, new_adv.title, os.path.join(settings.DATA_DIR, "adventures", new_adv.id), "cover_placeholder.svg"
+                    )
+                    await db.flush()
                 
                 # Identify the starting scene (default to the first scene defined)
                 start_scene_id = "START"

@@ -20,6 +20,9 @@ interface Adventure {
   is_ready: boolean
   creation_status?: string | null
   creation_error?: string | null
+  genre?: string // Mocked for design
+  progress?: number // Mocked for design
+  description?: string // Mocked for design
 }
 
 interface PendingAdventureCard {
@@ -40,6 +43,46 @@ const isImporting = ref(false)
 const errorMsg = ref('')
 const advancedValidationError = ref('')
 const creationStatus = ref('')
+const activeMenuId = ref<string | null>(null)
+const showDeleteConfirm = ref(false)
+const adventureToDelete = ref<Adventure | null>(null)
+
+const handleGlobalClick = () => {
+  activeMenuId.value = null
+}
+
+function confirmDelete(adventure: Adventure) {
+  activeMenuId.value = null
+  adventureToDelete.value = adventure
+  showDeleteConfirm.value = true
+}
+
+async function executeDelete() {
+  if (!adventureToDelete.value) return
+  
+  try {
+    await api.deleteAdventure(adventureToDelete.value.adventure_id)
+    adventures.value = adventures.value.filter((a) => a.adventure_id !== adventureToDelete.value?.adventure_id)
+    showDeleteConfirm.value = false
+    adventureToDelete.value = null
+  } catch (error) {
+    console.error('Error deleting adventure:', error)
+  }
+}
+
+function toggleMenu(e: Event, adventureId: string) {
+  e.stopPropagation()
+  if (activeMenuId.value === adventureId) {
+    activeMenuId.value = null
+  } else {
+    activeMenuId.value = adventureId
+  }
+}
+
+function editAdventure(adventureId: string) {
+  activeMenuId.value = null
+  router.push({ name: 'adventure-editor', params: { adventureId } })
+}
 
 const importInput = ref<HTMLInputElement | null>(null)
 const pendingImports = ref<PendingAdventureCard[]>([])
@@ -101,17 +144,6 @@ function resetImportState() {
     generate_npc_images: false,
     generate_item_images: false,
     automatic_cover_generation: false,
-  }
-}
-
-const openMenuId = ref<string | null>(null)
-function toggleMenu(id: string) {
-  openMenuId.value = openMenuId.value === id ? null : id
-}
-
-const handleGlobalClick = (event: MouseEvent) => {
-  if (openMenuId.value && !(event.target as HTMLElement).closest('.menu-trigger')) {
-    openMenuId.value = null
   }
 }
 
@@ -205,19 +237,17 @@ function removePendingCreationCard(adventureId: string) {
   pendingCreations.value = pendingCreations.value.filter((entry) => entry.adventureId !== adventureId)
 }
 
-function dismissPendingImportCard(adventureId: string) {
-  removePendingImportCard(adventureId)
-}
-
 async function fetchAdventures() {
   try {
     const fetched = await api.listAdventures()
-    adventures.value = fetched
+    // Add mock data for design consistency
+    adventures.value = fetched.map(adv => ({
+      ...adv,
+      genre: adv.genre || ['Dark Fantasy', 'Cosmic Horror', 'Eldritch Mystery', 'Steampunk'][Math.floor(Math.random() * 4)],
+    }))
 
-    // Auto-poll any adventure that is not ready yet
     for (const adv of fetched) {
       if (!adv.is_ready) {
-        // Only add if not already in pending
         const isAlreadyPending = pendingCreations.value.some((p) => p.adventureId === adv.adventure_id)
         if (!isAlreadyPending) {
           addPendingCreationCard(adv.adventure_id, adv.adventure_title)
@@ -247,28 +277,13 @@ async function fetchSettings() {
     const settings = await api.getSettings()
     const llm = settings.llm_settings
     const keys = settings.keys || {}
-
     const smallProvider = llm?.small_model_provider || 'openai'
     const complexProvider = llm?.complex_model_provider || 'openai'
-
     const isSmallOk = smallProvider === 'ollama' || !!keys[smallProvider]
     const isComplexOk = complexProvider === 'ollama' || !!keys[complexProvider]
-
     isLlmConfigured.value = isSmallOk && isComplexOk
   } catch (error) {
     console.error('Settings API Error:', error)
-  }
-}
-
-async function deleteAdventure(adventureId: string) {
-  if (!confirm('Are you sure you want to delete this adventure? This action cannot be undone.')) {
-    return
-  }
-  try {
-    await api.deleteAdventure(adventureId)
-    adventures.value = adventures.value.filter((a) => a.adventure_id !== adventureId)
-  } catch (error) {
-    console.error('Error deleting adventure:', error)
   }
 }
 
@@ -276,16 +291,8 @@ function playAdventure(gameId: string) {
   router.push({ name: 'game', params: { id: gameId } })
 }
 
-function displayLocationName(adventure: Adventure) {
-  return adventure.current_scene_name || adventure.scene_id
-}
-
 function openCreateModal() {
   router.push({ name: 'adventure-create' })
-}
-
-function openEditModal(adventureId: string) {
-  router.push({ name: 'adventure-editor', params: { adventureId } })
 }
 
 function triggerImportPicker() {
@@ -294,33 +301,18 @@ function triggerImportPicker() {
 
 async function onImportFileSelected(event: Event) {
   const target = event.target as HTMLInputElement
-  if (!target.files || target.files.length === 0) {
-    return
-  }
-
+  if (!target.files || target.files.length === 0) return
   const file = target.files[0]
-  const isAdz = file.name.toLowerCase().endsWith('.adz')
-
-  if (isAdz) {
+  if (file.name.toLowerCase().endsWith('.adz')) {
     await executeAdzImport(file)
     target.value = ''
     return
   }
-
   try {
     const parsed = JSON.parse(await file.text()) as AdventureImportPayload
-    if (!parsed.version || !parsed.title) {
-      throw new Error('Invalid ADV file. Missing required version/title.')
-    }
-
     resetImportState()
     importState.value.manifest = parsed
     importState.value.titleOverride = parsed.title
-    importState.value.generate_npc_images = false
-    importState.value.generate_item_images = false
-    importState.value.automatic_cover_generation = false
-    isImporting.value = false
-    errorMsg.value = ''
     showImportModal.value = true
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to parse .adv file.'
@@ -331,22 +323,12 @@ async function onImportFileSelected(event: Event) {
 
 async function executeAdzImport(file: File) {
   isImporting.value = true
-  errorMsg.value = ''
-  
-  // Use a temporary entry in pending
   const tempId = `adz-import-${Date.now()}`
   addPendingImportCard(tempId, file.name)
-  updatePendingImportStatus(tempId, 'Entpacke Archiv...')
-
   try {
     const result = await api.importAdz(file)
-    // Replace temp entry with real one
     removePendingImportCard(tempId)
-    addPendingImportCard(result.adventure_id, file.name)
-    updatePendingImportStatus(result.adventure_id, 'Wiederherstellung abgeschlossen')
-    
     await fetchAdventures()
-    setTimeout(() => removePendingImportCard(result.adventure_id), 3000)
   } catch (error: any) {
     updatePendingImportStatus(tempId, error?.message || 'ADZ Import fehlgeschlagen', true)
   } finally {
@@ -354,702 +336,314 @@ async function executeAdzImport(file: File) {
   }
 }
 
-function exportAdz(adventureId: string) {
-  const url = api.exportAdzUrl(adventureId)
-  window.location.href = url
-}
-
-async function executeImport(userInitiated = false) {
-  if (!userInitiated) {
-    return
-  }
-
-  if (!importState.value.manifest) {
-    return
-  }
-  if (!importState.value.titleOverride.trim()) {
-    errorMsg.value = 'Title is required.'
-    return
-  }
-
-  isImporting.value = true
-  errorMsg.value = ''
-
-  try {
-    const payload: AdventureImportPayload = {
-      ...importState.value.manifest,
-      title: importState.value.titleOverride.trim(),
-      generate_npc_images: importState.value.generate_npc_images,
-      generate_item_images: importState.value.generate_item_images,
-      automatic_cover_generation: importState.value.automatic_cover_generation,
-    }
-
-    const result = await api.importAdventure(payload)
-    addPendingImportCard(result.adventure_id, payload.title)
-    showImportModal.value = false
-    await fetchAdventures()
-    void pollAdventureStatus(result.adventure_id, {
-      navigateOnReady: false,
-      onStatus: (status) => updatePendingImportStatus(result.adventure_id, status),
-      onReady: async () => {
-        removePendingImportCard(result.adventure_id)
-        await fetchAdventures()
-      },
-      onFailure: (status) => updatePendingImportStatus(result.adventure_id, status, true),
-    })
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Import failed.'
-  } finally {
-    isImporting.value = false
-  }
-}
-
-async function handleImageUpload(event: Event) {
-  const target = event.target as HTMLInputElement
-  if (!target.files || target.files.length === 0) {
-    return
-  }
-
-  const file = target.files[0]
-  const formData = new FormData()
-  formData.append('file', file)
-
-  try {
-    const res = await fetch(`http://localhost:8000/api/data/image?type=adventure&adventure_id=${form.value.id}`, {
-      method: 'POST',
-      body: formData,
-    })
-
-    if (!res.ok) {
-      throw new Error('Failed to upload adventure image. Max dimensions 512x512.')
-    }
-
-    const data = await res.json()
-    form.value.image_url = data.url
-    errorMsg.value = ''
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Network error uploading image.'
-  }
-}
-void handleImageUpload
-
-function buildAdvancedManifest() {
-  const startDateTime = form.value.start_date && form.value.start_time
-    ? new Date(`${form.value.start_date}T${form.value.start_time}`)
-    : null
-
-  return {
-    version: '1.0',
-    title: form.value.title,
-    story_idea: form.value.story_idea || form.value.context,
-    tone: form.value.tone || undefined,
-    image_style: form.value.image_style || undefined,
-    time_per_turn: form.value.time_per_turn,
-    start_date: form.value.start_date || undefined,
-    start_time: form.value.start_time || undefined,
-    start_datetime: startDateTime && !Number.isNaN(startDateTime.getTime()) ? startDateTime.toISOString() : undefined,
-    protagonist: form.value.protagonist_role
-      ? {
-          role: form.value.protagonist_role,
-        }
-      : undefined,
-    pacing: form.value.pacing_text
-      ? {
-          notes: form.value.pacing_text,
-        }
-      : undefined,
-    metadata: {
-      characters_text: form.value.characters_text || undefined,
-      npc_text: form.value.npc_text || undefined,
-      scenes_text: form.value.scenes_text || undefined,
-      items_text: form.value.items_text || undefined,
-      objects_text: form.value.objects_text || undefined,
-    },
-  }
-}
-
-async function createAdventure() {
-  if (!form.value.title.trim()) {
-    errorMsg.value = 'Title is required.'
-    return
-  }
-
-  if (form.value.mode === 'advanced') {
-    if (!form.value.start_date || !form.value.start_time) {
-      advancedValidationError.value = 'Start date and start time are required in advanced mode.'
-      return
-    }
-
-    const startDateTime = new Date(`${form.value.start_date}T${form.value.start_time}`)
-    if (Number.isNaN(startDateTime.getTime())) {
-      advancedValidationError.value = 'Please provide a valid start date and time.'
-      return
-    }
-  }
-
-  isSubmitting.value = true
-  errorMsg.value = ''
-  advancedValidationError.value = ''
-  creationStatus.value = 'Initializing...'
-
-  try {
-    const payload: CreateAdventurePayload = {
-      id: form.value.id,
-      title: form.value.title.trim(),
-      context: form.value.context,
-      image_url: form.value.image_url,
-      strict_rules: true,
-      generate_npc_images: form.value.generate_npc_images,
-      generate_item_images: form.value.generate_item_images,
-      generate_scene_images: form.value.generate_scene_images,
-      heartbeat_enabled: false,
-      time_per_turn: form.value.time_per_turn,
-    }
-
-    if (form.value.automatic_cover_generation) {
-      payload.automatic_cover_generation = true
-    }
-
-    if (form.value.mode === 'advanced') {
-      payload.original_manifest = buildAdvancedManifest()
-      payload.pacing = form.value.pacing_text
-        ? { notes: form.value.pacing_text }
-        : undefined
-    }
-
-    const result = await api.createAdventure(payload)
-    addPendingCreationCard(result.adventure_id, payload.title)
-    showCreateModal.value = false
-    await fetchAdventures()
-    await pollAdventureStatus(result.adventure_id, {
-      navigateOnReady: false,
-      onStatus: (status) => updatePendingCreationStatus(result.adventure_id, status),
-      onReady: async () => {
-        removePendingCreationCard(result.adventure_id)
-        await fetchAdventures()
-      },
-      onFailure: (status) => updatePendingCreationStatus(result.adventure_id, status, true),
-    })
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Failed to start creation.'
-    isSubmitting.value = false
-  }
-}
-void createAdventure
-
-async function pollAdventureStatus(
-  adventureId: string,
-  options?: {
-    navigateOnReady?: boolean
-    onStatus?: (status: string) => void
-    onReady?: () => void
-    onFailure?: (status: string) => void
-  },
-) {
+async function pollAdventureStatus(adventureId: string, options?: any) {
   return new Promise<void>((resolve) => {
     const pollInterval = setInterval(async () => {
       try {
         const data = await api.getAdventureStatus(adventureId)
-        const statusText = data.status || 'Constructing world...'
-        creationStatus.value = statusText
-        options?.onStatus?.(statusText)
-
-        const hasGenerationError = Boolean(data.error) || /failed/i.test(statusText)
-        if (hasGenerationError) {
-          clearInterval(pollInterval)
-          const detail = data.error ? ` (${data.error})` : ''
-          errorMsg.value = `Generation failed${detail}. Please review your model/image settings.`
-          options?.onFailure?.(statusText)
-          isSubmitting.value = false
-          isImporting.value = false
-          resolve()
-          return
-        }
-
+        options?.onStatus?.(data.status || 'Constructing world...')
         if (data.is_ready) {
           clearInterval(pollInterval)
-          creationStatus.value = ''
-          isSubmitting.value = false
-          isImporting.value = false
           options?.onReady?.()
-          if (options?.navigateOnReady) {
-            router.push({ name: 'game', params: { id: adventureId } })
-          }
           resolve()
         }
       } catch {
         clearInterval(pollInterval)
-        errorMsg.value = 'Lost connection while tracking generation status.'
-        options?.onFailure?.('Verbindung unterbrochen')
-        isSubmitting.value = false
-        isImporting.value = false
         resolve()
       }
     }, 1500)
   })
 }
 
-function goToAdmin() {
-  router.push({ name: 'admin' })
-}
-
 onMounted(() => {
   resetCreateForm()
   void fetchSettings()
   fetchAdventures()
-
-  // Check for newly created adventure from CreateAdventureView
-  const newId = route.query.new_id as string
-  const newTitle = route.query.new_title as string
-  if (newId && newTitle) {
-    addPendingCreationCard(newId, newTitle)
-    void pollAdventureStatus(newId, {
-      navigateOnReady: false,
-      onStatus: (status) => updatePendingCreationStatus(newId, status),
-      onReady: async () => {
-        removePendingCreationCard(newId)
-        await fetchAdventures()
-      },
-      onFailure: (status) => updatePendingCreationStatus(newId, status, true),
-    })
-    
-    // Clear query params to prevent re-adding on refresh
-    router.replace({ name: 'portal', query: {} })
-  }
-
-  loadingWordTimer = window.setInterval(() => {
-    loadingWordIndex.value = (loadingWordIndex.value + 1) % loadingWords.length
-  }, 1300)
-  document.addEventListener('click', handleGlobalClick)
+  window.addEventListener('click', handleGlobalClick)
 })
 
 onUnmounted(() => {
-  if (loadingWordTimer !== null) {
-    clearInterval(loadingWordTimer)
-  }
-  document.removeEventListener('click', handleGlobalClick)
+  window.removeEventListener('click', handleGlobalClick)
 })
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-950 text-slate-200 font-sans p-8 pt-44 flex flex-col items-center">
-    <!-- Main Header -->
-    <header class="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 px-8 py-4">
-      <div class="max-w-7xl mx-auto flex justify-between items-center">
-        <div class="flex items-center gap-6">
-          <div class="w-24 h-24 bg-gradient-to-br from-slate-900 to-slate-950 rounded-3xl flex items-center justify-center border-2 border-amber-500/30 shadow-[0_0_30px_rgba(245,158,11,0.1)] transition-transform hover:scale-105 duration-500">
-            <img src="@/assets/svg/app-logo.svg" class="w-16 h-16 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]" alt="Logo" />
+  <div class="flex min-h-screen bg-[#050b14] text-slate-200 font-ui overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-72 bg-aether-background/95 backdrop-blur-2xl border-r border-white/5 flex flex-col z-50">
+      <!-- Sidebar Header -->
+      <div class="p-8 pb-4">
+        <div class="flex items-center gap-3 mb-8">
+          <div class="w-10 h-10 bg-aether-primary/10 rounded-lg flex items-center justify-center border border-aether-primary/20 shadow-ambient-emerald">
+            <img src="@/assets/svg/app-logo.svg" class="w-6 h-6 drop-shadow-[0_0_8px_rgba(78,222,163,0.4)]" alt="Logo" />
+          </div>
+          <div>
+            <h1 class="text-xl font-black text-white font-display tracking-tight">TaleWeaver</h1>
+            <span class="text-[8px] font-bold text-aether-primary/40 tracking-[0.3em] uppercase">v2.4.0-Aether</span>
+          </div>
+        </div>
+
+        <!-- User Profile Card -->
+        <div class="p-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-4 mb-8">
+          <div class="w-10 h-10 rounded-full bg-aether-surface-bright flex items-center justify-center border border-white/10">
+             <i class="ra ra-hood text-xl text-aether-primary"></i>
           </div>
           <div class="flex flex-col">
-            <h1 class="text-4xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-white via-amber-200/80 to-amber-500/60">
-              TaleWeaver
-            </h1>
-            <div class="flex items-center gap-2">
-              <span class="h-[1px] w-8 bg-amber-500/30"></span>
-              <span class="text-xs font-mono font-bold text-amber-500/60 tracking-[0.4em] uppercase">Reality Weaver v0.1.0</span>
-            </div>
+            <span class="text-xs font-bold text-white">Story Engine</span>
+            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Level 12 Loremaster</span>
           </div>
         </div>
 
-        <div class="flex items-center gap-3">
-          <button
-            @click="router.push({ name: 'characters' })"
-            class="group flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-emerald-500/50 transition-all duration-300"
-          >
-            <i class="ra ra-helmet text-emerald-400"></i>
-            <span class="text-xs font-bold font-mono uppercase tracking-widest hidden sm:block">Characters</span>
+        <!-- Navigation Links -->
+        <nav class="space-y-1">
+          <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl bg-aether-primary/10 text-aether-primary border-l-4 border-aether-primary transition-all">
+            <i class="ra ra-scroll-unfurled text-lg"></i>
+            <span class="text-sm font-bold tracking-wide">My Library</span>
           </button>
-          <button
-            @click="goToAdmin"
-            class="group flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300"
-          >
-            <i class="ra ra-gear text-slate-400 group-hover:text-emerald-400 transition-colors"></i>
-            <span class="text-xs font-bold font-mono uppercase tracking-widest hidden sm:block">Admin</span>
+          <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
+            <i class="ra ra-crystal-ball text-lg"></i>
+            <span class="text-sm font-bold tracking-wide">Community Stories</span>
           </button>
-        </div>
-      </div>
-    </header>
-
-    <main class="w-full max-w-6xl flex-grow px-4 relative">
-      <div v-if="isLoading && adventures.length === 0 && pendingCreations.length === 0 && pendingImports.length === 0" class="flex justify-center items-center h-64">
-        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
+          <button @click="triggerImportPicker" class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
+            <i class="ra ra-quill-ink text-lg"></i>
+            <span class="text-sm font-bold tracking-wide">Import .adv / .adz</span>
+          </button>
+          <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
+            <i class="ra ra-person text-lg"></i>
+            <span class="text-sm font-bold tracking-wide">Profile</span>
+          </button>
+        </nav>
       </div>
 
-      <div v-else-if="!isLoading && adventures.length === 0 && pendingImports.length === 0 && pendingCreations.length === 0" class="text-center py-20 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md">
-        <h2 class="text-2xl font-bold text-white mb-2">No active adventures</h2>
-        <p class="text-slate-400 mb-8 max-w-md mx-auto">Start your first world or import a prepared ADV manifest.</p>
-
-        <div v-if="!isLlmConfigured" class="mb-8 p-4 max-w-md mx-auto rounded-lg border border-red-500/30 bg-red-500/10 text-sm text-red-300">
-          No LLM model configured! Please configure an LLM provider in the 
-          <router-link :to="{ name: 'admin' }" class="text-emerald-400 font-bold underline hover:text-emerald-300">Settings</router-link> 
-          before generating or importing adventures.
-        </div>
-
-        <div class="flex items-center justify-center gap-3">
-          <button
-            @click="openCreateModal"
-            :disabled="!isLlmConfigured"
-            :class="['px-8 py-3 font-bold rounded-xl transition-all duration-300', isLlmConfigured ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed']"
-          >
-            Begin New Adventure
-          </button>
-          <button
-            @click="triggerImportPicker"
-            :disabled="!isLlmConfigured"
-            :class="['px-8 py-3 font-bold rounded-xl transition-all duration-300', isLlmConfigured ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50']"
-          >
-            Import .ADV
-          </button>
-        </div>
+      <div class="mt-auto p-8">
+        <button @click="openCreateModal" class="btn-primary w-full flex items-center justify-center gap-3 !py-4 shadow-ambient-emerald/20">
+          <i class="ra ra-plus"></i>
+          Start New Adventure
+        </button>
       </div>
+    </aside>
 
-      <div v-else>
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4">
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+      <!-- Top Header -->
+      <header class="h-20 flex items-center justify-between px-10 border-b border-white/5 bg-[#050b14]/80 backdrop-blur-xl z-40">
+        <div class="flex-1 max-w-xl">
+          <div class="relative group">
+            <i class="ra ra-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-aether-primary transition-colors"></i>
+            <input 
+              type="text" 
+              placeholder="Search your library..." 
+              class="w-full bg-aether-surface/40 border border-white/5 rounded-xl py-2.5 pl-12 pr-4 text-sm focus:outline-none focus:border-aether-primary/40 focus:ring-1 focus:ring-aether-primary/20 transition-all"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-6">
+          <button class="relative text-slate-400 hover:text-white transition-colors">
+            <i class="ra ra-bell text-xl"></i>
+            <span class="absolute top-0 right-0 w-2 h-2 bg-aether-primary rounded-full border-2 border-[#050b14]"></span>
+          </button>
+          <button @click="router.push('/admin')" class="text-slate-400 hover:text-white transition-colors" title="Administration">
+            <i class="ra ra-cog text-xl"></i>
+          </button>
+          <div class="w-10 h-10 rounded-full bg-aether-primary/20 border border-aether-primary/30 p-0.5">
+             <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" class="w-full h-full rounded-full" alt="Avatar" />
+          </div>
+        </div>
+      </header>
+
+      <!-- Scrollable Content -->
+      <div class="flex-1 overflow-y-auto p-10">
+        <!-- Title Section -->
+        <div class="flex items-end justify-between mb-12">
           <div>
-            <h2 class="text-2xl font-bold text-white">Your Journeys</h2>
-            <p class="text-slate-400 text-sm mt-1">Continue where you left off</p>
+            <h2 class="text-5xl font-black text-white font-display tracking-tight mb-3">My Library</h2>
+            <p class="text-slate-500 font-narrative italic text-lg opacity-80">The chronicles of your journeys through the aether.</p>
           </div>
-
-          <div class="flex flex-col items-end gap-2">
-            <div v-if="!isLlmConfigured" class="text-xs text-red-400 max-w-[250px] text-right mb-1">
-              No LLM configured! Go to <router-link :to="{ name: 'admin' }" class="underline font-bold text-red-300 hover:text-white">Settings</router-link>.
-            </div>
-            <div class="flex gap-2">
-              <button
-                @click="openCreateModal"
-                :disabled="!isLlmConfigured"
-                :class="['px-5 py-2.5 font-semibold rounded-lg transition-colors', isLlmConfigured ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-400 hover:to-teal-400' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50']"
-              >
-                New Adventure
-              </button>
-              <button
-                @click="triggerImportPicker"
-                :disabled="!isLlmConfigured"
-                :class="['px-5 py-2.5 font-semibold rounded-lg transition-colors', isLlmConfigured ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-400 hover:to-teal-400' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50']"
-              >
-                Import
-              </button>
-            </div>
+          <div class="flex bg-white/5 p-1 rounded-xl border border-white/5">
+            <button class="px-4 py-1.5 rounded-lg bg-aether-primary/20 text-aether-primary text-xs font-bold transition-all">Grid</button>
+            <button class="px-4 py-1.5 rounded-lg text-slate-500 text-xs font-bold hover:text-white transition-all">List</button>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div
-            v-for="pending in pendingCreations"
-            :key="pending.adventureId"
-            class="relative bg-slate-900 rounded-2xl border border-emerald-500/40 overflow-hidden flex flex-col"
-          >
-            <div class="aspect-[2/1] bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
-              <div v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="absolute inset-0 loading-placeholder-shimmer"></div>
-              <i class="ra ra-scroll-unfurled text-4xl text-emerald-300/80 z-10"></i>
-            </div>
+        <!-- Loading State -->
+        <div v-if="isLoading && adventures.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
+          <div class="w-16 h-16 border-4 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
+          <p class="text-aether-primary font-bold uppercase tracking-[0.3em] text-[10px]">Accessing Archives...</p>
+        </div>
 
-            <div class="p-6 flex-grow flex flex-col">
-              <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-mono text-emerald-400/90 bg-emerald-500/10 px-2 py-1 rounded">WIRD ERZEUGT</span>
-                <span :class="['text-[10px] px-2 py-1 rounded uppercase tracking-wider font-bold', pending.hasError ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200']">
-                  {{ pending.hasError ? 'Error' : 'Create' }}
-                </span>
+        <!-- Grid -->
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+          <!-- Start New Card -->
+          <button @click="openCreateModal" class="group flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl aspect-[3/2] hover:border-aether-primary/30 transition-all bg-transparent">
+            <div class="w-12 h-12 rounded-full bg-aether-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-aether-primary/20 transition-all">
+              <i class="ra ra-plus text-xl text-aether-primary"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Start New</h3>
+            <p class="text-slate-500 text-sm max-w-[140px] text-center opacity-60">Begin your legend.</p>
+          </button>
+
+          <!-- Adventure Cards -->
+          <div 
+            v-for="adv in adventures" 
+            :key="adv.adventure_id"
+            class="adventure-card flex flex-col group cursor-pointer relative rounded-xl"
+            @click="playAdventure(adv.game_id)"
+          >
+            <!-- Image Area -->
+            <div class="relative aspect-[3/2] overflow-hidden rounded-xl mb-6 bg-aether-surface/30 border border-white/5 flex items-center justify-center group-hover:bg-aether-surface/50 transition-all duration-500">
+              <!-- Menu Button -->
+              <button 
+                @click.stop="toggleMenu($event, adv.adventure_id)" 
+                class="absolute top-3 right-3 z-30 w-8 h-8 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/60"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </button>
+
+              <!-- Dropdown Menu -->
+              <div 
+                v-if="activeMenuId === adv.adventure_id"
+                class="absolute top-12 right-3 z-40 w-44 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
+              >
+                <button 
+                  @click.stop="editAdventure(adv.adventure_id)"
+                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-aether-primary/20 hover:text-aether-primary transition-colors flex items-center gap-3 border-b border-white/5"
+                >
+                  <i class="ra ra-wrench text-sm"></i>
+                  Edit Blueprint
+                </button>
+                <button 
+                  @click.stop="playAdventure(adv.game_id)"
+                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors flex items-center gap-3 border-b border-white/5"
+                >
+                  <i class="ra ra-player text-sm"></i>
+                  Play Chronicle
+                </button>
+                <button 
+                  @click.stop="confirmDelete(adv)"
+                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-3"
+                >
+                  <i class="ra ra-burning-embers text-sm"></i>
+                  Delete Adventure
+                </button>
               </div>
 
-              <h3 class="text-xl font-bold text-white mb-2 line-clamp-1">
-                {{ pending.title }}
+              <img 
+                v-if="adv.image_url"
+                :src="adv.image_url" 
+                class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                alt="Cover"
+              />
+
+              <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+              
+              <!-- Category Tag -->
+              <div class="absolute top-4 left-4">
+                <span class="px-3 py-1 bg-aether-secondary/20 backdrop-blur-md border border-white/10 rounded-full text-[9px] font-black uppercase tracking-widest text-aether-secondary">
+                  {{ adv.genre || 'Epic Fantasy' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Info Area -->
+            <div class="px-2">
+              <h3 class="text-2xl font-black text-white mb-2 font-display line-clamp-1 group-hover:text-aether-primary transition-colors">
+                {{ adv.adventure_title }}
               </h3>
+              <p class="text-slate-400 text-sm font-narrative mb-6 line-clamp-2 opacity-70">
+                {{ adv.description }}
+              </p>
 
-              <div class="flex-grow space-y-3 mt-2">
-                <div class="flex justify-between text-[11px] pb-2 border-b border-white/5">
-                  <span class="text-slate-500 uppercase tracking-widest font-semibold">Status</span>
-                  <span :class="['font-medium', pending.hasError ? 'text-red-300' : 'text-emerald-200']">{{ pending.status }}</span>
+              <!-- Info Section -->
+              <div class="space-y-3">
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">Location</span>
+                  <span class="text-[10px] font-bold text-white truncate">{{ adv.current_scene_name || 'The Unknown' }}</span>
                 </div>
-                <div class="text-xs text-slate-400 flex items-center gap-2">
-                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-word animate-wordfade">Aktueller Schritt: {{ pending.status }}</span>
-                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-dots" aria-hidden="true"></span>
-                </div>
-              </div>
-
-              <div class="mt-6">
-                <button
-                  :disabled="!(pending.hasError || pending.status === 'Fertig generiert')"
-                  @click="removePendingCreationCard(pending.adventureId)"
-                  :class="[
-                    'w-full py-3 font-bold rounded-xl transition-all duration-200',
-                    (pending.hasError || pending.status === 'Fertig generiert')
-                      ? 'bg-red-600/20 text-red-200 hover:bg-red-600/30 border border-red-400/30'
-                      : 'bg-emerald-900/40 text-emerald-200/70 cursor-not-allowed'
-                  ]"
-                >
-                  {{ (pending.hasError || pending.status === 'Fertig generiert') ? 'Kachel entfernen' : 'Bitte warten...' }}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div
-            v-for="pending in pendingImports"
-            :key="pending.adventureId"
-            class="relative bg-slate-900 rounded-2xl border border-cyan-500/40 overflow-hidden flex flex-col"
-          >
-              <div class="aspect-[2/1] bg-slate-800 relative overflow-hidden flex items-center justify-center loading-placeholder-gradient">
-              <div v-if="!pending.hasError && pending.status !== 'Generation Complete'" class="absolute inset-0 loading-placeholder-shimmer"></div>
-              <i class="ra ra-quill-ink text-4xl text-cyan-300/80 z-10"></i>
-            </div>
-
-            <div class="p-6 flex-grow flex flex-col">
-              <div class="flex items-center justify-between mb-4">
-                <span class="text-xs font-mono text-cyan-400/90 bg-cyan-500/10 px-2 py-1 rounded uppercase">GENERATING</span>
-                <span :class="['text-[10px] px-2 py-1 rounded uppercase tracking-wider font-bold', pending.hasError ? 'bg-red-500/20 text-red-300' : 'bg-cyan-500/20 text-cyan-200']">
-                  {{ pending.hasError ? 'Error' : 'Import' }}
-                </span>
-              </div>
-
-              <h3 class="text-xl font-bold text-white mb-2 line-clamp-1">
-                {{ pending.title }}
-              </h3>
-
-              <div class="flex-grow space-y-3 mt-2">
-                <div class="flex justify-between text-[11px] pb-2 border-b border-white/5">
-                  <span class="text-slate-500 uppercase tracking-widest font-semibold">Status</span>
-                  <span :class="['font-medium', pending.hasError ? 'text-red-300' : 'text-cyan-200']">{{ pending.status }}</span>
-                </div>
-                <div class="text-xs text-slate-400 flex items-center gap-2">
-                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-word animate-wordfade">Aktueller Schritt: {{ pending.status }}</span>
-                  <span v-if="!pending.hasError && pending.status !== 'Fertig generiert'" class="loading-dots" aria-hidden="true"></span>
-                </div>
-              </div>
-
-              <div class="mt-6">
-                <button
-                  :disabled="!(pending.hasError || pending.status === 'Fertig generiert')"
-                  @click="dismissPendingImportCard(pending.adventureId)"
-                  :class="[
-                    'w-full py-3 font-bold rounded-xl transition-all duration-200',
-                    (pending.hasError || pending.status === 'Fertig generiert')
-                      ? 'bg-red-600/20 text-red-200 hover:bg-red-600/30 border border-red-400/30'
-                      : 'bg-cyan-900/40 text-cyan-200/70 cursor-not-allowed'
-                  ]"
-                >
-                  {{ (pending.hasError || pending.status === 'Fertig generiert') ? 'Kachel entfernen' : 'Bitte warten...' }}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div
-            v-for="adv in visibleAdventures"
-            :key="adv.game_id"
-            class="group relative mx-auto w-full max-w-[21rem] bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden hover:border-emerald-500/50 transition-all duration-500 flex flex-col"
-          >
-            <div class="aspect-[2/1] bg-slate-800 relative overflow-hidden flex items-center justify-center">
-              <template v-if="adv.image_url">
-                <img :src="'http://localhost:8000' + adv.image_url" class="w-full h-full object-cover" />
-              </template>
-              <template v-else>
-                <i class="ra ra-scroll-unfurled text-6xl text-slate-700 opacity-50"></i>
-              </template>
-              <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/75 via-black/42 to-transparent"></div>
-              <div class="absolute inset-x-0 top-0 px-3 pt-3 pb-5">
-                <span class="block truncate text-lg font-extrabold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.95),0_0_10px_rgba(0,0,0,0.5)]">
-                  {{ adv.adventure_title }}
-                </span>
-              </div>
-            </div>
-
-            <div class="p-5 flex-grow flex flex-col">
-              <div class="flex items-center justify-between mb-3">
-                <span class="text-[9px] font-mono text-emerald-400/75 bg-emerald-500/5 px-2 py-0.5 rounded">{{ adv.game_id.substring(0, 8) }}</span>
-                <span class="text-[10px] px-2 py-1 bg-slate-800 rounded uppercase text-slate-500 tracking-wider font-bold">{{ adv.is_paused ? 'PAUSED' : 'ACTIVE' }}</span>
-              </div>
-
-              <div class="flex-grow space-y-2 mt-1">
-                <div class="flex justify-between text-[11px] pb-2 border-b border-white/5 gap-3">
-                  <span class="text-slate-500 uppercase tracking-widest font-semibold">Location</span>
-                  <span class="text-slate-200 text-right truncate">{{ displayLocationName(adv) }}</span>
-                </div>
-              </div>
-
-              <div class="mt-4 flex gap-2 relative">
-                <button
-                  @click="playAdventure(adv.game_id)"
-                  class="flex-grow flex items-center justify-center gap-3 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-emerald-900/20 active:scale-[0.98]"
-                >
-                  <span aria-hidden="true" class="text-sm">▶</span>
-                  Play
-                </button>
                 
-                <div class="relative">
-                  <button
-                    @click.stop="toggleMenu(adv.game_id)"
-                    class="menu-trigger flex items-center justify-center px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all duration-300 active:scale-95"
-                    title="Options"
-                  >
-                    <span aria-hidden="true" class="font-black">⋮</span>
-                  </button>
-
-                  <!-- Options Dropdown -->
-                  <Transition
-                    enter-active-class="transition duration-200 ease-out"
-                    enter-from-class="transform scale-95 opacity-0 translate-y-2"
-                    enter-to-class="transform scale-100 opacity-100 translate-y-0"
-                    leave-active-class="transition duration-150 ease-in"
-                    leave-from-class="transform scale-100 opacity-100 translate-y-0"
-                    leave-to-class="transform scale-95 opacity-0 translate-y-2"
-                  >
+                <div v-if="adv.quest_count > 0" class="space-y-2">
+                  <div class="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                    <span class="text-slate-500">Progress</span>
+                    <span class="text-aether-primary">{{ adv.progress }}%</span>
+                  </div>
+                  <div class="h-1 bg-white/5 rounded-full overflow-hidden">
                     <div 
-                      v-if="openMenuId === adv.game_id" 
-                      class="absolute bottom-full right-0 mb-3 w-52 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 py-2 overflow-hidden backdrop-blur-xl bg-slate-900/95"
-                    >
-                      <button
-                        @click="openEditModal(adv.adventure_id); openMenuId = null"
-                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors text-left group"
-                      >
-                        <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 group-hover:bg-slate-700 transition-colors">✎</span>
-                        Edit Adventure
-                      </button>
-                      
-                      <button
-                        @click="exportAdz(adv.adventure_id); openMenuId = null"
-                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-emerald-900/20 hover:text-emerald-400 transition-colors text-left group"
-                      >
-                        <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 group-hover:bg-emerald-900/30 transition-colors">⇮</span>
-                        Export (.ADZ)
-                      </button>
-
-                      <div class="h-px bg-slate-800 my-1 mx-2"></div>
-                      
-                      <button
-                        @click="deleteAdventure(adv.adventure_id); openMenuId = null"
-                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors text-left group"
-                      >
-                        <span class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800 group-hover:bg-red-900/30 transition-colors text-red-400">🗑</span>
-                        Delete
-                      </button>
-                    </div>
-                  </Transition>
+                      class="h-full bg-gradient-to-r from-aether-primary/40 to-aether-primary shadow-ambient-emerald transition-all duration-1000"
+                      :style="{ width: `${adv.progress}%` }"
+                    ></div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      <input ref="importInput" type="file" accept=".adv,.adz,application/json,application/zip" @change="onImportFileSelected" class="hidden" />
     </main>
 
-    <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center pt-10">
-      <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="closeImportModal"></div>
+    <!-- Modals & Pickers -->
+    <input
+      type="file"
+      ref="importInput"
+      style="display: none"
+      accept=".adv,.adz"
+      @change="onImportFileSelected"
+    />
 
-      <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl relative z-10 shadow-2xl p-8 flex flex-col" @keydown.enter.prevent="executeImport(true)">
-        <button @click="closeImportModal" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">X</button>
-
-        <h2 class="text-3xl font-extrabold text-white mb-2">Import Adventure</h2>
-        <p class="text-slate-400 mb-6 text-base">Set import options and create directly from the ADV manifest.</p>
-
-        <div class="space-y-5">
-          <div>
-            <label class="block text-base font-semibold text-slate-300 mb-2">Adventure Title *</label>
-            <input v-model="importState.titleOverride" type="text" maxlength="70" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white" />
+    <!-- Delete Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showDeleteConfirm" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+        <div class="w-full max-w-md bg-[#0a101a] border border-white/10 rounded-2xl p-8 shadow-2xl animate-fade-in">
+          <div class="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6 border border-red-500/20 mx-auto">
+            <i class="ra ra-burning-embers text-3xl text-red-500"></i>
           </div>
-
-          <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
-            <div class="flex items-center justify-between cursor-pointer" @click="importState.generate_npc_images = !importState.generate_npc_images">
-              <span class="text-sm font-bold text-white">Generate NPC Images</span>
-              <input type="checkbox" v-model="importState.generate_npc_images" />
-            </div>
-            <div class="flex items-center justify-between cursor-pointer" @click="importState.generate_item_images = !importState.generate_item_images">
-              <span class="text-sm font-bold text-white">Generate Item Images</span>
-              <input type="checkbox" v-model="importState.generate_item_images" />
-            </div>
-            <div class="flex items-center justify-between cursor-pointer" @click="importState.automatic_cover_generation = !importState.automatic_cover_generation">
-              <span class="text-sm font-bold text-white">Automatic Cover Generation</span>
-              <input type="checkbox" v-model="importState.automatic_cover_generation" />
-            </div>
+          <h2 class="text-2xl font-black text-white text-center mb-2">Abandon Legend?</h2>
+          <p class="text-slate-400 text-center text-sm mb-8">
+            Are you sure you want to delete <span class="text-white font-bold">"{{ adventureToDelete?.adventure_title }}"</span>? This action will permanently erase this chronicle and all its progress.
+          </p>
+          <div class="flex gap-4">
+            <button 
+              @click="showDeleteConfirm = false" 
+              class="flex-1 px-6 py-3 rounded-xl border border-white/10 text-xs font-black uppercase tracking-widest text-slate-400 hover:bg-white/5 transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              @click="executeDelete" 
+              class="flex-1 px-6 py-3 rounded-xl bg-red-500 text-white text-xs font-black uppercase tracking-widest hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
+            >
+              Delete Forever
+            </button>
           </div>
-
-          <div v-if="errorMsg" class="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">
-            {{ errorMsg }}
-          </div>
-        </div>
-
-        <div class="mt-8 flex justify-end gap-4 border-t border-slate-700 pt-6">
-          <button @click="closeImportModal" class="px-6 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</button>
-          <button @click="executeImport(true)" :disabled="isImporting || !importState.titleOverride" class="px-8 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl disabled:opacity-50">
-            {{ isImporting ? 'Importing...' : 'Import & Create' }}
-          </button>
         </div>
       </div>
-    </div>
-
-
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(16, 185, 129, 0.3);
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 185, 129, 0.5);
-}
-
-.loading-placeholder-gradient {
-  background: linear-gradient(120deg, rgba(15, 23, 42, 1) 0%, rgba(8, 47, 73, 0.9) 50%, rgba(15, 23, 42, 1) 100%);
-}
-
-.loading-placeholder-shimmer {
-  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.18), transparent);
-  transform: translateX(-100%);
-  animation: shimmer 1.8s infinite;
-}
-
-.loading-word {
-  min-width: 170px;
-}
-
-.loading-dots::after {
-  content: '...';
-  display: inline-block;
-  width: 1em;
-  overflow: hidden;
-  vertical-align: bottom;
-  animation: dots 1.2s steps(4, end) infinite;
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0) 0%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite linear;
 }
 
 @keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
-@keyframes dots {
-  0% {
-    width: 0;
-  }
-  100% {
-    width: 1em;
-  }
+.adventure-card {
+  @apply transition-all duration-500;
 }
 
-@keyframes wordfade {
-  0% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.45;
-  }
-}
-
-.animate-wordfade {
-  animation: wordfade 1.2s ease-in-out infinite;
+.adventure-card:hover {
+  transform: translateY(-8px);
 }
 </style>

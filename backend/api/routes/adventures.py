@@ -557,6 +557,8 @@ class GameSessionResponse(BaseModel):
     is_ready: bool = True
     creation_status: Optional[str] = None
     creation_error: Optional[str] = None
+    progress: int = 0
+    quest_count: int = 0
 
 class ChatResponse(BaseModel):
     """Unified response for a game turn."""
@@ -649,23 +651,11 @@ async def create_adventure(
 
     # Generate placeholder if no image is provided
     if not adv_kwargs.get("image_url"):
-        try:
-            # Ensure the adventure directory exists
-            adv_id = adv_kwargs.get("id") or str(uuid.uuid4())
-            adv_kwargs["id"] = adv_id # Ensure ID is set for path construction
-            
-            adv_dir = os.path.join(settings.DATA_DIR, "adventures", adv_id)
-            os.makedirs(adv_dir, exist_ok=True)
-            
-            placeholder_filename = "cover_placeholder.svg"
-            placeholder_path = os.path.join(adv_dir, placeholder_filename)
-            
-            generator = SVGPlaceholderGenerator(width=800, height=400, num_shapes=12)
-            generator.save(placeholder_path, title=payload.title)
-            
-            adv_kwargs["image_url"] = f"/data/adventures/{adv_id}/{placeholder_filename}"
-        except Exception as e:
-            logger.error(f"Failed to generate SVG placeholder for adventure: {e}")
+        adv_id = adv_kwargs.get("id") or str(uuid.uuid4())
+        adv_kwargs["id"] = adv_id
+        adv_kwargs["image_url"] = await MediaEngine.generate_svg_placeholder(
+            adv_id, payload.title, os.path.join(settings.DATA_DIR, "adventures", adv_id), "cover_placeholder.svg"
+        )
 
     if payload.heartbeat_interval is not None:
         adv_kwargs["heartbeat_interval"] = int(payload.heartbeat_interval)
@@ -944,8 +934,19 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     if cover_url:
                         adv_for_context.image_url = cover_url
                         await db.commit()
+                    else:
+                        # Fallback to procedural SVG if cinematic cover fails
+                        adv_for_context.image_url = await MediaEngine.generate_svg_placeholder(
+                            adventure_id, adv_for_context.title, os.path.join(settings.DATA_DIR, "adventures", adventure_id), "cover_placeholder.svg"
+                        )
+                        await db.commit()
                 except Exception as e:
                     logger.error(f"Cover generation failed: {e}")
+                    # Fallback to procedural SVG
+                    adv_for_context.image_url = await MediaEngine.generate_svg_placeholder(
+                        adventure_id, adv_for_context.title, os.path.join(settings.DATA_DIR, "adventures", adventure_id), "cover_placeholder.svg"
+                    )
+                    await db.commit()
 
             # 3. Mark Ready
             await _set_generation_state(
@@ -1000,6 +1001,16 @@ async def get_adventure_status(game_id: str, db: AsyncSession = Depends(get_db))
     }
 
 
+def _calculate_quest_progress(quests: Optional[List[Dict[str, Any]]]) -> int:
+    if not quests:
+        return 0
+    total = len(quests)
+    if total == 0:
+        return 0
+    completed = len([q for q in quests if q.get("status") == "completed"])
+    return int((completed / total) * 100)
+
+
 @router.get("", response_model=List[GameSessionResponse])
 async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
     """Returns all game sessions with their linked adventure and avatar IDs."""
@@ -1020,12 +1031,14 @@ async def list_adventures(db: AsyncSession = Depends(get_db)) -> list:
             adventure_title=a.title,
             image_url=a.image_url,
             scene_id=s.scene_id,
-            current_scene_name=scene_label,
+            current_scene_name=scene_label or "Unknown",
             in_game_time=s.in_game_time,
             is_paused=s.is_paused,
             is_ready=a.is_ready,
             creation_status=a.creation_status,
             creation_error=a.creation_error,
+            progress=_calculate_quest_progress(a.quests),
+            quest_count=len(a.quests or []),
         )
         for s, a, scene_label in rows
     ]
@@ -1082,6 +1095,13 @@ async def import_adventure(
     adv = Adventure(**adv_kwargs)
     db.add(adv)
     await db.flush()
+
+    # Generate placeholder for imported adventure if no image is provided
+    if not adv.image_url:
+        adv.image_url = await MediaEngine.generate_svg_placeholder(
+            adv.id, adv.title, os.path.join(settings.DATA_DIR, "adventures", adv.id), "cover_placeholder.svg"
+        )
+        await db.flush()
 
     avatar_name = None
     if payload.protagonist and payload.protagonist.name:
@@ -1232,9 +1252,13 @@ async def get_game_state(adventure_id: str, db: AsyncSession = Depends(get_db)) 
         adventure_title=adv.title if adv else "",
         image_url=adv.image_url if adv else None,
         scene_id=state.scene_id,
-        current_scene_name=scene_label,
+        current_scene_name=scene_label or "Unknown",
         in_game_time=state.in_game_time,
         is_paused=state.is_paused,
+        is_ready=adv.is_ready if adv else True,
+        creation_status=adv.creation_status if adv else None,
+        creation_error=adv.creation_error if adv else None,
+        progress=_calculate_quest_progress(adv.quests if adv else None)
     )
 
 
