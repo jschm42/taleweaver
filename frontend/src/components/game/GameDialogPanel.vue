@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import ChatWindow from '@/components/ChatWindow.vue'
+import ChatWindow from '@/components/game/ChatWindow.vue'
 import type { ChatMessage } from '@/types'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 

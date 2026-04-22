@@ -1,0 +1,83 @@
+<script setup lang="ts">
+const props = defineProps<{
+  pending: {
+    adventureId: string
+    title: string
+    status: string
+    hasError: boolean
+    kind: 'creation' | 'import'
+  }
+  loadingWordIndex: number
+}>()
+
+const emit = defineEmits<{
+  (e: 'removeFailed', adventureId: string, kind: 'creation' | 'import'): void
+}>()
+</script>
+
+<template>
+  <div class="adventure-card flex flex-col rounded-xl border border-white/10 bg-aether-surface/30 p-6 relative overflow-hidden">
+    <div class="absolute inset-0 animate-shimmer opacity-60"></div>
+    <div class="relative z-10 flex-1 flex flex-col">
+      <div class="flex items-center justify-between mb-4">
+        <span
+          :class="[
+            'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border',
+            props.pending.hasError
+              ? 'bg-red-500/15 border-red-500/30 text-red-400'
+              : 'bg-aether-primary/15 border-aether-primary/30 text-aether-primary',
+          ]"
+        >
+          {{ props.pending.hasError ? 'Failed' : (props.pending.kind === 'import' ? 'Import' : 'Generating') }}
+        </span>
+        <i
+          :class="[
+            'ra text-lg',
+            props.pending.hasError ? 'ra-burning-embers text-red-400' : 'ra-cog text-aether-primary animate-spin',
+          ]"
+        ></i>
+      </div>
+
+      <h3 class="text-xl font-black text-white mb-2 font-display line-clamp-2">{{ props.pending.title }}</h3>
+      <p class="text-sm text-slate-300/90 mb-5">{{ props.pending.status }}</p>
+
+      <div class="mt-auto">
+        <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div
+            :class="[
+              'h-full rounded-full',
+              props.pending.hasError ? 'bg-red-500/70' : 'bg-gradient-to-r from-aether-primary/30 to-aether-primary',
+            ]"
+            :style="{ width: props.pending.hasError ? '100%' : `${40 + props.loadingWordIndex * 15}%` }"
+          ></div>
+        </div>
+
+        <button
+          v-if="props.pending.hasError"
+          class="mt-4 w-full px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[11px] font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
+          @click="emit('removeFailed', props.pending.adventureId, props.pending.kind)"
+        >
+          Delete Failed Adventure
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0) 0%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite linear;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+</style>

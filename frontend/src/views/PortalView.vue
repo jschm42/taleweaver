@@ -3,6 +3,13 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
+import PortalSidebar from '@/components/portal/PortalSidebar.vue'
+import PortalHeader from '@/components/portal/PortalHeader.vue'
+import PendingAdventureCard from '@/components/portal/PendingAdventureCard.vue'
+import AdventureCard from '@/components/portal/AdventureCard.vue'
+import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
+import PortalLibraryToolbar from '@/components/portal/PortalLibraryToolbar.vue'
+import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -52,13 +59,8 @@ const adventures = ref<Adventure[]>([])
 const isLoading = ref(true)
 const isLlmConfigured = ref(true)
 
-const showCreateModal = ref(false)
-const showImportModal = ref(false)
-const isSubmitting = ref(false)
 const isImporting = ref(false)
 const errorMsg = ref('')
-const advancedValidationError = ref('')
-const creationStatus = ref('')
 const activeMenuId = ref<string | null>(null)
 const showDeleteConfirm = ref(false)
 const adventureToDelete = ref<Adventure | null>(null)
@@ -151,31 +153,6 @@ const form = ref({
   start_time: '',
   protagonist_role: '',
 })
-
-const importState = ref({
-  manifest: null as AdventureImportPayload | null,
-  titleOverride: '',
-  generate_npc_images: false,
-  generate_item_images: false,
-  automatic_cover_generation: false,
-})
-
-function resetImportState() {
-  importState.value = {
-    manifest: null,
-    titleOverride: '',
-    generate_npc_images: false,
-    generate_item_images: false,
-    automatic_cover_generation: false,
-  }
-}
-
-function closeImportModal() {
-  showImportModal.value = false
-  isImporting.value = false
-  errorMsg.value = ''
-  resetImportState()
-}
 
 function resetCreateForm() {
   form.value = {
@@ -282,9 +259,9 @@ async function removeFailedPendingCard(adventureId: string, kind: 'creation' | '
 
 async function fetchAdventures() {
   try {
-    const fetched = await api.listAdventures()
+    const fetched = (await api.listAdventures()) as Adventure[]
     // Add mock data for design consistency
-    adventures.value = fetched.map(adv => ({
+    adventures.value = fetched.map((adv) => ({
       ...adv,
       genre: adv.genre || ['Dark Fantasy', 'Cosmic Horror', 'Eldritch Mystery', 'Steampunk'][Math.floor(Math.random() * 4)],
     }))
@@ -302,12 +279,12 @@ async function fetchAdventures() {
           
           void pollAdventureStatus(adv.adventure_id, {
             navigateOnReady: false,
-            onStatus: (status) => updatePendingCreationStatus(adv.adventure_id, status),
+            onStatus: (status: string) => updatePendingCreationStatus(adv.adventure_id, status),
             onReady: async () => {
               removePendingCreationCard(adv.adventure_id)
               await fetchAdventures()
             },
-            onFailure: (status) => updatePendingCreationStatus(adv.adventure_id, status, true),
+            onFailure: (status: string) => updatePendingCreationStatus(adv.adventure_id, status, true),
           })
         }
       } else {
@@ -324,10 +301,10 @@ async function fetchAdventures() {
 async function fetchSettings() {
   try {
     const settings = await api.getSettings()
-    const llm = settings.llm_settings
-    const keys = settings.keys || {}
-    const smallProvider = llm?.small_model_provider || 'openai'
-    const complexProvider = llm?.complex_model_provider || 'openai'
+    const llm = (settings.llm_settings || {}) as Record<string, string | undefined>
+    const keys = (settings.keys || {}) as Record<string, string | undefined>
+    const smallProvider = llm.small_model_provider || 'openai'
+    const complexProvider = llm.complex_model_provider || 'openai'
     const isSmallOk = smallProvider === 'ollama' || !!keys[smallProvider]
     const isComplexOk = complexProvider === 'ollama' || !!keys[complexProvider]
     isLlmConfigured.value = isSmallOk && isComplexOk
@@ -440,7 +417,14 @@ async function exportAdventureAdv(adventureId: string, title: string) {
   }
 }
 
-async function pollAdventureStatus(adventureId: string, options?: any) {
+interface PollAdventureOptions {
+  navigateOnReady?: boolean
+  onStatus?: (status: string) => void
+  onReady?: () => void | Promise<void>
+  onFailure?: (status: string) => void
+}
+
+async function pollAdventureStatus(adventureId: string, options?: PollAdventureOptions) {
   return new Promise<void>((resolve) => {
     const pollInterval = setInterval(async () => {
       try {
@@ -509,75 +493,20 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full min-h-0 bg-[#050b14] text-slate-200 font-ui overflow-hidden">
-    <!-- Sidebar -->
-    <aside class="w-72 bg-aether-background/95 backdrop-blur-2xl border-r border-white/5 flex flex-col z-50 overflow-y-auto">
-      <!-- Sidebar Header -->
-      <div class="p-8 pb-4">
-
-        <!-- Navigation Links -->
-        <nav class="space-y-1">
-          <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl bg-aether-primary/10 text-aether-primary border-l-4 border-aether-primary transition-all">
-            <span class="text-sm font-bold tracking-wide">My Library</span>
-          </button>
-          <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-            <span class="text-sm font-bold tracking-wide">Community Stories</span>
-          </button>
-          <button @click="triggerImportPicker" class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-            <span class="text-sm font-bold tracking-wide">Import .adv / .adz</span>
-          </button>
-          <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-            <span class="text-sm font-bold tracking-wide">Profile</span>
-          </button>
-          <button
-            v-if="isAdmin"
-            @click="router.push('/admin')"
-            class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all"
-          >
-            <span class="text-sm font-bold tracking-wide">Administration</span>
-          </button>
-        </nav>
-      </div>
-
-      <div class="mt-auto p-8">
-        <button @click="openCreateModal" class="btn-primary w-full flex items-center justify-center gap-3 !py-4 shadow-ambient-emerald/20">
-          <i class="ra ra-plus"></i>
-          Start New Adventure
-        </button>
-      </div>
-    </aside>
+    <PortalSidebar
+      :is-admin="isAdmin"
+      @import="triggerImportPicker"
+      @create="openCreateModal"
+      @admin="router.push('/admin')"
+    />
 
     <!-- Main Content Area -->
     <main class="flex-1 flex flex-col relative overflow-hidden">
-      <!-- Page Header -->
-      <header class="h-16 flex items-center justify-between px-10 border-b border-white/5 bg-[#050b14]/40 backdrop-blur-md z-40">
-        <div class="flex-1 max-w-xl">
-          <div class="relative group">
-            <i class="ra ra-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-aether-primary transition-colors"></i>
-            <input 
-              type="text" 
-              placeholder="Search your library..." 
-              class="w-full bg-aether-surface/40 border border-white/5 rounded-xl py-2 px-12 text-sm focus:outline-none focus:border-aether-primary/40 transition-all"
-            />
-          </div>
-        </div>
-
-        <div class="flex items-center gap-4">
-        </div>
-      </header>
+      <PortalHeader />
 
       <!-- Scrollable Content -->
       <div class="flex-1 overflow-y-auto p-10">
-        <!-- Title Section -->
-        <div class="flex items-end justify-between mb-12">
-          <div>
-            <h2 class="text-5xl font-black text-white font-display tracking-tight mb-3">My Library</h2>
-            <p class="text-slate-500 font-narrative italic text-lg opacity-80">The chronicles of your journeys through the aether.</p>
-          </div>
-          <div class="flex bg-white/5 p-1 rounded-xl border border-white/5">
-            <button class="px-4 py-1.5 rounded-lg bg-aether-primary/20 text-aether-primary text-xs font-bold transition-all">Grid</button>
-            <button class="px-4 py-1.5 rounded-lg text-slate-500 text-xs font-bold hover:text-white transition-all">List</button>
-          </div>
-        </div>
+        <PortalLibraryToolbar />
 
         <!-- Loading State -->
         <div v-if="isLoading && adventures.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
@@ -587,184 +516,29 @@ onUnmounted(() => {
 
         <!-- Grid -->
         <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
-          <!-- Start New Card -->
-          <button @click="openCreateModal" class="group flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl aspect-[3/2] hover:border-aether-primary/30 transition-all bg-transparent">
-            <div class="w-12 h-12 rounded-full bg-aether-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-aether-primary/20 transition-all">
-              <i class="ra ra-plus text-xl text-aether-primary"></i>
-            </div>
-            <h3 class="text-xl font-bold text-white mb-2">Start New</h3>
-            <p class="text-slate-500 text-sm max-w-[140px] text-center opacity-60">Begin your legend.</p>
-          </button>
+          <PortalCreateAdventureCard @create="openCreateModal" />
 
-          <div
+          <PendingAdventureCard
             v-for="pending in pendingCards"
             :key="`pending-${pending.adventureId}`"
-            class="adventure-card flex flex-col rounded-xl border border-white/10 bg-aether-surface/30 p-6 relative overflow-hidden"
-          >
-            <div class="absolute inset-0 animate-shimmer opacity-60"></div>
-            <div class="relative z-10 flex-1 flex flex-col">
-              <div class="flex items-center justify-between mb-4">
-                <span
-                  :class="[
-                    'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border',
-                    pending.hasError
-                      ? 'bg-red-500/15 border-red-500/30 text-red-400'
-                      : 'bg-aether-primary/15 border-aether-primary/30 text-aether-primary',
-                  ]"
-                >
-                  {{ pending.hasError ? 'Failed' : (pending.kind === 'import' ? 'Import' : 'Generating') }}
-                </span>
-                <i
-                  :class="[
-                    'ra text-lg',
-                    pending.hasError ? 'ra-burning-embers text-red-400' : 'ra-cog text-aether-primary animate-spin',
-                  ]"
-                ></i>
-              </div>
-
-              <h3 class="text-xl font-black text-white mb-2 font-display line-clamp-2">{{ pending.title }}</h3>
-              <p class="text-sm text-slate-300/90 mb-5">{{ pending.status }}</p>
-
-              <div class="mt-auto">
-                <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    :class="[
-                      'h-full rounded-full',
-                      pending.hasError ? 'bg-red-500/70' : 'bg-gradient-to-r from-aether-primary/30 to-aether-primary',
-                    ]"
-                    :style="{ width: pending.hasError ? '100%' : `${40 + loadingWordIndex * 15}%` }"
-                  ></div>
-                </div>
-
-                <button
-                  v-if="pending.hasError"
-                  class="mt-4 w-full px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[11px] font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
-                  @click="removeFailedPendingCard(pending.adventureId, pending.kind)"
-                >
-                  Delete Failed Adventure
-                </button>
-              </div>
-            </div>
-          </div>
+            :pending="pending"
+            :loading-word-index="loadingWordIndex"
+            @remove-failed="removeFailedPendingCard"
+          />
 
           <!-- Adventure Cards -->
-          <div 
-            v-for="adv in visibleAdventures" 
+          <AdventureCard
+            v-for="adv in visibleAdventures"
             :key="adv.adventure_id"
-            class="adventure-card flex flex-col group cursor-pointer relative rounded-xl"
-            @click="playAdventure(adv.game_id)"
-          >
-            <!-- Image Area -->
-            <div class="relative aspect-[3/2] overflow-visible rounded-xl mb-6 bg-aether-surface/30 border border-white/5 flex items-center justify-center group-hover:bg-aether-surface/50 transition-all duration-500">
-              <!-- Menu Button -->
-              <button 
-                @click.stop="toggleMenu($event, adv.adventure_id)" 
-                class="absolute top-3 right-3 z-30 w-8 h-8 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/60"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                </svg>
-              </button>
-
-              <!-- Dropdown Menu -->
-              <div 
-                v-if="activeMenuId === adv.adventure_id"
-                class="absolute top-12 right-3 z-40 w-44 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in"
-              >
-                <button 
-                  @click.stop="editAdventure(adv.adventure_id)"
-                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-aether-primary/20 hover:text-aether-primary transition-colors flex items-center gap-3 border-b border-white/5"
-                >
-                  <i class="ra ra-wrench text-sm"></i>
-                  Edit Blueprint
-                </button>
-                <button 
-                  @click.stop="playAdventure(adv.game_id)"
-                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors flex items-center gap-3 border-b border-white/5"
-                >
-                  <i class="ra ra-player text-sm"></i>
-                  Play Chronicle
-                </button>
-                <button 
-                  @click.stop="exportAdventureAdz(adv.adventure_id, adv.adventure_title)"
-                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-cyan-500/20 hover:text-cyan-300 transition-colors flex items-center gap-3 border-b border-white/5"
-                >
-                  <i class="ra ra-save text-sm"></i>
-                  Export ADZ
-                </button>
-                <button 
-                  @click.stop="exportAdventureAdv(adv.adventure_id, adv.adventure_title)"
-                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-blue-500/20 hover:text-blue-300 transition-colors flex items-center gap-3 border-b border-white/5"
-                >
-                  <i class="ra ra-scroll-unfurled text-sm"></i>
-                  Export ADV
-                </button>
-                <button 
-                  @click.stop="confirmDelete(adv)"
-                  class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-3"
-                >
-                  <i class="ra ra-burning-embers text-sm"></i>
-                  Delete Adventure
-                </button>
-              </div>
-
-              <div class="absolute inset-0 overflow-hidden rounded-xl">
-                <img 
-                  v-if="adv.image_url"
-                  :src="adv.image_url" 
-                  class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  alt="Cover"
-                />
-
-                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-              </div>
-              
-              <!-- Category Tag -->
-              <div class="absolute top-4 left-4">
-                <span class="px-3 py-1 bg-aether-secondary/20 backdrop-blur-md border border-white/10 rounded-full text-[9px] font-black uppercase tracking-widest text-aether-secondary">
-                  {{ adv.genre || 'Epic Fantasy' }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Info Area -->
-            <div class="px-2">
-              <h3 class="text-2xl font-black text-white mb-2 font-display line-clamp-1 group-hover:text-aether-primary transition-colors">
-                {{ adv.adventure_title }}
-              </h3>
-              <p class="text-slate-400 text-sm font-narrative mb-6 line-clamp-2 opacity-70">
-                {{ adv.description }}
-              </p>
-
-              <!-- Info Section -->
-              <div class="space-y-3">
-                <div class="flex flex-col gap-0.5">
-                  <span class="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">Location</span>
-                  <span class="text-[10px] font-bold text-white truncate">{{ adv.current_scene_name || 'The Unknown' }}</span>
-                </div>
-                
-                <div v-if="adv.quest_count > 0" class="space-y-2">
-                  <div class="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                    <span class="text-slate-500">Progress</span>
-                    <span class="text-aether-primary">
-                      {{ adv.completed_quest_count || 0 }} / {{ adv.quest_count }} Quests 
-                      ({{ adv.progress }}%)
-                    </span>
-                  </div>
-                  <div class="h-1 bg-white/5 rounded-full overflow-hidden">
-                    <div 
-                      class="h-full bg-gradient-to-r from-aether-primary/40 to-aether-primary shadow-ambient-emerald transition-all duration-1000"
-                      :style="{ width: `${adv.progress}%` }"
-                    ></div>
-                  </div>
-                </div>
-                <div v-else class="text-[10px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
-                  <i class="ra ra-scroll text-[8px] opacity-40"></i>
-                  No Quests active
-                </div>
-              </div>
-            </div>
-          </div>
+            :adv="adv"
+            :active-menu-id="activeMenuId"
+            @play="playAdventure"
+            @toggle-menu="toggleMenu"
+            @edit="editAdventure"
+            @export-adz="exportAdventureAdz"
+            @export-adv="exportAdventureAdv"
+            @delete="confirmDelete"
+          />
         </div>
       </div>
     </main>
@@ -780,57 +554,12 @@ onUnmounted(() => {
 
     <!-- Delete Confirmation Modal -->
     <Teleport to="body">
-      <div v-if="showDeleteConfirm" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
-        <div class="w-full max-w-md bg-[#0a101a] border border-white/10 rounded-2xl p-8 shadow-2xl animate-fade-in">
-          <div class="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6 border border-red-500/20 mx-auto">
-            <i class="ra ra-burning-embers text-3xl text-red-500"></i>
-          </div>
-          <h2 class="text-2xl font-black text-white text-center mb-2">Abandon Legend?</h2>
-          <p class="text-slate-400 text-center text-sm mb-8">
-            Are you sure you want to delete <span class="text-white font-bold">"{{ adventureToDelete?.adventure_title }}"</span>? This action will permanently erase this chronicle and all its progress.
-          </p>
-          <div class="flex gap-4">
-            <button 
-              @click="showDeleteConfirm = false" 
-              class="flex-1 px-6 py-3 rounded-xl border border-white/10 text-xs font-black uppercase tracking-widest text-slate-400 hover:bg-white/5 transition-all"
-            >
-              Cancel
-            </button>
-            <button 
-              @click="executeDelete" 
-              class="flex-1 px-6 py-3 rounded-xl bg-red-500 text-white text-xs font-black uppercase tracking-widest hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
-            >
-              Delete Forever
-            </button>
-          </div>
-        </div>
-      </div>
+      <DeleteAdventureModal
+        v-if="showDeleteConfirm"
+        :adventure-title="adventureToDelete?.adventure_title || ''"
+        @close="showDeleteConfirm = false"
+        @confirm="executeDelete"
+      />
     </Teleport>
   </div>
 </template>
-
-<style scoped>
-.animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.05) 50%,
-    rgba(255, 255, 255, 0) 0%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite linear;
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.adventure-card {
-  @apply transition-all duration-500;
-}
-
-.adventure-card:hover {
-  transform: translateY(-8px);
-}
-</style>

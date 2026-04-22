@@ -7,18 +7,18 @@
  */
 import { onBeforeUnmount, onMounted, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import CharacterSheetModal from '@/components/CharacterSheetModal.vue'
-import MapModal from '@/components/MapModal.vue'
-import QuestsModal from '@/components/QuestsModal.vue'
-import WalkthroughModal from '@/components/WalkthroughModal.vue'
-import SuccessScreen from '@/components/SuccessScreen.vue'
-import DebugModal from '@/components/DebugModal.vue'
-import GameScenePanel from '@/components/GameScenePanel.vue'
-import GameNpcsPanel from '@/components/GameNpcsPanel.vue'
-import GameItemsPanel from '@/components/GameItemsPanel.vue'
-import GameQuestTracker from '@/components/GameQuestTracker.vue'
-import GameClockWidget from '@/components/GameClockWidget.vue'
-import GameDialogPanel from '@/components/GameDialogPanel.vue'
+import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
+import MapModal from '@/components/game/MapModal.vue'
+import QuestsModal from '@/components/game/QuestsModal.vue'
+import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
+import SuccessScreen from '@/components/game/SuccessScreen.vue'
+import DebugModal from '@/components/game/DebugModal.vue'
+import GameScenePanel from '@/components/game/GameScenePanel.vue'
+import GameNpcsPanel from '@/components/game/GameNpcsPanel.vue'
+import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
+import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
+import GameClockWidget from '@/components/game/GameClockWidget.vue'
+import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
@@ -42,14 +42,15 @@ const walkthroughData = ref<any | null>(null)
 const trackedQuestId = ref<string | null>(null)
 const clockTick = ref(false)
 const { notifications, removeNotification } = useNotifications()
-const gameSettings = ref({ clock_24h: false })
+const gameSettings = ref<{ clock_24h: boolean; date_format?: 'DD.MM.YY' | 'MM/DD/YY' | 'YY-MM-DD' }>({
+  clock_24h: false,
+})
 
 const {
   sheet,
   status,
   messages,
   gameOverReason,
-  autoVisualize,
   adventureImage,
   entities,
   mermaidData,
