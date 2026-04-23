@@ -105,11 +105,7 @@
                   <span class="award-tier">{{ award.tier }}</span>
                 </div>
                 <p class="award-desc">{{ award.description }}</p>
-                <div v-if="!award.is_earned" class="award-requirement">
-                  <span class="req-label">Requirement:</span>
-                  <span class="req-text">{{ award.requirement }}</span>
-                </div>
-                <div v-else class="earned-label">EARNED</div>
+                <div v-if="award.is_earned" class="earned-label">EARNED</div>
               </div>
             </div>
           </div>
@@ -407,7 +403,7 @@ export default {
 
 .awards-grid {
   display: grid;
-  grid-template-cols: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 }
 

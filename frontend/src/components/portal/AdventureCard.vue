@@ -83,7 +83,7 @@ const emit = defineEmits<{
 
       <div class="absolute top-4 left-4">
         <span class="px-3 py-1 bg-aether-secondary/20 backdrop-blur-md border border-white/10 rounded-full text-[9px] font-black uppercase tracking-widest text-aether-secondary">
-          {{ props.adv.genre || 'Epic Fantasy' }}
+          {{ props.adv.genre || 'No Tone' }}
         </span>
       </div>
     </div>

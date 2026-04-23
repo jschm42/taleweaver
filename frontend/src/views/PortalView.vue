@@ -28,7 +28,8 @@ interface Adventure {
   is_ready: boolean
   creation_status?: string | null
   creation_error?: string | null
-  genre?: string // Mocked for design
+  selected_tone?: string | null
+  genre?: string
   progress?: number // Mocked for design
   description?: string // Mocked for design
   quest_count?: number
@@ -54,6 +55,16 @@ function prettifyStatus(status: string): string {
 function isFailureStatus(status: string): boolean {
   const value = (status || '').toLowerCase()
   return value.includes('failed') || value.includes('error')
+}
+
+function formatToneLabel(value?: string | null): string {
+  if (!value) return ''
+  const normalized = value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!normalized) return ''
+  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 const adventures = ref<Adventure[]>([])
@@ -262,10 +273,9 @@ async function removeFailedPendingCard(adventureId: string, kind: 'creation' | '
 async function fetchAdventures() {
   try {
     const fetched = (await api.listAdventures()) as Adventure[]
-    // Add mock data for design consistency
     adventures.value = fetched.map((adv) => ({
       ...adv,
-      genre: adv.genre || ['Dark Fantasy', 'Cosmic Horror', 'Eldritch Mystery', 'Steampunk'][Math.floor(Math.random() * 4)],
+      genre: formatToneLabel(adv.selected_tone) || adv.genre || '',
     }))
 
     for (const adv of fetched) {

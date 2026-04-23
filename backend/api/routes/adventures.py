@@ -773,6 +773,7 @@ class GameSessionResponse(BaseModel):
     is_ready: bool = True
     creation_status: Optional[str] = None
     creation_error: Optional[str] = None
+    selected_tone: Optional[str] = None
     progress: int = 0
     quest_count: int = 0
     completed_quest_count: int = 0
@@ -1309,6 +1310,7 @@ async def list_adventures(
             is_ready=a.is_ready,
             creation_status=a.creation_status,
             creation_error=a.creation_error,
+            selected_tone=a.selected_tone,
             progress=_calculate_quest_progress(a.quests),
             quest_count=len(a.quests or []),
             completed_quest_count=len([q for q in (a.quests or []) if q.get("status") == "completed"]),
@@ -1559,6 +1561,7 @@ async def get_game_state(
         is_ready=adv.is_ready if adv else True,
         creation_status=adv.creation_status if adv else None,
         creation_error=adv.creation_error if adv else None,
+        selected_tone=adv.selected_tone if adv else None,
         progress=_calculate_quest_progress(adv.quests if adv else None)
     )
 
@@ -2629,6 +2632,20 @@ async def import_adventure_adv(
         if not isinstance(adv_data, dict):
             raise HTTPException(status_code=400, detail="Invalid ADV file. Missing adventure section")
 
+        def _pick_list(primary: Any, fallback: Any) -> list[dict[str, Any]]:
+            if isinstance(primary, list):
+                return [v for v in primary if isinstance(v, dict)]
+            if isinstance(fallback, list):
+                return [v for v in fallback if isinstance(v, dict)]
+            return []
+
+        import_scenes = _pick_list(manifest_data.get("scenes"), adv_data.get("scenes"))
+        import_exits = _pick_list(manifest_data.get("exits"), adv_data.get("exits"))
+        import_npcs = _pick_list(manifest_data.get("npcs"), adv_data.get("npcs"))
+        import_objects = _pick_list(manifest_data.get("objects"), adv_data.get("objects"))
+        import_quests = _pick_list(manifest_data.get("quests"), adv_data.get("quests"))
+        import_awards = _pick_list(manifest_data.get("awards"), adv_data.get("awards"))
+
         new_adv_id = str(uuid.uuid4())
         new_adv = Adventure(
             id=new_adv_id,
@@ -2646,6 +2663,10 @@ async def import_adventure_adv(
             generate_item_images=adv_data.get("generate_item_images", False),
             selected_image_styles=adv_data.get("selected_image_styles", []),
             selected_tone=adv_data.get("selected_tone"),
+            award_generation_enabled=adv_data.get("award_generation_enabled", False),
+            min_awards=adv_data.get("min_awards", 3),
+            max_awards=adv_data.get("max_awards", 8),
+            original_manifest=manifest_data,
             is_ready=True,
             creation_status="Ready",
         )
@@ -2689,11 +2710,12 @@ async def import_adventure_adv(
                 "starting_inventory": [],
                 "starting_equipment": {},
             },
-            "scenes": manifest_data.get("scenes", []),
-            "exits": manifest_data.get("exits", []),
-            "npcs": manifest_data.get("npcs", []),
-            "objects": manifest_data.get("objects", []),
-            "quests": manifest_data.get("quests", []),
+            "scenes": import_scenes,
+            "exits": import_exits,
+            "npcs": import_npcs,
+            "objects": import_objects,
+            "quests": import_quests,
+            "awards": import_awards,
         }
 
         for n in world_manifest["npcs"]:
@@ -2707,13 +2729,13 @@ async def import_adventure_adv(
         if isinstance(prot, dict) and prot.get("profile_image"):
             image_urls["PROTAGONIST"] = prot["profile_image"]
 
-        for s in manifest_data.get("scenes", []):
+        for s in import_scenes:
             if isinstance(s, dict) and s.get("image_url") and s.get("id"):
                 image_urls[s["id"]] = s["image_url"]
-        for n in manifest_data.get("npcs", []):
+        for n in import_npcs:
             if isinstance(n, dict) and n.get("image_url") and n.get("id"):
                 image_urls[n["id"]] = n["image_url"]
-        for o in manifest_data.get("objects", []):
+        for o in import_objects:
             if isinstance(o, dict) and o.get("image_url") and o.get("id"):
                 image_urls[o["id"]] = o["image_url"]
 
@@ -2728,6 +2750,13 @@ async def import_adventure_adv(
         cover_image = adv_data.get("image_url")
         if isinstance(cover_image, str) and (cover_image.startswith("/data/") or cover_image.startswith("http")):
             new_adv.image_url = cover_image
+
+        first_scene_id = world_manifest["scenes"][0].get("id") if world_manifest["scenes"] else None
+        if first_scene_id:
+            state_res = await db.execute(select(GameState).where(GameState.adventure_id == new_adv_id))
+            imported_state = state_res.scalars().first()
+            if imported_state:
+                imported_state.scene_id = first_scene_id
 
         if not new_adv.image_url:
             new_adv.image_url = await MediaEngine.generate_svg_placeholder(

@@ -97,6 +97,11 @@ function toggleAllAssets() {
     form.value.generate_item_images = true
     form.value.generate_scene_images = true
     form.value.automatic_cover_generation = true
+  } else {
+    form.value.generate_npc_images = false
+    form.value.generate_item_images = false
+    form.value.generate_scene_images = false
+    form.value.automatic_cover_generation = false
   }
 }
 
@@ -203,7 +208,7 @@ onMounted(() => {
                   v-model="form.storyIdea"
                   rows="4"
                   placeholder="The Weaver will use this to seed the world's history and current conflicts..."
-                  class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white resize-none focus:border-aether-primary outline-none transition-all placeholder:text-white/10"
+                  class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white resize-y min-h-[7rem] focus:border-aether-primary outline-none transition-all placeholder:text-white/10"
                 ></textarea>
               </div>
             </div>

@@ -6,6 +6,7 @@ sub-routes. All tests follow the Arrange-Act-Assert pattern.
 """
 import pytest
 import pytest_asyncio
+import json
 from httpx import AsyncClient
 from io import BytesIO
 import os
@@ -1041,3 +1042,112 @@ async def test_import_session_bundle_uses_split_route(client: AsyncClient):
     assert data["status"] == "imported"
     assert data["type"] == "SESSION"
     assert data["adventure_id"]
+
+
+async def test_import_adv_file_keeps_quests_npcs_and_initial_scene(client: AsyncClient):
+    """ADV file import should keep world data and set the first scene as active."""
+    adv_payload = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADV File Import Quest",
+            "context": "Imported from file",
+            "strict_rules": True,
+            "rule_enforcement_mode": "story",
+            "time_per_turn": 5,
+            "pacing_minutes": 5,
+            "clock_enabled": False,
+            "heartbeat_enabled": False,
+            "generate_scene_images": False,
+            "generate_npc_images": False,
+            "generate_item_images": False,
+            "quests": [
+                {
+                    "id": "Q_MAIN",
+                    "title": "Imported Main Quest",
+                    "description": "Should survive ADV import",
+                    "goal": "Do the thing",
+                    "impact": "World changes",
+                    "exp_reward": 100,
+                    "is_main": True,
+                    "status": "open",
+                }
+            ],
+            "awards": [
+                {
+                    "key": "IMP_AWARD",
+                    "title": "Imported Award",
+                    "description": "Should survive ADV import",
+                    "tier": "bronze",
+                    "requirement": "Finish Q_MAIN",
+                    "is_earned": False,
+                }
+            ],
+        },
+        "protagonist": {
+            "name": "Import Hero",
+            "role": "Tester",
+            "description": "Checks import",
+            "inventory": [],
+            "equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ROOM_A", "name": "Room A", "description": "First room"},
+            {"id": "ROOM_B", "name": "Room B", "description": "Second room"},
+        ],
+        "exits": [
+            {
+                "from_scene_id": "ROOM_A",
+                "to_scene_id": "ROOM_B",
+                "label": "door",
+                "is_locked": False,
+                "lock_description": None,
+            }
+        ],
+        "npcs": [
+            {
+                "id": "NPC_A",
+                "name": "Import NPC",
+                "description": "Should exist after import",
+                "start_scene_id": "ROOM_A",
+                "spatial_position": "near the door",
+                "is_hidden": False,
+            }
+        ],
+        "objects": [
+            {
+                "id": "OBJ_A",
+                "name": "Import Object",
+                "description": "Should exist after import",
+                "start_scene_id": "ROOM_A",
+                "spatial_position": "on the floor",
+                "item_type": "PICKABLE",
+                "is_hidden": False,
+            }
+        ],
+    }
+
+    file_bytes = json.dumps(adv_payload).encode("utf-8")
+    resp = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("import_test.adv", file_bytes, "application/json")},
+    )
+    assert resp.status_code == 201, resp.text
+    adventure_id = resp.json()["adventure_id"]
+
+    debug_resp = await client.get(f"/api/adventures/{adventure_id}/debug")
+    assert debug_resp.status_code == 200, debug_resp.text
+    debug_data = debug_resp.json()
+
+    assert len(debug_data.get("scenes", [])) == 2
+    assert any(npc.get("id") == "NPC_A" for npc in debug_data.get("npcs", []))
+    assert any(obj.get("id") == "OBJ_A" for obj in debug_data.get("objects", []))
+    assert any(q.get("id") == "Q_MAIN" for q in (debug_data.get("adventure", {}).get("quests", []) or []))
+    assert any(a.get("key") == "IMP_AWARD" for a in (debug_data.get("adventure", {}).get("awards", []) or []))
+
+    state_resp = await client.get(f"/api/adventures/{adventure_id}/state")
+    assert state_resp.status_code == 200, state_resp.text
+    state_data = state_resp.json()
+    assert (state_data.get("scene_id") or state_data.get("current_scene_id")) == "ROOM_A"
