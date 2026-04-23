@@ -7,6 +7,7 @@ const emit = defineEmits<{
   (e: 'import'): void
   (e: 'create'): void
   (e: 'admin'): void
+  (e: 'profile'): void
 }>()
 </script>
 
@@ -23,7 +24,7 @@ const emit = defineEmits<{
         <button @click="emit('import')" class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
           <span class="text-sm font-bold tracking-wide">Import .adv / .adz</span>
         </button>
-        <button class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
+        <button @click="emit('profile')" class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all">
           <span class="text-sm font-bold tracking-wide">Profile</span>
         </button>
         <button

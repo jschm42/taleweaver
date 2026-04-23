@@ -43,7 +43,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'world' | 'advanced'>('world')
+const activeTab = ref<'world' | 'awards' | 'advanced'>('world')
 
 type VisualKind = 'cover' | 'protagonist' | 'scene' | 'npc' | 'object'
 
@@ -97,6 +97,7 @@ const form = ref({
   time_per_turn: 5,
   min_scenes: 1,
   max_scenes: 5,
+  awards: [] as any[]
 })
 
 function normalizeEntityType(entity: any): string {
@@ -181,6 +182,7 @@ async function fetchAdventure() {
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.min_scenes = data.min_scenes || 1
     form.value.max_scenes = data.max_scenes || 5
+    form.value.awards = data.awards || []
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -533,6 +535,20 @@ async function exportAdz() {
   URL.revokeObjectURL(url)
 }
 
+function addAward() {
+  form.value.awards.push({
+    key: crypto.randomUUID(),
+    title: 'New Award',
+    description: 'Award description',
+    tier: 'bronze',
+    requirement: 'Grant requirement'
+  })
+}
+
+function removeAward(index: number) {
+  form.value.awards.splice(index, 1)
+}
+
 const goBack = () => router.push({ name: 'portal' })
 </script>
 
@@ -564,7 +580,7 @@ const goBack = () => router.push({ name: 'portal' })
       <div class="flex items-center gap-6">
         <nav class="flex bg-black/40 rounded-xl p-1 border border-white/5 backdrop-blur-md shadow-inner">
           <button 
-            v-for="tab in (['world', 'advanced'] as const)" 
+            v-for="tab in (['world', 'awards', 'advanced'] as const)" 
             :key="tab"
             @click="activeTab = tab"
             :class="[
@@ -844,6 +860,69 @@ const goBack = () => router.push({ name: 'portal' })
                  </div>
                </section>
             </div>
+          </div>
+        </div>
+
+        <!-- Awards Tab -->
+        <div v-if="activeTab === 'awards'" class="space-y-8 animate-page-in">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-2xl font-black text-white">Award Templates</h2>
+              <p class="text-slate-400 text-sm">Define achievements that players can earn during this adventure.</p>
+            </div>
+            <div class="flex gap-4">
+              <button @click="addAward" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center gap-2">
+                <i class="ra ra-plus"></i> Add Award
+              </button>
+              <button @click="saveChanges" :disabled="isSaving" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50">
+                {{ isSaving ? 'Saving...' : 'Save Awards' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div v-for="(award, index) in form.awards" :key="award.key" class="p-6 bg-slate-900/40 border border-white/5 rounded-[2rem] backdrop-blur-md relative group">
+              <button @click="removeAward(index)" class="absolute top-6 right-6 p-2 text-slate-500 hover:text-red-400 transition-colors">
+                <i class="ra ra-cancel"></i>
+              </button>
+
+              <div class="space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                  <div class="space-y-2">
+                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Award Title</label>
+                    <input v-model="award.title" type="text" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none" />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Tier</label>
+                    <select v-model="award.tier" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none appearance-none">
+                      <option value="bronze">Bronze</option>
+                      <option value="silver">Silver</option>
+                      <option value="gold">Gold</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Description</label>
+                  <textarea v-model="award.description" rows="2" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none resize-none"></textarea>
+                </div>
+
+                <div class="space-y-2">
+                  <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Requirement (GM Instruction)</label>
+                  <input v-model="award.requirement" type="text" placeholder="e.g. 'Defeat the Rat King' or 'Make a very funny joke'" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none" />
+                </div>
+
+                <div class="flex items-center gap-2 text-[9px] font-mono text-slate-600">
+                  <span class="px-2 py-0.5 bg-black/40 rounded border border-white/5 uppercase">Key: {{ award.key }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="form.awards.length === 0" class="py-20 text-center border-2 border-dashed border-white/5 rounded-[3rem]">
+            <i class="ra ra-trophy text-5xl text-slate-800 mb-4 block"></i>
+            <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">No awards defined yet.</p>
+            <p class="text-slate-600 text-[10px] mt-2">Add awards to reward your players for their heroic deeds.</p>
           </div>
         </div>
 

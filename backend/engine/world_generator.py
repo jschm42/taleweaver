@@ -1,6 +1,7 @@
 import logging
 import asyncio
-from typing import List, Optional, Dict
+import os
+from typing import List, Optional, Dict, Literal
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -136,6 +137,13 @@ class QuestSchema(BaseModel):
     is_main: bool = Field(..., description="True if this quest is required to finish the adventure")
     status: str = Field("open", description="Current state: open, completed, failed")
 
+class AwardTemplateSchema(BaseModel):
+    key: str = Field(..., description="Unique identifier for the award, e.g., SLAYER_OF_RATS")
+    title: str = Field(..., description="Visual name of the award")
+    description: str = Field(..., description="Short description shown to the player")
+    tier: Literal["bronze", "silver", "gold"] = Field(..., description="The rarity/tier of the award")
+    requirement: str = Field(..., description="The specific rule/condition when the GM should grant this award")
+
 class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
     role: str = Field(..., description="The professional or narrative role of the player, e.g. 'Royal Chef', 'Exiled Alchemist'.")
@@ -153,6 +161,7 @@ class WorldManifesto(BaseModel):
     npcs: List[WorldEntitySchema]
     objects: List[WorldEntitySchema]
     quests: List[QuestSchema]
+    awards: List[AwardTemplateSchema]
     
     # Optional Time Initialization
     start_date: Optional[str] = Field(None, description="Initial in-game date, e.g. '2026-04-17'")
@@ -172,7 +181,10 @@ class WorldGenerator:
         generate_npc_images: bool = False,
         generate_item_images: bool = False,
         min_scenes: int = 1,
-        max_scenes: int = 5
+        max_scenes: int = 5,
+        award_generation_enabled: bool = True,
+        min_awards: int = 3,
+        max_awards: int = 5
     ) -> None:
         """
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
@@ -208,8 +220,18 @@ class WorldGenerator:
         
         system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
         
+        award_requirement = ""
+        if award_generation_enabled:
+            award_requirement = f"\n\nAWARD SYSTEM:\n- Generate between {min_awards} and {max_awards} unique Awards that players can earn."
+        else:
+            award_requirement = "\n\nAWARD SYSTEM:\n- Do not generate any awards for this adventure."
+
         user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(
-            title=title, context=context, min_scenes=min_scenes, max_scenes=max_scenes
+            title=title, 
+            context=context, 
+            min_scenes=min_scenes, 
+            max_scenes=max_scenes,
+            award_requirement=award_requirement
         )
         
         # 1. Update Status
@@ -351,6 +373,12 @@ class WorldGenerator:
                 if "status" not in q:
                     q["status"] = "open"
             adventure.quests = quests
+            
+            awards = manifest_dict.get("awards", [])
+            for a in awards:
+                if "is_earned" not in a:
+                    a["is_earned"] = False
+            adventure.awards = awards
             await db.flush()
 
         # 0. Sync Protagonist to Avatar

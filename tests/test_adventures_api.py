@@ -9,12 +9,16 @@ import pytest_asyncio
 from httpx import AsyncClient
 from io import BytesIO
 import os
+from sqlalchemy import delete, select
 
 from PIL import Image
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
+from backend.models.game_state import GameState
 from backend.models.world_entity import WorldEntity
 from backend.models.world_entity import WorldScene
+from backend.models.user import User
+from backend.engine.debug_engine import DebugEngine
 from tests.conftest import TestSessionLocal
 
 pytestmark = pytest.mark.asyncio
@@ -232,6 +236,107 @@ async def test_debug_includes_protagonist_profile_image(client: AsyncClient):
     debug_data = debug_resp.json()
     assert debug_data["protagonist"]["id"] == ids["avatar_id"]
     assert debug_data["protagonist"]["profile_image"] == "/data/adventures/example/protagonist.png"
+
+
+async def test_debug_award_grants_all_adventure_awards():
+    """The /debug award command should mark every adventure award as earned."""
+    async with TestSessionLocal() as session:
+        user = User(username="award_debugger", hashed_password="hash", role="user")
+        adventure = Adventure(title="Award Debug Quest")
+        session.add_all([user, adventure])
+        await session.flush()
+
+        # Existing award from another adventure with identical key must not block this one.
+        user.earned_awards = [
+            {
+                "key": "award-1",
+                "title": "Plumber of the Hour",
+                "description": "From another adventure",
+                "tier": "gold",
+                "adventure_id": "other-adventure",
+                "adventure_title": "Old Quest",
+                "session_id": "old-session",
+                "earned_at": "2026-01-01T00:00:00",
+            }
+        ]
+
+        adventure.owner_id = user.id
+        avatar = Avatar(user_id=user.id, adventure_id=adventure.id, name="Hero")
+        session.add(avatar)
+        await session.flush()
+
+        adventure.awards = [
+            {
+                "key": "award-1",
+                "title": "Plumber of the Hour",
+                "description": "A debug-only award.",
+                "tier": "gold",
+                "requirement": "Test command",
+                "is_earned": False,
+            },
+            {
+                "key": "award-2",
+                "title": "Pipe Whisperer",
+                "description": "A second debug-only award.",
+                "tier": "silver",
+                "requirement": "Test command",
+                "is_earned": False,
+            },
+        ]
+
+        state = GameState(
+            user_id=user.id,
+            avatar_id=avatar.id,
+            adventure_id=adventure.id,
+            scene_id="SCENE-1",
+        )
+
+        session.add(state)
+        await session.commit()
+
+        message = await DebugEngine.handle_debug_command(
+            session,
+            state,
+            "award",
+            user=user,
+            adventure=adventure,
+        )
+        await session.commit()
+        await session.refresh(adventure)
+        await session.refresh(user)
+
+    assert "All adventure awards granted" in message
+    assert all(award["is_earned"] is True for award in adventure.awards)
+    assert len(user.earned_awards or []) == 3
+    this_adv_awards = [a for a in (user.earned_awards or []) if a.get("adventure_id") == adventure.id]
+    assert {entry["key"] for entry in this_adv_awards} == {"award-1", "award-2"}
+
+
+async def test_get_chat_history_includes_awards(client: AsyncClient):
+    """Session snapshot must include the full award list for Quest Log rendering."""
+    ids = await _create_adventure(client, "Awards Snapshot Quest")
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, ids["adventure_id"])
+        assert adventure is not None
+        adventure.awards = [
+            {
+                "key": "a-snapshot",
+                "title": "Visible in Log",
+                "description": "Should be present in GET /chat response",
+                "tier": "bronze",
+                "requirement": "Any",
+                "is_earned": False,
+            }
+        ]
+        await session.commit()
+
+    chat_resp = await client.get(f"/api/adventures/{ids['game_id']}/chat")
+    assert chat_resp.status_code == 200
+    data = chat_resp.json()
+    assert "awards" in data
+    assert len(data["awards"]) == 1
+    assert data["awards"][0]["key"] == "a-snapshot"
 
 
 async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, monkeypatch):
@@ -470,6 +575,106 @@ async def test_upload_visual_updates_cover_image(client: AsyncClient):
     assert debug_resp.status_code == 200
     debug_data = debug_resp.json()
     assert debug_data["adventure"]["image_url"] == data["image_url"]
+
+
+async def test_reset_adventure_preserves_existing_image_assets(client: AsyncClient):
+    """Reset should keep already generated protagonist/scene/entity image URLs."""
+    ids = await _create_adventure(client, "Reset Asset Quest")
+
+    protagonist_img = "/data/adventures/reset-asset/protagonist.png"
+    scene_img = "/data/adventures/reset-asset/scenes/hall.png"
+    npc_img = "/data/adventures/reset-asset/npcs/guide.png"
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, ids["adventure_id"])
+        assert adventure is not None
+        adventure.original_manifest = {
+            "title": "Reset Asset Quest",
+            "protagonist": {
+                "name": "Hero",
+                "role": "Plumber",
+                "description": "Keeps pipes alive",
+            },
+            "scenes": [
+                {
+                    "id": "HALL",
+                    "name": "Hall",
+                    "description": "A simple corridor",
+                }
+            ],
+            "exits": [],
+            "npcs": [
+                {
+                    "id": "GUIDE",
+                    "name": "Guide",
+                    "description": "Shows the way",
+                    "start_scene_id": "HALL",
+                }
+            ],
+            "objects": [],
+        }
+
+        state_res = await session.execute(select(GameState).where(GameState.adventure_id == ids["adventure_id"]))
+        state = state_res.scalars().first()
+        assert state is not None
+        state.scene_id = "HALL"
+
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert avatar is not None
+        avatar.profile_image = protagonist_img
+
+        await session.execute(delete(WorldScene).where(WorldScene.adventure_id == ids["adventure_id"]))
+        await session.execute(delete(WorldEntity).where(WorldEntity.adventure_id == ids["adventure_id"]))
+
+        session.add(
+            WorldScene(
+                id="HALL",
+                adventure_id=ids["adventure_id"],
+                label="Hall",
+                description="A simple corridor",
+                image_url=scene_img,
+            )
+        )
+        session.add(
+            WorldEntity(
+                id="GUIDE",
+                adventure_id=ids["adventure_id"],
+                entity_type="NPC",
+                name="Guide",
+                description="Shows the way",
+                current_scene_id="HALL",
+                image_url=npc_img,
+            )
+        )
+        await session.commit()
+
+    reset_resp = await client.post(f"/api/adventures/{ids['adventure_id']}/reset")
+    assert reset_resp.status_code == 200, reset_resp.text
+
+    async with TestSessionLocal() as session:
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert avatar is not None
+        assert avatar.profile_image == protagonist_img
+
+        hall_scene_res = await session.execute(
+            select(WorldScene).where(
+                WorldScene.adventure_id == ids["adventure_id"],
+                WorldScene.id == "HALL",
+            )
+        )
+        hall_scene = hall_scene_res.scalars().first()
+        assert hall_scene is not None
+        assert hall_scene.image_url == scene_img
+
+        guide_res = await session.execute(
+            select(WorldEntity).where(
+                WorldEntity.adventure_id == ids["adventure_id"],
+                WorldEntity.id == "GUIDE",
+            )
+        )
+        guide = guide_res.scalars().first()
+        assert guide is not None
+        assert guide.image_url == npc_img
 
 
 async def test_export_manifest_returns_original_manifest_only(client: AsyncClient):

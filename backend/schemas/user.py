@@ -3,6 +3,7 @@ from typing import Optional
 
 class UserBase(BaseModel):
     username: str
+    earned_awards: Optional[List[Dict[str, Any]]] = None
 
 class UserCreate(UserBase):
     pass

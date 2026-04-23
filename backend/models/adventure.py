@@ -41,3 +41,9 @@ class Adventure(Base, TimestampMixin):
     # Quest System
     quests = Column(JSON, nullable=True) # List of quest objects
     is_completed = Column(Boolean, default=False, nullable=False)
+
+    # Award System
+    awards = Column(JSON, nullable=True) # List of award templates
+    award_generation_enabled = Column(Boolean, default=False, nullable=False)
+    min_awards = Column(Integer, default=3, nullable=False)
+    max_awards = Column(Integer, default=8, nullable=False)

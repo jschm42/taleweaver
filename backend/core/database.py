@@ -126,6 +126,19 @@ async def apply_sqlite_compat_migrations() -> None:
 
         user_cols_result = await conn.exec_driver_sql("PRAGMA table_info(users)")
         user_cols = {row[1] for row in user_cols_result.fetchall()}
+
+        if "profile_image_url" not in user_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN profile_image_url TEXT"
+            )
+            logger.info("SQLite migration: added users.profile_image_url")
+
+        if "bio" not in user_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN bio TEXT"
+            )
+            logger.info("SQLite migration: added users.bio")
+
         if "llm_settings" not in user_cols:
             await conn.exec_driver_sql(
                 "ALTER TABLE users ADD COLUMN llm_settings TEXT"
@@ -251,6 +264,54 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added adventures.generate_item_images")
 
+        if "awards" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN awards TEXT"
+            )
+            logger.info("SQLite migration: added adventures.awards")
+
+        if "award_generation_enabled" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN award_generation_enabled BOOLEAN NOT NULL DEFAULT 0"
+            )
+            logger.info("SQLite migration: added adventures.award_generation_enabled")
+
+        if "min_awards" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN min_awards INTEGER NOT NULL DEFAULT 3"
+            )
+            logger.info("SQLite migration: added adventures.min_awards")
+
+        if "max_awards" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN max_awards INTEGER NOT NULL DEFAULT 8"
+            )
+            logger.info("SQLite migration: added adventures.max_awards")
+
+        if "original_manifest" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN original_manifest TEXT"
+            )
+            logger.info("SQLite migration: added adventures.original_manifest")
+
+        if "min_scenes" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN min_scenes INTEGER NOT NULL DEFAULT 1"
+            )
+            logger.info("SQLite migration: added adventures.min_scenes")
+
+        if "max_scenes" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN max_scenes INTEGER NOT NULL DEFAULT 5"
+            )
+            logger.info("SQLite migration: added adventures.max_scenes")
+
+        if "owner_id" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN owner_id TEXT"
+            )
+            logger.info("SQLite migration: added adventures.owner_id")
+
         # Avatar link for cleanup
         avatar_cols_result = await conn.exec_driver_sql("PRAGMA table_info(avatars)")
         avatar_cols = {row[1] for row in avatar_cols_result.fetchall()}
@@ -283,3 +344,13 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE avatars ADD COLUMN exp INTEGER NOT NULL DEFAULT 0"
             )
             logger.info("SQLite migration: added avatars.exp")
+
+        # User Awards System
+        user_cols_result = await conn.exec_driver_sql("PRAGMA table_info(users)")
+        user_cols = {row[1] for row in user_cols_result.fetchall()}
+        
+        if "earned_awards" not in user_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN earned_awards TEXT"
+            )
+            logger.info("SQLite migration: added users.earned_awards")

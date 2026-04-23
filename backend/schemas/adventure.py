@@ -11,6 +11,14 @@ class QuestSchema(BaseModel):
     is_main: bool
     status: Literal["open", "completed"] = "open"
 
+class AwardSchema(BaseModel):
+    key: str
+    title: str
+    description: str
+    tier: Literal["bronze", "silver", "gold"]
+    requirement: str
+    is_earned: bool = False
+
 class AdventureBase(BaseModel):
     title: str = Field(..., max_length=50)
     image_url: Optional[str] = None
@@ -20,13 +28,24 @@ class AdventureBase(BaseModel):
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
     clock_enabled: Optional[bool] = False
+    
+    generate_npc_images: bool = True
+    generate_item_images: bool = True
+    generate_scene_images: bool = True
+    automatic_cover_generation: bool = True
+    
     selected_image_styles: Optional[List[str]] = None
     selected_tone: Optional[str] = None
     game_over_rules: Optional[Dict[str, Any]] = None
     quests: Optional[List[QuestSchema]] = None
+    awards: Optional[List[AwardSchema]] = None
     is_completed: bool = False
     min_scenes: Optional[int] = 1
     max_scenes: Optional[int] = 5
+    
+    award_generation_enabled: bool = True
+    min_awards: int = 3
+    max_awards: int = 8
 
 
 class AdventureCreate(AdventureBase):

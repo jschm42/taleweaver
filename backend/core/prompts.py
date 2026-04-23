@@ -41,7 +41,10 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "QUEST GENERATION:\n"
     "Generate 1-2 Main Quests and 2-3 Side Quests that fit the story context. "
     "Main Quests are required for adventure completion. Side Quests are optional. "
-    "Each quest should have a clear 'goal' (e.g. 'Defeat the dragon', 'Find the lost ring') and a 'exp_reward' (Main: 200-500, Side: 50-150)."
+    "Each quest should have a clear 'goal' (e.g. 'Defeat the dragon', 'Find the lost ring') and a 'exp_reward' (Main: 200-500, Side: 50-150).\n\n"
+    "AWARD GENERATION:\n"
+    "Generate 3-5 unique Awards that players can earn for specific achievements or playstyles. "
+    "Assign each a 'tier' (bronze, silver, gold) and a clear 'requirement' (e.g. 'Kill 10 goblins', 'Solve the riddle without hints', 'Funny roleplay')."
 )
 """
 The primary system prompt for generating a complete world manifest (scenes, NPCs, items, protagonist).
@@ -54,6 +57,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "WORLD SIZE REQUIREMENTS:\n"
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
     "- Create a complex network of exits and interesting entities connecting these locations."
+    "{award_requirement}"
 )
 """
 Template for the user message that kicks off world generation.
@@ -147,9 +151,10 @@ GM_MECHANICS_SUFFIX = (
     "If the action is uncertain, request a roll using `requested_skill_checks`. "
     "You provide the `stat` (strength, dexterity, intelligence, wisdom, charisma, armor_class), a `dc` (Difficulty Class), and a `reason`. "
     "The system will resolve the roll and provide the result for the final narration. "
-    "Evaluate if any of the following Quests have been completed based on the current action:\n"
-    "{quests_json}\n"
-    "If a quest is completed, return its ID in 'completed_quest_ids'. "
+    "If a quest is completed, return its ID in 'completed_quest_ids'.\n"
+    "Evaluate if any of the following Awards have been earned based on the current action:\n"
+    "{awards_json}\n"
+    "If an award is earned, return its key in 'earned_award_keys'. Only grant an award once per session. "
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """
@@ -159,9 +164,10 @@ Appended to the system prompt when the GM is running in 'Mechanics' mode (Pass 1
 GM_STORY_MECHANICS_SUFFIX = (
     "CRITICAL: You are in Story Mode. Prioritize narrative and atmosphere over strict mechanics. "
     "RPG elements (HP, items) are optional. Apply them only when it significantly enhances the story. "
-    "Evaluate if any of the following Quests have been completed based on the current action:\n"
-    "{quests_json}\n"
-    "If a quest is completed, return its ID in 'completed_quest_ids'. "
+    "If a quest is completed, return its ID in 'completed_quest_ids'.\n"
+    "Evaluate if any of the following Awards have been earned based on the current action:\n"
+    "{awards_json}\n"
+    "If an award is earned, return its key in 'earned_award_keys'. Only grant an award once per session. "
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """

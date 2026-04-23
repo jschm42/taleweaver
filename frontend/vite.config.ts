@@ -28,6 +28,11 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      // Proxy static assets (catalog images, etc.) from backend
+      '/assets': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
 })

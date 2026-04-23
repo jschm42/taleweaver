@@ -29,3 +29,7 @@ class User(Base, TimestampMixin):
     # General game preferences: {"clock_24h": false}
     game_settings = Column(JSON, nullable=True)
 
+    # Award System: stores earned awards as a list of objects
+    # [{"key": "...", "tier": "gold", "adventure_title": "...", "session_id": "...", "earned_at": "..."}]
+    earned_awards = Column(JSON, nullable=True)
+

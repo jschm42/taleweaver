@@ -10,6 +10,7 @@ import AdventureCard from '@/components/portal/AdventureCard.vue'
 import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
 import PortalLibraryToolbar from '@/components/portal/PortalLibraryToolbar.vue'
 import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
+import UserProfileModal from '@/components/portal/UserProfileModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -64,6 +65,7 @@ const errorMsg = ref('')
 const activeMenuId = ref<string | null>(null)
 const showDeleteConfirm = ref(false)
 const adventureToDelete = ref<Adventure | null>(null)
+const showProfile = ref(false)
 
 const handleGlobalClick = () => {
   activeMenuId.value = null
@@ -498,6 +500,7 @@ onUnmounted(() => {
       @import="triggerImportPicker"
       @create="openCreateModal"
       @admin="router.push('/admin')"
+      @profile="showProfile = true"
     />
 
     <!-- Main Content Area -->
@@ -559,6 +562,14 @@ onUnmounted(() => {
         :adventure-title="adventureToDelete?.adventure_title || ''"
         @close="showDeleteConfirm = false"
         @confirm="executeDelete"
+      />
+    </Teleport>
+
+    <Teleport to="body">
+      <UserProfileModal
+        v-if="showProfile"
+        :is-open="showProfile"
+        @close="showProfile = false"
       />
     </Teleport>
   </div>

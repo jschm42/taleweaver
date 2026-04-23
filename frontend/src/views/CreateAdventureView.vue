@@ -2,7 +2,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
-import type { CatalogTile, CreateAdventurePayload } from '@/types'
+import type { CatalogTile } from '@/types'
+import { 
+  Sparkles, Palette, Flame, Check, Image, 
+  ImageIcon, Users, Sword, MapPin, Trophy 
+} from 'lucide-vue-next'
 
 const router = useRouter()
 
@@ -11,27 +15,62 @@ type RuleMode = 'rpg' | 'story' | 'chat'
 const form = ref({
   title: '',
   storyIdea: '',
-  generate_npc_images: false,
-  generate_item_images: false,
-  generate_scene_images: false,
-  automatic_cover_generation: false,
-  clock_enabled: false,
-  pacing_minutes: 5,
+  generate_npc_images: true,
+  generate_item_images: true,
+  generate_scene_images: true,
+  automatic_cover_generation: true,
+  clock_enabled: true,
+  pacing_minutes: 10,
   rule_enforcement_mode: 'rpg' as RuleMode,
-  selected_image_styles: [] as string[],
-  selected_tone: '',
-  min_scenes: 1,
-  max_scenes: 5,
+  selected_style_id: '',
+  selected_tone_id: '',
+  min_scenes: 3,
+  max_scenes: 6,
+  award_generation_enabled: true,
+  min_awards: 3,
+  max_awards: 8,
 })
 
-const imageStylesCatalog = ref<CatalogTile[]>([])
-const toneCatalog = ref<CatalogTile[]>([])
+const automatedAssetsEnabled = ref(true)
 
+const assetOptions: Array<{
+  key: 'automatic_cover_generation' | 'generate_npc_images' | 'generate_item_images' | 'generate_scene_images'
+  label: string
+  icon: any
+}> = [
+  { key: 'automatic_cover_generation', label: 'Cover Art', icon: ImageIcon },
+  { key: 'generate_npc_images', label: 'NPC Portraits', icon: Users },
+  { key: 'generate_item_images', label: 'Item Icons', icon: Sword },
+  { key: 'generate_scene_images', label: 'Scene Visuals', icon: MapPin },
+]
+
+const imageStyles = ref<CatalogTile[]>([])
+const tones = ref<CatalogTile[]>([])
 const isLoadingCatalogs = ref(true)
-const isSubmitting = ref(false)
+const isGenerating = ref(false)
 const errorMsg = ref('')
-const statusMsg = ref('')
-const isImageLlmConfigured = ref(true)
+const config = ref<any>(null)
+
+const isImageLlmConfigured = computed(() => {
+  if (!config.value) return false;
+  
+  const t2i = config.value.t2i_settings;
+  const llm = config.value.llm_settings;
+  if (!t2i || !llm) return false;
+  
+  const keys = config.value.keys || {};
+
+  // LLM Check: Need at least one configured provider for narrative gen
+  const llmProvider = (llm.small_model_provider || llm.complex_model_provider || llm.preferred_provider || 'openai').toLowerCase();
+  const llmConfigured = llmProvider === 'ollama' || !!keys[llmProvider];
+
+  // T2I Check: Need at least one configured provider for visual gen
+  // Prioritize specific providers over legacy 'provider' field
+  const t2iProvider = (t2i.simple_model_provider || t2i.advanced_model_provider || t2i.provider || 'openai').toLowerCase();
+  const t2iConfigured = t2iProvider === 'ollama' || !!keys[t2iProvider];
+
+  return llmConfigured && t2iConfigured;
+});
 
 const ruleModeHelp = computed(() => {
   if (form.value.rule_enforcement_mode === 'rpg') {
@@ -40,35 +79,45 @@ const ruleModeHelp = computed(() => {
   if (form.value.rule_enforcement_mode === 'story') {
     return 'Story and atmosphere foreground. RPG elements optional.'
   }
-  return 'Story, atmosphere, chatting with NPCs. No strict rules check. Best for sitcoms or pure roleplay.'
+  return 'Story, atmosphere, chatting with NPCs. No strict rules check.'
 })
 
-function toggleImageStyle(styleId: string) {
-  if (form.value.selected_image_styles.includes(styleId)) {
-    form.value.selected_image_styles = form.value.selected_image_styles.filter((id) => id !== styleId)
-    return
+function toggleStyle(id: string) {
+  form.value.selected_style_id = id
+}
+
+function toggleTone(id: string) {
+  form.value.selected_tone_id = id
+}
+
+function toggleAllAssets() {
+  automatedAssetsEnabled.value = !automatedAssetsEnabled.value
+  if (automatedAssetsEnabled.value) {
+    form.value.generate_npc_images = true
+    form.value.generate_item_images = true
+    form.value.generate_scene_images = true
+    form.value.automatic_cover_generation = true
   }
-  form.value.selected_image_styles = [...form.value.selected_image_styles, styleId]
+}
+
+function toggleAsset(key: 'automatic_cover_generation' | 'generate_npc_images' | 'generate_item_images' | 'generate_scene_images') {
+  if (automatedAssetsEnabled.value) return
+  form.value[key] = !form.value[key]
 }
 
 async function loadCatalogs() {
   isLoadingCatalogs.value = true
   try {
-    const settings = await api.getSettings()
-    imageStylesCatalog.value = settings.image_styles_catalog || []
-    toneCatalog.value = settings.tone_catalog || []
-    if (!form.value.selected_tone && toneCatalog.value.length > 0) {
-      form.value.selected_tone = toneCatalog.value[0].id
+    const data = await api.getSettings()
+    config.value = data
+    imageStyles.value = data.image_styles_catalog || []
+    tones.value = data.tone_catalog || []
+    
+    if (!form.value.selected_style_id && imageStyles.value.length > 0) {
+      form.value.selected_style_id = imageStyles.value[0].id
     }
-    
-    const t2iProvider = settings.t2i_settings?.provider as string || 'openai'
-    isImageLlmConfigured.value = t2iProvider === 'ollama' || !!settings.keys[t2iProvider]
-    
-    if (!isImageLlmConfigured.value) {
-      form.value.generate_npc_images = false
-      form.value.generate_item_images = false
-      form.value.generate_scene_images = false
-      form.value.automatic_cover_generation = false
+    if (!form.value.selected_tone_id && tones.value.length > 0) {
+      form.value.selected_tone_id = tones.value[0].id
     }
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to load configurations.'
@@ -77,70 +126,30 @@ async function loadCatalogs() {
   }
 }
 
-
-
-async function createAdventure() {
+async function handleCreate() {
   if (!form.value.title.trim()) {
     errorMsg.value = 'Title is required.'
     return
   }
-  if (form.value.pacing_minutes < 1 || form.value.pacing_minutes > 30) {
-    errorMsg.value = 'Pacing must be between 1 and 30 minutes.'
-    return
-  }
-  if (form.value.min_scenes < 1) {
-    errorMsg.value = 'Minimum scenes must be at least 1.'
-    return
-  }
-  if (form.value.max_scenes < form.value.min_scenes) {
-    errorMsg.value = 'Maximum scenes must be greater than or equal to minimum scenes.'
-    return
-  }
-  if (form.value.max_scenes > 20) {
-    errorMsg.value = 'Maximum scenes cannot exceed 20.'
-    return
-  }
 
-  isSubmitting.value = true
+  isGenerating.value = true
   errorMsg.value = ''
-  statusMsg.value = 'Initializing...'
-
-  const strictRules = form.value.rule_enforcement_mode === 'rpg' || form.value.rule_enforcement_mode === 'story'
-  const adventureId = crypto.randomUUID()
-  const payload: CreateAdventurePayload = {
-    id: adventureId,
-    title: form.value.title.trim(),
+  
+  const payload: any = {
+    ...form.value,
+    id: crypto.randomUUID(),
+    title: form.value.title.trim() || 'Untitled Odyssey',
     context: form.value.storyIdea.trim(),
-    strict_rules: strictRules,
-    rule_enforcement_mode: form.value.rule_enforcement_mode,
-    generate_npc_images: form.value.generate_npc_images,
-    generate_item_images: form.value.generate_item_images,
-    generate_scene_images: form.value.generate_scene_images,
-    automatic_cover_generation: form.value.automatic_cover_generation,
-    clock_enabled: form.value.clock_enabled,
-    time_per_turn: form.value.pacing_minutes,
-    pacing_minutes: form.value.pacing_minutes,
-    selected_image_styles: form.value.selected_image_styles,
-    selected_tone: form.value.selected_tone || undefined,
-    min_scenes: form.value.min_scenes,
-    max_scenes: form.value.max_scenes,
+    selected_image_styles: [form.value.selected_style_id],
+    selected_tone: form.value.selected_tone_id
   }
 
   try {
-    // We await for reliability - the backend placeholder creation is very fast (<100ms)
     await api.createAdventure(payload)
-    
-    // Redirect to portal with query params so it can show the pending card and poll immediately
-    router.push({ 
-      name: 'portal', 
-      query: { 
-        new_id: adventureId, 
-        new_title: payload.title 
-      } 
-    })
+    router.push({ name: 'portal', query: { new_id: payload.id } })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to create adventure.'
-    isSubmitting.value = false
+    isGenerating.value = false
   }
 }
 
@@ -150,222 +159,272 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full min-h-0 overflow-y-auto bg-slate-950 text-slate-200 font-sans p-8 pb-12 md:p-10 md:pb-14">
-    <header class="w-full max-w-5xl mx-auto mb-8 flex items-center justify-between">
+  <div class="h-full min-h-0 overflow-y-auto bg-slate-950 text-slate-200 font-sans p-8 md:p-12">
+    <header class="max-w-7xl mx-auto mb-12 flex items-center justify-between">
       <div>
-        <h1 class="text-3xl md:text-4xl font-extrabold text-white">New Adventure Generation</h1>
-        <p class="text-slate-400 mt-2">One mode, clear parameters, controllable style and tone.</p>
+        <h1 class="text-4xl font-black text-white uppercase tracking-tight">New Adventure</h1>
+        <p class="text-slate-500 mt-2 tracking-wide text-sm">Weave the parameters of your next odyssey.</p>
       </div>
-      <button
-        @click="router.push({ name: 'portal' })"
-        class="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800"
-      >
-        Back
-      </button>
+      <button @click="router.back()" class="px-6 py-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all">Back</button>
     </header>
 
-    <main class="w-full max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
-        <div class="grid grid-cols-1 gap-5">
-          <div>
-            <label class="block text-sm font-semibold text-slate-300 mb-2">Title *</label>
-            <input
-              v-model="form.title"
-              type="text"
-              maxlength="70"
-              class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white"
-            />
-          </div>
+    <main class="max-w-7xl mx-auto">
+      <!-- Error Message -->
+      <div v-if="errorMsg" class="mb-8 p-4 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-300 text-sm flex items-center gap-3">
+        <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+        {{ errorMsg }}
+      </div>
 
-          <div>
-            <label class="block text-sm font-semibold text-slate-300 mb-2">Story Idea</label>
-            <textarea
-              v-model="form.storyIdea"
-              rows="5"
-              class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"
-            ></textarea>
-          </div>
-        </div>
+      <!-- Warning if no image model -->
+      <div v-if="!isImageLlmConfigured && !isLoadingCatalogs" class="mb-8 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex items-center gap-3">
+        <div class="w-2 h-2 rounded-full bg-amber-500"></div>
+        Warning: No image generation model is configured. You can still generate the adventure, but visual assets will be skipped.
+      </div>
 
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
-          <h2 class="text-lg font-bold text-white">Rule Mode</h2>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <button
-              @click="form.rule_enforcement_mode = 'rpg'"
-              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'rpg' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
-            >
-              <div class="font-bold">RPG</div>
-              <div class="text-xs mt-1">Strict rules & stats</div>
-            </button>
-            <button
-              @click="form.rule_enforcement_mode = 'story'"
-              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'story' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
-            >
-              <div class="font-bold">Story Mode</div>
-              <div class="text-xs mt-1">Narrative focus</div>
-            </button>
-            <button
-              @click="form.rule_enforcement_mode = 'chat'"
-              :class="['text-left border rounded-lg p-3 transition-colors', form.rule_enforcement_mode === 'chat' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300']"
-            >
-              <div class="font-bold">Chat Mode</div>
-              <div class="text-xs mt-1">Freeform roleplay</div>
-            </button>
-          </div>
-          <p class="text-xs text-slate-400">{{ ruleModeHelp }}</p>
-        </div>
-
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
-          <h2 class="text-lg font-bold text-white">World Size</h2>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <div class="flex items-center justify-between text-sm mb-2">
-                <span>Min Scenes</span>
-                <strong class="text-emerald-400">{{ form.min_scenes }}</strong>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-stretch">
+        <!-- Configuration Panel (Left) -->
+        <div class="flex flex-col h-full space-y-8">
+          <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 space-y-8 overflow-y-auto">
+            <!-- Basic Info -->
+            <div class="space-y-6">
+              <div>
+                <label class="block text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-3">Adventure Title</label>
+                <input
+                  v-model="form.title"
+                  type="text"
+                  placeholder="Enter a title..."
+                  class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-aether-primary outline-none transition-all placeholder:text-white/10"
+                />
               </div>
-              <input
-                type="range"
-                v-model.number="form.min_scenes"
-                min="1"
-                max="10"
-                step="1"
-                class="w-full accent-emerald-500"
-              />
-            </div>
-            <div>
-              <div class="flex items-center justify-between text-sm mb-2">
-                <span>Max Scenes</span>
-                <strong class="text-emerald-400">{{ form.max_scenes }}</strong>
-              </div>
-              <input
-                type="range"
-                v-model.number="form.max_scenes"
-                min="1"
-                max="20"
-                step="1"
-                class="w-full accent-emerald-500"
-              />
-            </div>
-          </div>
-          <p class="text-[10px] text-slate-500 italic">Determines how many unique locations will be generated in the initial world.</p>
-        </div>
 
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-4">
-          <h2 class="text-lg font-bold text-white">Game Time & Pacing</h2>
-          <label class="flex items-center justify-between gap-3 text-sm">
-            <span>Enable in-game clock</span>
-            <input type="checkbox" v-model="form.clock_enabled" />
-          </label>
-          <div>
-            <div class="flex items-center justify-between text-sm mb-2">
-              <span>Pacing per Action</span>
-              <strong class="text-emerald-400">{{ form.pacing_minutes }} min</strong>
-            </div>
-            <input
-              type="range"
-              v-model.number="form.pacing_minutes"
-              min="1"
-              max="30"
-              step="1"
-              class="w-full accent-emerald-500"
-            />
-          </div>
-        </div>
-
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-          <h2 class="text-lg font-bold text-white mb-2">Image Generation</h2>
-          
-          <div v-if="!isImageLlmConfigured" class="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-300">
-            No Image Generation model configured! Please configure a Text-to-Image provider in the 
-            <router-link :to="{ name: 'admin' }" class="text-emerald-400 font-bold underline hover:text-emerald-300">Settings</router-link>.
-          </div>
-
-          <label :class="['flex items-center justify-between gap-3 text-sm transition-opacity', !isImageLlmConfigured ? 'opacity-50 cursor-not-allowed' : '']">
-            <span>Generate NPC Images</span>
-            <input type="checkbox" v-model="form.generate_npc_images" :disabled="!isImageLlmConfigured" />
-          </label>
-          <label :class="['flex items-center justify-between gap-3 text-sm transition-opacity', !isImageLlmConfigured ? 'opacity-50 cursor-not-allowed' : '']">
-            <span>Generate Item Images</span>
-            <input type="checkbox" v-model="form.generate_item_images" :disabled="!isImageLlmConfigured" />
-          </label>
-          <label :class="['flex items-center justify-between gap-3 text-sm transition-opacity', !isImageLlmConfigured ? 'opacity-50 cursor-not-allowed' : '']">
-            <span>Generate Scene Images</span>
-            <input type="checkbox" v-model="form.generate_scene_images" :disabled="!isImageLlmConfigured" />
-          </label>
-          <label :class="['flex items-center justify-between gap-3 text-sm transition-opacity', !isImageLlmConfigured ? 'opacity-50 cursor-not-allowed' : '']">
-            <span>Automatic Cover Generation</span>
-            <input type="checkbox" v-model="form.automatic_cover_generation" :disabled="!isImageLlmConfigured" />
-          </label>
-        </div>
-      </section>
-
-      <aside class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5 w-full lg:w-96 flex-shrink-0 self-start">
-        <div>
-          <h2 class="text-lg font-bold text-white">Visual Styles</h2>
-          <p class="text-xs text-slate-400">Multiple selection possible. All chosen styles will be combined.</p>
-        </div>
-
-        <div v-if="isLoadingCatalogs" class="text-sm text-slate-500">Loading catalogs...</div>
-
-        <div v-else class="space-y-2 max-h-64 overflow-y-auto pr-1">
-          <button
-            v-for="style in imageStylesCatalog"
-            :key="style.id"
-            @click="toggleImageStyle(style.id)"
-            :class="['w-full text-left border rounded-lg p-2 transition-colors flex items-center gap-3', form.selected_image_styles.includes(style.id) ? 'border-cyan-500 bg-cyan-500/10 text-cyan-100' : 'border-slate-700 bg-slate-950 text-slate-300']"
-          >
-            <div class="w-20 h-20 rounded-lg bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden">
-              <img v-if="style.image_url" :src="style.image_url.startsWith('http') ? style.image_url : 'http://localhost:8000' + style.image_url" class="w-full h-full object-cover" />
-              <div v-else class="w-full h-full flex items-center justify-center text-slate-700 text-xl">
-                <i class="ra ra-paint-brush"></i>
+              <div>
+                <label class="block text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-3">Story Idea & Context</label>
+                <textarea
+                  v-model="form.storyIdea"
+                  rows="4"
+                  placeholder="The Weaver will use this to seed the world's history and current conflicts..."
+                  class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white resize-none focus:border-aether-primary outline-none transition-all placeholder:text-white/10"
+                ></textarea>
               </div>
             </div>
-            <div class="min-w-0 flex-grow">
-              <div class="font-semibold text-sm truncate pr-2">{{ style.name }}</div>
-              <div class="text-[10px] text-slate-400 line-clamp-2 leading-tight break-all">{{ style.description }}</div>
+
+            <!-- Rule Enforcement -->
+            <div class="space-y-4">
+              <label class="block text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Rule Enforcement Mode</label>
+              <div class="grid grid-cols-3 gap-3">
+                <button
+                  v-for="mode in ['rpg', 'story', 'chat']"
+                  :key="mode"
+                  @click="form.rule_enforcement_mode = mode as RuleMode"
+                  class="px-4 py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1"
+                  :class="form.rule_enforcement_mode === mode ? 'border-aether-primary bg-aether-primary/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/10'"
+                >
+                  <span class="text-xs font-black uppercase tracking-widest">{{ mode }}</span>
+                </button>
+              </div>
+              <p class="text-[10px] text-white/30 uppercase tracking-widest text-center">{{ ruleModeHelp }}</p>
             </div>
-          </button>
 
-        </div>
-
-        <div>
-          <h2 class="text-lg font-bold text-white">Tone</h2>
-          <div class="space-y-2 mt-2 max-h-52 overflow-y-auto pr-1">
-            <label
-              v-for="tone in toneCatalog"
-              :key="tone.id"
-              class="flex items-center gap-3 border border-slate-700 rounded-lg p-2 bg-slate-950 cursor-pointer"
-            >
-              <input type="radio" name="tone" :value="tone.id" v-model="form.selected_tone" />
-              <div class="w-16 h-16 rounded-lg bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden">
-                <img v-if="tone.image_url" :src="tone.image_url.startsWith('http') ? tone.image_url : 'http://localhost:8000' + tone.image_url" class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full flex items-center justify-center text-slate-700 text-lg">
-                  <i class="ra ra-quill-ink"></i>
+            <!-- World Pacing & Time -->
+            <div class="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl space-y-6">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <MapPin class="w-5 h-5" />
+                  </div>
+                  <span class="text-xs font-black text-white/80 uppercase tracking-widest">In-Game Pacing</span>
+                </div>
+                <div 
+                  @click="form.clock_enabled = !form.clock_enabled"
+                  :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', form.clock_enabled ? 'bg-emerald-500' : 'bg-slate-700']"
+                >
+                  <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', form.clock_enabled ? 'left-6' : 'left-1']"></div>
                 </div>
               </div>
-              <div class="min-w-0 flex-grow">
-                <div class="font-semibold text-sm text-slate-100 truncate pr-2">{{ tone.name }}</div>
-                <div class="text-[10px] text-slate-400 line-clamp-2 break-all leading-tight">{{ tone.description }}</div>
+
+              <div class="space-y-4" v-if="form.clock_enabled">
+                <div class="flex justify-between items-center">
+                  <span class="text-[10px] font-black text-white/40 uppercase tracking-widest">Pacing (Min/Action)</span>
+                  <span class="text-xs font-mono text-emerald-400">{{ form.pacing_minutes }}m</span>
+                </div>
+                <input 
+                  type="range" 
+                  v-model.number="form.pacing_minutes" 
+                  min="1" 
+                  max="30" 
+                  class="w-full accent-emerald-500 bg-white/5 h-1.5 rounded-lg appearance-none cursor-pointer"
+                />
               </div>
-            </label>
+            </div>
+
+            <!-- Asset Toggles -->
+            <div class="space-y-6">
+              <div class="flex items-center justify-between">
+                <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Automated Assets</label>
+                <div 
+                  @click="toggleAllAssets"
+                  :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', automatedAssetsEnabled ? 'bg-aether-primary' : 'bg-slate-700']"
+                >
+                  <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', automatedAssetsEnabled ? 'left-6' : 'left-1']"></div>
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <button 
+                  v-for="asset in assetOptions"
+                  :key="asset.key"
+                  :disabled="automatedAssetsEnabled"
+                  @click="toggleAsset(asset.key)"
+                  class="p-4 rounded-2xl border-2 transition-all flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed"
+                  :class="form[asset.key] ? 'border-sky-500/50 bg-sky-500/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/10'"
+                >
+                  <component :is="asset.icon" class="w-4 h-4" />
+                  <span class="text-[10px] font-black uppercase tracking-widest">{{ asset.label }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Awards Section -->
+            <div class="p-6 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl space-y-6">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <Trophy class="w-5 h-5" />
+                  </div>
+                  <span class="text-xs font-black text-white/80 uppercase tracking-widest">Awards Weaver</span>
+                </div>
+                <div 
+                  @click="form.award_generation_enabled = !form.award_generation_enabled"
+                  :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', form.award_generation_enabled ? 'bg-indigo-500' : 'bg-slate-700']"
+                >
+                  <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', form.award_generation_enabled ? 'left-6' : 'left-1']"></div>
+                </div>
+              </div>
+
+              <div v-if="form.award_generation_enabled" class="grid grid-cols-2 gap-8">
+                <div class="space-y-3">
+                  <div class="flex justify-between">
+                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest">Min</label>
+                    <span class="text-xs font-mono text-indigo-400">{{ form.min_awards }}</span>
+                  </div>
+                  <input type="range" v-model.number="form.min_awards" min="1" :max="form.max_awards" class="w-full accent-indigo-500" />
+                </div>
+                <div class="space-y-3">
+                  <div class="flex justify-between">
+                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest">Max</label>
+                    <span class="text-xs font-mono text-indigo-400">{{ form.max_awards }}</span>
+                  </div>
+                  <input type="range" v-model.number="form.max_awards" :min="form.min_awards" max="20" class="w-full accent-indigo-500" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div v-if="errorMsg" class="p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-sm text-red-300">
-          {{ errorMsg }}
-        </div>
+        <!-- Style & Tone Selection (Right) -->
+        <div class="flex flex-col gap-8 h-full">
+          <!-- Image Style -->
+          <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 flex flex-col min-h-0">
+            <div class="flex items-center gap-4 mb-8">
+              <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                <Palette class="w-6 h-6" />
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Visual Style</h3>
+                <p class="text-[10px] text-white/40 uppercase tracking-widest">Select one aesthetic direction</p>
+              </div>
+            </div>
 
-        <div class="space-y-3 pt-2">
-          <button
-            @click="createAdventure"
-            :disabled="isSubmitting"
-            class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold disabled:opacity-50"
-          >
-            {{ isSubmitting ? (statusMsg || 'Generating...') : 'Generate Adventure' }}
-          </button>
-          <p v-if="statusMsg" class="text-xs text-slate-400">{{ statusMsg }}</p>
+            <div class="grid grid-cols-2 gap-4 overflow-y-auto pr-2 custom-scrollbar max-h-[416px]">
+              <button
+                v-for="style in imageStyles"
+                :key="style.id"
+                @click="toggleStyle(style.id)"
+                class="relative h-32 rounded-2xl overflow-hidden border-4 transition-all duration-300 group"
+                :class="form.selected_style_id === style.id ? 'border-blue-500 ring-8 ring-blue-500/10' : 'border-transparent hover:border-white/10'"
+              >
+                <img :src="style.image_url" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
+                <div class="absolute bottom-4 left-4 right-4">
+                  <p class="text-[10px] font-black text-white uppercase tracking-widest">{{ style.name }}</p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- World Tone -->
+          <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 flex flex-col min-h-0">
+            <div class="flex items-center gap-4 mb-8">
+              <div class="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400">
+                <Flame class="w-6 h-6" />
+              </div>
+              <div>
+                <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Narrative Tone</h3>
+                <p class="text-[10px] text-white/40 uppercase tracking-widest">Atmosphere and description style</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 overflow-y-auto pr-2 custom-scrollbar max-h-[416px]">
+              <button
+                v-for="tone in tones"
+                :key="tone.id"
+                @click="toggleTone(tone.id)"
+                class="relative h-32 rounded-2xl overflow-hidden border-4 transition-all duration-300 group"
+                :class="form.selected_tone_id === tone.id ? 'border-blue-500 ring-8 ring-blue-500/10' : 'border-transparent hover:border-white/10'"
+              >
+                <img :src="tone.image_url" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
+                <div class="absolute bottom-4 left-4 right-4">
+                  <p class="text-[10px] font-black text-white uppercase tracking-widest">{{ tone.name }}</p>
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
-      </aside>
+      </div>
+
+      <!-- Action Button (Centered at bottom) -->
+      <div class="mt-16 flex flex-col items-center gap-6">
+        <button
+          @click="handleCreate"
+          :disabled="isGenerating || isLoadingCatalogs"
+          class="group relative px-20 py-6 bg-gradient-to-br from-aether-primary to-aether-secondary rounded-3xl font-black text-white shadow-2xl shadow-aether-primary/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+        >
+          <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+          <div class="relative flex items-center gap-4">
+            <div v-if="isGenerating" class="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <Sparkles v-else class="w-7 h-7" />
+            <span class="text-xl tracking-[0.2em]">{{ isGenerating ? 'WEAVING REALITY...' : 'BEGIN WEAVING' }}</span>
+          </div>
+        </button>
+        <p class="text-[10px] text-white/20 uppercase tracking-[0.3em]">The process may take a few minutes as the world is manifest</p>
+      </div>
     </main>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+</style>

@@ -76,6 +76,9 @@ export interface CreateAdventurePayload {
   pacing_minutes?: number
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
+  award_generation_enabled?: boolean
+  min_awards?: number
+  max_awards?: number
 }
 
 export interface CatalogTile {
@@ -124,3 +127,19 @@ export type WsIncoming =
   | { type: 'game_over'; reason: string }
   | { type: 'map_update'; mermaid: string }
   | { type: 'image_update'; url: string }
+
+export interface Award {
+  key: string
+  title: string
+  description: string
+  tier: 'bronze' | 'silver' | 'gold'
+  requirement: string
+  is_earned?: boolean
+}
+
+export interface EarnedAward extends Award {
+  adventure_id: string
+  adventure_title: string
+  session_id: string
+  earned_at: string
+}

@@ -1,4 +1,5 @@
 import json
+from typing import List, Optional
 from backend.models.avatar import Avatar
 from backend.engine.stat_aggregator import calculate_total_stats
 from backend.core import prompts
@@ -30,7 +31,8 @@ class MemoryManager:
         current_scene=None, 
         entities=None, 
         exits=None,
-        in_game_time: int = 0
+        in_game_time: int = 0,
+        awards: Optional[List[dict]] = None
     ) -> str:
         """
         Builds the foundational system prompt using the pre-generated world integrity.
@@ -97,13 +99,14 @@ class MemoryManager:
         current_scene=None, 
         entities=None, 
         exits=None,
-        in_game_time: int = 0
+        in_game_time: int = 0,
+        awards: Optional[List[dict]] = None
     ) -> list[dict]:
         """
         Combines the System Prompt with the sliding window of history and structured world state.
         """
         sys_prompt = MemoryManager.build_system_prompt(
-            avatar, world_context, current_scene, entities, exits, in_game_time
+            avatar, world_context, current_scene, entities, exits, in_game_time, awards
         )
         messages = [{"role": "system", "content": sys_prompt}]
         

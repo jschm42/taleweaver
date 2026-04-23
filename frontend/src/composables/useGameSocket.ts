@@ -24,6 +24,7 @@ export interface UseGameSocket {
   autoVisualize: Ref<boolean>
   adventureImage: Ref<string | null>
   quests: Ref<any[]>
+  awards: Ref<any[]>
   isCompleted: Ref<boolean>
   statusText: Ref<string>
   debugLogs: Ref<{ timestamp: string, content: string }[]>
@@ -48,6 +49,7 @@ export function useGameSocket(): UseGameSocket {
   const autoVisualize = ref(false)
   const adventureImage = ref<string | null>(null)
   const quests = ref<any[]>([])
+  const awards = ref<any[]>([])
   const isCompleted = ref(false)
   const statusText = ref('')
   const debugLogs = ref<{ timestamp: string, content: string }[]>([])
@@ -109,6 +111,9 @@ export function useGameSocket(): UseGameSocket {
     }
     if (data.is_completed !== undefined) {
       isCompleted.value = !!data.is_completed
+    }
+    if (data.awards !== undefined) {
+      awards.value = data.awards || []
     }
   }
 
@@ -294,6 +299,7 @@ export function useGameSocket(): UseGameSocket {
     autoVisualize,
     adventureImage,
     quests,
+    awards,
     isCompleted,
     statusText,
     debugLogs,

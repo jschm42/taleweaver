@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import json
+from typing import List, Optional
 import re
 import uuid
 import zipfile
@@ -726,6 +727,9 @@ class CreateAdventurePayload(BaseModel):
     pacing: Optional[Dict[str, Any]] = None
     min_scenes: int = 1
     max_scenes: int = 5
+    award_generation_enabled: bool = False
+    min_awards: int = 3
+    max_awards: int = 8
 
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventurePayload':
@@ -787,6 +791,7 @@ class ChatResponse(BaseModel):
     game_over_reason: Optional[str] = None
     adventure_image: Optional[str] = None
     quests: Optional[List[Dict[str, Any]]] = None
+    awards: Optional[List[Dict[str, Any]]] = None
     is_completed: bool = False
     full_world: Optional[Dict[str, Any]] = None
 
@@ -857,6 +862,9 @@ async def create_adventure(
         selected_tone=(payload.selected_tone.strip() if payload.selected_tone else None),
         min_scenes=payload.min_scenes,
         max_scenes=payload.max_scenes,
+        award_generation_enabled=payload.award_generation_enabled,
+        min_awards=payload.min_awards,
+        max_awards=payload.max_awards,
     )
 
     # Generate placeholder if no image is provided
@@ -999,6 +1007,9 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     generate_item_images=bool(payload_dict.get("generate_item_images", False)),
                     selected_image_styles=payload_dict.get("selected_image_styles") or [],
                     selected_tone=payload_dict.get("selected_tone"),
+                    award_generation_enabled=bool(payload_dict.get("award_generation_enabled", False)),
+                    min_awards=int(payload_dict.get("min_awards", 3)),
+                    max_awards=int(payload_dict.get("max_awards", 8)),
                     is_ready=False,
                     creation_status="Generating world structure",
                 )
@@ -1067,7 +1078,10 @@ async def run_background_generation(adventure_id: str, user_id: str, payload_dic
                     generate_npc_images=payload_dict.get('generate_npc_images', False),
                     generate_item_images=payload_dict.get('generate_item_images', False),
                     min_scenes=payload_dict.get('min_scenes', 1),
-                    max_scenes=payload_dict.get('max_scenes', 5)
+                    max_scenes=payload_dict.get('max_scenes', 5),
+                    award_generation_enabled=payload_dict.get('award_generation_enabled', False),
+                    min_awards=payload_dict.get('min_awards', 3),
+                    max_awards=payload_dict.get('max_awards', 8)
                 )
             
             # 2. Initial GameState
@@ -2113,9 +2127,23 @@ async def reset_adventure(adventure_id: str, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=400, detail="Adventure not found or has no original manifest to reset to.")
     
     # 1. Clear current world & narration data
-    # Backup image URLs first to preserve visuals
+    # Backup image URLs first to preserve visuals.
+    # apply_manifest expects scene IDs, entity IDs, and a special PROTAGONIST key.
     ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
     img_map = {e.id: e.image_url for e in ent_res.scalars().all() if e.image_url}
+
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+    for scene in scene_res.scalars().all():
+        if scene.image_url:
+            img_map[scene.id] = scene.image_url
+
+    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
+    state = state_res.scalars().first()
+    if state:
+        av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+        avatar = av_res.scalars().first()
+        if avatar and avatar.profile_image:
+            img_map["PROTAGONIST"] = avatar.profile_image
 
     await db.execute(delete(WorldScene).where(WorldScene.adventure_id == adventure_id))
     await db.execute(delete(WorldExit).where(WorldExit.adventure_id == adventure_id))
@@ -2124,8 +2152,7 @@ async def reset_adventure(adventure_id: str, db: AsyncSession = Depends(get_db))
     
     # 2. Reset GameState & Avatar
     # ... (same)
-    state_res = await db.execute(select(GameState).where(GameState.adventure_id == adventure_id))
-    state = state_res.scalars().first()
+    # Re-use the state loaded above.
     if state:
         # Wipe chat logs
         await db.execute(delete(ChatMessage).where(ChatMessage.game_state_id == state.id))
@@ -3057,6 +3084,7 @@ async def get_chat_history(
         image_url=current_scene.image_url if current_scene else None,
         adventure_image=adventure.image_url if adventure else None,
         quests=adventure.quests,
+        awards=adventure.awards,
         is_completed=adventure.is_completed,
         full_world=full_world,
     )
@@ -3143,7 +3171,7 @@ async def post_chat_message(
                     }))}\n\n"
                     return
 
-                debug_info = await DebugEngine.handle_debug_command(db, state, cmd_args)
+                debug_info = await DebugEngine.handle_debug_command(db, state, cmd_args, user=user, adventure=adventure)
                 
                 # Check for special log toggle return markers
                 if "[DEBUG_LOG_ON]" in debug_info:
@@ -3156,7 +3184,8 @@ async def post_chat_message(
                 await db.commit() # Persist toggle state
                 yield f"event: final\ndata: {json.dumps(jsonable_encoder({
                     'messages': [msg],
-                    'sheet': await _build_sheet_snapshot(avatar, state, db)
+                    'sheet': await _build_sheet_snapshot(avatar, state, db),
+                    'awards': adventure.awards
                 }))}\n\n"
                 return
 
@@ -3365,7 +3394,9 @@ async def post_chat_message(
 
             context_messages = MemoryManager.build_context(
                 avatar, adventure.context or "", history, 
-                current_scene=current_scene, entities=entities, exits=exits, in_game_time=state.in_game_time
+                current_scene=current_scene, entities=entities, exits=exits,
+                in_game_time=state.in_game_time,
+                awards=[a for a in (adventure.awards or []) if not a.get("is_earned")]
             )
             if adventure.quests:
                 quests_summary = "\n".join([f"- {q.get('title', 'Unknown')}: {q.get('description', '')} (Status: {q.get('status', 'open')})" for q in adventure.quests])
@@ -3400,10 +3431,15 @@ async def post_chat_message(
 
             if adventure.strict_rules:
                 # --- Pass 1: Technical Reasoning ---
-                quests_json = json.dumps(adventure.quests or [], indent=2)
                 mechanics_system_prompt = system_prompt + "\n\n" + (
-                    prompts.GM_STORY_MECHANICS_SUFFIX.format(quests_json=quests_json) if adventure.rule_enforcement_mode == "story" 
-                    else prompts.GM_MECHANICS_SUFFIX.format(quests_json=quests_json)
+                    prompts.GM_STORY_MECHANICS_SUFFIX.format(
+                        quests_json=json.dumps(adventure.quests or [], indent=2),
+                        awards_json=json.dumps([a for a in (adventure.awards or []) if not a.get("is_earned")], indent=2)
+                    ) if adventure.rule_enforcement_mode == "story" 
+                    else prompts.GM_MECHANICS_SUFFIX.format(
+                        quests_json=json.dumps(adventure.quests or [], indent=2),
+                        awards_json=json.dumps([a for a in (adventure.awards or []) if not a.get("is_earned")], indent=2)
+                    )
                 )
                 
                 if state.is_debug_enabled:
@@ -3556,6 +3592,48 @@ async def post_chat_message(
                             adventure.is_completed = True
                             response_messages.append({"role": "system", "content": "[ADVENTURE COMPLETED] All main objectives achieved!"})
 
+                if game_event.earned_award_keys:
+                    updated_awards = deepcopy(adventure.awards or [])
+                    any_awarded = False
+                    for a_key in game_event.earned_award_keys:
+                        for a in updated_awards:
+                            if a.get("key") == a_key and not a.get("is_earned"):
+                                a["is_earned"] = True
+                                any_awarded = True
+                                title = a.get("title") or a_key or "Unknown Award"
+                                dedupe_key = a_key or title
+                                
+                                # Add to User Profile
+                                earned_entry = {
+                                    "key": dedupe_key,
+                                    "title": title,
+                                    "description": a.get("description"),
+                                    "tier": a.get("tier"),
+                                    "adventure_id": adventure.id,
+                                    "adventure_title": adventure.title,
+                                    "session_id": game_id,
+                                    "earned_at": datetime.utcnow().isoformat()
+                                }
+                                user_awards = list(user.earned_awards or [])
+                                # De-duplicate per adventure, so repeated generic keys in different adventures still count.
+                                if not any(
+                                    (ea.get("key") or ea.get("title")) == dedupe_key
+                                    and ea.get("adventure_id") == adventure.id
+                                    for ea in user_awards
+                                ):
+                                    user_awards.append(earned_entry)
+                                    user.earned_awards = user_awards
+                                    flag_modified(user, "earned_awards")
+                                
+                                response_messages.append({
+                                    "role": "system", 
+                                    "content": f"[AWARD EARNED] {a.get('title')} ({a.get('tier').upper()})"
+                                })
+                    
+                    if any_awarded:
+                        adventure.awards = updated_awards
+                        flag_modified(adventure, "awards")
+
                 if state.is_debug_enabled:
                     debug_payload = game_event.model_dump(exclude={'narrative_description'})
                     content = f"**[DEBUG] MECHANICAL OUTCOME:**\n```json\n{json.dumps(debug_payload, indent=2)}\n```"
@@ -3674,6 +3752,7 @@ async def post_chat_message(
                 'game_over_reason': game_over_reason,
                 'adventure_image': adventure.image_url if adventure else None,
                 'quests': adventure.quests,
+                'awards': adventure.awards,
                 'is_completed': adventure.is_completed,
                 'discovered_item_ids': discovered_item_ids
             }))}\n\n"

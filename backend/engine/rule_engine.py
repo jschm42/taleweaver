@@ -98,6 +98,9 @@ class GameEvent(BaseModel):
     
     # Quest System
     completed_quest_ids: Optional[List[str]] = None
+    
+    # Award System
+    earned_award_keys: Optional[List[str]] = None
 
 # Maximum resource cap
 RESOURCE_CAP = 200

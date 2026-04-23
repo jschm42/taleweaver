@@ -58,6 +58,7 @@ const {
   npcMetadata,
   currentSceneImage,
   quests,
+  awards,
   isCompleted,
   statusText,
   debugLogs,
@@ -453,6 +454,7 @@ onBeforeUnmount(() => {
     <QuestsModal 
       :is-open="showQuests" 
       :quests="quests" 
+      :awards="awards"
       :tracked-quest-id="trackedQuestId" 
       @close="showQuests = false" 
       @track-quest="handleTrackQuest"
