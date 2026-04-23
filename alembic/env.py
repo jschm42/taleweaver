@@ -12,8 +12,9 @@ from backend.models.base import Base
 import backend.models.user  # noqa: F401
 import backend.models.avatar  # noqa: F401
 import backend.models.character  # noqa: F401
-import backend.models.adventure  # noqa: F401
-import backend.models.game_state  # noqa: F401
+import backend.models.adventure_template  # noqa: F401
+import backend.models.game_session  # noqa: F401
+import backend.models.session_state  # noqa: F401
 import backend.models.chat  # noqa: F401
 import backend.models.world_entity  # noqa: F401
 import backend.models.world_map  # noqa: F401

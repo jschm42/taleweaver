@@ -18,9 +18,10 @@ from typing import Optional
 from sqlalchemy import select
 
 from backend.core.database import AsyncSessionLocal
-from backend.models.adventure import Adventure
+from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
-from backend.models.game_state import GameState
+from backend.models.game_session import GameSession
+from backend.models.session_state import SessionState
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class HeartbeatManager:
             try:
                 async with AsyncSessionLocal() as db:
                     result = await db.execute(
-                        select(Adventure).where(Adventure.heartbeat_enabled == True)  # noqa: E712
+                        select(AdventureTemplate).where(AdventureTemplate.heartbeat_enabled == True)  # noqa: E712
                     )
                     adventures = result.scalars().all()
 
@@ -128,7 +129,7 @@ class HeartbeatManager:
             except Exception:
                 logger.exception("Heartbeat loop error — continuing.")
 
-    async def _process_adventure_tick(self, db, adventure: Adventure) -> None:
+    async def _process_adventure_tick(self, db, adventure: AdventureTemplate) -> None:
         """
         Applies time-based status-effect damage/healing to all active
         game states belonging to the given adventure.
@@ -136,9 +137,9 @@ class HeartbeatManager:
         Skips paused game states so players can safely take a break.
         """
         state_res = await db.execute(
-            select(GameState).where(
-                GameState.adventure_id == adventure.id,
-                GameState.is_paused == False,  # noqa: E712
+            select(SessionState).where(
+                SessionState.template_id == adventure.id,
+                SessionState.is_paused == False,  # noqa: E712
             )
         )
         states = state_res.scalars().all()

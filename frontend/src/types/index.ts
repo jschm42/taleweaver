@@ -44,6 +44,7 @@ export interface InventoryItem {
 /** Summary of a game session returned by GET /api/adventures. */
 export interface GameSession {
   game_id: string
+  template_id?: string
   adventure_id: string
   avatar_id: string
   adventure_title: string
@@ -52,6 +53,24 @@ export interface GameSession {
   current_scene_name?: string | null
   in_game_time: number
   is_paused: boolean
+}
+
+export interface AdventureTemplateSummary {
+  template_id: string
+  title: string
+  image_url: string | null
+  is_ready: boolean
+  creation_status?: string | null
+  creation_error?: string | null
+  selected_tone?: string | null
+  progress?: number
+  quest_count?: number
+  completed_quest_count?: number
+  active_game_id?: string | null
+  has_active_session?: boolean
+  is_paused?: boolean
+  scene_id?: string | null
+  current_scene_name?: string | null
 }
 
 /** Payload for creating a new adventure. */

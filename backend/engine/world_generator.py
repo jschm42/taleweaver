@@ -10,7 +10,7 @@ from backend.core.llm_router import GameMasterLLM
 from backend.core.llm_logger import log_structured_event
 from backend.models.user import User
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
-from backend.models.adventure import Adventure
+from backend.models.adventure_template import AdventureTemplate
 from backend.core.config import settings
 from backend.core import prompts
 
@@ -76,7 +76,7 @@ def _validate_t2i_prerequisites(
                     raise ValueError(f"API key missing for simple image provider '{provider}'.")
 
 
-async def _publish_generation_status(db: AsyncSession, adventure: Optional[Adventure], status: str) -> None:
+async def _publish_generation_status(db: AsyncSession, adventure: Optional[AdventureTemplate], status: str) -> None:
     """Publish live status text via the active session without committing mid-generation."""
     if not adventure:
         return
@@ -160,8 +160,8 @@ class WorldManifesto(BaseModel):
     exits: List[WorldExitSchema]
     npcs: List[WorldEntitySchema]
     objects: List[WorldEntitySchema]
-    quests: List[QuestSchema]
-    awards: List[AwardTemplateSchema]
+    quests: List[QuestSchema] = Field(default_factory=list)
+    awards: List[AwardTemplateSchema] = Field(default_factory=list)
     
     # Optional Time Initialization
     start_date: Optional[str] = Field(None, description="Initial in-game date, e.g. '2026-04-17'")
@@ -172,7 +172,7 @@ class WorldGenerator:
     async def generate_world(
         db: AsyncSession, 
         user: User, 
-        adventure_id: str, 
+        template_id: str, 
         title: str, 
         context: str,
         model: str = "gpt-4o", # default to a complex model
@@ -208,7 +208,7 @@ class WorldGenerator:
 
         log_structured_event(
             "adventure.generation.start",
-            adventure_id=adventure_id,
+            template_id=template_id,
             title=title,
             provider=provider,
             model=model,
@@ -235,12 +235,12 @@ class WorldGenerator:
         )
         
         # 1. Update Status
-        adventure = await db.get(Adventure, adventure_id)
+        adventure = await db.get(AdventureTemplate, template_id)
         if adventure:
             adventure.creation_status = "Analyzing Story Idea..."
             log_structured_event(
                 "adventure.generation.status",
-                adventure_id=adventure_id,
+                template_id=template_id,
                 status=adventure.creation_status,
                 phase="analysis",
             )
@@ -251,7 +251,7 @@ class WorldGenerator:
             user_prompt=user_prompt,
             response_model=WorldManifesto,
             model=model,
-            adventure_id=adventure_id,
+            adventure_id=template_id,
             operation="generate_world",
             phase="analysis",
             metadata={
@@ -263,7 +263,7 @@ class WorldGenerator:
 
         log_structured_event(
             "adventure.generation.manifest_received",
-            adventure_id=adventure_id,
+            template_id=template_id,
             scene_count=len(manifesto.scenes),
             exit_count=len(manifesto.exits),
             npc_count=len(manifesto.npcs),
@@ -275,7 +275,7 @@ class WorldGenerator:
             adventure.creation_status = "Building Scenes & Plot..."
             log_structured_event(
                 "adventure.generation.status",
-                adventure_id=adventure_id,
+                template_id=template_id,
                 status=adventure.creation_status,
                 phase="apply_manifest",
             )
@@ -286,7 +286,7 @@ class WorldGenerator:
             
         await WorldGenerator.apply_manifest(
             db, 
-            adventure_id, 
+            template_id, 
             manifesto.model_dump(), 
             user=user if (generate_npc_images or generate_item_images or generate_scene_images) else None,
             gen_npc=generate_npc_images,
@@ -296,7 +296,7 @@ class WorldGenerator:
         )
         log_structured_event(
             "adventure.generation.world_applied",
-            adventure_id=adventure_id,
+            template_id=template_id,
             scene_count=len(manifesto.scenes),
             exit_count=len(manifesto.exits),
             npc_count=len(manifesto.npcs),
@@ -307,7 +307,7 @@ class WorldGenerator:
     @staticmethod
     async def apply_manifest(
         db: AsyncSession, 
-        adventure_id: str, 
+        template_id: str, 
         manifest_dict: dict, 
         user: Optional[User] = None,
         gen_npc: bool = False,
@@ -322,7 +322,7 @@ class WorldGenerator:
         If existing_images is provided, uses them to restore entity visual states.
         """
         from backend.engine.media_engine import MediaEngine
-        adventure = await db.get(Adventure, adventure_id)
+        adventure = await db.get(AdventureTemplate, template_id)
 
         image_attempts = 0
         image_successes = 0
@@ -337,7 +337,7 @@ class WorldGenerator:
 
         log_structured_event(
             "adventure.generation.apply_manifest.start",
-            adventure_id=adventure_id,
+            template_id=template_id,
             scene_count=len(manifest_dict.get("scenes", [])),
             exit_count=len(manifest_dict.get("exits", [])),
             npc_count=len(manifest_dict.get("npcs", [])),
@@ -347,18 +347,18 @@ class WorldGenerator:
         # Preserve any existing images if caller didn't provide them
         if existing_images is None:
             existing_images = {}
-            ent_res = await db.execute(select(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+            ent_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
             for e in ent_res.scalars().all():
                 if e.image_url: existing_images[e.id] = e.image_url
             
-            scene_res = await db.execute(select(WorldScene).where(WorldScene.adventure_id == adventure_id))
+            scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
             for s in scene_res.scalars().all():
                 if s.image_url: existing_images[s.id] = s.image_url
 
         # Ensure idempotency: clear prior world objects for this adventure so re-runs don't attempt duplicate inserts
-        await db.execute(delete(WorldScene).where(WorldScene.adventure_id == adventure_id))
-        await db.execute(delete(WorldExit).where(WorldExit.adventure_id == adventure_id))
-        await db.execute(delete(WorldEntity).where(WorldEntity.adventure_id == adventure_id))
+        await db.execute(delete(WorldScene).where(WorldScene.template_id == template_id))
+        await db.execute(delete(WorldExit).where(WorldExit.template_id == template_id))
+        await db.execute(delete(WorldEntity).where(WorldEntity.template_id == template_id))
 
         # Deduplication caches
         seen_scene_ids = set()
@@ -385,7 +385,7 @@ class WorldGenerator:
         prot = manifest_dict.get("protagonist", {})
         if prot and adventure:
             from backend.models.avatar import Avatar
-            av_res = await db.execute(select(Avatar).where(Avatar.adventure_id == adventure_id))
+            av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
             avatar = av_res.scalars().first()
             
             # Map of ID -> Slot for starting equipment
@@ -418,11 +418,11 @@ class WorldGenerator:
                             timeout=_image_generation_timeout_seconds(),
                         )
                     except asyncio.TimeoutError as exc:
-                        logger.warning("Protagonist image generation timed out for %s: %s", adventure_id, exc)
+                        logger.warning("Protagonist image generation timed out for %s: %s", template_id, exc)
                         image_url = None
                     except Exception as exc:
                         # Visual failures (e.g. provider moderation) must not abort world creation
-                        logger.warning("Protagonist image generation failed for %s: %s", adventure_id, exc)
+                        logger.warning("Protagonist image generation failed for %s: %s", template_id, exc)
                         image_url = None
                     if image_url:
                         image_successes += 1
@@ -463,22 +463,22 @@ class WorldGenerator:
                         timeout=_image_generation_timeout_seconds(),
                     )
                 except asyncio.TimeoutError as exc:
-                    logger.warning("Scene image generation timed out for %s/%s: %s", adventure_id, s['id'], exc)
+                    logger.warning("Scene image generation timed out for %s/%s: %s", template_id, s['id'], exc)
                     image_url = None
                 except Exception as exc:
-                    logger.warning("Scene image generation failed for %s/%s: %s", adventure_id, s['id'], exc)
+                    logger.warning("Scene image generation failed for %s/%s: %s", template_id, s['id'], exc)
                     image_url = None
                 if image_url:
                     image_successes += 1
                 else:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
-                        adventure_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
+                        adventure_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "scenes")
                     )
 
             db.add(WorldScene(
                 id=s["id"],
-                adventure_id=adventure_id,
+                template_id=template_id,
                 label=s["name"],
                 description=s["description"],
                 image_url=image_url
@@ -487,7 +487,7 @@ class WorldGenerator:
         # Persist Exits
         for e in manifest_dict.get("exits", []):
             db.add(WorldExit(
-                adventure_id=adventure_id,
+                template_id=template_id,
                 from_scene_id=e["from_scene_id"],
                 to_scene_id=e["to_scene_id"],
                 label=e["label"],
@@ -527,22 +527,22 @@ class WorldGenerator:
                         timeout=_image_generation_timeout_seconds(),
                     )
                 except asyncio.TimeoutError as exc:
-                    logger.warning("NPC image generation timed out for %s/%s: %s", adventure_id, n['id'], exc)
+                    logger.warning("NPC image generation timed out for %s/%s: %s", template_id, n['id'], exc)
                     image_url = None
                 except Exception as exc:
-                    logger.warning("NPC image generation failed for %s/%s: %s", adventure_id, n['id'], exc)
+                    logger.warning("NPC image generation failed for %s/%s: %s", template_id, n['id'], exc)
                     image_url = None
                 if image_url:
                     image_successes += 1
                 else:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
-                        adventure_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
+                        adventure_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
                     )
 
             db.add(WorldEntity(
                 id=n["id"],
-                adventure_id=adventure_id,
+                template_id=template_id,
                 entity_type="NPC",
                 name=n["name"],
                 description=n["description"],
@@ -589,17 +589,17 @@ class WorldGenerator:
                         timeout=_image_generation_timeout_seconds(),
                     )
                 except asyncio.TimeoutError as exc:
-                    logger.warning("Object image generation timed out for %s/%s: %s", adventure_id, o['id'], exc)
+                    logger.warning("Object image generation timed out for %s/%s: %s", template_id, o['id'], exc)
                     image_url = None
                 except Exception as exc:
-                    logger.warning("Object image generation failed for %s/%s: %s", adventure_id, o['id'], exc)
+                    logger.warning("Object image generation failed for %s/%s: %s", template_id, o['id'], exc)
                     image_url = None
                 if image_url:
                     image_successes += 1
                 else:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
-                        adventure_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
+                        adventure_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
                     )
 
             is_starting_inv = o["id"] in starting_inv_ids
@@ -629,7 +629,7 @@ class WorldGenerator:
             db.add(
                 WorldEntity(
                     id=o["id"],
-                    adventure_id=adventure_id,
+                    template_id=template_id,
                     entity_type="OBJECT",
                     name=o["name"],
                     description=o["description"],
@@ -649,7 +649,7 @@ class WorldGenerator:
 
         log_structured_event(
             "adventure.generation.apply_manifest.complete",
-            adventure_id=adventure_id,
+            template_id=template_id,
             scene_count=len(manifest_dict.get("scenes", [])),
             exit_count=len(manifest_dict.get("exits", [])),
             npc_count=len(manifest_dict.get("npcs", [])),

@@ -52,7 +52,7 @@ Used in WorldGenerator.generate_world.
 """
 
 WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
-    "Adventure Title: {title}\n"
+    "AdventureTemplate Title: {title}\n"
     "Story Idea: {context}\n\n"
     "WORLD SIZE REQUIREMENTS:\n"
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
@@ -118,7 +118,7 @@ Variables: name, description.
 # --- Game Master (Chat) Prompts ---
 
 GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
-    "You are the Gamemaster (GM) of an AI Text Adventure RPG. "
+    "You are the Gamemaster (GM) of an AI Text AdventureTemplate RPG. "
     "You dynamically generate world narratives, resolve choices, and act as NPCs. "
     "The world context/setting is:\n{world_context}\n\n"
     "CURRENT GAME TIME: {time_str}\n"

@@ -3,38 +3,19 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
+import type { AdventureTemplateSummary, GameSession } from '@/types'
 import PortalSidebar from '@/components/portal/PortalSidebar.vue'
 import PortalHeader from '@/components/portal/PortalHeader.vue'
 import PendingAdventureCard from '@/components/portal/PendingAdventureCard.vue'
-import AdventureCard from '@/components/portal/AdventureCard.vue'
 import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
 import PortalLibraryToolbar from '@/components/portal/PortalLibraryToolbar.vue'
 import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
 import UserProfileModal from '@/components/portal/UserProfileModal.vue'
+import AdventureTemplateCard from '@/components/portal/AdventureTemplateCard.vue'
+import GameSessionCard from '@/components/portal/GameSessionCard.vue'
 
 const router = useRouter()
 const route = useRoute()
-
-interface Adventure {
-  game_id: string
-  adventure_id: string
-  avatar_id: string
-  adventure_title: string
-  image_url: string | null
-  scene_id: string
-  current_scene_name?: string | null
-  in_game_time: number
-  is_paused: boolean
-  is_ready: boolean
-  creation_status?: string | null
-  creation_error?: string | null
-  selected_tone?: string | null
-  genre?: string
-  progress?: number // Mocked for design
-  description?: string // Mocked for design
-  quest_count?: number
-  completed_quest_count?: number
-}
 
 interface PendingAdventureCard {
   adventureId: string
@@ -67,53 +48,16 @@ function formatToneLabel(value?: string | null): string {
   return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
-const adventures = ref<Adventure[]>([])
+const templates = ref<AdventureTemplateSummary[]>([])
+const sessions = ref<GameSession[]>([])
+const activeSection = ref<'templates' | 'sessions'>('templates')
 const isLoading = ref(true)
-const isLlmConfigured = ref(true)
 
 const isImporting = ref(false)
 const errorMsg = ref('')
-const activeMenuId = ref<string | null>(null)
 const showDeleteConfirm = ref(false)
-const adventureToDelete = ref<Adventure | null>(null)
+const templateToDelete = ref<{ id: string; title: string } | null>(null)
 const showProfile = ref(false)
-
-const handleGlobalClick = () => {
-  activeMenuId.value = null
-}
-
-function confirmDelete(adventure: Adventure) {
-  activeMenuId.value = null
-  adventureToDelete.value = adventure
-  showDeleteConfirm.value = true
-}
-
-async function executeDelete() {
-  if (!adventureToDelete.value) return
-  
-  try {
-    await api.deleteAdventure(adventureToDelete.value.adventure_id)
-    adventures.value = adventures.value.filter((a) => a.adventure_id !== adventureToDelete.value?.adventure_id)
-    showDeleteConfirm.value = false
-    adventureToDelete.value = null
-  } catch (error) {
-    console.error('Error deleting adventure:', error)
-  }
-}
-
-function toggleMenu(e: Event, adventureId: string) {
-  e.stopPropagation()
-  if (activeMenuId.value === adventureId) {
-    activeMenuId.value = null
-  } else {
-    activeMenuId.value = adventureId
-  }
-}
-
-function editAdventure(adventureId: string) {
-  activeMenuId.value = null
-  router.push({ name: 'adventure-editor', params: { adventureId } })
-}
 
 const importInput = ref<HTMLInputElement | null>(null)
 const pendingImports = ref<PendingAdventureCard[]>([])
@@ -127,72 +71,20 @@ const loadingWords = [
 ]
 let loadingWordTimer: number | null = null
 
-const visibleAdventures = computed(() => {
-  const pendingIds = new Set([
-    ...pendingImports.value.map((entry) => entry.adventureId),
-    ...pendingCreations.value.map((entry) => entry.adventureId),
-  ])
-  return adventures.value.filter((adv) => !pendingIds.has(adv.adventure_id))
-})
-
 const pendingCards = computed(() => [
   ...pendingCreations.value.map((entry) => ({ ...entry, kind: 'creation' as const })),
   ...pendingImports.value.map((entry) => ({ ...entry, kind: 'import' as const })),
 ])
 
-const isAdmin = computed(() => authState.user?.role === 'admin')
-
-const form = ref({
-  id: '',
-  mode: 'simple' as 'simple' | 'advanced',
-  title: '',
-  context: '',
-  image_url: null as string | null,
-  generate_npc_images: false,
-  generate_item_images: false,
-  generate_scene_images: false,
-  automatic_cover_generation: false,
-  time_per_turn: 5,
-  story_idea: '',
-  tone: '',
-  characters_text: '',
-  image_style: '',
-  items_text: '',
-  scenes_text: '',
-  objects_text: '',
-  npc_text: '',
-  pacing_text: '',
-  start_date: '',
-  start_time: '',
-  protagonist_role: '',
+const visibleTemplates = computed(() => {
+  const pendingIds = new Set([
+    ...pendingImports.value.map((entry) => entry.adventureId),
+    ...pendingCreations.value.map((entry) => entry.adventureId),
+  ])
+  return templates.value.filter((entry) => !pendingIds.has(entry.template_id))
 })
 
-function resetCreateForm() {
-  form.value = {
-    id: crypto.randomUUID(),
-    mode: 'simple',
-    title: '',
-    context: '',
-    image_url: null,
-    generate_npc_images: false,
-    generate_item_images: false,
-    generate_scene_images: false,
-    automatic_cover_generation: false,
-    time_per_turn: 5,
-    story_idea: '',
-    tone: '',
-    characters_text: '',
-    image_style: '',
-    items_text: '',
-    scenes_text: '',
-    objects_text: '',
-    npc_text: '',
-    pacing_text: '',
-    start_date: '',
-    start_time: '',
-    protagonist_role: '',
-  }
-}
+const isAdmin = computed(() => authState.user?.role === 'admin')
 
 function addPendingImportCard(adventureId: string, title: string) {
   pendingImports.value = [
@@ -256,7 +148,8 @@ async function removeFailedPendingCard(adventureId: string, kind: 'creation' | '
   try {
     if (!isTemporaryImport) {
       await api.deleteAdventure(adventureId)
-      adventures.value = adventures.value.filter((a) => a.adventure_id !== adventureId)
+      templates.value = templates.value.filter((a) => a.template_id !== adventureId)
+      sessions.value = sessions.value.filter((s) => (s.template_id || s.adventure_id) !== adventureId)
     }
   } catch (error) {
     console.error('Error deleting failed pending adventure:', error)
@@ -270,37 +163,41 @@ async function removeFailedPendingCard(adventureId: string, kind: 'creation' | '
   removePendingCreationCard(adventureId)
 }
 
-async function fetchAdventures() {
+async function fetchPortalData() {
   try {
-    const fetched = (await api.listAdventures()) as Adventure[]
-    adventures.value = fetched.map((adv) => ({
-      ...adv,
-      genre: formatToneLabel(adv.selected_tone) || adv.genre || '',
-    }))
+    const [fetchedTemplates, fetchedSessions] = await Promise.all([
+      api.listAdventureTemplates(),
+      api.listSessions(),
+    ])
 
-    for (const adv of fetched) {
-      if (!adv.is_ready) {
-        const isAlreadyPending = pendingCreations.value.some((p) => p.adventureId === adv.adventure_id)
+    templates.value = fetchedTemplates.map((entry) => ({
+      ...entry,
+      selected_tone: formatToneLabel(entry.selected_tone),
+    }))
+    sessions.value = fetchedSessions
+
+    for (const template of fetchedTemplates) {
+      if (!template.is_ready) {
+        const isAlreadyPending = pendingCreations.value.some((p) => p.adventureId === template.template_id)
         if (!isAlreadyPending) {
-          addPendingCreationCard(adv.adventure_id, adv.adventure_title)
+          addPendingCreationCard(template.template_id, template.title)
           updatePendingCreationStatus(
-            adv.adventure_id,
-            adv.creation_error || adv.creation_status || 'Wird vorbereitet...',
-            Boolean(adv.creation_error) || isFailureStatus(adv.creation_status || ''),
+            template.template_id,
+            template.creation_error || template.creation_status || 'Wird vorbereitet...',
+            Boolean(template.creation_error) || isFailureStatus(template.creation_status || ''),
           )
-          
-          void pollAdventureStatus(adv.adventure_id, {
-            navigateOnReady: false,
-            onStatus: (status: string) => updatePendingCreationStatus(adv.adventure_id, status),
+
+          void pollAdventureStatus(template.template_id, {
+            onStatus: (status: string) => updatePendingCreationStatus(template.template_id, status),
             onReady: async () => {
-              removePendingCreationCard(adv.adventure_id)
-              await fetchAdventures()
+              removePendingCreationCard(template.template_id)
+              await fetchPortalData()
             },
-            onFailure: (status: string) => updatePendingCreationStatus(adv.adventure_id, status, true),
+            onFailure: (status: string) => updatePendingCreationStatus(template.template_id, status, true),
           })
         }
       } else {
-        removePendingCreationCard(adv.adventure_id)
+        removePendingCreationCard(template.template_id)
       }
     }
   } catch (error) {
@@ -310,23 +207,78 @@ async function fetchAdventures() {
   }
 }
 
-async function fetchSettings() {
+function playSession(gameId: string) {
+  router.push({ name: 'game', params: { id: gameId } })
+}
+
+async function startSession(templateId: string) {
   try {
-    const settings = await api.getSettings()
-    const llm = (settings.llm_settings || {}) as Record<string, string | undefined>
-    const keys = (settings.keys || {}) as Record<string, string | undefined>
-    const smallProvider = llm.small_model_provider || 'openai'
-    const complexProvider = llm.complex_model_provider || 'openai'
-    const isSmallOk = smallProvider === 'ollama' || !!keys[smallProvider]
-    const isComplexOk = complexProvider === 'ollama' || !!keys[complexProvider]
-    isLlmConfigured.value = isSmallOk && isComplexOk
-  } catch (error) {
-    console.error('Settings API Error:', error)
+    const result = await api.startSessionForTemplate(templateId)
+    await fetchPortalData()
+    playSession(result.game_id)
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Session konnte nicht gestartet werden.'
   }
 }
 
-function playAdventure(gameId: string) {
-  router.push({ name: 'game', params: { id: gameId } })
+async function pauseSession(templateId: string) {
+  try {
+    await api.pauseSession(templateId)
+    await fetchPortalData()
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Session konnte nicht pausiert werden.'
+  }
+}
+
+async function resumeHeartbeat(templateId: string) {
+  try {
+    await api.resumeSession(templateId)
+    await fetchPortalData()
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Session konnte nicht fortgesetzt werden.'
+  }
+}
+
+async function resetSession(templateId: string) {
+  try {
+    await api.resetSession(templateId)
+    await fetchPortalData()
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Session konnte nicht zurueckgesetzt werden.'
+  }
+}
+
+async function deleteSession(gameId: string) {
+  try {
+    await api.deleteSession(gameId)
+    sessions.value = sessions.value.filter((s) => s.game_id !== gameId)
+    await fetchPortalData()
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Session konnte nicht geloescht werden.'
+  }
+}
+
+function editAdventure(templateId: string) {
+  router.push({ name: 'adventure-editor', params: { adventureId: templateId } })
+}
+
+function confirmDeleteTemplate(templateId: string, title: string) {
+  templateToDelete.value = { id: templateId, title }
+  showDeleteConfirm.value = true
+}
+
+async function executeDeleteTemplate() {
+  if (!templateToDelete.value) return
+
+  try {
+    await api.deleteAdventure(templateToDelete.value.id)
+    templates.value = templates.value.filter((entry) => entry.template_id !== templateToDelete.value?.id)
+    sessions.value = sessions.value.filter((entry) => (entry.template_id || entry.adventure_id) !== templateToDelete.value?.id)
+    showDeleteConfirm.value = false
+    templateToDelete.value = null
+  } catch (error) {
+    console.error('Error deleting template:', error)
+  }
 }
 
 function openCreateModal() {
@@ -344,7 +296,7 @@ async function onImportFileSelected(event: Event) {
 
   const lower = file.name.toLowerCase()
   if (!lower.endsWith('.adz') && !lower.endsWith('.adv')) {
-    errorMsg.value = 'Nur .adv und .adz werden als Importformat unterstützt.'
+    errorMsg.value = 'Nur .adv und .adz werden als Importformat unterstuetzt.'
     target.value = ''
     return
   }
@@ -369,7 +321,7 @@ async function executeAdvImport(file: File) {
   try {
     await api.importAdv(file)
     removePendingImportCard(tempId)
-    await fetchAdventures()
+    await fetchPortalData()
   } catch (error: any) {
     updatePendingImportStatus(tempId, error?.message || 'ADV Import fehlgeschlagen', true)
   } finally {
@@ -384,7 +336,7 @@ async function executeAdzImport(file: File) {
   try {
     await api.importAdz(file)
     removePendingImportCard(tempId)
-    await fetchAdventures()
+    await fetchPortalData()
   } catch (error: any) {
     updatePendingImportStatus(tempId, error?.message || 'ADZ Import fehlgeschlagen', true)
   } finally {
@@ -412,7 +364,6 @@ function makeSafeFilename(title: string, ext: string) {
 }
 
 async function exportAdventureAdz(adventureId: string, title: string) {
-  activeMenuId.value = null
   try {
     await downloadAdventureExport(api.exportAdzUrl(adventureId), makeSafeFilename(title, 'adz'))
   } catch (error: any) {
@@ -421,7 +372,6 @@ async function exportAdventureAdz(adventureId: string, title: string) {
 }
 
 async function exportAdventureAdv(adventureId: string, title: string) {
-  activeMenuId.value = null
   try {
     await downloadAdventureExport(api.exportAdvUrl(adventureId), makeSafeFilename(title, 'adv'))
   } catch (error: any) {
@@ -430,7 +380,6 @@ async function exportAdventureAdv(adventureId: string, title: string) {
 }
 
 interface PollAdventureOptions {
-  navigateOnReady?: boolean
   onStatus?: (status: string) => void
   onReady?: () => void | Promise<void>
   onFailure?: (status: string) => void
@@ -466,9 +415,7 @@ async function pollAdventureStatus(adventureId: string, options?: PollAdventureO
 }
 
 onMounted(() => {
-  resetCreateForm()
-  void fetchSettings()
-  fetchAdventures()
+  void fetchPortalData()
 
   loadingWordTimer = window.setInterval(() => {
     loadingWordIndex.value = (loadingWordIndex.value + 1) % loadingWords.length
@@ -480,22 +427,18 @@ onMounted(() => {
     addPendingCreationCard(newId, newTitle)
     updatePendingCreationStatus(newId, 'Starting generation...')
     void pollAdventureStatus(newId, {
-      navigateOnReady: false,
       onStatus: (status: string) => updatePendingCreationStatus(newId, status || 'Wird vorbereitet...'),
       onReady: async () => {
         removePendingCreationCard(newId)
-        await fetchAdventures()
+        await fetchPortalData()
       },
       onFailure: (status: string) => updatePendingCreationStatus(newId, status || 'Generierung fehlgeschlagen', true),
     })
     router.replace({ name: 'portal', query: {} })
   }
-
-  window.addEventListener('click', handleGlobalClick)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('click', handleGlobalClick)
   if (loadingWordTimer !== null) {
     clearInterval(loadingWordTimer)
     loadingWordTimer = null
@@ -519,39 +462,58 @@ onUnmounted(() => {
 
       <!-- Scrollable Content -->
       <div class="flex-1 overflow-y-auto p-10">
-        <PortalLibraryToolbar />
+        <PortalLibraryToolbar
+          :active-section="activeSection"
+          @change-section="activeSection = $event"
+        />
 
         <!-- Loading State -->
-        <div v-if="isLoading && adventures.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
+        <div v-if="isLoading && templates.length === 0 && sessions.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
           <div class="w-16 h-16 border-4 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
           <p class="text-aether-primary font-bold uppercase tracking-[0.3em] text-[10px]">Accessing Archives...</p>
         </div>
 
-        <!-- Grid -->
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
-          <PortalCreateAdventureCard @create="openCreateModal" />
+        <div v-else>
+          <div v-if="activeSection === 'templates'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+            <PortalCreateAdventureCard @create="openCreateModal" />
 
-          <PendingAdventureCard
-            v-for="pending in pendingCards"
-            :key="`pending-${pending.adventureId}`"
-            :pending="pending"
-            :loading-word-index="loadingWordIndex"
-            @remove-failed="removeFailedPendingCard"
-          />
+            <PendingAdventureCard
+              v-for="pending in pendingCards"
+              :key="`pending-${pending.adventureId}`"
+              :pending="pending"
+              :loading-word-index="loadingWordIndex"
+              @remove-failed="removeFailedPendingCard"
+            />
 
-          <!-- Adventure Cards -->
-          <AdventureCard
-            v-for="adv in visibleAdventures"
-            :key="adv.adventure_id"
-            :adv="adv"
-            :active-menu-id="activeMenuId"
-            @play="playAdventure"
-            @toggle-menu="toggleMenu"
-            @edit="editAdventure"
-            @export-adz="exportAdventureAdz"
-            @export-adv="exportAdventureAdv"
-            @delete="confirmDelete"
-          />
+            <AdventureTemplateCard
+              v-for="entry in visibleTemplates"
+              :key="entry.template_id"
+              :template="entry"
+              @start-session="startSession"
+              @edit="editAdventure"
+              @export-adz="exportAdventureAdz"
+              @export-adv="exportAdventureAdv"
+              @delete="confirmDeleteTemplate"
+            />
+          </div>
+
+          <div v-else class="space-y-6">
+            <div v-if="sessions.length === 0" class="rounded-xl border border-white/10 bg-aether-surface/20 p-6 text-slate-400">
+              No active sessions yet. Start one from the Adventures area.
+            </div>
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              <GameSessionCard
+                v-for="entry in sessions"
+                :key="entry.game_id"
+                :session="entry"
+                @resume="playSession"
+                @pause="pauseSession"
+                @resume-heartbeat="resumeHeartbeat"
+                @reset="resetSession"
+                @delete="deleteSession"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -569,9 +531,9 @@ onUnmounted(() => {
     <Teleport to="body">
       <DeleteAdventureModal
         v-if="showDeleteConfirm"
-        :adventure-title="adventureToDelete?.adventure_title || ''"
+        :adventure-title="templateToDelete?.title || ''"
         @close="showDeleteConfirm = false"
-        @confirm="executeDelete"
+        @confirm="executeDeleteTemplate"
       />
     </Teleport>
 

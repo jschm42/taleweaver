@@ -19,7 +19,7 @@ class AwardSchema(BaseModel):
     requirement: str
     is_earned: bool = False
 
-class AdventureBase(BaseModel):
+class AdventureTemplateBase(BaseModel):
     title: str = Field(..., max_length=50)
     image_url: Optional[str] = None
     context: Optional[str] = Field(None, max_length=2000)
@@ -48,10 +48,10 @@ class AdventureBase(BaseModel):
     max_awards: int = 8
 
 
-class AdventureCreate(AdventureBase):
+class AdventureTemplateCreate(AdventureTemplateBase):
     pass
 
-class AdventureUpdate(BaseModel):
+class AdventureTemplateUpdate(BaseModel):
     title: Optional[str] = None
     strict_rules: Optional[bool] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
@@ -64,14 +64,14 @@ class AdventureUpdate(BaseModel):
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
 
-class AdventureInDBBase(AdventureBase):
+class AdventureTemplateInDBBase(AdventureTemplateBase):
     id: str
     model_config = {"from_attributes": True}
 
-class Adventure(AdventureInDBBase):
+class AdventureTemplate(AdventureTemplateInDBBase):
     pass
 
-class AdventureDebugResponse(BaseModel):
+class AdventureTemplateDebugResponse(BaseModel):
     adventure: Dict[str, Any]
     protagonist: Optional[Dict[str, Any]] = None
     scenes: List[Dict[str, Any]]

@@ -1,0 +1,37 @@
+import uuid
+from sqlalchemy import Column, String, Integer, Boolean, JSON, ForeignKey
+from sqlalchemy.orm import relationship, synonym
+from backend.models.base import Base, TimestampMixin
+
+class SessionState(Base, TimestampMixin):
+    __tablename__ = "session_states"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String(36), ForeignKey("game_sessions.id"), nullable=False)
+    
+    # Denormalized fields for easier querying
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=True)
+    avatar_id = Column(String(36), ForeignKey("avatars.id"), nullable=True)
+    
+    # Current Runtime State
+    current_scene_id = Column(String(100), nullable=False, default="START")
+    in_game_time = Column(Integer, default=0, nullable=False)
+    inventory = Column(JSON, nullable=True, default=[])
+    
+    # Progress trackers
+    entity_states = Column(JSON, nullable=True, default={})
+    exit_states = Column(JSON, nullable=True, default={})
+    discovered_scenes = Column(JSON, nullable=True, default=[])
+    
+    # Runtime flags
+    is_paused = Column(Boolean, default=False)
+    is_completed = Column(Boolean, default=False)
+    is_debug_enabled = Column(Boolean, default=False)
+
+    # Relationships
+    session = relationship("GameSession", back_populates="state")
+
+    # Legacy aliases for backward compatibility during migration rollout.
+    adventure_id = synonym("template_id")
+    scene_id = synonym("current_scene_id")

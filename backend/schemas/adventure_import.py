@@ -48,7 +48,7 @@ class ItemSpec(BaseModel):
     properties: Optional[Dict[str, Any]] = None
 
 
-class AdventureImportPayload(BaseModel):
+class AdventureTemplateImportPayload(BaseModel):
     format: str = Field(default=FORMAT_NAME, description="Canonical TaleWeaver import format")
     version: str = Field(default=CURRENT_VERSION, description="Import format version, e.g. '1.0'")
     id: Optional[str] = None

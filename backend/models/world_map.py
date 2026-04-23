@@ -9,6 +9,7 @@ to Mermaid.js notation in O(V + E) time.
 """
 import uuid
 from sqlalchemy import Column, String, JSON, ForeignKey
+from sqlalchemy.orm import synonym
 from backend.models.base import Base, TimestampMixin
 
 
@@ -16,7 +17,7 @@ class WorldMap(Base, TimestampMixin):
     __tablename__ = "world_maps"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    adventure_id = Column(String(36), ForeignKey("adventures.id"), nullable=False, unique=True)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=False, unique=True)
 
     # {"scene_id": {"label": "...", "description": "..."}, ...}
     nodes: dict = Column(JSON, default=dict, nullable=False)
@@ -26,3 +27,6 @@ class WorldMap(Base, TimestampMixin):
 
     # The scene_id that is currently active (highlighted on the map)
     current_scene_id = Column(String(255), nullable=True)
+
+    # Legacy alias for backward compatibility during migration rollout.
+    adventure_id = synonym("template_id")

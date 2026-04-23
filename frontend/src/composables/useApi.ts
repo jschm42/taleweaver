@@ -4,7 +4,13 @@
  * All methods throw on non-2xx responses so callers can handle errors
  * with a simple try/catch.
  */
-import type { CreateAdventurePayload, GameSession, AdventureImportPayload, CatalogTile } from '@/types'
+import type {
+  CreateAdventurePayload,
+  GameSession,
+  AdventureImportPayload,
+  CatalogTile,
+  AdventureTemplateSummary,
+} from '@/types'
 import { authState } from '@/store/auth'
 
 interface SettingsResponse {
@@ -23,14 +29,14 @@ interface SettingsResponse {
 const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { ...init?.headers }
+  const headers = new Headers(init?.headers)
   
-  if (!(init?.body instanceof FormData) && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json'
+  if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
   }
   
   if (authState.token) {
-    headers['Authorization'] = `Bearer ${authState.token}`
+    headers.set('Authorization', `Bearer ${authState.token}`)
   }
 
   const res = await fetch(`${BASE}${path}`, {
@@ -53,6 +59,46 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   /** Lists all game sessions. */
   listAdventures(): Promise<GameSession[]> {
+    return request<GameSession[]>('/adventures/sessions')
+  },
+
+  /** Lists all game sessions (explicit endpoint). */
+  listSessions(): Promise<GameSession[]> {
+    return request<GameSession[]>('/adventures/sessions')
+  },
+
+  /** Lists all adventure templates for management. */
+  listAdventureTemplates(): Promise<AdventureTemplateSummary[]> {
+    return request<AdventureTemplateSummary[]>('/adventures/templates')
+  },
+
+  /** Starts (or reuses) a session for a template. */
+  startSessionForTemplate(templateId: string): Promise<{ game_id: string; template_id: string; adventure_id: string; avatar_id: string }> {
+    return request(`/adventures/${templateId}/sessions/start`, { method: 'POST' })
+  },
+
+  /** Deletes one game session but keeps the template. */
+  deleteSession(gameId: string): Promise<{ status: string; game_id: string }> {
+    return request(`/adventures/sessions/${gameId}`, { method: 'DELETE' })
+  },
+
+  /** Pauses a session via template-scoped route. */
+  pauseSession(templateId: string): Promise<{ status: string; game_id: string }> {
+    return request(`/adventures/${templateId}/pause`, { method: 'POST' })
+  },
+
+  /** Resumes a session via template-scoped route. */
+  resumeSession(templateId: string): Promise<{ status: string; game_id: string }> {
+    return request(`/adventures/${templateId}/resume`, { method: 'POST' })
+  },
+
+  /** Hard-resets a session via template-scoped route. */
+  resetSession(templateId: string): Promise<{ status: string; message: string }> {
+    return request(`/adventures/${templateId}/reset`, { method: 'POST' })
+  },
+
+  /** @deprecated Use listSessions() instead. */
+  listGameSessions(): Promise<GameSession[]> {
     return request<GameSession[]>('/adventures')
   },
 

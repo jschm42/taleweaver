@@ -1,5 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Integer, JSON, ForeignKey
+from sqlalchemy.orm import synonym
 from backend.models.base import Base, TimestampMixin
 
 class Avatar(Base, TimestampMixin):
@@ -7,7 +8,7 @@ class Avatar(Base, TimestampMixin):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    adventure_id = Column(String(36), ForeignKey("adventures.id"), nullable=True) # Linked for cleanup
+    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=True) # Linked for cleanup
     name = Column(String(100), nullable=False)
     role = Column(String(100), nullable=True)
     description = Column(String(1000), nullable=True)
@@ -45,3 +46,6 @@ class Avatar(Base, TimestampMixin):
     }, nullable=False)
     
     status_effects = Column(JSON, default=list, nullable=False)
+
+    # Legacy alias for backward compatibility during migration rollout.
+    adventure_id = synonym("template_id")

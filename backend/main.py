@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 # Import all models so SQLAlchemy metadata registers them before create_all
 import backend.models.user
 import backend.models.avatar
-import backend.models.adventure
-import backend.models.game_state
+import backend.models.adventure_template
+import backend.models.game_session
+import backend.models.session_state
 import backend.models.chat
 import backend.models.world_map
 
@@ -33,26 +34,26 @@ async def lifespan(app: FastAPI):
 
     # Auto-import adventures
     from backend.core.database import AsyncSessionLocal
-    from backend.engine.adventure_importer import AdventureImporter
-    from backend.models.adventure import Adventure
+    from backend.engine.adventure_importer import AdventureTemplateImporter
+    from backend.models.adventure_template import AdventureTemplate
     
     async with AsyncSessionLocal() as db:
         # Check if we have any adventures in the database
-        result = await db.execute(select(Adventure).limit(1))
+        result = await db.execute(select(AdventureTemplate).limit(1))
         is_empty_db = result.scalars().first() is None
 
         if is_empty_db:
             # 0. Import bundled adventures (committed to repo) 
             # These are only imported ONCE when the database is first created/empty
             logger.info("Fresh database detected. Importing bundled adventures from /adventures...")
-            await AdventureImporter.import_from_directory(db, "adventures", delete_after=False)
+            await AdventureTemplateImporter.import_from_directory(db, "adventures", delete_after=False)
             
             # 1. Also seed with presets (examples) on first start
-            await AdventureImporter.import_from_directory(db, "data/presets/adventures", delete_after=False)
+            await AdventureTemplateImporter.import_from_directory(db, "data/presets/adventures", delete_after=False)
             
         # 2. Always check for manual drops in the import folder (useful for migrations/sharing)
         # These are deleted after successful import to keep the folder clean
-        await AdventureImporter.import_from_directory(db, "data/imports/adventures", delete_after=True)
+        await AdventureTemplateImporter.import_from_directory(db, "data/imports/adventures", delete_after=True)
 
     yield
 

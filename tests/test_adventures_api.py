@@ -15,6 +15,7 @@ from sqlalchemy import delete, select
 from PIL import Image
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
+from backend.models.game_session import GameSession
 from backend.models.game_state import GameState
 from backend.models.world_entity import WorldEntity
 from backend.models.world_entity import WorldScene
@@ -71,7 +72,7 @@ async def test_create_adventure_creates_one_visible_session(client: AsyncClient)
     sessions = resp.json()
     assert len(sessions) == 1
     assert sessions[0]["adventure_id"] == ids["adventure_id"]
-    assert sessions[0]["game_id"] == ids["adventure_id"]
+    assert sessions[0]["game_id"] == ids["game_id"]
 
 
 async def test_create_adventure_with_heartbeat(client: AsyncClient):
@@ -285,7 +286,17 @@ async def test_debug_award_grants_all_adventure_awards():
             },
         ]
 
+        game_session = GameSession(
+            user_id=user.id,
+            avatar_id=avatar.id,
+            template_id=adventure.id,
+            status="active",
+        )
+        session.add(game_session)
+        await session.flush()
+
         state = GameState(
+            session_id=game_session.id,
             user_id=user.id,
             avatar_id=avatar.id,
             adventure_id=adventure.id,
@@ -515,7 +526,8 @@ async def test_upload_visual_updates_protagonist_image(client: AsyncClient):
     data = resp.json()
     assert data["status"] == "uploaded"
     assert data["target_type"] == "protagonist"
-    assert data["image_url"].endswith(f"/protagonist/{ids['avatar_id']}.png")
+    assert f"/protagonist/{ids['avatar_id']}_" in data["image_url"]
+    assert data["image_url"].endswith(".png")
 
     debug_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/debug")
     assert debug_resp.status_code == 200
@@ -1151,3 +1163,111 @@ async def test_import_adv_file_keeps_quests_npcs_and_initial_scene(client: Async
     assert state_resp.status_code == 200, state_resp.text
     state_data = state_resp.json()
     assert (state_data.get("scene_id") or state_data.get("current_scene_id")) == "ROOM_A"
+
+async def test_list_templates_returns_created_template(client: AsyncClient):
+    """Template endpoint returns template-centric records."""
+    ids = await _create_adventure(client, "Template Listing Quest")
+
+    resp = await client.get("/api/adventures/templates")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data) >= 1
+    row = next((entry for entry in data if entry["template_id"] == ids["adventure_id"]), None)
+    assert row is not None
+    assert row["title"] == "Template Listing Quest"
+
+
+async def test_start_session_route_creates_additional_session(client: AsyncClient):
+    """Starting a session for an existing template creates a new game session."""
+    ids = await _create_adventure(client, "Session Multi Quest")
+
+    resp = await client.post(f"/api/adventures/{ids['adventure_id']}/sessions/start")
+    assert resp.status_code == 201, resp.text
+    data = resp.json()
+    assert data["game_id"] != ids["game_id"]
+    assert data["template_id"] == ids["adventure_id"]
+
+    list_resp = await client.get("/api/adventures/sessions")
+    assert list_resp.status_code == 200
+    session_rows = [s for s in list_resp.json() if s["adventure_id"] == ids["adventure_id"]]
+    assert len(session_rows) >= 2
+
+
+async def test_delete_single_session_keeps_template(client: AsyncClient):
+    """Deleting a session should not delete the corresponding adventure template."""
+    ids = await _create_adventure(client, "Delete Session Quest")
+
+    del_resp = await client.delete(f"/api/adventures/sessions/{ids['game_id']}")
+    assert del_resp.status_code == 200, del_resp.text
+
+    list_resp = await client.get("/api/adventures/sessions")
+    assert list_resp.status_code == 200
+    sessions = list_resp.json()
+    assert all(entry["game_id"] != ids["game_id"] for entry in sessions)
+
+    template_resp = await client.get(f"/api/adventures/{ids['adventure_id']}")
+    assert template_resp.status_code == 200
+
+
+async def test_started_session_persists_asset_snapshot(client: AsyncClient):
+    """Newly started sessions store a template asset snapshot for isolation."""
+    ids = await _create_adventure(client, "Snapshot Quest")
+
+    start_resp = await client.post(f"/api/adventures/{ids['adventure_id']}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    async with TestSessionLocal() as session:
+        state_res = await session.execute(select(GameState).where(GameState.session_id == game_id))
+        state = state_res.scalars().first()
+        assert state is not None
+        assert isinstance(state.entity_states, dict)
+        assert "__asset_snapshot__" in state.entity_states
+
+
+async def test_started_sessions_keep_snapshot_images_after_template_avatar_edit(client: AsyncClient):
+    """Started sessions keep their snapshot cover/protagonist images after later template edits."""
+    ids = await _create_adventure(client, "Snapshot Image Isolation Quest")
+
+    old_cover = "/data/adventures/test/cover_old.png"
+    old_profile = "/data/adventures/test/protagonist_old.png"
+    new_cover = "/data/adventures/test/cover_new.png"
+    new_profile = "/data/adventures/test/protagonist_new.png"
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, ids["adventure_id"])
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert adventure is not None
+        assert avatar is not None
+        adventure.image_url = old_cover
+        avatar.profile_image = old_profile
+        await session.commit()
+
+    game_ids: list[str] = []
+    for _ in range(3):
+        start_resp = await client.post(f"/api/adventures/{ids['adventure_id']}/sessions/start")
+        assert start_resp.status_code == 201, start_resp.text
+        game_ids.append(start_resp.json()["game_id"])
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, ids["adventure_id"])
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert adventure is not None
+        assert avatar is not None
+        adventure.image_url = new_cover
+        avatar.profile_image = new_profile
+        await session.commit()
+
+    sessions_resp = await client.get("/api/adventures/sessions")
+    assert sessions_resp.status_code == 200, sessions_resp.text
+    sessions_data = {entry["game_id"]: entry for entry in sessions_resp.json()}
+
+    for game_id in game_ids:
+        assert game_id in sessions_data
+        assert sessions_data[game_id]["image_url"] == old_cover
+
+        chat_resp = await client.get(f"/api/adventures/{game_id}/chat")
+        assert chat_resp.status_code == 200, chat_resp.text
+        chat_data = chat_resp.json()
+        assert chat_data["adventure_image"] == old_cover
+        assert chat_data["sheet"]["profile_image"] == old_profile

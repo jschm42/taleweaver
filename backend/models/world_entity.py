@@ -1,5 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, JSON, Boolean, ForeignKey, Integer
+from sqlalchemy.orm import synonym
 from backend.models.base import Base, TimestampMixin
 
 class WorldScene(Base, TimestampMixin):
@@ -9,11 +10,12 @@ class WorldScene(Base, TimestampMixin):
     __tablename__ = "world_scenes"
 
     id = Column(String(50), primary_key=True) # Unique within an adventure (e.g. "FOREST_START")
-    adventure_id = Column(String(36), ForeignKey("adventures.id"), primary_key=True)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id"), primary_key=True)
     
     label = Column(String(100), nullable=False) # Human readable name
     description = Column(String(2000), nullable=False) # Atmospheric description
     image_url = Column(String(255), nullable=True) # Scene visual link
+    adventure_id = synonym("template_id")
 
 class WorldExit(Base, TimestampMixin):
     """
@@ -22,7 +24,7 @@ class WorldExit(Base, TimestampMixin):
     __tablename__ = "world_exits"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    adventure_id = Column(String(36), ForeignKey("adventures.id"), nullable=False)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=False)
     
     from_scene_id = Column(String(50), nullable=False)
     to_scene_id = Column(String(50), nullable=False)
@@ -30,6 +32,7 @@ class WorldExit(Base, TimestampMixin):
     label = Column(String(100), nullable=False) # e.g. "a heavy oak door"
     is_locked = Column(Boolean, default=False, nullable=False)
     lock_description = Column(String(255), nullable=True) # e.g. "The door is bolted from the other side."
+    adventure_id = synonym("template_id")
 
 class WorldEntity(Base, TimestampMixin):
     """
@@ -38,7 +41,7 @@ class WorldEntity(Base, TimestampMixin):
     __tablename__ = "world_entities"
 
     id = Column(String(50), primary_key=True) # e.g. "OLD_LIBRARIAN"
-    adventure_id = Column(String(36), ForeignKey("adventures.id"), primary_key=True)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id"), primary_key=True)
     
     entity_type = Column(String(20), nullable=False) # "NPC" or "OBJECT"
     name = Column(String(100), nullable=False)
@@ -72,3 +75,4 @@ class WorldEntity(Base, TimestampMixin):
     # Optional state, e.g. NPC inventory: [{"name": "Key", "id": "BRONZE_KEY"}]
     inventory = Column(JSON, default=list, nullable=False)
     metadata_json = Column(JSON, default=dict, nullable=False) # For stats or dynamic state
+    adventure_id = synonym("template_id")

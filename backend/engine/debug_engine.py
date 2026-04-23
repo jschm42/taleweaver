@@ -3,19 +3,20 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.models.game_state import GameState
+from backend.models.game_session import GameSession
+from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
-from backend.models.adventure import Adventure
+from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 
 class DebugEngine:
     @staticmethod
     async def handle_debug_command(
         db: AsyncSession,
-        state: GameState,
+        state: SessionState,
         args: str,
         user: User | None = None,
-        adventure: Adventure | None = None,
+        adventure: AdventureTemplate | None = None,
     ) -> str:
         """
         Processes /debug sub-commands and returns atmospheric yet technical info.
@@ -45,7 +46,7 @@ class DebugEngine:
             return "\n".join(lines)
 
         elif sub == "plot" or sub == "context":
-            res = await db.execute(select(Adventure).where(Adventure.id == adv_id))
+            res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == adv_id))
             adv = res.scalars().first()
             return f"--- DEBUG: PLOT CONTEXT ---\n{adv.context}"
 
@@ -57,7 +58,7 @@ class DebugEngine:
             
             return (
                 f"--- DEBUG: WORLD STATS ---\n"
-                f"Adventure ID: {adv_id}\n"
+                f"AdventureTemplate ID: {adv_id}\n"
                 f"Total Scenes: {len(s_count.scalars().all())}\n"
                 f"Total Entities: {len(e_count.scalars().all())}\n"
                 f"Total Connections: {len(ex_count.scalars().all())}"

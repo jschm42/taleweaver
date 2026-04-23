@@ -643,7 +643,7 @@ class MediaEngine:
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        filename = f"{entity_id}.{ext}"
+        filename = f"{entity_id}_{uuid.uuid4().hex}.{ext}"
         
         return await MediaEngine.generate_image(
             prompt=prompt, 

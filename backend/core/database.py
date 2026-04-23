@@ -54,6 +54,9 @@ async def apply_sqlite_compat_migrations() -> None:
         return
 
     async with engine.begin() as conn:
+        table_rows = await conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")
+        table_names = {row[0] for row in table_rows.fetchall()}
+
         # Ensure tables exist first
         await conn.exec_driver_sql("CREATE TABLE IF NOT EXISTS adventures (id TEXT PRIMARY KEY)")
         await conn.exec_driver_sql("CREATE TABLE IF NOT EXISTS game_states (id TEXT PRIMARY KEY)")
@@ -311,6 +314,23 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE adventures ADD COLUMN owner_id TEXT"
             )
             logger.info("SQLite migration: added adventures.owner_id")
+
+        # New split model uses adventure_templates; backfill columns that older local DBs may miss.
+        if "adventure_templates" in table_names:
+            template_cols_result = await conn.exec_driver_sql("PRAGMA table_info(adventure_templates)")
+            template_cols = {row[1] for row in template_cols_result.fetchall()}
+
+            if "quests" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN quests TEXT"
+                )
+                logger.info("SQLite migration: added adventure_templates.quests")
+
+            if "is_completed" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN is_completed BOOLEAN NOT NULL DEFAULT 0"
+                )
+                logger.info("SQLite migration: added adventure_templates.is_completed")
 
         # Avatar link for cleanup
         avatar_cols_result = await conn.exec_driver_sql("PRAGMA table_info(avatars)")
