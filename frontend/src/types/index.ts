@@ -47,6 +47,7 @@ export interface GameSession {
   template_id?: string
   adventure_id: string
   avatar_id: string
+  profile_image?: string | null
   adventure_title: string
   image_url: string | null
   scene_id: string

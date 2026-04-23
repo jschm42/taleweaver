@@ -765,6 +765,7 @@ class GameSessionResponse(BaseModel):
     template_id: str
     adventure_id: Optional[str] = None
     avatar_id: str
+    profile_image: Optional[str] = None
     adventure_title: str
     image_url: Optional[str] = None
     scene_id: str
@@ -1412,9 +1413,10 @@ async def list_adventures(
 ) -> list:
     """Returns all game sessions for the current user."""
     result = await db.execute(
-        select(GameSession, SessionState, AdventureTemplate, WorldScene.label)
+        select(GameSession, SessionState, AdventureTemplate, WorldScene.label, Avatar.profile_image)
         .join(SessionState, SessionState.session_id == GameSession.id)
         .join(AdventureTemplate, GameSession.template_id == AdventureTemplate.id)
+        .outerjoin(Avatar, Avatar.id == SessionState.avatar_id)
         .outerjoin(
             WorldScene,
             (WorldScene.template_id == GameSession.template_id) & (WorldScene.id == SessionState.current_scene_id),
@@ -1431,6 +1433,7 @@ async def list_adventures(
             template_id=s.template_id,
             adventure_id=s.template_id,
             avatar_id=s.avatar_id,
+            profile_image=_resolve_session_asset(s, "protagonist", avatar_profile_image),
             adventure_title=a.title,
             image_url=_resolve_session_asset(s, "cover", a.image_url),
             scene_id=s.current_scene_id,
@@ -1445,7 +1448,7 @@ async def list_adventures(
             quest_count=len(a.quests or []),
             completed_quest_count=len([q for q in (a.quests or []) if q.get("status") == "completed"]),
         )
-        for g, s, a, scene_label in rows
+        for g, s, a, scene_label, avatar_profile_image in rows
     ]
 
 
@@ -1882,11 +1885,14 @@ async def get_game_state(
         )
     )
     scene_label = scene_res.scalar_one_or_none()
+    avatar_res = await db.execute(select(Avatar.profile_image).where(Avatar.id == state.avatar_id))
+    avatar_profile_image = avatar_res.scalar_one_or_none()
     return GameSessionResponse(
         game_id=state.session_id,
         template_id=state.template_id,
         adventure_id=state.template_id,
         avatar_id=state.avatar_id,
+        profile_image=_resolve_session_asset(state, "protagonist", avatar_profile_image),
         adventure_title=adv.title if adv else "",
         image_url=_resolve_session_asset(state, "cover", adv.image_url if adv else None),
         scene_id=state.current_scene_id,

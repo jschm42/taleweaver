@@ -450,6 +450,8 @@ onUnmounted(() => {
   <div class="flex h-full min-h-0 bg-[#050b14] text-slate-200 font-ui overflow-hidden">
     <PortalSidebar
       :is-admin="isAdmin"
+      :active-section="activeSection"
+      @section="activeSection = $event"
       @import="triggerImportPicker"
       @create="openCreateModal"
       @admin="router.push('/admin')"
