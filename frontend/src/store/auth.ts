@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue'
+import { reactive } from 'vue'
 
 export interface User {
   id: string
@@ -6,6 +6,8 @@ export interface User {
   role: string
   profile_image_url?: string | null
   bio?: string | null
+  earned_awards?: any[] | null
+  adventure_count?: number
 }
 
 export const authState = reactive({
@@ -25,4 +27,28 @@ export function clearAuth() {
   authState.token = null
   authState.isAuthenticated = false
   localStorage.removeItem('access_token')
+}
+
+export async function refreshUser() {
+  if (!authState.token) return
+  
+  const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
+  try {
+    const res = await fetch(`${BASE}/auth/me`, {
+      headers: {
+        'Authorization': `Bearer ${authState.token}`
+      }
+    })
+    if (res.ok) {
+      const userData = await res.json()
+      authState.user = userData
+      authState.isAuthenticated = true
+    } else if (res.status === 401) {
+      clearAuth()
+    }
+  } catch (error) {
+    console.error('Failed to refresh user:', error)
+  } finally {
+    authState.isInitialized = true
+  }
 }

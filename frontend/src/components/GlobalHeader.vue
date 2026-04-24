@@ -16,8 +16,7 @@ function handleLogout() {
 }
 
 function openProfile() {
-  // We'll emit an event or use a global modal for this
-  window.dispatchEvent(new CustomEvent('open-profile-modal'))
+  router.push({ name: 'portal', query: { section: 'profile' } })
   isMenuOpen.value = false
 }
 </script>

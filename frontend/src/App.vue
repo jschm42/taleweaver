@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authState, clearAuth } from '@/store/auth'
 import { api } from '@/composables/useApi'
 import GlobalHeader from '@/components/GlobalHeader.vue'
-import UserProfileModal from '@/components/UserProfileModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -56,7 +55,6 @@ onMounted(() => {
     <main class="flex-1 min-h-0 relative overflow-hidden">
       <RouterView />
     </main>
-    <UserProfileModal />
   </div>
 </template>
 

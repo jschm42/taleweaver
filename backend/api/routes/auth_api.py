@@ -1,5 +1,6 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -21,6 +22,8 @@ class UserResponse(BaseModel):
     role: str
     profile_image_url: str | None = None
     bio: str | None = None
+    earned_awards: list | None = None
+    adventure_count: int = 0
 
 class SetupRootRequest(BaseModel):
     username: str
@@ -57,8 +60,27 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/auth/me", response_model=UserResponse)
-async def read_users_me(current_user: User = Depends(get_current_user)):
-    return current_user
+async def read_users_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from backend.models.game_session import GameSession
+    
+    # Count unique adventures played by this user
+    result = await db.execute(
+        select(func.count(GameSession.template_id.distinct()))
+        .where(GameSession.user_id == current_user.id)
+    )
+    adventure_count = result.scalar() or 0
+    
+    # We convert the ORM object to a dict and add the extra field
+    user_data = {
+        "id": current_user.id,
+        "username": current_user.username,
+        "role": current_user.role,
+        "profile_image_url": current_user.profile_image_url,
+        "bio": current_user.bio,
+        "earned_awards": current_user.earned_awards or [],
+        "adventure_count": adventure_count
+    }
+    return user_data
 
 @router.post("/auth/setup-root")
 async def setup_root_admin(request: SetupRootRequest, db: AsyncSession = Depends(get_db)):

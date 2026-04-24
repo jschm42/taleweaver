@@ -440,6 +440,11 @@ onMounted(() => {
 
   const newId = typeof route.query.new_id === 'string' ? route.query.new_id : ''
   const newTitle = typeof route.query.new_title === 'string' ? route.query.new_title : 'New Adventure'
+  
+  if (route.query.section === 'profile') {
+    activeSection.value = 'profile'
+  }
+
   if (newId) {
     addPendingCreationCard(newId, newTitle)
     updatePendingCreationStatus(newId, 'Starting generation...')
@@ -521,7 +526,7 @@ onUnmounted(() => {
             <div v-if="sessions.length === 0" class="rounded-xl border border-white/10 bg-aether-surface/20 p-6 text-slate-400">
               No active sessions yet. Start one from the Adventures area.
             </div>
-            <div v-else class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-10">
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
               <GameSessionCard
                 v-for="entry in sessions"
                 :key="entry.game_id"

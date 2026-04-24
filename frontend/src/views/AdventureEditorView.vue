@@ -3,6 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState } from '@/store/auth'
 import { ArrowLeft, Save, Trash2, Wand2, Sparkles, Image as ImageIcon, Plus, X } from 'lucide-vue-next'
+import bronzeTrophy from '@/assets/svg/bronze-award-trophy.svg'
+import silverTrophy from '@/assets/svg/silver-award-trophy.svg'
+import goldTrophy from '@/assets/svg/gold-award-trophy.svg'
 
 const props = defineProps<{
   adventureId: string
@@ -145,6 +148,13 @@ function normalizeDebugPayload(raw: any): any {
   payload.npcs = mergeUniqueById(Array.isArray(raw.npcs) ? raw.npcs : [], inferredNpcs)
   payload.objects = mergeUniqueById(Array.isArray(raw.objects) ? raw.objects : [], inferredObjects)
   return payload
+}
+
+function getAwardIcon(tier: string) {
+  const t = (tier || '').toLowerCase()
+  if (t === 'gold') return goldTrophy
+  if (t === 'silver') return silverTrophy
+  return bronzeTrophy
 }
 
 const editorNpcs = computed<any[]>(() => {
@@ -848,7 +858,7 @@ const goBack = () => router.push({ name: 'portal' })
                        award.tier === 'silver' ? 'bg-slate-300/10 border-slate-300/20 text-slate-300' :
                        'bg-orange-700/10 border-orange-700/20 text-orange-700'
                      ]">
-                       <i class="ra ra-trophy text-2xl"></i>
+                       <img :src="getAwardIcon(award.tier)" class="w-8 h-8 object-contain" alt="Trophy" />
                      </div>
                      <div class="space-y-1">
                        <div class="flex items-center gap-2">
