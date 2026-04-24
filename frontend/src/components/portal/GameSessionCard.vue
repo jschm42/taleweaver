@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { GameSession } from '@/types'
-import { MoreHorizontal } from 'lucide-vue-next'
+import { MoreHorizontal, Clock } from 'lucide-vue-next'
 
 const props = defineProps<{
   session: GameSession
@@ -27,6 +27,18 @@ function toggleMenu(): void {
 
 function closeMenu(): void {
   isMenuOpen.value = false
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return 'Recently'
+  const d = new Date(dateStr)
+  return d.toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'): void {
@@ -70,7 +82,7 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
       </div>
 
       <!-- Action Dots -->
-      <div class="absolute top-3 right-3">
+      <div class="absolute top-3 right-3 z-20">
         <button
           @click.stop="toggleMenu"
           class="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all flex items-center justify-center"
@@ -119,10 +131,16 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
     <div class="p-6 flex flex-col gap-6">
       <div class="min-w-0">
         <h3 class="text-2xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.session.adventure_title }}</h3>
-        <p class="text-sm text-slate-400 mt-2 flex items-center gap-2 font-bold uppercase tracking-[0.15em]">
-          <span class="w-2 h-2 rounded-full bg-emerald-500/60"></span>
-          {{ props.session.current_scene_name || 'Exploring...' }}
-        </p>
+        <div class="flex flex-col gap-1.5 mt-3">
+          <p class="text-sm text-slate-400 flex items-center gap-2 font-bold uppercase tracking-[0.15em]">
+            <span class="w-2 h-2 rounded-full bg-emerald-500/60"></span>
+            {{ props.session.current_scene_name || 'Exploring...' }}
+          </p>
+          <p class="text-[10px] text-slate-500 flex items-center gap-2 font-black uppercase tracking-widest">
+            <Clock class="w-3 h-3 opacity-50" />
+            Started: {{ formatDate(props.session.created_at) }}
+          </p>
+        </div>
       </div>
 
       <!-- Progress Stats Single Row -->

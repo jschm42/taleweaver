@@ -53,4 +53,6 @@ Please adhere to the following rules for all implementations to ensure high code
 To understand the internal processes of TaleWeaver, refer to the following Mermaid diagrams:
 
 * **Adventure Generation:** [adventure_generation.mermaid](docs/diagrams/adventure_generation.mermaid) | [Activity Diagram](docs/diagrams/adventure_generation_activity.mermaid) - Detailed workflow of how worlds are created.
+* **Adventure Import/Export:** [adventure_import.mermaid](docs/diagrams/adventure_import.mermaid) | [adventure_export.mermaid](docs/diagrams/adventure_export.mermaid) - Logic for .adz and .adv portability.
 * **Game Session Loop:** [game_session_loop.mermaid](docs/diagrams/game_session_loop.mermaid) | [Activity Diagram](docs/diagrams/game_session_loop_activity.mermaid) - Detailed flow of a single chat turn (user input to GM response).
+* **Data Formats:** [Adventure Format Specification](docs/specs/adventure_format.md) - Standardized structure for `.adv` and `.adz` files.

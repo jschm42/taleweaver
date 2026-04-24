@@ -31,8 +31,13 @@ const emit = defineEmits<{
 }>()
 
 const inputText = ref('')
+const fontSize = ref<'small' | 'medium' | 'large'>((localStorage.getItem('tw_chat_font_size') as any) || 'medium')
 const logEl = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
+
+watch(fontSize, (newSize) => {
+  localStorage.setItem('tw_chat_font_size', newSize)
+})
 
 const handleImageError = (path?: string | null) => {
   if (!path) return
@@ -205,18 +210,45 @@ function displayMessageContent(msg: ChatMessage): string {
         </svg>
         <span class="text-slate-300 text-sm font-semibold tracking-wide uppercase">Chronicle Log</span>
       </div>
-      <div 
-        v-if="status !== 'connected'"
-        :class="['px-2.5 py-1 text-xs font-semibold rounded-full border flex items-center gap-2 animate-fade-in', statusColor]"
-      >
-        <template v-if="status === 'connecting' || status === 'loading'">
-          <span v-if="statusText" class="text-[9px] uppercase font-black opacity-70 tracking-widest">{{ statusText }}</span>
-          <div class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-        </template>
-        <template v-else>
-          <span class="w-1.5 h-1.5 rounded-full bg-current shadow-[0_0_8px_currentColor]"></span>
-          {{ statusLabel }}
-        </template>
+      <div class="flex items-center gap-4">
+        <!-- Font Size Controls -->
+        <div class="flex items-center bg-slate-950/40 border border-slate-800/50 rounded-xl p-1 mr-2 shadow-inner backdrop-blur-sm">
+          <button 
+            @click="fontSize = 'small'" 
+            :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all transform active:scale-90', fontSize === 'small' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] ring-2 ring-emerald-400/50 scale-105 z-10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80']"
+            title="Small Font"
+          >
+            <span class="text-[10px] font-black">A</span>
+          </button>
+          <button 
+            @click="fontSize = 'medium'" 
+            :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all transform active:scale-90', fontSize === 'medium' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] ring-2 ring-emerald-400/50 scale-105 z-10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80']"
+            title="Medium Font"
+          >
+            <span class="text-xs font-black">A</span>
+          </button>
+          <button 
+            @click="fontSize = 'large'" 
+            :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all transform active:scale-90', fontSize === 'large' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] ring-2 ring-emerald-400/50 scale-105 z-10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80']"
+            title="Large Font"
+          >
+            <span class="text-sm font-black">A</span>
+          </button>
+        </div>
+
+        <div 
+          v-if="status !== 'connected'"
+          :class="['px-2.5 py-1 text-xs font-semibold rounded-full border flex items-center gap-2 animate-fade-in', statusColor]"
+        >
+          <template v-if="status === 'connecting' || status === 'loading'">
+            <span v-if="statusText" class="text-[9px] uppercase font-black opacity-70 tracking-widest">{{ statusText }}</span>
+            <div class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+          </template>
+          <template v-else>
+            <span class="w-1.5 h-1.5 rounded-full bg-current shadow-[0_0_8px_currentColor]"></span>
+            {{ statusLabel }}
+          </template>
+        </div>
       </div>
     </div>
 
@@ -256,7 +288,8 @@ function displayMessageContent(msg: ChatMessage): string {
         <!-- Content -->
         <div
           :class="[
-            'text-sm leading-normal whitespace-pre-wrap break-words pl-4 border-l-2',
+            'leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2',
+            fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm',
             msg.role === 'user' ? 'text-slate-300 border-cyan-500/50' :
             msg.role === 'assistant' ? 'text-amber-50/90 border-amber-500/50' :
             'text-emerald-300 border-emerald-500/50 italic opacity-80'

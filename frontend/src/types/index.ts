@@ -62,6 +62,7 @@ export interface GameSession {
   completed_quest_count?: number
   award_count?: number
   earned_award_count?: number
+  created_at?: string
 }
 
 export interface AdventureTemplateSummary {

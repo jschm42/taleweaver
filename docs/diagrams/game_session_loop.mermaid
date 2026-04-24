@@ -25,6 +25,8 @@ sequenceDiagram
     end
 
     B->>DB: Register Visit & Exits in WorldMap
+    B->>MM: Evaluate Quest Progress & Award Triggers
+    B->>DB: Update Session Quests & Awards
     
     opt On-demand Visuals (auto_visualize)
         B->>ME: Generate Scene Image (if prompt in Event)

@@ -12,7 +12,8 @@ flowchart TD
         subgraph ApplyLogic [Application Logic]
             direction TB
             ClearDB[Clear Existing World Objects] --> Protagonist[Sync Protagonist & Generate Portrait]
-            Protagonist --> Scenes[Generate Scenes & Atmospheric Images]
+            Protagonist --> Quests[Initialize Quests & Awards]
+            Quests --> Scenes[Generate Scenes & Atmospheric Images]
             Scenes --> Entities[Generate NPCs & Items with Visuals]
             Entities --> Exits[Connect Map via World Exits]
         end

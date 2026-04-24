@@ -1,0 +1,23 @@
+graph TD
+    Start([Start Import]) --> Source{File Source}
+    Source -->|Folder Watcher| Watcher[Detect .adv / .adz in /adventures]
+    Source -->|UI Upload| Upload[API: POST /api/adventures/import]
+    
+    Watcher --> LoadFile[Load File Content]
+    Upload --> LoadFile
+    
+    LoadFile --> TypeCheck{File Type?}
+    TypeCheck -->|.adz| Unzip[Extract ZIP Archive]
+    TypeCheck -->|.adv| ParseJSON[Parse JSON Manifest]
+    
+    Unzip --> ExtractManifest[Read adventure.adv]
+    ExtractManifest --> ParseJSON
+    
+    ParseJSON --> CreateTemplate[Create AdventureTemplate DB Record]
+    CreateTemplate --> Assets[Move Images to /data/adventures/{id}/]
+    Assets --> CreateAvatar[Create Avatar & Sync Protagonist Stats]
+    CreateAvatar --> CreateSession[Create GameSession<br/>(Denormalize Title & Image)]
+    CreateSession --> CreateState[Create SessionState<br/>(Set Starting Scene & Items)]
+    
+    CreateState --> Cleanup[Delete Source File (if Folder Watcher)]
+    Cleanup --> End([Import Complete])

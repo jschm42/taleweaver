@@ -810,6 +810,7 @@ class GameSessionResponse(BaseModel):
     completed_quest_count: int = 0
     award_count: int = 0
     earned_award_count: int = 0
+    created_at: Optional[datetime] = None
 
 
 class AdventureTemplateSummaryResponse(BaseModel):
@@ -1522,6 +1523,7 @@ async def list_adventures(
             completed_quest_count=len([q for q in ((a.quests if a else None) or []) if q.get("status") == "completed"]),
             award_count=len((a.awards if a else None) or []),
             earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if aw.get("is_earned")]),
+            created_at=g.created_at,
         )
         for g, s, a, scene_label, avatar_profile_image in rows
     ]

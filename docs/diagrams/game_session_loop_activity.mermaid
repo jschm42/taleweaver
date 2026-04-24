@@ -25,7 +25,8 @@ flowchart TD
     StrictMode --> MapUpdate[MapEngine: Register Visit & Discovery]
     FreeformMode --> MapUpdate
     
-    MapUpdate --> VisualCheck{Auto-Visualize & Image Prompt?}
+    MapUpdate --> QuestUpdate[Update Quests & Evaluate Awards]
+    QuestUpdate --> VisualCheck{Auto-Visualize & Image Prompt?}
     VisualCheck -- Yes --> GenImage[MediaEngine: Generate Scene Image]
     GenImage --> SaveImage[Update Scene & Map Visuals]
     VisualCheck -- No --> Finalize

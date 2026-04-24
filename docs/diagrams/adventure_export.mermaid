@@ -1,0 +1,20 @@
+graph TD
+    Start([Start Export]) --> CollectData[Fetch Template, Scenes, NPCs,<br/>Objects & Session State]
+    CollectData --> BuildManifest[Assemble World Manifesto JSON]
+    
+    BuildManifest --> FormatCheck{Export Format?}
+    
+    FormatCheck -->|.adv| DownloadJSON[Return JSON Response]
+    FormatCheck -->|.adz| PackageZIP[Prepare ZIP Bundle]
+    
+    subgraph ZIP_Packaging [Packaging Logic]
+        direction TB
+        AddManifest[Add adventure.adv to Root] --> IdentifyAssets[Identify Local Image Paths]
+        IdentifyAssets --> AddAssets[Add images to /assets folder]
+    end
+    
+    PackageZIP --> ZIP_Packaging
+    ZIP_Packaging --> DownloadZIP[Return ZIP Archive]
+    
+    DownloadJSON --> End([Export Complete])
+    DownloadZIP --> End
