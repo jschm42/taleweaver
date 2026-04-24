@@ -665,7 +665,7 @@ const goBack = () => router.push({ name: 'portal' })
                   Regenerate Cover
                 </button>
               </div>
-              <div class="relative group aspect-[3/1] bg-slate-900 border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl">
+              <div class="relative group aspect-[2/1] bg-slate-900 border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl max-w-2xl mx-auto">
                 <img v-if="debugData.adventure.image_url" :src="buildVisualImageUrl(debugData.adventure.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
                 <div v-if="isQuickGenerating['cover_' + debugData.adventure.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                   <div class="flex flex-col items-center gap-2">
@@ -674,10 +674,10 @@ const goBack = () => router.push({ name: 'portal' })
                   </div>
                 </div>
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
-                <div class="absolute inset-x-0 bottom-0 p-8">
+                <div class="absolute inset-x-0 bottom-0 p-6">
                   <div class="flex justify-between items-end gap-12">
                     <div class="space-y-2 max-w-3xl">
-                      <h4 class="text-3xl font-black text-white tracking-tight">{{ debugData.adventure.title }}</h4>
+                      <h4 class="text-xl font-black text-white tracking-tight">{{ debugData.adventure.title }}</h4>
                       <div class="flex items-center gap-3">
                         <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
                         <p v-else class="text-xs font-bold text-slate-500/40 uppercase tracking-widest italic">No teaser set...</p>
@@ -762,7 +762,7 @@ const goBack = () => router.push({ name: 'portal' })
                    </button>
                  </div>
                   <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    <div v-for="scene in editorScenes" :key="'scene_' + scene.id" @mouseenter="handleHover({ name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="clearHover" class="relative group aspect-[1.8/1] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
+                    <div v-for="scene in editorScenes" :key="'scene_' + scene.id" @mouseenter="handleHover({ name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="clearHover" class="relative group aspect-[2/1] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
                       <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                       <div v-if="isQuickGenerating['scene_' + scene.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                          <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>

@@ -1674,19 +1674,15 @@ async def delete_session(
 ) -> dict:
     """Deletes a single game session while keeping the template intact."""
     session_res = await db.execute(
-        select(GameSession, AdventureTemplate)
-        .join(AdventureTemplate, AdventureTemplate.id == GameSession.template_id)
+        select(GameSession)
         .where(
             (GameSession.id == game_id)
             & (GameSession.user_id == current_user.id)
-            & (AdventureTemplate.owner_id == current_user.id)
         )
     )
-    row = session_res.first()
-    if not row:
+    game_session = session_res.scalars().first()
+    if not game_session:
         raise HTTPException(status_code=404, detail="Session not found.")
-
-    game_session, _ = row
 
     await db.execute(delete(ChatMessage).where(ChatMessage.session_id == game_session.id))
     await db.execute(delete(SessionState).where(SessionState.session_id == game_session.id))
@@ -3504,22 +3500,18 @@ async def get_chat_history(
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
 
+    if state.user_id and state.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have access to this game session.")
+
     adv_res = await db.execute(
         select(AdventureTemplate).where(
             (AdventureTemplate.id == state.template_id)
-            & (AdventureTemplate.owner_id == current_user.id)
         )
     )
     adventure = adv_res.scalars().first()
     if not adventure:
         raise HTTPException(status_code=404, detail="Session not found.")
 
-    # Migrate legacy sessions created before strict user ownership checks.
-    if state.user_id != current_user.id:
-        state.user_id = current_user.id
-        await db.commit()
-        await db.refresh(state)
-        
     av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
     avatar = av_res.scalars().first()
     
@@ -3604,21 +3596,22 @@ async def post_chat_message(
                 yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Game session not found.'}))}\n\n"
                 return
 
+            if state.user_id and state.user_id != current_user.id:
+                yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Access denied.'}))}\n\n"
+                return
+
+            if not state.user_id:
+                state.user_id = current_user.id
+                await db.flush()
+
             adv_res = await db.execute(
-                select(AdventureTemplate).where(
-                    (AdventureTemplate.id == state.template_id)
-                    & (AdventureTemplate.owner_id == current_user.id)
-                )
+                select(AdventureTemplate).where(AdventureTemplate.id == state.template_id)
             )
             adventure = adv_res.scalars().first()
             if not adventure:
-                yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Game session not found.'}))}\n\n"
+                yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Adventure not found.'}))}\n\n"
                 return
 
-            # Migrate legacy sessions created before strict user ownership checks.
-            if state.user_id != current_user.id:
-                state.user_id = current_user.id
-                await db.flush()
 
             if state.is_paused:
                 av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
