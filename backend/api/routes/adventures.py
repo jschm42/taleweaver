@@ -1495,7 +1495,10 @@ async def list_adventures(
             quest_count=len((a.quests if a else None) or []),
             completed_quest_count=len([q for q in ((a.quests if a else None) or []) if q.get("status") == "completed"]),
             award_count=len((a.awards if a else None) or []),
-            earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if aw.get("is_earned")]),
+            earned_award_count=len([
+                aw for aw in ((a.awards if a else None) or []) 
+                if any(ea.get("key") == aw.get("key") and ea.get("template_id") == a.id for ea in (current_user.earned_awards or []))
+            ]),
             created_at=g.created_at,
         )
         for g, s, a, scene_label, avatar_profile_image in rows
@@ -1711,7 +1714,19 @@ async def get_adventure(
     adv = result.scalars().first()
     if not adv:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
-    return adv
+    
+    # Enrich awards with user-specific earned status
+    user_earned_keys = {ea.get("key") for ea in (current_user.earned_awards or []) if ea.get("template_id") == adv.id}
+    enriched_awards = []
+    for aw in (adv.awards or []):
+        enriched_aw = dict(aw)
+        enriched_aw["is_earned"] = aw.get("key") in user_earned_keys
+        enriched_awards.append(enriched_aw)
+    
+    # Return a dict to allow enrichment beyond the raw DB model
+    response_data = AdventureTemplateResponse.model_validate(adv).model_dump()
+    response_data["awards"] = enriched_awards
+    return response_data
 
 
 @router.post("/import", status_code=201)
@@ -3233,7 +3248,10 @@ async def get_chat_history(
         image_url=scene_image,
         adventure_image=_resolve_session_asset(state, "cover", adventure.image_url if adventure else None),
         quests=adventure.quests,
-        awards=adventure.awards,
+        awards=[
+            {**aw, "is_earned": any(ea.get("key") == aw.get("key") and ea.get("template_id") == adventure.id for ea in (current_user.earned_awards or []))}
+            for aw in (adventure.awards or [])
+        ],
         is_completed=adventure.is_completed,
         full_world=full_world,
     )
@@ -3758,8 +3776,9 @@ async def post_chat_message(
                     any_awarded = False
                     for a_key in game_event.earned_award_keys:
                         for a in updated_awards:
-                            if a.get("key") == a_key and not a.get("is_earned"):
-                                a["is_earned"] = True
+                            if a.get("key") == a_key:
+                                # DO NOT set a["is_earned"] = True here, as it would be global for the template.
+                                # Instead, just mark that we found it to trigger the User Profile update.
                                 any_awarded = True
                                 title = a.get("title") or a_key or "Unknown Award"
                                 dedupe_key = a_key or title
@@ -3791,9 +3810,10 @@ async def post_chat_message(
                                     "content": f"[AWARD EARNED] {a.get('title')} ({a.get('tier').upper()})"
                                 })
                     
-                    if any_awarded:
-                        adventure.awards = updated_awards
-                        flag_modified(adventure, "awards")
+                    # We no longer save updated_awards back to adventure.awards to keep it as a clean definition.
+                    # adventure.awards = updated_awards
+                    # flag_modified(adventure, "awards")
+                    pass
 
                 if state.is_debug_enabled:
                     debug_payload = game_event.model_dump(exclude={'narrative_description'})
