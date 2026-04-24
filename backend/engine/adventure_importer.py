@@ -62,35 +62,35 @@ class AdventureTemplateImporter:
     async def import_file(db: AsyncSession, file_path: str, owner_id: Optional[str] = None) -> bool:
         """Imports a single file (.adv or .adz)."""
         if file_path.endswith(".adz"):
-            return await AdventureTemplateImporter._import_adz(db, file_path, owner_id=owner_id)
+            with open(file_path, "rb") as f:
+                return await AdventureTemplateImporter.import_adz(db, f.read(), owner_id=owner_id)
         elif file_path.endswith(".adv"):
-            return await AdventureTemplateImporter._import_adv(db, file_path, owner_id=owner_id)
+            with open(file_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+                return await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=owner_id)
         return False
 
     @staticmethod
-    async def _import_adz(db: AsyncSession, file_path: str, owner_id: Optional[str] = None) -> bool:
+    async def import_adz(db: AsyncSession, adz_data: bytes, owner_id: Optional[str] = None) -> bool:
         """Logic for ADZ (ZIP) import, including assets."""
         try:
-            with open(file_path, "rb") as f:
-                zip_content = f.read()
-            
-            zip_buffer = io.BytesIO(zip_content)
+            zip_buffer = io.BytesIO(adz_data)
             
             with zipfile.ZipFile(zip_buffer, "r") as zip_file:
                 if "adventure.adv" not in zip_file.namelist():
-                    logger.error(f"Invalid ADZ {file_path}: Missing adventure.adv")
+                    logger.error("Invalid ADZ: Missing adventure.adv")
                     return False
                 
                 manifest_data = json.loads(zip_file.read("adventure.adv").decode("utf-8"))
                 try:
                     validate_manifest_version(manifest_data, require_format=True)
                 except ValueError as exc:
-                    logger.error("Invalid ADZ format for %s: %s", file_path, exc)
+                    logger.error("Invalid ADZ format: %s", exc)
                     return False
 
                 adv_data = manifest_data.get("adventure")
                 if not adv_data:
-                    logger.error(f"Invalid ADZ {file_path}: Missing adventure section in manifest")
+                    logger.error("Invalid ADZ: Missing adventure section in manifest")
                     return False
 
                 # Check if template with this title already exists for this owner (if provided)
@@ -134,6 +134,7 @@ class AdventureTemplateImporter:
                     award_generation_enabled=adv_data.get("award_generation_enabled", False),
                     is_ready=True,
                     creation_status="Ready",
+                    original_manifest=manifest_data
                 )
                 db.add(new_template)
                 
@@ -152,43 +153,8 @@ class AdventureTemplateImporter:
                         rel_path = os.path.relpath(target_path, settings.DATA_DIR).replace("\\", "/")
                         existing_images_mapping[zip_path] = f"/data/{rel_path}"
 
-                # Create Avatar
-                prot = manifest_data.get("protagonist")
-                new_avatar = None
-                user = None
-                if prot:
-                    if owner_id:
-                        user_res = await db.execute(select(User).where(User.id == owner_id))
-                        user = user_res.scalars().first()
-                    else:
-                        result = await db.execute(select(User).limit(1))
-                        user = result.scalars().first()
-
-                    if not user:
-                        user = _build_local_default_user()
-                        db.add(user)
-                        await db.flush()
-                    
-                    profile_image = existing_images_mapping.get(prot.get("profile_image")) if prot.get("profile_image") else None
-                    
-                    new_avatar = Avatar(
-                        user_id=user.id,
-                        template_id=new_template_id,
-                        name=prot["name"],
-                        role=prot.get("role"),
-                        description=prot.get("description"),
-                        profile_image=profile_image,
-                        hp=prot.get("hp", 200),
-                        stamina=prot.get("stamina", 200),
-                        mana=prot.get("mana", 200),
-                        inventory=prot.get("inventory", []),
-                        equipment=prot.get("equipment", {}),
-                        stats=prot.get("stats", {}),
-                    )
-                    db.add(new_avatar)
-                    await db.flush()
-
                 # Reconstruct world
+                prot = manifest_data.get("protagonist")
                 world_manifest = {
                     "protagonist": {
                         "name": prot.get("name", "You") if prot else "You",
@@ -238,43 +204,22 @@ class AdventureTemplateImporter:
                         new_template_id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template_id), "cover_placeholder.svg"
                     )
                 
-                # Now create Session if avatar was created
-                if new_avatar and user:
-                    new_session = GameSession(
-                        user_id=user.id,
-                        avatar_id=new_avatar.id,
-                        template_id=new_template_id,
-                        adventure_title=new_template.title,
-                        adventure_image_url=new_template.image_url,
-                        status="active"
-                    )
-                    db.add(new_session)
-                    await db.flush()
-
-                    db.add(SessionState(
-                        session_id=new_session.id,
-                        current_scene_id=default_scene_id,
-                        in_game_time=0
-                    ))
 
                 await db.commit()
                 return True
         except Exception as e:
-            logger.exception(f"ADZ Import failed for {file_path}")
+            logger.exception("ADZ Import failed")
             await db.rollback()
             return False
 
     @staticmethod
-    async def _import_adv(db: AsyncSession, file_path: str, owner_id: Optional[str] = None) -> bool:
+    async def import_adv_manifest(db: AsyncSession, payload: Dict[str, Any], owner_id: Optional[str] = None) -> bool:
         """Logic for pure .adv (JSON) import."""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                payload = json.load(f)
-
             try:
                 validate_manifest_version(payload, require_format=True)
             except ValueError as exc:
-                logger.error("Invalid ADV format for %s: %s", file_path, exc)
+                logger.error("Invalid ADV format: %s", exc)
                 return False
             
             is_session = payload.get("type") == "SESSION_BUNDLE"
@@ -289,6 +234,7 @@ class AdventureTemplateImporter:
                 logger.info(f"AdventureTemplate template '{title}' already exists. Skipping.")
                 return False
 
+            user = None
             if owner_id:
                 user_res = await db.execute(select(User).where(User.id == owner_id))
                 user = user_res.scalars().first()
@@ -300,6 +246,7 @@ class AdventureTemplateImporter:
                 user = _build_local_default_user()
                 db.add(user)
                 await db.flush()
+
 
             if is_session:
                 data = payload
@@ -377,7 +324,7 @@ class AdventureTemplateImporter:
                 adv_meta = payload.get("adventure") or payload
                 
                 new_template = AdventureTemplate(
-                    owner_id=user.id,
+                    owner_id=owner_id,
                     title=adv_meta.get("title") or manifest.get("title") or "Imported Blueprint",
                     teaser=adv_meta.get("teaser") or manifest.get("teaser"),
                     context=adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
@@ -404,39 +351,6 @@ class AdventureTemplateImporter:
                     )
                     await db.flush()
                 
-                prot = manifest.get("protagonist", {})
-                avatar = Avatar(
-                    user_id=user.id, 
-                    template_id=new_template.id, 
-                    name=prot.get("name", "Hero"),
-                    role=prot.get("role"),
-                    description=prot.get("description"),
-                    profile_image=prot.get("profile_image"),
-                    hp=prot.get("hp", 200), 
-                    stamina=prot.get("stamina", 200), 
-                    mana=prot.get("mana", 200), 
-                    stats=prot.get("stats", {}), 
-                    inventory=prot.get("inventory", []), 
-                    equipment=prot.get("equipment", {})
-                )
-                db.add(avatar)
-                await db.flush()
-
-                new_sess = GameSession(
-                    user_id=user.id,
-                    avatar_id=avatar.id,
-                    template_id=new_template.id,
-                    adventure_title=new_template.title,
-                    adventure_image_url=new_template.image_url
-                )
-                db.add(new_sess)
-                await db.flush()
-
-                db.add(SessionState(
-                    session_id=new_sess.id,
-                    current_scene_id=manifest["scenes"][0]["id"] if manifest.get("scenes") else "START",
-                    in_game_time=0
-                ))
 
                 # Prepare manifest for apply_manifest to ensure protagonist has starting items
                 if "protagonist" in manifest:
@@ -450,6 +364,7 @@ class AdventureTemplateImporter:
                 await db.commit()
                 return True
         except Exception as e:
-            logger.exception(f"ADV Import failed for {file_path}")
+            logger.exception("ADV Import failed")
             await db.rollback()
             return False
+

@@ -1111,85 +1111,19 @@ async def create_adventure(
     adv = AdventureTemplate(**adv_kwargs)
     db.add(adv)
     await db.flush()
-    # Create a minimal placeholder Avatar which will be populated by WorldGenerator
-    avatar_name = payload.avatar_name or "You"
-    avatar = Avatar(
-        user_id=current_user.id,
-        template_id=adv.id, # Link early for background tasks
-        name=avatar_name,
-        hp=200,
-        stamina=200,
-        mana=200,
-        stats={},
-        inventory=[],
-        equipment={
-            "Head": None, "Chest": None, "Arms": None, "Legs": None,
-            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
-        },
-        status_effects=[],
-    )
-    db.add(avatar)
-    await db.commit()
-    log_structured_event(
-        "adventure.create.placeholder_ready",
-        template_id=adv.id,
-        avatar_id=avatar.id,
-        user_id=current_user.id,
-    )
-    # Create the Session objects
-    new_session = GameSession(
-        user_id=current_user.id,
-        avatar_id=avatar.id,
-        template_id=adv.id,
-        adventure_title=adv.title,
-        adventure_image_url=adv.image_url,
-        status="active"
-    )
-    db.add(new_session)
-    await db.flush()
-
-    initial_state = SessionState(
-        session_id=new_session.id,
-        user_id=current_user.id,
-        template_id=adv.id,
-        avatar_id=avatar.id,
-        current_scene_id="START",
-        in_game_time=0
-    )
-    snapshot = await _build_asset_snapshot(db, template=adv, avatar_id=avatar.id)
-    _attach_asset_snapshot_to_state(initial_state, snapshot)
-    db.add(initial_state)
-    await db.commit()
-    log_structured_event(
-        "adventure.create.session_seeded",
-        template_id=adv.id,
-        session_id=new_session.id,
-        avatar_id=avatar.id,
-    )
-
-    # Store original_manifest if provided and dispatch generation with payload
-    if getattr(payload, 'original_manifest', None):
-        adv.original_manifest = payload.original_manifest
-
+    # No longer creating GameSession/Avatar here.
+    # User will start the session from the portal.
     await db.commit()
 
-    # Prepare payload for background generation; include original_manifest if present
+    # Prepare payload for background generation
     bg_payload = payload.model_dump()
-    log_structured_event(
-        "adventure.generation.scheduled",
-        template_id=adv.id,
-        title=payload.title,
-        background_task="run_background_generation",
-        has_original_manifest=bool(payload.original_manifest),
-    )
     background_tasks.add_task(run_background_generation, adv.id, current_user.id, bg_payload)
     
-    # Return IDs expected by existing clients/tests
     return {
-        "game_id": new_session.id,
+        "game_id": None,
         "template_id": adv.id,
         "adventure_id": adv.id,
-        "avatar_id": avatar.id,
+        "avatar_id": None,
     }
 
 async def run_background_generation(template_id: str, user_id: str, payload_dict: dict):
@@ -1340,68 +1274,9 @@ async def run_background_generation(template_id: str, user_id: str, payload_dict
             scenes = scenes_res.scalars().all()
             if not scenes: raise ValueError("Engine failed to sprout any locations.")
             
-            # Get Avatar ID
-            avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
-            avatar = avatar_res.scalars().first()
-            if not avatar:
-                avatar = Avatar(
-                    user_id=user.id,
-                    template_id=template_id,
-                    name="You",
-                    hp=200,
-                    stamina=200,
-                    mana=200,
-                    stats={},
-                    inventory=[],
-                    equipment={
-                        "Head": None,
-                        "Chest": None,
-                        "Arms": None,
-                        "Legs": None,
-                        "Hands": None,
-                        "Feet": None,
-                        "Ring_1": None,
-                        "Ring_2": None,
-                        "Amulet": None,
-                    },
-                    status_effects=[],
-                )
-                db.add(avatar)
-                await db.commit()
-            
-            # create_adventure already seeds a SessionState; update it instead of inserting a duplicate
-            state_res = await db.execute(select(SessionState).where(SessionState.template_id == template_id))
-            state = state_res.scalars().first()
-            resolved_initial_scene_id = initial_scene_id if initial_scene_id and any(s.id == initial_scene_id for s in scenes) else scenes[0].id
-            if state:
-                state.avatar_id = avatar.id if avatar else state.avatar_id
-                state.current_scene_id = resolved_initial_scene_id
-            else:
-                session_res = await db.execute(
-                    select(GameSession).where(
-                        (GameSession.user_id == user_id) & (GameSession.template_id == template_id)
-                    )
-                )
-                session = session_res.scalars().first()
-                if not session:
-                    session = GameSession(
-                        user_id=user_id,
-                        avatar_id=avatar.id,
-                        template_id=template_id,
-                        adventure_title=payload_dict.get("title") or "New Adventure",
-                        adventure_image_url=payload_dict.get("image_url"),
-                        status="active",
-                    )
-                    db.add(session)
-                    await db.flush()
-                db.add(SessionState(
-                    session_id=session.id,
-                    user_id=user_id,
-                    template_id=template_id,
-                    avatar_id=avatar.id if avatar else None,
-                    current_scene_id=resolved_initial_scene_id,
-                    in_game_time=0
-                ))
+            # No longer creating GameSession or SessionState in background.
+            # They will be created when the user clicks 'Play'.
+            pass
             
             # 2.5 Generate Cinematic Cover if requested
             if payload_dict.get('automatic_cover_generation'):
@@ -1722,16 +1597,23 @@ async def start_session_for_template(
     )
     avatar = avatar_res.scalars().first()
     if not avatar:
+        # Try to extract protagonist from manifest if it exists
+        manifest = adventure.original_manifest or {}
+        prot = manifest.get("protagonist", {})
+        
         avatar = Avatar(
             user_id=current_user.id,
             template_id=template_id,
-            name="You",
-            hp=200,
-            stamina=200,
-            mana=200,
-            stats={},
-            inventory=[],
-            equipment={
+            name=prot.get("name", "You"),
+            role=prot.get("role"),
+            description=prot.get("description"),
+            profile_image=prot.get("profile_image"),
+            hp=prot.get("hp", 200),
+            stamina=prot.get("stamina", 200),
+            mana=prot.get("mana", 200),
+            stats=prot.get("stats", {}),
+            inventory=prot.get("starting_inventory", prot.get("inventory", [])),
+            equipment=prot.get("starting_equipment", prot.get("equipment", {
                 "Head": None,
                 "Chest": None,
                 "Arms": None,
@@ -1741,8 +1623,8 @@ async def start_session_for_template(
                 "Ring_1": None,
                 "Ring_2": None,
                 "Amulet": None,
-            },
-            status_effects=[],
+            })),
+            status_effects=prot.get("status_effects", []),
         )
         db.add(avatar)
         await db.flush()
@@ -1879,53 +1761,8 @@ async def import_adventure(
         )
         await db.flush()
 
-    avatar_name = None
-    if payload.protagonist and payload.protagonist.name:
-        avatar_name = payload.protagonist.name
-    avatar_name = avatar_name or "You"
-
-    avatar = Avatar(
-        user_id=current_user.id,
-        template_id=adv.id,
-        name=avatar_name,
-        role=(payload.protagonist.role if payload.protagonist else None),
-        description=(payload.protagonist.description if payload.protagonist else None),
-        hp=200,
-        stamina=200,
-        mana=200,
-        stats={},
-        inventory=[],
-        equipment={
-            "Head": None, "Chest": None, "Arms": None, "Legs": None,
-            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
-        },
-        status_effects=[],
-    )
-    db.add(avatar)
-    await db.commit()
-
-    new_session = GameSession(
-        user_id=current_user.id,
-        avatar_id=avatar.id,
-        template_id=adv.id,
-        adventure_title=adv.title,
-        adventure_image_url=adv.image_url,
-        status="active",
-    )
-    db.add(new_session)
-    await db.flush()
-
-    initial_state = SessionState(
-        session_id=new_session.id,
-        user_id=current_user.id,
-        template_id=adv.id,
-        avatar_id=avatar.id,
-        current_scene_id="START",
-        in_game_time=0
-    )
-    snapshot = await _build_asset_snapshot(db, template=adv, avatar_id=avatar.id)
-    _attach_asset_snapshot_to_state(initial_state, snapshot)
-    db.add(initial_state)
+    # NOTE: We no longer create a GameSession/Avatar here.
+    # The session will be created when the user clicks 'Start New Game'.
     await db.commit()
 
     # Prepare minimal payload for background gen; world generator will read original_manifest from DB if needed
@@ -1953,10 +1790,10 @@ async def import_adventure(
     background_tasks.add_task(run_background_generation, adv.id, current_user.id, payload_dict)
 
     return {
-        "game_id": new_session.id,
+        "game_id": None,
         "template_id": adv.id,
         "adventure_id": adv.id,
-        "avatar_id": avatar.id,
+        "avatar_id": None,
     }
 
 
@@ -2985,164 +2822,19 @@ async def import_adventure_adz(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Imports an adventure from an ADZ archive, including all asset images."""
+    """Imports an adventure from an ADZ archive (ZIP) containing manifest and assets."""
     if not file.filename.lower().endswith(".adz"):
         raise HTTPException(status_code=400, detail="Invalid file format. Expected .adz")
 
-    zip_content = await file.read()
-    zip_buffer = io.BytesIO(zip_content)
+    from backend.engine.adventure_importer import AdventureTemplateImporter
     
-    try:
-        with zipfile.ZipFile(zip_buffer, "r") as zip_file:
-            if "adventure.adv" not in zip_file.namelist():
-                raise HTTPException(status_code=400, detail="Invalid ADZ archive. Missing adventure.adv")
-            
-            manifest_data = json.loads(zip_file.read("adventure.adv").decode("utf-8"))
-            _validate_import_manifest(manifest_data, require_format=True)
-            
-            # Create new adventure ID
-            new_adv_id = str(uuid.uuid4())
-            adv_data = manifest_data["adventure"]
-            
-            # Create AdventureTemplate record
-            new_adv = AdventureTemplate(
-                id=new_adv_id,
-                owner_id=current_user.id,
-                title=adv_data["title"],
-                context=adv_data["context"],
-                strict_rules=adv_data.get("strict_rules", True),
-                rule_enforcement_mode=adv_data.get("rule_enforcement_mode", "strict"),
-                time_per_turn=adv_data.get("time_per_turn", 5),
-                pacing_minutes=adv_data.get("pacing_minutes", 5),
-                clock_enabled=adv_data.get("clock_enabled", False),
-                heartbeat_enabled=adv_data.get("heartbeat_enabled", False),
-                generate_scene_images=adv_data.get("generate_scene_images", False),
-                generate_npc_images=adv_data.get("generate_npc_images", False),
-                generate_item_images=adv_data.get("generate_item_images", False),
-                selected_image_styles=adv_data.get("selected_image_styles", []),
-                selected_tone=adv_data.get("selected_tone"),
-                is_ready=True,
-                creation_status="Ready",
-            )
-            db.add(new_adv)
-            
-            target_base_dir = os.path.join(settings.DATA_DIR, "adventures", new_adv_id)
-            os.makedirs(target_base_dir, exist_ok=True)
-            
-            existing_images_mapping = {} # zip_path -> local_url
-            for zip_path in zip_file.namelist():
-                if zip_path.startswith("assets/"):
-                    filename = os.path.basename(zip_path)
-                    target_path = os.path.join(target_base_dir, filename)
-                    with open(target_path, "wb") as f:
-                        f.write(zip_file.read(zip_path))
-                    
-                    rel_path = os.path.relpath(target_path, settings.DATA_DIR).replace("\\", "/")
-                    existing_images_mapping[zip_path] = f"/data/{rel_path}"
-
-            # Create Avatar
-            prot = manifest_data.get("protagonist")
-            if prot:
-                profile_image = existing_images_mapping.get(prot.get("profile_image")) if prot.get("profile_image") else None
-                
-                new_avatar = Avatar(
-                    user_id=current_user.id,
-                    template_id=new_adv_id,
-                    name=prot["name"],
-                    role=prot.get("role"),
-                    description=prot.get("description"),
-                    profile_image=profile_image,
-                    hp=prot.get("hp", 200),
-                    stamina=prot.get("stamina", 200),
-                    mana=prot.get("mana", 200),
-                    inventory=prot.get("inventory", []),
-                    equipment=prot.get("equipment", {}),
-                    stats=prot.get("stats", {}),
-                )
-                db.add(new_avatar)
-                await db.flush()
-
-                new_session = GameSession(
-                    user_id=current_user.id,
-                    avatar_id=new_avatar.id,
-                    template_id=new_adv_id,
-                    adventure_title=new_template.title,
-                    adventure_image_url=new_template.image_url,
-                    status="active",
-                )
-                db.add(new_session)
-                await db.flush()
-
-                db.add(SessionState(
-                    session_id=new_session.id,
-                    user_id=current_user.id,
-                    template_id=new_adv_id,
-                    avatar_id=new_avatar.id,
-                    current_scene_id="START",
-                    in_game_time=0
-                ))
-
-            # Reconstruct world using apply_manifest
-            world_manifest = {
-                "protagonist": {
-                    "name": prot["name"] if prot else "You",
-                    "role": prot.get("role") if prot else "AdventureTemplater",
-                    "description": prot.get("description") if prot else "",
-                    "starting_inventory": [],
-                    "starting_equipment": {}
-                },
-                "scenes": manifest_data["scenes"],
-                "exits": manifest_data["exits"],
-                "npcs": manifest_data["npcs"],
-                "objects": manifest_data["objects"],
-                "quests": adv_data.get("quests", [])
-            }
-
-            # Fallback for old ADZs that use current_scene_id instead of start_scene_id
-            for n in world_manifest["npcs"]:
-                if "start_scene_id" not in n and "current_scene_id" in n:
-                    n["start_scene_id"] = n["current_scene_id"]
-            for o in world_manifest["objects"]:
-                if "start_scene_id" not in o and "current_scene_id" in o:
-                    o["start_scene_id"] = o["current_scene_id"]
-            
-            image_urls = {}
-            if prot and prot.get("profile_image") in existing_images_mapping:
-                image_urls["PROTAGONIST"] = existing_images_mapping[prot["profile_image"]]
-            
-            for s in manifest_data["scenes"]:
-                if s.get("image_url") in existing_images_mapping:
-                    image_urls[s["id"]] = existing_images_mapping[s["image_url"]]
-            
-            for n in manifest_data["npcs"]:
-                if n.get("image_url") in existing_images_mapping:
-                    image_urls[n["id"]] = existing_images_mapping[n["image_url"]]
-
-            for o in manifest_data["objects"]:
-                if o.get("image_url") in existing_images_mapping:
-                    image_urls[o["id"]] = existing_images_mapping[o["image_url"]]
-
-            await WorldGenerator.apply_manifest(
-                db=db,
-                template_id=new_adv_id,
-                manifest_dict=world_manifest,
-                user=None,
-                existing_images=image_urls
-            )
-            
-            if adv_data.get("image_url") in existing_images_mapping:
-                new_adv.image_url = existing_images_mapping[adv_data["image_url"]]
-
-            await db.commit()
-            return {"status": "success", "template_id": new_adv_id, "adventure_id": new_adv_id}
-
-    except HTTPException:
-        await db.rollback()
-        raise
-    except Exception as e:
-        logger.exception("ADZ Import failed")
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    adz_data = await file.read()
+    success = await AdventureTemplateImporter.import_adz(db, adz_data, owner_id=current_user.id)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail="Import failed. The adventure might already exist or the file is corrupted.")
+        
+    return {"status": "success", "message": "ADZ imported successfully."}
 
 
 @router.post("/import/adv", status_code=201)
@@ -3151,7 +2843,7 @@ async def import_adventure_adv(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Imports an ADV JSON blueprint using the same structure as ADZ's adventure.adv (without assets)."""
+    """Imports an ADV JSON blueprint."""
     if not file.filename.lower().endswith(".adv"):
         raise HTTPException(status_code=400, detail="Invalid file format. Expected .adv")
 
@@ -3161,168 +2853,15 @@ async def import_adventure_adv(
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid ADV JSON file.") from exc
 
-    _validate_import_manifest(manifest_data, require_format=True)
+    from backend.engine.adventure_importer import AdventureTemplateImporter
+    
+    success = await AdventureTemplateImporter.import_adv_manifest(db, manifest_data, owner_id=current_user.id)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail="Import failed. The adventure might already exist or the file is corrupted.")
+        
+    return {"status": "success", "message": "ADV imported successfully."}
 
-    try:
-        adv_data = manifest_data.get("adventure")
-        if not isinstance(adv_data, dict):
-            raise HTTPException(status_code=400, detail="Invalid ADV file. Missing adventure section")
-
-        def _pick_list(primary: Any, fallback: Any) -> list[dict[str, Any]]:
-            if isinstance(primary, list):
-                return [v for v in primary if isinstance(v, dict)]
-            if isinstance(fallback, list):
-                return [v for v in fallback if isinstance(v, dict)]
-            return []
-
-        import_scenes = _pick_list(manifest_data.get("scenes"), adv_data.get("scenes"))
-        import_exits = _pick_list(manifest_data.get("exits"), adv_data.get("exits"))
-        import_npcs = _pick_list(manifest_data.get("npcs"), adv_data.get("npcs"))
-        import_objects = _pick_list(manifest_data.get("objects"), adv_data.get("objects"))
-        import_quests = _pick_list(manifest_data.get("quests"), adv_data.get("quests"))
-        import_awards = _pick_list(manifest_data.get("awards"), adv_data.get("awards"))
-
-        new_adv_id = str(uuid.uuid4())
-        new_adv = AdventureTemplate(
-            id=new_adv_id,
-            owner_id=current_user.id,
-            title=adv_data.get("title") or "Imported AdventureTemplate",
-            context=adv_data.get("context"),
-            strict_rules=adv_data.get("strict_rules", True),
-            rule_enforcement_mode=adv_data.get("rule_enforcement_mode", "strict"),
-            time_per_turn=adv_data.get("time_per_turn", 5),
-            pacing_minutes=adv_data.get("pacing_minutes", 5),
-            clock_enabled=adv_data.get("clock_enabled", False),
-            heartbeat_enabled=adv_data.get("heartbeat_enabled", False),
-            generate_scene_images=adv_data.get("generate_scene_images", False),
-            generate_npc_images=adv_data.get("generate_npc_images", False),
-            generate_item_images=adv_data.get("generate_item_images", False),
-            selected_image_styles=adv_data.get("selected_image_styles", []),
-            selected_tone=adv_data.get("selected_tone"),
-            award_generation_enabled=adv_data.get("award_generation_enabled", False),
-            min_awards=adv_data.get("min_awards", 3),
-            max_awards=adv_data.get("max_awards", 8),
-            original_manifest=manifest_data,
-            is_ready=True,
-            creation_status="Ready",
-        )
-        db.add(new_adv)
-
-        prot = manifest_data.get("protagonist")
-        if isinstance(prot, dict):
-            new_avatar = Avatar(
-                user_id=current_user.id,
-                template_id=new_adv_id,
-                name=prot.get("name") or "You",
-                role=prot.get("role"),
-                description=prot.get("description"),
-                profile_image=prot.get("profile_image"),
-                hp=prot.get("hp", 200),
-                stamina=prot.get("stamina", 200),
-                mana=prot.get("mana", 200),
-                inventory=prot.get("inventory", []),
-                equipment=prot.get("equipment", {}),
-                stats=prot.get("stats", {}),
-            )
-            db.add(new_avatar)
-            await db.flush()
-
-            new_session = GameSession(
-                user_id=current_user.id,
-                avatar_id=new_avatar.id,
-                template_id=new_adv_id,
-                adventure_title=new_template.title,
-                adventure_image_url=new_template.image_url,
-                status="active",
-            )
-            db.add(new_session)
-            await db.flush()
-
-            db.add(
-                SessionState(
-                    session_id=new_session.id,
-                    user_id=current_user.id,
-                    template_id=new_adv_id,
-                    avatar_id=new_avatar.id,
-                    current_scene_id="START",
-                    in_game_time=0,
-                )
-            )
-
-        world_manifest = {
-            "protagonist": {
-                "name": prot.get("name") if isinstance(prot, dict) and prot.get("name") else "You",
-                "role": prot.get("role") if isinstance(prot, dict) else "AdventureTemplater",
-                "description": prot.get("description") if isinstance(prot, dict) else "",
-                "starting_inventory": [],
-                "starting_equipment": {},
-            },
-            "scenes": import_scenes,
-            "exits": import_exits,
-            "npcs": import_npcs,
-            "objects": import_objects,
-            "quests": import_quests,
-            "awards": import_awards,
-        }
-
-        for n in world_manifest["npcs"]:
-            if "start_scene_id" not in n and "current_scene_id" in n:
-                n["start_scene_id"] = n["current_scene_id"]
-        for o in world_manifest["objects"]:
-            if "start_scene_id" not in o and "current_scene_id" in o:
-                o["start_scene_id"] = o["current_scene_id"]
-
-        image_urls: dict[str, str] = {}
-        if isinstance(prot, dict) and prot.get("profile_image"):
-            image_urls["PROTAGONIST"] = prot["profile_image"]
-
-        for s in import_scenes:
-            if isinstance(s, dict) and s.get("image_url") and s.get("id"):
-                image_urls[s["id"]] = s["image_url"]
-        for n in import_npcs:
-            if isinstance(n, dict) and n.get("image_url") and n.get("id"):
-                image_urls[n["id"]] = n["image_url"]
-        for o in import_objects:
-            if isinstance(o, dict) and o.get("image_url") and o.get("id"):
-                image_urls[o["id"]] = o["image_url"]
-
-        await WorldGenerator.apply_manifest(
-            db=db,
-            template_id=new_adv_id,
-            manifest_dict=world_manifest,
-            user=None,
-            existing_images=image_urls,
-        )
-
-        cover_image = adv_data.get("image_url")
-        if isinstance(cover_image, str) and (cover_image.startswith("/data/") or cover_image.startswith("http")):
-            new_adv.image_url = cover_image
-
-        first_scene_id = world_manifest["scenes"][0].get("id") if world_manifest["scenes"] else None
-        if first_scene_id:
-            state_res = await db.execute(select(SessionState).where(SessionState.template_id == new_adv_id))
-            imported_state = state_res.scalars().first()
-            if imported_state:
-                imported_state.current_scene_id = first_scene_id
-
-        if not new_adv.image_url:
-            new_adv.image_url = await MediaEngine.generate_svg_placeholder(
-                new_adv_id,
-                new_adv.title,
-                os.path.join(settings.DATA_DIR, "adventures", new_adv_id),
-                "cover_placeholder.svg",
-            )
-
-        await db.commit()
-        return {"status": "success", "template_id": new_adv_id, "adventure_id": new_adv_id}
-
-    except HTTPException:
-        await db.rollback()
-        raise
-    except Exception as e:
-        logger.exception("ADV Import failed")
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 @router.post("/import/session-bundle")
 async def import_adventure_session_bundle(
