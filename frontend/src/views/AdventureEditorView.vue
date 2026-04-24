@@ -665,7 +665,7 @@ const goBack = () => router.push({ name: 'portal' })
                   Regenerate Cover
                 </button>
               </div>
-              <div class="relative group aspect-[2/1] bg-slate-900 border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl max-w-2xl mx-auto">
+              <div class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl max-w-2xl mx-auto">
                 <img v-if="debugData.adventure.image_url" :src="buildVisualImageUrl(debugData.adventure.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
                 <div v-if="isQuickGenerating['cover_' + debugData.adventure.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                   <div class="flex flex-col items-center gap-2">
@@ -698,35 +698,6 @@ const goBack = () => router.push({ name: 'portal' })
               </div>
             </section>
 
-            <!-- Awards (Read-only) -->
-            <section v-if="adventure?.awards?.length" class="space-y-6">
-              <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Achievements & Awards ({{ adventure.awards.length }})</h3>
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div v-for="award in adventure.awards" :key="'award_' + award.key" class="bg-slate-900/40 border border-white/5 rounded-2xl p-5 hover:border-emerald-500/20 transition-all group flex items-start gap-4">
-                  <div :class="[
-                    'w-12 h-12 rounded-xl flex items-center justify-center border shrink-0',
-                    award.tier === 'gold' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' :
-                    award.tier === 'silver' ? 'bg-slate-300/10 border-slate-300/20 text-slate-300' :
-                    'bg-orange-700/10 border-orange-700/20 text-orange-700'
-                  ]">
-                    <i class="ra ra-trophy text-2xl"></i>
-                  </div>
-                  <div class="space-y-1">
-                    <div class="flex items-center gap-2">
-                      <h4 class="text-sm font-black text-white uppercase tracking-tight">{{ award.title }}</h4>
-                      <span :class="[
-                        'text-[7px] font-black uppercase px-1.5 py-0.5 rounded border',
-                        award.tier === 'gold' ? 'bg-amber-500/20 border-amber-500/30 text-amber-500' :
-                        award.tier === 'silver' ? 'bg-slate-300/20 border-slate-300/30 text-slate-300' :
-                        'bg-orange-700/20 border-orange-700/30 text-orange-700'
-                      ]">{{ award.tier }}</span>
-                    </div>
-                    <p class="text-[10px] text-slate-400 leading-relaxed">{{ award.description }}</p>
-                    <p class="text-[8px] text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
-                  </div>
-                </div>
-              </div>
-            </section>
 
             <!-- Categorized Grid -->
             <div class="space-y-8">
@@ -762,7 +733,7 @@ const goBack = () => router.push({ name: 'portal' })
                    </button>
                  </div>
                   <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    <div v-for="scene in editorScenes" :key="'scene_' + scene.id" @mouseenter="handleHover({ name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="clearHover" class="relative group aspect-[2/1] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
+                    <div v-for="scene in editorScenes" :key="'scene_' + scene.id" @mouseenter="handleHover({ name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
                       <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                       <div v-if="isQuickGenerating['scene_' + scene.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                          <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
@@ -861,6 +832,36 @@ const goBack = () => router.push({ name: 'portal' })
                            <div class="h-full bg-emerald-500/40" :style="{ width: quest.status === 'completed' ? '100%' : '0%' }"></div>
                         </div>
                         <span class="text-[8px] font-black uppercase tracking-tighter" :class="quest.status === 'completed' ? 'text-emerald-500' : 'text-slate-600'">{{ quest.status }}</span>
+                     </div>
+                   </div>
+                 </div>
+               </section>
+ 
+               <!-- Awards (Read-only) -->
+               <section v-if="adventure?.awards?.length" class="space-y-6">
+                 <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Achievements & Awards ({{ adventure.awards.length }})</h3>
+                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                   <div v-for="award in adventure.awards" :key="'award_' + award.key" class="bg-slate-900/40 border border-white/5 rounded-2xl p-5 hover:border-emerald-500/20 transition-all group flex items-start gap-4">
+                     <div :class="[
+                       'w-12 h-12 rounded-xl flex items-center justify-center border shrink-0',
+                       award.tier === 'gold' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' :
+                       award.tier === 'silver' ? 'bg-slate-300/10 border-slate-300/20 text-slate-300' :
+                       'bg-orange-700/10 border-orange-700/20 text-orange-700'
+                     ]">
+                       <i class="ra ra-trophy text-2xl"></i>
+                     </div>
+                     <div class="space-y-1">
+                       <div class="flex items-center gap-2">
+                         <h4 class="text-sm font-black text-white uppercase tracking-tight">{{ award.title }}</h4>
+                         <span :class="[
+                           'text-[7px] font-black uppercase px-1.5 py-0.5 rounded border',
+                           award.tier === 'gold' ? 'bg-amber-500/20 border-amber-500/30 text-amber-500' :
+                           award.tier === 'silver' ? 'bg-slate-300/20 border-slate-300/30 text-slate-300' :
+                           'bg-orange-700/20 border-orange-700/30 text-orange-700'
+                         ]">{{ award.tier }}</span>
+                       </div>
+                       <p class="text-[10px] text-slate-400 leading-relaxed">{{ award.description }}</p>
+                       <p class="text-[8px] text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
                      </div>
                    </div>
                  </div>

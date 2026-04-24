@@ -572,7 +572,7 @@ VISUAL_UPLOAD_SPECS: Dict[str, Dict[str, Any]] = {
         "max_width": 2048,
         "max_height": 1024,
         "max_bytes": 4 * 1024 * 1024,
-        "recommended": "Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.",
+        "recommended": "Optimal: cinematic landscape 3:2, max 1536x1024. PNG, JPEG, or WEBP.",
     },
     "protagonist": {
         "folder": "protagonist",

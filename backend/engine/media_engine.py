@@ -667,7 +667,7 @@ class MediaEngine:
 
     @staticmethod
     async def generate_adventure_cover(title: str, context: str, adventure_id: str, user_config: dict, api_keys: dict) -> Optional[str]:
-        """High-level wrapper for adventure cover generation (uses Advanced Model, 2:1 aspect ratio)."""
+        """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
             logger.warning("No T2I settings found in user_config")

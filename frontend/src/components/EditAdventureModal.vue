@@ -652,7 +652,7 @@ watch(
                     </button>
                   </div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div class="relative group aspect-[2/1] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden col-span-2 lg:col-span-3">
+                    <div class="relative group aspect-[3/2] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden col-span-2 lg:col-span-3">
                       <img v-if="debugData.adventure.image_url" :src="buildVisualImageUrl(debugData.adventure.image_url)" class="absolute inset-0 w-full h-full object-cover" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ debugData.adventure.title || 'Adventure Cover' }}</div>

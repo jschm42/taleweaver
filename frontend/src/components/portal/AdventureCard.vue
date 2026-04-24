@@ -89,10 +89,10 @@ const emit = defineEmits<{
     </div>
 
     <div class="px-2">
-      <h3 class="text-2xl font-black text-white mb-2 font-display line-clamp-1 group-hover:text-aether-primary transition-colors">
+      <h3 class="text-2xl font-black text-white mb-2 font-display line-clamp-1 group-hover:text-aether-primary transition-colors tracking-tight">
         {{ props.adv.adventure_title }}
       </h3>
-      <p class="text-slate-400 text-sm font-narrative mb-6 line-clamp-2 opacity-70">
+      <p class="text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest mb-6 line-clamp-2 opacity-90 leading-relaxed min-h-[2.5rem]">
         {{ props.adv.description }}
       </p>
 

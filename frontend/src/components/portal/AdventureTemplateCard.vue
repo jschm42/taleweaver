@@ -51,8 +51,8 @@ onUnmounted(() => {
     </div>
 
     <div class="space-y-1">
-      <h3 class="text-xl font-black text-white line-clamp-1">{{ props.template.title }}</h3>
-      <p v-if="props.template.teaser" class="text-xs text-slate-400 line-clamp-2 min-h-[2.5rem] leading-relaxed">
+      <h3 class="text-xl font-black text-white line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
+      <p v-if="props.template.teaser" class="text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-2 min-h-[2.5rem] leading-relaxed">
         {{ props.template.teaser }}
       </p>
     </div>

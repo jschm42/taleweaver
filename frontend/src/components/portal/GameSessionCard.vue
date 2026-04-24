@@ -48,7 +48,7 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
 <template>
   <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col overflow-hidden relative group">
     <!-- Top Cover Area -->
-    <div class="aspect-[1.8/1] relative overflow-hidden bg-black/30 border-b border-white/5">
+    <div class="aspect-[3/2] relative overflow-hidden bg-black/30 border-b border-white/5">
       <img
         v-if="props.session.image_url"
         :src="props.session.image_url"
