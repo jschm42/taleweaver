@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ app.include_router(map_api.router, prefix="/api")
 app.include_router(auth_api.router, prefix="/api")
 app.include_router(users_api.router, prefix="/api")
 
-from backend.core.config import settings
+
 
 # Ensure storage directories exist
 os.makedirs(os.path.join(settings.DATA_DIR, "characters"), exist_ok=True)
