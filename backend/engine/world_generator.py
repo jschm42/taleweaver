@@ -10,7 +10,7 @@ from backend.core.llm_router import GameMasterLLM
 from backend.core.llm_logger import log_structured_event
 from backend.models.user import User
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
-from backend.models.adventure_template import AdventureTemplate
+from backend.models.adventure_template import AdventureTemplate, GenerationCancelled
 from backend.core.config import settings
 from backend.core import prompts
 
@@ -80,6 +80,12 @@ async def _publish_generation_status(db: AsyncSession, adventure: Optional[Adven
     """Publish live status text via the active session without committing mid-generation."""
     if not adventure:
         return
+        
+    # Check for cancellation before updating status
+    await db.refresh(adventure)
+    if adventure.creation_status == "Cancelled":
+        raise GenerationCancelled("Generation was cancelled by the user.")
+        
     adventure.creation_status = status
     await db.flush()
 
@@ -238,6 +244,8 @@ class WorldGenerator:
         # 1. Update Status
         adventure = await db.get(AdventureTemplate, template_id)
         if adventure:
+            if adventure.creation_status == "Cancelled":
+                raise GenerationCancelled("Generation stopped due to user cancellation.")
             adventure.creation_status = "Analyzing Story Idea..."
             log_structured_event(
                 "adventure.generation.status",
@@ -273,6 +281,9 @@ class WorldGenerator:
         
         # 2. Update Status
         if adventure:
+            await db.refresh(adventure)
+            if adventure.creation_status == "Cancelled":
+                raise GenerationCancelled("Generation stopped due to user cancellation.")
             adventure.creation_status = "Building Scenes & Plot..."
             log_structured_event(
                 "adventure.generation.status",

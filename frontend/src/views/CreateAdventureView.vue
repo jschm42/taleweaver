@@ -20,7 +20,7 @@ const form = ref({
   generate_scene_images: true,
   automatic_cover_generation: true,
   clock_enabled: true,
-  pacing_minutes: 10,
+  pacing_minutes: 5,
   rule_enforcement_mode: 'rpg' as RuleMode,
   selected_style_id: '',
   selected_tone_id: '',
@@ -145,6 +145,7 @@ async function handleCreate() {
     id: crypto.randomUUID(),
     title: form.value.title.trim() || 'Untitled Odyssey',
     context: form.value.storyIdea.trim(),
+    time_per_turn: form.value.pacing_minutes,
     selected_image_styles: [form.value.selected_style_id],
     selected_tone: form.value.selected_tone_id
   }

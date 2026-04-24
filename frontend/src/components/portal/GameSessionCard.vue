@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { GameSession } from '@/types'
+import { MoreHorizontal } from 'lucide-vue-next'
 
 const props = defineProps<{
   session: GameSession
@@ -47,7 +48,7 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
 <template>
   <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col overflow-hidden relative group">
     <!-- Top Cover Area -->
-    <div class="aspect-[2.2/1] relative overflow-hidden bg-black/30 border-b border-white/5">
+    <div class="aspect-[1.8/1] relative overflow-hidden bg-black/30 border-b border-white/5">
       <img
         v-if="props.session.image_url"
         :src="props.session.image_url"
@@ -72,10 +73,10 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
       <div class="absolute top-3 right-3">
         <button
           @click.stop="toggleMenu"
-          class="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all flex items-center justify-center font-bold text-lg"
+          class="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all flex items-center justify-center"
           title="Session actions"
         >
-          &bull;&bull;&bull;
+          <MoreHorizontal class="w-5 h-5" />
         </button>
 
         <div v-if="isMenuOpen" class="fixed inset-0 z-20" @click="closeMenu"></div>
@@ -115,11 +116,11 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
     </div>
 
     <!-- Content Area -->
-    <div class="p-5 flex flex-col gap-5">
+    <div class="p-6 flex flex-col gap-6">
       <div class="min-w-0">
-        <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.session.adventure_title }}</h3>
-        <p class="text-xs text-slate-400 mt-1.5 flex items-center gap-2 font-bold uppercase tracking-wider">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500/60"></span>
+        <h3 class="text-2xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.session.adventure_title }}</h3>
+        <p class="text-sm text-slate-400 mt-2 flex items-center gap-2 font-bold uppercase tracking-[0.15em]">
+          <span class="w-2 h-2 rounded-full bg-emerald-500/60"></span>
           {{ props.session.current_scene_name || 'Exploring...' }}
         </p>
       </div>
@@ -127,37 +128,37 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
       <!-- Progress Stats Single Row -->
       <div class="flex items-end justify-between gap-6 pt-1">
         <!-- Quests -->
-        <div v-if="props.session.quest_count" class="flex-1 flex flex-col gap-2">
+        <div v-if="props.session.quest_count" class="flex-1 flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Quests</span>
-            <span class="text-[10px] font-bold text-slate-300">{{ props.session.completed_quest_count }}/{{ props.session.quest_count }}</span>
+            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Quests</span>
+            <span class="text-xs font-bold text-slate-300">{{ props.session.completed_quest_count }}/{{ props.session.quest_count }}</span>
           </div>
-          <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+          <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div 
-              class="h-full bg-emerald-500 transition-all duration-500"
+              class="h-full bg-emerald-500 transition-all duration-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
               :style="{ width: `${(props.session.completed_quest_count || 0) / (props.session.quest_count || 1) * 100}%` }"
             ></div>
           </div>
         </div>
 
         <!-- Awards -->
-        <div v-if="props.session.award_count" class="flex-1 flex flex-col gap-2">
+        <div v-if="props.session.award_count" class="flex-1 flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Awards</span>
-            <span class="text-[10px] font-bold text-slate-300">{{ props.session.earned_award_count }}/{{ props.session.award_count }}</span>
+            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Awards</span>
+            <span class="text-xs font-bold text-slate-300">{{ props.session.earned_award_count }}/{{ props.session.award_count }}</span>
           </div>
-          <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+          <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div 
-              class="h-full bg-amber-400 transition-all duration-500"
+              class="h-full bg-amber-400 transition-all duration-500 shadow-[0_0_10px_rgba(251,191,36,0.3)]"
               :style="{ width: `${(props.session.earned_award_count || 0) / (props.session.award_count || 1) * 100}%` }"
             ></div>
           </div>
         </div>
 
         <!-- Time Played -->
-        <div class="flex flex-col gap-1 items-end shrink-0">
-          <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Playtime</span>
-          <span class="text-xs font-black text-slate-200 tracking-wider">{{ props.session.in_game_time }} MIN</span>
+        <div class="flex flex-col gap-1.5 items-end shrink-0">
+          <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Playtime</span>
+          <span class="text-sm font-black text-slate-200 tracking-widest">{{ props.session.in_game_time }} MIN</span>
         </div>
       </div>
 

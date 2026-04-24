@@ -35,7 +35,7 @@ function prettifyStatus(status: string): string {
 
 function isFailureStatus(status: string): boolean {
   const value = (status || '').toLowerCase()
-  return value.includes('failed') || value.includes('error')
+  return value.includes('failed') || value.includes('error') || value.includes('cancelled')
 }
 
 function formatToneLabel(value?: string | null): string {
@@ -161,6 +161,15 @@ async function removeFailedPendingCard(adventureId: string, kind: 'creation' | '
     return
   }
   removePendingCreationCard(adventureId)
+}
+
+async function cancelAdventure(adventureId: string) {
+  try {
+    await api.cancelAdventure(adventureId)
+    updatePendingCreationStatus(adventureId, 'Cancelled', true)
+  } catch (error) {
+    console.error('Error cancelling adventure:', error)
+  }
 }
 
 async function fetchPortalData() {
@@ -452,10 +461,7 @@ onUnmounted(() => {
       :is-admin="isAdmin"
       :active-section="activeSection"
       @section="activeSection = $event"
-      @import="triggerImportPicker"
-      @create="openCreateModal"
       @admin="router.push('/admin')"
-      @profile="showProfile = true"
     />
 
     <!-- Main Content Area -->
@@ -488,6 +494,7 @@ onUnmounted(() => {
               :pending="pending"
               :loading-word-index="loadingWordIndex"
               @remove-failed="removeFailedPendingCard"
+              @cancel="cancelAdventure"
             />
 
             <AdventureTemplateCard
@@ -506,7 +513,7 @@ onUnmounted(() => {
             <div v-if="sessions.length === 0" class="rounded-xl border border-white/10 bg-aether-surface/20 p-6 text-slate-400">
               No active sessions yet. Start one from the Adventures area.
             </div>
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <div v-else class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-10">
               <GameSessionCard
                 v-for="entry in sessions"
                 :key="entry.game_id"

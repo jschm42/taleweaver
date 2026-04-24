@@ -22,7 +22,7 @@ class AwardSchema(BaseModel):
 class AdventureTemplateBase(BaseModel):
     title: str = Field(..., max_length=50)
     image_url: Optional[str] = None
-    teaser: Optional[str] = Field(None, max_length=200)
+    teaser: Optional[str] = Field(None, max_length=300)
     context: Optional[str] = Field(None, max_length=2000)
     strict_rules: Optional[bool] = True
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
@@ -54,6 +54,7 @@ class AdventureTemplateCreate(AdventureTemplateBase):
 
 class AdventureTemplateUpdate(BaseModel):
     title: Optional[str] = None
+    teaser: Optional[str] = Field(None, max_length=300)
     strict_rules: Optional[bool] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
     time_per_turn: Optional[int] = None

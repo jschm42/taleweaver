@@ -11,7 +11,7 @@ class SessionState(Base, TimestampMixin):
     
     # Denormalized fields for easier querying
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=True)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True)
     avatar_id = Column(String(36), ForeignKey("avatars.id"), nullable=True)
     
     # Current Runtime State

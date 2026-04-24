@@ -183,6 +183,11 @@ export const api = {
     return request(`/adventures/${adventureId}/status`)
   },
 
+  /** Cancels an active adventure generation. */
+  cancelAdventure(adventureId: string): Promise<{ status: string }> {
+    return request(`/adventures/${adventureId}/cancel`, { method: 'POST' })
+  },
+
   /** Admin Settings */
   saveLlmSettings(payload: any): Promise<any> {
     return request('/settings/llm', { method: 'POST', body: JSON.stringify(payload) })

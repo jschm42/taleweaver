@@ -25,9 +25,9 @@ function openProfile() {
 <template>
   <header v-if="authState.isAuthenticated" class="h-12 bg-[#050b14] border-b border-white/5 px-6 my-1 flex items-center justify-between z-[100] relative">
     <!-- Left: Branding -->
-    <div 
-      class="flex items-center gap-3 select-none cursor-pointer group/logo"
-      @click="router.push({ name: 'portal' })"
+    <router-link 
+      to="/"
+      class="flex items-center gap-3 select-none cursor-pointer group/logo decoration-none"
       title="Return to Portal"
     >
       <div class="w-12 h-12 flex items-center justify-center">
@@ -41,7 +41,7 @@ function openProfile() {
         <span class="text-sm font-black text-white font-display tracking-tight">TaleWeaver</span>
         <span class="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">v2.4.0-Aether</span>
       </div>
-    </div>
+    </router-link>
 
     <!-- Right: User Profile -->
     <div class="relative">

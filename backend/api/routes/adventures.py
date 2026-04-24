@@ -22,7 +22,7 @@ from backend.core.database import get_db
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.models.user import User
-from backend.models.adventure_template import AdventureTemplate
+from backend.models.adventure_template import AdventureTemplate, GenerationCancelled
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
@@ -440,6 +440,11 @@ async def _set_generation_state(
     if not adventure:
         return
 
+    # If the user has cancelled, don't overwrite it with a new "active" status.
+    # Instead, raise an exception to stop the process if we are trying to update progress.
+    if adventure.creation_status == "Cancelled" and status != "Cancelled":
+        raise GenerationCancelled("Generation stopped due to user cancellation.")
+
     if status is not None:
         adventure.creation_status = status
     if is_ready is not None:
@@ -742,6 +747,7 @@ class AdventureTemplateResponse(BaseModel):
     """Full adventure details returned to the client."""
     id: str
     title: str
+    teaser: Optional[str] = None
     strict_rules: bool
     rule_enforcement_mode: str
     time_per_turn: int
@@ -949,8 +955,8 @@ async def create_adventure(
         context=payload.context,
         strict_rules=strict_rules,
         rule_enforcement_mode=rule_mode,
-        time_per_turn=payload.time_per_turn,
-        pacing_minutes=payload.pacing_minutes if payload.pacing_minutes is not None else payload.time_per_turn,
+        time_per_turn=payload.time_per_turn if payload.time_per_turn is not None else (payload.pacing_minutes or 5),
+        pacing_minutes=payload.pacing_minutes if payload.pacing_minutes is not None else (payload.time_per_turn or 5),
         clock_enabled=bool(payload.clock_enabled),
         game_over_rules=payload.game_over_rules,
         is_ready=False,
@@ -1012,6 +1018,8 @@ async def create_adventure(
         user_id=current_user.id,
         avatar_id=avatar.id,
         template_id=adv.id,
+        adventure_title=adv.title,
+        adventure_image_url=adv.image_url,
         status="active"
     )
     db.add(new_session)
@@ -1319,6 +1327,19 @@ async def run_background_generation(template_id: str, user_id: str, payload_dict
                 scene_count=len(scenes),
                 avatar_id=avatar.id if avatar else None,
             )
+        except GenerationCancelled:
+            logger.info("Background Gen Cancelled for %s", template_id)
+            try:
+                await db.rollback()
+                await _set_generation_state(
+                    db,
+                    template_id,
+                    status="Cancelled",
+                    is_ready=False,
+                    error="Generation was cancelled by the user.",
+                )
+            except Exception:
+                pass
         except Exception as e:
             logger.exception("Background Gen Failed for %s", template_id)
             error_msg = str(e)
@@ -1398,6 +1419,28 @@ async def get_adventure_status(game_id: str, db: AsyncSession = Depends(get_db))
         "error": adv.creation_error
     }
 
+@router.post("/{game_id}/cancel")
+async def cancel_adventure_generation(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    adv = await db.get(AdventureTemplate, game_id)
+    if not adv:
+        raise HTTPException(status_code=404, detail="Adventure not found.")
+    
+    if adv.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to cancel this adventure.")
+
+    if adv.is_ready:
+        raise HTTPException(status_code=400, detail="Adventure is already ready.")
+
+    adv.creation_status = "Cancelled"
+    adv.creation_error = "Generation was cancelled by the user."
+    await db.commit()
+    
+    return {"status": "Cancelled"}
+
 
 def _calculate_quest_progress(quests: Optional[List[Dict[str, Any]]]) -> int:
     if not quests:
@@ -1418,14 +1461,13 @@ async def list_adventures(
     result = await db.execute(
         select(GameSession, SessionState, AdventureTemplate, WorldScene.label, Avatar.profile_image)
         .join(SessionState, SessionState.session_id == GameSession.id)
-        .join(AdventureTemplate, GameSession.template_id == AdventureTemplate.id)
+        .outerjoin(AdventureTemplate, GameSession.template_id == AdventureTemplate.id)
         .outerjoin(Avatar, Avatar.id == SessionState.avatar_id)
         .outerjoin(
             WorldScene,
             (WorldScene.template_id == GameSession.template_id) & (WorldScene.id == SessionState.current_scene_id),
         )
         .where(
-            (AdventureTemplate.owner_id == current_user.id) & 
             (GameSession.user_id == current_user.id)
         )
     )
@@ -1433,25 +1475,25 @@ async def list_adventures(
     return [
         GameSessionResponse(
             game_id=g.id,
-            template_id=s.template_id,
-            adventure_id=s.template_id,
-            avatar_id=s.avatar_id,
+            template_id=g.template_id,
+            adventure_id=g.template_id,
+            avatar_id=g.avatar_id,
             profile_image=_resolve_session_asset(s, "protagonist", avatar_profile_image),
-            adventure_title=a.title,
-            image_url=_resolve_session_asset(s, "cover", a.image_url),
+            adventure_title=a.title if a else g.adventure_title,
+            image_url=_resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
             scene_id=s.current_scene_id,
-            current_scene_name=scene_label or "Unknown",
+            current_scene_name=scene_label or "Exploring...",
             in_game_time=s.in_game_time,
             is_paused=s.is_paused,
-            is_ready=a.is_ready,
-            creation_status=a.creation_status,
-            creation_error=a.creation_error,
-            selected_tone=a.selected_tone,
-            progress=_calculate_quest_progress(a.quests),
-            quest_count=len(a.quests or []),
-            completed_quest_count=len([q for q in (a.quests or []) if q.get("status") == "completed"]),
-            award_count=len(a.awards or []),
-            earned_award_count=len([aw for aw in (a.awards or []) if aw.get("is_earned")]),
+            is_ready=a.is_ready if a else True,
+            creation_status=a.creation_status if a else "Ready",
+            creation_error=a.creation_error if a else None,
+            selected_tone=a.selected_tone if a else None,
+            progress=_calculate_quest_progress(a.quests if a else None),
+            quest_count=len((a.quests if a else None) or []),
+            completed_quest_count=len([q for q in ((a.quests if a else None) or []) if q.get("status") == "completed"]),
+            award_count=len((a.awards if a else None) or []),
+            earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if aw.get("is_earned")]),
         )
         for g, s, a, scene_label, avatar_profile_image in rows
     ]
@@ -1507,6 +1549,7 @@ async def list_templates(
             AdventureTemplateSummaryResponse(
                 template_id=template.id,
                 title=template.title,
+                teaser=template.teaser,
                 image_url=template.image_url,
                 is_ready=template.is_ready,
                 creation_status=template.creation_status,
@@ -1588,6 +1631,8 @@ async def start_session_for_template(
         user_id=current_user.id,
         avatar_id=avatar.id,
         template_id=template_id,
+        adventure_title=adventure.title,
+        adventure_image_url=adventure.image_url,
         status="active",
     )
     db.add(new_session)
@@ -1680,6 +1725,7 @@ async def import_adventure(
     adv_kwargs = dict(
         owner_id=current_user.id,
         title=payload.title,
+        teaser=payload.teaser,
         image_url=None,
         context=payload.story_idea or payload.description or payload.subtitle,
         strict_rules=import_strict_rules,
@@ -1738,6 +1784,8 @@ async def import_adventure(
         user_id=current_user.id,
         avatar_id=avatar.id,
         template_id=adv.id,
+        adventure_title=adv.title,
+        adventure_image_url=adv.image_url,
         status="active",
     )
     db.add(new_session)
@@ -1839,12 +1887,8 @@ async def delete_adventure(
     if not adv:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
 
-    # Remove linked game states first to avoid FK constraint violations
-    gs_result = await db.execute(
-        select(SessionState).where(SessionState.template_id == template_id)
-    )
-    for gs in gs_result.scalars().all():
-        await db.delete(gs)
+    # We keep GameSession and SessionState to preserve history.
+    # The ForeignKey ondelete="SET NULL" will handle the decoupling.
 
     await db.delete(adv)
     await db.commit()
@@ -2112,6 +2156,7 @@ class EntityUpdateRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
     target_id: str
     name: Optional[str] = None
+    teaser: Optional[str] = None
     description: Optional[str] = None
 
 class AIEditRequest(BaseModel):
@@ -2132,6 +2177,8 @@ async def update_editor_entity(
     if payload.target_type == "cover":
         if payload.name is not None:
             adv.title = payload.name
+        if payload.teaser is not None:
+            adv.teaser = payload.teaser
         if payload.description is not None:
             adv.context = payload.description
     elif payload.target_type == "protagonist":

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState } from '@/store/auth'
+import { ArrowLeft, Save, Trash2, Wand2, Sparkles, Image as ImageIcon, Plus, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   adventureId: string
@@ -34,7 +35,7 @@ const isAIEditing = ref(false)
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
-const editForm = ref({ name: '', description: '' })
+const editForm = ref({ name: '', teaser: '', description: '' })
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -43,7 +44,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'world' | 'awards' | 'advanced'>('world')
+const activeTab = ref<'world' | 'advanced'>('world')
 
 type VisualKind = 'cover' | 'protagonist' | 'scene' | 'npc' | 'object'
 
@@ -92,6 +93,7 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 
 const form = ref({
   title: '',
+  teaser: '',
   context: '',
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
@@ -177,6 +179,7 @@ async function fetchAdventure() {
     const data = await res.json()
     adventure.value = data
     form.value.title = data.title
+    form.value.teaser = data.teaser || ''
     form.value.context = data.context || ''
     form.value.rule_enforcement_mode = data.rule_enforcement_mode || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
@@ -211,9 +214,13 @@ async function fetchDebugInfo() {
   }
 }
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string) {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '') {
   editEntityContext.value = { type, id }
-  editForm.value = { name: currentName || '', description: currentDesc || '' }
+  editForm.value = { 
+    name: currentName || '', 
+    description: currentDesc || '',
+    teaser: currentTeaser || ''
+  }
   showEditModal.value = true
 }
 
@@ -228,6 +235,7 @@ async function saveEntityText(type: string, id: string) {
         target_type: type,
         target_id: id,
         name: editForm.value.name,
+        teaser: type === 'cover' ? editForm.value.teaser : undefined,
         description: editForm.value.description
       })
     })
@@ -520,34 +528,7 @@ async function resetAdventure() {
   }
 }
 
-async function exportAdz() {
-  const res = await fetch(`${BASE}/adventures/${props.adventureId}/export/adz`, {
-    headers: authHeaders(false),
-  })
-  if (!res.ok) return
 
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.adz`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function addAward() {
-  form.value.awards.push({
-    key: crypto.randomUUID(),
-    title: 'New Award',
-    description: 'Award description',
-    tier: 'bronze',
-    requirement: 'Grant requirement'
-  })
-}
-
-function removeAward(index: number) {
-  form.value.awards.splice(index, 1)
-}
 
 const goBack = () => router.push({ name: 'portal' })
 </script>
@@ -565,10 +546,10 @@ const goBack = () => router.push({ name: 'portal' })
       <div class="flex items-center gap-6">
         <button 
           @click="goBack" 
-          class="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/40 transition-all duration-300 shadow-xl group"
+          class="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-slate-800/60 hover:bg-emerald-500/20 border border-white/10 hover:border-emerald-500/50 transition-all duration-300 shadow-xl group active:scale-95"
         >
-          <i class="ra ra-back-arrow text-sm text-slate-400 group-hover:text-emerald-400 transition-colors"></i>
-          <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-white transition-colors">Back</span>
+          <ArrowLeft class="w-4 h-4 text-emerald-500 group-hover:text-emerald-400 transition-colors" />
+          <span class="text-xs font-black uppercase tracking-[0.2em] text-white transition-colors">Back</span>
         </button>
         <div>
           <div class="flex items-center gap-3">
@@ -584,7 +565,7 @@ const goBack = () => router.push({ name: 'portal' })
       <div class="flex items-center gap-6">
         <nav class="flex bg-black/40 rounded-xl p-1 border border-white/5 backdrop-blur-md shadow-inner">
           <button 
-            v-for="tab in (['world', 'awards', 'advanced'] as const)" 
+            v-for="tab in (['world', 'advanced'] as const)" 
             :key="tab"
             @click="activeTab = tab"
             :class="[
@@ -714,13 +695,14 @@ const goBack = () => router.push({ name: 'portal' })
                   <div class="flex justify-between items-end gap-12">
                     <div class="space-y-2 max-w-3xl">
                       <h4 class="text-3xl font-black text-white tracking-tight">{{ debugData.adventure.title }}</h4>
+                      <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
                       <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ debugData.adventure.context }}</p>
                     </div>
                     <div class="flex gap-3 shrink-0">
                        <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all">Fast Gen</button>
                        <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
                         <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
-                       <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
+                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context, debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
                     </div>
                   </div>
                 </div>
@@ -836,6 +818,7 @@ const goBack = () => router.push({ name: 'portal' })
                   </div>
                </section>
 
+ 
                <!-- Quests -->
                <section v-if="adventure?.quests?.length" class="space-y-6">
                  <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Quest Log ({{ adventure.quests.length }})</h3>
@@ -863,86 +846,54 @@ const goBack = () => router.push({ name: 'portal' })
                    </div>
                  </div>
                </section>
+
+               <!-- Awards (Read-only) -->
+               <section v-if="adventure?.awards?.length" class="space-y-6">
+                 <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Achievements & Awards ({{ adventure.awards.length }})</h3>
+                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                   <div v-for="award in adventure.awards" :key="'award_' + award.key" class="bg-slate-900/40 border border-white/5 rounded-2xl p-5 hover:border-emerald-500/20 transition-all group flex items-start gap-4">
+                     <div :class="[
+                       'w-12 h-12 rounded-xl flex items-center justify-center border shrink-0',
+                       award.tier === 'gold' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' :
+                       award.tier === 'silver' ? 'bg-slate-300/10 border-slate-300/20 text-slate-300' :
+                       'bg-orange-700/10 border-orange-700/20 text-orange-700'
+                     ]">
+                       <i class="ra ra-trophy text-2xl"></i>
+                     </div>
+                     <div class="space-y-1">
+                       <div class="flex items-center gap-2">
+                         <h4 class="text-sm font-black text-white uppercase tracking-tight">{{ award.title }}</h4>
+                         <span :class="[
+                           'text-[7px] font-black uppercase px-1.5 py-0.5 rounded border',
+                           award.tier === 'gold' ? 'bg-amber-500/20 border-amber-500/30 text-amber-500' :
+                           award.tier === 'silver' ? 'bg-slate-300/20 border-slate-300/30 text-slate-300' :
+                           'bg-orange-700/20 border-orange-700/30 text-orange-700'
+                         ]">{{ award.tier }}</span>
+                       </div>
+                       <p class="text-[10px] text-slate-400 leading-relaxed">{{ award.description }}</p>
+                       <p class="text-[8px] text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
+                     </div>
+                   </div>
+                 </div>
+               </section>
             </div>
           </div>
         </div>
 
-        <!-- Awards Tab -->
-        <div v-if="activeTab === 'awards'" class="space-y-8 animate-page-in">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-2xl font-black text-white">Award Templates</h2>
-              <p class="text-slate-400 text-sm">Define achievements that players can earn during this adventure.</p>
-            </div>
-            <div class="flex gap-4">
-              <button @click="addAward" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center gap-2">
-                <i class="ra ra-plus"></i> Add Award
-              </button>
-              <button @click="saveChanges" :disabled="isSaving" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50">
-                {{ isSaving ? 'Saving...' : 'Save Awards' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div v-for="(award, index) in form.awards" :key="award.key" class="p-6 bg-slate-900/40 border border-white/5 rounded-[2rem] backdrop-blur-md relative group">
-              <button @click="removeAward(index)" class="absolute top-6 right-6 p-2 text-slate-500 hover:text-red-400 transition-colors">
-                <i class="ra ra-cancel"></i>
-              </button>
-
-              <div class="space-y-6">
-                <div class="grid grid-cols-2 gap-4">
-                  <div class="space-y-2">
-                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Award Title</label>
-                    <input v-model="award.title" type="text" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none" />
-                  </div>
-                  <div class="space-y-2">
-                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Tier</label>
-                    <select v-model="award.tier" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none appearance-none">
-                      <option value="bronze">Bronze</option>
-                      <option value="silver">Silver</option>
-                      <option value="gold">Gold</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="space-y-2">
-                  <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Description</label>
-                  <textarea v-model="award.description" rows="2" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none resize-none"></textarea>
-                </div>
-
-                <div class="space-y-2">
-                  <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Requirement (GM Instruction)</label>
-                  <input v-model="award.requirement" type="text" placeholder="e.g. 'Defeat the Rat King' or 'Make a very funny joke'" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white text-sm focus:border-emerald-500/50 outline-none" />
-                </div>
-
-                <div class="flex items-center gap-2 text-[9px] font-mono text-slate-600">
-                  <span class="px-2 py-0.5 bg-black/40 rounded border border-white/5 uppercase">Key: {{ award.key }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="form.awards.length === 0" class="py-20 text-center border-2 border-dashed border-white/5 rounded-[3rem]">
-            <i class="ra ra-trophy text-5xl text-slate-800 mb-4 block"></i>
-            <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">No awards defined yet.</p>
-            <p class="text-slate-600 text-[10px] mt-2">Add awards to reward your players for their heroic deeds.</p>
-          </div>
-        </div>
 
         <!-- Advanced Tab -->
         <div v-else-if="activeTab === 'advanced'" class="space-y-10 animate-page-in">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- Exports -->
+            <!-- Data Debug -->
             <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6">
               <h4 class="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                <i class="ra ra-save text-emerald-500"></i> Archival & Export
+                <i class="ra ra-crystal-ball text-cyan-500"></i> Adventure Data Debug
               </h4>
-              <p class="text-xs text-slate-400 leading-relaxed">Single exchange format: export as versioned ADZ package.</p>
+              <p class="text-xs text-slate-400 leading-relaxed">View raw JSON data structures of this adventure template. Useful for deep analysis.</p>
               <div class="grid grid-cols-1 gap-3">
-                <button @click="exportAdz" class="flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 rounded-2xl transition-all group">
-                  <span class="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-emerald-400">Export as .ADZ Package</span>
-                  <i class="ra ra-save text-emerald-500"></i>
+                <button @click="showDebug = true" class="flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/30 rounded-2xl transition-all group">
+                  <span class="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-cyan-400">Open JSON Debug Inspector</span>
+                  <i class="ra ra-search text-cyan-500"></i>
                 </button>
               </div>
             </div>
@@ -1077,8 +1028,19 @@ const goBack = () => router.push({ name: 'portal' })
                   <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Entity Name</label>
                   <input v-model="editForm.name" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-2xl font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" />
                 </div>
+                
+                <div v-if="editEntityContext.type === 'cover'" class="space-y-3">
+                  <div class="flex justify-between items-center">
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Teaser (Max 300 Characters)</label>
+                    <span :class="['text-[9px] font-bold tracking-widest', editForm.teaser.length > 300 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ editForm.teaser.length }} / 300
+                    </span>
+                  </div>
+                  <textarea v-model="editForm.teaser" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="A short, catchy teaser for your adventure..."></textarea>
+                </div>
+
                 <div class="space-y-3">
-                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Description / Biography</label>
+                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">{{ editEntityContext.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }}</label>
                   <textarea v-model="editForm.description" rows="8" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"></textarea>
                 </div>
               </div>
@@ -1134,20 +1096,46 @@ const goBack = () => router.push({ name: 'portal' })
         </TransitionGroup>
       </div>
     </Teleport>
-
-    <!-- REALITY WEAVING OVERLAY (Global Lock) -->
+ 
+    <!-- DATA DEBUG MODAL -->
     <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="isAIEditing" class="fixed inset-0 z-[500] flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-2xl">
-          <div class="relative w-32 h-32 mb-8">
-            <div class="absolute inset-0 rounded-full border-4 border-emerald-500/10 animate-pulse"></div>
-            <div class="absolute inset-2 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin"></div>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <i class="ra ra-player-teleport text-4xl text-emerald-500 animate-pulse"></i>
+      <Transition name="modal">
+        <div v-if="showDebug" class="fixed inset-0 z-[600] flex items-center justify-center p-12 backdrop-blur-3xl bg-slate-950/90">
+          <div class="modal-content w-full max-w-6xl h-[80vh] bg-slate-900 border border-white/10 rounded-[3rem] shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-8 border-b border-white/5 flex justify-between items-center bg-slate-900/50">
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                  <i class="ra ra-crystal-ball text-cyan-400"></i>
+                </div>
+                <div>
+                  <h3 class="text-lg font-black text-white uppercase tracking-widest">Chronicle Debug Inspector</h3>
+                  <p class="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Raw Adventure Manifest & Entities</p>
+                </div>
+              </div>
+              <button @click="showDebug = false" class="p-3 rounded-full hover:bg-white/5 text-slate-500 hover:text-white transition-all">
+                <i class="ra ra-cancel text-xl"></i>
+              </button>
+            </div>
+            
+            <div class="flex-grow overflow-hidden flex">
+              <div class="flex-grow p-8 overflow-auto font-mono text-[11px] leading-relaxed">
+                <div class="space-y-8">
+                  <section v-if="adventure" class="space-y-4">
+                    <h4 class="text-xs font-black text-emerald-500 uppercase tracking-widest border-l-2 border-emerald-500 pl-4">Adventure Core</h4>
+                    <pre class="bg-black/40 p-6 rounded-2xl border border-white/5 text-emerald-300/80">{{ JSON.stringify(adventure, null, 2) }}</pre>
+                  </section>
+                  <section v-if="debugData" class="space-y-4">
+                    <h4 class="text-xs font-black text-cyan-500 uppercase tracking-widest border-l-2 border-cyan-500 pl-4">Asset Matrix (DebugData)</h4>
+                    <pre class="bg-black/40 p-6 rounded-2xl border border-white/5 text-cyan-300/80">{{ JSON.stringify(debugData, null, 2) }}</pre>
+                  </section>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-6 bg-black/20 border-t border-white/5 flex justify-end gap-4">
+              <button @click="showDebug = false" class="px-10 py-3 bg-slate-800 hover:bg-slate-700 text-white font-black uppercase text-xs tracking-widest rounded-xl transition-all">Close Inspector</button>
             </div>
           </div>
-          <h2 class="text-xl font-black text-white uppercase tracking-[0.4em] mb-2">Weaving Reality</h2>
-          <p class="text-xs font-bold text-emerald-500/60 uppercase tracking-widest animate-pulse">The Chronicles are being rewritten...</p>
         </div>
       </Transition>
     </Teleport>

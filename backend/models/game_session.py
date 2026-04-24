@@ -9,7 +9,11 @@ class GameSession(Base, TimestampMixin):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     avatar_id = Column(String(36), ForeignKey("avatars.id"), nullable=False)
-    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=False)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True)
+    
+    # Denormalized fields to preserve history if template is deleted
+    adventure_title = Column(String(100), nullable=True)
+    adventure_image_url = Column(String(255), nullable=True)
     
     status = Column(String(20), default="active", nullable=False) # active, archived, completed
 

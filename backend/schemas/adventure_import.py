@@ -53,6 +53,7 @@ class AdventureTemplateImportPayload(BaseModel):
     version: str = Field(default=CURRENT_VERSION, description="Import format version, e.g. '1.0'")
     id: Optional[str] = None
     title: str
+    teaser: Optional[str] = None
     subtitle: Optional[str] = None
     description: Optional[str] = None
     story_idea: Optional[str] = None
