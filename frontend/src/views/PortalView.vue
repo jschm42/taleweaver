@@ -13,6 +13,8 @@ import UserProfileContent from '@/components/portal/UserProfileContent.vue'
 import AdventureTemplateCard from '@/components/portal/AdventureTemplateCard.vue'
 import GameSessionCard from '@/components/portal/GameSessionCard.vue'
 import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
+import ImportExamplesCard from '@/components/portal/ImportExamplesCard.vue'
+import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -66,6 +68,8 @@ const errorMsg = ref('')
 const showDeleteConfirm = ref(false)
 const templateToDelete = ref<{ id: string; title: string } | null>(null)
 const showProfile = ref(false)
+const showImportConfirm = ref(false)
+const isSeeding = ref(false)
 
 const importInput = ref<HTMLInputElement | null>(null)
 const pendingImports = ref<PendingAdventureCard[]>([])
@@ -302,6 +306,19 @@ function openCreateModal() {
   router.push({ name: 'adventure-create' })
 }
 
+async function executeImportExamples() {
+  showImportConfirm.value = false
+  isSeeding.value = true
+  try {
+    await api.importExamples()
+    await fetchPortalData()
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Import der Beispiele fehlgeschlagen.'
+  } finally {
+    isSeeding.value = false
+  }
+}
+
 function triggerImportPicker() {
   importInput.value?.click()
 }
@@ -500,6 +517,17 @@ onUnmounted(() => {
         <div v-else>
           <div v-if="activeSection === 'templates'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
             <PortalCreateAdventureCard @click="openCreateModal" />
+            
+            <ImportExamplesCard 
+              v-if="templates.length === 0 && !isSeeding" 
+              @import="showImportConfirm = true" 
+            />
+
+            <!-- Loading indicator for seeding -->
+            <div v-if="isSeeding" class="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl aspect-[3/2] bg-white/5 gap-3">
+              <div class="w-8 h-8 border-2 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
+              <span class="text-[10px] text-aether-primary uppercase tracking-widest font-bold">Importing Tales...</span>
+            </div>
 
             <PendingAdventureCard
               v-for="pending in pendingCards"
@@ -563,6 +591,12 @@ onUnmounted(() => {
         :adventure-title="templateToDelete?.title || ''"
         @close="showDeleteConfirm = false"
         @confirm="executeDeleteTemplate"
+      />
+      
+      <ImportExamplesModal
+        v-if="showImportConfirm"
+        @close="showImportConfirm = false"
+        @confirm="executeImportExamples"
       />
     </Teleport>
 

@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, Form, UploadFile, Query
 from fastapi.responses import StreamingResponse
+
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
@@ -51,6 +52,24 @@ router = APIRouter(prefix="/adventures", tags=["AdventureTemplates"])
 logger = logging.getLogger(__name__)
 
 WALKTHROUGH_REVEAL_COST = 200
+
+@router.post("/import-examples")
+async def import_examples(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually triggers import of example adventures from the bundled /adventures and presets folder."""
+    from backend.engine.adventure_importer import AdventureTemplateImporter
+    
+    # Import from main adventures dir
+    await AdventureTemplateImporter.import_from_directory(db, "adventures", owner_id=current_user.id, delete_after=False)
+    
+    # Import from presets dir
+    presets_dir = os.path.join(settings.DATA_DIR, "presets", "adventures")
+    if os.path.exists(presets_dir):
+        await AdventureTemplateImporter.import_from_directory(db, presets_dir, owner_id=current_user.id, delete_after=False)
+    
+    return {"status": "success", "message": "Example adventures imported successfully."}
 WALKTHROUGH_HINT_COST = 50
 WALKTHROUGH_ITEM_TOKEN_PATTERN = re.compile(r"\[\[ITEM:([A-Z0-9_]+)\|([^\]]+)\]\]")
 
@@ -1269,6 +1288,8 @@ async def run_background_generation(template_id: str, user_id: str, payload_dict
                         user_id=user_id,
                         avatar_id=avatar.id,
                         template_id=template_id,
+                        adventure_title=payload_dict.get("title") or "New Adventure",
+                        adventure_image_url=payload_dict.get("image_url"),
                         status="active",
                     )
                     db.add(session)
@@ -1486,7 +1507,7 @@ async def list_adventures(
             adventure_id=g.template_id,
             avatar_id=g.avatar_id,
             profile_image=_resolve_session_asset(s, "protagonist", avatar_profile_image),
-            adventure_title=a.title if a else g.adventure_title,
+            adventure_title=a.title if a else (g.adventure_title or "Unknown Adventure"),
             image_url=_resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
             scene_id=s.current_scene_id,
             current_scene_name=scene_label or "Exploring...",
@@ -2945,6 +2966,8 @@ async def import_adventure_adz(
                     user_id=current_user.id,
                     avatar_id=new_avatar.id,
                     template_id=new_adv_id,
+                    adventure_title=new_template.title,
+                    adventure_image_url=new_template.image_url,
                     status="active",
                 )
                 db.add(new_session)
@@ -3108,6 +3131,8 @@ async def import_adventure_adv(
                 user_id=current_user.id,
                 avatar_id=new_avatar.id,
                 template_id=new_adv_id,
+                adventure_title=new_template.title,
+                adventure_image_url=new_template.image_url,
                 status="active",
             )
             db.add(new_session)
@@ -3292,6 +3317,8 @@ async def import_adventure_session_bundle(
                 user_id=user.id,
                 avatar_id=new_avatar.id,
                 template_id=new_adv.id,
+                adventure_title=new_adv.title,
+                adventure_image_url=new_adv.image_url,
                 status="active",
             )
             db.add(new_session)

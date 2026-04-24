@@ -381,7 +381,7 @@ class WorldGenerator:
         
         # 0. Sync Quests
         if adventure:
-            quests = manifest_dict.get("quests", [])
+            quests = manifest_dict.get("quests") or []
             for q in quests:
                 if "status" not in q:
                     q["status"] = "open"
@@ -391,7 +391,7 @@ class WorldGenerator:
             if teaser:
                 adventure.teaser = teaser
             
-            awards = manifest_dict.get("awards", [])
+            awards = manifest_dict.get("awards") or []
             for a in awards:
                 if "is_earned" not in a:
                     a["is_earned"] = False
@@ -406,8 +406,19 @@ class WorldGenerator:
             avatar = av_res.scalars().first()
             
             # Map of ID -> Slot for starting equipment
-            starting_equipped_ids = {v: k for k, v in (prot.get("starting_equipment") or {}).items()}
-            starting_inv_ids = set(prot.get("starting_inventory") or [])
+            raw_equip = prot.get("starting_equipment") or {}
+            starting_equipped_ids = {}
+            for slot, val in raw_equip.items():
+                item_id = val.get("id") if isinstance(val, dict) else val
+                if item_id:
+                    starting_equipped_ids[item_id] = slot
+
+            raw_inv = prot.get("starting_inventory") or []
+            starting_inv_ids = set()
+            for item in raw_inv:
+                item_id = item.get("id") if isinstance(item, dict) else item
+                if item_id:
+                    starting_inv_ids.add(item_id)
 
             if avatar:
                 avatar.name = prot["name"]

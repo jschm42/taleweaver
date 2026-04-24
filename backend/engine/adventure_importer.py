@@ -34,7 +34,7 @@ def _build_local_default_user() -> User:
 
 class AdventureTemplateImporter:
     @staticmethod
-    async def import_from_directory(db: AsyncSession, directory: str, delete_after: bool = False):
+    async def import_from_directory(db: AsyncSession, directory: str, owner_id: Optional[str] = None, delete_after: bool = False):
         """Scans a directory for .adv or .adz files and imports them."""
         if not os.path.exists(directory):
             logger.warning(f"Import directory {directory} does not exist.")
@@ -49,7 +49,7 @@ class AdventureTemplateImporter:
         for filename in files:
             file_path = os.path.join(directory, filename)
             try:
-                success = await AdventureTemplateImporter.import_file(db, file_path)
+                success = await AdventureTemplateImporter.import_file(db, file_path, owner_id=owner_id)
                 if success and delete_after:
                     os.remove(file_path)
                     logger.info(f"Successfully imported and deleted {filename}")
@@ -59,16 +59,16 @@ class AdventureTemplateImporter:
                 logger.error(f"Error during import of {file_path}: {e}")
 
     @staticmethod
-    async def import_file(db: AsyncSession, file_path: str) -> bool:
+    async def import_file(db: AsyncSession, file_path: str, owner_id: Optional[str] = None) -> bool:
         """Imports a single file (.adv or .adz)."""
         if file_path.endswith(".adz"):
-            return await AdventureTemplateImporter._import_adz(db, file_path)
+            return await AdventureTemplateImporter._import_adz(db, file_path, owner_id=owner_id)
         elif file_path.endswith(".adv"):
-            return await AdventureTemplateImporter._import_adv(db, file_path)
+            return await AdventureTemplateImporter._import_adv(db, file_path, owner_id=owner_id)
         return False
 
     @staticmethod
-    async def _import_adz(db: AsyncSession, file_path: str) -> bool:
+    async def _import_adz(db: AsyncSession, file_path: str, owner_id: Optional[str] = None) -> bool:
         """Logic for ADZ (ZIP) import, including assets."""
         try:
             with open(file_path, "rb") as f:
@@ -93,8 +93,12 @@ class AdventureTemplateImporter:
                     logger.error(f"Invalid ADZ {file_path}: Missing adventure section in manifest")
                     return False
 
-                # Check if template with this title already exists
-                existing_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.title == adv_data["title"]))
+                # Check if template with this title already exists for this owner (if provided)
+                query = select(AdventureTemplate).where(AdventureTemplate.title == adv_data["title"])
+                if owner_id:
+                    query = query.where(AdventureTemplate.owner_id == owner_id)
+                
+                existing_res = await db.execute(query)
                 if existing_res.scalars().first():
                     logger.info(f"AdventureTemplate template '{adv_data['title']}' already exists. Skipping.")
                     return False
@@ -105,6 +109,7 @@ class AdventureTemplateImporter:
                 # Create AdventureTemplate record
                 new_template = AdventureTemplate(
                     id=new_template_id,
+                    owner_id=owner_id,
                     title=adv_data["title"],
                     teaser=adv_data.get("teaser"),
                     context=adv_data.get("context"),
@@ -114,11 +119,19 @@ class AdventureTemplateImporter:
                     pacing_minutes=adv_data.get("pacing_minutes", 5),
                     clock_enabled=adv_data.get("clock_enabled", False),
                     heartbeat_enabled=adv_data.get("heartbeat_enabled", False),
+                    heartbeat_interval=adv_data.get("heartbeat_interval", 10),
                     generate_scene_images=adv_data.get("generate_scene_images", False),
                     generate_npc_images=adv_data.get("generate_npc_images", False),
                     generate_item_images=adv_data.get("generate_item_images", False),
                     selected_image_styles=adv_data.get("selected_image_styles", []),
                     selected_tone=adv_data.get("selected_tone"),
+                    quests=adv_data.get("quests", []),
+                    awards=adv_data.get("awards", []),
+                    min_scenes=adv_data.get("min_scenes", 1),
+                    max_scenes=adv_data.get("max_scenes", 5),
+                    min_awards=adv_data.get("min_awards", 3),
+                    max_awards=adv_data.get("max_awards", 8),
+                    award_generation_enabled=adv_data.get("award_generation_enabled", False),
                     is_ready=True,
                     creation_status="Ready",
                 )
@@ -142,8 +155,13 @@ class AdventureTemplateImporter:
                 # Create Avatar and Session
                 prot = manifest_data.get("protagonist")
                 if prot:
-                    result = await db.execute(select(User).limit(1))
-                    user = result.scalars().first()
+                    if owner_id:
+                        user_res = await db.execute(select(User).where(User.id == owner_id))
+                        user = user_res.scalars().first()
+                    else:
+                        result = await db.execute(select(User).limit(1))
+                        user = result.scalars().first()
+
                     if not user:
                         user = _build_local_default_user()
                         db.add(user)
@@ -186,18 +204,19 @@ class AdventureTemplateImporter:
                 # Reconstruct world
                 world_manifest = {
                     "protagonist": {
-                        "name": prot["name"] if prot else "You",
-                        "role": prot.get("role") if prot else "AdventureTemplater",
-                        "description": prot.get("description") if prot else "",
-                        "starting_inventory": [],
-                        "starting_equipment": {}
+                        "name": prot.get("name", "You") if prot else "You",
+                        "role": prot.get("role", "Hero") if prot else "Hero",
+                        "description": prot.get("description", "") if prot else "",
+                        "starting_inventory": prot.get("starting_inventory", prot.get("inventory", [])) if prot else [],
+                        "starting_equipment": prot.get("starting_equipment", prot.get("equipment", {})) if prot else {}
                     },
                     "scenes": manifest_data.get("scenes", []),
                     "exits": manifest_data.get("exits", []),
                     "npcs": manifest_data.get("npcs", []),
                     "objects": manifest_data.get("objects", []),
-                    "quests": manifest_data.get("quests", []),
-                    "teaser": manifest_data.get("teaser")
+                    "quests": manifest_data.get("quests") or adv_data.get("quests", []),
+                    "awards": manifest_data.get("awards") or adv_data.get("awards", []),
+                    "teaser": manifest_data.get("teaser") or adv_data.get("teaser")
                 }
 
                 default_scene_id = manifest_data["scenes"][0]["id"] if manifest_data.get("scenes") else "START"
@@ -240,7 +259,7 @@ class AdventureTemplateImporter:
             return False
 
     @staticmethod
-    async def _import_adv(db: AsyncSession, file_path: str) -> bool:
+    async def _import_adv(db: AsyncSession, file_path: str, owner_id: Optional[str] = None) -> bool:
         """Logic for pure .adv (JSON) import."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -255,13 +274,22 @@ class AdventureTemplateImporter:
             is_session = payload.get("type") == "SESSION_BUNDLE"
             title = payload.get("adventure", {}).get("title") if is_session else payload.get("title", "Imported AdventureTemplate")
             
-            existing_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.title == title))
+            query = select(AdventureTemplate).where(AdventureTemplate.title == title)
+            if owner_id:
+                query = query.where(AdventureTemplate.owner_id == owner_id)
+            
+            existing_res = await db.execute(query)
             if existing_res.scalars().first():
                 logger.info(f"AdventureTemplate template '{title}' already exists. Skipping.")
                 return False
 
-            res = await db.execute(select(User).limit(1))
-            user = res.scalars().first()
+            if owner_id:
+                user_res = await db.execute(select(User).where(User.id == owner_id))
+                user = user_res.scalars().first()
+            else:
+                res = await db.execute(select(User).limit(1))
+                user = res.scalars().first()
+            
             if not user:
                 user = _build_local_default_user()
                 db.add(user)
@@ -272,13 +300,20 @@ class AdventureTemplateImporter:
                 old_adv = data["adventure"]
                 
                 new_template = AdventureTemplate(
+                    owner_id=user.id,
                     title=old_adv['title'],
                     teaser=old_adv.get("teaser"),
                     context=old_adv.get("context"),
                     image_url=old_adv.get("image_url"),
                     strict_rules=old_adv.get("strict_rules", True),
                     time_per_turn=old_adv.get("time_per_turn", 10),
+                    pacing_minutes=old_adv.get("pacing_minutes", 5),
+                    clock_enabled=old_adv.get("clock_enabled", False),
+                    heartbeat_enabled=old_adv.get("heartbeat_enabled", False),
+                    heartbeat_interval=old_adv.get("heartbeat_interval", 10),
                     game_over_rules=old_adv.get("game_over_rules"),
+                    quests=old_adv.get("quests", []),
+                    awards=old_adv.get("awards", []),
                     original_manifest=old_adv.get("original_manifest"),
                     is_ready=True,
                     creation_status="Ready"
@@ -312,7 +347,9 @@ class AdventureTemplateImporter:
                     new_sess = GameSession(
                         user_id=user.id,
                         avatar_id=new_avatar.id,
-                        template_id=new_template.id
+                        template_id=new_template.id,
+                        adventure_title=new_template.title,
+                        adventure_image_url=new_template.image_url
                     )
                     db.add(new_sess)
                     await db.flush()
@@ -334,10 +371,19 @@ class AdventureTemplateImporter:
                 adv_meta = payload.get("adventure") or payload
                 
                 new_template = AdventureTemplate(
+                    owner_id=user.id,
                     title=adv_meta.get("title") or manifest.get("title") or "Imported Blueprint",
                     teaser=adv_meta.get("teaser") or manifest.get("teaser"),
                     context=adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
                     image_url=adv_meta.get("image_url") or manifest.get("image_url"),
+                    strict_rules=adv_meta.get("strict_rules", True),
+                    time_per_turn=adv_meta.get("time_per_turn", 5),
+                    pacing_minutes=adv_meta.get("pacing_minutes", 5),
+                    clock_enabled=adv_meta.get("clock_enabled", False),
+                    heartbeat_enabled=adv_meta.get("heartbeat_enabled", False),
+                    heartbeat_interval=adv_meta.get("heartbeat_interval", 10),
+                    quests=adv_meta.get("quests") or manifest.get("quests") or [],
+                    awards=adv_meta.get("awards") or manifest.get("awards") or [],
                     original_manifest=manifest,
                     is_ready=True,
                     creation_status="Ready"
@@ -373,7 +419,9 @@ class AdventureTemplateImporter:
                 new_sess = GameSession(
                     user_id=user.id,
                     avatar_id=avatar.id,
-                    template_id=new_template.id
+                    template_id=new_template.id,
+                    adventure_title=new_template.title,
+                    adventure_image_url=new_template.image_url
                 )
                 db.add(new_sess)
                 await db.flush()
@@ -383,6 +431,14 @@ class AdventureTemplateImporter:
                     current_scene_id=manifest["scenes"][0]["id"] if manifest.get("scenes") else "START",
                     in_game_time=0
                 ))
+
+                # Prepare manifest for apply_manifest to ensure protagonist has starting items
+                if "protagonist" in manifest:
+                    p = manifest["protagonist"]
+                    if "starting_inventory" not in p:
+                        p["starting_inventory"] = p.get("inventory", [])
+                    if "starting_equipment" not in p:
+                        p["starting_equipment"] = p.get("equipment", {})
 
                 await WorldGenerator.apply_manifest(db, new_template.id, manifest)
                 await db.commit()

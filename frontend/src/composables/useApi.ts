@@ -58,6 +58,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  /** Manually trigger import of example adventures. */
+  importExamples(): Promise<{ status: string; message: string }> {
+    return request('/adventures/import-examples', { method: 'POST' })
+  },
+
   /** Lists all game sessions. */
   listAdventures(): Promise<GameSession[]> {
     return request<GameSession[]>('/adventures/sessions')

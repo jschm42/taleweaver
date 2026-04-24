@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
+import { MoreHorizontal } from 'lucide-vue-next'
 
 const props = defineProps<{
   template: AdventureTemplateSummary
@@ -14,16 +15,16 @@ const emit = defineEmits<{
   (e: 'delete', templateId: string, title: string): void
 }>()
 
-const showDropdown = ref(false)
-const dropdownRef = ref<HTMLElement | null>(null)
+const isMenuOpen = ref(false)
+const menuRef = ref<HTMLElement | null>(null)
 
-function toggleDropdown() {
-  showDropdown.value = !showDropdown.value
+function toggleMenu() {
+  isMenuOpen.value = !isMenuOpen.value
 }
 
 function handleClickOutside(event: MouseEvent) {
-  if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
-    showDropdown.value = false
+  if (menuRef.value && !menuRef.value.contains(event.target as Node)) {
+    isMenuOpen.value = false
   }
 }
 
@@ -34,47 +35,47 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('mousedown', handleClickOutside)
 })
+
+function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
+  if (action === 'edit') emit('edit', props.template.template_id)
+  else if (action === 'adz') emit('exportAdz', props.template.template_id, props.template.title)
+  else if (action === 'adv') emit('exportAdv', props.template.template_id, props.template.title)
+  else if (action === 'delete') emit('delete', props.template.template_id, props.template.title)
+  isMenuOpen.value = false
+}
 </script>
 
 <template>
-  <article class="rounded-xl border border-white/10 bg-aether-surface/20 p-4 flex flex-col gap-4 relative group">
-    <div class="aspect-[3/2] rounded-lg overflow-hidden bg-black/30 border border-white/5">
+  <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col overflow-hidden relative group">
+    <!-- Top Cover Area -->
+    <div class="aspect-[3/2] relative overflow-hidden bg-black/30 border-b border-white/5">
       <img
         v-if="props.template.image_url"
         :src="props.template.image_url"
-        class="w-full h-full object-cover"
+        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
         alt="Adventure cover"
       />
-      <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs uppercase tracking-widest">
+      <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-[10px] font-bold uppercase tracking-widest">
         No Cover
       </div>
-    </div>
 
-    <div class="space-y-1">
-      <h3 class="text-xl font-black text-white line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
-      <p v-if="props.template.teaser" class="text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-2 min-h-[2.5rem] leading-relaxed">
-        {{ props.template.teaser }}
-      </p>
-    </div>
+      <!-- Tone Badge -->
+      <div v-if="props.template.selected_tone" class="absolute top-3 left-3">
+        <span class="px-2.5 py-1 rounded-full bg-aether-primary/20 text-aether-primary text-[9px] uppercase tracking-widest font-black border border-aether-primary/20">
+          {{ props.template.selected_tone }}
+        </span>
+      </div>
 
-    <div class="flex gap-2">
-      <button
-        class="flex-1 px-3 py-2.5 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-bold uppercase tracking-widest hover:bg-emerald-500/30 transition-colors border border-emerald-500/20"
-        @click="emit('startSession', props.template.template_id)"
-      >
-        Start New Game
-      </button>
-      
-      <div class="relative" ref="dropdownRef">
+      <!-- Action Dots -->
+      <div class="absolute top-3 right-3" ref="menuRef">
         <button
-          class="h-full px-3 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all border border-white/10 flex items-center justify-center font-bold text-lg"
-          @click="toggleDropdown"
-          title="Adventure Options"
+          @click.stop="toggleMenu"
+          class="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all flex items-center justify-center"
+          title="Adventure options"
         >
-          &bull;&bull;&bull;
+          <MoreHorizontal class="w-5 h-5" />
         </button>
 
-        <!-- Dropdown Menu -->
         <Transition
           enter-active-class="transition duration-100 ease-out"
           enter-from-class="transform scale-95 opacity-0"
@@ -83,42 +84,57 @@ onUnmounted(() => {
           leave-from-class="transform scale-100 opacity-100"
           leave-to-class="transform scale-95 opacity-0"
         >
-          <div 
-            v-if="showDropdown"
-            class="absolute right-0 bottom-full mb-3 w-52 bg-[#0d1117] border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-50 overflow-hidden backdrop-blur-xl"
+          <div
+            v-if="isMenuOpen"
+            class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
           >
-            <div class="p-2 space-y-1">
-              <button
-                class="w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
-                @click="emit('edit', props.template.template_id); showDropdown = false"
-              >
-                Edit blueprint
-              </button>
-              <button
-                class="w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
-                @click="emit('exportAdz', props.template.template_id, props.template.title); showDropdown = false"
-              >
-                Export (.adz)
-              </button>
-              <button
-                class="w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
-                @click="emit('exportAdv', props.template.template_id, props.template.title); showDropdown = false"
-              >
-                Export (.adv)
-              </button>
-              
-              <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
-              
-              <button
-                class="w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
-                @click="emit('delete', props.template.template_id, props.template.title); showDropdown = false"
-              >
-                Archive world
-              </button>
-            </div>
+            <button
+              class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+              @click="runAction('edit')"
+            >
+              Edit blueprint
+            </button>
+            <button
+              class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+              @click="runAction('adz')"
+            >
+              Export (.adz)
+            </button>
+            <button
+              class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+              @click="runAction('adv')"
+            >
+              Export (.adv)
+            </button>
+            <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
+            <button
+              class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
+              @click="runAction('delete')"
+            >
+              Archive world
+            </button>
           </div>
         </Transition>
       </div>
+    </div>
+
+    <!-- Content Area -->
+    <div class="p-6 flex flex-col gap-4 flex-1">
+      <div class="space-y-2 flex-1">
+        <h3 class="text-2xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
+        <p v-if="props.template.teaser" class="text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-3 leading-relaxed">
+          {{ props.template.teaser }}
+        </p>
+      </div>
+
+      <!-- Action Button -->
+      <button
+        class="w-full py-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all border border-emerald-500/20 flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/5 group/btn"
+        @click="emit('startSession', props.template.template_id)"
+      >
+        <i class="ra ra-play text-sm transition-transform group-hover/btn:scale-110"></i>
+        Start New Game
+      </button>
     </div>
   </article>
 </template>
