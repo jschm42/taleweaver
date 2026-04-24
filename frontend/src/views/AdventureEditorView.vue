@@ -245,7 +245,7 @@ async function saveEntityText(type: string, id: string) {
     }
     showEditModal.value = false
     editEntityContext.value = null
-    await fetchDebugInfo()
+    await Promise.all([fetchAdventure(), fetchDebugInfo()])
   } catch (error: any) {
     promptError.value = error.message
   } finally {
@@ -510,23 +510,6 @@ watch(
   { immediate: true }
 )
 
-async function resetAdventure() {
-  if (!confirm('Are you sure? This will reset all story progress and character stats.')) return
-  isSaving.value = true
-  try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}/reset`, {
-      method: 'POST',
-      headers: authHeaders(false),
-    })
-    if (!res.ok) throw new Error('Reset failed')
-    await fetchDebugInfo()
-    alert('Adventure has been reset to its original state.')
-  } catch (error: any) {
-    errorMsg.value = error.message
-  } finally {
-    isSaving.value = false
-  }
-}
 
 
 
@@ -695,7 +678,13 @@ const goBack = () => router.push({ name: 'portal' })
                   <div class="flex justify-between items-end gap-12">
                     <div class="space-y-2 max-w-3xl">
                       <h4 class="text-3xl font-black text-white tracking-tight">{{ debugData.adventure.title }}</h4>
-                      <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
+                      <div class="flex items-center gap-3">
+                        <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
+                        <p v-else class="text-xs font-bold text-slate-500/40 uppercase tracking-widest italic">No teaser set...</p>
+                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context, debugData.adventure.teaser)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-emerald-400 transition-all" title="Edit Teaser & Metadata">
+                          <i class="ra ra-quill-ink text-[10px]"></i>
+                        </button>
+                      </div>
                       <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ debugData.adventure.context }}</p>
                     </div>
                     <div class="flex gap-3 shrink-0">
@@ -704,6 +693,36 @@ const goBack = () => router.push({ name: 'portal' })
                         <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
                         <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context, debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Awards (Read-only) -->
+            <section v-if="adventure?.awards?.length" class="space-y-6">
+              <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Achievements & Awards ({{ adventure.awards.length }})</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div v-for="award in adventure.awards" :key="'award_' + award.key" class="bg-slate-900/40 border border-white/5 rounded-2xl p-5 hover:border-emerald-500/20 transition-all group flex items-start gap-4">
+                  <div :class="[
+                    'w-12 h-12 rounded-xl flex items-center justify-center border shrink-0',
+                    award.tier === 'gold' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' :
+                    award.tier === 'silver' ? 'bg-slate-300/10 border-slate-300/20 text-slate-300' :
+                    'bg-orange-700/10 border-orange-700/20 text-orange-700'
+                  ]">
+                    <i class="ra ra-trophy text-2xl"></i>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                      <h4 class="text-sm font-black text-white uppercase tracking-tight">{{ award.title }}</h4>
+                      <span :class="[
+                        'text-[7px] font-black uppercase px-1.5 py-0.5 rounded border',
+                        award.tier === 'gold' ? 'bg-amber-500/20 border-amber-500/30 text-amber-500' :
+                        award.tier === 'silver' ? 'bg-slate-300/20 border-slate-300/30 text-slate-300' :
+                        'bg-orange-700/20 border-orange-700/30 text-orange-700'
+                      ]">{{ award.tier }}</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 leading-relaxed">{{ award.description }}</p>
+                    <p class="text-[8px] text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
                   </div>
                 </div>
               </div>
@@ -847,35 +866,6 @@ const goBack = () => router.push({ name: 'portal' })
                  </div>
                </section>
 
-               <!-- Awards (Read-only) -->
-               <section v-if="adventure?.awards?.length" class="space-y-6">
-                 <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Achievements & Awards ({{ adventure.awards.length }})</h3>
-                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                   <div v-for="award in adventure.awards" :key="'award_' + award.key" class="bg-slate-900/40 border border-white/5 rounded-2xl p-5 hover:border-emerald-500/20 transition-all group flex items-start gap-4">
-                     <div :class="[
-                       'w-12 h-12 rounded-xl flex items-center justify-center border shrink-0',
-                       award.tier === 'gold' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' :
-                       award.tier === 'silver' ? 'bg-slate-300/10 border-slate-300/20 text-slate-300' :
-                       'bg-orange-700/10 border-orange-700/20 text-orange-700'
-                     ]">
-                       <i class="ra ra-trophy text-2xl"></i>
-                     </div>
-                     <div class="space-y-1">
-                       <div class="flex items-center gap-2">
-                         <h4 class="text-sm font-black text-white uppercase tracking-tight">{{ award.title }}</h4>
-                         <span :class="[
-                           'text-[7px] font-black uppercase px-1.5 py-0.5 rounded border',
-                           award.tier === 'gold' ? 'bg-amber-500/20 border-amber-500/30 text-amber-500' :
-                           award.tier === 'silver' ? 'bg-slate-300/20 border-slate-300/30 text-slate-300' :
-                           'bg-orange-700/20 border-orange-700/30 text-orange-700'
-                         ]">{{ award.tier }}</span>
-                       </div>
-                       <p class="text-[10px] text-slate-400 leading-relaxed">{{ award.description }}</p>
-                       <p class="text-[8px] text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
-                     </div>
-                   </div>
-                 </div>
-               </section>
             </div>
           </div>
         </div>
@@ -898,27 +888,6 @@ const goBack = () => router.push({ name: 'portal' })
               </div>
             </div>
 
-            <!-- Maintenance -->
-            <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6">
-              <h4 class="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                <i class="ra ra-cycle text-emerald-500"></i> Batch Operations
-              </h4>
-              <p class="text-xs text-slate-400 leading-relaxed">Perform mass updates on all world assets. Warning: This consumes AI resources.</p>
-              <div class="flex flex-wrap gap-2">
-                <button v-for="kind in (['cover', 'protagonist', 'scene', 'npc', 'object'] as const)" :key="kind" @click="regenerateAll(kind)" class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all">
-                  Regen {{ kind }}
-                </button>
-              </div>
-              
-              <div class="pt-6 border-t border-white/5">
-                <h4 class="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2 mb-4">
-                  <i class="ra ra-tombstone"></i> Danger Zone
-                </h4>
-                <button @click="resetAdventure" class="w-full py-4 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all">
-                  Reset Adventure Progress
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1122,11 +1091,11 @@ const goBack = () => router.push({ name: 'portal' })
                 <div class="space-y-8">
                   <section v-if="adventure" class="space-y-4">
                     <h4 class="text-xs font-black text-emerald-500 uppercase tracking-widest border-l-2 border-emerald-500 pl-4">Adventure Core</h4>
-                    <pre class="bg-black/40 p-6 rounded-2xl border border-white/5 text-emerald-300/80">{{ JSON.stringify(adventure, null, 2) }}</pre>
+                    <pre class="bg-black/40 p-6 rounded-2xl border border-white/5 text-emerald-300/80 whitespace-pre-wrap break-all">{{ JSON.stringify(adventure, null, 2) }}</pre>
                   </section>
                   <section v-if="debugData" class="space-y-4">
                     <h4 class="text-xs font-black text-cyan-500 uppercase tracking-widest border-l-2 border-cyan-500 pl-4">Asset Matrix (DebugData)</h4>
-                    <pre class="bg-black/40 p-6 rounded-2xl border border-white/5 text-cyan-300/80">{{ JSON.stringify(debugData, null, 2) }}</pre>
+                    <pre class="bg-black/40 p-6 rounded-2xl border border-white/5 text-cyan-300/80 whitespace-pre-wrap break-all">{{ JSON.stringify(debugData, null, 2) }}</pre>
                   </section>
                 </div>
               </div>

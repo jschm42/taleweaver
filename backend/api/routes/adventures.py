@@ -760,6 +760,7 @@ class AdventureTemplateResponse(BaseModel):
     selected_tone: Optional[str] = None
     context: Optional[str] = None
     quests: Optional[List[Dict[str, Any]]] = None
+    awards: Optional[List[Dict[str, Any]]] = None
     is_completed: bool = False
 
     model_config = {"from_attributes": True}
