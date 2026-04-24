@@ -34,7 +34,7 @@ def _build_local_default_user() -> User:
 
 class AdventureTemplateImporter:
     @staticmethod
-    async def import_from_directory(db: AsyncSession, directory: str, owner_id: Optional[str] = None, delete_after: bool = False):
+    async def import_from_directory(db: AsyncSession, directory: str, owner_id: Optional[str] = None, delete_after: bool = False, allow_session: bool = False):
         """Scans a directory for .adv or .adz files and imports them."""
         if not os.path.exists(directory):
             logger.warning(f"Import directory {directory} does not exist.")
@@ -49,7 +49,7 @@ class AdventureTemplateImporter:
         for filename in files:
             file_path = os.path.join(directory, filename)
             try:
-                success = await AdventureTemplateImporter.import_file(db, file_path, owner_id=owner_id)
+                success = await AdventureTemplateImporter.import_file(db, file_path, owner_id=owner_id, allow_session=allow_session)
                 if success and delete_after:
                     os.remove(file_path)
                     logger.info(f"Successfully imported and deleted {filename}")
@@ -59,7 +59,7 @@ class AdventureTemplateImporter:
                 logger.error(f"Error during import of {file_path}: {e}")
 
     @staticmethod
-    async def import_file(db: AsyncSession, file_path: str, owner_id: Optional[str] = None) -> bool:
+    async def import_file(db: AsyncSession, file_path: str, owner_id: Optional[str] = None, allow_session: bool = True) -> bool:
         """Imports a single file (.adv or .adz)."""
         if file_path.endswith(".adz"):
             with open(file_path, "rb") as f:
@@ -67,7 +67,7 @@ class AdventureTemplateImporter:
         elif file_path.endswith(".adv"):
             with open(file_path, "r", encoding="utf-8") as f:
                 payload = json.load(f)
-                return await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=owner_id)
+                return await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=owner_id, allow_session=allow_session)
         return False
 
     @staticmethod
@@ -213,7 +213,7 @@ class AdventureTemplateImporter:
             return False
 
     @staticmethod
-    async def import_adv_manifest(db: AsyncSession, payload: Dict[str, Any], owner_id: Optional[str] = None) -> bool:
+    async def import_adv_manifest(db: AsyncSession, payload: Dict[str, Any], owner_id: Optional[str] = None, allow_session: bool = True) -> bool:
         """Logic for pure .adv (JSON) import."""
         try:
             try:
@@ -248,7 +248,7 @@ class AdventureTemplateImporter:
                 await db.flush()
 
 
-            if is_session:
+            if is_session and allow_session:
                 data = payload
                 old_adv = data["adventure"]
                 
