@@ -105,6 +105,101 @@ def test_openrouter_normalizes_prefixed_model(monkeypatch):
     assert captured["api_key"] == "sk-or-v1-test"
 
 
+def test_openrouter_retries_with_available_providers_on_provider_mismatch(monkeypatch):
+    user = _make_user(
+        llm_settings={},
+        encrypted_api_keys={"openrouter": "encrypted-placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-or-v1-test")
+    router = GameMasterLLM(user, provider="openrouter")
+
+    calls = []
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    def fake_completion(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise Exception(
+                "Error code: 404 - {'error': {'message': 'No allowed providers are available for the selected model.', "
+                "'metadata': {'available_providers': ['xai'], 'requested_providers': ['openai']}}}"
+            )
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.completion", fake_completion)
+
+    out = router.execute_simple_task(
+        system_prompt="sys",
+        user_prompt="hello",
+        model="openai/gpt-5-mini",
+    )
+
+    assert out == "ok"
+    assert len(calls) == 2
+    assert "extra_body" not in calls[0]
+    assert calls[1]["extra_body"]["provider"]["order"] == ["xai"]
+    assert calls[1]["extra_body"]["provider"]["allow_fallbacks"] is True
+
+
+@pytest.mark.asyncio
+async def test_openrouter_async_retries_with_available_providers_on_provider_mismatch(monkeypatch):
+    user = _make_user(
+        llm_settings={},
+        encrypted_api_keys={"openrouter": "encrypted-placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-or-v1-test")
+    router = GameMasterLLM(user, provider="openrouter")
+
+    calls = []
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise Exception(
+                "Error code: 404 - {'error': {'message': 'No allowed providers are available for the selected model.', "
+                "'metadata': {'available_providers': ['xai'], 'requested_providers': ['openai']}}}"
+            )
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.stream_simple_task(
+        system_prompt="sys",
+        user_prompt="hello",
+        model="openai/gpt-5-mini",
+    )
+
+    assert out is not None
+    assert len(calls) == 2
+    assert "extra_body" not in calls[0]
+    assert calls[1]["extra_body"]["provider"]["order"] == ["xai"]
+    assert calls[1]["extra_body"]["provider"]["allow_fallbacks"] is True
+
+
 def test_thinking_defaults_to_disabled_when_not_configured(monkeypatch):
     monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "test-key")
     user = _make_user(llm_settings={"small_model": "gpt-4o-mini"})
