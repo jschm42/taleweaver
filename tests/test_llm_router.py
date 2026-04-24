@@ -100,7 +100,7 @@ def test_openrouter_normalizes_prefixed_model(monkeypatch):
     )
 
     assert out == "ok"
-    assert captured["model"] == "gpt-5.4"
+    assert captured["model"] == "openai/gpt-5.4"
     assert captured["api_base"] == "https://openrouter.ai/api/v1"
     assert captured["api_key"] == "sk-or-v1-test"
 

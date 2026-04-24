@@ -74,6 +74,105 @@ WALKTHROUGH_HINT_COST = 50
 WALKTHROUGH_ITEM_TOKEN_PATTERN = re.compile(r"\[\[ITEM:([A-Z0-9_]+)\|([^\]]+)\]\]")
 
 
+async def _resolve_session_state(
+    db: AsyncSession,
+    session_or_template_id: str,
+    *,
+    user_id: Optional[str] = None,
+) -> Optional[SessionState]:
+    """Resolve a session state by session id first, then by template/adventure id."""
+    direct_res = await db.execute(
+        select(SessionState).where(SessionState.session_id == session_or_template_id)
+    )
+    direct_state = direct_res.scalars().first()
+    if direct_state:
+        return direct_state
+
+    # Self-heal: if a GameSession exists but its SessionState is missing,
+    # recreate a minimal runtime state so chat routes do not fail with 404.
+    session_candidate = None
+    session_by_id_res = await db.execute(
+        select(GameSession).where(GameSession.id == session_or_template_id)
+    )
+    session_candidate = session_by_id_res.scalars().first()
+
+    if not session_candidate:
+        template_session_res = await db.execute(
+            select(GameSession)
+            .where(GameSession.template_id == session_or_template_id)
+            .order_by(GameSession.updated_at.desc())
+        )
+        template_sessions = template_session_res.scalars().all()
+        if user_id:
+            session_candidate = next((s for s in template_sessions if s.user_id == user_id), None)
+        else:
+            session_candidate = template_sessions[0] if template_sessions else None
+
+    if session_candidate:
+        if user_id and session_candidate.user_id != user_id:
+            return None
+
+        existing_for_candidate_res = await db.execute(
+            select(SessionState).where(SessionState.session_id == session_candidate.id)
+        )
+        existing_for_candidate = existing_for_candidate_res.scalars().first()
+        if existing_for_candidate:
+            return existing_for_candidate
+
+        scene_res = await db.execute(
+            select(WorldScene.id)
+            .where(WorldScene.template_id == session_candidate.template_id)
+            .order_by(WorldScene.id.asc())
+            .limit(1)
+        )
+        first_scene_id = scene_res.scalar_one_or_none() or "START"
+
+        healed_state = SessionState(
+            session_id=session_candidate.id,
+            user_id=session_candidate.user_id,
+            template_id=session_candidate.template_id,
+            avatar_id=session_candidate.avatar_id,
+            current_scene_id=first_scene_id,
+            in_game_time=0,
+        )
+        db.add(healed_state)
+        await db.commit()
+        await db.refresh(healed_state)
+        return healed_state
+
+    if user_id:
+        user_state_res = await db.execute(
+            select(SessionState)
+            .where(
+                SessionState.template_id == session_or_template_id,
+                SessionState.user_id == user_id,
+            )
+            .order_by(SessionState.updated_at.desc())
+        )
+        user_state = user_state_res.scalars().first()
+        if user_state:
+            return user_state
+
+    legacy_state_res = await db.execute(
+        select(SessionState)
+        .where(
+            SessionState.template_id == session_or_template_id,
+            SessionState.user_id.is_(None),
+        )
+        .order_by(SessionState.updated_at.desc())
+    )
+    legacy_state = legacy_state_res.scalars().first()
+    if legacy_state:
+        return legacy_state
+
+    any_state_res = await db.execute(
+        select(SessionState)
+        .where(SessionState.template_id == session_or_template_id)
+        .order_by(SessionState.updated_at.desc())
+    )
+    return any_state_res.scalars().first()
+
+
 def _sanitize_narrative_response(text: str, *, fallback: Optional[str] = None) -> str:
     """Remove leaked technical JSON blocks from player-visible narration."""
     cleaned = (text or "").strip()
@@ -1410,8 +1509,7 @@ async def get_walkthrough_state(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
-    state = state_res.scalars().first()
+    state = await _resolve_session_state(db, game_id, user_id=current_user.id)
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
 
@@ -3524,10 +3622,11 @@ async def get_chat_history(
     current_user: User = Depends(get_current_user),
 ):
     """Retrieves full chat history and current session state."""
-    state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
-    state = state_res.scalars().first()
+    state = await _resolve_session_state(db, game_id, user_id=current_user.id)
     if not state:
         raise HTTPException(status_code=404, detail="Session not found.")
+
+    resolved_game_id = state.session_id
 
     if state.user_id and state.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="You do not have access to this game session.")
@@ -3544,7 +3643,7 @@ async def get_chat_history(
     av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
     avatar = av_res.scalars().first()
     
-    chat_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == game_id).order_by(ChatMessage.created_at.asc()))
+    chat_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == resolved_game_id).order_by(ChatMessage.created_at.asc()))
     history = [{"role": m.role, "content": m.content} for m in chat_res.scalars().all()]
     
     map_res = await db.execute(select(WorldMap).where(WorldMap.template_id == state.template_id))
@@ -3619,11 +3718,12 @@ async def post_chat_message(
             yield f"event: status\ndata: {json.dumps(jsonable_encoder({'content': 'Considering...'}))}\n\n"
             
             # 1. Load context
-            state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
-            state = state_res.scalars().first()
+            state = await _resolve_session_state(db, game_id, user_id=current_user.id)
             if not state:
                 yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Game session not found.'}))}\n\n"
                 return
+
+            resolved_game_id = state.session_id
 
             if state.user_id and state.user_id != current_user.id:
                 yield f"event: error\ndata: {json.dumps(jsonable_encoder({'detail': 'Access denied.'}))}\n\n"
@@ -3891,12 +3991,12 @@ async def post_chat_message(
 
             # Record User Message
             if actual_user_input:
-                user_chat_rec = ChatMessage(session_id=game_id, role="user", content=actual_user_input)
+                user_chat_rec = ChatMessage(session_id=resolved_game_id, role="user", content=actual_user_input)
                 db.add(user_chat_rec)
                 await db.flush()
 
             # --- History & Context ---
-            hist_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == game_id).order_by(ChatMessage.created_at.asc()))
+            hist_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == resolved_game_id).order_by(ChatMessage.created_at.asc()))
             history = [{"role": m.role, "content": m.content} for m in hist_res.scalars().all()]
 
             scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
@@ -3976,7 +4076,7 @@ async def post_chat_message(
                     response_model=GameEvent,
                     model=small_model,
                     adventure_id=state.template_id,
-                    game_id=game_id,
+                    game_id=resolved_game_id,
                     operation="chat_turn",
                     phase="mechanics",
                 )
@@ -4133,7 +4233,7 @@ async def post_chat_message(
                                     "tier": a.get("tier"),
                                     "template_id": adventure.id,
                                     "adventure_title": adventure.title,
-                                    "session_id": game_id,
+                                    "session_id": resolved_game_id,
                                     "earned_at": datetime.utcnow().isoformat()
                                 }
                                 user_awards = list(user.earned_awards or [])
@@ -4192,7 +4292,7 @@ async def post_chat_message(
                 else:
                     stream = await llm.stream_simple_task(
                         system_prompt=narration_system_prompt, user_prompt=user_msg, model=complex_model,
-                        adventure_id=state.template_id, game_id=game_id, operation="chat_turn", phase="narration"
+                        adventure_id=state.template_id, game_id=resolved_game_id, operation="chat_turn", phase="narration"
                     )
                     async for chunk in stream:
                         delta = chunk.choices[0].delta.content or ""
@@ -4212,7 +4312,7 @@ async def post_chat_message(
 
                 stream = await llm.stream_simple_task(
                     freeform_system_prompt, user_msg, complex_model,
-                    adventure_id=state.template_id, game_id=game_id, operation="chat_turn", phase="freeform"
+                    adventure_id=state.template_id, game_id=resolved_game_id, operation="chat_turn", phase="freeform"
                 )
                 async for chunk in stream:
                     delta = chunk.choices[0].delta.content or ""
@@ -4221,7 +4321,7 @@ async def post_chat_message(
                         yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
                 response_text = _sanitize_narrative_response(response_text)
 
-            assistant_chat = ChatMessage(session_id=game_id, role="assistant", content=response_text)
+            assistant_chat = ChatMessage(session_id=resolved_game_id, role="assistant", content=response_text)
             db.add(assistant_chat)
 
             map_res = await db.execute(select(WorldMap).where(WorldMap.template_id == state.template_id))

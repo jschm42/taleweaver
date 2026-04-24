@@ -123,9 +123,10 @@ class GameMasterLLM:
             return normalized
 
         if self.provider == "openrouter":
-            # Use raw model slug; provider routing is handled via api_base + custom_llm_provider.
-            if "/" in normalized:
-                normalized = normalized.split("/", 1)[1].strip()
+            # OpenRouter model ids often require provider prefixes (e.g. openai/gpt-5-mini).
+            # Only strip an optional leading openrouter/ wrapper if present.
+            if normalized.lower().startswith("openrouter/"):
+                return normalized.split("/", 1)[1].strip()
             return normalized
 
         if "/" in normalized:

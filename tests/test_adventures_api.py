@@ -351,6 +351,18 @@ async def test_get_chat_history_includes_awards(client: AsyncClient):
     assert data["awards"][0]["key"] == "a-snapshot"
 
 
+async def test_get_chat_history_accepts_adventure_id_alias(client: AsyncClient):
+    """GET /chat should resolve adventure/template ids to the latest session for that user."""
+    ids = await _create_adventure(client, "Alias Route Quest")
+
+    chat_resp = await client.get(f"/api/adventures/{ids['adventure_id']}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
+    payload = chat_resp.json()
+
+    assert "messages" in payload
+    assert "sheet" in payload
+
+
 async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, monkeypatch):
     """Regenerating the protagonist uses the default prompt when none is provided."""
     ids = await _create_adventure(client, "Regenerate Quest")

@@ -73,6 +73,7 @@ const isSubmitting = ref(false)
 const statusMessage = ref<{ type: 'success' | 'error', text: string } | null>(null)
 const imageStylesCatalog = ref<CatalogTile[]>([])
 const toneCatalog = ref<CatalogTile[]>([])
+const isHydratingSettings = ref(false)
 
 // MODAL STATE
 const isCatalogModalOpen = ref(false)
@@ -100,6 +101,7 @@ const goBack = () => {
 
 const fetchSettings = async () => {
   try {
+    isHydratingSettings.value = true
     const data = await api.getSettings()
     configuredKeys.value = data.keys || {}
     if (data.llm_settings) llmForm.value = { ...data.llm_settings as any }
@@ -110,6 +112,8 @@ const fetchSettings = async () => {
     toneCatalog.value = data.tone_catalog || []
   } catch (error) {
     console.error('Failed to fetch settings', error)
+  } finally {
+    isHydratingSettings.value = false
   }
 }
 
@@ -412,6 +416,32 @@ const isModelCustom = (model: string, provider: string, type: 'llm' | 'image') =
   return !predefined.includes(model)
 }
 
+const resolveModelOnProviderChange = (
+  currentModel: string,
+  newProvider: string,
+  oldProvider: string | undefined,
+  type: 'llm' | 'image',
+) => {
+  const getPredefined = (provider: string | undefined) => {
+    if (!provider) return [] as string[]
+    return type === 'llm'
+      ? (availableConstants.value.predefined_llm_models[provider] || [])
+      : (availableConstants.value.predefined_image_models[provider] || [])
+  }
+
+  const nextPredefined = getPredefined(newProvider)
+  if (nextPredefined.length === 0) return currentModel
+  if (!currentModel) return nextPredefined[0]
+
+  if (nextPredefined.includes(currentModel)) return currentModel
+
+  const prevPredefined = getPredefined(oldProvider)
+  if (prevPredefined.includes(currentModel)) return nextPredefined[0]
+
+  // Keep custom model ids unchanged across provider churn.
+  return currentModel
+}
+
 onMounted(() => {
   fetchSettings()
   fetchUsers()
@@ -419,41 +449,53 @@ onMounted(() => {
 
 watch(
   () => t2iForm.value.simple_model_provider,
-  (provider) => {
-    const predefined = availableConstants.value.predefined_image_models[provider] || []
-    if (predefined.length > 0) {
-      t2iForm.value.simple_model = predefined[0]
-    }
+  (provider, oldProvider) => {
+    if (isHydratingSettings.value) return
+    t2iForm.value.simple_model = resolveModelOnProviderChange(
+      t2iForm.value.simple_model,
+      provider,
+      oldProvider,
+      'image',
+    )
   }
 )
 
 watch(
   () => t2iForm.value.advanced_model_provider,
-  (provider) => {
-    const predefined = availableConstants.value.predefined_image_models[provider] || []
-    if (predefined.length > 0) {
-      t2iForm.value.advanced_model = predefined[0]
-    }
+  (provider, oldProvider) => {
+    if (isHydratingSettings.value) return
+    t2iForm.value.advanced_model = resolveModelOnProviderChange(
+      t2iForm.value.advanced_model,
+      provider,
+      oldProvider,
+      'image',
+    )
   }
 )
 
 watch(
   () => llmForm.value.small_model_provider,
-  (provider) => {
-    const predefined = availableConstants.value.predefined_llm_models[provider] || []
-    if (predefined.length > 0) {
-      llmForm.value.small_model = predefined[0]
-    }
+  (provider, oldProvider) => {
+    if (isHydratingSettings.value) return
+    llmForm.value.small_model = resolveModelOnProviderChange(
+      llmForm.value.small_model,
+      provider,
+      oldProvider,
+      'llm',
+    )
   }
 )
 
 watch(
   () => llmForm.value.complex_model_provider,
-  (provider) => {
-    const predefined = availableConstants.value.predefined_llm_models[provider] || []
-    if (predefined.length > 0) {
-      llmForm.value.complex_model = predefined[0]
-    }
+  (provider, oldProvider) => {
+    if (isHydratingSettings.value) return
+    llmForm.value.complex_model = resolveModelOnProviderChange(
+      llmForm.value.complex_model,
+      provider,
+      oldProvider,
+      'llm',
+    )
   }
 )
 </script>

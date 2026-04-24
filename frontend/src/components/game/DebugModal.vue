@@ -171,11 +171,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
               <h4 class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">Filters</h4>
               <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <input
-                  v-model="searchQuery"
-                  placeholder="Search id, name, description..."
-                  class="md:col-span-2 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
-                />
                 <div class="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs text-slate-300">
                   <input id="debug-current-scene-only" v-model="currentSceneOnly" type="checkbox" class="h-3.5 w-3.5 accent-cyan-500" />
                   <label for="debug-current-scene-only">Current scene only</label>
