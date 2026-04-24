@@ -31,9 +31,18 @@ class MediaEngine:
         return litellm
 
     @staticmethod
+    def _sanitize_prompt(prompt: str) -> str:
+        """Corrects common typos that trigger safety filters (e.g. 'raping' -> 'rapping')."""
+        import re
+        # Case-insensitive replacement of 'raping' with 'rapping', but only if preceded by 'rap', 'battle', etc.
+        # or as a standalone word that is clearly a typo in this context.
+        # Actually, in a TTRPG/Creative context, 'raping' is almost always a typo for 'rapping'.
+        return re.sub(r'(\b)raping(\b)', r'\1rapping\2', prompt, flags=re.IGNORECASE)
+
+    @staticmethod
     def _apply_no_text_instruction(prompt: str) -> str:
         """Append a global no-text instruction to image prompts when missing."""
-        normalized = prompt.strip()
+        normalized = MediaEngine._sanitize_prompt(prompt.strip())
         if NO_TEXT_IMAGE_PROMPT_SUFFIX.lower() in normalized.lower():
             return normalized
         return f"{normalized} {NO_TEXT_IMAGE_PROMPT_SUFFIX}"

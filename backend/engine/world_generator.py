@@ -426,7 +426,7 @@ class WorldGenerator:
                         image_url = await asyncio.wait_for(
                             MediaEngine.generate_entity_image(
                                 prompt,
-                                adventure_id,
+                                template_id,
                                 "PROTAGONIST",
                                 "NPC",
                                 {"t2i_settings": user.t2i_settings},
@@ -446,7 +446,7 @@ class WorldGenerator:
                     else:
                         # Fallback to procedural SVG
                         image_url = await MediaEngine.generate_svg_placeholder(
-                            adventure_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", adventure_id)
+                            template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", template_id)
                         )
                     avatar.profile_image = image_url
             
@@ -473,7 +473,7 @@ class WorldGenerator:
                     image_url = await asyncio.wait_for(
                         MediaEngine.generate_scene_image(
                             prompt,
-                            adventure_id,
+                            template_id,
                             {"t2i_settings": user.t2i_settings},
                             user.encrypted_api_keys,
                         ),
@@ -490,7 +490,7 @@ class WorldGenerator:
                 else:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
-                        adventure_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "scenes")
+                        template_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "scenes")
                     )
 
             db.add(WorldScene(
@@ -535,7 +535,7 @@ class WorldGenerator:
                     image_url = await asyncio.wait_for(
                         MediaEngine.generate_entity_image(
                             prompt,
-                            adventure_id,
+                            template_id,
                             n['id'],
                             "NPC",
                             {"t2i_settings": user.t2i_settings},
@@ -554,7 +554,7 @@ class WorldGenerator:
                 else:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
-                        adventure_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
+                        template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
                     )
 
             db.add(WorldEntity(
@@ -597,7 +597,7 @@ class WorldGenerator:
                     image_url = await asyncio.wait_for(
                         MediaEngine.generate_entity_image(
                             prompt,
-                            adventure_id,
+                            template_id,
                             o['id'],
                             "OBJECT",
                             {"t2i_settings": user.t2i_settings},
@@ -616,7 +616,7 @@ class WorldGenerator:
                 else:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
-                        adventure_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
+                        template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
                     )
 
             is_starting_inv = o["id"] in starting_inv_ids

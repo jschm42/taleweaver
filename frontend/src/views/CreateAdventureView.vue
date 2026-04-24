@@ -152,7 +152,7 @@ async function handleCreate() {
 
   try {
     await api.createAdventure(payload)
-    router.push({ name: 'portal', query: { new_id: payload.id } })
+    router.push({ name: 'portal', query: { new_id: payload.id, new_title: payload.title } })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to create adventure.'
     isGenerating.value = false
@@ -287,6 +287,33 @@ onMounted(() => {
                   <component :is="asset.icon" class="w-4 h-4" />
                   <span class="text-[10px] font-black uppercase tracking-widest">{{ asset.label }}</span>
                 </button>
+              </div>
+            </div>
+
+            <!-- Scene Generation Settings -->
+            <div class="p-6 bg-blue-500/5 border border-blue-500/10 rounded-2xl space-y-6">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
+                  <MapPin class="w-5 h-5" />
+                </div>
+                <span class="text-xs font-black text-white/80 uppercase tracking-widest">World Complexity (Scenes)</span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-8">
+                <div class="space-y-3">
+                  <div class="flex justify-between">
+                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest">Min</label>
+                    <span class="text-xs font-mono text-blue-400">{{ form.min_scenes }}</span>
+                  </div>
+                  <input type="range" v-model.number="form.min_scenes" min="1" :max="form.max_scenes" class="w-full accent-blue-500" />
+                </div>
+                <div class="space-y-3">
+                  <div class="flex justify-between">
+                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest">Max</label>
+                    <span class="text-xs font-mono text-blue-400">{{ form.max_scenes }}</span>
+                  </div>
+                  <input type="range" v-model.number="form.max_scenes" :min="form.min_scenes" max="20" class="w-full accent-blue-500" />
+                </div>
               </div>
             </div>
 

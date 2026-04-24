@@ -26,6 +26,14 @@ interface PendingAdventureCard {
 
 function prettifyStatus(status: string): string {
   if (!status) return 'Wird vorbereitet...'
+  const lower = status.toLowerCase()
+  if (lower.includes('generating world structure')) return 'Weltstruktur wird erschaffen...'
+  if (lower.includes('forging scenes')) return 'Szenen werden geschmiedet...'
+  if (lower.includes('weaving entities')) return 'Figuren & Objekte entstehen...'
+  if (lower.includes('generating visual')) return 'Bilder werden generiert...'
+  if (lower.includes('finalizing')) return 'Feinschliff wird vorgenommen...'
+  if (lower.includes('cancelled')) return 'Abgebrochen'
+  
   const spaced = status
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/_/g, ' ')
@@ -78,8 +86,8 @@ const pendingCards = computed(() => [
 
 const visibleTemplates = computed(() => {
   const pendingIds = new Set([
-    ...pendingImports.value.map((entry) => entry.adventureId),
-    ...pendingCreations.value.map((entry) => entry.adventureId),
+    ...pendingImports.value.map((entry) => entry.adventureId).filter(Boolean),
+    ...pendingCreations.value.map((entry) => entry.adventureId).filter(Boolean),
   ])
   return templates.value.filter((entry) => !pendingIds.has(entry.template_id))
 })

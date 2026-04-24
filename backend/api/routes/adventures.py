@@ -537,17 +537,20 @@ def _build_visual_prompt(
         name = target_data.get("name") or "The protagonist"
         role = target_data.get("role") or "adventurer"
         description = target_data.get("description") or "A distinctive fantasy hero."
-        return f"Portrait of character {name}, {role}. {description}. Game character art style.{prompt_suffix}"
+        style_line = f"Visual Style: {style_instruction}." if style_instruction else "Game character art style."
+        return f"Portrait of character {name}, {role}. {description}. {style_line}{prompt_suffix}"
 
     if target_type == "scene":
         label = target_data.get("label") or target_data.get("name") or "Scene"
         description = target_data.get("description") or ""
-        return f"Atmospheric background: {label}. {description}. RPG visual novel style, high detail.{prompt_suffix}"
+        style_line = f"Visual Style: {style_instruction}." if style_instruction else "RPG visual novel style, high detail."
+        return f"Atmospheric background: {label}. {description}. {style_line}{prompt_suffix}"
 
     if target_type == "npc":
         name = target_data.get("name") or "NPC"
         description = target_data.get("description") or "A distinctive non-player character."
-        return f"Portrait of NPC {name}. {description}. Character portrait, high detail.{prompt_suffix}"
+        style_line = f"Visual Style: {style_instruction}." if style_instruction else "Character portrait, high detail."
+        return f"Portrait of NPC {name}. {description}. {style_line}{prompt_suffix}"
 
     if target_type == "object":
         name = target_data.get("name") or "Object"
@@ -1158,8 +1161,10 @@ async def run_background_generation(template_id: str, user_id: str, payload_dict
                 manifest = (adv_for_context.original_manifest or {}) if adv_for_context else {}
                 adventure_context = manifest.get('story_idea') or manifest.get('description') or "A standard fantasy world."
 
+            if style_instruction:
+                adventure_context = f"Visual Style: {style_instruction}.\n{adventure_context}"
             if tone_instruction:
-                adventure_context = f"{adventure_context}\n\nTone Guidance: {tone_instruction}"
+                adventure_context = f"Narrative Tone: {tone_instruction}.\n{adventure_context}"
 
             log_structured_event(
                 "adventure.generation.status",
@@ -1286,9 +1291,10 @@ async def run_background_generation(template_id: str, user_id: str, payload_dict
                     is_ready=False,
                 )
                 try:
-                    cover_context = adventure_context
-                    if style_instruction:
-                        cover_context = f"{cover_context}\nVisual Style Guidance: {style_instruction}"
+                    cover_style = style_instruction if style_instruction else "Game attribute art style"
+                    cover_context = f"Visual Style: {cover_style}.\n{adventure_context}"
+                    if tone_instruction:
+                        cover_context = f"Narrative Tone: {tone_instruction}.\n{cover_context}"
                     cover_url = await MediaEngine.generate_adventure_cover(
                         title=adv_for_context.title,
                         context=cover_context,
@@ -2352,10 +2358,10 @@ async def regenerate_visual(
     try:
         if payload.target_type == "cover":
             cover_context = payload.prompt.strip() if payload.prompt and payload.prompt.strip() else (target_data.get("context") or "")
-            if style_instruction:
-                cover_context = f"{cover_context}\nVisual Style Guidance: {style_instruction}"
+            cover_style = style_instruction if style_instruction else "Game attribute art style"
+            cover_context = f"Visual Style: {cover_style}.\n{cover_context}"
             if tone_instruction:
-                cover_context = f"{cover_context}\nTone Guidance: {tone_instruction}"
+                cover_context = f"Narrative Tone: {tone_instruction}.\n{cover_context}"
             image_url = await MediaEngine.generate_adventure_cover(
                 title=target_data.get("title") or "AdventureTemplate",
                 context=cover_context,
@@ -2423,7 +2429,11 @@ async def regenerate_visual(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image generation error: {str(e)}")
+        # Detect moderation or provider errors to return 400 instead of 500
+        err_msg = str(e)
+        if "moderated" in err_msg.lower() or "safety" in err_msg.lower() or "badrequest" in err_msg.lower():
+            raise HTTPException(status_code=400, detail=f"Image generation failed: {err_msg}")
+        raise HTTPException(status_code=500, detail=f"Image generation error: {err_msg}")
 
     setattr(target_model, image_attr, image_url)
     await db.commit()

@@ -78,7 +78,7 @@ Global negative instruction appended to all image prompts to prevent AI-generate
 
 ADVENTURE_COVER_PROMPT_TEMPLATE = (
     "Epic cinematic adventure cover: {title}. {context}. "
-    "Landscape format, 2:1 aspect ratio. Game attribute art style, no text. Cinematic, immersive atmosphere, detailed concept art."
+    "Landscape format, 2:1 aspect ratio. No text. Cinematic, immersive atmosphere, detailed concept art."
 )
 """
 Template for generating the main cover image of an adventure.
