@@ -204,11 +204,11 @@ def _sanitize_narrative_response(text: str, *, fallback: Optional[str] = None) -
     return cleaned
 
 
-def _resolve_start_datetime(manifest: dict[str, Any] | None) -> Optional[str]:
-    """Returns a usable ISO datetime string from manifest fields.
+def _resolve_start_datetime(manifest: dict[str, Any] | None, state: Optional[SessionState] = None) -> Optional[str]:
+    """Returns a usable ISO datetime string. Prioritizes session-specific state over manifest."""
+    if state and state.start_datetime:
+        return state.start_datetime
 
-    Accepts either explicit `start_datetime` or fallback `start_date` + `start_time`.
-    """
     if not manifest:
         return None
 
@@ -1492,8 +1492,8 @@ async def list_adventures(
             creation_error=a.creation_error if a else None,
             selected_tone=a.selected_tone if a else None,
             progress=_calculate_quest_progress(a.quests if a else None),
-            quest_count=len((a.quests if a else None) or []),
-            completed_quest_count=len([q for q in ((a.quests if a else None) or []) if q.get("status") == "completed"]),
+            quest_count=len((s.quests if s else (a.quests if a else None)) or []),
+            completed_quest_count=len([q for q in ((s.quests if s else (a.quests if a else None)) or []) if q.get("status") == "completed"]),
             award_count=len((a.awards if a else None) or []),
             earned_award_count=len([
                 aw for aw in ((a.awards if a else None) or []) 
@@ -1658,6 +1658,8 @@ async def start_session_for_template(
         avatar_id=avatar.id,
         current_scene_id=first_scene_id,
         in_game_time=0,
+        quests=deepcopy(adventure.quests or []),
+        start_datetime=_resolve_start_datetime(adventure.original_manifest)
     )
     snapshot = await _build_asset_snapshot(db, template=adventure, avatar_id=avatar.id)
     _attach_asset_snapshot_to_state(new_state, snapshot)
@@ -3023,7 +3025,7 @@ async def _build_sheet_snapshot(avatar: Avatar, state: SessionState, db: AsyncSe
     adventure = adv_res.scalars().first()
     start_datetime = None
     if adventure and adventure.original_manifest:
-        start_datetime = _resolve_start_datetime(adventure.original_manifest)
+        start_datetime = _resolve_start_datetime(adventure.original_manifest, state=state)
     
     # Fallback if clock is enabled but manifest lacks start time
     if not start_datetime and adventure and adventure.clock_enabled:
@@ -3247,7 +3249,7 @@ async def get_chat_history(
         npc_metadata=await _get_npc_metadata(state.template_id, db),
         image_url=scene_image,
         adventure_image=_resolve_session_asset(state, "cover", adventure.image_url if adventure else None),
-        quests=adventure.quests,
+        quests=state.quests,
         awards=[
             {**aw, "is_earned": any(ea.get("key") == aw.get("key") and ea.get("template_id") == adventure.id for ea in (current_user.earned_awards or []))}
             for aw in (adventure.awards or [])
@@ -3746,15 +3748,12 @@ async def post_chat_message(
                     response_messages.append({"role": "system", "content": f"[System] Time jump: clock set to {game_event.time_override_minutes} minutes from start."})
 
                 if game_event.start_datetime_override:
-                    if adventure.original_manifest:
-                        # Update the manifest so it persists across resets/reloads
-                        manifest = dict(adventure.original_manifest)
-                        manifest["start_datetime"] = game_event.start_datetime_override
-                        adventure.original_manifest = manifest
-                    response_messages.append({"role": "system", "content": f"[System] Calendar shift: adventure start time updated to {game_event.start_datetime_override}."})
+                    state.start_datetime = game_event.start_datetime_override
+                    flag_modified(state, "start_datetime")
+                    response_messages.append({"role": "system", "content": f"[System] Calendar shift: session start time updated to {game_event.start_datetime_override}."})
 
                 if game_event.completed_quest_ids:
-                    updated_quests = deepcopy(adventure.quests or [])
+                    updated_quests = deepcopy(state.quests or [])
                     any_updated = False
                     for q_id in game_event.completed_quest_ids:
                         for q in updated_quests:
@@ -3764,11 +3763,11 @@ async def post_chat_message(
                                 response_messages.append({"role": "system", "content": f"[QUEST COMPLETED] {q.get('title', 'Unknown Quest')} (+{q.get('exp_reward', 0)} EXP)"})
                                 any_updated = True
                     if any_updated:
-                        adventure.quests = updated_quests
-                        flag_modified(adventure, "quests")
+                        state.quests = updated_quests
+                        flag_modified(state, "quests")
                         main_quests = [q for q in updated_quests if q.get("is_main")]
                         if main_quests and all(q.get("status", "open") == "completed" for q in main_quests):
-                            adventure.is_completed = True
+                            state.is_completed = True
                             response_messages.append({"role": "system", "content": "[ADVENTURE COMPLETED] All main objectives achieved!"})
 
                 if game_event.earned_award_keys:

@@ -23,6 +23,8 @@ class SessionState(Base, TimestampMixin):
     entity_states = Column(JSON, nullable=True, default={})
     exit_states = Column(JSON, nullable=True, default={})
     discovered_scenes = Column(JSON, nullable=True, default=[])
+    quests = Column(JSON, nullable=True, default=[])
+    start_datetime = Column(String(36), nullable=True)
     
     # Runtime flags
     is_paused = Column(Boolean, default=False)
