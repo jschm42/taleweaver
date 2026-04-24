@@ -152,8 +152,10 @@ class AdventureTemplateImporter:
                         rel_path = os.path.relpath(target_path, settings.DATA_DIR).replace("\\", "/")
                         existing_images_mapping[zip_path] = f"/data/{rel_path}"
 
-                # Create Avatar and Session
+                # Create Avatar
                 prot = manifest_data.get("protagonist")
+                new_avatar = None
+                user = None
                 if prot:
                     if owner_id:
                         user_res = await db.execute(select(User).where(User.id == owner_id))
@@ -185,21 +187,6 @@ class AdventureTemplateImporter:
                     )
                     db.add(new_avatar)
                     await db.flush()
-
-                    new_session = GameSession(
-                        user_id=user.id,
-                        avatar_id=new_avatar.id,
-                        template_id=new_template_id,
-                        status="active"
-                    )
-                    db.add(new_session)
-                    await db.flush()
-
-                    db.add(SessionState(
-                        session_id=new_session.id,
-                        current_scene_id="START",
-                        in_game_time=0
-                    ))
 
                 # Reconstruct world
                 world_manifest = {
@@ -250,6 +237,25 @@ class AdventureTemplateImporter:
                     new_template.image_url = await MediaEngine.generate_svg_placeholder(
                         new_template_id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template_id), "cover_placeholder.svg"
                     )
+                
+                # Now create Session if avatar was created
+                if new_avatar and user:
+                    new_session = GameSession(
+                        user_id=user.id,
+                        avatar_id=new_avatar.id,
+                        template_id=new_template_id,
+                        adventure_title=new_template.title,
+                        adventure_image_url=new_template.image_url,
+                        status="active"
+                    )
+                    db.add(new_session)
+                    await db.flush()
+
+                    db.add(SessionState(
+                        session_id=new_session.id,
+                        current_scene_id=default_scene_id,
+                        in_game_time=0
+                    ))
 
                 await db.commit()
                 return True
