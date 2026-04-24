@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { configState } from '@/store/config'
 import type { CatalogTile } from '@/types'
 
 const router = useRouter()
@@ -526,7 +527,7 @@ watch(
       </nav>
 
       <div class="mt-auto pt-6 border-t border-slate-800 opacity-50">
-        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">TaleWeaver Engine v0.1.0</div>
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">TaleWeaver Engine v{{ configState.appVersion }}</div>
       </div>
     </aside>
 

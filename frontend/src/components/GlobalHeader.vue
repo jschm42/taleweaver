@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState, clearAuth } from '@/store/auth'
+import { configState } from '@/store/config'
 
 const router = useRouter()
 const isMenuOpen = ref(false)
@@ -38,7 +39,7 @@ function openProfile() {
       </div>
       <div class="flex items-baseline gap-2">
         <span class="text-sm font-black text-white font-display tracking-tight">TaleWeaver</span>
-        <span class="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">v2.4.0-Aether</span>
+        <span class="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">v{{ configState.appVersion }}</span>
       </div>
     </router-link>
 

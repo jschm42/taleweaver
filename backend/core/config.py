@@ -1,9 +1,21 @@
 import base64
 import logging
 import os
+import json
 from typing import Optional
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
+
+def get_app_version() -> str:
+    try:
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "version.json")
+        with open(path, "r") as f:
+            data = json.load(f)
+            v = data.get("version", "0.1.0")
+            s = data.get("suffix", "")
+            return f"{v}-{s}" if s else v
+    except Exception:
+        return "0.1.0"
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +30,7 @@ def generate_temp_key() -> str:
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "TaleWeaver"
+    APP_VERSION: str = Field(default_factory=get_app_version)
     DATABASE_URL: str = ""
     
     # Storage configuration

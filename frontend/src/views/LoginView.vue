@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState, setToken } from '@/store/auth'
+import { configState } from '@/store/config'
 
 const router = useRouter()
 const username = ref('')
@@ -48,7 +49,7 @@ async function handleLogin() {
           <img src="@/assets/svg/app-logo.svg" class="w-16 h-16 drop-shadow-[0_0_10px_rgba(78,222,163,0.4)]" alt="Logo" />
         </div>
         <h1 class="text-5xl font-black text-white font-display tracking-tighter mb-2">TaleWeaver</h1>
-        <p class="text-aether-primary/40 text-[10px] font-bold uppercase tracking-[0.4em]">Chronicle Intelligence v2.4.0</p>
+        <p class="text-aether-primary/40 text-[10px] font-bold uppercase tracking-[0.4em]">Chronicle Intelligence v{{ configState.appVersion }}</p>
       </div>
 
       <form @submit.prevent="handleLogin" class="space-y-6">

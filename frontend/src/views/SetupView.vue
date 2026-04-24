@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
+import { configState } from '@/store/config'
 
 const router = useRouter()
 const username = ref('admin')
@@ -44,7 +45,7 @@ async function handleSetup() {
       </div>
       <div class="text-center">
         <h1 class="text-6xl font-black text-white font-display tracking-tighter leading-none mb-2">TaleWeaver</h1>
-        <span class="text-xs font-bold text-aether-primary/40 tracking-[0.5em] uppercase">Chronicle Intelligence v2.4.0</span>
+        <span class="text-xs font-bold text-aether-primary/40 tracking-[0.5em] uppercase">Chronicle Intelligence v{{ configState.appVersion }}</span>
       </div>
     </div>
 

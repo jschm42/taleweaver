@@ -14,6 +14,7 @@ import type {
 import { authState } from '@/store/auth'
 
 interface SettingsResponse {
+  app_version?: string
   keys: Record<string, string>
   llm_settings: Record<string, unknown>
   t2i_settings: Record<string, unknown>

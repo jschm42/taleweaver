@@ -377,6 +377,7 @@ async def get_settings(
 
     if not user:
         return {
+            "app_version": settings.APP_VERSION,
             "keys": get_keys_status({}),
             "llm_settings": default_llm,
             "t2i_settings": default_t2i,
@@ -395,6 +396,7 @@ async def get_settings(
         }
     
     return {
+        "app_version": settings.APP_VERSION,
         "keys": get_keys_status(user.encrypted_api_keys),
         "llm_settings": _normalize_llm_settings(user.llm_settings),
         "t2i_settings": _normalize_t2i_settings(user.t2i_settings),

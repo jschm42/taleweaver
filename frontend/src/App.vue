@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authState, clearAuth } from '@/store/auth'
+import { configState, refreshConfig } from '@/store/config'
 import { api } from '@/composables/useApi'
 import GlobalHeader from '@/components/GlobalHeader.vue'
 
@@ -40,6 +41,7 @@ async function checkAuth() {
 
 onMounted(() => {
   checkAuth()
+  refreshConfig()
   
   // Listen for 401 events from useApi
   window.addEventListener('auth-unauthorized', () => {
