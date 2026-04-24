@@ -8,6 +8,7 @@ class AdventureTemplate(Base, TimestampMixin):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     title = Column(String(50), nullable=False)
+    teaser = Column(String(200), nullable=True)
     
     image_url = Column(String(255), nullable=True)
     context = Column(String(2000), nullable=True)

@@ -9,10 +9,10 @@ import PortalHeader from '@/components/portal/PortalHeader.vue'
 import PendingAdventureCard from '@/components/portal/PendingAdventureCard.vue'
 import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
 import PortalLibraryToolbar from '@/components/portal/PortalLibraryToolbar.vue'
-import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
-import UserProfileModal from '@/components/portal/UserProfileModal.vue'
+import UserProfileContent from '@/components/portal/UserProfileContent.vue'
 import AdventureTemplateCard from '@/components/portal/AdventureTemplateCard.vue'
 import GameSessionCard from '@/components/portal/GameSessionCard.vue'
+import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -50,7 +50,7 @@ function formatToneLabel(value?: string | null): string {
 
 const templates = ref<AdventureTemplateSummary[]>([])
 const sessions = ref<GameSession[]>([])
-const activeSection = ref<'templates' | 'sessions'>('templates')
+const activeSection = ref<'templates' | 'sessions' | 'profile'>('templates')
 const isLoading = ref(true)
 
 const isImporting = ref(false)
@@ -463,10 +463,13 @@ onUnmounted(() => {
       <PortalHeader />
 
       <!-- Scrollable Content -->
-      <div class="flex-1 overflow-y-auto p-10">
+      <div class="flex-1 overflow-y-auto" :class="activeSection !== 'profile' ? 'p-10' : ''">
         <PortalLibraryToolbar
+          v-if="activeSection !== 'profile'"
           :active-section="activeSection"
           @change-section="activeSection = $event"
+          @create="openCreateModal"
+          @import="triggerImportPicker"
         />
 
         <!-- Loading State -->
@@ -477,7 +480,7 @@ onUnmounted(() => {
 
         <div v-else>
           <div v-if="activeSection === 'templates'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
-            <PortalCreateAdventureCard @create="openCreateModal" />
+            <PortalCreateAdventureCard @click="openCreateModal" />
 
             <PendingAdventureCard
               v-for="pending in pendingCards"
@@ -499,11 +502,11 @@ onUnmounted(() => {
             />
           </div>
 
-          <div v-else class="space-y-6">
+          <div v-else-if="activeSection === 'sessions'" class="space-y-6">
             <div v-if="sessions.length === 0" class="rounded-xl border border-white/10 bg-aether-surface/20 p-6 text-slate-400">
               No active sessions yet. Start one from the Adventures area.
             </div>
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
               <GameSessionCard
                 v-for="entry in sessions"
                 :key="entry.game_id"
@@ -515,6 +518,10 @@ onUnmounted(() => {
                 @delete="deleteSession"
               />
             </div>
+          </div>
+
+          <div v-else-if="activeSection === 'profile'">
+            <UserProfileContent />
           </div>
         </div>
       </div>
@@ -539,12 +546,5 @@ onUnmounted(() => {
       />
     </Teleport>
 
-    <Teleport to="body">
-      <UserProfileModal
-        v-if="showProfile"
-        :is-open="showProfile"
-        @close="showProfile = false"
-      />
-    </Teleport>
   </div>
 </template>

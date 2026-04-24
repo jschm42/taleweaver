@@ -35,6 +35,8 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "- Use 'combination_ingredients: [item_id1, item_id2]' on a hidden result item to create a crafting recipe.\n"
     "- Use 'reveals_item_id: result_id' on a room object (e.g. a generator) and 'combination_ingredients: [fuel_id]' to allow using an item on it to reveal a new state.\n\n"
     "Generate a specialized player character (Protagonist). "
+    "TEASER GENERATION:\n"
+    "- Generate a short, atmospheric teaser (max 100 characters) for this adventure that hooks the player's interest.\n\n"
     "Define 'strength', 'intelligence', 'wisdom', 'dexterity', 'charisma', and 'armor_class' (range 1-99) "
     "based on their role and background. "
     "Define 'starting_inventory' and 'starting_equipment' using IDs from your objects list for items they already possess (e.g. a coin or their boots).\n\n"

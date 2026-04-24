@@ -563,8 +563,12 @@ const goBack = () => router.push({ name: 'portal' })
     <!-- Header -->
     <header class="bg-slate-900/40 border-b border-white/5 px-8 py-3 flex justify-between items-center backdrop-blur-2xl sticky top-0 z-40 shadow-2xl">
       <div class="flex items-center gap-6">
-        <button @click="goBack" class="group p-2 rounded-xl bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/50 transition-all duration-300 shadow-xl">
-          <i class="ra ra-back-arrow text-lg text-slate-400 group-hover:text-emerald-400"></i>
+        <button 
+          @click="goBack" 
+          class="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/40 transition-all duration-300 shadow-xl group"
+        >
+          <i class="ra ra-back-arrow text-sm text-slate-400 group-hover:text-emerald-400 transition-colors"></i>
+          <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-white transition-colors">Back</span>
         </button>
         <div>
           <div class="flex items-center gap-3">

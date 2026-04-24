@@ -25,9 +25,17 @@ function openProfile() {
 <template>
   <header v-if="authState.isAuthenticated" class="h-12 bg-[#050b14] border-b border-white/5 px-6 my-1 flex items-center justify-between z-[100] relative">
     <!-- Left: Branding -->
-    <div class="flex items-center gap-3 select-none">
+    <div 
+      class="flex items-center gap-3 select-none cursor-pointer group/logo"
+      @click="router.push({ name: 'portal' })"
+      title="Return to Portal"
+    >
       <div class="w-12 h-12 flex items-center justify-center">
-        <img src="@/assets/svg/app-logo.svg" class="w-10 h-10 drop-shadow-[0_0_8px_rgba(78,222,163,0.4)]" alt="Logo" />
+        <img 
+          src="@/assets/svg/app-logo.svg" 
+          class="w-10 h-10 drop-shadow-[0_0_8px_rgba(78,222,163,0.4)] group-hover/logo:drop-shadow-[0_0_12px_rgba(78,222,163,0.7)] transition-all" 
+          alt="Logo" 
+        />
       </div>
       <div class="flex items-baseline gap-2">
         <span class="text-sm font-black text-white font-display tracking-tight">TaleWeaver</span>

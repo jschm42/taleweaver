@@ -106,6 +106,7 @@ class AdventureTemplateImporter:
                 new_template = AdventureTemplate(
                     id=new_template_id,
                     title=adv_data["title"],
+                    teaser=adv_data.get("teaser"),
                     context=adv_data.get("context"),
                     strict_rules=adv_data.get("strict_rules", True),
                     rule_enforcement_mode=adv_data.get("rule_enforcement_mode", "rpg"),
@@ -195,7 +196,8 @@ class AdventureTemplateImporter:
                     "exits": manifest_data.get("exits", []),
                     "npcs": manifest_data.get("npcs", []),
                     "objects": manifest_data.get("objects", []),
-                    "quests": manifest_data.get("quests", [])
+                    "quests": manifest_data.get("quests", []),
+                    "teaser": manifest_data.get("teaser")
                 }
 
                 default_scene_id = manifest_data["scenes"][0]["id"] if manifest_data.get("scenes") else "START"
@@ -271,6 +273,7 @@ class AdventureTemplateImporter:
                 
                 new_template = AdventureTemplate(
                     title=old_adv['title'],
+                    teaser=old_adv.get("teaser"),
                     context=old_adv.get("context"),
                     image_url=old_adv.get("image_url"),
                     strict_rules=old_adv.get("strict_rules", True),
@@ -332,6 +335,7 @@ class AdventureTemplateImporter:
                 
                 new_template = AdventureTemplate(
                     title=adv_meta.get("title") or manifest.get("title") or "Imported Blueprint",
+                    teaser=adv_meta.get("teaser") or manifest.get("teaser"),
                     context=adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
                     image_url=adv_meta.get("image_url") or manifest.get("image_url"),
                     original_manifest=manifest,

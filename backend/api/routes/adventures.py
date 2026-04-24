@@ -779,12 +779,15 @@ class GameSessionResponse(BaseModel):
     progress: int = 0
     quest_count: int = 0
     completed_quest_count: int = 0
+    award_count: int = 0
+    earned_award_count: int = 0
 
 
 class AdventureTemplateSummaryResponse(BaseModel):
     """Summary of an adventure template for management views."""
     template_id: str
     title: str
+    teaser: Optional[str] = None
     image_url: Optional[str] = None
     is_ready: bool = True
     creation_status: Optional[str] = None
@@ -1447,6 +1450,8 @@ async def list_adventures(
             progress=_calculate_quest_progress(a.quests),
             quest_count=len(a.quests or []),
             completed_quest_count=len([q for q in (a.quests or []) if q.get("status") == "completed"]),
+            award_count=len(a.awards or []),
+            earned_award_count=len([aw for aw in (a.awards or []) if aw.get("is_earned")]),
         )
         for g, s, a, scene_label, avatar_profile_image in rows
     ]

@@ -54,11 +54,20 @@ export interface GameSession {
   current_scene_name?: string | null
   in_game_time: number
   is_paused: boolean
+  is_ready: boolean
+  creation_status?: string | null
+  creation_error?: string | null
+  progress?: number
+  quest_count?: number
+  completed_quest_count?: number
+  award_count?: number
+  earned_award_count?: number
 }
 
 export interface AdventureTemplateSummary {
   template_id: string
   title: string
+  teaser?: string | null
   image_url: string | null
   is_ready: boolean
   creation_status?: string | null

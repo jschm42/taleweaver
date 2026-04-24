@@ -360,12 +360,11 @@ onBeforeUnmount(() => {
       <div class="absolute left-8 top-8 flex items-center gap-4 z-10">
         <button 
           @click="goBack" 
-          class="p-2 rounded-full bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700 transition-colors backdrop-blur-md shadow-xl"
+          class="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-all duration-300 backdrop-blur-md shadow-xl group"
           title="Return to Portal"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-100" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-          </svg>
+          <i class="ra ra-back-arrow text-sm text-slate-100 group-hover:text-emerald-400 transition-colors"></i>
+          <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-100 group-hover:text-white transition-colors">Back</span>
         </button>
         <h1 class="text-2xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide whitespace-nowrap" style="font-family: 'Acme', sans-serif;">
           {{ sheet?.adventure_title || 'Chronicle' }}

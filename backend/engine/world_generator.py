@@ -156,6 +156,7 @@ class WorldManifesto(BaseModel):
     The complete blueprint of the generated world.
     """
     protagonist: ProtagonistSchema
+    teaser: str = Field(..., description="A short, atmospheric teaser text for the adventure, max 100 characters.")
     scenes: List[WorldSceneSchema]
     exits: List[WorldExitSchema]
     npcs: List[WorldEntitySchema]
@@ -280,6 +281,7 @@ class WorldGenerator:
                 phase="apply_manifest",
             )
             # Keep imported/source manifest intact for reproducible resets.
+            adventure.teaser = manifesto.teaser
             if not adventure.original_manifest:
                 adventure.original_manifest = manifesto.model_dump()
             await db.commit()
@@ -373,6 +375,10 @@ class WorldGenerator:
                 if "status" not in q:
                     q["status"] = "open"
             adventure.quests = quests
+            
+            teaser = manifest_dict.get("teaser")
+            if teaser:
+                adventure.teaser = teaser
             
             awards = manifest_dict.get("awards", [])
             for a in awards:

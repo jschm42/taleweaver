@@ -33,11 +33,17 @@ class BootstrapStatusResponse(BaseModel):
 
 @router.post("/auth/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Login attempt for username: '{form_data.username}'")
+    
     result = await db.execute(select(User).filter(User.username == form_data.username))
     user = result.scalars().first()
     
     from backend.core.auth import verify_password
     if not user or not verify_password(form_data.password, user.hashed_password):
+        if user:
+            logger.warning(f"Invalid password for user '{form_data.username}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
