@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 import re
+import time
 from copy import deepcopy
 from datetime import datetime
 from typing import Optional, List, Dict, Any, AsyncGenerator
@@ -48,12 +49,19 @@ class GameTurnManager:
 
     async def initialize(self) -> bool:
         """Loads all necessary context for the turn."""
+        start = time.perf_counter()
         self.state = await AdventureLogic.resolve_session_state(self.db, self.game_id, user_id=self.user.id)
-        if not self.state: return False
+        if not self.state: 
+            logger.warning(f"[Turn {self.game_id}] Initialization failed: Session state not found.")
+            return False
+            
         adv_res = await self.db.execute(select(AdventureTemplate).where(AdventureTemplate.id == self.state.template_id))
         self.adventure = adv_res.scalars().first()
         av_res = await self.db.execute(select(Avatar).where(Avatar.id == self.state.avatar_id))
         self.avatar = av_res.scalars().first()
+        
+        duration = time.perf_counter() - start
+        logger.debug(f"[Turn {self.game_id}] Initialization (DB) took {duration:.4f}s")
         return bool(self.adventure and self.avatar)
 
     async def process_turn(self, message: str, auto_visualize: bool = False) -> AsyncGenerator[str, None]:
@@ -74,6 +82,8 @@ class GameTurnManager:
             return
 
         # Core Turn Logic
+        turn_start = time.perf_counter()
+        logger.debug(f"[Turn {self.game_id}] Starting turn for user '{self.user.username}' with input: {user_msg}")
         yield f"event: status\ndata: {json.dumps({'content': 'Considering...'})}\n\n"
         
         # 1. Advance Time & Apply Ticks
@@ -90,6 +100,9 @@ class GameTurnManager:
         # 3. LLM Processing (Pass 1 & Pass 2)
         async for chunk in self._run_llm_cycle(user_msg, auto_visualize):
             yield chunk
+            
+        turn_end = time.perf_counter()
+        logger.debug(f"[Turn {self.game_id}] Total turn processing took {turn_end - turn_start:.4f}s")
 
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
         cmd_args = user_msg[7:].strip()
@@ -116,11 +129,14 @@ class GameTurnManager:
 
     async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool) -> AsyncGenerator[str, None]:
         # Load Context and LLM Settings
+        db_start = time.perf_counter()
         hist_res = await self.db.execute(select(ChatMessage).where(ChatMessage.session_id == self.state.session_id).order_by(ChatMessage.created_at.asc()))
         history = [{"role": m.role, "content": m.content} for m in hist_res.scalars().all()]
         
         scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.template_id == self.state.template_id))
         current_scene = scene_res.scalars().first()
+        db_duration = time.perf_counter() - db_start
+        logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
         
         # Build prompt using MemoryManager
         system_prompt = MemoryManager.build_context(self.avatar, self.adventure.context or "", history, current_scene=current_scene)[0]["content"]
@@ -160,7 +176,12 @@ class GameTurnManager:
                 quests_json=json.dumps(self.state.quests or [], indent=2),
                 awards_json=json.dumps(self.adventure.awards or [], indent=2)
             )
+            
+            pass1_start = time.perf_counter()
+            logger.debug(f"[Turn {self.game_id}] [Pass 1] Calling small model: {small_model} via {small_model_provider}")
             game_event = await llm.aexecute_complex_task(mechanics_prompt, user_msg, response_model=GameEvent, model=small_model)
+            pass1_duration = time.perf_counter() - pass1_start
+            logger.debug(f"[Turn {self.game_id}] [Pass 1] Mechanics analysis took {pass1_duration:.4f}s")
             
             # Apply Changes
             await self._apply_game_event(game_event)
@@ -176,12 +197,18 @@ class GameTurnManager:
             outcome_json=game_event.model_dump_json() if game_event else "{}"
         )
         
+        pass2_start = time.perf_counter()
+        logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
         stream = await llm.stream_simple_task(narration_prompt, user_msg, complex_model)
+        
         async for chunk in stream:
             delta = chunk.choices[0].delta.content or ""
             if delta:
                 response_text += delta
                 yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
+        
+        pass2_duration = time.perf_counter() - pass2_start
+        logger.debug(f"[Turn {self.game_id}] [Pass 2] Narration took {pass2_duration:.4f}s")
 
         # Finalize
         assistant_chat = ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text)

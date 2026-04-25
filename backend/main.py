@@ -5,10 +5,15 @@ from fastapi.staticfiles import StaticFiles
 import os
 import logging
 from sqlalchemy import select
-
 from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
 from backend.core.config import settings
+
+# Configure logging based on .env settings
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(levelname)s:     %(name)s - %(message)s"
+)
 
 logger = logging.getLogger(__name__)
 

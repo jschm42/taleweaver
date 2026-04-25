@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "TaleWeaver"
     APP_VERSION: str = Field(default_factory=get_app_version)
     DATABASE_URL: str = ""
+    LOG_LEVEL: str = "INFO"
     
     # Storage configuration
     DATA_DIR: str = "data"

@@ -64,20 +64,20 @@ async def apply_sqlite_compat_migrations() -> None:
         adventure_cols_result = await conn.exec_driver_sql("PRAGMA table_info(adventures)")
         adventure_cols = {row[1] for row in adventure_cols_result.fetchall()}
  
-        # Cleanup: Drop deprecated heartbeat columns if they exist
+        # Cleanup legacy columns from 'adventures' table if they still exist
         if "heartbeat_enabled" in adventure_cols:
             try:
-                await conn.exec_driver_sql("ALTER TABLE adventure_templates DROP COLUMN heartbeat_enabled")
-                logger.info("SQLite migration: dropped adventure_templates.heartbeat_enabled")
+                await conn.exec_driver_sql("ALTER TABLE adventures DROP COLUMN heartbeat_enabled")
+                logger.info("SQLite migration: dropped adventures.heartbeat_enabled")
             except Exception as e:
-                logger.warning(f"Could not drop heartbeat_enabled: {e}")
+                logger.debug(f"Could not drop heartbeat_enabled from adventures: {e}")
 
         if "heartbeat_interval" in adventure_cols:
             try:
-                await conn.exec_driver_sql("ALTER TABLE adventure_templates DROP COLUMN heartbeat_interval")
-                logger.info("SQLite migration: dropped adventure_templates.heartbeat_interval")
+                await conn.exec_driver_sql("ALTER TABLE adventures DROP COLUMN heartbeat_interval")
+                logger.info("SQLite migration: dropped adventures.heartbeat_interval")
             except Exception as e:
-                logger.warning(f"Could not drop heartbeat_interval: {e}")
+                logger.debug(f"Could not drop heartbeat_interval from adventures: {e}")
 
         if "game_over_rules" not in adventure_cols:
             await conn.exec_driver_sql(
