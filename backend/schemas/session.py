@@ -8,7 +8,6 @@ class SessionStateBase(BaseModel):
     entity_states: Dict[str, Any] = {}
     exit_states: Dict[str, Any] = {}
     discovered_scenes: List[str] = []
-    is_paused: bool = False
     is_completed: bool = False
     is_debug_enabled: bool = False
 
@@ -23,7 +22,6 @@ class SessionStateUpdate(BaseModel):
     entity_states: Optional[Dict[str, Any]] = None
     exit_states: Optional[Dict[str, Any]] = None
     discovered_scenes: Optional[List[str]] = None
-    is_paused: Optional[bool] = None
     is_completed: Optional[bool] = None
     is_debug_enabled: Optional[bool] = None
 

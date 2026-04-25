@@ -63,18 +63,21 @@ async def apply_sqlite_compat_migrations() -> None:
 
         adventure_cols_result = await conn.exec_driver_sql("PRAGMA table_info(adventures)")
         adventure_cols = {row[1] for row in adventure_cols_result.fetchall()}
+ 
+        # Cleanup: Drop deprecated heartbeat columns if they exist
+        if "heartbeat_enabled" in adventure_cols:
+            try:
+                await conn.exec_driver_sql("ALTER TABLE adventure_templates DROP COLUMN heartbeat_enabled")
+                logger.info("SQLite migration: dropped adventure_templates.heartbeat_enabled")
+            except Exception as e:
+                logger.warning(f"Could not drop heartbeat_enabled: {e}")
 
-        if "heartbeat_enabled" not in adventure_cols:
-            await conn.exec_driver_sql(
-                "ALTER TABLE adventures ADD COLUMN heartbeat_enabled BOOLEAN NOT NULL DEFAULT 0"
-            )
-            logger.info("SQLite migration: added adventures.heartbeat_enabled")
-
-        if "heartbeat_interval" not in adventure_cols:
-            await conn.exec_driver_sql(
-                "ALTER TABLE adventures ADD COLUMN heartbeat_interval INTEGER NOT NULL DEFAULT 10"
-            )
-            logger.info("SQLite migration: added adventures.heartbeat_interval")
+        if "heartbeat_interval" in adventure_cols:
+            try:
+                await conn.exec_driver_sql("ALTER TABLE adventure_templates DROP COLUMN heartbeat_interval")
+                logger.info("SQLite migration: dropped adventure_templates.heartbeat_interval")
+            except Exception as e:
+                logger.warning(f"Could not drop heartbeat_interval: {e}")
 
         if "game_over_rules" not in adventure_cols:
             await conn.exec_driver_sql(
@@ -114,12 +117,6 @@ async def apply_sqlite_compat_migrations() -> None:
 
         game_state_cols_result = await conn.exec_driver_sql("PRAGMA table_info(game_states)")
         game_state_cols = {row[1] for row in game_state_cols_result.fetchall()}
-
-        if "is_paused" not in game_state_cols:
-            await conn.exec_driver_sql(
-                "ALTER TABLE game_states ADD COLUMN is_paused BOOLEAN NOT NULL DEFAULT 0"
-            )
-            logger.info("SQLite migration: added game_states.is_paused")
 
         if "is_debug_enabled" not in game_state_cols:
             await conn.exec_driver_sql(
@@ -320,6 +317,21 @@ async def apply_sqlite_compat_migrations() -> None:
             template_cols_result = await conn.exec_driver_sql("PRAGMA table_info(adventure_templates)")
             template_cols = {row[1] for row in template_cols_result.fetchall()}
 
+            # Cleanup: Drop deprecated heartbeat columns from adventure_templates (using the new table name)
+            if "heartbeat_enabled" in template_cols:
+                try:
+                    await conn.exec_driver_sql("ALTER TABLE adventure_templates DROP COLUMN heartbeat_enabled")
+                    logger.info("SQLite migration: dropped adventure_templates.heartbeat_enabled")
+                except Exception as e:
+                    logger.warning(f"Could not drop heartbeat_enabled: {e}")
+
+            if "heartbeat_interval" in template_cols:
+                try:
+                    await conn.exec_driver_sql("ALTER TABLE adventure_templates DROP COLUMN heartbeat_interval")
+                    logger.info("SQLite migration: dropped adventure_templates.heartbeat_interval")
+                except Exception as e:
+                    logger.warning(f"Could not drop heartbeat_interval: {e}")
+
             if "quests" not in template_cols:
                 await conn.exec_driver_sql(
                     "ALTER TABLE adventure_templates ADD COLUMN quests TEXT"
@@ -346,6 +358,16 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE avatars ADD COLUMN adventure_id TEXT"
             )
             logger.info("SQLite migration: added avatars.adventure_id")
+
+        # Cleanup: Drop is_paused from session_states
+        session_state_cols_result = await conn.exec_driver_sql("PRAGMA table_info(session_states)")
+        session_state_cols = {row[1] for row in session_state_cols_result.fetchall()}
+        if "is_paused" in session_state_cols:
+            try:
+                await conn.exec_driver_sql("ALTER TABLE session_states DROP COLUMN is_paused")
+                logger.info("SQLite migration: dropped session_states.is_paused")
+            except Exception as e:
+                logger.warning(f"Could not drop is_paused: {e}")
 
         if "role" not in avatar_cols:
             await conn.exec_driver_sql(

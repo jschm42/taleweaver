@@ -61,10 +61,6 @@ class GameTurnManager:
             yield f"event: error\ndata: {json.dumps({'detail': 'Game session not found.'})}\n\n"
             return
 
-        if self.state.is_paused:
-            yield f"event: final\ndata: {json.dumps(jsonable_encoder({'messages': [{'role': 'system', 'content': 'The game is currently paused.'}], 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db)}))}\n\n"
-            return
-
         user_msg = message.strip()
         actual_user_input = user_msg
         if not user_msg: user_msg = "[LOOK AROUND]"

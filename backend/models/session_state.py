@@ -27,7 +27,6 @@ class SessionState(Base, TimestampMixin):
     start_datetime = Column(String(36), nullable=True)
     
     # Runtime flags
-    is_paused = Column(Boolean, default=False)
     is_completed = Column(Boolean, default=False)
     is_debug_enabled = Column(Boolean, default=False)
 

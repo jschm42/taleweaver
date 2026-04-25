@@ -56,7 +56,6 @@ async def list_templates(
             completed_quest_count=len([q for q in (template.quests or []) if q.get("status") == "completed"]),
             active_game_id=(game_session.id if game_session else None),
             has_active_session=(game_session is not None),
-            is_paused=(state.is_paused if state else False),
             scene_id=(state.current_scene_id if state else None),
             current_scene_name=(scene_label if scene_label else None),
         ))

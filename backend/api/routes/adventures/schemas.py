@@ -18,8 +18,6 @@ class CreateAdventureTemplatePayload(BaseModel):
     time_per_turn: int = 5
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = False
-    heartbeat_enabled: Optional[bool] = False
-    heartbeat_interval: Optional[int] = None
     game_over_rules: Optional[Dict[str, Any]] = None
     selected_image_styles: Optional[List[str]] = None
     selected_tone: Optional[str] = None
@@ -49,8 +47,6 @@ class AdventureTemplateResponse(BaseModel):
     time_per_turn: int
     pacing_minutes: int
     clock_enabled: bool
-    heartbeat_enabled: bool
-    heartbeat_interval: Optional[int] = None
     game_over_rules: Optional[Dict[str, Any]]
     selected_image_styles: Optional[List[str]] = None
     selected_tone: Optional[str] = None
@@ -73,7 +69,6 @@ class GameSessionResponse(BaseModel):
     scene_id: str
     current_scene_name: Optional[str] = None
     in_game_time: int
-    is_paused: bool
     is_ready: bool = True
     creation_status: Optional[str] = None
     creation_error: Optional[str] = None
@@ -100,7 +95,6 @@ class AdventureTemplateSummaryResponse(BaseModel):
     completed_quest_count: int = 0
     active_game_id: Optional[str] = None
     has_active_session: bool = False
-    is_paused: bool = False
     scene_id: Optional[str] = None
     current_scene_name: Optional[str] = None
 

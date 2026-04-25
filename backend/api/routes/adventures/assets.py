@@ -23,10 +23,11 @@ async def import_examples(
     current_user: User = Depends(get_current_user),
 ):
     """Manually triggers import of example adventures from the bundled /adventures and presets folder."""
-    await AdventureTemplateImporter.import_from_directory(db, "adventures", owner_id=current_user.id, delete_after=False)
+    user_id = current_user.id
+    await AdventureTemplateImporter.import_from_directory(db, "adventures", owner_id=user_id, delete_after=False)
     presets_dir = os.path.join(settings.DATA_DIR, "presets", "adventures")
     if os.path.exists(presets_dir):
-        await AdventureTemplateImporter.import_from_directory(db, presets_dir, owner_id=current_user.id, delete_after=False)
+        await AdventureTemplateImporter.import_from_directory(db, presets_dir, owner_id=user_id, delete_after=False)
     return {"status": "success", "message": "Example adventures imported successfully."}
 
 @router.post("/import")

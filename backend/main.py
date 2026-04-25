@@ -27,7 +27,7 @@ from backend.api.routes import config_api, adventures, avatars, data, characters
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manages application startup and shutdown lifecycle."""
-    # Startup: create DB tables and launch background heartbeat
+    # Startup: create DB tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

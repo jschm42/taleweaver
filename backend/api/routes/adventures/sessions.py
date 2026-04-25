@@ -46,7 +46,7 @@ async def list_sessions(
             adventure_title=a.title if a else (g.adventure_title or "Unknown"),
             image_url=AdventureLogic.resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
             scene_id=s.current_scene_id, current_scene_name=scene_label or "Exploring...",
-            in_game_time=s.in_game_time, is_paused=s.is_paused,
+            in_game_time=s.in_game_time,
             is_ready=a.is_ready if a else True, creation_status=a.creation_status if a else "Ready",
             creation_error=a.creation_error if a else None, selected_tone=a.selected_tone if a else None,
             progress=AdventureLogic.calculate_quest_progress(s.quests if s else (a.quests if a else None)),
