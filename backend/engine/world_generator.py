@@ -162,6 +162,12 @@ class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
     role: str = Field(..., description="The professional or narrative role of the player, e.g. 'Royal Chef', 'Exiled Alchemist'.")
     description: str = Field(..., description="A detailed narrative description of the character's appearance and backstory.")
+    strength: int = Field(10, description="Base strength stat (1-99)")
+    dexterity: int = Field(10, description="Base dexterity stat (1-99)")
+    intelligence: int = Field(10, description="Base intelligence stat (1-99)")
+    wisdom: int = Field(10, description="Base wisdom stat (1-99)")
+    charisma: int = Field(10, description="Base charisma stat (1-99)")
+    armor_class: int = Field(10, description="Base armor class stat (1-99)")
     starting_inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in the player's pocket.")
     starting_equipment: Optional[Dict[str, str]] = Field(None, description="Mapping of slots (e.g. 'Hands', 'Head') to object IDs.")
 
@@ -454,6 +460,7 @@ class WorldGenerator:
 
             if not avatar:
                 # Create new Avatar for this adventure
+                s = prot.get("stats", {})
                 avatar = Avatar(
                     template_id=template_id,
                     user_id=adventure.owner_id,
@@ -466,6 +473,12 @@ class WorldGenerator:
                     max_stamina=prot.get("stamina", 200),
                     mana=prot.get("mana", 200),
                     max_mana=prot.get("mana", 200),
+                    strength=prot.get("strength", 10),
+                    dexterity=prot.get("dexterity", 10),
+                    intelligence=prot.get("intelligence", 10),
+                    wisdom=prot.get("wisdom", 10),
+                    charisma=prot.get("charisma", 10),
+                    armor_class=prot.get("armor_class", 10),
                     stats=prot.get("stats", {}),
                     inventory=prot.get("starting_inventory", []),
                     equipment=prot.get("starting_equipment", {
@@ -485,6 +498,15 @@ class WorldGenerator:
                 avatar.max_stamina = prot.get("stamina", avatar.max_stamina)
                 avatar.mana = prot.get("mana", avatar.mana)
                 avatar.max_mana = prot.get("mana", avatar.max_mana)
+                
+                # Sync Core Stats from manifest (flattened in Schema)
+                avatar.strength = prot.get("strength", avatar.strength)
+                avatar.dexterity = prot.get("dexterity", avatar.dexterity)
+                avatar.intelligence = prot.get("intelligence", avatar.intelligence)
+                avatar.wisdom = prot.get("wisdom", avatar.wisdom)
+                avatar.charisma = prot.get("charisma", avatar.charisma)
+                avatar.armor_class = prot.get("armor_class", avatar.armor_class)
+                
                 avatar.stats = prot.get("stats", avatar.stats)
                 avatar.inventory = prot.get("starting_inventory", avatar.inventory)
                 avatar.equipment = prot.get("starting_equipment", avatar.equipment)

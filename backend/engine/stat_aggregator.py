@@ -25,8 +25,21 @@ def calculate_total_stats(avatar: Avatar) -> dict:
 
     # If avatar.stats contains additional/override values, apply them
     if avatar.stats:
+        # Standardize core stat names to ensure they overwrite the baseline columns
+        norm_map = {
+            "str": "strength", "strength": "strength",
+            "dex": "dexterity", "dexterity": "dexterity",
+            "int": "intelligence", "intelligence": "intelligence",
+            "wis": "wisdom", "wisdom": "wisdom",
+            "cha": "charisma", "charisma": "charisma",
+            "ac": "armor_class", "armor_class": "armor_class"
+        }
         for k, v in avatar.stats.items():
-            total_stats[k] = v
+            low_k = k.lower()
+            if low_k in norm_map:
+                total_stats[norm_map[low_k]] = v
+            else:
+                total_stats[k] = v
 
     # 1. Add Equipment modifiers
     for slot, item in avatar.equipment.items():

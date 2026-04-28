@@ -178,6 +178,7 @@ class GameMasterLLM:
         else:
             self.api_key = self._get_decrypted_key(self.provider)
             
+        self.model_category = model_category
         logger.info(f"Router initialized: category={model_category}, provider={self.provider}, thinking={self.enable_thinking}, max_tokens={self.max_tokens}")
 
     def _normalize_model(self, model: str) -> str:
@@ -479,8 +480,8 @@ class GameMasterLLM:
         except json.JSONDecodeError as exc:
             if finish_reason == "length":
                 raise ValueError(
-                    "LLM response was truncated (token limit) while generating structured JSON. "
-                    "Increase Complex Max Tokens in Settings and retry."
+                    "LLM response was truncated (token limit). "
+                    "Please increase the token limit in Settings (Intelligence) and retry."
                 ) from exc
             preview = content[:280].replace("\n", " ").strip()
             raise ValueError(f"Failed to parse LLM response as JSON. Preview: {preview}") from exc
@@ -583,8 +584,8 @@ class GameMasterLLM:
         except json.JSONDecodeError as exc:
             if finish_reason == "length":
                 raise ValueError(
-                    "LLM response was truncated (token limit) while generating structured JSON. "
-                    "Increase Complex Max Tokens in Settings and retry."
+                    "LLM response was truncated (token limit). "
+                    "Please increase the token limit in Settings (Intelligence) and retry."
                 ) from exc
             preview = content[:280].replace("\n", " ").strip()
             raise ValueError(f"Failed to parse LLM response as JSON. Preview: {preview}") from exc

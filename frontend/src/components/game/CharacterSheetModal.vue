@@ -18,10 +18,6 @@ const emit = defineEmits<{
   changed: []
 }>()
 
-const sortedStats = computed(() => {
-  if (!props.sheet?.stats) return []
-  return Object.entries(props.sheet.stats).sort(([a], [b]) => a.localeCompare(b))
-})
 
 const inventoryList = computed(() => props.sheet?.inventory ?? [])
 const equipment = computed(() => props.sheet?.equipment ?? {})
@@ -226,13 +222,6 @@ const onClose = () => {
                     </div>
                   </div>
 
-                  <!-- Secondary Stats List (e.g. from mods) -->
-                  <div v-if="sortedStats.length > 0" class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-2 border-t border-slate-800/20 pt-4">
-                    <div v-for="[key, value] in sortedStats" :key="key" class="flex items-center justify-between border-b border-slate-800/10 pb-1.5">
-                      <span class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{{ key }}</span>
-                      <span class="text-sm font-black text-white font-mono">{{ value }}</span>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>

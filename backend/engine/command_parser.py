@@ -82,14 +82,29 @@ class CommandParser:
         if slot == "Hand": slot = "Hands"
         if slot == "Ring": slot = "Ring_1"
 
-        if slot not in avatar.equipment:
-            # Try to find a partial match or default to Hands if it's a weapon
-            if item_to_equip.get("item_type") == "WEAPON":
-                slot = "Hands"
-            else:
-                return f"Invalid equipment slot '{slot}' on item."
+        # Self-healing: Ensure standard slots exist if they are missing
+        DEFAULT_SLOTS = {
+            "Head": None, "Chest": None, "Arms": None, "Legs": None,
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
+        }
+        
+        # Fallback for weapons if their preferred slot is missing
+        if slot not in avatar.equipment and item_to_equip.get("item_type") == "WEAPON":
+            slot = "Hands"
 
-        currently_equipped = avatar.equipment[slot]
+        # If the slot is still missing, check if it's a standard slot we can auto-create
+        if slot not in avatar.equipment:
+            if slot in DEFAULT_SLOTS:
+                # Add all missing default slots to the avatar's equipment
+                new_equipment = dict(avatar.equipment)
+                for s, val in DEFAULT_SLOTS.items():
+                    if s not in new_equipment:
+                        new_equipment[s] = val
+                avatar.equipment = new_equipment
+            else:
+                return f"The protagonist does not have an equipment slot for '{slot}'."
+
+        currently_equipped = avatar.equipment.get(slot)
         response_msg = ""
         
         # SQLAlchemy mutability safely handled by re-assigning lists/dicts

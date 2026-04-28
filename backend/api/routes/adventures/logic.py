@@ -211,13 +211,31 @@ class AdventureLogic:
         scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
         current_scene = scene_res.scalars().first()
         
-        return {
+        from backend.engine.stat_aggregator import calculate_total_stats
+        total_stats = calculate_total_stats(avatar)
+        
+        # Build base snapshot
+        snapshot = {
             "name": avatar.name,
             "role": avatar.role,
             "description": avatar.description,
             "profile_image": AdventureLogic.resolve_session_asset(state, "protagonist", avatar.profile_image),
-            "hp": avatar.hp, "stamina": avatar.stamina, "mana": avatar.mana,
-            "stats": avatar.stats, "inventory": synced_inventory, "equipment": synced_equipment,
+            "hp": avatar.hp, 
+            "max_hp": avatar.max_hp,
+            "stamina": avatar.stamina, 
+            "max_stamina": avatar.max_stamina,
+            "mana": avatar.mana,
+            "max_mana": avatar.max_mana,
+            # Core Stats (calculated totals)
+            "strength": total_stats.get("strength", avatar.strength),
+            "dexterity": total_stats.get("dexterity", avatar.dexterity),
+            "intelligence": total_stats.get("intelligence", avatar.intelligence),
+            "wisdom": total_stats.get("wisdom", avatar.wisdom),
+            "charisma": total_stats.get("charisma", avatar.charisma),
+            "armor_class": total_stats.get("armor_class", avatar.armor_class),
+            "stats": total_stats, 
+            "inventory": synced_inventory, 
+            "equipment": synced_equipment,
             "status_effects": avatar.status_effects, "in_game_time": state.in_game_time,
             "start_datetime": start_datetime,
             "current_scene": current_scene.label if current_scene else state.current_scene_id,
@@ -227,6 +245,8 @@ class AdventureLogic:
             "exp": avatar.exp,
             "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg"
         }
+        
+        return snapshot
 
     @staticmethod
     async def delete_adventure(db: AsyncSession, template_id: str):
