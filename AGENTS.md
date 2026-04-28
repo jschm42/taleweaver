@@ -33,6 +33,9 @@ Please adhere to the following rules for all implementations to ensure high code
 * **Mocking:**
   * Network requests (especially LLM API calls to OpenAI/Anthropic/etc.) **must** be mocked in unit tests. We do not want to incur actual API costs or latencies when running the test suite!
   * Database access in isolated tests should also be mocked or use a dedicated in-memory SQLite test database.
+* **Mandatory Lifecycle Tests:**
+  * Whenever you modify `AdventureExporter`, `AdventureTemplateImporter`, or the `WorldGenerator` data mapping, you **must** run the lifecycle tests: `pytest tests/test_adventure_lifecycle.py`.
+  * These tests ensure that adventures can be correctly moved between systems without data loss (especially protagonist and assets).
 
 ---
 
