@@ -26,7 +26,7 @@ const loadCharacter = async () => {
   if (!isEditMode.value) return;
 
   try {
-    const res = await fetch(`http://localhost:8000/api/characters`)
+    const res = await fetch(`/api/characters`)
     if (res.ok) {
       const all = await res.json()
       const character = all.find((c: any) => c.id === charId.value)
@@ -53,7 +53,7 @@ const handleImageUpload = async (event: Event) => {
 
   try {
     errorMsg.value = ''
-    const res = await fetch(`http://localhost:8000/api/data/image?type=character`, {
+    const res = await fetch(`/api/data/image?type=character`, {
       method: 'POST',
       body: formData
     })
@@ -87,8 +87,8 @@ const saveCharacter = async () => {
 
   try {
     const url = isEditMode.value
-      ? `http://localhost:8000/api/characters/${charId.value}`
-      : `http://localhost:8000/api/characters`
+      ? `/api/characters/${charId.value}`
+      : `/api/characters`
 
     const method = isEditMode.value ? 'PUT' : 'POST'
 
@@ -167,7 +167,7 @@ onMounted(() => {
             <div class="flex flex-col items-center mb-6">
               <div class="relative group cursor-pointer w-48 h-48 rounded-2xl overflow-hidden border-2 border-dashed border-slate-700 bg-slate-950/50 hover:border-emerald-500/50 transition-colors flex items-center justify-center">
                 <template v-if="profileImageUrl">
-                  <img :src="'http://localhost:8000' + profileImageUrl" alt="Avatar Preview" class="w-full h-full object-cover">
+                  <img :src="profileImageUrl" alt="Avatar Preview" class="w-full h-full object-cover">
                 </template>
                 <template v-else>
                   <i class="ra ra-player text-6xl text-slate-600"></i>

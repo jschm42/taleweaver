@@ -66,10 +66,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow the Vue.js frontend (dev server on port 5173) to reach the API
+# Allow the Vue.js frontend (dev server) to reach the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        f"http://localhost:{settings.FRONTEND_PORT}",
+        f"http://127.0.0.1:{settings.FRONTEND_PORT}"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,3 +108,9 @@ app.mount("/assets", StaticFiles(directory="backend/static/assets"), name="asset
 async def health_check() -> dict:
     """Returns a simple liveness signal for load-balancer health checks."""
     return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    # Use the port from settings
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=settings.BACKEND_PORT, reload=True)

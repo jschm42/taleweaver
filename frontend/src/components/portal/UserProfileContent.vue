@@ -137,12 +137,12 @@ import { authState, refreshUser } from '@/store/auth'
 import { api } from '@/composables/useApi'
 import AwardTile from './AwardTile.vue'
 
-const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
+const BASE = '/api'
 
 const user = computed(() => authState.user)
 const userAvatar = computed(() => {
   if (user.value?.profile_image_url) {
-    const baseUrl = import.meta.env.DEV ? 'http://localhost:8000' : ''
+    const baseUrl = ''
     return user.value.profile_image_url.startsWith('http') 
       ? user.value.profile_image_url 
       : `${baseUrl}${user.value.profile_image_url}`

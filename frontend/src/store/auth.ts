@@ -32,7 +32,7 @@ export function clearAuth() {
 export async function refreshUser() {
   if (!authState.token) return
   
-  const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
+  const BASE = '/api'
   try {
     const res = await fetch(`${BASE}/auth/me`, {
       headers: {

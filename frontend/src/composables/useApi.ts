@@ -27,7 +27,7 @@ interface SettingsResponse {
 // the relative proxy can lead to empty responses on initial load). In
 // production we keep the relative `/api` base so the server can serve the
 // frontend and backend from the same origin.
-const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
+const BASE = '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)

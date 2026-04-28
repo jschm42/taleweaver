@@ -16,7 +16,7 @@ const importInput = ref<HTMLInputElement | null>(null)
 
 const fetchCharacters = async () => {
   try {
-    const res = await fetch('http://localhost:8000/api/characters')
+    const res = await fetch('/api/characters')
     if (res.ok) {
       characters.value = await res.json()
     }
@@ -30,7 +30,7 @@ const fetchCharacters = async () => {
 const deleteCharacter = async (charId: string) => {
   if (confirm('Are you sure you want to delete this character?')) {
     try {
-      const res = await fetch(`http://localhost:8000/api/characters/${charId}`, {
+      const res = await fetch(`/api/characters/${charId}`, {
         method: 'DELETE'
       })
       if (res.ok) {
@@ -61,7 +61,7 @@ const importCharacter = async (event: Event) => {
       return
     }
     
-    const res = await fetch('http://localhost:8000/api/characters/import', {
+    const res = await fetch('/api/characters/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -161,7 +161,7 @@ onMounted(() => {
           <!-- Profile Banner / Image -->
           <div class="h-48 w-full bg-slate-800 flex items-center justify-center relative overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')]">
             <template v-if="char.profile_image">
-              <img :src="'http://localhost:8000' + char.profile_image" alt="Profile" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+              <img :src="char.profile_image" alt="Profile" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
             </template>
             <template v-else>
               <i class="ra ra-player text-6xl text-slate-600 drop-shadow-md"></i>

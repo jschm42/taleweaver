@@ -823,7 +823,7 @@ watch(
                       <i v-else :class="testResults.simple_v.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
                       {{ testResults.simple_v.message }}
                     </div>
-                    <img v-if="testResults.simple_v.image_url" :src="'http://localhost:8000' + testResults.simple_v.image_url" class="w-full max-w-xs rounded-lg border border-white/10 shadow-lg" />
+                    <img v-if="testResults.simple_v.image_url" :src="testResults.simple_v.image_url" class="w-full max-w-xs rounded-lg border border-white/10 shadow-lg" />
                  </div>
               </div>
             </div>
@@ -879,7 +879,7 @@ watch(
                       <i v-else :class="testResults.advanced_v.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
                       {{ testResults.advanced_v.message }}
                     </div>
-                    <img v-if="testResults.advanced_v.image_url" :src="'http://localhost:8000' + testResults.advanced_v.image_url" class="w-full max-w-xs rounded-lg border border-white/10 shadow-lg" />
+                    <img v-if="testResults.advanced_v.image_url" :src="testResults.advanced_v.image_url" class="w-full max-w-xs rounded-lg border border-white/10 shadow-lg" />
                  </div>
               </div>
             </div>
@@ -951,7 +951,7 @@ watch(
             <div v-for="(style, index) in imageStylesCatalog" :key="style.id + '-' + index" class="group relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-amber-500/50 transition-all shadow-xl">
               <!-- Image Section -->
               <div class="relative aspect-[4/3] bg-slate-950 overflow-hidden">
-                <img v-if="style.image_url" :src="style.image_url.startsWith('http') ? style.image_url : 'http://localhost:8000' + style.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img v-if="style.image_url" :src="style.image_url.startsWith('http') ? style.image_url : style.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 text-slate-700">
                   <svg class="w-16 h-16 opacity-30 mb-2 animate-pulse-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
@@ -1039,7 +1039,7 @@ watch(
             <div v-for="(tone, index) in toneCatalog" :key="tone.id + '-' + index" class="group relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-indigo-500/50 transition-all shadow-xl">
               <!-- Image Section -->
               <div class="relative aspect-[4/3] bg-slate-950 overflow-hidden">
-                <img v-if="tone.image_url" :src="tone.image_url.startsWith('http') ? tone.image_url : 'http://localhost:8000' + tone.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img v-if="tone.image_url" :src="tone.image_url.startsWith('http') ? tone.image_url : tone.image_url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 text-slate-700">
                   <svg class="w-16 h-16 opacity-30 mb-2 animate-pulse-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -1283,7 +1283,7 @@ watch(
           <!-- Image Preview & Actions in Modal -->
           <div class="mb-8 flex items-center gap-6 bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
             <div class="w-24 h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex-shrink-0 relative group">
-              <img v-if="editingItem.image_url" :src="editingItem.image_url.startsWith('http') ? editingItem.image_url : 'http://localhost:8000' + editingItem.image_url" class="w-full h-full object-cover" />
+              <img v-if="editingItem.image_url" :src="editingItem.image_url.startsWith('http') ? editingItem.image_url : editingItem.image_url" class="w-full h-full object-cover" />
               <div v-else class="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 text-slate-800">
                 <svg v-if="catalogModalType === 'styles'" class="w-10 h-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" /><path d="M12 8v4l3 3" /><path d="M9 3v2" /><path d="M5 5L6.5 6.5" /><path d="M3 9h2" /><path d="M3 15h2" /><path d="M5 19l1.5-1.5" /><path d="M9 21v-2" /><path d="M15 21v-2" /><path d="M19 19l-1.5-1.5" /><path d="M21 15h-2" /><path d="M21 9h-2" /><path d="M19 5L17.5 6.5" /><path d="M15 3v2" /></svg>
                 <svg v-else class="w-10 h-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>

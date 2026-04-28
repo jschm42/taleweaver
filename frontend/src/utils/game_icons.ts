@@ -42,8 +42,6 @@ export const getImageUrl = (path?: string | null) => {
     const separator = path.includes('?') ? '&' : '?'
     return `${path}${separator}v=${cacheVersion}`
   }
-  // In dev, the frontend is on 5173 and backend on 8000
-  const baseUrl = window.location.origin.replace('5173', '8000')
   const separator = path.includes('?') ? '&' : '?'
-  return `${baseUrl}${path}${separator}v=${cacheVersion}`
+  return `${path}${separator}v=${cacheVersion}`
 }

@@ -12,8 +12,8 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
-const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
-const ASSET_BASE = import.meta.env.DEV ? 'http://localhost:8000' : ''
+const BASE = '/api'
+const ASSET_BASE = ''
 
 function authHeaders(includeJson = false): Record<string, string> {
   const headers: Record<string, string> = {}

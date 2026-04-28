@@ -35,7 +35,7 @@ export interface UseGameSocket {
 }
 
 export function useGameSocket(): UseGameSocket {
-  const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
+  const BASE = '/api'
   const { addNotification } = useNotifications()
   const messages = ref<ChatMessage[]>([])
   const sheet = ref<CharacterSheet | null>(null)

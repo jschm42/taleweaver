@@ -255,7 +255,7 @@ onMounted(async () => {
                   <div class="w-72 bg-slate-900/95 border border-slate-700 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
                     <!-- Image Area -->
                     <div v-if="hoveredNode.image_url" class="h-40 w-full relative">
-                      <img :src="'http://localhost:8000' + hoveredNode.image_url" class="absolute inset-0 w-full h-full object-cover" />
+                      <img :src="hoveredNode.image_url" class="absolute inset-0 w-full h-full object-cover" />
                       <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
                     </div>
 

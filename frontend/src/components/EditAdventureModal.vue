@@ -32,7 +32,7 @@ async function saveEntityText(type: string, id: string) {
   isSavingText.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/entity`, {
+    const res = await fetch(`/api/adventures/${props.adventureId}/editor/entity`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -61,7 +61,7 @@ async function runAIEdit() {
   isAIEditing.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/ai-edit`, {
+    const res = await fetch(`/api/adventures/${props.adventureId}/editor/ai-edit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: aiEditPrompt.value })
@@ -118,7 +118,7 @@ async function fetchAdventure() {
   isLoading.value = true
   errorMsg.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`)
+    const res = await fetch(`/api/adventures/${props.adventureId}`)
     if (!res.ok) {
       throw new Error('Failed to load adventure configuration.')
     }
@@ -142,7 +142,7 @@ async function fetchDebugInfo() {
     return
   }
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/editor/assets`)
+    const res = await fetch(`/api/adventures/${props.adventureId}/editor/assets`)
     if (res.ok) {
       debugData.value = await res.json()
       visualsCacheVersion.value += 1
@@ -170,7 +170,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) {
     return ''
   }
-  return `http://localhost:8000${imagePath}?v=${visualsCacheVersion.value}`
+  return `${imagePath}?v=${visualsCacheVersion.value}`
 }
 
 function bumpGlobalVisualCacheVersion() {
@@ -248,7 +248,7 @@ async function regenerateVisual() {
   isRegenerating.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/visuals/regenerate`, {
+    const res = await fetch(`/api/adventures/${props.adventureId}/visuals/regenerate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -281,7 +281,7 @@ async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | '
   isQuickGenerating.value[key] = true
   
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/visuals/regenerate`, {
+    const res = await fetch(`/api/adventures/${props.adventureId}/visuals/regenerate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -390,7 +390,7 @@ async function handleUploadChange(event: Event) {
     formData.append('target_type', selectedVisual.value.kind)
     formData.append('target_id', selectedVisual.value.id)
 
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/visuals/upload`, {
+    const res = await fetch(`/api/adventures/${props.adventureId}/visuals/upload`, {
       method: 'POST',
       body: formData,
     })
@@ -418,7 +418,7 @@ async function saveChanges() {
   isSaving.value = true
   errorMsg.value = ''
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`, {
+    const res = await fetch(`/api/adventures/${props.adventureId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form.value),
@@ -447,7 +447,7 @@ async function resetAdventure() {
 
   isSaving.value = true
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/reset`, {
+    const res = await fetch(`/api/adventures/${props.adventureId}/reset`, {
       method: 'POST',
     })
     if (!res.ok) {
@@ -474,7 +474,7 @@ async function removeAdventure() {
 
   isSaving.value = true
   try {
-    const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}`, {
+    const res = await fetch(`/api/adventures/${props.adventureId}`, {
       method: 'DELETE',
     })
     if (!res.ok) {
@@ -492,7 +492,7 @@ async function removeAdventure() {
 
 async function exportADZ() {
   if (!props.adventureId) return
-  const res = await fetch(`http://localhost:8000/api/adventures/${props.adventureId}/export/adz`)
+  const res = await fetch(`/api/adventures/${props.adventureId}/export/adz`)
   if (!res.ok) return
 
   const blob = await res.blob()

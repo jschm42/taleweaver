@@ -99,15 +99,16 @@ python -m alembic upgrade head
 # python -c "import sqlite3; c=sqlite3.connect('taleweaver.db'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_adventures'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_users'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_avatars'); c.commit(); c.close()"
 # python -m alembic upgrade head
 
-# Start the FastAPI server
-python -m uvicorn backend.main:app --reload
+# Start the FastAPI server (uses BACKEND_PORT from .env)
+python -m backend.main
 ```
 
 Important: Run this command from the project root. Running it from inside the backend directory causes import errors like ModuleNotFoundError: No module named backend.
 
 If you see SQLite errors such as no such column after model changes, recreate the local database file taleweaver.db (or run your migration flow) so the schema matches the current models.
 
-The backend API will typically run on `http://localhost:8000`.
+The backend API will run on the port configured in `.env` (default: `http://localhost:8000`).
+The frontend will run on the port configured in `.env` (default: `http://localhost:5173`).
 
 #### Windows Quick Start (PowerShell)
 
@@ -119,7 +120,7 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m alembic upgrade head
-python -m uvicorn backend.main:app --reload
+python -m backend.main
 ```
 
 ```powershell

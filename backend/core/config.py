@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "TaleWeaver"
     APP_VERSION: str = Field(default_factory=get_app_version)
     DATABASE_URL: str = ""
+    BACKEND_PORT: int = 8000
+    FRONTEND_PORT: int = 5173
     
     # Storage configuration
     DATA_DIR: str = "data"

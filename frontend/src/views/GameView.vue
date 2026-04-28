@@ -192,7 +192,7 @@ const handleTrackQuest = (questId: string | null) => {
 }
 
 const brokenImages = ref<Record<string, boolean>>({})
-const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
+const BASE = '/api'
 
 function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {}
