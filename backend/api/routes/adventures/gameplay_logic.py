@@ -219,6 +219,18 @@ class GameTurnManager:
         ))
         exits = exit_res.scalars().all()
         
+        # Apply session overrides to entities so LLM sees current HP/state
+        overrides = self.state.entity_states or {}
+        for ent in entities:
+            if ent.id in overrides:
+                ov = overrides[ent.id]
+                if "hp" in ov: ent.hp = ov["hp"]
+                if "mana" in ov: ent.mana = ov["mana"]
+                if "stamina" in ov: ent.stamina = ov["stamina"]
+                if "spatial_position" in ov: ent.spatial_position = ov["spatial_position"]
+                if "name" in ov: ent.name = ov["name"]
+                if "description" in ov: ent.description = ov["description"]
+        
         db_duration = time.perf_counter() - db_start
         logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
 
@@ -345,14 +357,52 @@ class GameTurnManager:
         assistant_chat = ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text)
         self.db.add(assistant_chat)
         
-        # Add system messages for inventory items
-        if game_event and game_event.new_inventory_items:
-            for item in game_event.new_inventory_items:
-                msg_text = f"Added {item.name} to your inventory."
-                # Persistent system message
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
-                # Yield system event
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
+        # Add system messages for stat changes and items
+        if game_event:
+            # 1. Protagonist changes
+            if game_event.hp_change != 0:
+                verb = "gain" if game_event.hp_change > 0 else "lose"
+                msg = f"You {verb} {abs(game_event.hp_change)} HP."
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            
+            if game_event.stamina_change != 0:
+                verb = "gain" if game_event.stamina_change > 0 else "lose"
+                msg = f"You {verb} {abs(game_event.stamina_change)} Stamina."
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
+            if game_event.mana_change != 0:
+                verb = "gain" if game_event.mana_change > 0 else "lose"
+                msg = f"You {verb} {abs(game_event.mana_change)} Mana."
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
+            # 2. NPC/Entity changes
+            if game_event.updated_entities:
+                for update in game_event.updated_entities:
+                    eid = update.entity_id
+                    # Find name
+                    ent_name = "Someone"
+                    # Try to find in current entities list (from start of turn)
+                    match = next((e for e in entities if e.id == eid), None)
+                    if match:
+                        ent_name = match.name
+                    
+                    if update.hp is not None and match and match.hp is not None:
+                        diff = update.hp - match.hp
+                        if diff != 0:
+                            verb = "healed for" if diff > 0 else "takes"
+                            msg = f"{ent_name} {verb} {abs(diff)} damage." if diff < 0 else f"{ent_name} {verb} {diff} HP."
+                            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
+            # 3. Items
+            if game_event.new_inventory_items:
+                for item in game_event.new_inventory_items:
+                    msg_text = f"Added {item.name} to your inventory."
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
         await self.db.commit()
         
