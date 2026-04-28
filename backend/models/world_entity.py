@@ -69,8 +69,11 @@ class WorldEntity(Base, TimestampMixin):
     hp = Column(JSON, nullable=True) # Store as JSON to allow for {current: 10, max: 10} or similar if needed, or just Integer. User asked for Hitpoints.
     # Actually, let's keep it simple as Integers since user said "Hitpoints, Mana, Stamina"
     hp = Column(Integer, nullable=True)
+    max_hp = Column(Integer, nullable=True)
     mana = Column(Integer, nullable=True)
+    max_mana = Column(Integer, nullable=True)
     stamina = Column(Integer, nullable=True)
+    max_stamina = Column(Integer, nullable=True)
 
     # Stat Modifiers
     stat_modifier_strength = Column(Integer, nullable=True)

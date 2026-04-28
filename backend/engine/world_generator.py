@@ -146,16 +146,16 @@ class QuestSchema(BaseModel):
     title: str = Field(..., description="Short, descriptive title")
     description: str = Field(..., description="Narrative description of what needs to be done")
     goal: str = Field(..., description="Technical condition for completion (for GM reference)")
-    impact: str = Field(..., description="How this affects the world when completed")
-    exp_reward: int = Field(..., description="EXP awarded for completion (e.g., 50, 100, 250)")
-    is_main: bool = Field(..., description="True if this quest is required to finish the adventure")
+    impact: Optional[str] = Field(None, description="How this affects the world when completed")
+    exp_reward: int = Field(250, description="EXP awarded for completion (e.g., 50, 100, 250)")
+    is_main: bool = Field(True, description="True if this quest is required to finish the adventure")
     status: str = Field("open", description="Current state: open, completed, failed")
 
 class AwardTemplateSchema(BaseModel):
     key: str = Field(..., description="Unique identifier for the award, e.g., SLAYER_OF_RATS")
     title: str = Field(..., description="Visual name of the award")
     description: str = Field(..., description="Short description shown to the player")
-    tier: Literal["bronze", "silver", "gold"] = Field(..., description="The rarity/tier of the award")
+    tier: Literal["bronze", "silver", "gold"] = Field("bronze", description="The rarity/tier of the award")
     requirement: str = Field(..., description="The specific rule/condition when the GM should grant this award")
 
 class ProtagonistSchema(BaseModel):
@@ -405,6 +405,13 @@ class WorldGenerator:
                     a["is_earned"] = False
             adventure.awards = awards
             
+            # Sync to active sessions if they don't have quests yet (e.g. during first generation)
+            from backend.models.session_state import SessionState
+            state_res = await db.execute(select(SessionState).where(SessionState.template_id == template_id))
+            for state in state_res.scalars().all():
+                if not state.quests:
+                    state.quests = quests
+            
             # Generate Adventure Cover if missing
             if not adventure.image_url and user:
                 await _publish_generation_status(db, adventure, "Painting Adventure Cover...")
@@ -454,8 +461,11 @@ class WorldGenerator:
                     role=prot.get("role", "Protagonist"),
                     description=prot.get("description", ""),
                     hp=prot.get("hp", 200),
+                    max_hp=prot.get("hp", 200),
                     stamina=prot.get("stamina", 200),
+                    max_stamina=prot.get("stamina", 200),
                     mana=prot.get("mana", 200),
+                    max_mana=prot.get("mana", 200),
                     stats=prot.get("stats", {}),
                     inventory=prot.get("starting_inventory", []),
                     equipment=prot.get("starting_equipment", {
@@ -470,8 +480,11 @@ class WorldGenerator:
                 avatar.role = prot.get("role", avatar.role)
                 avatar.description = prot.get("description", avatar.description)
                 avatar.hp = prot.get("hp", avatar.hp)
+                avatar.max_hp = prot.get("hp", avatar.max_hp)
                 avatar.stamina = prot.get("stamina", avatar.stamina)
+                avatar.max_stamina = prot.get("stamina", avatar.max_stamina)
                 avatar.mana = prot.get("mana", avatar.mana)
+                avatar.max_mana = prot.get("mana", avatar.max_mana)
                 avatar.stats = prot.get("stats", avatar.stats)
                 avatar.inventory = prot.get("starting_inventory", avatar.inventory)
                 avatar.equipment = prot.get("starting_equipment", avatar.equipment)
@@ -646,8 +659,11 @@ class WorldGenerator:
                 npc_type=n.get("npc_type"),
                 movement_type=n.get("movement_type"),
                 hp=n.get("hp"),
+                max_hp=n.get("hp"),
                 mana=n.get("mana"),
+                max_mana=n.get("mana"),
                 stamina=n.get("stamina"),
+                max_stamina=n.get("stamina"),
                 is_hidden=n.get("is_hidden", False),
             ))
             

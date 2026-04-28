@@ -102,8 +102,11 @@ const npcs = computed(() => {
       image_url: sheet.value.profile_image || sheet.value.profile_image || null,
       role: sheet.value.role || null,
       hp: sheet.value.hp,
+      max_hp: sheet.value.max_hp,
       stamina: sheet.value.stamina,
-      mana: sheet.value.mana
+      max_stamina: sheet.value.max_stamina,
+      mana: sheet.value.mana,
+      max_mana: sheet.value.max_mana
     }
     return [playerEntity, ...worldNpcs]
   }
@@ -610,9 +613,9 @@ onBeforeUnmount(() => {
 
               <!-- NPC/Player Bars -->
               <div v-if="hoveredEntity.entity_type === 'NPC'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
-                <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="hoveredEntity.hp" color="crimson" size="sm" />
-                <StatBar v-if="hoveredEntity.stamina != null" label="Stamina" :value="hoveredEntity.stamina" color="emerald" size="sm" />
-                <StatBar v-if="hoveredEntity.mana != null" label="Mana" :value="hoveredEntity.mana" color="sapphire" size="sm" />
+                <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="hoveredEntity.hp" :max="hoveredEntity.max_hp" color="crimson" size="sm" />
+                <StatBar v-if="hoveredEntity.stamina != null" label="Stamina" :value="hoveredEntity.stamina" :max="hoveredEntity.max_stamina" color="emerald" size="sm" />
+                <StatBar v-if="hoveredEntity.mana != null" label="Mana" :value="hoveredEntity.mana" :max="hoveredEntity.max_mana" color="sapphire" size="sm" />
               </div>
 
               <!-- Item Stats -->

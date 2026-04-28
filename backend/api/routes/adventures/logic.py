@@ -112,6 +112,10 @@ class AdventureLogic:
             # Auto-healing logic
             scene_res = await db.execute(select(WorldScene.id).where(WorldScene.template_id == session_candidate.template_id).order_by(WorldScene.id.asc()).limit(1))
             first_scene_id = scene_res.scalar_one_or_none() or "START"
+            
+            adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == session_candidate.template_id))
+            adventure = adv_res.scalars().first()
+
             healed_state = SessionState(
                 session_id=session_candidate.id,
                 user_id=session_candidate.user_id,
@@ -119,6 +123,7 @@ class AdventureLogic:
                 avatar_id=session_candidate.avatar_id,
                 current_scene_id=first_scene_id,
                 in_game_time=0,
+                quests=adventure.quests if adventure else []
             )
             db.add(healed_state)
             await db.commit()
@@ -175,6 +180,11 @@ class AdventureLogic:
         
         synced_inventory = []
         for item in (avatar.inventory or []):
+            if not isinstance(item, dict):
+                if isinstance(item, str):
+                    item = {"name": item}
+                else:
+                    continue
             item_copy = dict(item)
             item_id = item_copy.get("id")
             if item_id in img_map and not item_copy.get("image_url"):
@@ -183,7 +193,13 @@ class AdventureLogic:
             
         synced_equipment = {}
         for slot, item in (avatar.equipment or {}).items():
-            if item and isinstance(item, dict):
+            if item:
+                if not isinstance(item, dict):
+                    if isinstance(item, str):
+                        item = {"name": item}
+                    else:
+                        synced_equipment[slot] = item
+                        continue
                 item_copy = dict(item)
                 item_id = item_copy.get("id")
                 if item_id in img_map and not item_copy.get("image_url"):

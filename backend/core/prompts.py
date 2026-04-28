@@ -62,7 +62,8 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "Story Idea: {context}\n\n"
     "WORLD SIZE REQUIREMENTS:\n"
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
-    "- Create a complex network of exits and interesting entities connecting these locations."
+    "- Create a complex network of exits and interesting entities connecting these locations.\n"
+    "- Generate 1-2 Main Quests and 2-3 Side Quests that fit the narrative context."
     "{award_requirement}"
 )
 """

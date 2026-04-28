@@ -7,8 +7,11 @@ interface Entity {
   name: string
   image_url?: string | null
   hp?: number
+  max_hp?: number
   stamina?: number
+  max_stamina?: number
   mana?: number
+  max_mana?: number
 }
 
 const props = defineProps<{
@@ -56,9 +59,9 @@ const emit = defineEmits<{
         
         <!-- Very thin bars -->
         <div v-if="ent.hp != null || ent.stamina != null || ent.mana != null" class="w-full mt-1 px-1 flex flex-col gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-          <StatBar v-if="ent.hp != null" :value="ent.hp" color="crimson" size="xs" />
-          <StatBar v-if="ent.stamina != null" :value="ent.stamina" color="emerald" size="xs" />
-          <StatBar v-if="ent.mana != null" :value="ent.mana" color="sapphire" size="xs" />
+          <StatBar v-if="ent.hp != null" :value="ent.hp" :max="ent.max_hp" color="crimson" size="xs" />
+          <StatBar v-if="ent.stamina != null" :value="ent.stamina" :max="ent.max_stamina" color="emerald" size="xs" />
+          <StatBar v-if="ent.mana != null" :value="ent.mana" :max="ent.max_mana" color="sapphire" size="xs" />
         </div>
       </div>
     </div>

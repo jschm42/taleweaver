@@ -14,8 +14,11 @@ export interface CharacterSheet {
   description?: string | null
   profile_image?: string | null
   hp: number
+  max_hp?: number
   stamina: number
+  max_stamina?: number
   mana: number
+  max_mana?: number
   exp: number
   strength: number
   intelligence: number
@@ -37,6 +40,12 @@ export interface InventoryItem {
   name: string
   image_url?: string | null
   item_type?: string
+  hp?: number
+  max_hp?: number
+  stamina?: number
+  max_stamina?: number
+  mana?: number
+  max_mana?: number
   stat_modifiers?: Record<string, number>
   [key: string]: unknown
 }

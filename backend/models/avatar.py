@@ -16,8 +16,11 @@ class Avatar(Base, TimestampMixin):
     
     # Character Sheet values
     hp = Column(Integer, default=200, nullable=False)
+    max_hp = Column(Integer, default=200, nullable=False)
     stamina = Column(Integer, default=200, nullable=False)
+    max_stamina = Column(Integer, default=200, nullable=False)
     mana = Column(Integer, default=200, nullable=False)
+    max_mana = Column(Integer, default=200, nullable=False)
     exp = Column(Integer, default=0, nullable=False)
     
     # Core RPG Stats (1-99)
