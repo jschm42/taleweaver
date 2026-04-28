@@ -14,6 +14,7 @@ import GameSessionCard from '@/components/portal/GameSessionCard.vue'
 import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
 import ImportExamplesCard from '@/components/portal/ImportExamplesCard.vue'
 import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
+import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -59,16 +60,19 @@ function formatToneLabel(value?: string | null): string {
 
 const templates = ref<AdventureTemplateSummary[]>([])
 const sessions = ref<GameSession[]>([])
-const activeSection = ref<'templates' | 'sessions' | 'profile'>('templates')
+const activeSection = ref<'templates' | 'sessions' | 'profile'>('sessions')
 const isLoading = ref(true)
 
-const isImporting = ref(false)
-const errorMsg = ref('')
 const showDeleteConfirm = ref(false)
 const templateToDelete = ref<{ id: string; title: string } | null>(null)
+const showDeleteSessionConfirm = ref(false)
+const sessionToDelete = ref<{ id: string; title: string } | null>(null)
+const isImporting = ref(false)
+const errorMsg = ref('')
 const showImportConfirm = ref(false)
 const isSeeding = ref(false)
 const isDeleting = ref(false)
+const isDeletingSession = ref(false)
 
 const importInput = ref<HTMLInputElement | null>(null)
 const pendingImports = ref<PendingAdventureCard[]>([])
@@ -268,13 +272,24 @@ async function resetSession(templateId: string) {
   }
 }
 
-async function deleteSession(gameId: string) {
+function confirmDeleteSession(gameId: string, title: string) {
+  sessionToDelete.value = { id: gameId, title }
+  showDeleteSessionConfirm.value = true
+}
+
+async function executeDeleteSession() {
+  if (!sessionToDelete.value) return
+
+  isDeletingSession.value = true
   try {
-    await api.deleteSession(gameId)
-    sessions.value = sessions.value.filter((s) => s.game_id !== gameId)
-    await fetchPortalData()
+    await api.deleteSession(sessionToDelete.value.id)
+    sessions.value = sessions.value.filter((s) => s.game_id !== sessionToDelete.value?.id)
+    showDeleteSessionConfirm.value = false
+    sessionToDelete.value = null
   } catch (error: any) {
     errorMsg.value = error?.message || 'Session konnte nicht geloescht werden.'
+  } finally {
+    isDeletingSession.value = false
   }
 }
 
@@ -551,8 +566,20 @@ onUnmounted(() => {
           </div>
 
           <div v-else-if="activeSection === 'sessions'" class="space-y-6">
-            <div v-if="sessions.length === 0" class="rounded-xl border border-white/10 bg-aether-surface/20 p-6 text-slate-400">
-              No active sessions yet. Start one from the Adventures area.
+            <div v-if="sessions.length === 0" class="rounded-xl border border-white/10 bg-aether-surface/20 p-12 text-center flex flex-col items-center gap-4">
+              <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-3xl text-slate-500 mb-2">
+                <i class="ra ra-pawn"></i>
+              </div>
+              <p class="text-slate-400 max-w-md">
+                Noch keine aktiven Sessions vorhanden. Entdecke neue Welten in der Abenteuer-Bibliothek und starte deine Reise.
+              </p>
+              <button 
+                @click="activeSection = 'templates'"
+                class="mt-2 px-6 py-3 rounded-xl bg-aether-primary/10 border border-aether-primary/30 text-aether-primary font-bold hover:bg-aether-primary/20 transition-all uppercase tracking-widest text-[10px] flex items-center gap-3"
+              >
+                <i class="ra ra-book text-sm"></i>
+                Abenteuer-Bibliothek
+              </button>
             </div>
             <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
               <GameSessionCard
@@ -563,7 +590,7 @@ onUnmounted(() => {
                 @pause="pauseSession"
                 @resume-heartbeat="resumeHeartbeat"
                 @reset="resetSession"
-                @delete="deleteSession"
+                @delete="confirmDeleteSession(entry.game_id, entry.title)"
               />
             </div>
           </div>
@@ -598,6 +625,14 @@ onUnmounted(() => {
         v-if="showImportConfirm"
         @close="showImportConfirm = false"
         @confirm="executeImportExamples"
+      />
+
+      <DeleteSessionModal
+        v-if="showDeleteSessionConfirm"
+        :session-title="sessionToDelete?.title || ''"
+        :is-deleting="isDeletingSession"
+        @close="showDeleteSessionConfirm = false"
+        @confirm="executeDeleteSession"
       />
     </Teleport>
 
