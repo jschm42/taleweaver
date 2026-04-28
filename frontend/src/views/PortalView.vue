@@ -27,14 +27,14 @@ interface PendingAdventureCard {
 }
 
 function prettifyStatus(status: string): string {
-  if (!status) return 'Wird vorbereitet...'
+  if (!status) return 'Preparing...'
   const lower = status.toLowerCase()
-  if (lower.includes('generating world structure')) return 'Weltstruktur wird erschaffen...'
-  if (lower.includes('forging scenes')) return 'Szenen werden geschmiedet...'
-  if (lower.includes('weaving entities')) return 'Figuren & Objekte entstehen...'
-  if (lower.includes('generating visual')) return 'Bilder werden generiert...'
-  if (lower.includes('finalizing')) return 'Feinschliff wird vorgenommen...'
-  if (lower.includes('cancelled')) return 'Abgebrochen'
+  if (lower.includes('generating world structure')) return 'Creating world structure...'
+  if (lower.includes('forging scenes')) return 'Forging scenes...'
+  if (lower.includes('weaving entities')) return 'Weaving entities...'
+  if (lower.includes('generating visual')) return 'Generating visuals...'
+  if (lower.includes('finalizing')) return 'Finalizing...'
+  if (lower.includes('cancelled')) return 'Cancelled'
   
   const spaced = status
     .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -79,10 +79,10 @@ const pendingImports = ref<PendingAdventureCard[]>([])
 const pendingCreations = ref<PendingAdventureCard[]>([])
 const loadingWordIndex = ref(0)
 const loadingWords = [
-  'Manifest wird geprueft',
-  'Weltstruktur entsteht',
-  'Szenen werden gebaut',
-  'Figuren werden gewebt',
+  'Checking manifest',
+  'Creating world structure',
+  'Building scenes',
+  'Weaving characters',
 ]
 let loadingWordTimer: number | null = null
 
@@ -107,7 +107,7 @@ function addPendingImportCard(adventureId: string, title: string) {
     {
       adventureId,
       title,
-      status: 'Import gestartet',
+      status: 'Import started',
       hasError: false,
     },
   ]
@@ -207,7 +207,7 @@ async function fetchPortalData() {
           addPendingCreationCard(template.template_id, template.title)
           updatePendingCreationStatus(
             template.template_id,
-            template.creation_error || template.creation_status || 'Wird vorbereitet...',
+            template.creation_error || template.creation_status || 'Preparing...',
             Boolean(template.creation_error) || isFailureStatus(template.creation_status || ''),
           )
 
@@ -241,7 +241,7 @@ async function startSession(templateId: string) {
     await fetchPortalData()
     playSession(result.game_id)
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Session konnte nicht gestartet werden.'
+    errorMsg.value = error?.message || 'Session could not be started.'
   }
 }
 
@@ -250,7 +250,7 @@ async function pauseSession(templateId: string) {
     await api.pauseSession(templateId)
     await fetchPortalData()
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Session konnte nicht pausiert werden.'
+    errorMsg.value = error?.message || 'Session could not be paused.'
   }
 }
 
@@ -259,7 +259,7 @@ async function resumeHeartbeat(templateId: string) {
     await api.resumeSession(templateId)
     await fetchPortalData()
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Session konnte nicht fortgesetzt werden.'
+    errorMsg.value = error?.message || 'Session could not be resumed.'
   }
 }
 
@@ -268,7 +268,7 @@ async function resetSession(templateId: string) {
     await api.resetSession(templateId)
     await fetchPortalData()
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Session konnte nicht zurueckgesetzt werden.'
+    errorMsg.value = error?.message || 'Session could not be reset.'
   }
 }
 
@@ -287,7 +287,7 @@ async function executeDeleteSession() {
     showDeleteSessionConfirm.value = false
     sessionToDelete.value = null
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Session konnte nicht geloescht werden.'
+    errorMsg.value = error?.message || 'Session could not be deleted.'
   } finally {
     isDeletingSession.value = false
   }
@@ -330,7 +330,7 @@ async function executeImportExamples() {
     await api.importExamples()
     await fetchPortalData()
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Import der Beispiele fehlgeschlagen.'
+    errorMsg.value = error?.message || 'Import of examples failed.'
   } finally {
     isSeeding.value = false
   }
@@ -347,7 +347,7 @@ async function onImportFileSelected(event: Event) {
 
   const lower = file.name.toLowerCase()
   if (!lower.endsWith('.adz') && !lower.endsWith('.adv')) {
-    errorMsg.value = 'Nur .adv und .adz werden als Importformat unterstuetzt.'
+    errorMsg.value = 'Only .adv and .adz are supported as import formats.'
     target.value = ''
     return
   }
@@ -359,7 +359,7 @@ async function onImportFileSelected(event: Event) {
       await executeAdvImport(file)
     }
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Import fehlgeschlagen.'
+    errorMsg.value = error?.message || 'Import failed.'
   } finally {
     target.value = ''
   }
@@ -374,7 +374,7 @@ async function executeAdvImport(file: File) {
     removePendingImportCard(tempId)
     await fetchPortalData()
   } catch (error: any) {
-    updatePendingImportStatus(tempId, error?.message || 'ADV Import fehlgeschlagen', true)
+    updatePendingImportStatus(tempId, error?.message || 'ADV import failed', true)
   } finally {
     isImporting.value = false
   }
@@ -389,7 +389,7 @@ async function executeAdzImport(file: File) {
     removePendingImportCard(tempId)
     await fetchPortalData()
   } catch (error: any) {
-    updatePendingImportStatus(tempId, error?.message || 'ADZ Import fehlgeschlagen', true)
+    updatePendingImportStatus(tempId, error?.message || 'ADZ import failed', true)
   } finally {
     isImporting.value = false
   }
@@ -410,7 +410,7 @@ async function exportAdventureAdz(adventureId: string, title: string) {
     a.click()
     URL.revokeObjectURL(url)
   } catch (error: any) {
-    errorMsg.value = error?.message || 'ADZ Export fehlgeschlagen'
+    errorMsg.value = error?.message || 'ADZ export failed'
   }
 }
 
@@ -425,7 +425,7 @@ async function exportAdventureAdv(adventureId: string, title: string) {
     a.click()
     URL.revokeObjectURL(url)
   } catch (error: any) {
-    errorMsg.value = error?.message || 'ADV Export fehlgeschlagen'
+    errorMsg.value = error?.message || 'ADV export failed'
   }
 }
 
@@ -484,12 +484,12 @@ onMounted(() => {
     addPendingCreationCard(newId, newTitle)
     updatePendingCreationStatus(newId, 'Starting generation...')
     void pollAdventureStatus(newId, {
-      onStatus: (status: string) => updatePendingCreationStatus(newId, status || 'Wird vorbereitet...'),
+      onStatus: (status: string) => updatePendingCreationStatus(newId, status || 'Preparing...'),
       onReady: async () => {
         removePendingCreationCard(newId)
         await fetchPortalData()
       },
-      onFailure: (status: string) => updatePendingCreationStatus(newId, status || 'Generierung fehlgeschlagen', true),
+      onFailure: (status: string) => updatePendingCreationStatus(newId, status || 'Generation failed', true),
     })
     router.replace({ name: 'portal', query: {} })
   }
@@ -572,14 +572,14 @@ onUnmounted(() => {
                 <i class="ra ra-pawn"></i>
               </div>
               <p class="text-slate-400 max-w-md">
-                Noch keine aktiven Sessions vorhanden. Entdecke neue Welten in der Abenteuer-Bibliothek und starte deine Reise.
+                No active sessions yet. Discover new worlds in the Adventure Library and start your journey.
               </p>
               <button 
                 @click="activeSection = 'templates'"
                 class="mt-2 px-6 py-3 rounded-xl bg-aether-primary/10 border border-aether-primary/30 text-aether-primary font-bold hover:bg-aether-primary/20 transition-all uppercase tracking-widest text-[10px] flex items-center gap-3"
               >
                 <i class="ra ra-book text-sm"></i>
-                Abenteuer-Bibliothek
+                Adventure Library
               </button>
             </div>
             <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
