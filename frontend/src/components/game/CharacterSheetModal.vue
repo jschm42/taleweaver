@@ -97,7 +97,13 @@ const stateChanged = ref(false)
 const handleInventoryClick = (item: any) => {
   if (!item) return
   stateChanged.value = true
-  if (item.wearable_slots && item.wearable_slots.length > 0) {
+  
+  // Allow equipping if it has an explicit slot, or belongs to an equippable category
+  const isEquippable = item.slot || 
+                      (item.wearable_slots && item.wearable_slots.length > 0) || 
+                      ['WEAPON', 'WEARABLE', 'TOOL', 'PICKABLE'].includes(item.item_type)
+  
+  if (isEquippable) {
     emit('equip', item.name)
   } else if (item.item_type === 'CONSUMABLE') {
     emit('consume', item.name)

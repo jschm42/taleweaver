@@ -184,12 +184,13 @@ class GameTurnManager:
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
                 response = f"Added {ent.name} to your inventory."
-                # Save to history
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=response))
-                # Yield system event
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
             else:
                 response = f"You cannot take that."
+
+        # PERSIST AND YIELD RESPONSE (For all commands including equip/unequip)
+        if response and not response.startswith("[TRIGGER_"):
+            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=response))
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
 
         await self.db.commit()
         yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state)}))}\n\n"
@@ -287,7 +288,7 @@ class GameTurnManager:
                 results = []
                 for req in game_event.requested_skill_checks:
                     roll = roll_skill_check(self.avatar, req.stat, req.dc)
-                    results.append(SkillCheckResult(
+                    res = SkillCheckResult(
                         stat=req.stat,
                         dc=req.dc,
                         roll=roll["d20"],
@@ -295,7 +296,18 @@ class GameTurnManager:
                         total=roll["total"],
                         success=roll["success"],
                         reason=req.reason
-                    ))
+                    )
+                    results.append(res)
+                    
+                    # Output as system message for transparency
+                    success_label = "SUCCESS" if res.success else "FAILURE"
+                    roll_msg = (
+                        f"🎲 **{req.stat.upper()} CHECK**: {res.reason}\n"
+                        f"Roll: {res.roll} + {res.modifier} = **{res.total}** (vs DC {res.dc}) -> **{success_label}**"
+                    )
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=roll_msg))
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': roll_msg})}\n\n"
+                
                 game_event.skill_check_results = results
 
             # 3. Apply Changes

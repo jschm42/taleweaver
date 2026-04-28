@@ -395,20 +395,6 @@ async function executeAdzImport(file: File) {
   }
 }
 
-async function downloadAdventureExport(url: string, filename: string) {
-  const res = await fetch(url)
-  if (!res.ok) {
-    throw new Error('Export fehlgeschlagen')
-  }
-  const blob = await res.blob()
-  const blobUrl = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = blobUrl
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(blobUrl)
-}
-
 function makeSafeFilename(title: string, ext: string) {
   const safe = (title || 'adventure').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_')
   return `${safe || 'adventure'}.${ext}`
@@ -416,7 +402,13 @@ function makeSafeFilename(title: string, ext: string) {
 
 async function exportAdventureAdz(adventureId: string, title: string) {
   try {
-    await downloadAdventureExport(api.exportAdzUrl(adventureId), makeSafeFilename(title, 'adz'))
+    const blob = await api.downloadAdventureAdz(adventureId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = makeSafeFilename(title, 'adz')
+    a.click()
+    URL.revokeObjectURL(url)
   } catch (error: any) {
     errorMsg.value = error?.message || 'ADZ Export fehlgeschlagen'
   }
@@ -424,7 +416,14 @@ async function exportAdventureAdz(adventureId: string, title: string) {
 
 async function exportAdventureAdv(adventureId: string, title: string) {
   try {
-    await downloadAdventureExport(api.exportAdvUrl(adventureId), makeSafeFilename(title, 'adv'))
+    const data = await api.downloadAdventureAdv(adventureId)
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = makeSafeFilename(title, 'adv')
+    a.click()
+    URL.revokeObjectURL(url)
   } catch (error: any) {
     errorMsg.value = error?.message || 'ADV Export fehlgeschlagen'
   }

@@ -52,7 +52,7 @@ function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
       <img
         v-if="props.template.image_url"
         :src="props.template.image_url"
-        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+        class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
         alt="Adventure cover"
       />
       <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-[10px] font-bold uppercase tracking-widest">

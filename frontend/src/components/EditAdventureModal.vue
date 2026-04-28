@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { authState } from '@/store/auth'
+import { api } from '@/composables/useApi'
 
 const props = defineProps<{
   open: boolean
@@ -34,7 +36,10 @@ async function saveEntityText(type: string, id: string) {
   try {
     const res = await fetch(`/api/adventures/${props.adventureId}/editor/entity`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authState.token}`
+      },
       body: JSON.stringify({
         target_type: type,
         target_id: id,
@@ -63,7 +68,10 @@ async function runAIEdit() {
   try {
     const res = await fetch(`/api/adventures/${props.adventureId}/editor/ai-edit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authState.token}`
+      },
       body: JSON.stringify({ prompt: aiEditPrompt.value })
     })
     if (!res.ok) {
@@ -118,7 +126,11 @@ async function fetchAdventure() {
   isLoading.value = true
   errorMsg.value = ''
   try {
-    const res = await fetch(`/api/adventures/${props.adventureId}`)
+    const res = await fetch(`/api/adventures/${props.adventureId}`, {
+      headers: {
+        'Authorization': `Bearer ${authState.token}`
+      }
+    })
     if (!res.ok) {
       throw new Error('Failed to load adventure configuration.')
     }
@@ -142,7 +154,11 @@ async function fetchDebugInfo() {
     return
   }
   try {
-    const res = await fetch(`/api/adventures/${props.adventureId}/editor/assets`)
+    const res = await fetch(`/api/adventures/${props.adventureId}/editor/assets`, {
+      headers: {
+        'Authorization': `Bearer ${authState.token}`
+      }
+    })
     if (res.ok) {
       debugData.value = await res.json()
       visualsCacheVersion.value += 1
@@ -250,7 +266,10 @@ async function regenerateVisual() {
   try {
     const res = await fetch(`/api/adventures/${props.adventureId}/visuals/regenerate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authState.token}`
+      },
       body: JSON.stringify({
         target_type: selectedVisual.value.kind,
         target_id: selectedVisual.value.id,
@@ -283,7 +302,10 @@ async function quickRegenerateVisual(kind: 'cover' | 'protagonist' | 'scene' | '
   try {
     const res = await fetch(`/api/adventures/${props.adventureId}/visuals/regenerate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authState.token}`
+      },
       body: JSON.stringify({
         target_type: kind,
         target_id: id,
@@ -392,6 +414,9 @@ async function handleUploadChange(event: Event) {
 
     const res = await fetch(`/api/adventures/${props.adventureId}/visuals/upload`, {
       method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${authState.token}`
+      },
       body: formData,
     })
 
@@ -420,7 +445,10 @@ async function saveChanges() {
   try {
     const res = await fetch(`/api/adventures/${props.adventureId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authState.token}`
+      },
       body: JSON.stringify(form.value),
     })
 
@@ -449,6 +477,9 @@ async function resetAdventure() {
   try {
     const res = await fetch(`/api/adventures/${props.adventureId}/reset`, {
       method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${authState.token}`
+      },
     })
     if (!res.ok) {
       throw new Error('Failed to reset adventure.')
@@ -476,6 +507,9 @@ async function removeAdventure() {
   try {
     const res = await fetch(`/api/adventures/${props.adventureId}`, {
       method: 'DELETE',
+      headers: { 
+        'Authorization': `Bearer ${authState.token}`
+      },
     })
     if (!res.ok) {
       throw new Error('Failed to delete adventure.')
@@ -492,16 +526,17 @@ async function removeAdventure() {
 
 async function exportADZ() {
   if (!props.adventureId) return
-  const res = await fetch(`/api/adventures/${props.adventureId}/export/adz`)
-  if (!res.ok) return
-
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.adz`
-  a.click()
-  URL.revokeObjectURL(url)
+  try {
+    const blob = await api.downloadAdventureAdz(props.adventureId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(adventure.value?.title || 'adventure').replace(/\s+/g, '_')}.adz`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Export failed'
+  }
 }
 
 watch(
@@ -653,7 +688,7 @@ watch(
                   </div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative group aspect-[3/2] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden col-span-2 lg:col-span-3">
-                      <img v-if="debugData.adventure.image_url" :src="buildVisualImageUrl(debugData.adventure.image_url)" class="absolute inset-0 w-full h-full object-cover" />
+                      <img v-if="debugData.adventure.image_url" :src="buildVisualImageUrl(debugData.adventure.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ debugData.adventure.title || 'Adventure Cover' }}</div>
                         <div class="text-white/70">Cinematic title artwork</div>
@@ -787,8 +822,8 @@ watch(
                   </div>
                   <div v-if="(debugData.scenes ? debugData.scenes.length : 0) === 0" class="text-xs text-slate-600 italic">No scene visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div v-for="scene in (debugData.scenes || [])" :key="scene.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover" />
+                    <div v-for="scene in (debugData.scenes || [])" :key="scene.id" class="relative group aspect-[3/4.5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                      <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ scene.label || scene.name || scene.id }}</div>
                       </div>
@@ -854,8 +889,8 @@ watch(
                   </div>
                   <div v-if="(debugData.npcs ? debugData.npcs.length : 0) === 0" class="text-xs text-slate-600 italic">No inhabitant visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover" />
+                    <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-[3/4.5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                      <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ npc.name }}</div>
                       </div>
@@ -921,8 +956,8 @@ watch(
                   </div>
                   <div v-if="(debugData.objects ? debugData.objects.length : 0) === 0" class="text-xs text-slate-600 italic">No object visuals generated.</div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div v-for="obj in (debugData.objects || [])" :key="obj.id" class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover" />
+                    <div v-for="obj in (debugData.objects || [])" :key="obj.id" class="relative group aspect-[3/4.5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                      <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
                       <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
                         <div class="font-bold text-[11px]">{{ obj.name }}</div>
                       </div>
@@ -1055,7 +1090,7 @@ watch(
     <Transition name="fade">
       <div v-if="showPromptDialog" class="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" @click="() => closeRegenerateDialog()" />
-        <div class="relative z-10 w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden">
+        <div class="relative z-10 w-full max-w-xl min-h-[60vh] bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
           <div class="px-6 py-5 border-b border-slate-800">
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-lg font-bold text-white">Replace Visual</h3>
@@ -1067,7 +1102,7 @@ watch(
             <p v-if="selectedVisual?.kind !== 'cover'" class="text-xs text-slate-300 mt-3 whitespace-pre-line">{{ selectedVisual?.description || 'No description available.' }}</p>
             <p class="text-[10px] text-slate-500 mt-2">{{ selectedVisual?.hint || '' }}</p>
           </div>
-          <div class="p-6 space-y-4">
+          <div class="p-6 space-y-4 flex-grow overflow-y-auto custom-scrollbar">
             <div>
               <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Optional Prompt</label>
               <textarea v-model="visualPrompt" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-white resize-none" placeholder="Leave empty to use the entity's own description..."></textarea>

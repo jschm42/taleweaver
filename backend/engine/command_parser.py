@@ -77,9 +77,17 @@ class CommandParser:
 
         item_to_equip = avatar.inventory[item_idx]
         slot = item_to_equip.get("slot", "Hands") # Fallback to hands if missing
+        
+        # Normalize slot names (Hand -> Hands, etc.)
+        if slot == "Hand": slot = "Hands"
+        if slot == "Ring": slot = "Ring_1"
 
         if slot not in avatar.equipment:
-            return f"Invalid equipment slot '{slot}' on item."
+            # Try to find a partial match or default to Hands if it's a weapon
+            if item_to_equip.get("item_type") == "WEAPON":
+                slot = "Hands"
+            else:
+                return f"Invalid equipment slot '{slot}' on item."
 
         currently_equipped = avatar.equipment[slot]
         response_msg = ""

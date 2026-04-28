@@ -57,6 +57,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const headers = new Headers(init?.headers)
+  
+  if (authState.token) {
+    headers.set('Authorization', `Bearer ${authState.token}`)
+  }
+
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers,
+  })
+  if (!res.ok) {
+    const detail = await res.text()
+    if (res.status === 401 && authState.isAuthenticated) {
+       window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+    }
+    throw new Error(`API ${res.status}: ${detail}`)
+  }
+  return res.blob()
+}
+
 export const api = {
   /** Manually trigger import of example adventures. */
   importExamples(): Promise<{ status: string; message: string }> {
@@ -160,6 +181,16 @@ export const api = {
   /** Returns the URL for exporting an adventure as ADV (JSON blueprint). */
   exportAdvUrl(adventureId: string): string {
     return `${BASE}/adventures/${adventureId}/export/adv`
+  },
+
+  /** Downloads the adventure as ADZ (ZIP) bundle. */
+  downloadAdventureAdz(adventureId: string): Promise<Blob> {
+    return requestBlob(`/adventures/${adventureId}/export/adz`)
+  },
+
+  /** Downloads the adventure as ADV (JSON) manifest. */
+  downloadAdventureAdv(adventureId: string): Promise<any> {
+    return request(`/adventures/${adventureId}/export/adv`)
   },
 
   /** Import an ADZ file via FormData. */

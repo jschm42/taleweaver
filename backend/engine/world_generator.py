@@ -404,6 +404,23 @@ class WorldGenerator:
                 if "is_earned" not in a:
                     a["is_earned"] = False
             adventure.awards = awards
+            
+            # Generate Adventure Cover if missing
+            if not adventure.image_url and user:
+                await _publish_generation_status(db, adventure, "Painting Adventure Cover...")
+                try:
+                    cover_url = await MediaEngine.generate_adventure_cover(
+                        title=adventure.title,
+                        context=adventure.teaser or adventure.description,
+                        adventure_id=template_id,
+                        user_config={"t2i_settings": user.t2i_settings},
+                        api_keys=user.encrypted_api_keys
+                    )
+                    if cover_url:
+                        adventure.image_url = cover_url
+                except Exception as e:
+                    logger.warning(f"Failed to generate adventure cover for {template_id}: {e}")
+
             await db.flush()
 
         # 0. Sync Protagonist to Avatar
@@ -442,8 +459,10 @@ class WorldGenerator:
                             adventure,
                             f"Envisioning Portrait for {prot['name']}...",
                         )
-                        prompt = prompts.NPC_IMAGE_PROMPT_TEMPLATE.format(
-                            name=prot['name'], description=prot['description']
+                        prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
+                            name=prot['name'],
+                            role=prot['role'],
+                            description=prot['description']
                         )
                         image_attempts += 1
                         try:
@@ -525,7 +544,7 @@ class WorldGenerator:
             db.add(WorldScene(
                 id=s["id"],
                 template_id=template_id,
-                label=s["name"],
+                label=s.get("name") or s.get("label") or "Unknown Scene",
                 description=s["description"],
                 image_url=image_url
             ))

@@ -1,7 +1,8 @@
 import logging
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
@@ -252,3 +253,42 @@ async def delete_adventure(
     
     await AdventureLogic.delete_adventure(db, template_id)
     return {"status": "deleted", "template_id": template_id}
+
+@router.get("/{template_id}/export/adv")
+async def export_adventure_adv(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports the adventure as a pure .adv JSON manifest."""
+    from backend.engine.adventure_exporter import AdventureExporter
+    try:
+        manifest = await AdventureExporter.build_full_manifest(db, template_id)
+        return manifest
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Export failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{template_id}/export/adz")
+async def export_adventure_adz(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports the adventure as a portable .adz (ZIP) bundle including assets."""
+    from backend.engine.adventure_exporter import AdventureExporter
+    import io
+    try:
+        zip_data = await AdventureExporter.export_adz(db, template_id)
+        return StreamingResponse(
+            io.BytesIO(zip_data),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=adventure_{template_id}.adz"}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("ADZ Export failed")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -64,7 +64,7 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
       <img
         v-if="props.session.image_url"
         :src="props.session.image_url"
-        class="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
+        class="w-full h-full object-cover object-top opacity-60 group-hover:opacity-80 transition-opacity"
         alt="Adventure cover"
       />
       <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-[10px] font-bold uppercase tracking-widest">

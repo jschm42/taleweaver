@@ -376,7 +376,7 @@ onMounted(() => {
                 class="relative h-32 rounded-2xl overflow-hidden border-4 transition-all duration-300 group"
                 :class="form.selected_style_id === style.id ? 'border-blue-500 ring-8 ring-blue-500/10' : 'border-transparent hover:border-white/10'"
               >
-                <img :src="style.image_url" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                <img :src="style.image_url" class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110" />
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
                 <div class="absolute bottom-4 left-4 right-4">
                   <p class="text-[10px] font-black text-white uppercase tracking-widest">{{ style.name }}</p>
@@ -405,7 +405,7 @@ onMounted(() => {
                 class="relative h-32 rounded-2xl overflow-hidden border-4 transition-all duration-300 group"
                 :class="form.selected_tone_id === tone.id ? 'border-blue-500 ring-8 ring-blue-500/10' : 'border-transparent hover:border-white/10'"
               >
-                <img :src="tone.image_url" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                <img :src="tone.image_url" class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110" />
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
                 <div class="absolute bottom-4 left-4 right-4">
                   <p class="text-[10px] font-black text-white uppercase tracking-widest">{{ tone.name }}</p>
