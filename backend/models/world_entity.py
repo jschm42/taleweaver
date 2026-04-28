@@ -72,6 +72,14 @@ class WorldEntity(Base, TimestampMixin):
     mana = Column(Integer, nullable=True)
     stamina = Column(Integer, nullable=True)
 
+    # Stat Modifiers
+    stat_modifier_strength = Column(Integer, nullable=True)
+    stat_modifier_dexterity = Column(Integer, nullable=True)
+    stat_modifier_intelligence = Column(Integer, nullable=True)
+    stat_modifier_wisdom = Column(Integer, nullable=True)
+    stat_modifier_charisma = Column(Integer, nullable=True)
+    stat_modifier_armor_class = Column(Integer, nullable=True)
+
     # Optional state, e.g. NPC inventory: [{"name": "Key", "id": "BRONZE_KEY"}]
     inventory = Column(JSON, default=list, nullable=False)
     metadata_json = Column(JSON, default=dict, nullable=False) # For stats or dynamic state

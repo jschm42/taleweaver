@@ -587,8 +587,8 @@ onBeforeUnmount(() => {
         >
           <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
             <!-- Image Area -->
-            <div v-if="hoveredEntity.image_url" class="h-32 w-full relative">
-              <img :src="getImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover" />
+            <div v-if="hoveredEntity.image_url" class="h-48 w-full relative">
+              <img :src="getImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
               <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
             </div>
 

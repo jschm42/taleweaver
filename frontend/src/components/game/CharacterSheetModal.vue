@@ -147,8 +147,8 @@ const onClose = () => {
                 <!-- Identity Header -->
                 <div class="flex items-center gap-4 md:gap-6 mb-4 md:mb-8 shrink-0">
                   <div class="relative group/avatar">
-                    <div class="w-20 h-20 rounded-2xl bg-slate-800/40 border border-slate-700/50 overflow-hidden flex items-center justify-center shadow-2xl">
-                      <img v-if="sheet.profile_image && showImage(sheet.profile_image)" :src="getImageUrl(sheet.profile_image)" class="w-full h-full object-cover" @error="handleImageError(sheet.profile_image)" />
+                    <div class="w-28 h-28 rounded-2xl bg-slate-800/40 border border-slate-700/50 overflow-hidden flex items-center justify-center shadow-2xl">
+                      <img v-if="sheet.profile_image && showImage(sheet.profile_image)" :src="getImageUrl(sheet.profile_image)" class="w-full h-full object-cover object-top" @error="handleImageError(sheet.profile_image)" />
                       <img v-else src="@/assets/svg/upper-body-bust-silhouette.svg" class="w-16 h-16 object-contain opacity-100 filter brightness-[800%] contrast-150 drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]" />
                     </div>
                     <!-- Avatar Bio Hover Popup -->
@@ -190,7 +190,7 @@ const onClose = () => {
 
                       <template v-if="equipment[slot]">
                         <div v-if="showImage(equipment[slot].image_url)" class="w-full h-full p-1">
-                          <img :src="getImageUrl(equipment[slot].image_url)" class="w-full h-full object-cover rounded-lg" @error="handleImageError(equipment[slot].image_url)" />
+                          <img :src="getImageUrl(equipment[slot].image_url)" class="w-full h-full object-cover object-top rounded-lg" @error="handleImageError(equipment[slot].image_url)" />
                         </div>
                         <i v-else :class="['ra text-lg md:text-xl', getItemIcon(equipment[slot].item_type), getTypeColor(equipment[slot].item_type)]"></i>
                       </template>
@@ -255,7 +255,7 @@ const onClose = () => {
                       >
                         <template v-if="inventoryList[idx-1]">
                           <div v-if="showImage(inventoryList[idx-1].image_url)" class="w-full h-full p-2">
-                            <img :src="getImageUrl(inventoryList[idx-1].image_url)" class="w-full h-full object-cover rounded-lg transition-transform group-hover:scale-110" @error="handleImageError(inventoryList[idx-1].image_url)" />
+                            <img :src="getImageUrl(inventoryList[idx-1].image_url)" class="w-full h-full object-cover object-top rounded-lg transition-transform group-hover:scale-110" @error="handleImageError(inventoryList[idx-1].image_url)" />
                           </div>
                           <i v-else :class="['ra text-3xl', getItemIcon(inventoryList[idx-1].item_type), getTypeColor(inventoryList[idx-1].item_type)]"></i>
                         </template>

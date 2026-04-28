@@ -41,7 +41,7 @@ const emit = defineEmits<{
           <img
             v-if="ent.image_url && showImage(ent.image_url)"
             :src="getImageUrl(ent.image_url)"
-            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            class="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
             @error="emit('imageError', ent.image_url)"
           />
           <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">

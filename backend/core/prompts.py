@@ -20,6 +20,10 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "- COMBINABLE: Parts of a machine, ingredients for a recipe.\n"
     "- PICKABLE: Standard items without special traits.\n"
     "- WEAPON / TOOL / KEY / READABLE: Self-explanatory.\n"
+    "MODIFIERS (for OBJECTS):\n"
+    "- Assign 'stat_modifier_strength', 'stat_modifier_dexterity', 'stat_modifier_intelligence', "
+    "'stat_modifier_wisdom', 'stat_modifier_charisma', or 'stat_modifier_armor_class' (integer) "
+    "to items if they should improve the player's stats when equipped.\n"
     "Use 'is_hidden: true' for objects revealed by combinations or searching.\n"
     "For NPCs, assign a specific 'npc_type':\n"
     "- HUMANOID: People, elves, dwarves.\n"
@@ -109,9 +113,10 @@ Template for generating NPC portraits.
 Variables: name, description.
 """
 
-ITEM_IMAGE_PROMPT_TEMPLATE = (
+OBJECT_IMAGE_PROMPT_TEMPLATE = (
     "Highly detailed item: {name}. {description}. Isolated on simple background, RPG asset style."
 )
+ITEM_IMAGE_PROMPT_TEMPLATE = OBJECT_IMAGE_PROMPT_TEMPLATE
 """
 Template for generating icons/portraits for items and objects.
 Variables: name, description.

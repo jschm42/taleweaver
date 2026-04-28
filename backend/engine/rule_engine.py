@@ -18,10 +18,11 @@ class InventoryItem(BaseModel):
     wearable_slots: Optional[List[str]] = None
     image_url: Optional[str] = None
     stat_modifier_strength: Optional[int] = None
-    stat_modifier_endurance: Optional[int] = None
-    stat_modifier_agility: Optional[int] = None
+    stat_modifier_dexterity: Optional[int] = None
     stat_modifier_intelligence: Optional[int] = None
+    stat_modifier_wisdom: Optional[int] = None
     stat_modifier_charisma: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
 
 class EntityMovement(BaseModel):
     entity_id: str

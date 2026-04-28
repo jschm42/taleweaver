@@ -477,6 +477,8 @@ onMounted(() => {
   
   if (route.query.section === 'profile') {
     activeSection.value = 'profile'
+  } else if (route.query.section === 'templates') {
+    activeSection.value = 'templates'
   }
 
   if (newId) {

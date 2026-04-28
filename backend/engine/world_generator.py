@@ -133,6 +133,14 @@ class WorldEntitySchema(BaseModel):
     mana: Optional[int] = Field(None, description="Optional mana")
     stamina: Optional[int] = Field(None, description="Optional stamina")
 
+    # Stat Modifiers (for OBJECTS)
+    stat_modifier_strength: Optional[int] = None
+    stat_modifier_dexterity: Optional[int] = None
+    stat_modifier_intelligence: Optional[int] = None
+    stat_modifier_wisdom: Optional[int] = None
+    stat_modifier_charisma: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
+
 class QuestSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the quest, e.g., FIND_GOLDEN_KEY")
     title: str = Field(..., description="Short, descriptive title")
@@ -654,7 +662,13 @@ class WorldGenerator:
                 "description": o["description"],
                 "image_url": image_url,
                 "item_type": o.get("item_type", "PICKABLE"),
-                "slot": (o.get("wearable_slots") or ["Hands"])[0] if o.get("item_type") == "WEARABLE" else "Hands"
+                "slot": (o.get("wearable_slots") or ["Hands"])[0] if o.get("item_type") == "WEARABLE" else "Hands",
+                "stat_modifier_strength": o.get("stat_modifier_strength"),
+                "stat_modifier_dexterity": o.get("stat_modifier_dexterity"),
+                "stat_modifier_intelligence": o.get("stat_modifier_intelligence"),
+                "stat_modifier_wisdom": o.get("stat_modifier_wisdom"),
+                "stat_modifier_charisma": o.get("stat_modifier_charisma"),
+                "stat_modifier_armor_class": o.get("stat_modifier_armor_class"),
             }
 
             if avatar and is_in_inv:
@@ -685,6 +699,12 @@ class WorldGenerator:
                     combination_ingredients=o.get("combination_ingredients"),
                     reveals_item_id=o.get("reveals_item_id"),
                     state_comment=o.get("state_comment"),
+                    stat_modifier_strength=o.get("stat_modifier_strength"),
+                    stat_modifier_dexterity=o.get("stat_modifier_dexterity"),
+                    stat_modifier_intelligence=o.get("stat_modifier_intelligence"),
+                    stat_modifier_wisdom=o.get("stat_modifier_wisdom"),
+                    stat_modifier_charisma=o.get("stat_modifier_charisma"),
+                    stat_modifier_armor_class=o.get("stat_modifier_armor_class"),
                 )
             )
 

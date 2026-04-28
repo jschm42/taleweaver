@@ -282,7 +282,23 @@ class GameTurnManager:
             pass1_duration = time.perf_counter() - pass1_start
             logger.debug(f"[Turn {self.game_id}] [Pass 1] Mechanics analysis took {pass1_duration:.4f}s")
             
-            # Apply Changes
+            # 2. Resolve Skill Checks
+            if game_event.requested_skill_checks:
+                results = []
+                for req in game_event.requested_skill_checks:
+                    roll = roll_skill_check(self.avatar, req.stat, req.dc)
+                    results.append(SkillCheckResult(
+                        stat=req.stat,
+                        dc=req.dc,
+                        roll=roll["d20"],
+                        modifier=roll["modifier"],
+                        total=roll["total"],
+                        success=roll["success"],
+                        reason=req.reason
+                    ))
+                game_event.skill_check_results = results
+
+            # 3. Apply Changes
             await self._apply_game_event(game_event)
 
         # Pass 2: Narration

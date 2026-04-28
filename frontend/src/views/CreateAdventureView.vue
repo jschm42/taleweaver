@@ -152,7 +152,7 @@ async function handleCreate() {
 
   try {
     await api.createAdventure(payload)
-    router.push({ name: 'portal', query: { new_id: payload.id, new_title: payload.title } })
+    router.push({ name: 'portal', query: { new_id: payload.id, new_title: payload.title, section: 'templates' } })
   } catch (error: any) {
     errorMsg.value = error?.message || 'Failed to create adventure.'
     isGenerating.value = false
