@@ -64,8 +64,20 @@ class MemoryManager:
             
             # Entities present here
             if entities:
-                npcs = [f"{e.name} (Position: {e.spatial_position})" if e.spatial_position else e.name for e in entities if e.entity_type == "NPC"]
+                npcs = []
+                for e in entities:
+                    if e.entity_type == "NPC":
+                        stats = []
+                        if e.hp is not None: stats.append(f"HP: {e.hp}/{e.max_hp or e.hp}")
+                        if e.mana is not None: stats.append(f"Mana: {e.mana}/{e.max_mana or e.mana}")
+                        if e.stamina is not None: stats.append(f"Stamina: {e.stamina}/{e.max_stamina or e.stamina}")
+                        
+                        stat_str = f" [{', '.join(stats)}]" if stats else ""
+                        pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
+                        npcs.append(f"{e.name}{stat_str}{pos_str}")
+                
                 objects = [f"{e.name} (Position: {e.spatial_position})" if e.spatial_position else e.name for e in entities if e.entity_type == "OBJECT"]
+                
                 if npcs:
                     location_context += f"PRESENT NPCs: {', '.join(npcs)}\n"
                 if objects:

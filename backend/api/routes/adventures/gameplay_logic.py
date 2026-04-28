@@ -407,6 +407,8 @@ class GameTurnManager:
                 if update.spatial_position is not None: states[eid]["spatial_position"] = update.spatial_position
                 if update.is_hidden is not None: states[eid]["is_hidden"] = update.is_hidden
                 if update.hp is not None: states[eid]["hp"] = update.hp
+                if update.mana is not None: states[eid]["mana"] = update.mana
+                if update.stamina is not None: states[eid]["stamina"] = update.stamina
                 state_dirty = True
         
         if event.deleted_entities:
