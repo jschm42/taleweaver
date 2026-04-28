@@ -445,54 +445,80 @@ class WorldGenerator:
                 if item_id:
                     starting_inv_ids.add(item_id)
 
-            if avatar:
-                avatar.name = prot["name"]
-                avatar.role = prot["role"]
-                avatar.description = prot["description"]
+            if not avatar:
+                # Create new Avatar for this adventure
+                avatar = Avatar(
+                    template_id=template_id,
+                    user_id=adventure.owner_id,
+                    name=prot.get("name", "Hero"),
+                    role=prot.get("role", "Protagonist"),
+                    description=prot.get("description", ""),
+                    hp=prot.get("hp", 200),
+                    stamina=prot.get("stamina", 200),
+                    mana=prot.get("mana", 200),
+                    stats=prot.get("stats", {}),
+                    inventory=prot.get("starting_inventory", []),
+                    equipment=prot.get("starting_equipment", {
+                        "Head": None, "Chest": None, "Arms": None, "Legs": None,
+                        "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
+                    })
+                )
+                db.add(avatar)
+            else:
+                # Update existing Avatar
+                avatar.name = prot.get("name", avatar.name)
+                avatar.role = prot.get("role", avatar.role)
+                avatar.description = prot.get("description", avatar.description)
+                avatar.hp = prot.get("hp", avatar.hp)
+                avatar.stamina = prot.get("stamina", avatar.stamina)
+                avatar.mana = prot.get("mana", avatar.mana)
+                avatar.stats = prot.get("stats", avatar.stats)
+                avatar.inventory = prot.get("starting_inventory", avatar.inventory)
+                avatar.equipment = prot.get("starting_equipment", avatar.equipment)
+
+            # Unified Portrait Logic
+            image_url = (existing_images or {}).get("PROTAGONIST") or prot.get("profile_image")
+            if not image_url or image_url.startswith("assets/"): # If it's a relative path from manifest, it should have been in existing_images
+                if user and gen_protagonist_image:
+                    await _publish_generation_status(
+                        db,
+                        adventure,
+                        f"Envisioning Portrait for {avatar.name}...",
+                    )
+                    prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
+                        name=avatar.name,
+                        role=avatar.role,
+                        description=avatar.description
+                    )
+                    image_attempts += 1
+                    try:
+                        image_url = await asyncio.wait_for(
+                            MediaEngine.generate_entity_image(
+                                prompt,
+                                template_id,
+                                "PROTAGONIST",
+                                "NPC",
+                                {"t2i_settings": user.t2i_settings},
+                                user.encrypted_api_keys,
+                            ),
+                            timeout=_image_generation_timeout_seconds(),
+                        )
+                    except Exception as exc:
+                        logger.warning("Protagonist image generation failed for %s: %s", template_id, exc)
+                        image_url = None
+                    if image_url:
+                        image_successes += 1
                 
-                # Generate Portrait for Protagonist if requested
-                image_url = (existing_images or {}).get("PROTAGONIST") or prot.get("profile_image")
                 if not image_url:
-                    if user and gen_protagonist_image:
-                        await _publish_generation_status(
-                            db,
-                            adventure,
-                            f"Envisioning Portrait for {prot['name']}...",
-                        )
-                        prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
-                            name=prot['name'],
-                            role=prot['role'],
-                            description=prot['description']
-                        )
-                        image_attempts += 1
-                        try:
-                            image_url = await asyncio.wait_for(
-                                MediaEngine.generate_entity_image(
-                                    prompt,
-                                    template_id,
-                                    "PROTAGONIST",
-                                    "NPC",
-                                    {"t2i_settings": user.t2i_settings},
-                                    user.encrypted_api_keys,
-                                ),
-                                timeout=_image_generation_timeout_seconds(),
-                            )
-                        except asyncio.TimeoutError as exc:
-                            logger.warning("Protagonist image generation timed out for %s: %s", template_id, exc)
-                            image_url = None
-                        except Exception as exc:
-                            # Visual failures (e.g. provider moderation) must not abort world creation
-                            logger.warning("Protagonist image generation failed for %s: %s", template_id, exc)
-                            image_url = None
-                        if image_url:
-                            image_successes += 1
-                    
-                    if not image_url:
-                        # Fallback to procedural SVG
+                    # Fallback to procedural SVG or keep existing if it's already a valid /data/ path
+                    if not avatar.profile_image or not avatar.profile_image.startswith("/data/"):
                         image_url = await MediaEngine.generate_svg_placeholder(
                             template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", template_id)
                         )
-                avatar.profile_image = image_url
+                    else:
+                        image_url = avatar.profile_image
+            
+            avatar.profile_image = image_url
             
         # Persist Scenes
         scenes = manifest_dict.get("scenes", [])
