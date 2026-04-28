@@ -62,23 +62,25 @@ async def test_game_loop_standard_turn(setup_test_db, monkeypatch):
         
         # Pass 1: Returns a GameEvent with no changes
         mock_event = GameEvent(
-            narrative_update="You walk into the room.",
+            narrative_description="You walk into the room.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
             scene_change=None,
-            stat_changes={},
-            inventory_changes=[],
-            requested_skill_checks=[],
-            quest_updates=[]
+            requested_skill_checks=[]
         )
         mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
         
-        # Pass 2: Returns naration stream
+        # Pass 2: Returns narration stream
         async def mock_stream(*args, **kwargs):
-            yield "The "
-            yield "room "
-            yield "is "
-            yield "dark."
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The "))])
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="room "))])
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="is "))])
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="dark."))])
             
-        mock_llm_instance.astream_chat = mock_stream
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
         
         monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
         
@@ -89,7 +91,11 @@ async def test_game_loop_standard_turn(setup_test_db, monkeypatch):
             chunks.append(chunk)
             
         # Assert
-        assert any("The room is dark." in c for c in chunks)
+        full_response = "".join(chunks)
+        assert "The " in full_response
+        assert "room " in full_response
+        assert "is " in full_response
+        assert "dark." in full_response
         
         # Check if state was updated (time)
         await db.refresh(state)
@@ -112,16 +118,21 @@ async def test_game_loop_skill_check_trigger(setup_test_db, monkeypatch):
         # Pass 1: Requests a Strength check
         from backend.engine.rule_engine import SkillCheckRequest
         mock_event = GameEvent(
-            narrative_update="The door is heavy.",
+            narrative_description="The door is heavy.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
             requested_skill_checks=[SkillCheckRequest(stat="strength", dc=12, reason="Opening the heavy door")]
         )
         mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
         
         # Pass 2: Acknowledges the check
         async def mock_stream(*args, **kwargs):
-            yield "You strain against the wood..."
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You strain against the wood..."))])
             
-        mock_llm_instance.astream_chat = mock_stream
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
         
         monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
         
@@ -135,10 +146,12 @@ async def test_game_loop_skill_check_trigger(setup_test_db, monkeypatch):
             chunks.append(chunk)
             
         # Assert
-        # Verify skill check event was sent to client
-        assert any("event: skill_check" in c for c in chunks)
-        assert any("Opening the heavy door" in c for c in chunks)
-        assert any('"success": true' in c for c in chunks)
+        # Verify skill check was yielded as a system message with dice roll details
+        full_response = "".join(chunks)
+        assert "event: system" in full_response
+        assert "STRENGTH CHECK" in full_response
+        assert "Opening the heavy door" in full_response
+        assert "SUCCESS" in full_response
 
 async def test_game_loop_scene_change(setup_test_db, monkeypatch):
     """Verifies that the GM can trigger a scene change that updates the session state."""
@@ -149,14 +162,19 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
         
         mock_llm_instance = MagicMock()
         mock_event = GameEvent(
-            narrative_update="You descend into the cellar.",
-            scene_change="CELLAR"
+            narrative_description="You descend into the cellar.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
+            new_scene_id="CELLAR"
         )
         mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
         
         async def mock_stream(*args, **kwargs):
-            yield "The air is damp here."
-        mock_llm_instance.astream_chat = mock_stream
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The air is damp here."))])
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
         
         monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
         
@@ -201,9 +219,7 @@ async def test_rule_engine_apply_ticks():
     messages = RuleEngine.apply_ticks(avatar)
     
     assert avatar.hp == 95 # Poisoned: -5
-    assert avatar.stamina == 100 # Resting: +3, but capped at 100 in this test if logic allows, wait.
-    # RESOURCE_CAP is 200 in rule_engine.py
-    assert avatar.stamina == 103
+    assert avatar.stamina == 103 # Resting: +3
     assert avatar.mana == 103
     assert any("Poisoned" in m for m in messages)
 

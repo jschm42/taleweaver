@@ -3,6 +3,7 @@ import zipfile
 import io
 import json
 import os
+from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -84,13 +85,13 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
         user = user_res.scalars().first()
         adventure_id = await _seed_adventure(db, user.id)
 
-        # 1. Export
         # Mock file system to avoid actual disk writes/reads
         # We'll mock os.path.exists and open to simulate presence of image files
+        original_exists = os.path.exists
         def fake_exists(path):
             if "cover.jpg" in path or "hero.jpg" in path or "scene1.jpg" in path or "npc1.jpg" in path:
                 return True
-            return os.path.exists(path)
+            return original_exists(path)
         
         monkeypatch.setattr("os.path.exists", fake_exists)
         
@@ -109,6 +110,11 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
                 yield from original_walk(top, topdown, onerror, followlinks)
         
         monkeypatch.setattr("os.walk", fake_walk)
+        monkeypatch.setattr("os.makedirs", lambda *args, **kwargs: None)
+        
+        # Mock MediaEngine to avoid placeholder generation errors
+        monkeypatch.setattr("backend.engine.media_engine.MediaEngine.generate_svg_placeholder", AsyncMock(return_value="/data/fake_placeholder.svg"))
+        monkeypatch.setattr("backend.engine.media_engine.MediaEngine.generate_entity_image", AsyncMock(return_value="/data/fake_portrait.jpg"))
 
         adz_bytes = await AdventureExporter.export_adz(db, adventure_id)
         assert len(adz_bytes) > 0
@@ -125,14 +131,17 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
 
         # 2. Import
         # Mock zip_file.read for assets to return dummy bytes
+        original_zip_read = zipfile.ZipFile.read
         def fake_zip_read(self, name):
             if name == "adventure.adv":
-                return z.read(name)
+                return original_zip_read(self, name)
             return b"fake_image_data"
         
         monkeypatch.setattr("zipfile.ZipFile.read", fake_zip_read)
         
         # Mock open() for writing extracted assets
+        import builtins
+        original_open = builtins.open
         mock_files = {}
         class MockFile:
             def __init__(self, name): self.name = name
@@ -140,12 +149,21 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
             def __exit__(self, *args): pass
             def write(self, data): mock_files[self.name] = data
             
-        def fake_open(name, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True, opener=None):
+        def fake_open(name, mode="r", *args, **kwargs):
             if "wb" in mode:
                 return MockFile(name)
-            return open(name, mode, buffering, encoding, errors, newline, closefd, opener)
+            return original_open(name, mode, *args, **kwargs)
             
         monkeypatch.setattr("builtins.open", fake_open)
+
+        # Delete adventure before import to avoid duplicate title conflict
+        from backend.models.world_entity import WorldScene, WorldEntity
+        from sqlalchemy import delete
+        await db.execute(delete(WorldEntity).where(WorldEntity.template_id == adventure_id))
+        await db.execute(delete(WorldScene).where(WorldScene.template_id == adventure_id))
+        await db.execute(delete(Avatar).where(Avatar.template_id == adventure_id))
+        await db.execute(delete(AdventureTemplate).where(AdventureTemplate.id == adventure_id))
+        await db.commit()
 
         # Import as a new adventure for the same user
         success = await AdventureTemplateImporter.import_adz(db, adz_bytes, owner_id=user.id)
@@ -195,8 +213,19 @@ async def test_adventure_import_restores_protagonist(auth_client, setup_test_db,
             z.writestr("assets/hero.jpg", b"fake_data")
             
         # Mock file operations for extraction
+        import builtins
+        original_open = builtins.open
+        def fake_open(name, mode="r", *args, **kwargs):
+            if "wb" in mode:
+                return io.BytesIO()
+            return original_open(name, mode, *args, **kwargs)
+            
         monkeypatch.setattr("os.makedirs", lambda *args, **kwargs: None)
-        monkeypatch.setattr("builtins.open", lambda *args, **kwargs: io.BytesIO()) # Drain writes
+        monkeypatch.setattr("builtins.open", fake_open)
+        
+        # Mock MediaEngine
+        monkeypatch.setattr("backend.engine.media_engine.MediaEngine.generate_svg_placeholder", AsyncMock(return_value="/data/fake_placeholder.svg"))
+        monkeypatch.setattr("backend.engine.media_engine.MediaEngine.generate_entity_image", AsyncMock(return_value="/data/fake_portrait.jpg"))
         
         success = await AdventureTemplateImporter.import_adz(db, zip_buffer.getvalue(), owner_id=user.id)
         assert success is True

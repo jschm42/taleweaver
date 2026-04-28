@@ -159,6 +159,10 @@ class AdventureTemplateImporter:
                         "role": prot.get("role", "Hero") if prot else "Hero",
                         "description": prot.get("description", "") if prot else "",
                         "profile_image": prot.get("profile_image") if prot else None,
+                        "hp": prot.get("hp", 200) if prot else 200,
+                        "stamina": prot.get("stamina", 200) if prot else 200,
+                        "mana": prot.get("mana", 200) if prot else 200,
+                        "stats": prot.get("stats", {}) if prot else {},
                         "starting_inventory": prot.get("starting_inventory", prot.get("inventory", [])) if prot else [],
                         "starting_equipment": prot.get("starting_equipment", prot.get("equipment", {})) if prot else {}
                     },

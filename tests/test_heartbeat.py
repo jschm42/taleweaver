@@ -7,7 +7,10 @@ in isolation using simple Avatar stubs.
 import pytest
 from unittest.mock import MagicMock
 
-from backend.engine.heartbeat import _apply_status_effect_ticks, RESOURCE_CAP
+from backend.engine.rule_engine import RuleEngine, RESOURCE_CAP
+
+def _apply_status_effect_ticks(avatar):
+    return RuleEngine.apply_ticks(avatar)
 
 
 def _make_avatar(hp: int = 200, stamina: int = 200, mana: int = 200, effects=None):
