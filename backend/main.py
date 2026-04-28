@@ -5,10 +5,15 @@ from fastapi.staticfiles import StaticFiles
 import os
 import logging
 from sqlalchemy import select
-
 from backend.core.database import engine, apply_sqlite_compat_migrations
 from backend.models.base import Base
 from backend.core.config import settings
+
+# Configure logging based on .env settings
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(levelname)s:     %(name)s - %(message)s"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +32,7 @@ from backend.api.routes import config_api, adventures, avatars, data, characters
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manages application startup and shutdown lifecycle."""
-    # Startup: create DB tables and launch background heartbeat
+    # Startup: create DB tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

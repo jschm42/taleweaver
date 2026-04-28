@@ -23,8 +23,6 @@ class AdventureTemplate(Base, TimestampMixin):
     time_per_turn = Column(Integer, default=5, nullable=False)
     pacing_minutes = Column(Integer, default=5, nullable=False)
     clock_enabled = Column(Boolean, default=False, nullable=False)
-    heartbeat_enabled = Column(Boolean, default=False, nullable=False)
-    heartbeat_interval = Column(Integer, default=10, nullable=False)
     
     generate_scene_images = Column(Boolean, default=False, nullable=False)
     generate_npc_images = Column(Boolean, default=False, nullable=False)

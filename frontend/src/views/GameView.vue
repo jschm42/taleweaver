@@ -21,6 +21,7 @@ import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
+import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
 import { getImageUrl } from '@/utils/game_icons'
 
@@ -323,17 +324,57 @@ const fetchGameSettings = async () => {
   }
 }
 
-onMounted(() => {
-  fetchGameSettings()
-  if (props.id) {
-    connect(props.id)
+const resolveGameIdFromRouteId = async (routeId: string): Promise<string | null> => {
+  try {
+    const sessions = await api.listSessions()
+    const direct = sessions.find((s: any) => s.game_id === routeId)
+    if (direct) return routeId
+
+    const match = sessions.find((s: any) => s.template_id === routeId || s.adventure_id === routeId)
+    return match?.game_id || null
+  } catch (error) {
+    console.error('Failed to resolve route id to game session id', error)
+    return null
   }
+}
+
+const ensureGameIdForRouteId = async (routeId: string): Promise<string | null> => {
+  const resolved = await resolveGameIdFromRouteId(routeId)
+  if (resolved) return resolved
+
+  // If no active session exists yet, routeId might be a template/adventure id.
+  // Try to start one and continue with the returned game id.
+  try {
+    const created = await api.startSessionForTemplate(routeId)
+    return created?.game_id || null
+  } catch {
+    return null
+  }
+}
+
+const connectWithRouteFallback = async (routeId: string) => {
+  await connect(routeId)
+  if (status.value !== 'error') return
+
+  const resolvedGameId = await ensureGameIdForRouteId(routeId)
+  if (!resolvedGameId || resolvedGameId === routeId) return
+
+  await router.replace({ name: 'game', params: { id: resolvedGameId } })
+}
+
+onMounted(() => {
+  void (async () => {
+    await fetchGameSettings()
+    if (props.id) {
+      await connectWithRouteFallback(props.id)
+    }
+  })()
 })
 
 watch(() => props.id, (newId) => {
   disconnect()
   if (newId) {
-    connect(newId)
+    void connectWithRouteFallback(newId)
   }
 })
 

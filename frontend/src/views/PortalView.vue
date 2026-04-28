@@ -5,7 +5,6 @@ import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
 import type { AdventureTemplateSummary, GameSession } from '@/types'
 import PortalSidebar from '@/components/portal/PortalSidebar.vue'
-import PortalHeader from '@/components/portal/PortalHeader.vue'
 import PendingAdventureCard from '@/components/portal/PendingAdventureCard.vue'
 import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
 import PortalLibraryToolbar from '@/components/portal/PortalLibraryToolbar.vue'
@@ -67,7 +66,6 @@ const isImporting = ref(false)
 const errorMsg = ref('')
 const showDeleteConfirm = ref(false)
 const templateToDelete = ref<{ id: string; title: string } | null>(null)
-const showProfile = ref(false)
 const showImportConfirm = ref(false)
 const isSeeding = ref(false)
 
@@ -496,8 +494,6 @@ onUnmounted(() => {
 
     <!-- Main Content Area -->
     <main class="flex-1 flex flex-col relative overflow-hidden">
-      <PortalHeader />
-
       <!-- Scrollable Content -->
       <div class="flex-1 overflow-y-auto" :class="activeSection !== 'profile' ? 'p-10' : ''">
         <PortalLibraryToolbar

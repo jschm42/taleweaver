@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from pydantic import BaseModel
 from typing import TypeVar, Type, Any
 import litellm
@@ -12,6 +13,78 @@ T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 class GameMasterLLM:
+
+    @staticmethod
+    def _extract_openrouter_available_providers(exc: Exception) -> list[str]:
+        """Parse OpenRouter provider metadata from LiteLLM/OpenAI-style exceptions."""
+        message = str(exc or "")
+        if "No allowed providers are available for the selected model" not in message:
+            return []
+
+        match = re.search(r"'available_providers'\s*:\s*\[([^\]]*)\]", message)
+        if not match:
+            return []
+
+        providers = re.findall(r"'([^']+)'", match.group(1))
+        # Keep deterministic order and de-duplicate just in case.
+        seen: set[str] = set()
+        unique: list[str] = []
+        for provider in providers:
+            if provider and provider not in seen:
+                seen.add(provider)
+                unique.append(provider)
+        return unique
+
+    def _retry_kwargs_with_openrouter_provider_order(self, kwargs: dict, providers: list[str]) -> dict:
+        """Build retry kwargs that explicitly prefer providers OpenRouter says are available."""
+        retry_kwargs = dict(kwargs)
+        extra_body = dict(retry_kwargs.get("extra_body") or {})
+        provider_block = dict(extra_body.get("provider") or {})
+        provider_block["order"] = providers
+        provider_block.setdefault("allow_fallbacks", True)
+        extra_body["provider"] = provider_block
+        retry_kwargs["extra_body"] = extra_body
+        return retry_kwargs
+
+    def _completion_with_openrouter_fallback(self, kwargs: dict):
+        """Call LiteLLM completion and retry once for OpenRouter provider-order mismatches."""
+        try:
+            return self._get_litellm().completion(**kwargs)
+        except Exception as exc:
+            if self.provider != "openrouter":
+                raise
+
+            available_providers = self._extract_openrouter_available_providers(exc)
+            if not available_providers:
+                raise
+
+            logger.warning(
+                "OpenRouter provider mismatch for model '%s'. Retrying with provider order: %s",
+                kwargs.get("model"),
+                ",".join(available_providers),
+            )
+            retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
+            return self._get_litellm().completion(**retry_kwargs)
+
+    async def _acompletion_with_openrouter_fallback(self, kwargs: dict):
+        """Async variant of completion retry for OpenRouter provider-order mismatches."""
+        try:
+            return await self._get_litellm().acompletion(**kwargs)
+        except Exception as exc:
+            if self.provider != "openrouter":
+                raise
+
+            available_providers = self._extract_openrouter_available_providers(exc)
+            if not available_providers:
+                raise
+
+            logger.warning(
+                "OpenRouter provider mismatch for model '%s'. Retrying with provider order: %s",
+                kwargs.get("model"),
+                ",".join(available_providers),
+            )
+            retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
+            return await self._get_litellm().acompletion(**retry_kwargs)
 
     @staticmethod
     def _is_supported_bool_value(value: Any) -> bool:
@@ -123,9 +196,10 @@ class GameMasterLLM:
             return normalized
 
         if self.provider == "openrouter":
-            # Use raw model slug; provider routing is handled via api_base + custom_llm_provider.
-            if "/" in normalized:
-                normalized = normalized.split("/", 1)[1].strip()
+            # OpenRouter model ids often require provider prefixes (e.g. openai/gpt-5-mini).
+            # Only strip an optional leading openrouter/ wrapper if present.
+            if normalized.lower().startswith("openrouter/"):
+                return normalized.split("/", 1)[1].strip()
             return normalized
 
         if "/" in normalized:
@@ -238,7 +312,7 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        response = self._get_litellm().completion(**kwargs)
+        response = self._completion_with_openrouter_fallback(kwargs)
         
         result = response.choices[0].message.content or ""
         
@@ -312,7 +386,7 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        return await self._get_litellm().acompletion(**kwargs)
+        return await self._acompletion_with_openrouter_fallback(kwargs)
 
     async def aexecute_complex_task(
         self,
@@ -369,7 +443,7 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        response = await self._get_litellm().acompletion(**kwargs)
+        response = await self._acompletion_with_openrouter_fallback(kwargs)
         
         content = response.choices[0].message.content
         
@@ -473,7 +547,7 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        response = self._get_litellm().completion(**kwargs)
+        response = self._completion_with_openrouter_fallback(kwargs)
         
         content = response.choices[0].message.content
         

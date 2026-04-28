@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     BACKEND_PORT: int = 8000
     FRONTEND_PORT: int = 5173
+    LOG_LEVEL: str = "INFO"
     
     # Storage configuration
     DATA_DIR: str = "data"

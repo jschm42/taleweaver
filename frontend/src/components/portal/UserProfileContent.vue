@@ -319,7 +319,7 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 }
 
 .profile-header {
-  padding: 50px;
+  padding: 28px;
   background: rgba(255, 255, 255, 0.01);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -336,8 +336,8 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 
 .avatar-container {
   position: relative;
-  width: 160px;
-  height: 160px;
+  width: 112px;
+  height: 112px;
   border-radius: 40px;
   overflow: hidden;
   background: #000;
@@ -392,8 +392,8 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
   font-family: 'Outfit', sans-serif;
   color: #fff;
   font-weight: 800;
-  font-size: 3rem;
-  letter-spacing: -1.5px;
+  font-size: 1.55rem;
+  letter-spacing: -0.6px;
   line-height: 1;
 }
 
@@ -418,8 +418,8 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 }
 
 .bio-text {
-  font-size: 1.1rem;
-  line-height: 1.6;
+  font-size: 0.86rem;
+  line-height: 1.45;
   max-width: 600px;
 }
 
@@ -443,7 +443,7 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 }
 
 .profile-body {
-  padding: 50px;
+  padding: 28px;
   width: 100%;
 }
 
@@ -452,8 +452,8 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
   align-items: center;
   justify-content: center;
   gap: 0;
-  margin-bottom: 50px;
-  padding: 40px;
+  margin-bottom: 24px;
+  padding: 20px;
   background: rgba(255, 255, 255, 0.015);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 30px;
@@ -464,37 +464,37 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 25px;
+  gap: 16px;
 }
 
 .stat-divider {
   width: 1px;
-  height: 80px;
+  height: 48px;
   background: rgba(255, 255, 255, 0.05);
-  margin: 0 50px;
+  margin: 0 16px;
 }
 
 .stat-icon {
-  width: 60px;
-  height: 60px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(78, 222, 163, 0.1);
-  border-radius: 20px;
+  border-radius: 14px;
   color: #4edea3;
-  font-size: 1.8rem;
+  font-size: 1rem;
 }
 
 .stat-value {
-  font-size: 3rem;
+  font-size: 1.5rem;
   font-weight: 900;
   color: #fff;
   line-height: 1;
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.15em;
@@ -508,11 +508,11 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 
 .awards-section h3 {
   margin-top: 0;
-  margin-bottom: 40px;
-  font-size: 1.3rem;
+  margin-bottom: 16px;
+  font-size: 0.86rem;
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 0.5em;
+  letter-spacing: 0.22em;
   color: #94a3b8;
   display: flex;
   align-items: center;
@@ -520,7 +520,7 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 }
 
 .empty-trophy {
-  padding: 120px 60px;
+  padding: 56px 24px;
   text-align: center;
   background: rgba(255, 255, 255, 0.005);
   border: 2px dashed rgba(255, 255, 255, 0.03);
@@ -528,10 +528,38 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 }
 
 .empty-icon {
-  font-size: 100px;
+  font-size: 56px;
   color: rgba(255, 255, 255, 0.02);
-  margin-bottom: 40px;
+  margin-bottom: 16px;
   display: block;
+}
+
+@media (max-width: 900px) {
+  .profile-header,
+  .profile-body {
+    padding: 24px;
+  }
+
+  .header-main {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .user-identity h2 {
+    font-size: 1.25rem;
+  }
+
+  .stats-overview {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .stat-divider {
+    width: 100%;
+    height: 1px;
+    margin: 0;
+  }
 }
 
 .trophy-grid {
