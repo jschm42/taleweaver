@@ -73,16 +73,18 @@ Variables: title, context.
 # --- Image Generation Prompts ---
 
 NO_TEXT_IMAGE_PROMPT_SUFFIX = (
-    "Do not include any text, letters, captions, logos, watermarks, or signage "
-    "unless the prompt explicitly asks for text."
+    "ABSOLUTELY NO TEXT. No letters, no captions, no logos, no watermarks, no signage, "
+    "no signatures, and no writing of any kind should appear in this image."
 )
 """
 Global negative instruction appended to all image prompts to prevent AI-generated gibberish text.
 """
 
 ADVENTURE_COVER_PROMPT_TEMPLATE = (
-    "Epic cinematic adventure cover: {title}. {context}. "
-    "Landscape format, 3:2 aspect ratio. No text. Cinematic, immersive atmosphere, detailed concept art."
+    "Epic cinematic illustration depicting: {context}. "
+    "Atmosphere: {title}. "
+    "Landscape format, 3:2 aspect ratio. ABSOLUTELY NO TEXT, NO LETTERS, NO LOGOS. "
+    "Cinematic lighting, immersive atmosphere, highly detailed digital painting."
 )
 """
 Template for generating the main cover image of an adventure.
@@ -90,7 +92,7 @@ Variables: title, context.
 """
 
 PROTAGONIST_IMAGE_PROMPT_TEMPLATE = (
-    "Portrait of character {name}, {role}. {description}. Game attribute art style."
+    "Portrait of character {name}, {role}. {description}. Game attribute art style. No text."
 )
 """
 Template for generating the player character's portrait.
@@ -98,7 +100,7 @@ Variables: name, role, description.
 """
 
 SCENE_IMAGE_PROMPT_TEMPLATE = (
-    "Atmospheric background: {name}. {description}. RPG visual novel style, 3:2 aspect ratio, high detail."
+    "Atmospheric background: {name}. {description}. RPG visual novel style, 3:2 aspect ratio, high detail. No text."
 )
 """
 Template for generating background images for scenes.
@@ -106,7 +108,7 @@ Variables: name, description.
 """
 
 NPC_IMAGE_PROMPT_TEMPLATE = (
-    "Portrait of NPC {name}. {description}. Game attribute art style."
+    "Portrait of NPC {name}. {description}. Game attribute art style. No text."
 )
 """
 Template for generating NPC portraits.
@@ -114,7 +116,7 @@ Variables: name, description.
 """
 
 OBJECT_IMAGE_PROMPT_TEMPLATE = (
-    "Highly detailed item: {name}. {description}. Isolated on simple background, RPG asset style."
+    "Highly detailed item: {name}. {description}. Isolated on simple background, RPG asset style. No text."
 )
 ITEM_IMAGE_PROMPT_TEMPLATE = OBJECT_IMAGE_PROMPT_TEMPLATE
 """
