@@ -68,6 +68,7 @@ const showDeleteConfirm = ref(false)
 const templateToDelete = ref<{ id: string; title: string } | null>(null)
 const showImportConfirm = ref(false)
 const isSeeding = ref(false)
+const isDeleting = ref(false)
 
 const importInput = ref<HTMLInputElement | null>(null)
 const pendingImports = ref<PendingAdventureCard[]>([])
@@ -289,6 +290,7 @@ function confirmDeleteTemplate(templateId: string, title: string) {
 async function executeDeleteTemplate() {
   if (!templateToDelete.value) return
 
+  isDeleting.value = true
   try {
     await api.deleteAdventure(templateToDelete.value.id)
     templates.value = templates.value.filter((entry) => entry.template_id !== templateToDelete.value?.id)
@@ -297,6 +299,8 @@ async function executeDeleteTemplate() {
     templateToDelete.value = null
   } catch (error) {
     console.error('Error deleting template:', error)
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -585,6 +589,7 @@ onUnmounted(() => {
       <DeleteAdventureModal
         v-if="showDeleteConfirm"
         :adventure-title="templateToDelete?.title || ''"
+        :is-deleting="isDeleting"
         @close="showDeleteConfirm = false"
         @confirm="executeDeleteTemplate"
       />

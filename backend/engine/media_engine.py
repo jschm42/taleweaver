@@ -24,7 +24,22 @@ BFL_API_BASE = "https://api.bfl.ai/v1"
 # Use centralized prompts
 NO_TEXT_IMAGE_PROMPT_SUFFIX = prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX
 
+import shutil
+
 class MediaEngine:
+    @staticmethod
+    async def cleanup_adventure_assets(adventure_id: str):
+        """Removes all generated assets for an adventure from disk."""
+        target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
+        if os.path.exists(target_dir):
+            try:
+                # Use a thread pool executor for blocking I/O if needed, 
+                # but for simplicity we'll just use shutil in this async context.
+                shutil.rmtree(target_dir)
+                logger.info(f"Cleaned up assets for adventure {adventure_id}")
+            except Exception as e:
+                logger.error(f"Failed to cleanup assets for adventure {adventure_id}: {e}")
+
 
     @classmethod
     def _get_litellm(cls) -> Any:
@@ -710,7 +725,8 @@ class MediaEngine:
         adventure_id: str,
         entity_id: str,
         target_dir: str,
-        filename: str = "placeholder.svg"
+        filename: str = "placeholder.svg",
+        category: str = ""
     ) -> str:
         """
         Generates a procedural SVG placeholder as a fallback.
@@ -723,7 +739,7 @@ class MediaEngine:
             
             filepath = os.path.join(target_dir, filename)
             generator = SVGPlaceholderGenerator(width=1200, height=800, num_shapes=15)
-            generator.save(filepath, title=entity_id)
+            generator.save(filepath, title=entity_id, category=category)
             
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"

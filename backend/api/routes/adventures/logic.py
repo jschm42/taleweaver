@@ -211,3 +211,44 @@ class AdventureLogic:
             "exp": avatar.exp,
             "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg"
         }
+
+    @staticmethod
+    async def delete_adventure(db: AsyncSession, template_id: str):
+        """
+        Deletes an adventure template and all associated records explicitly.
+        Order is important to avoid FK violations.
+        Also cleans up physical assets.
+        """
+        from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
+        from backend.models.world_map import WorldMap
+        from backend.models.game_session import GameSession
+        from backend.models.session_state import SessionState
+        from backend.models.avatar import Avatar
+        from backend.engine.media_engine import MediaEngine
+        from sqlalchemy import delete
+
+        # 1. Resolve and Delete Sessions & States
+        # We find sessions first to delete their states
+        session_query = select(GameSession.id).where(GameSession.template_id == template_id)
+        session_ids = (await db.execute(session_query)).scalars().all()
+        
+        if session_ids:
+            await db.execute(delete(SessionState).where(SessionState.session_id.in_(session_ids)))
+            await db.execute(delete(GameSession).where(GameSession.id.in_(session_ids)))
+
+        # 2. Delete Avatars (linked to template)
+        await db.execute(delete(Avatar).where(Avatar.template_id == template_id))
+
+        # 3. Delete World Content
+        await db.execute(delete(WorldExit).where(WorldExit.template_id == template_id))
+        await db.execute(delete(WorldEntity).where(WorldEntity.template_id == template_id))
+        await db.execute(delete(WorldScene).where(WorldScene.template_id == template_id))
+        await db.execute(delete(WorldMap).where(WorldMap.template_id == template_id))
+
+        # 4. Finally delete the template itself
+        await db.execute(delete(AdventureTemplate).where(AdventureTemplate.id == template_id))
+        
+        await db.commit()
+
+        # 5. Cleanup Files
+        await MediaEngine.cleanup_adventure_assets(template_id)

@@ -4,19 +4,17 @@
 
 export const getItemIcon = (type?: string) => {
   switch (type?.toUpperCase()) {
-    case 'CONSUMABLE': return 'ra-knife-fork'
-    case 'WEAPON': return 'ra-knife' // ra-bowie-knife doesn't exist in 0.2.0
+    case 'CONSUMABLE': return 'ra-potion'
+    case 'WEAPON': return 'ra-bowie-knife'
     case 'TOOL': return 'ra-wrench'
     case 'KEY': return 'ra-key'
-    case 'COMBINABLE': return 'ra-gear-hammer' // ra-repair doesn't exist in 0.2.0
-    case 'READABLE': return 'ra-book'
+    case 'KEYS': return 'ra-key'
+    case 'COMBINABLE': return 'ra-wrench'
     case 'WEARABLE': return 'ra-helmet'
-    case 'PICKABLE': return 'ra-hand'
-    case 'STATIC': return 'ra-anchor'
     case 'NPC': return 'ra-player'
     case 'PLAYER': return 'ra-player'
-    case 'SCENE': return 'ra-mountains' // NEW: Default for current scene
-    default: return 'ra-tower'
+    case 'SCENE': return 'ra-mountains'
+    default: return 'ra-emerald'
   }
 }
 

@@ -10,7 +10,7 @@ class WorldScene(Base, TimestampMixin):
     __tablename__ = "world_scenes"
 
     id = Column(String(50), primary_key=True) # Unique within an adventure (e.g. "FOREST_START")
-    template_id = Column(String(36), ForeignKey("adventure_templates.id"), primary_key=True)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="CASCADE"), primary_key=True)
     
     label = Column(String(100), nullable=False) # Human readable name
     description = Column(String(2000), nullable=False) # Atmospheric description
@@ -24,7 +24,7 @@ class WorldExit(Base, TimestampMixin):
     __tablename__ = "world_exits"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=False)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="CASCADE"), nullable=False)
     
     from_scene_id = Column(String(50), nullable=False)
     to_scene_id = Column(String(50), nullable=False)
@@ -41,7 +41,7 @@ class WorldEntity(Base, TimestampMixin):
     __tablename__ = "world_entities"
 
     id = Column(String(50), primary_key=True) # e.g. "OLD_LIBRARIAN"
-    template_id = Column(String(36), ForeignKey("adventure_templates.id"), primary_key=True)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="CASCADE"), primary_key=True)
     
     entity_type = Column(String(20), nullable=False) # "NPC" or "OBJECT"
     name = Column(String(100), nullable=False)

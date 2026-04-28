@@ -575,9 +575,10 @@ class WorldGenerator:
                         image_successes += 1
                 
                 if not image_url:
-                    # Fallback to procedural SVG
+                    # Fallback to mage silhouette for NPCs
                     image_url = await MediaEngine.generate_svg_placeholder(
-                        template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
+                        template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities"),
+                        category="NPC"
                     )
 
             db.add(WorldEntity(
@@ -639,10 +640,8 @@ class WorldGenerator:
                         image_successes += 1
                 
                 if not image_url:
-                    # Fallback to procedural SVG
-                    image_url = await MediaEngine.generate_svg_placeholder(
-                        template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
-                    )
+                    # Items use RPG Awesome fallbacks in the frontend; set to None here.
+                    image_url = None
 
             is_starting_inv = o["id"] in starting_inv_ids
             starting_slot = starting_equipped_ids.get(o["id"])

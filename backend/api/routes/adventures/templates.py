@@ -249,6 +249,6 @@ async def delete_adventure(
     adv = result.scalars().first()
     if not adv:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
-    await db.delete(adv)
-    await db.commit()
+    
+    await AdventureLogic.delete_adventure(db, template_id)
     return {"status": "deleted", "template_id": template_id}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const props = defineProps<{
   adventureTitle: string
+  isDeleting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -31,16 +32,19 @@ const emit = defineEmits<{
 
       <div class="px-6 py-4 border-t border-white/10 flex justify-end gap-3">
         <button
-          class="px-4 py-2 rounded-lg border border-white/15 text-slate-300 text-sm font-bold hover:bg-white/5 transition-colors"
+          class="px-4 py-2 rounded-lg border border-white/15 text-slate-300 text-sm font-bold hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="props.isDeleting"
           @click="emit('close')"
         >
           Cancel
         </button>
         <button
-          class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-black uppercase tracking-widest hover:bg-red-500 transition-colors"
+          class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-black uppercase tracking-widest hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          :disabled="props.isDeleting"
           @click="emit('confirm')"
         >
-          Delete
+          <span v-if="props.isDeleting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          {{ props.isDeleting ? 'Deleting...' : 'Delete' }}
         </button>
       </div>
     </div>
