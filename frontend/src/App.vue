@@ -10,19 +10,24 @@ const router = useRouter()
 const route = useRoute()
 
 async function checkAuth() {
+  // Always check bootstrap status first to know if we need setup
+  let bootstrap = { has_admin: false, has_users: false }
+  try {
+    bootstrap = await api.getBootstrapStatus()
+  } catch (e) {
+    console.error('Failed to get bootstrap status:', e)
+  }
+
   if (!authState.token) {
-    authState.isInitialized = true
-    try {
-      const bootstrap = await api.getBootstrapStatus()
-      if (!bootstrap.has_admin) {
-        router.push('/setup')
-      } else {
+    if (!bootstrap.has_admin) {
+      router.push('/setup')
+    } else {
+      // Only redirect to login if we are not already on a public page
+      if (route.name !== 'setup' && route.name !== 'login') {
         router.push('/login')
       }
-    } catch (e) {
-      // Fallback safely to login if bootstrap status cannot be determined.
-      if (route.name !== 'setup') router.push('/login')
     }
+    authState.isInitialized = true
     return
   }
 
@@ -33,7 +38,12 @@ async function checkAuth() {
   } catch (err: any) {
     console.error('Initial auth check failed:', err)
     clearAuth()
-    router.push('/login')
+    // After clearing auth, decide where to go based on bootstrap
+    if (!bootstrap.has_admin) {
+      router.push('/setup')
+    } else {
+      router.push('/login')
+    }
   } finally {
     authState.isInitialized = true
   }

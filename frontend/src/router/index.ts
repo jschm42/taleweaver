@@ -70,10 +70,15 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from, next) => {
-  // Wait for initial auth check (performed in App.vue)
-  if (!authState.isInitialized && to.name !== 'setup') {
-    // Initial load: App.vue will handle the first getMe() call.
-    // If we're already on a route, we just let it be until isInitialized is true.
+  // If we're not initialized yet, we don't know the auth state or if setup is needed.
+  // We allow the navigation to proceed, and App.vue will handle the final redirection
+  // once the bootstrap status is known.
+  if (!authState.isInitialized) {
+    if (to.name === 'login' || to.name === 'setup') {
+      return next()
+    }
+    // Continue navigation; App.vue will redirect if necessary after init.
+    return next()
   }
 
   if (to.name === 'login' || to.name === 'setup') {
