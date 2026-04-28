@@ -108,15 +108,28 @@ class AdventureExporter:
         # Update manifest to point to relative paths in the zip
         def localize_path(path):
             if not path or not path.startswith("/data/"): return path
-            # Extract actual filename
+            
+            # Convert URL to local path relative to DATA_DIR
+            # URL format is /data/path/to/file.ext
+            rel_path = path.replace("/data/", "", 1).lstrip("/")
+            local_full = os.path.join(settings.DATA_DIR, rel_path)
+            
+            if os.path.exists(local_full):
+                fname = os.path.basename(local_full)
+                zip_rel = f"assets/{fname}"
+                asset_mapping[local_full] = zip_rel
+                return zip_rel
+            
+            # Fallback: search in adventure_dir if not found directly 
+            # (handles cases where path might be different but file exists there)
             fname = os.path.basename(path)
-            # Find it on disk
             for root, dirs, files in os.walk(adventure_dir):
                 if fname in files:
                     local_full = os.path.join(root, fname)
                     zip_rel = f"assets/{fname}"
                     asset_mapping[local_full] = zip_rel
                     return zip_rel
+            
             return path
 
         # Localize all image fields
