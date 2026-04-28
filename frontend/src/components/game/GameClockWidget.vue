@@ -6,7 +6,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div class="absolute right-8 top-8 z-10">
+  <div class="z-10">
     <div class="flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': props.clockTick }">
       <template v-if="props.gameTime">
         <div class="flex items-center gap-3 px-4 py-2 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md shadow-lg transition-all">
