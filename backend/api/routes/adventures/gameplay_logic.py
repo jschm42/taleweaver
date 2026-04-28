@@ -60,9 +60,27 @@ class GameTurnManager:
         av_res = await self.db.execute(select(Avatar).where(Avatar.id == self.state.avatar_id))
         self.avatar = av_res.scalars().first()
         
+        if not (self.adventure and self.avatar):
+            return False
+
+        # Lazy-register initial map visit
+        try:
+            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+            scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.template_id == self.state.template_id))
+            cur_scene = scene_res.scalars().first()
+            MapEngine.register_visit(
+                world_map, 
+                self.state.current_scene_id, 
+                label=cur_scene.label if cur_scene else None, 
+                description=cur_scene.description if cur_scene else None, 
+                image_url=cur_scene.image_url if cur_scene else None
+            )
+        except Exception as e:
+            logger.warning(f"Failed to auto-register map visit for {self.game_id}: {e}")
+
         duration = time.perf_counter() - start
         logger.debug(f"[Turn {self.game_id}] Initialization (DB) took {duration:.4f}s")
-        return bool(self.adventure and self.avatar)
+        return True
 
     async def process_turn(self, message: str, auto_visualize: bool = False) -> AsyncGenerator[str, None]:
         if not await self.initialize():
@@ -318,8 +336,28 @@ class GameTurnManager:
         
         state_dirty = False
         if event.new_scene_id:
+            old_scene_id = self.state.current_scene_id
             self.state.current_scene_id = event.new_scene_id
             state_dirty = True
+            
+            # Map Update
+            try:
+                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+                # 1. Register exit between scenes
+                MapEngine.register_exit(world_map, old_scene_id, event.new_scene_id, exit_label=event.exit_label or "")
+                # 2. Register visit to the new scene
+                # If we have scene data in DB, use it, otherwise use LLM provided label
+                scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == event.new_scene_id, WorldScene.template_id == self.state.template_id))
+                new_scene_db = scene_res.scalars().first()
+                MapEngine.register_visit(
+                    world_map, 
+                    event.new_scene_id, 
+                    label=new_scene_db.label if new_scene_db else event.scene_label,
+                    description=new_scene_db.description if new_scene_db else None,
+                    image_url=new_scene_db.image_url if new_scene_db else None
+                )
+            except Exception as e:
+                logger.error(f"Map update failed during turn: {e}")
             
         # Entity State Overrides (Movement, Stats, Visibility)
         states = dict(self.state.entity_states or {})
@@ -361,6 +399,20 @@ class GameTurnManager:
             if modified:
                 self.state.quests = new_quests
                 state_dirty = True
+
+        # Process Explicit Map Updates (Exits)
+        if event.updated_exits:
+            try:
+                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+                for up_exit in event.updated_exits:
+                    MapEngine.register_exit(
+                        world_map, 
+                        up_exit.from_scene_id, 
+                        up_exit.to_scene_id, 
+                        is_locked=up_exit.is_locked
+                    )
+            except Exception as e:
+                logger.error(f"Manual map exit update failed: {e}")
 
         if state_dirty:
             self.state.entity_states = states

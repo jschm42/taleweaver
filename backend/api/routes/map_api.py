@@ -17,6 +17,7 @@ from backend.core.database import get_db
 from backend.models.world_map import WorldMap
 from backend.models.adventure_template import AdventureTemplate
 from backend.engine.map_engine import MapEngine
+from backend.api.routes.adventures.logic import AdventureLogic
 
 router = APIRouter(tags=["WorldMap"])
 logger = logging.getLogger(__name__)
@@ -39,17 +40,7 @@ class ExitPayload(BaseModel):
 
 # ── Route helpers ─────────────────────────────────────────────────────────────
 
-async def _get_or_create_map(template_id: str, db: AsyncSession) -> WorldMap:
-    """Fetch or lazily create a WorldMap row for the given adventure."""
-    result = await db.execute(
-        select(WorldMap).where(WorldMap.template_id == template_id)
-    )
-    world_map = result.scalars().first()
-    if not world_map:
-        world_map = WorldMap(template_id=template_id)
-        db.add(world_map)
-        await db.flush()
-    return world_map
+# _get_or_create_map moved to AdventureLogic.get_or_create_map
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -103,7 +94,7 @@ async def post_visit(
     if not adv.scalars().first():
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
 
-    world_map = await _get_or_create_map(template_id, db)
+    world_map = await AdventureLogic.get_or_create_map(db, template_id)
     MapEngine.register_visit(
         world_map, 
         payload.scene_id, 
@@ -122,7 +113,7 @@ async def post_exit(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Register a directed exit between two scenes."""
-    world_map = await _get_or_create_map(template_id, db)
+    world_map = await AdventureLogic.get_or_create_map(db, template_id)
     MapEngine.register_exit(world_map, payload.from_scene, payload.to_scene, payload.exit_label or "")
     await db.commit()
     return {"status": "ok"}

@@ -21,6 +21,19 @@ class AdventureLogic:
     """Class grouping core business logic and helper functions for Adventure management."""
 
     @staticmethod
+    async def get_or_create_map(db: AsyncSession, template_id: str) -> WorldMap:
+        """Fetch or lazily create a WorldMap row for the given adventure."""
+        result = await db.execute(
+            select(WorldMap).where(WorldMap.template_id == template_id)
+        )
+        world_map = result.scalars().first()
+        if not world_map:
+            world_map = WorldMap(template_id=template_id)
+            db.add(world_map)
+            await db.flush()
+        return world_map
+
+    @staticmethod
     def calculate_quest_progress(quests: Optional[List[Dict[str, Any]]]) -> int:
         if not quests:
             return 0
