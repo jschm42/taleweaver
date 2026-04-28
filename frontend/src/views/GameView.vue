@@ -11,8 +11,8 @@ import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
 import QuestsModal from '@/components/game/QuestsModal.vue'
 import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
-import SuccessScreen from '@/components/game/SuccessScreen.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
+import StatBar from '@/components/game/StatBar.vue'
 import GameScenePanel from '@/components/game/GameScenePanel.vue'
 import GameNpcsPanel from '@/components/game/GameNpcsPanel.vue'
 import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
@@ -100,7 +100,10 @@ const npcs = computed(() => {
       name: `You (${sheet.value.name})`,
       description: sheet.value.description || '',
       image_url: sheet.value.profile_image || sheet.value.profile_image || null,
-      role: sheet.value.role || null
+      role: sheet.value.role || null,
+      hp: sheet.value.hp,
+      stamina: sheet.value.stamina,
+      mana: sheet.value.mana
     }
     return [playerEntity, ...worldNpcs]
   }
@@ -603,7 +606,38 @@ onBeforeUnmount(() => {
                   {{ hoveredEntity.entity_type }}
                 </span>
               </div>
-              <p class="text-xs text-slate-400 leading-relaxed italic">{{ hoveredEntity.description }}</p>
+              <p class="text-xs text-slate-400 leading-relaxed italic mb-3">{{ hoveredEntity.description }}</p>
+
+              <!-- NPC/Player Bars -->
+              <div v-if="hoveredEntity.entity_type === 'NPC'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
+                <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="hoveredEntity.hp" color="crimson" size="sm" />
+                <StatBar v-if="hoveredEntity.stamina != null" label="Stamina" :value="hoveredEntity.stamina" color="emerald" size="sm" />
+                <StatBar v-if="hoveredEntity.mana != null" label="Mana" :value="hoveredEntity.mana" color="sapphire" size="sm" />
+              </div>
+
+              <!-- Item Stats -->
+              <div v-if="hoveredEntity.entity_type === 'OBJECT' || hoveredEntity.entity_type === 'ITEM'" class="mt-3 pt-3 border-t border-slate-800">
+                <div class="grid grid-cols-2 gap-2 text-[10px] uppercase font-bold tracking-wider">
+                  <div v-if="hoveredEntity.stat_modifier_strength != null" class="text-red-400 flex justify-between">
+                    <span>STR</span> <span>+{{ hoveredEntity.stat_modifier_strength }}</span>
+                  </div>
+                  <div v-if="hoveredEntity.stat_modifier_dexterity != null" class="text-emerald-400 flex justify-between">
+                    <span>DEX</span> <span>+{{ hoveredEntity.stat_modifier_dexterity }}</span>
+                  </div>
+                  <div v-if="hoveredEntity.stat_modifier_intelligence != null" class="text-blue-400 flex justify-between">
+                    <span>INT</span> <span>+{{ hoveredEntity.stat_modifier_intelligence }}</span>
+                  </div>
+                  <div v-if="hoveredEntity.stat_modifier_wisdom != null" class="text-purple-400 flex justify-between">
+                    <span>WIS</span> <span>+{{ hoveredEntity.stat_modifier_wisdom }}</span>
+                  </div>
+                  <div v-if="hoveredEntity.stat_modifier_charisma != null" class="text-pink-400 flex justify-between">
+                    <span>CHA</span> <span>+{{ hoveredEntity.stat_modifier_charisma }}</span>
+                  </div>
+                  <div v-if="hoveredEntity.stat_modifier_armor_class != null" class="text-amber-400 flex justify-between">
+                    <span>AC</span> <span>+{{ hoveredEntity.stat_modifier_armor_class }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
