@@ -11,9 +11,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  itemClick: [name: string]
-  itemHover: [item: any, event: MouseEvent]
   itemLeave: []
+  equip: [name: string]
+  unequip: [slot: string]
+  consume: [name: string]
+  changed: []
 }>()
 
 const sortedStats = computed(() => {
@@ -72,7 +74,7 @@ const slotPositions: Record<string, { top: string, left: string }> = {
 
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && props.open) {
-    emit('close')
+    onClose()
   }
 }
 
@@ -89,6 +91,31 @@ const handleImageError = (path?: string | null) => {
 const showImage = (path?: string | null) => {
   return !!path && !brokenImages.value[path]
 }
+
+const stateChanged = ref(false)
+
+const handleInventoryClick = (item: any) => {
+  if (!item) return
+  stateChanged.value = true
+  if (item.wearable_slots && item.wearable_slots.length > 0) {
+    emit('equip', item.name)
+  } else if (item.item_type === 'CONSUMABLE') {
+    emit('consume', item.name)
+  }
+}
+
+const handleUnequip = (slot: string) => {
+  stateChanged.value = true
+  emit('unequip', slot)
+}
+
+const onClose = () => {
+  if (stateChanged.value) {
+    emit('changed')
+    stateChanged.value = false
+  }
+  emit('close')
+}
 </script>
 
 <template>
@@ -97,14 +124,14 @@ const showImage = (path?: string | null) => {
       <div
         v-if="open"
         class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4"
-        @click.self="emit('close')"
+        @click.self="onClose"
       >
         <div class="w-full max-w-7xl h-[95vh] md:h-[90vh] flex flex-col bg-slate-900 border border-slate-800 rounded-3xl shadow-[0_0_100px_rgba(0,0,0,0.9)] relative animate-sheet-in overflow-hidden">
           
           <!-- Close Button -->
           <button
             class="absolute top-6 right-6 z-30 p-2.5 rounded-full bg-slate-800/80 hover:bg-red-600 text-slate-400 hover:text-white transition-all shadow-xl backdrop-blur-sm border border-slate-700/50"
-            @click="emit('close')"
+            @click="onClose"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -153,7 +180,8 @@ const showImage = (path?: string | null) => {
                   >
                     <div 
                       class="w-14 h-14 md:w-16 md:h-16 rounded-2xl border-2 flex items-center justify-center transition-all relative shadow-xl backdrop-blur-md"
-                      :class="equipment[slot] ? 'bg-slate-900 border-amber-500/50 shadow-amber-500/20 scale-110 z-10' : 'bg-slate-950/40 border-slate-800 hover:border-slate-600'"
+                      :class="equipment[slot] ? 'bg-slate-900 border-amber-500/50 shadow-amber-500/20 scale-110 z-10 cursor-pointer' : 'bg-slate-950/40 border-slate-800 hover:border-slate-600'"
+                      @click="equipment[slot] && handleUnequip(slot)"
                     >
                       <!-- Slot Label Tooltip -->
                       <div class="absolute -top-7 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-slate-400 opacity-0 group-hover/slot:opacity-100 transition-opacity bg-slate-800 px-2 py-0.5 rounded border border-slate-700 z-20 shadow-xl whitespace-nowrap pointer-events-none">
@@ -221,7 +249,7 @@ const showImage = (path?: string | null) => {
                         :key="idx"
                         class="aspect-square rounded-2xl border-2 flex items-center justify-center transition-all relative group cursor-pointer"
                         :class="inventoryList[idx-1] ? 'bg-slate-950 border-slate-700/50 hover:border-emerald-500/50 hover:bg-slate-900/60' : 'bg-slate-800/20 border-slate-800/60 border-dashed'"
-                        @click="inventoryList[idx-1] && emit('itemClick', inventoryList[idx-1].name)"
+                        @click="inventoryList[idx-1] && handleInventoryClick(inventoryList[idx-1])"
                         @mouseenter="inventoryList[idx-1] && emit('itemHover', { ...inventoryList[idx-1], entity_type: 'ITEM' }, $event)"
                         @mouseleave="emit('itemLeave')"
                       >

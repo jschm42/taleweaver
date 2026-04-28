@@ -140,7 +140,9 @@ GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
     "FORMATTING RULES:\n"
     "1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: **Character Name:** \"...\"\n"
     "2. LINE BREAKS: Use double line breaks between narrative prose and dialogue or major shifts in focus.\n"
-    "3. READABILITY: Avoid walls of text. Keep paragraphs focused."
+    "3. READABILITY: Avoid walls of text. Keep paragraphs focused.\n"
+    "4. NO SUMMARIES: Do NOT append lists like 'AVAILABLE INTERACTIONS', 'Suggestions', or 'What do you do?'.\n"
+    "5. NO SEPARATORS: Do NOT use horizontal rules or lines like '---' in your output."
 )
 """
 The main system prompt that defines the GM's persona and rules.

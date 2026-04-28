@@ -60,7 +60,7 @@ class AdventureTemplateResponse(BaseModel):
 class GameSessionResponse(BaseModel):
     """Summary of a game session (SessionState + linked entities)."""
     game_id: str
-    template_id: str
+    template_id: Optional[str] = None
     adventure_id: Optional[str] = None
     avatar_id: str
     profile_image: Optional[str] = None

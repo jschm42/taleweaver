@@ -69,6 +69,10 @@ class GameTurnManager:
             yield f"event: error\ndata: {json.dumps({'detail': 'Game session not found.'})}\n\n"
             return
 
+        # Pre-emptive sanitization of avatar JSON fields to avoid datetime serialization issues
+        self.avatar.inventory = jsonable_encoder(self.avatar.inventory)
+        self.avatar.equipment = jsonable_encoder(self.avatar.equipment)
+
         user_msg = message.strip()
         actual_user_input = user_msg
         if not user_msg: user_msg = "[LOOK AROUND]"
@@ -77,23 +81,38 @@ class GameTurnManager:
         if user_msg.startswith("/debug"):
             async for chunk in self._handle_debug(user_msg): yield chunk
             return
+            
+        is_rule_pass = False
         if user_msg.startswith("/"):
-            async for chunk in self._handle_slash(user_msg): yield chunk
-            return
+            response = CommandParser.parse_command(self.avatar, user_msg)
+            
+            if response == "[RULE_PASS]":
+                is_rule_pass = True
+                user_msg = "[EVALUATE STATE]"
+                yield f"event: status\ndata: {json.dumps({'content': 'The Game Master evaluates your situation...'})}\n\n"
+            else:
+                # Standard slash command handling (equip, take_direct, etc.)
+                async for chunk in self._handle_slash(user_msg, response): yield chunk
+                return
 
         # Core Turn Logic
         turn_start = time.perf_counter()
         logger.debug(f"[Turn {self.game_id}] Starting turn for user '{self.user.username}' with input: {user_msg}")
-        yield f"event: status\ndata: {json.dumps({'content': 'Considering...'})}\n\n"
+        if not is_rule_pass:
+            yield f"event: status\ndata: {json.dumps({'content': 'Considering...'})}\n\n"
         
-        # 1. Advance Time & Apply Ticks
-        self.state.in_game_time += self.adventure.time_per_turn
-        tick_msgs = RuleEngine.apply_ticks(self.avatar)
-        for tm in tick_msgs:
-            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': tm})}\n\n"
+        # 1. Advance Time & Apply Ticks (Only for normal turns, NOT for rule passes)
+        if not is_rule_pass:
+            self.state.in_game_time += self.adventure.time_per_turn
+            tick_msgs = RuleEngine.apply_ticks(self.avatar)
+            for tm in tick_msgs:
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': tm})}\n\n"
 
         # 2. Record User Message
-        if actual_user_input:
+        silent_commands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume']
+        is_silent = any(actual_user_input.lower().startswith(cmd) for cmd in silent_commands)
+
+        if actual_user_input and not is_silent:
             self.db.add(ChatMessage(session_id=self.state.session_id, role="user", content=actual_user_input))
             await self.db.flush()
 
@@ -114,18 +133,49 @@ class GameTurnManager:
             'awards': self.adventure.awards
         }))}\n\n"
 
-    async def _handle_slash(self, user_msg: str) -> AsyncGenerator[str, None]:
-        # Handle /map specifically
+    async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
+        # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
             map_res = await self.db.execute(select(WorldMap).where(WorldMap.template_id == self.state.template_id))
             world_map = map_res.scalars().first()
             yield f"event: final\ndata: {json.dumps(jsonable_encoder({'mermaid': MapEngine.to_mermaid(world_map) if world_map else None, 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db)}))}\n\n"
             return
-        
-        response = CommandParser.parse_command(self.avatar, user_msg)
-        # Simplified Command Parsing... (Add full list as needed)
+            
+        if response.startswith("[TRIGGER_TAKE_DIRECT]"):
+            entity_id_or_name = response[21:].strip()
+            # Find entity in current scene
+            ent_res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.template_id == self.state.template_id,
+                    WorldEntity.current_scene_id == self.state.current_scene_id,
+                    (WorldEntity.id == entity_id_or_name) | (WorldEntity.name == entity_id_or_name)
+                )
+            )
+            ent = ent_res.scalars().first()
+            if ent and ent.is_portable:
+                # Move to inventory
+                new_inv = list(self.avatar.inventory)
+                item_dict = jsonable_encoder({c.name: getattr(ent, c.name) for c in ent.__table__.columns})
+                new_inv.append(item_dict)
+                self.avatar.inventory = new_inv
+                
+                # Update session state instead of global entity
+                states = dict(self.state.entity_states or {})
+                if ent.id not in states: states[ent.id] = {}
+                states[ent.id]["is_in_inventory"] = True
+                self.state.entity_states = states
+                flag_modified(self.state, "entity_states")
+                response = f"Added {ent.name} to your inventory."
+                # Save to history
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=response))
+                # Yield system event
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
+            else:
+                response = f"You cannot take that."
+
         await self.db.commit()
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({'messages': [{'role': 'system', 'content': response}], 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db)}))}\n\n"
+        yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state)}))}\n\n"
+        self.stop_requested = True # Stop after direct slash response
 
     async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool) -> AsyncGenerator[str, None]:
         # Load Context and LLM Settings
@@ -135,11 +185,42 @@ class GameTurnManager:
         
         scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.template_id == self.state.template_id))
         current_scene = scene_res.scalars().first()
+
+        # Fetch dynamic scene context (entities and exits)
+        ent_res = await self.db.execute(select(WorldEntity).where(
+            WorldEntity.template_id == self.state.template_id, 
+            WorldEntity.current_scene_id == self.state.current_scene_id,
+            WorldEntity.is_hidden == False,
+            WorldEntity.is_in_inventory == False
+        ))
+        entities = ent_res.scalars().all()
+        exit_res = await self.db.execute(select(WorldExit).where(
+            WorldExit.from_scene_id == self.state.current_scene_id,
+            WorldExit.template_id == self.state.template_id
+        ))
+        exits = exit_res.scalars().all()
+        
         db_duration = time.perf_counter() - db_start
         logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
-        
+
         # Build prompt using MemoryManager
-        system_prompt = MemoryManager.build_context(self.avatar, self.adventure.context or "", history, current_scene=current_scene)[0]["content"]
+        system_prompt = MemoryManager.build_context(
+            self.avatar, self.adventure.context or "", history, 
+            current_scene=current_scene,
+            entities=entities,
+            exits=exits,
+            in_game_time=self.state.in_game_time,
+            awards=self.adventure.awards
+        )[0]["content"]
+
+        # Override for technical state evaluation (e.g. closing character sheet)
+        if user_msg == "[EVALUATE STATE]":
+            system_prompt += (
+                "\n\nIMPORTANT: The player just synchronized their character sheet or world state (e.g., closing a menu). "
+                "This is a TECHNICAL turn. Respond only if something meaningful changed (e.g., equipment effects). "
+                "Do NOT list available actions, do NOT provide suggestions, and do NOT use meta-formatting like '---' or 'You can:'. "
+                "Keep the narrative flow natural if you speak at all."
+            )
         
         llm_settings = self.user.llm_settings or {}
         
@@ -193,8 +274,12 @@ class GameTurnManager:
         except ValueError as e:
             yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
             return
-        narration_prompt = system_prompt + "\n\n" + prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
-            outcome_json=game_event.model_dump_json() if game_event else "{}"
+        narration_prompt = (
+            system_prompt + "\n\n" + 
+            prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
+                outcome_json=game_event.model_dump_json() if game_event else "{}"
+            ) + "\n\n" +
+            prompts.GM_NARRATION_MANDATORY_FORMATTING
         )
         
         pass2_start = time.perf_counter()
@@ -213,15 +298,72 @@ class GameTurnManager:
         # Finalize
         assistant_chat = ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text)
         self.db.add(assistant_chat)
+        
+        # Add system messages for inventory items
+        if game_event and game_event.new_inventory_items:
+            for item in game_event.new_inventory_items:
+                msg_text = f"Added {item.name} to your inventory."
+                # Persistent system message
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                # Yield system event
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
+
         await self.db.commit()
         
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'status': 'success'}))}\n\n"
+        yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state), 'status': 'success'}))}\n\n"
 
     async def _apply_game_event(self, event: GameEvent):
-        """Applies technical mutations from a GameEvent to the database and state."""
+        """Applies technical mutations from a GameEvent to the database and session state."""
         RuleEngine.apply_event(self.avatar, event)
+        
+        state_dirty = False
         if event.new_scene_id:
-            # Simple scene move
             self.state.current_scene_id = event.new_scene_id
-        # ... more detailed entry updates for WorldEntity etc ...
+            state_dirty = True
+            
+        # Entity State Overrides (Movement, Stats, Visibility)
+        states = dict(self.state.entity_states or {})
+        
+        if event.moved_entities:
+            for move in event.moved_entities:
+                eid = move.entity_id
+                if eid not in states: states[eid] = {}
+                if move.to_scene_id: states[eid]["current_scene_id"] = move.to_scene_id
+                if move.to_spatial_position: states[eid]["spatial_position"] = move.to_spatial_position
+                state_dirty = True
+
+        if event.updated_entities:
+            for update in event.updated_entities:
+                eid = update.entity_id
+                if eid not in states: states[eid] = {}
+                if update.name is not None: states[eid]["name"] = update.name
+                if update.description is not None: states[eid]["description"] = update.description
+                if update.spatial_position is not None: states[eid]["spatial_position"] = update.spatial_position
+                if update.is_hidden is not None: states[eid]["is_hidden"] = update.is_hidden
+                if update.hp is not None: states[eid]["hp"] = update.hp
+                state_dirty = True
+        
+        if event.deleted_entities:
+            for eid in event.deleted_entities:
+                if eid not in states: states[eid] = {}
+                states[eid]["is_hidden"] = True
+                state_dirty = True
+
+        # Quest Updates
+        if event.completed_quest_ids:
+            new_quests = deepcopy(self.state.quests or [])
+            modified = False
+            for qid in event.completed_quest_ids:
+                for q in new_quests:
+                    if q.get("id") == qid and q.get("status") != "completed":
+                        q["status"] = "completed"
+                        modified = True
+            if modified:
+                self.state.quests = new_quests
+                state_dirty = True
+
+        if state_dirty:
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
+            
         await self.db.flush()

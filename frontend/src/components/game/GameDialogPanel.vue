@@ -16,6 +16,9 @@ const props = defineProps<{
   debugLogs: { timestamp: string, content: string }[]
   gameOverReason?: string | null
   exp: number
+  inventoryGlow?: boolean
+  mapGlow?: boolean
+  questGlow?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -30,6 +33,7 @@ const emit = defineEmits<{
   itemLeave: []
   openDebug: []
   toggleDebugLog: [enabled: boolean]
+  takeDirect: [entity: any]
 }>()
 
 const chatWindow = ref<any>(null)
@@ -61,6 +65,9 @@ defineExpose({ appendText })
       :status-text="props.statusText"
       :show-debug-log="props.showDebugLog"
       :debug-logs="props.debugLogs"
+      :inventory-glow="props.inventoryGlow"
+      :map-glow="props.mapGlow"
+      :quest-glow="props.questGlow"
       @send="emit('send', $event)"
       @open-sheet="emit('openSheet')"
       @open-map="emit('openMap')"
@@ -72,6 +79,7 @@ defineExpose({ appendText })
       @item-leave="emit('itemLeave')"
       @open-debug="emit('openDebug')"
       @toggle-debug-log="emit('toggleDebugLog', $event)"
+      @take-direct="emit('takeDirect', $event)"
     />
 
     <div class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">

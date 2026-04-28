@@ -57,7 +57,7 @@ class MemoryManager:
         location_context = ""
         if current_scene:
             location_context = (
-                f"\n--- CURRENT LOCATION ---\n"
+                f"\nCURRENT LOCATION:\n"
                 f"NAME: {current_scene.label} (ID: {current_scene.id})\n"
                 f"DESCRIPTION: {current_scene.description}\n"
             )

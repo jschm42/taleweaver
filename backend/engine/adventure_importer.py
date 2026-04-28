@@ -186,11 +186,16 @@ class AdventureTemplateImporter:
                 for o in manifest_data.get("objects", []):
                     if o.get("image_url") in existing_images_mapping: image_urls[o["id"]] = existing_images_mapping[o["image_url"]]
 
+                user = None
+                if owner_id:
+                    user_res = await db.execute(select(User).where(User.id == owner_id))
+                    user = user_res.scalars().first()
+
                 await WorldGenerator.apply_manifest(
                     db=db,
                     template_id=new_template_id,
                     manifest_dict=world_manifest,
-                    user=None,
+                    user=user,
                     existing_images=image_urls
                 )
                 
@@ -270,7 +275,7 @@ class AdventureTemplateImporter:
                 db.add(new_template)
                 await db.flush()
                 
-                await WorldGenerator.apply_manifest(db, new_template.id, data)
+                await WorldGenerator.apply_manifest(db, new_template.id, data, user=user)
                 
                 old_state = data.get("game_state") or data.get("session_state")
                 old_avatar = data.get("avatar")
@@ -354,7 +359,7 @@ class AdventureTemplateImporter:
                     if "starting_equipment" not in p:
                         p["starting_equipment"] = p.get("equipment", {})
 
-                await WorldGenerator.apply_manifest(db, new_template.id, manifest)
+                await WorldGenerator.apply_manifest(db, new_template.id, manifest, user=user)
                 await db.commit()
                 return True
         except Exception as e:

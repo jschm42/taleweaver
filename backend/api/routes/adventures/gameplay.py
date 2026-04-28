@@ -23,7 +23,7 @@ router = APIRouter(tags=["Gameplay"])
 logger = logging.getLogger(__name__)
 
 async def _get_npc_metadata(template_id: str, db: AsyncSession) -> dict:
-    npc_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type == "npc"))
+    npc_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type.in_(["NPC", "npc"])))
     return {npc.id: {"name": npc.name, "description": npc.description} for npc in npc_res.scalars().all()}
 
 async def _enrich_map_nodes(template_id: str, nodes: dict, db: AsyncSession) -> dict:
@@ -58,8 +58,7 @@ async def get_chat_history(
     map_res = await db.execute(select(WorldMap).where(WorldMap.template_id == state.template_id))
     world_map = map_res.scalars().first()
     
-    ent_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == state.template_id, WorldEntity.current_scene_id == state.current_scene_id, WorldEntity.is_hidden == False, WorldEntity.is_in_inventory == False))
-    entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in ent_res.scalars().all()]
+    entities = await AdventureLogic.build_session_entities(db, state)
     
     scene_image = AdventureLogic.resolve_session_asset(state, state.current_scene_id)
     if not scene_image:

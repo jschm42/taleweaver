@@ -427,39 +427,45 @@ class WorldGenerator:
                 
                 # Generate Portrait for Protagonist if requested
                 image_url = (existing_images or {}).get("PROTAGONIST") or prot.get("profile_image")
-                if not image_url and user and gen_protagonist_image:
-                    await _publish_generation_status(db, adventure, f"Envisioning You: {prot['name']}...")
-                    prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
-                        name=prot['name'], role=prot['role'], description=prot['description']
-                    )
-                    image_attempts += 1
-                    try:
-                        image_url = await asyncio.wait_for(
-                            MediaEngine.generate_entity_image(
-                                prompt,
-                                template_id,
-                                "PROTAGONIST",
-                                "NPC",
-                                {"t2i_settings": user.t2i_settings},
-                                user.encrypted_api_keys,
-                            ),
-                            timeout=_image_generation_timeout_seconds(),
+                if not image_url:
+                    if user and gen_protagonist_image:
+                        await _publish_generation_status(
+                            db,
+                            adventure,
+                            f"Envisioning Portrait for {prot['name']}...",
                         )
-                    except asyncio.TimeoutError as exc:
-                        logger.warning("Protagonist image generation timed out for %s: %s", template_id, exc)
-                        image_url = None
-                    except Exception as exc:
-                        # Visual failures (e.g. provider moderation) must not abort world creation
-                        logger.warning("Protagonist image generation failed for %s: %s", template_id, exc)
-                        image_url = None
-                    if image_url:
-                        image_successes += 1
-                    else:
+                        prompt = prompts.NPC_IMAGE_PROMPT_TEMPLATE.format(
+                            name=prot['name'], description=prot['description']
+                        )
+                        image_attempts += 1
+                        try:
+                            image_url = await asyncio.wait_for(
+                                MediaEngine.generate_entity_image(
+                                    prompt,
+                                    template_id,
+                                    "PROTAGONIST",
+                                    "NPC",
+                                    {"t2i_settings": user.t2i_settings},
+                                    user.encrypted_api_keys,
+                                ),
+                                timeout=_image_generation_timeout_seconds(),
+                            )
+                        except asyncio.TimeoutError as exc:
+                            logger.warning("Protagonist image generation timed out for %s: %s", template_id, exc)
+                            image_url = None
+                        except Exception as exc:
+                            # Visual failures (e.g. provider moderation) must not abort world creation
+                            logger.warning("Protagonist image generation failed for %s: %s", template_id, exc)
+                            image_url = None
+                        if image_url:
+                            image_successes += 1
+                    
+                    if not image_url:
                         # Fallback to procedural SVG
                         image_url = await MediaEngine.generate_svg_placeholder(
                             template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", template_id)
                         )
-                    avatar.profile_image = image_url
+                avatar.profile_image = image_url
             
         # Persist Scenes
         scenes = manifest_dict.get("scenes", [])
@@ -470,35 +476,39 @@ class WorldGenerator:
             seen_scene_ids.add(s["id"])
             
             image_url = (existing_images or {}).get(s["id"]) or s.get("image_url")
-            if not image_url and user and gen_scenes:
-                await _publish_generation_status(
-                    db,
-                    adventure,
-                    f"Envisioning Scene {scene_index}/{total_scenes}: {s['name']}...",
-                )
-                prompt = prompts.SCENE_IMAGE_PROMPT_TEMPLATE.format(
-                    name=s['name'], description=s['description']
-                )
-                image_attempts += 1
-                try:
-                    image_url = await asyncio.wait_for(
-                        MediaEngine.generate_scene_image(
-                            prompt,
-                            template_id,
-                            {"t2i_settings": user.t2i_settings},
-                            user.encrypted_api_keys,
-                        ),
-                        timeout=_image_generation_timeout_seconds(),
+            if not image_url:
+                if user and gen_scenes:
+                    await _publish_generation_status(
+                        db,
+                        adventure,
+                        f"Envisioning Scene {scene_index}/{total_scenes}: {s['name']}...",
                     )
-                except asyncio.TimeoutError as exc:
-                    logger.warning("Scene image generation timed out for %s/%s: %s", template_id, s['id'], exc)
-                    image_url = None
-                except Exception as exc:
-                    logger.warning("Scene image generation failed for %s/%s: %s", template_id, s['id'], exc)
-                    image_url = None
-                if image_url:
-                    image_successes += 1
-                else:
+                    prompt = prompts.SCENE_IMAGE_PROMPT_TEMPLATE.format(
+                        name=s['name'], description=s['description']
+                    )
+                    image_attempts += 1
+                    try:
+                        image_url = await asyncio.wait_for(
+                            MediaEngine.generate_entity_image(
+                                prompt,
+                                template_id,
+                                s['id'],
+                                "SCENE",
+                                {"t2i_settings": user.t2i_settings},
+                                user.encrypted_api_keys,
+                            ),
+                            timeout=_image_generation_timeout_seconds(),
+                        )
+                    except asyncio.TimeoutError as exc:
+                        logger.warning("Scene image generation timed out for %s/%s: %s", template_id, s['id'], exc)
+                        image_url = None
+                    except Exception as exc:
+                        logger.warning("Scene image generation failed for %s/%s: %s", template_id, s['id'], exc)
+                        image_url = None
+                    if image_url:
+                        image_successes += 1
+                
+                if not image_url:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
                         template_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "scenes")
@@ -532,37 +542,39 @@ class WorldGenerator:
             seen_entity_ids.add(n["id"])
             
             image_url = (existing_images or {}).get(n["id"]) or n.get("image_url")
-            if not image_url and user and gen_npc:
-                await _publish_generation_status(
-                    db,
-                    adventure,
-                    f"Envisioning Portrait {npc_index}/{total_npcs}: {n['name']}...",
-                )
-                prompt = prompts.NPC_IMAGE_PROMPT_TEMPLATE.format(
-                    name=n['name'], description=n['description']
-                )
-                image_attempts += 1
-                try:
-                    image_url = await asyncio.wait_for(
-                        MediaEngine.generate_entity_image(
-                            prompt,
-                            template_id,
-                            n['id'],
-                            "NPC",
-                            {"t2i_settings": user.t2i_settings},
-                            user.encrypted_api_keys,
-                        ),
-                        timeout=_image_generation_timeout_seconds(),
+            if not image_url:
+                if user and gen_npc:
+                    await _publish_generation_status(
+                        db,
+                        adventure,
+                        f"Envisioning Portrait {npc_index}/{total_npcs}: {n['name']}...",
                     )
-                except asyncio.TimeoutError as exc:
-                    logger.warning("NPC image generation timed out for %s/%s: %s", template_id, n['id'], exc)
-                    image_url = None
-                except Exception as exc:
-                    logger.warning("NPC image generation failed for %s/%s: %s", template_id, n['id'], exc)
-                    image_url = None
-                if image_url:
-                    image_successes += 1
-                else:
+                    prompt = prompts.NPC_IMAGE_PROMPT_TEMPLATE.format(
+                        name=n['name'], description=n['description']
+                    )
+                    image_attempts += 1
+                    try:
+                        image_url = await asyncio.wait_for(
+                            MediaEngine.generate_entity_image(
+                                prompt,
+                                template_id,
+                                n['id'],
+                                "NPC",
+                                {"t2i_settings": user.t2i_settings},
+                                user.encrypted_api_keys,
+                            ),
+                            timeout=_image_generation_timeout_seconds(),
+                        )
+                    except asyncio.TimeoutError as exc:
+                        logger.warning("NPC image generation timed out for %s/%s: %s", template_id, n['id'], exc)
+                        image_url = None
+                    except Exception as exc:
+                        logger.warning("NPC image generation failed for %s/%s: %s", template_id, n['id'], exc)
+                        image_url = None
+                    if image_url:
+                        image_successes += 1
+                
+                if not image_url:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
                         template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")
@@ -594,37 +606,39 @@ class WorldGenerator:
             seen_entity_ids.add(o["id"])
             
             image_url = (existing_images or {}).get(o["id"]) or o.get("image_url")
-            if not image_url and user and gen_items:
-                await _publish_generation_status(
-                    db,
-                    adventure,
-                    f"Envisioning Item {object_index}/{total_objects}: {o['name']}...",
-                )
-                prompt = prompts.ITEM_IMAGE_PROMPT_TEMPLATE.format(
-                    name=o['name'], description=o['description']
-                )
-                image_attempts += 1
-                try:
-                    image_url = await asyncio.wait_for(
-                        MediaEngine.generate_entity_image(
-                            prompt,
-                            template_id,
-                            o['id'],
-                            "OBJECT",
-                            {"t2i_settings": user.t2i_settings},
-                            user.encrypted_api_keys,
-                        ),
-                        timeout=_image_generation_timeout_seconds(),
+            if not image_url:
+                if user and gen_items:
+                    await _publish_generation_status(
+                        db,
+                        adventure,
+                        f"Reifying Artifact {object_index}/{total_objects}: {o['name']}...",
                     )
-                except asyncio.TimeoutError as exc:
-                    logger.warning("Object image generation timed out for %s/%s: %s", template_id, o['id'], exc)
-                    image_url = None
-                except Exception as exc:
-                    logger.warning("Object image generation failed for %s/%s: %s", template_id, o['id'], exc)
-                    image_url = None
-                if image_url:
-                    image_successes += 1
-                else:
+                    prompt = prompts.OBJECT_IMAGE_PROMPT_TEMPLATE.format(
+                        name=o['name'], description=o['description']
+                    )
+                    image_attempts += 1
+                    try:
+                        image_url = await asyncio.wait_for(
+                            MediaEngine.generate_entity_image(
+                                prompt,
+                                template_id,
+                                o['id'],
+                                "OBJECT",
+                                {"t2i_settings": user.t2i_settings},
+                                user.encrypted_api_keys,
+                            ),
+                            timeout=_image_generation_timeout_seconds(),
+                        )
+                    except asyncio.TimeoutError as exc:
+                        logger.warning("Object image generation timed out for %s/%s: %s", template_id, o['id'], exc)
+                        image_url = None
+                    except Exception as exc:
+                        logger.warning("Object image generation failed for %s/%s: %s", template_id, o['id'], exc)
+                        image_url = None
+                    if image_url:
+                        image_successes += 1
+                
+                if not image_url:
                     # Fallback to procedural SVG
                     image_url = await MediaEngine.generate_svg_placeholder(
                         template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities")

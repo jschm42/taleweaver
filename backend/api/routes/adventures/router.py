@@ -5,7 +5,7 @@ from backend.api.routes.adventures.gameplay import router as gameplay_router
 from backend.api.routes.adventures.assets import router as assets_router
 from backend.api.routes.adventures.editor import router as editor_router
 
-router = APIRouter(prefix="/adventures")
+router = APIRouter(prefix="/adventures", redirect_slashes=False)
 
 # Include sub-routers in order of specificity.
 # Routes with static paths (like /sessions) must come BEFORE 

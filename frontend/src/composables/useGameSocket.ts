@@ -28,6 +28,9 @@ export interface UseGameSocket {
   isCompleted: Ref<boolean>
   statusText: Ref<string>
   debugLogs: Ref<{ timestamp: string, content: string }[]>
+  inventoryGlow: Ref<boolean>
+  mapGlow: Ref<boolean>
+  questGlow: Ref<boolean>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
@@ -53,6 +56,9 @@ export function useGameSocket(): UseGameSocket {
   const isCompleted = ref(false)
   const statusText = ref('')
   const debugLogs = ref<{ timestamp: string, content: string }[]>([])
+  const inventoryGlow = ref(false)
+  const mapGlow = ref(false)
+  const questGlow = ref(false)
   let currentGameId = ''
   let syncTimer: number | null = null
 
@@ -181,7 +187,10 @@ export function useGameSocket(): UseGameSocket {
    * Posts a player message and processes the GM response.
    */
   async function sendMessage(content: string): Promise<void> {
-    if (content) _pushMessage('user', content)
+    const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume']
+    const isSilent = silentCommands.some(cmd => content.toLowerCase().startsWith(cmd))
+    
+    if (content && !isSilent) _pushMessage('user', content)
     
     const wasGameOver = status.value === 'game_over'
     if (wasGameOver) return
@@ -303,6 +312,9 @@ export function useGameSocket(): UseGameSocket {
     isCompleted,
     statusText,
     debugLogs,
+    inventoryGlow,
+    mapGlow,
+    questGlow,
     connect,
     disconnect,
     sendMessage,

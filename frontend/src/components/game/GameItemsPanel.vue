@@ -5,8 +5,9 @@ interface Entity {
   id: string
   name: string
   item_type?: string | null
-  image_url?: string | null
-}
+   image_url?: string | null
+   is_portable?: boolean
+ }
 
 const props = defineProps<{
   items: Entity[]
@@ -18,6 +19,7 @@ const emit = defineEmits<{
   move: [event: MouseEvent]
   leave: []
   imageError: [path: string]
+  takeDirect: [entity: Entity]
 }>()
 </script>
 
@@ -33,10 +35,12 @@ const emit = defineEmits<{
       <div
         v-for="ent in items"
         :key="ent.id"
-        class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group cursor-help transition-all hover:border-amber-500/40 hover:bg-slate-900/50 p-2 flex flex-col items-center shadow-lg"
+        class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group transition-all hover:border-amber-500/40 hover:bg-slate-900/50 p-2 flex flex-col items-center shadow-lg"
+        :class="ent.is_portable !== false ? 'cursor-pointer' : 'cursor-help'"
         @mouseenter="emit('hover', ent, $event)"
         @mousemove="emit('move', $event)"
         @mouseleave="emit('leave')"
+        @click="ent.is_portable !== false ? emit('takeDirect', ent) : null"
       >
         <div class="w-12 h-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
           <img

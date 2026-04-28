@@ -105,12 +105,12 @@ export const api = {
 
   /** @deprecated Use listSessions() instead. */
   listGameSessions(): Promise<GameSession[]> {
-    return request<GameSession[]>('/adventures')
+    return request<GameSession[]>('/adventures/')
   },
 
   /** Creates a new adventure and returns the generated IDs. */
   createAdventure(payload: CreateAdventurePayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
-    return request('/adventures', { method: 'POST', body: JSON.stringify(payload) })
+    return request('/adventures/', { method: 'POST', body: JSON.stringify(payload) })
   },
 
   /** Import an adventure JSON payload (parsed .adv) and open creation flow on the server. */

@@ -63,6 +63,9 @@ const {
   isCompleted,
   statusText,
   debugLogs,
+  inventoryGlow,
+  mapGlow,
+  questGlow,
   connect,
   disconnect,
   sendMessage
@@ -105,6 +108,37 @@ const npcs = computed(() => {
 })
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
+
+// --- WATCHERS FOR UI FEEDBACK (GLOW) ---
+
+watch(() => sheet.value?.inventory, (newInv, oldInv) => {
+  if (oldInv && newInv && newInv.length > oldInv.length) {
+    inventoryGlow.value = true
+    setTimeout(() => { inventoryGlow.value = false }, 3000)
+  }
+}, { deep: true })
+
+watch(() => nodes.value, (newNodes, oldNodes) => {
+  if (oldNodes && newNodes && newNodes.length > oldNodes.length) {
+    mapGlow.value = true
+    setTimeout(() => { mapGlow.value = false }, 3000)
+  }
+}, { deep: true })
+
+watch(() => quests.value, (newQuests, oldQuests) => {
+  if (oldQuests && newQuests) {
+    const newActive = newQuests.filter(q => q.status === 'active').length
+    const oldActive = oldQuests.filter(q => q.status === 'active').length
+    if (newActive > oldActive) {
+      questGlow.value = true
+      setTimeout(() => { questGlow.value = false }, 3000)
+    }
+  }
+}, { deep: true })
+
+const handleTakeDirect = async (entity: any) => {
+  await sendMessage(`/take_direct ${entity.id || entity.name}`)
+}
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
 
 /**
@@ -454,6 +488,7 @@ onBeforeUnmount(() => {
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
           @image-error="(path) => handleImageError(path)"
+          @take-direct="handleTakeDirect"
         />
       </aside>
 
@@ -471,6 +506,9 @@ onBeforeUnmount(() => {
         :debug-logs="debugLogs"
         :game-over-reason="gameOverReason"
         :exp="sheet?.exp || 0"
+        :inventory-glow="inventoryGlow"
+        :map-glow="mapGlow"
+        :quest-glow="questGlow"
         @send="handlePlayerInput"
         @open-sheet="showSheet = true"
         @open-map="showMap = true"
@@ -480,6 +518,7 @@ onBeforeUnmount(() => {
         @npc-leave="hoveredEntity = null"
         @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
         @item-leave="hoveredEntity = null"
+        @take-direct="handleTakeDirect"
         @open-debug="openDebugInspector"
         @toggle-debug-log="(val) => showDebugLog = val"
       />
@@ -490,7 +529,10 @@ onBeforeUnmount(() => {
       :open="showSheet" 
       :sheet="sheet" 
       @close="showSheet = false" 
-      @item-click="(name) => dialogPanel?.appendText(name)"
+      @equip="(name) => sendMessage(`/equip ${name}`)"
+      @unequip="(slot) => sendMessage(`/unequip ${slot}`)"
+      @consume="(name) => sendMessage(`/consume ${name}`)"
+      @changed="sheet?.rule_enforcement_mode !== 'chat' && sendMessage('/rule-pass')"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
     />

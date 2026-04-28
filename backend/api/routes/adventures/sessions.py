@@ -66,10 +66,14 @@ async def start_session_for_template(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """Creates a new active session for a template and returns its identifiers."""
-    adv_res = await db.execute(select(AdventureTemplate).where((AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)))
+    adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == template_id))
     adventure = adv_res.scalars().first()
     if not adventure:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
+
+    # Allow if user is owner OR if adventure is ready (public-ready)
+    if adventure.owner_id != current_user.id and not adventure.is_ready:
+        raise HTTPException(status_code=403, detail="You do not have access to this adventure yet.")
 
     avatar_res = await db.execute(select(Avatar).where((Avatar.template_id == template_id) & (Avatar.user_id == current_user.id)))
     avatar = avatar_res.scalars().first()

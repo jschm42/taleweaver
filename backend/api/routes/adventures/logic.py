@@ -114,6 +114,32 @@ class AdventureLogic:
         return None
 
     @staticmethod
+    async def build_session_entities(db: AsyncSession, state: SessionState) -> List[Dict[str, Any]]:
+        """Fetches and processes entities for the current scene, applying session overrides."""
+        ent_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == state.template_id, 
+                WorldEntity.current_scene_id == state.current_scene_id
+            )
+        )
+        base_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in ent_res.scalars().all()]
+        
+        session_overrides = state.entity_states or {}
+        entities = []
+        for ent in base_entities:
+            eid = ent.get("id")
+            # Clear global leaks for fresh session feel
+            ent["is_in_inventory"] = False
+            
+            if eid in session_overrides:
+                ent.update(session_overrides[eid])
+            
+            if ent.get("is_hidden") or ent.get("is_in_inventory"):
+                continue
+            entities.append(ent)
+        return entities
+
+    @staticmethod
     async def build_sheet_snapshot(avatar: Avatar, state: SessionState, db: AsyncSession) -> dict:
         """Builds a serialisable character-sheet snapshot."""
         adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == state.template_id))
@@ -168,5 +194,7 @@ class AdventureLogic:
             "current_scene": current_scene.label if current_scene else state.current_scene_id,
             "scene_id": state.current_scene_id,
             "adventure_title": adventure.title if adventure else "Unknown",
-            "template_id": state.template_id, "exp": avatar.exp
+            "template_id": state.template_id, 
+            "exp": avatar.exp,
+            "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg"
         }

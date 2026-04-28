@@ -14,6 +14,9 @@ const props = defineProps<{
   statusText?: string
   showDebugLog?: boolean
   debugLogs?: { timestamp: string, content: string }[]
+  inventoryGlow?: boolean
+  mapGlow?: boolean
+  questGlow?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +31,7 @@ const emit = defineEmits<{
   openMap: []
   openDebug: []
   toggleDebugLog: [enabled: boolean]
+  takeDirect: [entity: any]
 }>()
 
 const inputText = ref('')
@@ -339,7 +343,7 @@ function displayMessageContent(msg: ChatMessage): string {
               <button 
                 v-if="entities.find(e => e.id === itemId)?.is_portable !== false"
                 class="mt-auto py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 active:scale-95 shadow-lg shadow-emerald-500/10"
-                @click="emit('send', `/take ${entities.find(e => e.id === itemId)?.name}`)"
+                @click="emit('takeDirect', entities.find(e => e.id === itemId))"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
@@ -411,6 +415,7 @@ function displayMessageContent(msg: ChatMessage): string {
         <!-- Tool Buttons -->
         <button
           class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+          :class="{ 'glow-quest': props.questGlow }"
           title="Quest Log"
           @click="emit('openQuests')"
         >
@@ -427,6 +432,7 @@ function displayMessageContent(msg: ChatMessage): string {
 
         <button
           class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+          :class="{ 'glow-inventory': props.inventoryGlow }"
           title="Character Sheet"
           @click="emit('openSheet')"
         >
@@ -435,6 +441,7 @@ function displayMessageContent(msg: ChatMessage): string {
 
         <button
           class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+          :class="{ 'glow-map': props.mapGlow }"
           title="World Map"
           @click="emit('openMap')"
         >
@@ -514,4 +521,22 @@ function displayMessageContent(msg: ChatMessage): string {
   line-height: 1;
   vertical-align: middle;
 }
+
+/* Glow animations */
+@keyframes tool-glow-inventory {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(129, 140, 248, 0)); }
+  50% { filter: drop-shadow(0 0 25px rgba(129, 140, 248, 0.9)); transform: scale(1.1); }
+}
+@keyframes tool-glow-map {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(251, 191, 36, 0)); }
+  50% { filter: drop-shadow(0 0 25px rgba(251, 191, 36, 0.9)); transform: scale(1.1); }
+}
+@keyframes tool-glow-quest {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(124, 58, 237, 0)); }
+  50% { filter: drop-shadow(0 0 25px rgba(124, 58, 237, 0.9)); transform: scale(1.1); }
+}
+
+.glow-inventory { animation: tool-glow-inventory 1s ease-in-out infinite; }
+.glow-map { animation: tool-glow-map 1s ease-in-out infinite; }
+.glow-quest { animation: tool-glow-quest 1s ease-in-out infinite; }
 </style>
