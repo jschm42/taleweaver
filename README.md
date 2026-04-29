@@ -280,6 +280,14 @@ The backend monitors three specific directories relative to the project root:
 
 ## 7. Credits & Assets
 
+* **AI & LLM:** Image generation is powered by **FLUX.1 [schnell]** and **FLUX.2 [klein]** by [Black Forest Labs](https://blackforestlabs.ai/). Multi-provider LLM abstraction is handled via [LiteLLM](https://github.com/BerriAI/litellm).
+* **Mapping:** Dynamic world maps are rendered using [Mermaid.js](https://mermaid.js.org/).
 * **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets used throughout the interface.
-* **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/).
-* **Typography:** Modern fantasy aesthetics powered by [Google Fonts](https://fonts.google.com/).
+* **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/) and system icons by [Lucide](https://lucide.dev/).
+* **Typography:** Retro pixel-art aesthetics powered by the **Press Start 2P** font from [Google Fonts](https://fonts.google.com/).
+
+## 8. License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+AI-generated content (images and text) produced by this application is subject to the terms of the respective model providers. For **Black Forest Labs FLUX.1 [schnell]** and **FLUX.2 [klein]**, commercial use is permitted under the Apache 2.0 license. Please be aware that the copyrightability of AI-generated content is subject to legal interpretation in your local jurisdiction.
