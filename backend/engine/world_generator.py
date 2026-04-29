@@ -269,7 +269,7 @@ class WorldGenerator:
             )
             await db.commit()
 
-        manifesto: WorldManifesto = llm.execute_complex_task(
+        manifesto: WorldManifesto = await llm.aexecute_complex_task(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_model=WorldManifesto,
@@ -738,6 +738,11 @@ class WorldGenerator:
             starting_slot = starting_equipped_ids.get(o["id"])
             is_in_inv = is_starting_inv or (starting_slot is not None)
 
+            from backend.engine.item_logic import get_item_slot
+            guessed_slot = get_item_slot(o["name"], o.get("item_type", "PICKABLE"))
+            # Prioritize wearable_slots if defined by LLM, else use our guess
+            item_slot = o.get("wearable_slots")[0] if (o.get("wearable_slots") and len(o.get("wearable_slots")) > 0) else guessed_slot
+
             # Construct the Item Dict for Avatar storage
             item_data = {
                 "id": o["id"],
@@ -745,7 +750,7 @@ class WorldGenerator:
                 "description": o["description"],
                 "image_url": image_url,
                 "item_type": o.get("item_type", "PICKABLE"),
-                "slot": (o.get("wearable_slots") or ["Hands"])[0] if o.get("item_type") == "WEARABLE" else "Hands",
+                "slot": item_slot,
                 "stat_modifier_strength": o.get("stat_modifier_strength"),
                 "stat_modifier_dexterity": o.get("stat_modifier_dexterity"),
                 "stat_modifier_intelligence": o.get("stat_modifier_intelligence"),

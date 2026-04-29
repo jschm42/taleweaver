@@ -69,6 +69,9 @@ class GameMasterLLM:
     async def _acompletion_with_openrouter_fallback(self, kwargs: dict):
         """Async variant of completion retry for OpenRouter provider-order mismatches."""
         try:
+            logger.info(
+                "GameMasterLLM calling LLM for user %s with model %s", self.user.id, kwargs.get("model")
+            )
             return await self._get_litellm().acompletion(**kwargs)
         except Exception as exc:
             if self.provider != "openrouter":
@@ -84,6 +87,10 @@ class GameMasterLLM:
                 ",".join(available_providers),
             )
             retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
+
+            logger.info(
+                "GameMasterLLM calling LLM (Fallback) for user %s with model %s", self.user.id, kwargs.get("model")
+            )
             return await self._get_litellm().acompletion(**retry_kwargs)
 
     @staticmethod
@@ -314,6 +321,79 @@ class GameMasterLLM:
         )
 
         response = self._completion_with_openrouter_fallback(kwargs)
+        
+        result = response.choices[0].message.content or ""
+        
+        log_llm_interaction(
+            model=model,
+            provider=self.provider,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_content=result,
+            raw_response=response.model_dump(),
+            event_type="gm.turn.response",
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata=metadata,
+        )
+        
+        return result
+
+    async def aexecute_simple_task(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str,
+        *,
+        adventure_id: str | None = None,
+        game_id: str | None = None,
+        operation: str | None = None,
+        phase: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """
+        Async version of execute_simple_task.
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        normalized_model = self._normalize_model(model)
+
+        kwargs = {
+            "model": normalized_model,
+            "messages": messages,
+            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
+        }
+        self._apply_thinking_settings(kwargs)
+
+        if self.provider == "ollama":
+            self._validate_ollama_model(model)
+            kwargs["api_base"] = self.api_base
+            kwargs["custom_llm_provider"] = "ollama"
+        else:
+            kwargs["api_key"] = self.api_key
+            if self.provider == "openrouter":
+                kwargs["custom_llm_provider"] = "openai"
+        
+        if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
+            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+        
+        log_structured_event(
+            "gm.turn.request",
+            model=normalized_model,
+            provider=self.provider,
+            adventure_id=adventure_id,
+            game_id=game_id,
+            operation=operation,
+            phase=phase,
+            metadata=metadata,
+        )
+
+        response = await self._acompletion_with_openrouter_fallback(kwargs)
         
         result = response.choices[0].message.content or ""
         

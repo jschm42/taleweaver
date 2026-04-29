@@ -178,6 +178,7 @@ class AdventureLogic:
         else:
             img_map.update({k: v for k, v in snapshot_entity_images.items() if isinstance(v, str) and v})
         
+        from backend.engine.item_logic import get_item_slot
         synced_inventory = []
         for item in (avatar.inventory or []):
             if not isinstance(item, dict):
@@ -186,6 +187,11 @@ class AdventureLogic:
                 else:
                     continue
             item_copy = dict(item)
+            
+            # On-the-fly slot fixup for old data
+            if not item_copy.get("slot"):
+                item_copy["slot"] = get_item_slot(item_copy.get("name", ""), item_copy.get("item_type", "PICKABLE"))
+                
             item_id = item_copy.get("id")
             if item_id in img_map and not item_copy.get("image_url"):
                 item_copy["image_url"] = img_map[item_id]
@@ -201,6 +207,11 @@ class AdventureLogic:
                         synced_equipment[slot] = item
                         continue
                 item_copy = dict(item)
+                
+                # On-the-fly slot fixup
+                if not item_copy.get("slot"):
+                    item_copy["slot"] = get_item_slot(item_copy.get("name", ""), item_copy.get("item_type", "PICKABLE"))
+                
                 item_id = item_copy.get("id")
                 if item_id in img_map and not item_copy.get("image_url"):
                     item_copy["image_url"] = img_map[item_id]

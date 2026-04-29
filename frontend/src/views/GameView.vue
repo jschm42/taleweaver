@@ -82,6 +82,26 @@ const handleHover = (ent: any, event: MouseEvent) => {
   mousePos.value = { x: event.clientX, y: event.clientY }
 }
 
+const tooltipStyle = computed(() => {
+  if (!hoveredEntity.value) return {}
+  const x = mousePos.value.x + 20
+  const y = mousePos.value.y
+  const threshold = window.innerHeight * 0.6
+  
+  if (y > threshold) {
+    return {
+      left: `${x}px`,
+      bottom: `${window.innerHeight - y + 10}px`,
+      top: 'auto'
+    }
+  }
+  return {
+    left: `${x}px`,
+    top: `${y + 10}px`,
+    bottom: 'auto'
+  }
+})
+
 const handleChatNpcHover = (name: string, event: MouseEvent) => {
   const metadata = npcMetadata.value[name]
   if (metadata) {
@@ -589,7 +609,7 @@ onBeforeUnmount(() => {
         <div 
           v-if="hoveredEntity" 
           class="fixed z-[100] pointer-events-none transition-all duration-75"
-          :style="{ left: (mousePos.x + 20) + 'px', top: (mousePos.y - 40) + 'px' }"
+          :style="tooltipStyle"
         >
           <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
             <!-- Image Area -->
@@ -621,6 +641,11 @@ onBeforeUnmount(() => {
               <!-- Item Stats -->
               <div v-if="hoveredEntity.entity_type === 'OBJECT' || hoveredEntity.entity_type === 'ITEM'" class="mt-3 pt-3 border-t border-slate-800">
                 <div class="grid grid-cols-2 gap-2 text-[10px] uppercase font-bold tracking-wider">
+                  <!-- Preferred Slot -->
+                  <div v-if="hoveredEntity.slot" class="col-span-2 text-slate-500 lowercase italic font-medium">
+                    {{ hoveredEntity.slot.replace('_', ' ') }}
+                  </div>
+
                   <div v-if="hoveredEntity.stat_modifier_strength != null" class="text-red-400 flex justify-between">
                     <span>STR</span> <span>+{{ hoveredEntity.stat_modifier_strength }}</span>
                   </div>

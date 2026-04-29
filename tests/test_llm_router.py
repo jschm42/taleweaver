@@ -230,3 +230,43 @@ def test_invalid_thinking_value_logs_warning_and_falls_back_to_false(monkeypatch
 
     assert router.enable_thinking is False
     assert "Invalid thinking setting" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_aexecute_simple_task(monkeypatch):
+    user = _make_user(
+        encrypted_api_keys={"openai": "encrypted-placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    router = GameMasterLLM(user, provider="openai")
+
+    captured = {}
+
+    class _Msg:
+        content = "hello world"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.aexecute_simple_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        model="gpt-4o",
+    )
+
+    assert out == "hello world"
+    assert captured["model"] == "gpt-4o"
+    assert "stream" not in captured or captured["stream"] is False

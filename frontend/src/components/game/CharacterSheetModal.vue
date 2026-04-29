@@ -36,36 +36,35 @@ const coreAttributes = computed(() => {
 })
 
 const getSlotPlaceholderIcon = (slot: string) => {
-  const map: Record<string, string> = {
-    Head: 'ra-helmet',
-    Chest: 'ra-chestplate',
-    Arms: 'ra-bracers',
-    Hands: 'ra-gloves',
-    Legs: 'ra-leggings',
-    Feet: 'ra-boots',
-    Ring_1: 'ra-ring',
-    Ring_2: 'ra-ring',
-    Amulet: 'ra-necklace'
+  switch (slot) {
+    case 'Head': return 'ra-helmet'
+    case 'Chest': return 'ra-breastplate'
+    case 'Arms': return 'ra-hand'
+    case 'Legs': return 'ra-leg'
+    case 'Hands': return 'ra-hand'
+    case 'Feet': return 'ra-boot-prints'
+    case 'Ring_1':
+    case 'Ring_2': return 'ra-ring'
+    case 'Amulet': return 'ra-necklace'
+    case 'Main_Hand': return 'ra-sword'
+    case 'Off_Hand': return 'ra-shield'
+    default: return 'ra-help'
   }
-  return map[slot] || 'ra-plain-dagger'
 }
 
 // Three-column layout within the silhouette area
 const slotPositions: Record<string, { top: string, left: string }> = {
-  // LEFT: Accessories
-  Amulet: { top: '15%', left: '10%' },
-  Ring_1: { top: '45%', left: '10%' },
-  Ring_2: { top: '75%', left: '10%' },
-  
-  // RIGHT COL 1
-  Head: { top: '15%', left: '76%' },
-  Chest: { top: '45%', left: '76%' },
-  Arms: { top: '75%', left: '76%' },
-  
-  // RIGHT COL 2
-  Hands: { top: '15%', left: '92%' },
-  Legs: { top: '45%', left: '92%' },
-  Feet: { top: '75%', left: '92%' },
+  'Head': { top: '10%', left: '42%' },
+  'Chest': { top: '30%', left: '42%' },
+  'Legs': { top: '65%', left: '42%' },
+  'Feet': { top: '85%', left: '42%' },
+  'Arms': { top: '25%', left: '10%' },
+  'Hands': { top: '45%', left: '10%' },
+  'Main_Hand': { top: '65%', left: '10%' },
+  'Amulet': { top: '15%', left: '75%' },
+  'Ring_1': { top: '35%', left: '75%' },
+  'Ring_2': { top: '55%', left: '75%' },
+  'Off_Hand': { top: '75%', left: '75%' }
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -94,10 +93,8 @@ const handleInventoryClick = (item: any) => {
   if (!item) return
   stateChanged.value = true
   
-  // Allow equipping if it has an explicit slot, or belongs to an equippable category
-  const isEquippable = item.slot || 
-                      (item.wearable_slots && item.wearable_slots.length > 0) || 
-                      ['WEAPON', 'WEARABLE', 'TOOL', 'PICKABLE'].includes(item.item_type)
+  // Strict check: must have a slot assigned or wearable_slots defined
+  const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
   
   if (isEquippable) {
     emit('equip', item.name)
@@ -147,7 +144,7 @@ const onClose = () => {
             <div class="w-full md:w-1/2 flex flex-col min-h-0 border-r border-slate-800/50 bg-slate-950/40">
               <div class="flex-grow overflow-y-auto custom-scrollbar p-4 md:p-8 flex flex-col">
                 <!-- Identity Header -->
-                <div class="flex items-center gap-4 md:gap-6 mb-4 md:mb-8 shrink-0">
+                <div class="flex items-start gap-4 md:gap-6 mb-4 md:mb-8 shrink-0">
                   <div class="relative group/avatar">
                     <div class="w-28 h-28 rounded-2xl bg-slate-800/40 border border-slate-700/50 overflow-hidden flex items-center justify-center shadow-2xl">
                       <img v-if="sheet.profile_image && showImage(sheet.profile_image)" :src="getImageUrl(sheet.profile_image)" class="w-full h-full object-cover object-top" @error="handleImageError(sheet.profile_image)" />
@@ -159,9 +156,16 @@ const onClose = () => {
                       <p class="text-[11px] text-slate-300 leading-relaxed italic font-serif opacity-90 whitespace-pre-line">{{ sheet.description || 'No detailed records found.' }}</p>
                     </div>
                   </div>
-                  <div class="identity-header">
+                  <div class="identity-header -mt-1.5">
                     <h3 class="text-xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">{{ sheet.name || 'Unnamed' }}</h3>
                     <div class="text-[10px] font-black text-amber-500 uppercase tracking-[0.4em] mt-2">{{ sheet.role || 'Adventurer' }}</div>
+                  </div>
+
+                  <!-- Bio Block -->
+                  <div v-if="sheet.description" class="hidden lg:block flex-grow max-w-[65%] border-l border-slate-800 pl-8 -mt-1.5">
+                    <p class="text-[11px] text-slate-400 leading-relaxed italic line-clamp-5 font-serif">
+                      {{ sheet.description }}
+                    </p>
                   </div>
                 </div>
 

@@ -78,24 +78,39 @@ class CommandParser:
         item_to_equip = avatar.inventory[item_idx]
         slot = item_to_equip.get("slot", "Hands") # Fallback to hands if missing
         
-        # Normalize slot names (Hand -> Hands, etc.)
+        from backend.engine.item_logic import get_item_slot
+        
+        # Normalize slot names
         if slot == "Hand": slot = "Hands"
         if slot == "Ring": slot = "Ring_1"
 
-        # Self-healing: Ensure standard slots exist if they are missing
+        # Determine target slot if not provided
+        if not slot or slot == "None":
+            slot = item_to_equip.get("slot")
+
+        # Smart Redirection / Guessing
+        if not slot or slot == "Hands":
+            # If it's a weapon or tool, move to Hand slots
+            if item_to_equip.get("item_type") == "WEAPON":
+                slot = "Main_Hand"
+            elif item_to_equip.get("item_type") == "TOOL" and any(kw in item_to_equip.get("name", "").lower() for kw in ["shield", "buckler", "torch"]):
+                slot = "Off_Hand"
+            else:
+                # Last resort: try guessing
+                slot = get_item_slot(item_to_equip.get("name", ""), item_to_equip.get("item_type", "PICKABLE"))
+
+        if not slot:
+            return f"'{item_to_equip.get('name')}' cannot be equipped."
+
+        # Self-healing: Ensure standard slots exist
         DEFAULT_SLOTS = {
             "Head": None, "Chest": None, "Arms": None, "Legs": None,
-            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None,
+            "Main_Hand": None, "Off_Hand": None
         }
         
-        # Fallback for weapons if their preferred slot is missing
-        if slot not in avatar.equipment and item_to_equip.get("item_type") == "WEAPON":
-            slot = "Hands"
-
-        # If the slot is still missing, check if it's a standard slot we can auto-create
         if slot not in avatar.equipment:
             if slot in DEFAULT_SLOTS:
-                # Add all missing default slots to the avatar's equipment
                 new_equipment = dict(avatar.equipment)
                 for s, val in DEFAULT_SLOTS.items():
                     if s not in new_equipment:

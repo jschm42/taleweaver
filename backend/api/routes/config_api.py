@@ -501,7 +501,7 @@ async def test_llm_connection(
     try:
         gm = GameMasterLLM(user, provider=payload.provider)
         start_time = time.perf_counter()
-        response = gm.execute_simple_task(
+        response = await gm.aexecute_simple_task(
             system_prompt="You are a helpful RPG assistant.",
             user_prompt="Say 'TaleWeaver connection test successful!' in a fantasy style.",
             model=payload.model
