@@ -32,6 +32,9 @@ To get started with your first adventure, follow these simple steps:
 3.  **Generate a World**: If you want something unique, use the **World Generator** to create a completely new setting from a simple prompt.
 4.  **Begin Journey**: Select your adventure and click **Begin Journey** to start playing! (Your hero's stats and appearance are automatically initialized from the adventure's protagonist definition).
 
+> [!TIP]
+> You can find several pre-made test adventures in the `/adventures` directory of this repository. Use the **Import** button in the **Library** to load them and start playing immediately!
+
 ## 1. The Vision
 
 Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background. The frontend is presented in an immersive, stylish pixel-art look.
