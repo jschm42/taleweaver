@@ -480,11 +480,12 @@ class WorldGenerator:
                     charisma=prot.get("charisma", 10),
                     armor_class=prot.get("armor_class", 10),
                     stats=prot.get("stats", {}),
-                    inventory=prot.get("starting_inventory", []),
-                    equipment=prot.get("starting_equipment", {
+                    inventory=prot.get("starting_inventory") or [],
+                    equipment=prot.get("starting_equipment") or {
                         "Head": None, "Chest": None, "Arms": None, "Legs": None,
-                        "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
-                    })
+                        "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, 
+                        "Amulet": None, "Main_Hand": None, "Off_Hand": None
+                    }
                 )
                 db.add(avatar)
             else:
@@ -507,9 +508,9 @@ class WorldGenerator:
                 avatar.charisma = prot.get("charisma", avatar.charisma)
                 avatar.armor_class = prot.get("armor_class", avatar.armor_class)
                 
-                avatar.stats = prot.get("stats", avatar.stats)
-                avatar.inventory = prot.get("starting_inventory", avatar.inventory)
-                avatar.equipment = prot.get("starting_equipment", avatar.equipment)
+                avatar.stats = prot.get("stats") or avatar.stats
+                avatar.inventory = prot.get("starting_inventory") or avatar.inventory
+                avatar.equipment = prot.get("starting_equipment") or avatar.equipment
 
             # Unified Portrait Logic
             image_url = (existing_images or {}).get("PROTAGONIST") or prot.get("profile_image")

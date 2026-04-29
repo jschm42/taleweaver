@@ -42,7 +42,8 @@ def calculate_total_stats(avatar: Avatar) -> dict:
                 total_stats[k] = v
 
     # 1. Add Equipment modifiers
-    for slot, item in avatar.equipment.items():
+    equipment = avatar.equipment or {}
+    for slot, item in equipment.items():
         if not item or not isinstance(item, dict):
             continue
             
@@ -58,7 +59,8 @@ def calculate_total_stats(avatar: Avatar) -> dict:
                 total_stats[stat_key] += item[mod_key]
                 
     # 2. Add Status Effect modifiers
-    for status in avatar.status_effects:
+    status_effects = avatar.status_effects or []
+    for status in status_effects:
         if status in STATUS_MODIFIERS:
             for stat, value in STATUS_MODIFIERS[status].items():
                 total_stats[stat] = total_stats.get(stat, 0) + value
