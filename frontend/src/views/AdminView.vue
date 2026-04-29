@@ -19,13 +19,13 @@ const keyForm = ref({
 })
 
 const llmForm = ref({
-  small_model: 'gpt-4o-mini',
+  small_model: '',
   small_model_provider: 'openai',
   small_max_tokens: 4096,
   small_enable_thinking: false,
   small_max_thinking_tokens: 1024,
   
-  complex_model: 'gpt-4o',
+  complex_model: '',
   complex_model_provider: 'openai',
   complex_max_tokens: 4096,
   complex_enable_thinking: false,
@@ -36,9 +36,9 @@ const llmForm = ref({
 })
 
 const t2iForm = ref({
-  simple_model: 'dall-e-2',
+  simple_model: '',
   simple_model_provider: 'openai',
-  advanced_model: 'dall-e-3',
+  advanced_model: '',
   advanced_model_provider: 'openai',
   provider: 'openai',
   ollama_url: 'http://localhost:11434',
@@ -671,6 +671,7 @@ watch(
                     }"
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
                   >
+                    <option value="" disabled>-- Please Select --</option>
                     <option v-for="m in availableConstants.predefined_llm_models[llmForm.small_model_provider]" :key="m" :value="m">{{ m }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>
@@ -744,6 +745,7 @@ watch(
                     }"
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
                   >
+                    <option value="" disabled>-- Please Select --</option>
                     <option v-for="m in availableConstants.predefined_llm_models[llmForm.complex_model_provider]" :key="m" :value="m">{{ m }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>
@@ -846,6 +848,7 @@ watch(
                     }"
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono"
                   >
+                    <option value="" disabled>-- Please Select --</option>
                     <option v-for="m in availableConstants.predefined_image_models[t2iForm.simple_model_provider]" :key="m" :value="m">{{ m }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>
@@ -902,6 +905,7 @@ watch(
                     }"
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono"
                   >
+                    <option value="" disabled>-- Please Select --</option>
                     <option v-for="m in availableConstants.predefined_image_models[t2iForm.advanced_model_provider]" :key="m" :value="m">{{ m }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>

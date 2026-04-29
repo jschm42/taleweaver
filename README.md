@@ -204,3 +204,9 @@ The backend monitors three specific directories relative to the project root:
 * The portal import action accepts both `.adv` and `.adz`:
 	* Use `.adv` when you only need the blueprint JSON.
 	* Use `.adz` when you also want to include packaged assets.
+
+## 7. Credits & Assets
+
+* **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets used throughout the interface.
+* **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/).
+* **Typography:** Modern fantasy aesthetics powered by [Google Fonts](https://fonts.google.com/).

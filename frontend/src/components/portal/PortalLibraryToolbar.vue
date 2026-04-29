@@ -13,8 +13,8 @@ const emit = defineEmits<{
 <template>
   <div class="flex items-end justify-between mb-12">
     <div>
-      <h2 class="text-5xl font-black text-white font-display tracking-tight mb-3">
-        {{ props.activeSection === 'templates' ? 'My Library' : 'Game sessions' }}
+      <h2 class="text-5xl font-black text-white font-display tracking-tight mb-2">
+        {{ props.activeSection === 'templates' ? 'Library' : 'Game sessions' }}
       </h2>
       <p class="text-slate-500 font-narrative italic text-lg opacity-80">
         {{ props.activeSection === 'templates' ? 'Manage your world blueprints.' : 'Manage your active playthroughs.' }}

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
+import { configState } from '@/store/config'
 import type { CatalogTile } from '@/types'
 import { 
   Sparkles, Palette, Flame, Check, Image, 
@@ -51,26 +52,17 @@ const isGenerating = ref(false)
 const errorMsg = ref('')
 const config = ref<any>(null)
 
-const isImageLlmConfigured = computed(() => {
+const hasLlmConfig = computed(() => configState.hasLlmConfig)
+const hasT2iConfig = computed(() => {
   if (!config.value) return false;
-  
   const t2i = config.value.t2i_settings;
-  const llm = config.value.llm_settings;
-  if (!t2i || !llm) return false;
-  
+  if (!t2i) return false;
   const keys = config.value.keys || {};
-
-  // LLM Check: Need at least one configured provider for narrative gen
-  const llmProvider = (llm.small_model_provider || llm.complex_model_provider || llm.preferred_provider || 'openai').toLowerCase();
-  const llmConfigured = llmProvider === 'ollama' || !!keys[llmProvider];
-
-  // T2I Check: Need at least one configured provider for visual gen
-  // Prioritize specific providers over legacy 'provider' field
   const t2iProvider = (t2i.simple_model_provider || t2i.advanced_model_provider || t2i.provider || 'openai').toLowerCase();
-  const t2iConfigured = t2iProvider === 'ollama' || !!keys[t2iProvider];
-
-  return llmConfigured && t2iConfigured;
+  return (t2iProvider === 'ollama' || !!keys[t2iProvider]) && !!t2i.simple_model;
 });
+
+const isImageLlmConfigured = computed(() => hasLlmConfig.value && hasT2iConfig.value);
 
 const ruleModeHelp = computed(() => {
   if (form.value.rule_enforcement_mode === 'rpg') {
@@ -181,8 +173,24 @@ onMounted(() => {
         {{ errorMsg }}
       </div>
 
+      <!-- CRITICAL: No LLM -->
+      <div v-if="!hasLlmConfig && configState.isLoaded" class="mb-8 p-6 rounded-2xl border border-red-500/50 bg-red-500/10 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 text-xl">
+            <i class="ra ra-warning"></i>
+          </div>
+          <div>
+            <h3 class="text-red-500 font-black uppercase tracking-widest text-xs mb-1">Intelligence Required</h3>
+            <p class="text-slate-400 text-xs">No AI provider is configured for world generation. You cannot weave new realities without a connection.</p>
+          </div>
+        </div>
+        <router-link to="/admin" class="px-6 py-3 rounded-xl bg-red-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-red-500 transition-all whitespace-nowrap">
+          Go to Configuration
+        </router-link>
+      </div>
+
       <!-- Warning if no image model -->
-      <div v-if="!isImageLlmConfigured && !isLoadingCatalogs" class="mb-8 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex items-center gap-3">
+      <div v-if="hasLlmConfig && !hasT2iConfig && !isLoadingCatalogs" class="mb-8 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm flex items-center gap-3">
         <div class="w-2 h-2 rounded-full bg-amber-500"></div>
         Warning: No image generation model is configured. You can still generate the adventure, but visual assets will be skipped.
       </div>
@@ -420,14 +428,14 @@ onMounted(() => {
       <div class="mt-16 flex flex-col items-center gap-6">
         <button
           @click="handleCreate"
-          :disabled="isGenerating || isLoadingCatalogs"
+          :disabled="isGenerating || isLoadingCatalogs || !hasLlmConfig"
           class="group relative px-20 py-6 bg-gradient-to-br from-aether-primary to-aether-secondary rounded-3xl font-black text-white shadow-2xl shadow-aether-primary/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
         >
           <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
           <div class="relative flex items-center gap-4">
             <div v-if="isGenerating" class="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
             <Sparkles v-else class="w-7 h-7" />
-            <span class="text-xl tracking-[0.2em]">{{ isGenerating ? 'WEAVING REALITY...' : 'BEGIN WEAVING' }}</span>
+            <span class="text-xl tracking-[0.2em]">{{ isGenerating ? 'WEAVING REALITY...' : (!hasLlmConfig ? 'CONFIGURATION REQUIRED' : 'BEGIN WEAVING') }}</span>
           </div>
         </button>
         <p class="text-[10px] text-white/20 uppercase tracking-[0.3em]">The process may take a few minutes as the world is manifest</p>

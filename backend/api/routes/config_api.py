@@ -210,12 +210,12 @@ def _normalize_openrouter_model(model: Optional[str]) -> Optional[str]:
 def _normalize_llm_settings(settings: Optional[dict]) -> dict:
     """Return LLM settings with separate providers, tokens and thinking modes."""
     fallback = {
-        "small_model": "gpt-4o-mini",
+        "small_model": "",
         "small_model_provider": "openai",
         "small_max_tokens": 4096,
         "small_enable_thinking": False,
         "small_max_thinking_tokens": 1024,
-        "complex_model": "gpt-4o",
+        "complex_model": "",
         "complex_model_provider": "openai",
         "complex_max_tokens": 8192,
         "complex_enable_thinking": False,
@@ -263,9 +263,9 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
 def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
     """Return T2I settings with separate providers."""
     fallback = {
-        "simple_model": "dall-e-2",
+        "simple_model": "",
         "simple_model_provider": "openai",
-        "advanced_model": "dall-e-3",
+        "advanced_model": "",
         "advanced_model_provider": "openai",
         "provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
