@@ -90,14 +90,54 @@ For a deeper look into the backend processes, check out the Mermaid diagrams in 
 * [Adventure Generation Workflow](docs/diagrams/adventure_generation.mermaid) ([Activity Diagram](docs/diagrams/adventure_generation_activity.mermaid))
 * [Game Session Loop Sequence](docs/diagrams/game_session_loop.mermaid) ([Activity Diagram](docs/diagrams/game_session_loop_activity.mermaid))
 
-## 5. Technical Details & Setup
+### 🐳 Running with Docker (Recommended)
 
-### System Requirements
-* **Python:** 3.12 (specified via `.python-version` file)
-* **Node.js:** 18+ (for the Vue.js frontend MVP)
-* **Package Managers:** `pip` and `npm`
-* **Database:** SQLite (built-in, no separate server needed)
-* **LLM Provider:** An active API key from an LLM provider (e.g., OpenAI, Anthropic, Gemini) is required for the AI Gamemaster.
+The easiest way to get TaleWeaver up and running is using Docker. This method packages both the frontend and backend into a single container and handles all dependencies automatically.
+
+#### Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) installed and running.
+- [Docker Compose](https://docs.docker.com/compose/install/) (usually included with Docker Desktop).
+
+#### Quick Start
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/jschm42/taleweaver.git
+    cd taleweaver
+    ```
+
+2.  **Run the setup script:**
+    -   **Linux/macOS:** `bash scripts/docker-setup.sh`
+    -   **Windows:** `scripts\docker-setup.bat`
+
+3.  **Configure Environment:**
+    The setup script will create a `.env` file from `.env.example`. Open it and set your `ENCRYPTION_KEY`. (You can generate one using `python scripts/generate_fernet_key.py` or use any persistent 32-byte base64 string).
+
+4.  **Access the App:**
+    Open your browser and go to `http://localhost:8000`.
+
+#### Persistence & Data
+The Docker setup uses a **bind mount** to the `./data` directory on your host machine. This ensures that:
+- Your SQLite database (`taleweaver.db`) and all game progress persist between restarts.
+- Generated character images and logs are saved on your host.
+- The bundled adventures in `/adventures` are automatically imported on the first start.
+
+#### Updating
+To update to the latest version and rebuild the container:
+```bash
+bash scripts/docker-update.sh
+```
+
+### 🛠️ Manual Development Setup
+
+If you prefer to run the components separately for development:
+
+#### System Requirements
+- **Python:** 3.12 (specified via `.python-version` file)
+- **Node.js:** 18+ (for the Vue.js frontend MVP)
+- **Package Managers:** `pip` and `npm`
+- **Database:** SQLite (built-in, no separate server needed)
+- **LLM Provider:** An active API key from an LLM provider (e.g., OpenAI, Anthropic, Gemini) is required for the AI Gamemaster.
 
 ### Installation & Execution
 
