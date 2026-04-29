@@ -251,6 +251,23 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
     if "complex_max_thinking_tokens" not in normalized:
         normalized["complex_max_thinking_tokens"] = normalized.get("max_thinking_tokens") or 1024
 
+    # Fallback between small and complex if one is missing
+    s_model = normalized.get("small_model")
+    c_model = normalized.get("complex_model")
+    
+    if s_model and not c_model:
+        normalized["complex_model"] = s_model
+        normalized["complex_model_provider"] = normalized.get("small_model_provider")
+        normalized["complex_max_tokens"] = normalized.get("small_max_tokens")
+        normalized["complex_enable_thinking"] = normalized.get("small_enable_thinking")
+        normalized["complex_max_thinking_tokens"] = normalized.get("small_max_thinking_tokens")
+    elif c_model and not s_model:
+        normalized["small_model"] = c_model
+        normalized["small_model_provider"] = normalized.get("complex_model_provider")
+        normalized["small_max_tokens"] = normalized.get("complex_max_tokens")
+        normalized["small_enable_thinking"] = normalized.get("complex_enable_thinking")
+        normalized["small_max_thinking_tokens"] = normalized.get("complex_max_thinking_tokens")
+
     # OpenRouter normalization
     if normalized.get("small_model_provider") == "openrouter":
         normalized["small_model"] = _normalize_openrouter_model(normalized.get("small_model"))

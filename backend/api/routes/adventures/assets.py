@@ -108,6 +108,16 @@ async def regenerate_visual(
     user_config = {"t2i_settings": current_user.t2i_settings}
     api_keys = current_user.encrypted_api_keys
 
+    # Resolve Style Instruction
+    style_instruction = ""
+    if adv.selected_image_styles and current_user:
+        catalog = current_user.image_styles_catalog or []
+        style_id = adv.selected_image_styles[0]
+        for s_entry in catalog:
+            if s_entry.get("id") == style_id:
+                style_instruction = s_entry.get("instruction", "")
+                break
+
     try:
         if payload.target_type == "cover":
             # 1. Adventure Cover
@@ -116,7 +126,8 @@ async def regenerate_visual(
             )
             image_url = await MediaEngine.generate_adventure_cover(
                 title=adv.title, context=adv.teaser or adv.context,
-                adventure_id=template_id, user_config=user_config, api_keys=api_keys
+                adventure_id=template_id, user_config=user_config, api_keys=api_keys,
+                style_instruction=style_instruction
             )
             if image_url: adv.image_url = image_url
 
@@ -131,7 +142,8 @@ async def regenerate_visual(
             )
             image_url = await MediaEngine.generate_entity_image(
                 prompt=prompt, adventure_id=template_id, entity_id="PROTAGONIST",
-                entity_type="NPC", user_config=user_config, api_keys=api_keys
+                entity_type="NPC", user_config=user_config, api_keys=api_keys,
+                style_instruction=style_instruction
             )
             if image_url: avatar.profile_image = image_url
 
@@ -145,7 +157,8 @@ async def regenerate_visual(
                 name=scene.label, description=scene.description
             )
             image_url = await MediaEngine.generate_scene_image(
-                prompt=prompt, adventure_id=template_id, user_config=user_config, api_keys=api_keys
+                prompt=prompt, adventure_id=template_id, user_config=user_config, api_keys=api_keys,
+                style_instruction=style_instruction
             )
             if image_url: scene.image_url = image_url
 
@@ -166,7 +179,8 @@ async def regenerate_visual(
 
             image_url = await MediaEngine.generate_entity_image(
                 prompt=prompt, adventure_id=template_id, entity_id=entity.id,
-                entity_type=entity.entity_type, user_config=user_config, api_keys=api_keys
+                entity_type=entity.entity_type, user_config=user_config, api_keys=api_keys,
+                style_instruction=style_instruction
             )
             if image_url: entity.image_url = image_url
 

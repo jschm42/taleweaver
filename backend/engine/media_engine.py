@@ -60,7 +60,8 @@ class MediaEngine:
         normalized = MediaEngine._sanitize_prompt(prompt.strip())
         if NO_TEXT_IMAGE_PROMPT_SUFFIX.lower() in normalized.lower():
             return normalized
-        return f"{normalized} {NO_TEXT_IMAGE_PROMPT_SUFFIX}"
+        # Combine instructions for better enforcement
+        return f"{normalized}. {NO_TEXT_IMAGE_PROMPT_SUFFIX}"
 
     @staticmethod
     def _normalize_black_forest_labs_model(model: str) -> str:
@@ -195,13 +196,16 @@ class MediaEngine:
         target_dir: Optional[str] = None,
         filename: Optional[str] = None,
         provider_options: Optional[dict[str, Any]] = None,
+        style_instruction: Optional[str] = None,
     ) -> Optional[str]:
         """Generates an image and saves it locally."""
         provider_key = (provider or "openai").lower()
         if not prompt or not model:
             raise ValueError("Missing prompt or model for image generation.")
         
-        # Ensure we have a key (might have been passed as None if caller relies on resolution)
+        # Apply style instruction if provided
+        if style_instruction:
+            prompt = f"{prompt}. Style: {style_instruction}."
         if provider_key != "ollama" and not api_key:
             # Try to resolve from ENV if not passed
             api_key = settings.get_env_api_key(provider_key)
@@ -609,7 +613,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict) -> Optional[str]:
+    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
         """High-level wrapper for gameplay scene generation (uses Advanced Model)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -645,7 +649,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict) -> Optional[str]:
+    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
         """High-level wrapper for NPC/Object generation (uses Simple Model)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -681,7 +685,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_adventure_cover(title: str, context: str, adventure_id: str, user_config: dict, api_keys: dict) -> Optional[str]:
+    async def generate_adventure_cover(title: str, context: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
         """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 

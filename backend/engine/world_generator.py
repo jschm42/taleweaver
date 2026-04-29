@@ -205,7 +205,8 @@ class WorldGenerator:
         max_scenes: int = 5,
         award_generation_enabled: bool = True,
         min_awards: int = 3,
-        max_awards: int = 5
+        max_awards: int = 5,
+        selected_image_styles: Optional[List[str]] = None
     ) -> None:
         """
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
@@ -319,7 +320,8 @@ class WorldGenerator:
             gen_npc=generate_npc_images,
             gen_items=generate_item_images,
             gen_scenes=generate_scene_images,
-            gen_protagonist_image=True # Always generate protagonist image
+            gen_protagonist_image=True, # Always generate protagonist image
+            selected_image_styles=selected_image_styles
         )
         log_structured_event(
             "adventure.generation.world_applied",
@@ -341,7 +343,8 @@ class WorldGenerator:
         gen_items: bool = False,
         gen_scenes: bool = False,
         gen_protagonist_image: bool = False,
-        existing_images: Optional[dict] = None
+        existing_images: Optional[dict] = None,
+        selected_image_styles: Optional[List[str]] = None
     ) -> None:
         """
         Populates (or re-populates) the world entities based on a manifest dictionary.
@@ -353,6 +356,19 @@ class WorldGenerator:
 
         image_attempts = 0
         image_successes = 0
+
+        # Resolve Style Instructions
+        style_instruction = ""
+        if selected_image_styles and user:
+            catalog = user.image_styles_catalog or []
+            # For now we take the first selected style
+            style_id = selected_image_styles[0]
+            for s_entry in catalog:
+                if s_entry.get("id") == style_id:
+                    style_instruction = s_entry.get("instruction", "")
+                    break
+        
+        logger.info(f"Applying manifest with style instruction: '{style_instruction}'")
 
         _validate_t2i_prerequisites(
             user,
@@ -427,7 +443,8 @@ class WorldGenerator:
                         context=adventure.teaser or adventure.description,
                         adventure_id=template_id,
                         user_config={"t2i_settings": user.t2i_settings},
-                        api_keys=user.encrypted_api_keys
+                        api_keys=user.encrypted_api_keys,
+                        style_instruction=style_instruction
                     )
                     if cover_url:
                         adventure.image_url = cover_url
@@ -536,6 +553,7 @@ class WorldGenerator:
                                 "NPC",
                                 {"t2i_settings": user.t2i_settings},
                                 user.encrypted_api_keys,
+                                style_instruction=style_instruction,
                             ),
                             timeout=_image_generation_timeout_seconds(),
                         )
@@ -585,6 +603,7 @@ class WorldGenerator:
                                 "SCENE",
                                 {"t2i_settings": user.t2i_settings},
                                 user.encrypted_api_keys,
+                                style_instruction=style_instruction,
                             ),
                             timeout=_image_generation_timeout_seconds(),
                         )
@@ -602,7 +621,7 @@ class WorldGenerator:
                     image_url = await MediaEngine.generate_svg_placeholder(
                         template_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "scenes")
                     )
-
+ 
             db.add(WorldScene(
                 id=s["id"],
                 template_id=template_id,
@@ -651,6 +670,7 @@ class WorldGenerator:
                                 "NPC",
                                 {"t2i_settings": user.t2i_settings},
                                 user.encrypted_api_keys,
+                                style_instruction=style_instruction,
                             ),
                             timeout=_image_generation_timeout_seconds(),
                         )
@@ -719,6 +739,7 @@ class WorldGenerator:
                                 "OBJECT",
                                 {"t2i_settings": user.t2i_settings},
                                 user.encrypted_api_keys,
+                                style_instruction=style_instruction,
                             ),
                             timeout=_image_generation_timeout_seconds(),
                         )

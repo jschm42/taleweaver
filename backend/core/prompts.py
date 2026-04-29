@@ -77,7 +77,8 @@ Variables: title, context.
 
 NO_TEXT_IMAGE_PROMPT_SUFFIX = (
     "ABSOLUTELY NO TEXT. No letters, no captions, no logos, no watermarks, no signage, "
-    "no signatures, and no writing of any kind should appear in this image."
+    "no signatures, and no writing of any kind should appear in this image. "
+    "Purely visual content only."
 )
 """
 Global negative instruction appended to all image prompts to prevent AI-generated gibberish text.
@@ -103,7 +104,7 @@ Variables: name, role, description.
 """
 
 SCENE_IMAGE_PROMPT_TEMPLATE = (
-    "Atmospheric background: {name}. {description}. RPG visual novel style, 3:2 aspect ratio, high detail. No text."
+    "Background scene: {name}. {description}. 3:2 aspect ratio. No text."
 )
 """
 Template for generating background images for scenes.
@@ -111,7 +112,7 @@ Variables: name, description.
 """
 
 NPC_IMAGE_PROMPT_TEMPLATE = (
-    "Portrait of NPC {name}. {description}. Game attribute art style. No text."
+    "Character portrait: {name}. {description}. No text."
 )
 """
 Template for generating NPC portraits.
@@ -119,7 +120,7 @@ Variables: name, description.
 """
 
 OBJECT_IMAGE_PROMPT_TEMPLATE = (
-    "Highly detailed item: {name}. {description}. Isolated on simple background, RPG asset style. No text."
+    "Item asset: {name}. {description}. Centered, isolated on simple background. No text."
 )
 ITEM_IMAGE_PROMPT_TEMPLATE = OBJECT_IMAGE_PROMPT_TEMPLATE
 """

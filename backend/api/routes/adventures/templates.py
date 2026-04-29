@@ -176,6 +176,7 @@ async def create_adventure(
                     award_generation_enabled=payload.award_generation_enabled,
                     min_awards=payload.min_awards,
                     max_awards=payload.max_awards,
+                    selected_image_styles=adv.selected_image_styles,
                 )
                 
                 # Finalize template
