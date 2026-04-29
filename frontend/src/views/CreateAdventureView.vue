@@ -53,14 +53,7 @@ const errorMsg = ref('')
 const config = ref<any>(null)
 
 const hasLlmConfig = computed(() => configState.hasLlmConfig)
-const hasT2iConfig = computed(() => {
-  if (!config.value) return false;
-  const t2i = config.value.t2i_settings;
-  if (!t2i) return false;
-  const keys = config.value.keys || {};
-  const t2iProvider = (t2i.simple_model_provider || t2i.advanced_model_provider || t2i.provider || 'openai').toLowerCase();
-  return (t2iProvider === 'ollama' || !!keys[t2iProvider]) && !!t2i.simple_model;
-});
+const hasT2iConfig = computed(() => configState.hasT2iConfig);
 
 const isImageLlmConfigured = computed(() => hasLlmConfig.value && hasT2iConfig.value);
 

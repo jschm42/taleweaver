@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { configState } from '@/store/config'
+import { configState, refreshConfig } from '@/store/config'
 import type { CatalogTile } from '@/types'
 
 const router = useRouter()
@@ -346,7 +346,8 @@ const saveApiKey = async () => {
     await api.saveApiKey(keyForm.value.provider, keyForm.value.api_key)
     statusMessage.value = { type: 'success', text: `${keyForm.value.provider} key saved securely.` }
     keyForm.value.api_key = ''
-    fetchSettings()
+    await fetchSettings()
+    await refreshConfig()
   } catch (error) {
     statusMessage.value = { type: 'error', text: 'Failed to save key.' }
   } finally {
@@ -360,6 +361,7 @@ const saveLlmSettings = async () => {
   try {
     await api.saveLlmSettings(llmForm.value)
     statusMessage.value = { type: 'success', text: 'Intelligence preferences updated.' }
+    await refreshConfig()
   } catch (error) {
     statusMessage.value = { type: 'error', text: 'Failed to save intelligence preferences.' }
   } finally {
@@ -373,6 +375,7 @@ const saveT2iSettings = async () => {
   try {
     await api.saveT2iSettings(t2iForm.value)
     statusMessage.value = { type: 'success', text: 'Visual preferences updated.' }
+    await refreshConfig()
   } catch (error) {
     statusMessage.value = { type: 'error', text: 'Failed to save visual preferences.' }
   } finally {

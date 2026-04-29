@@ -294,6 +294,39 @@ def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
 
     return normalized
 
+
+def _is_llm_configured(user: User, db_keys: dict) -> bool:
+    llm = _normalize_llm_settings(user.llm_settings)
+    small_provider = llm.get("small_model_provider", "openai")
+    complex_provider = llm.get("complex_model_provider", "openai")
+    small_model = llm.get("small_model")
+    complex_model = llm.get("complex_model")
+
+    def has_key(provider):
+        if provider == "ollama":
+            return True
+        return bool(settings.get_env_api_key(provider)) or (db_keys and provider in db_keys)
+
+    return all([
+        has_key(small_provider),
+        bool(small_model),
+        has_key(complex_provider),
+        bool(complex_model)
+    ])
+
+
+def _is_t2i_configured(user: User, db_keys: dict) -> bool:
+    t2i = _normalize_t2i_settings(user.t2i_settings)
+    simple_provider = t2i.get("simple_model_provider", "openai")
+    simple_model = t2i.get("simple_model")
+
+    def has_key(provider):
+        if provider == "ollama":
+            return True
+        return bool(settings.get_env_api_key(provider)) or (db_keys and provider in db_keys)
+
+    return has_key(simple_provider) and bool(simple_model)
+
 class ApiKeyPayload(BaseModel):
     provider: str
     api_key: str
@@ -381,6 +414,8 @@ async def get_settings(
             "keys": get_keys_status({}),
             "llm_settings": default_llm,
             "t2i_settings": default_t2i,
+            "is_llm_configured": False,
+            "is_t2i_configured": False,
             "image_styles_catalog": _default_image_styles_catalog(),
             "tone_catalog": _default_tone_catalog(),
             "game_settings": {
@@ -400,6 +435,8 @@ async def get_settings(
         "keys": get_keys_status(user.encrypted_api_keys),
         "llm_settings": _normalize_llm_settings(user.llm_settings),
         "t2i_settings": _normalize_t2i_settings(user.t2i_settings),
+        "is_llm_configured": _is_llm_configured(user, user.encrypted_api_keys),
+        "is_t2i_configured": _is_t2i_configured(user, user.encrypted_api_keys),
         "image_styles_catalog": _normalize_catalog(
             user.image_styles_catalog,
             fallback=_default_image_styles_catalog(),
