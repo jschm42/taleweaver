@@ -1,8 +1,39 @@
-# TaleWeaver - AI Text Adventure Wolrd Generator
+# TaleWeaver - AI Text Adventure World Generator (v0.1.0-beta)
+
+> [!IMPORTANT]
+> **TaleWeaver is currently in active development.**
+> As this is an early beta release, you may encounter unexpected behavior, bugs, or creative "hallucinations" from the AI Gamemaster. We are constantly refining the engine and **contributions, bug reports, and feedback are highly welcome!**
 
 Welcome to the AI Text Adventure RPG project! This is a next-generation browser-based text adventure RPG that combines the nostalgic feel of classic point-and-click and text adventures with the dynamic creativity of modern Large Language Models (LLMs).
 
+## 📸 Gallery
+
+<p align="center">
+  <img src="docs/screenshots/portal.png" width="800" alt="Adventure Portal Placeholder">
+  <br><em><b>Adventure Portal</b> - Manage your stories and explore new worlds.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/generator.png" width="800" alt="Game Builder Placeholder">
+  <br><em><b>World Generator</b> - AI-driven world building and story generation.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/gameplay.png" width="800" alt="In-Game Gameplay Placeholder">
+  <br><em><b>In-Game</b> - Immersive text adventure gameplay with dynamic AI interaction.</em>
+</p>
+
+## 🚀 First Steps
+
+To get started with your first adventure, follow these simple steps:
+
+1.  **Configure LLM**: Navigate to **Administration** and provide an API key for your preferred provider (OpenAI, Anthropic, Gemini, or local Ollama). This is required for the AI Gamemaster.
+2.  **Explore the Library**: Browse the **Library** for pre-seeded adventures or imported blueprints.
+3.  **Generate a World**: If you want something unique, use the **World Generator** to create a completely new setting from a simple prompt.
+4.  **Begin Journey**: Select your adventure and click **Begin Journey** to start playing! (Your hero's stats and appearance are automatically initialized from the adventure's protagonist definition).
+
 ## 1. The Vision
+
 Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background. The frontend is presented in an immersive, stylish pixel-art look.
 
 ## 2. Core Features
@@ -18,7 +49,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Persistence:** Progress is permanently stored in the database, allowing sessions to be paused and resumed at any time.
 
 ### RPG Mechanics
-* **Character Sheets & UI Dialog:** Players can create multiple avatars. The current state of the character can be opened via a command in a modal interface.
+* **Character Sheets & In-Game Stats:** The protagonist's state (stats, inventory, equipment) is automatically initialized from the adventure template. The current state can be viewed in-game via a command or modal interface.
 * **Resource Bars:** Hitpoints (HP), Stamina, and Mana (starting at 200). The AI dynamically adjusts these. HP 0 usually means Game Over.
 * **Dynamic States (Status Effects):** Avatars can receive plot-dependent states (e.g., Tired, Poisoned, Enraged, Blessed) modifying base stats.
 * **Randomized Action Resolution (Skill Checks):** A virtual D20 roll for risky actions (D20 + stats >= Challenge Rating) executed efficiently in the backend.
@@ -29,9 +60,8 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Natural Language Chat:** Free text input for dialogues and complex actions.
 * **Slash Commands:** `/sheet`, `/pickup`, `/drop`, `/equip`, `/unequip`, `/push`, `/pull`, `/attack`, `/take`, `/combine`, `/examine`, `/map`.
 
-### Dynamic World Mapping & Time Simulation
+### Dynamic World Mapping
 * **Generated Maps:** Directed graphs of scenes, visualized via Mermaid.js (using the `/map` command).
-* **Heartbeat Timer:** Background time simulation for unpredictable events independent of user input.
 
 ### Media & Immersion
 * Optional AI-generated images to enhance the retro pixel-art aesthetic.
