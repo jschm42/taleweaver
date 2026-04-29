@@ -557,7 +557,6 @@ onBeforeUnmount(() => {
         @open-sheet="showSheet = true"
         @open-map="showMap = true"
         @open-quests="showQuests = true"
-        @open-walkthrough="openWalkthroughPanel"
         @npc-hover="handleChatNpcHover"
         @npc-leave="hoveredEntity = null"
         @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"

@@ -26,7 +26,6 @@ const emit = defineEmits<{
   openSheet: []
   openMap: []
   openQuests: []
-  openWalkthrough: []
   npcHover: [name: string, event: MouseEvent]
   npcLeave: []
   itemHover: [item: any, event: MouseEvent]
@@ -72,7 +71,6 @@ defineExpose({ appendText })
       @open-sheet="emit('openSheet')"
       @open-map="emit('openMap')"
       @open-quests="emit('openQuests')"
-      @open-walkthrough="emit('openWalkthrough')"
       @npc-hover="(name, event) => emit('npcHover', name, event)"
       @npc-leave="emit('npcLeave')"
       @item-hover="(item, event) => emit('itemHover', item, event)"

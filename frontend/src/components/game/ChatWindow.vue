@@ -23,7 +23,6 @@ const emit = defineEmits<{
   send: [content: string]
   openSheet: []
   openQuests: []
-  openWalkthrough: []
   npcHover: [name: string, event: MouseEvent]
   npcLeave: []
   itemHover: [item: any, event: MouseEvent]
@@ -420,14 +419,6 @@ function displayMessageContent(msg: ChatMessage): string {
           @click="emit('openQuests')"
         >
           <img src="@/assets/svg/fantasy-spellbook.svg" class="h-14 w-14 invert brightness-200 contrast-75 group-hover:drop-shadow-[0_0_20px_rgba(124,58,237,0.8)] transition-all" />
-        </button>
-
-        <button
-          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-          title="Walkthrough"
-          @click="emit('openWalkthrough')"
-        >
-          <i class="ra ra-crystal-ball h-14 w-14 text-3xl text-fuchsia-300/80 group-hover:text-fuchsia-200 group-hover:drop-shadow-[0_0_20px_rgba(217,70,239,0.8)] transition-all flex items-center justify-center"></i>
         </button>
 
         <button
