@@ -19,28 +19,28 @@ const emit = defineEmits<{
           class="w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all"
           :class="props.activeSection === 'sessions' ? 'bg-aether-primary/10 text-aether-primary border-l-4 border-aether-primary' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
         >
-          <span class="text-base font-bold tracking-wide">Sessions</span>
+          <span class="text-base font-bold tracking-wide text-xl text-emerald-500/80 uppercase">Sessions</span>
         </button>
         <button
           @click="emit('section', 'templates')"
           class="w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all"
           :class="props.activeSection === 'templates' ? 'bg-aether-primary/10 text-aether-primary border-l-4 border-aether-primary' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
         >
-          <span class="text-base font-bold tracking-wide">My Library</span>
+          <span class="text-base font-bold tracking-wide text-xl text-emerald-500/80 uppercase">Library</span>
         </button>
         <button
           @click="emit('section', 'profile')"
           class="w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all"
           :class="props.activeSection === 'profile' ? 'bg-aether-primary/10 text-aether-primary border-l-4 border-aether-primary' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
         >
-          <span class="text-base font-bold tracking-wide">Profile</span>
+          <span class="text-base font-bold tracking-wide text-xl text-emerald-500/80 uppercase">Profile</span>
         </button>
         <button
           v-if="props.isAdmin"
           @click="emit('admin')"
           class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all"
         >
-          <span class="text-base font-bold tracking-wide">Administration</span>
+          <span class="text-base font-bold tracking-wide text-xl text-emerald-500/80 uppercase">Administration</span>
         </button>
       </nav>
     </div>

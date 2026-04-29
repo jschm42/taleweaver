@@ -473,12 +473,6 @@ onMounted(() => {
 
   const newId = typeof route.query.new_id === 'string' ? route.query.new_id : ''
   const newTitle = typeof route.query.new_title === 'string' ? route.query.new_title : 'New Adventure'
-  
-  if (route.query.section === 'profile') {
-    activeSection.value = 'profile'
-  } else if (route.query.section === 'templates') {
-    activeSection.value = 'templates'
-  }
 
   if (newId) {
     addPendingCreationCard(newId, newTitle)
@@ -499,7 +493,7 @@ watch(() => route.query.section, (section) => {
   if (section === 'profile') activeSection.value = 'profile'
   else if (section === 'templates') activeSection.value = 'templates'
   else if (section === 'sessions') activeSection.value = 'sessions'
-})
+}, { immediate: true })
 
 onUnmounted(() => {
   if (loadingWordTimer !== null) {
@@ -514,7 +508,7 @@ onUnmounted(() => {
     <PortalSidebar
       :is-admin="isAdmin"
       :active-section="activeSection"
-      @section="activeSection = $event"
+      @section="router.push({ query: { ...route.query, section: $event } })"
       @admin="router.push('/admin')"
     />
 

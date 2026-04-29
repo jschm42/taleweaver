@@ -25,11 +25,6 @@ function handleLogout() {
   clearAuth()
   router.push('/login')
 }
-
-function openProfile() {
-  router.push({ name: 'portal', query: { section: 'profile' } })
-  isMenuOpen.value = false
-}
 </script>
 
 <template>
@@ -89,10 +84,14 @@ function openProfile() {
             <p class="text-xs font-bold text-aether-primary capitalize">{{ authState.user?.role }}</p>
           </div>
 
-          <button @click="openProfile" class="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+          <router-link 
+            :to="{ name: 'portal', query: { section: 'profile' } }"
+            @click="isMenuOpen = false"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors decoration-none"
+          >
             <i class="ra ra-person"></i>
             Edit Profile
-          </button>
+          </router-link>
           
           <button @click="handleLogout" class="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors">
             <i class="ra ra-cancel"></i>
