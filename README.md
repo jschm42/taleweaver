@@ -284,7 +284,7 @@ The backend monitors three specific directories relative to the project root:
 * **Mapping:** Dynamic world maps are rendered using [Mermaid.js](https://mermaid.js.org/).
 * **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets used throughout the interface.
 * **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/) and system icons by [Lucide](https://lucide.dev/).
-* **Typography:** Retro pixel-art aesthetics powered by the **Press Start 2P** font from [Google Fonts](https://fonts.google.com/).
+* **Typography:** Retro pixel-art and fantasy aesthetics powered by the **Press Start 2P**, **Acme**, and **Orbitron** fonts from [Google Fonts](https://fonts.google.com/) (SIL Open Font License).
 
 ## 8. License
 
