@@ -15,7 +15,8 @@ class GameSession(Base, TimestampMixin):
     adventure_title = Column(String(100), nullable=True)
     adventure_image_url = Column(String(255), nullable=True)
     
-    status = Column(String(20), default="active", nullable=False) # active, archived, completed
+    status = Column(String(20), default="active", nullable=False) # active, archived, completed, game_over
+    status_note = Column(String(500), nullable=True)
 
     # Relationships
     state = relationship("SessionState", back_populates="session", uselist=False, cascade="all, delete-orphan")

@@ -55,6 +55,8 @@ async def list_sessions(
             award_count=len((a.awards if a else None) or []),
             earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if any(ea.get("key") == aw.get("key") and ea.get("template_id") == a.id for ea in user_earned_awards)]),
             created_at=g.created_at,
+            status=g.status,
+            status_note=g.status_note,
         )
         for g, s, a, scene_label, avatar_profile_image in rows
     ]

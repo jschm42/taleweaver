@@ -79,6 +79,8 @@ class GameSessionResponse(BaseModel):
     award_count: int = 0
     earned_award_count: int = 0
     created_at: Optional[datetime] = None
+    status: str = "active"
+    status_note: Optional[str] = None
 
 class AdventureTemplateSummaryResponse(BaseModel):
     """Summary of an adventure template for management views."""
@@ -114,6 +116,9 @@ class ChatResponse(BaseModel):
     quests: Optional[List[Dict[str, Any]]] = None
     awards: Optional[List[Dict[str, Any]]] = None
     is_completed: bool = False
+    game_over: bool = False
+    game_completed: bool = False
+    status_note: Optional[str] = None
     full_world: Optional[AdventureTemplateDebugResponse] = None
 
 class AdventureTemplateImportPayload(BaseModel):

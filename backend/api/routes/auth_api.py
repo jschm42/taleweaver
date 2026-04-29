@@ -24,6 +24,7 @@ class UserResponse(BaseModel):
     bio: str | None = None
     earned_awards: list | None = None
     adventure_count: int = 0
+    game_log: list | None = None
 
 class SetupRootRequest(BaseModel):
     username: str
@@ -78,7 +79,8 @@ async def read_users_me(current_user: User = Depends(get_current_user), db: Asyn
         "profile_image_url": current_user.profile_image_url,
         "bio": current_user.bio,
         "earned_awards": current_user.earned_awards or [],
-        "adventure_count": adventure_count
+        "adventure_count": adventure_count,
+        "game_log": current_user.game_log or []
     }
     return user_data
 

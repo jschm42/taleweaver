@@ -11,7 +11,7 @@
       </div>
 
       <h1>Adventure Completed!</h1>
-      <p class="congrats-text">Congratulations, hero! You have successfully navigated the challenges of this tale and achieved all major objectives.</p>
+      <p class="congrats-text">{{ note || 'Congratulations, hero! You have successfully navigated the challenges of this tale and achieved all major objectives.' }}</p>
 
       <div class="stats-summary">
         <div class="stat-item">
@@ -32,7 +32,8 @@ export default {
   name: "SuccessScreen",
   props: {
     show: Boolean,
-    totalExp: Number
+    totalExp: Number,
+    note: String
   },
   emits: ["close"]
 };

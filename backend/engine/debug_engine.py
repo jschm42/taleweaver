@@ -128,4 +128,18 @@ class DebugEngine:
             lines = ["[DEBUG] All adventure awards granted:"] + granted
             return "\n".join(lines)
 
-        return "DEBUG USAGE: /debug [szene | items | plot | map | log on/off | award(s)]"
+        elif sub == "game_over":
+            # Force game over
+            return "[TRIGGER_GAME_OVER] Manual debug trigger."
+
+        elif sub == "game_completed":
+            # Force game completed
+            return "[TRIGGER_GAME_COMPLETED] Manual debug trigger."
+
+        elif sub == "game_over_reset":
+            # Reset game over
+            state.session.status = "active"
+            state.session.status_note = None
+            return "DEBUG: Session status reset to active."
+
+        return "DEBUG USAGE: /debug [szene | items | plot | map | log on/off | award(s) | game_over | game_completed | game_over_reset]"

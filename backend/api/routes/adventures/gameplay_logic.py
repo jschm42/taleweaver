@@ -144,11 +144,25 @@ class GameTurnManager:
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
         cmd_args = user_msg[7:].strip()
         debug_info = await DebugEngine.handle_debug_command(self.db, self.state, cmd_args, user=self.user, adventure=self.adventure)
+        
+        # Handle status overrides from debug engine
+        if debug_info.startswith("[TRIGGER_GAME_OVER]"):
+            await self._finalize_session("game_over", debug_info)
+            debug_info = "DEBUG: Session forced to GAME OVER."
+        elif debug_info.startswith("[TRIGGER_GAME_COMPLETED]"):
+            await self._finalize_session("completed", debug_info)
+            debug_info = "DEBUG: Session forced to COMPLETED."
+
         await self.db.commit()
         yield f"event: final\ndata: {json.dumps(jsonable_encoder({
             'messages': [{'role': 'system', 'content': debug_info}],
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
-            'awards': self.adventure.awards
+            'awards': self.adventure.awards,
+            'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
+            'game_completed': (self.state.session.status == 'completed') if self.state.session else False,
+            'game_over_reason': self.state.session.status_note if self.state.session else None,
+            'status_note': self.state.session.status_note if self.state.session else None,
+            'status': 'success'
         }))}\n\n"
 
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
@@ -323,7 +337,15 @@ class GameTurnManager:
                 game_event.skill_check_results = results
 
             # 3. Apply Changes
-            await self._apply_game_event(game_event)
+            try:
+                await self._apply_game_event(game_event)
+                if game_event.game_completed:
+                    await self._finalize_session("completed", game_event.status_note)
+            except GameOverException as goe:
+                await self._finalize_session("game_over", str(goe))
+                # Ensure the narration knows about the game over
+                game_event.game_over = True
+                game_event.status_note = str(goe)
 
         # Pass 2: Narration
         yield f"event: status\ndata: {json.dumps({'content': 'Generating narrative...'})}\n\n"
@@ -406,7 +428,14 @@ class GameTurnManager:
 
         await self.db.commit()
         
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state), 'status': 'success'}))}\n\n"
+        yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+            'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 
+            'entities': await AdventureLogic.build_session_entities(self.db, self.state),
+            'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
+            'game_completed': (self.state.session.status == 'completed') if self.state.session else False,
+            'status_note': self.state.session.status_note if self.state.session else None,
+            'status': 'success'
+        }))}\n\n"
 
     async def _apply_game_event(self, event: GameEvent):
         """Applies technical mutations from a GameEvent to the database and session state."""
@@ -476,6 +505,22 @@ class GameTurnManager:
                     if q.get("id") == qid and q.get("status") != "completed":
                         q["status"] = "completed"
                         modified = True
+            
+            # RPG Completion Logic: Check if all main quests are finished
+            all_main_done = True
+            main_quest_exists = False
+            for q in new_quests:
+                if q.get("is_main"):
+                    main_quest_exists = True
+                    if q.get("status") != "completed":
+                        all_main_done = False
+                        break
+            
+            if main_quest_exists and all_main_done:
+                event.game_completed = True
+                if not event.status_note:
+                    event.status_note = "Congratulations! You have completed all main objectives."
+
             if modified:
                 self.state.quests = new_quests
                 state_dirty = True
@@ -499,3 +544,28 @@ class GameTurnManager:
             flag_modified(self.state, "entity_states")
             
         await self.db.flush()
+    async def _finalize_session(self, status: str, note: Optional[str] = None):
+        """Updates the session status and records the outcome in the user's game log."""
+        if self.state.session:
+            self.state.session.status = status
+            self.state.session.status_note = note
+        
+        if status == "completed":
+            self.state.is_completed = True
+        
+        # Add to User game log
+        log_entry = {
+            "session_id": self.game_id,
+            "adventure_title": (self.state.session.adventure_title if self.state.session else None) or self.adventure.title,
+            "status": status,
+            "outcome_note": note,
+            "completed_at": datetime.utcnow().isoformat()
+        }
+        
+        current_log = list(self.user.game_log or [])
+        # Avoid duplicate entries for same session
+        current_log = [entry for entry in current_log if entry.get("session_id") != self.game_id]
+        current_log.append(log_entry)
+        self.user.game_log = current_log
+        flag_modified(self.user, "game_log")
+        logger.info(f"Session {self.game_id} finalized with status {status}")

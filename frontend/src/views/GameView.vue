@@ -11,6 +11,8 @@ import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
 import QuestsModal from '@/components/game/QuestsModal.vue'
 import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
+import GameOverScreen from '@/components/game/GameOverScreen.vue'
+import SuccessScreen from '@/components/game/SuccessScreen.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
 import StatBar from '@/components/game/StatBar.vue'
 import GameScenePanel from '@/components/game/GameScenePanel.vue'
@@ -22,7 +24,7 @@ import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
-import { authState } from '@/store/auth'
+import { authState, refreshUser } from '@/store/auth'
 import { getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
@@ -36,6 +38,7 @@ const showMap = ref(false)
 const showQuests = ref(false)
 const showWalkthrough = ref(false)
 const showSuccess = ref(false)
+const showGameOver = ref(false)
 const showDebug = ref(false)
 const showDebugLog = ref(false)
 const fullWorldDebug = ref<any | null>(null)
@@ -246,6 +249,21 @@ watch(isCompleted, (val) => {
     showSuccess.value = true
   }
 })
+
+watch(status, async (val) => {
+  if (val === 'game_over') {
+    showGameOver.value = true
+    await refreshUser()
+  } else if (val === 'completed') {
+    showSuccess.value = true
+    await refreshUser()
+  }
+})
+
+const continueGame = async () => {
+  await sendMessage('/debug game_over_reset')
+  showGameOver.value = false
+}
 
 const handleTrackQuest = (questId: string | null) => {
   trackedQuestId.value = questId
@@ -584,6 +602,13 @@ onBeforeUnmount(() => {
     <SuccessScreen 
       :show="showSuccess" 
       :total-exp="sheet?.exp || 0" 
+      :note="gameOverReason"
+      @close="goBack" 
+    />
+    <GameOverScreen 
+      :show="showGameOver" 
+      :reason="gameOverReason" 
+      @continue="continueGame"
       @close="goBack" 
     />
     <DebugModal 

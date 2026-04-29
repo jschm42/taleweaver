@@ -99,6 +99,32 @@
             />
           </div>
         </div>
+
+        <div class="history-section mt-16 pt-16 border-t border-white/5">
+          <h3><span class="section-icon">📜</span> Chronicle of Deeds</h3>
+          
+          <div v-if="!gameLog.length" class="empty-history text-center py-16 bg-white/5 rounded-[40px] border border-white/5">
+            <i class="ra ra-scroll text-5xl text-white/5 block mb-4"></i>
+            <p class="text-slate-500 italic text-sm">No historical records found in the archives.</p>
+          </div>
+
+          <div v-else class="history-grid">
+            <div v-for="(entry, idx) in gameLog" :key="idx" class="history-entry p-6 bg-black/40 rounded-3xl border border-white/5 hover:border-emerald-500/30 transition-all group">
+              <div class="flex justify-between items-start gap-4">
+                <div class="flex-grow">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span :class="entry.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'" class="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border border-current/20">
+                      {{ entry.status === 'completed' ? 'Victory' : 'Defeat' }}
+                    </span>
+                    <span class="text-[9px] text-slate-600 font-bold uppercase tracking-widest">{{ formatDate(entry.completed_at) }}</span>
+                  </div>
+                  <h4 class="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors leading-snug">{{ entry.adventure_title }}</h4>
+                  <p class="text-xs text-slate-400 mt-2 italic line-clamp-2 leading-relaxed">"{{ entry.outcome_note }}"</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -153,6 +179,20 @@ const userAvatar = computed(() => {
 const earnedAwards = computed(() => {
   return (user.value?.earned_awards || []) as any[]
 })
+
+const gameLog = computed(() => {
+  return (user.value?.game_log || []) as any[]
+})
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return 'Eons ago'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
+}
 
 // Bio Editing
 const isEditingBio = ref(false)
@@ -592,6 +632,19 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 20px;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .history-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* Notifications Animations */

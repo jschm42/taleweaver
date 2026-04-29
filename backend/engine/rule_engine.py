@@ -103,6 +103,11 @@ class GameEvent(BaseModel):
     # Award System
     earned_award_keys: Optional[List[str]] = None
 
+    # Status Updates
+    game_over: bool = False
+    game_completed: bool = False
+    status_note: Optional[str] = None
+
 # Maximum resource cap
 RESOURCE_CAP = 200
 
@@ -156,9 +161,13 @@ class RuleEngine:
         avatar.stamina += event.stamina_change
         avatar.mana += event.mana_change
         
+        if event.game_over:
+            avatar.hp = 0
+            raise GameOverException(event.status_note or f"{avatar.name} has met their end.")
+
         if avatar.hp <= 0:
             avatar.hp = 0
-            raise GameOverException(f"{avatar.name} has died! Game Over.")
+            raise GameOverException(f"{avatar.name} has fallen! Game Over.")
             
         if avatar.stamina < 0: avatar.stamina = 0
         if avatar.mana < 0: avatar.mana = 0

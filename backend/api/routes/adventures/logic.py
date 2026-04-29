@@ -80,7 +80,12 @@ class AdventureLogic:
     @staticmethod
     async def resolve_session_state(db: AsyncSession, session_or_template_id: str, user_id: Optional[str] = None) -> Optional[SessionState]:
         """Resolve a session state by session id first, then by template/adventure id."""
-        direct_res = await db.execute(select(SessionState).where(SessionState.session_id == session_or_template_id))
+        from sqlalchemy.orm import selectinload
+        direct_res = await db.execute(
+            select(SessionState)
+            .options(selectinload(SessionState.session))
+            .where(SessionState.session_id == session_or_template_id)
+        )
         direct_state = direct_res.scalars().first()
         if direct_state:
             return direct_state
@@ -104,7 +109,11 @@ class AdventureLogic:
         if session_candidate:
             if user_id and session_candidate.user_id != user_id:
                 return None
-            existing_for_candidate_res = await db.execute(select(SessionState).where(SessionState.session_id == session_candidate.id))
+            existing_for_candidate_res = await db.execute(
+                select(SessionState)
+                .options(selectinload(SessionState.session))
+                .where(SessionState.session_id == session_candidate.id)
+            )
             existing_for_candidate = existing_for_candidate_res.scalars().first()
             if existing_for_candidate:
                 return existing_for_candidate
@@ -117,7 +126,7 @@ class AdventureLogic:
             adventure = adv_res.scalars().first()
 
             healed_state = SessionState(
-                session_id=session_candidate.id,
+                session=session_candidate,
                 user_id=session_candidate.user_id,
                 template_id=session_candidate.template_id,
                 avatar_id=session_candidate.avatar_id,
@@ -127,7 +136,7 @@ class AdventureLogic:
             )
             db.add(healed_state)
             await db.commit()
-            await db.refresh(healed_state)
+            await db.refresh(healed_state, ["session"])
             return healed_state
         return None
 

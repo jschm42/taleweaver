@@ -43,6 +43,12 @@ function formatDate(dateStr?: string): string {
 
 function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'): void {
   if (action === 'resume') {
+    if (props.session.status === 'game_over' || props.session.status === 'completed') {
+      const msg = props.session.status === 'game_over' 
+        ? "This adventure has already ended in defeat. Do you want to continue anyway?"
+        : "This adventure has already been completed. Do you want to continue anyway?"
+      if (!window.confirm(msg)) return
+    }
     emit('resume', props.session.game_id)
   } else if (action === 'pause') {
     emit('pause', templateIdOfSession())
@@ -61,6 +67,13 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
   <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col overflow-hidden relative group">
     <!-- Top Cover Area -->
     <div class="aspect-[3/2] relative overflow-hidden bg-black/30 border-b border-white/5">
+      <!-- Ribbon for Game Over / Completed -->
+      <div v-if="props.session.status === 'game_over'" class="absolute -right-12 top-6 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
+        Game Over
+      </div>
+      <div v-if="props.session.status === 'completed'" class="absolute -right-12 top-6 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
+        Completed
+      </div>
       <img
         v-if="props.session.image_url"
         :src="props.session.image_url"
@@ -75,9 +88,18 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
       <div class="absolute top-3 left-3">
         <span
           class="px-2.5 py-1 rounded-full text-[9px] uppercase tracking-widest font-black"
-          :class="props.session.is_paused ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'"
+          :class="{
+            'bg-amber-500/20 text-amber-300': props.session.is_paused && (!props.session.status || props.session.status === 'active'),
+            'bg-emerald-500/20 text-emerald-300': !props.session.is_paused && (!props.session.status || props.session.status === 'active'),
+            'bg-red-500/20 text-red-300': props.session.status === 'game_over',
+            'bg-emerald-600/40 text-emerald-100': props.session.status === 'completed'
+          }"
         >
-          {{ props.session.is_paused ? 'Paused' : 'Active' }}
+          {{ 
+            props.session.status === 'game_over' ? 'Defeated' : 
+            props.session.status === 'completed' ? 'Victory' : 
+            (props.session.is_paused ? 'Paused' : 'Active') 
+          }}
         </span>
       </div>
 
@@ -182,11 +204,25 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
 
       <!-- Action Button -->
       <button
-        class="w-full py-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all border border-emerald-500/20 flex items-center justify-center gap-3 mt-1 shadow-lg shadow-emerald-500/5 group/btn"
+        class="w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-3 mt-1 shadow-lg group/btn"
+        :class="[
+          props.session.status === 'game_over' ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 shadow-red-500/5' :
+          props.session.status === 'completed' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20 shadow-amber-500/5' :
+          'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 shadow-emerald-500/5'
+        ]"
         @click="runAction('resume')"
       >
-        <i class="ra ra-play text-sm transition-transform group-hover/btn:scale-110"></i>
-        Resume Game
+        <i :class="[
+          'text-sm transition-transform group-hover/btn:scale-110',
+          props.session.status === 'game_over' ? 'ra ra-skull' : 
+          props.session.status === 'completed' ? 'ra ra-trophy' : 
+          'ra ra-play'
+        ]"></i>
+        {{ 
+          props.session.status === 'game_over' ? 'Continue Anyway' : 
+          props.session.status === 'completed' ? 'Continue Anyway' : 
+          'Resume Game' 
+        }}
       </button>
     </div>
   </article>

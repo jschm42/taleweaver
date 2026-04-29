@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState, clearAuth } from '@/store/auth'
 import { configState } from '@/store/config'
 
 const router = useRouter()
 const isMenuOpen = ref(false)
+
+const userAvatar = computed(() => {
+  const user = authState.user
+  if (user?.profile_image_url) {
+    return user.profile_image_url.startsWith('http') 
+      ? user.profile_image_url 
+      : user.profile_image_url
+  }
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username || 'default'}`
+})
 
 function toggleMenu() {
   isMenuOpen.value = !isMenuOpen.value
@@ -54,13 +64,10 @@ function openProfile() {
         </span>
         <div class="w-12 h-12 rounded-full bg-white/5 border border-white/10 overflow-hidden shadow-inner p-0.5">
           <img 
-            v-if="authState.user?.profile_image_url" 
-            :src="authState.user.profile_image_url" 
+            :src="userAvatar" 
             class="w-full h-full rounded-full object-cover" 
+            alt="User Avatar"
           />
-          <div v-else class="w-full h-full rounded-full bg-aether-primary/10 flex items-center justify-center">
-            <i class="ra ra-hood text-xs text-aether-primary"></i>
-          </div>
         </div>
       </button>
 

@@ -72,6 +72,8 @@ export interface GameSession {
   award_count?: number
   earned_award_count?: number
   created_at?: string
+  status?: 'active' | 'archived' | 'completed' | 'game_over' | null
+  status_note?: string | null
 }
 
 export interface AdventureTemplateSummary {

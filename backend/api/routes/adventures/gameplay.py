@@ -78,6 +78,9 @@ async def get_chat_history(
         quests=state.quests,
         awards=[{**aw, "is_earned": any(ea.get("key") == aw.get("key") and ea.get("template_id") == adventure.id for ea in (current_user.earned_awards or []))} for aw in (adventure.awards or [])],
         is_completed=state.is_completed,
+        game_over=state.session.status == "game_over" if state.session else False,
+        game_completed=state.session.status == "completed" if state.session else False,
+        status_note=state.session.status_note if state.session else None,
     )
 
 @router.post("/{game_id}/chat")

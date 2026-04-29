@@ -9,7 +9,7 @@ import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import type { ChatMessage, CharacterSheet } from '@/types'
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading'
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
 
 export interface UseGameSocket {
   messages: Ref<ChatMessage[]>
@@ -275,6 +275,10 @@ export function useGameSocket(): UseGameSocket {
             if (data.game_over) {
               status.value = 'game_over'
               gameOverReason.value = data.game_over_reason
+              stopSyncTimer()
+            } else if (data.game_completed) {
+              status.value = 'completed'
+              gameOverReason.value = data.status_note
               stopSyncTimer()
             } else {
               status.value = 'connected'

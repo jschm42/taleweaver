@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
@@ -493,6 +493,12 @@ onMounted(() => {
     })
     router.replace({ name: 'portal', query: {} })
   }
+})
+
+watch(() => route.query.section, (section) => {
+  if (section === 'profile') activeSection.value = 'profile'
+  else if (section === 'templates') activeSection.value = 'templates'
+  else if (section === 'sessions') activeSection.value = 'sessions'
 })
 
 onUnmounted(() => {

@@ -33,3 +33,7 @@ class User(Base, TimestampMixin):
     # [{"key": "...", "tier": "gold", "adventure_title": "...", "session_id": "...", "earned_at": "..."}]
     earned_awards = Column(JSON, nullable=True)
 
+    # Game Log: stores history of completed or game-over sessions
+    # [{"session_id": "...", "adventure_title": "...", "status": "completed|game_over", "note": "...", "ended_at": "..."}]
+    game_log = Column(JSON, nullable=True)
+

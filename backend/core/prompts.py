@@ -170,6 +170,9 @@ GM_MECHANICS_SUFFIX = (
     "Evaluate if any of the following Awards have been earned based on the current action:\n"
     "{awards_json}\n"
     "If an award is earned, return its key in 'earned_award_keys'. Only grant an award once per session. "
+    "GAME OVER & COMPLETION:\n"
+    "- If the situation is hopeless or the player has violated core rules, set `game_over: true` and provide a `status_note` explanation.\n"
+    "- If the story has reached its logical conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """
@@ -183,6 +186,9 @@ GM_STORY_MECHANICS_SUFFIX = (
     "Evaluate if any of the following Awards have been earned based on the current action:\n"
     "{awards_json}\n"
     "If an award is earned, return its key in 'earned_award_keys'. Only grant an award once per session. "
+    "GAME OVER & COMPLETION:\n"
+    "- If the story has reached a logical turning point or conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
+    "- If the player is in an inescapable situation (e.g. HP <= 0), set `game_over: true` and provide a `status_note` explanation.\n"
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """
