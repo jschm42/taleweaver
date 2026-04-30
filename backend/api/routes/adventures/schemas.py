@@ -9,7 +9,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     title: str
     avatar_name: Optional[str] = None
     image_url: Optional[str] = None
-    context: Optional[str] = None
+    original_prompt: Optional[str] = None
     strict_rules: bool = True
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     generate_scene_images: bool = False
@@ -50,10 +50,17 @@ class AdventureTemplateResponse(BaseModel):
     game_over_rules: Optional[Dict[str, Any]]
     selected_image_styles: Optional[List[str]] = None
     selected_tone: Optional[str] = None
-    context: Optional[str] = None
+    original_prompt: Optional[str] = None
     quests: Optional[List[Dict[str, Any]]] = None
     awards: Optional[List[Dict[str, Any]]] = None
     is_completed: bool = False
+
+    # Narrative Meta (User editable in Plot tab)
+    plot: Optional[str] = None
+    rules: Optional[str] = None
+    walkthrough: Optional[str] = None
+    completed_condition: Optional[str] = None
+    gameover_condition: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

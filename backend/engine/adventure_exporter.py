@@ -52,7 +52,7 @@ class AdventureExporter:
             "adventure": {
                 "title": adv.title,
                 "teaser": adv.teaser,
-                "context": adv.context,
+                "original_prompt": adv.original_prompt,
                 "image_url": adv.image_url,
                 "strict_rules": adv.strict_rules,
                 "rule_enforcement_mode": adv.rule_enforcement_mode,
@@ -69,6 +69,13 @@ class AdventureExporter:
                 "award_generation_enabled": adv.award_generation_enabled,
                 "min_awards": adv.min_awards,
                 "max_awards": adv.max_awards,
+                "plot": adv.plot,
+                "rules": adv.rules,
+                "walkthrough": adv.walkthrough,
+                "completed_condition": adv.completed_condition,
+                "gameover_condition": adv.gameover_condition,
+                "original_prompt": adv.original_prompt,
+                "starting_timestamp": adv.starting_timestamp,
             },
             
             "protagonist": {

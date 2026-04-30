@@ -685,7 +685,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_adventure_cover(title: str, context: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
+    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
         """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -710,7 +710,7 @@ class MediaEngine:
         filename = f"cover_{uuid.uuid4().hex}.{ext}"
         
         prompt = prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
-            title=title, context=context
+            title=title, original_prompt=original_prompt
         )
         
         return await MediaEngine.generate_image(

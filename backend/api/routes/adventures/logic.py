@@ -132,7 +132,12 @@ class AdventureLogic:
                 avatar_id=session_candidate.avatar_id,
                 current_scene_id=first_scene_id,
                 in_game_time=0,
-                quests=adventure.quests if adventure else []
+                quests=adventure.quests if adventure else [],
+                plot=adventure.plot if adventure else None,
+                rules=adventure.rules if adventure else None,
+                walkthrough=adventure.walkthrough if adventure else None,
+                completed_condition=adventure.completed_condition if adventure else None,
+                gameover_condition=adventure.gameover_condition if adventure else None
             )
             db.add(healed_state)
             await db.commit()
@@ -145,7 +150,7 @@ class AdventureLogic:
         """Fetches and processes entities for the current scene, applying session overrides."""
         ent_res = await db.execute(
             select(WorldEntity).where(
-                WorldEntity.template_id == state.template_id, 
+                WorldEntity.session_id == state.session_id, 
                 WorldEntity.current_scene_id == state.current_scene_id
             )
         )
@@ -180,7 +185,7 @@ class AdventureLogic:
         has_asset_snapshot = "__asset_snapshot__" in (state.entity_states or {})
         snapshot_entity_images = snapshot.get("entity_images", {})
 
-        res = await db.execute(select(WorldEntity.id, WorldEntity.image_url).where(WorldEntity.template_id == state.template_id, WorldEntity.image_url.is_not(None)))
+        res = await db.execute(select(WorldEntity.id, WorldEntity.image_url).where(WorldEntity.session_id == state.session_id, WorldEntity.image_url.is_not(None)))
         img_map = {row.id: row.image_url for row in res.all() if row.id}
         if has_asset_snapshot:
             img_map = {k: v for k, v in snapshot_entity_images.items() if isinstance(v, str) and v}
@@ -228,8 +233,13 @@ class AdventureLogic:
             else:
                 synced_equipment[slot] = item
                 
-        scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
+        scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.session_id == state.session_id))
         current_scene = scene_res.scalars().first()
+        
+        # Fallback to template if session snapshot not found (e.g. legacy session)
+        if not current_scene:
+            scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
+            current_scene = scene_res.scalars().first()
         
         from backend.engine.stat_aggregator import calculate_total_stats
         total_stats = calculate_total_stats(avatar)

@@ -32,7 +32,12 @@ class MemoryManager:
         entities=None, 
         exits=None,
         in_game_time: int = 0,
-        awards: Optional[List[dict]] = None
+        awards: Optional[List[dict]] = None,
+        plot: Optional[str] = None,
+        rules: Optional[str] = None,
+        walkthrough: Optional[str] = None,
+        completed_condition: Optional[str] = None,
+        gameover_condition: Optional[str] = None
     ) -> str:
         """
         Builds the foundational system prompt using the pre-generated world integrity.
@@ -96,6 +101,11 @@ class MemoryManager:
         sheet_json = json.dumps(character_sheet, indent=2)
         
         system_instruction = prompts.GAME_MASTER_SYSTEM_PROMPT_TEMPLATE.format(
+            plot=plot or "Explore and survive.",
+            rules=rules or "Standard RPG rules apply.",
+            walkthrough=walkthrough or "No specific walkthrough guidance available.",
+            completed_condition=completed_condition or "No specific win condition set.",
+            gameover_condition=gameover_condition or "No specific game over condition set.",
             world_context=world_context,
             time_str=time_str,
             location_context=location_context,
@@ -112,13 +122,20 @@ class MemoryManager:
         entities=None, 
         exits=None,
         in_game_time: int = 0,
-        awards: Optional[List[dict]] = None
+        awards: Optional[List[dict]] = None,
+        plot: Optional[str] = None,
+        rules: Optional[str] = None,
+        walkthrough: Optional[str] = None,
+        completed_condition: Optional[str] = None,
+        gameover_condition: Optional[str] = None
     ) -> list[dict]:
         """
         Combines the System Prompt with the sliding window of history and structured world state.
         """
         sys_prompt = MemoryManager.build_system_prompt(
-            avatar, world_context, current_scene, entities, exits, in_game_time, awards
+            avatar, world_context, current_scene, entities, exits, in_game_time, awards,
+            plot=plot, rules=rules, walkthrough=walkthrough,
+            completed_condition=completed_condition, gameover_condition=gameover_condition
         )
         messages = [{"role": "system", "content": sys_prompt}]
         

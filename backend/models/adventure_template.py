@@ -15,7 +15,7 @@ class AdventureTemplate(Base, TimestampMixin):
     teaser = Column(String(300), nullable=True)
     
     image_url = Column(String(255), nullable=True)
-    context = Column(String(2000), nullable=True)
+    # context is now replaced by original_prompt below
     
     # Configuration / Rules (Back to top-level for easier querying/migration)
     strict_rules = Column(Boolean, default=True, nullable=False)
@@ -45,6 +45,15 @@ class AdventureTemplate(Base, TimestampMixin):
     # Generation Constraints
     min_scenes = Column(Integer, default=1, nullable=False)
     max_scenes = Column(Integer, default=5, nullable=False)
+
+    # New Concept Fields
+    plot = Column(String(5000), nullable=True)
+    rules = Column(String(5000), nullable=True)
+    walkthrough = Column(String(10000), nullable=True)
+    completed_condition = Column(String(1000), nullable=True)
+    gameover_condition = Column(String(1000), nullable=True)
+    original_prompt = Column(String(5000), nullable=True)
+    starting_timestamp = Column(Integer, default=0, nullable=False) # Minutes from Day 1, 00:00
 
     # Award System
     awards = Column(JSON, nullable=True)

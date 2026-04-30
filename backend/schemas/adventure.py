@@ -23,7 +23,7 @@ class AdventureTemplateBase(BaseModel):
     title: str = Field(..., max_length=50)
     image_url: Optional[str] = None
     teaser: Optional[str] = Field(None, max_length=300)
-    context: Optional[str] = Field(None, max_length=2000)
+    original_prompt: Optional[str] = Field(None, max_length=5000)
     strict_rules: Optional[bool] = True
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     time_per_turn: Optional[int] = 5
@@ -48,6 +48,13 @@ class AdventureTemplateBase(BaseModel):
     min_awards: int = 3
     max_awards: int = 8
 
+    # Narrative Meta (User editable in Plot tab)
+    plot: Optional[str] = None
+    rules: Optional[str] = None
+    walkthrough: Optional[str] = None
+    completed_condition: Optional[str] = None
+    gameover_condition: Optional[str] = None
+
 
 class AdventureTemplateCreate(AdventureTemplateBase):
     pass
@@ -55,6 +62,7 @@ class AdventureTemplateCreate(AdventureTemplateBase):
 class AdventureTemplateUpdate(BaseModel):
     title: Optional[str] = None
     teaser: Optional[str] = Field(None, max_length=300)
+    original_prompt: Optional[str] = Field(None, max_length=5000)
     strict_rules: Optional[bool] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
     time_per_turn: Optional[int] = None
@@ -65,6 +73,13 @@ class AdventureTemplateUpdate(BaseModel):
     game_over_rules: Optional[Dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
+    
+    # Editable Narrative Meta
+    plot: Optional[str] = None
+    rules: Optional[str] = None
+    walkthrough: Optional[str] = None
+    completed_condition: Optional[str] = None
+    gameover_condition: Optional[str] = None
 
 class AdventureTemplateInDBBase(AdventureTemplateBase):
     id: str

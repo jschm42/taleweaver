@@ -61,6 +61,8 @@ async def list_sessions(
         for g, s, a, scene_label, avatar_profile_image in rows
     ]
 
+from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
+
 @router.post("/{template_id}/sessions/start", status_code=201)
 async def start_session_for_template(
     template_id: str,
@@ -95,16 +97,73 @@ async def start_session_for_template(
     scene_res = await db.execute(select(WorldScene.id).where(WorldScene.template_id == template_id).order_by(WorldScene.id.asc()).limit(1))
     first_scene_id = scene_res.scalar_one_or_none() or "START"
 
-    new_session = GameSession(user_id=current_user.id, avatar_id=avatar.id, template_id=template_id, adventure_title=adventure.title, adventure_image_url=adventure.image_url, status="active")
+    new_session = GameSession(
+        user_id=current_user.id, 
+        avatar_id=avatar.id, 
+        template_id=template_id, 
+        adventure_title=adventure.title, 
+        adventure_image_url=adventure.image_url, 
+        status="active"
+    )
     db.add(new_session)
     await db.flush()
 
+    # Create SessionState with narrative snapshot
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
         current_scene_id=first_scene_id, in_game_time=0, quests=deepcopy(adventure.quests or []),
-        start_datetime=AdventureLogic.resolve_start_datetime(adventure.original_manifest)
+        start_datetime=AdventureLogic.resolve_start_datetime(adventure.original_manifest),
+        plot=adventure.plot,
+        rules=adventure.rules,
+        walkthrough=adventure.walkthrough,
+        completed_condition=adventure.completed_condition,
+        gameover_condition=adventure.gameover_condition
     )
     db.add(new_state)
+    
+    # --- DEEP CLONE WORLD DATA ---
+    # 1. Clone Scenes
+    scenes_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+    scenes = scenes_res.scalars().all()
+    for s in scenes:
+        new_s = WorldScene(
+            id=s.id, session_id=new_session.id, template_id=None,
+            label=s.label, description=s.description, image_url=s.image_url
+        )
+        db.add(new_s)
+    
+    # 2. Clone Exits
+    exits_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id))
+    exits = exits_res.scalars().all()
+    for e in exits:
+        new_e = WorldExit(
+            session_id=new_session.id, template_id=None,
+            from_scene_id=e.from_scene_id, to_scene_id=e.to_scene_id,
+            label=e.label, is_locked=e.is_locked, lock_description=e.lock_description
+        )
+        db.add(new_e)
+        
+    # 3. Clone Entities
+    entities_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+    entities = entities_res.scalars().all()
+    for ent in entities:
+        new_ent = WorldEntity(
+            id=ent.id, session_id=new_session.id, template_id=None,
+            entity_type=ent.entity_type, name=ent.name, description=ent.description,
+            current_scene_id=ent.current_scene_id, spatial_position=ent.spatial_position,
+            image_url=ent.image_url, item_type=ent.item_type, wearable_slots=ent.wearable_slots,
+            is_in_inventory=ent.is_in_inventory, is_hidden=ent.is_hidden, is_portable=ent.is_portable,
+            combination_ingredients=ent.combination_ingredients, reveals_item_id=ent.reveals_item_id,
+            is_final_state=ent.is_final_state, state_comment=ent.state_comment,
+            npc_type=ent.npc_type, movement_type=ent.movement_type,
+            hp=ent.hp, max_hp=ent.max_hp, mana=ent.mana, max_mana=ent.max_mana, stamina=ent.stamina, max_stamina=ent.max_stamina,
+            stat_modifier_strength=ent.stat_modifier_strength, stat_modifier_dexterity=ent.stat_modifier_dexterity,
+            stat_modifier_intelligence=ent.stat_modifier_intelligence, stat_modifier_wisdom=ent.stat_modifier_wisdom,
+            stat_modifier_charisma=ent.stat_modifier_charisma, stat_modifier_armor_class=ent.stat_modifier_armor_class,
+            inventory=deepcopy(ent.inventory), metadata_json=deepcopy(ent.metadata_json)
+        )
+        db.add(new_ent)
+
     await db.commit()
     return {"game_id": new_session.id, "template_id": template_id, "avatar_id": avatar.id}
 

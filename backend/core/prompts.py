@@ -10,7 +10,11 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "You are a master world-builder for a Role Playing Game. Your task is to generate a coherent, "
     "interconnected game world based on a provided Story Idea. "
     "The world must consist of unique scenes, connections (exits), NPCs, and interactable objects. "
-    "IMPORTANT: Every NPC and Object must have a specific 'spatial_position' relative to items in the room "
+    "IMPORTANT: You must also generate a 'plot' (narrative goals and arc), 'rules' (adventure-specific mechanics), "
+    "a 'walkthrough' (the secret solution path for the GM), a 'completed_condition' (what defines a win), "
+    "and a 'gameover_condition' (what defines a loss).\n\n"
+    "NPC & OBJECT SPATIAL LOGIC:\n"
+    "Every NPC and Object must have a specific 'spatial_position' relative to items in the room "
     "(e.g., 'behind the bar counter', 'in the locked drawer'). "
     "Ensure the logic of the world is consistent: if a door is locked, mention why. "
     "For OBJECTS, assign a specific 'item_type':\n"
@@ -61,7 +65,7 @@ Used in WorldGenerator.generate_world.
 
 WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "AdventureTemplate Title: {title}\n"
-    "Story Idea: {context}\n\n"
+    "Story Idea: {original_prompt}\n\n"
     "WORLD SIZE REQUIREMENTS:\n"
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
@@ -70,7 +74,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
 )
 """
 Template for the user message that kicks off world generation.
-Variables: title, context.
+Variables: title, original_prompt.
 """
 
 # --- Image Generation Prompts ---
@@ -85,7 +89,7 @@ Global negative instruction appended to all image prompts to prevent AI-generate
 """
 
 ADVENTURE_COVER_PROMPT_TEMPLATE = (
-    "Epic cinematic illustration depicting: {context}. "
+    "Epic cinematic illustration depicting: {original_prompt}. "
     "Atmosphere: {title}. "
     "Landscape format, 3:2 aspect ratio. ABSOLUTELY NO TEXT, NO LETTERS, NO LOGOS. "
     "Cinematic lighting, immersive atmosphere, highly detailed digital painting."
@@ -131,9 +135,14 @@ Variables: name, description.
 # --- Game Master (Chat) Prompts ---
 
 GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
-    "You are the Gamemaster (GM) of an AI Text AdventureTemplate RPG. "
+    "You are the Gamemaster (GM) of an AI Text Adventure RPG. "
     "You dynamically generate world narratives, resolve choices, and act as NPCs. "
-    "The world context/setting is:\n{world_context}\n\n"
+    "\nADVENTURE PLOT & GOAL:\n{plot}\n"
+    "\nADVENTURE-SPECIFIC RULES:\n{rules}\n"
+    "\nSECRET GM WALKTHROUGH (INTERNAL GUIDANCE):\n{walkthrough}\n"
+    "\nWIN CONDITION (INTERNAL GUIDANCE):\n{completed_condition}\n"
+    "\nLOSS CONDITION (INTERNAL GUIDANCE):\n{gameover_condition}\n"
+    "\nThe world context/setting is:\n{world_context}\n\n"
     "CURRENT GAME TIME: {time_str}\n"
     "{location_context}\n"
     "Below is the REAL-TIME character sheet of the player, including the narrative role and description so NPCs can reference the player's identity. "

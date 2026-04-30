@@ -112,7 +112,7 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 
 const form = ref({
   title: '',
-  context: '',
+  original_prompt: '',
   strict_rules: true,
   time_per_turn: 5,
   min_scenes: 1,
@@ -137,7 +137,7 @@ async function fetchAdventure() {
     const data = await res.json()
     adventure.value = data
     form.value.title = data.title
-    form.value.context = data.context || ''
+    form.value.original_prompt = data.original_prompt || ''
     form.value.strict_rules = data.strict_rules
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.min_scenes = data.min_scenes || 1
@@ -228,7 +228,7 @@ function getVisualDescription(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 
   }
 
   if (kind === 'cover') {
-    return debugData.value.adventure?.context || ''
+    return debugData.value.adventure?.original_prompt || ''
   }
 
   if (kind === 'protagonist') {
@@ -605,7 +605,7 @@ watch(
 
               <div>
                 <label class="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">World Context / Idea</label>
-                <textarea v-model="form.context" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
+                <textarea v-model="form.original_prompt" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white resize-none"></textarea>
               </div>
 
               <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl">
@@ -716,7 +716,7 @@ watch(
                           Custom
                         </button>
                         <button
-                          @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context)"
+                          @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt)"
                           class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
                         >
                           <i class="ra ra-quill-ink"></i>

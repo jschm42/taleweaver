@@ -129,7 +129,7 @@ async function handleCreate() {
     ...form.value,
     id: crypto.randomUUID(),
     title: form.value.title.trim() || 'Untitled Odyssey',
-    context: form.value.storyIdea.trim(),
+    original_prompt: form.value.storyIdea.trim(),
     time_per_turn: form.value.pacing_minutes,
     selected_image_styles: [form.value.selected_style_id],
     selected_tone: form.value.selected_tone_id

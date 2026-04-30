@@ -107,7 +107,7 @@ async def create_adventure(
         id=new_id,
         owner_id=current_user.id,
         title=payload.title,
-        context=payload.context,
+        original_prompt=payload.original_prompt,
         strict_rules=payload.strict_rules,
         rule_enforcement_mode=payload.rule_enforcement_mode or "rpg",
         time_per_turn=payload.time_per_turn,
@@ -167,7 +167,7 @@ async def create_adventure(
                     user=bg_user,
                     template_id=new_id,
                     title=payload.title,
-                    context=payload.context or "",
+                    original_prompt=payload.original_prompt or "",
                     generate_scene_images=payload.generate_scene_images,
                     generate_npc_images=payload.generate_npc_images,
                     generate_item_images=payload.generate_item_images,
@@ -178,7 +178,7 @@ async def create_adventure(
                     max_awards=payload.max_awards,
                     selected_image_styles=adv.selected_image_styles,
                 )
-                
+
                 # Finalize template
                 adv_res = await bg_db.execute(select(AdventureTemplate).where(AdventureTemplate.id == new_id))
                 bg_adv = adv_res.scalars().first()
@@ -203,6 +203,47 @@ async def create_adventure(
         "adventure_id": new_id,
         "avatar_id": avatar.id
     }
+
+@router.patch("/{template_id}", response_model=AdventureTemplateResponse)
+async def update_adventure(
+    template_id: str,
+    payload: AdventureTemplateUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Partially updates an adventure template's metadata, narrative fields, or configuration."""
+    result = await db.execute(select(AdventureTemplate).where((AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)))
+    adv = result.scalars().first()
+    if not adv:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    
+    # Apply updates to template
+    for field, value in update_data.items():
+        setattr(adv, field, value)
+
+    # Sync to active sessions if narrative fields changed
+    narrative_fields = {"plot", "rules", "walkthrough", "completed_condition", "gameover_condition"}
+    if any(f in update_data for f in narrative_fields):
+        from backend.models.session_state import SessionState
+        session_res = await db.execute(select(SessionState).where(SessionState.template_id == template_id))
+        active_states = session_res.scalars().all()
+        for state in active_states:
+            for f in narrative_fields:
+                if f in update_data:
+                    setattr(state, f, update_data[f])
+
+    await db.commit()
+    await db.refresh(adv)
+    
+    # Enrich awards for response
+    user_earned_keys = {ea.get("key") for ea in (current_user.earned_awards or []) if ea.get("template_id") == adv.id}
+    enriched_awards = [{**aw, "is_earned": aw.get("key") in user_earned_keys} for aw in (adv.awards or [])]
+    
+    response_data = AdventureTemplateResponse.model_validate(adv).model_dump()
+    response_data["awards"] = enriched_awards
+    return response_data
 
 @router.get("/{template_id}/status")
 async def get_adventure_status(

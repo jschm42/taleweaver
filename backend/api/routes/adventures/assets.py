@@ -122,10 +122,10 @@ async def regenerate_visual(
         if payload.target_type == "cover":
             # 1. Adventure Cover
             prompt = payload.prompt or prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
-                title=adv.title, context=adv.teaser or adv.context
+                title=adv.title, original_prompt=adv.teaser or adv.original_prompt
             )
             image_url = await MediaEngine.generate_adventure_cover(
-                title=adv.title, context=adv.teaser or adv.context,
+                title=adv.title, original_prompt=adv.teaser or adv.original_prompt,
                 adventure_id=template_id, user_config=user_config, api_keys=api_keys,
                 style_instruction=style_instruction
             )

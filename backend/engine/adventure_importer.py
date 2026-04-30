@@ -130,6 +130,13 @@ class AdventureTemplateImporter:
                     min_awards=adv_data.get("min_awards") or manifest_data.get("min_awards", 3),
                     max_awards=adv_data.get("max_awards") or manifest_data.get("max_awards", 8),
                     award_generation_enabled=adv_data.get("award_generation_enabled") or manifest_data.get("award_generation_enabled", False),
+                    plot=adv_data.get("plot") or manifest_data.get("plot"),
+                    rules=adv_data.get("rules") or manifest_data.get("rules"),
+                    walkthrough=adv_data.get("walkthrough") or manifest_data.get("walkthrough"),
+                    completed_condition=adv_data.get("completed_condition") or manifest_data.get("completed_condition"),
+                    gameover_condition=adv_data.get("gameover_condition") or manifest_data.get("gameover_condition"),
+                    original_prompt=adv_data.get("original_prompt") or manifest_data.get("original_prompt"),
+                    starting_timestamp=adv_data.get("starting_timestamp") or manifest_data.get("starting_timestamp", 0),
                     is_ready=True,
                     creation_status="Ready",
                     original_manifest=manifest_data
@@ -273,7 +280,7 @@ class AdventureTemplateImporter:
                     owner_id=user.id,
                     title=old_adv['title'],
                     teaser=old_adv.get("teaser"),
-                    context=old_adv.get("context"),
+                    original_prompt=old_adv.get("original_prompt") or old_adv.get("context"),
                     image_url=old_adv.get("image_url"),
                     strict_rules=old_adv.get("strict_rules", True),
                     time_per_turn=old_adv.get("time_per_turn", 10),
@@ -283,6 +290,13 @@ class AdventureTemplateImporter:
                     quests=old_adv.get("quests", []),
                     awards=old_adv.get("awards", []),
                     original_manifest=old_adv.get("original_manifest"),
+                    plot=old_adv.get("plot"),
+                    rules=old_adv.get("rules"),
+                    walkthrough=old_adv.get("walkthrough"),
+                    completed_condition=old_adv.get("completed_condition"),
+                    gameover_condition=old_adv.get("gameover_condition"),
+
+                    starting_timestamp=old_adv.get("starting_timestamp", 0),
                     is_ready=True,
                     creation_status="Ready"
                 )
@@ -351,7 +365,7 @@ class AdventureTemplateImporter:
                     owner_id=owner_id,
                     title=adv_meta.get("title") or manifest.get("title") or "Imported Blueprint",
                     teaser=adv_meta.get("teaser") or manifest.get("teaser"),
-                    context=adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
+                    original_prompt=adv_meta.get("original_prompt") or adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
                     image_url=adv_meta.get("image_url") or manifest.get("image_url"),
                     strict_rules=adv_meta.get("strict_rules", True),
                     time_per_turn=adv_meta.get("time_per_turn", 5),
@@ -362,6 +376,13 @@ class AdventureTemplateImporter:
                     quests=adv_meta.get("quests") or manifest.get("quests") or [],
                     awards=adv_meta.get("awards") or manifest.get("awards") or [],
                     original_manifest=manifest,
+                    plot=adv_meta.get("plot") or manifest.get("plot"),
+                    rules=adv_meta.get("rules") or manifest.get("rules"),
+                    walkthrough=adv_meta.get("walkthrough") or manifest.get("walkthrough"),
+                    completed_condition=adv_meta.get("completed_condition") or manifest.get("completed_condition"),
+                    gameover_condition=adv_meta.get("gameover_condition") or manifest.get("gameover_condition"),
+
+                    starting_timestamp=adv_meta.get("starting_timestamp") or manifest.get("starting_timestamp", 0),
                     is_ready=True,
                     creation_status="Ready"
                 )

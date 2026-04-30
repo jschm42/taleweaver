@@ -66,8 +66,15 @@ class GameTurnManager:
         # Lazy-register initial map visit
         try:
             world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
-            scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.template_id == self.state.template_id))
+            # Use session_id to find the scene (snapshot)
+            scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.session_id == self.game_id))
             cur_scene = scene_res.scalars().first()
+            
+            # Fallback to template if not found (though it should be there after deep clone)
+            if not cur_scene:
+                scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.template_id == self.state.template_id))
+                cur_scene = scene_res.scalars().first()
+
             MapEngine.register_visit(
                 world_map, 
                 self.state.current_scene_id, 
@@ -175,10 +182,10 @@ class GameTurnManager:
             
         if response.startswith("[TRIGGER_TAKE_DIRECT]"):
             entity_id_or_name = response[21:].strip()
-            # Find entity in current scene
+            # Find entity in current scene (snapshot)
             ent_res = await self.db.execute(
                 select(WorldEntity).where(
-                    WorldEntity.template_id == self.state.template_id,
+                    WorldEntity.session_id == self.game_id,
                     WorldEntity.current_scene_id == self.state.current_scene_id,
                     (WorldEntity.id == entity_id_or_name) | (WorldEntity.name == entity_id_or_name)
                 )
@@ -216,12 +223,12 @@ class GameTurnManager:
         hist_res = await self.db.execute(select(ChatMessage).where(ChatMessage.session_id == self.state.session_id).order_by(ChatMessage.created_at.asc()))
         history = [{"role": m.role, "content": m.content} for m in hist_res.scalars().all()]
         
-        scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.template_id == self.state.template_id))
+        # Fetch dynamic scene context (entities and exits) from the session snapshot
+        scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.session_id == self.game_id))
         current_scene = scene_res.scalars().first()
 
-        # Fetch dynamic scene context (entities and exits)
         ent_res = await self.db.execute(select(WorldEntity).where(
-            WorldEntity.template_id == self.state.template_id, 
+            WorldEntity.session_id == self.game_id, 
             WorldEntity.current_scene_id == self.state.current_scene_id,
             WorldEntity.is_hidden == False,
             WorldEntity.is_in_inventory == False
@@ -229,7 +236,7 @@ class GameTurnManager:
         entities = ent_res.scalars().all()
         exit_res = await self.db.execute(select(WorldExit).where(
             WorldExit.from_scene_id == self.state.current_scene_id,
-            WorldExit.template_id == self.state.template_id
+            WorldExit.session_id == self.game_id
         ))
         exits = exit_res.scalars().all()
         
@@ -248,14 +255,19 @@ class GameTurnManager:
         db_duration = time.perf_counter() - db_start
         logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
 
-        # Build prompt using MemoryManager
+        # Build prompt using MemoryManager with session-local plot/rules
         system_prompt = MemoryManager.build_context(
-            self.avatar, self.adventure.context or "", history, 
+            self.avatar, self.adventure.original_prompt or "", history, 
             current_scene=current_scene,
             entities=entities,
             exits=exits,
             in_game_time=self.state.in_game_time,
-            awards=self.adventure.awards
+            awards=self.adventure.awards,
+            plot=self.state.plot or self.adventure.plot,
+            rules=self.state.rules or self.adventure.rules,
+            walkthrough=self.state.walkthrough or self.adventure.walkthrough,
+            completed_condition=self.state.completed_condition or self.adventure.completed_condition,
+            gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition
         )[0]["content"]
 
         # Override for technical state evaluation (e.g. closing character sheet)
@@ -453,8 +465,8 @@ class GameTurnManager:
                 # 1. Register exit between scenes
                 MapEngine.register_exit(world_map, old_scene_id, event.new_scene_id, exit_label=event.exit_label or "")
                 # 2. Register visit to the new scene
-                # If we have scene data in DB, use it, otherwise use LLM provided label
-                scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == event.new_scene_id, WorldScene.template_id == self.state.template_id))
+                # Use session snapshot for scene data
+                scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == event.new_scene_id, WorldScene.session_id == self.game_id))
                 new_scene_db = scene_res.scalars().first()
                 MapEngine.register_visit(
                     world_map, 

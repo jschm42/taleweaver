@@ -25,6 +25,13 @@ async def _seed_adventure(db: AsyncSession, user_id: str) -> str:
         title="Lifecycle Test",
         teaser="A test for export and import.",
         context="Full context here.",
+        plot="Test plot",
+        rules="Test rules",
+        walkthrough="Test walkthrough",
+        completed_condition="Win",
+        gameover_condition="Lose",
+        original_prompt="The original prompt",
+        starting_timestamp=480,
         image_url="/data/adventures/test-adv-123/cover.jpg"
     )
     db.add(adv)
@@ -124,6 +131,10 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
             assert "adventure.adv" in z.namelist()
             manifest = json.loads(z.read("adventure.adv"))
             assert manifest["adventure"]["title"] == "Lifecycle Test"
+            assert manifest["adventure"]["plot"] == "Test plot"
+            assert manifest["adventure"]["rules"] == "Test rules"
+            assert manifest["adventure"]["completed_condition"] == "Win"
+            assert manifest["adventure"]["starting_timestamp"] == 480
             assert manifest["protagonist"]["name"] == "Test Hero"
             assert manifest["protagonist"]["profile_image"] == "assets/hero.jpg"
             assert len(manifest["scenes"]) == 1
@@ -193,7 +204,11 @@ async def test_adventure_import_restores_protagonist(auth_client, setup_test_db,
             "adventure": {
                 "title": "Import Protagonist Test",
                 "teaser": "Testing character restoration.",
-                "context": "Context"
+                "context": "Context",
+                "plot": "Import plot",
+                "rules": "Import rules",
+                "completed_condition": "Win if...",
+                "gameover_condition": "Lose if..."
             },
             "protagonist": {
                 "name": "Imported Hero",
@@ -234,6 +249,9 @@ async def test_adventure_import_restores_protagonist(auth_client, setup_test_db,
         res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.title == "Import Protagonist Test"))
         new_adv = res.scalars().first()
         assert new_adv is not None
+        assert new_adv.plot == "Import plot"
+        assert new_adv.rules == "Import rules"
+        assert new_adv.completed_condition == "Win if..."
         
         # Check Avatar
         av_res = await db.execute(select(Avatar).where(Avatar.template_id == new_adv.id))

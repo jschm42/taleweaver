@@ -106,6 +106,56 @@ async def test_game_loop_standard_turn(setup_test_db, monkeypatch):
         user_msg = res.scalars().first()
         assert user_msg.content == "I look around"
 
+async def test_game_loop_session_overrides_template(setup_test_db, monkeypatch):
+    """Verifies that the GameMaster receives plot/rules from SessionState, not AdventureTemplate."""
+    from tests.conftest import TestSessionLocal
+    from backend.engine.memory_manager import MemoryManager
+    
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        
+        # Override session state narrative
+        state.plot = "SESSION PLOT"
+        state.rules = "SESSION RULES"
+        await db.commit()
+        
+        # Mock MemoryManager.build_context to spy on arguments
+        original_build = MemoryManager.build_context
+        spy_context = {}
+        
+        def mock_build(*args, **kwargs):
+            spy_context['plot'] = kwargs.get('plot')
+            spy_context['rules'] = kwargs.get('rules')
+            return original_build(*args, **kwargs)
+            
+        monkeypatch.setattr("backend.engine.memory_manager.MemoryManager.build_context", mock_build)
+        
+        # Mock LLM to avoid actual calls
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=GameEvent(
+            narrative_description="OK",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[]
+        ))
+        
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Narrative"))])
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        
+        # Act
+        manager = GameTurnManager(db, "session-1", user)
+        async for _ in manager.process_turn("Hello"):
+            pass
+            
+        # Assert
+        assert spy_context['plot'] == "SESSION PLOT"
+        assert spy_context['rules'] == "SESSION RULES"
+
 async def test_game_loop_skill_check_trigger(setup_test_db, monkeypatch):
     """Verifies that the game loop processes skill checks requested by the GM."""
     from tests.conftest import TestSessionLocal

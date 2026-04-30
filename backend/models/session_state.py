@@ -26,6 +26,13 @@ class SessionState(Base, TimestampMixin):
     quests = Column(JSON, nullable=True, default=[])
     start_datetime = Column(String(36), nullable=True)
     
+    # Session-specific overrides/copies from template
+    plot = Column(String(5000), nullable=True)
+    rules = Column(String(5000), nullable=True)
+    walkthrough = Column(String(10000), nullable=True)
+    completed_condition = Column(String(1000), nullable=True)
+    gameover_condition = Column(String(1000), nullable=True)
+    
     # Runtime flags
     is_completed = Column(Boolean, default=False)
     is_debug_enabled = Column(Boolean, default=False)

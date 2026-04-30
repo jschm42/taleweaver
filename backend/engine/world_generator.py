@@ -170,6 +170,9 @@ class ProtagonistSchema(BaseModel):
     armor_class: int = Field(10, description="Base armor class stat (1-99)")
     starting_inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in the player's pocket.")
     starting_equipment: Optional[Dict[str, str]] = Field(None, description="Mapping of slots (e.g. 'Hands', 'Head') to object IDs.")
+    hp: int = Field(200, description="Base health points")
+    mana: int = Field(200, description="Base mana points")
+    stamina: int = Field(200, description="Base stamina points")
 
 class WorldManifesto(BaseModel):
     """
@@ -177,6 +180,11 @@ class WorldManifesto(BaseModel):
     """
     protagonist: ProtagonistSchema
     teaser: str = Field(..., description="A short, atmospheric teaser text for the adventure, max 100 characters.")
+    plot: str = Field(..., description="The main plotline, goals, and narrative arc of the adventure.")
+    rules: str = Field(..., description="Special rules or mechanics specific to this adventure world.")
+    walkthrough: str = Field(..., description="A secret GM walkthrough/solution for the adventure.")
+    completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
+    gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
     scenes: List[WorldSceneSchema]
     exits: List[WorldExitSchema]
     npcs: List[WorldEntitySchema]
@@ -195,7 +203,7 @@ class WorldGenerator:
         user: User, 
         template_id: str, 
         title: str, 
-        context: str,
+        original_prompt: str,
         model: str = "gpt-4o", # default to a complex model
         provider: Optional[str] = None,
         generate_scene_images: bool = False,
@@ -237,7 +245,7 @@ class WorldGenerator:
             generate_scene_images=generate_scene_images,
             generate_npc_images=generate_npc_images,
             generate_item_images=generate_item_images,
-            context_length=len(context or ""),
+            context_length=len(original_prompt or ""),
         )
         
         system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
@@ -250,7 +258,7 @@ class WorldGenerator:
 
         user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(
             title=title, 
-            context=context, 
+            original_prompt=original_prompt, 
             min_scenes=min_scenes, 
             max_scenes=max_scenes,
             award_requirement=award_requirement
@@ -308,6 +316,7 @@ class WorldGenerator:
             )
             # Keep imported/source manifest intact for reproducible resets.
             adventure.teaser = manifesto.teaser
+            adventure.original_prompt = original_prompt
             if not adventure.original_manifest:
                 adventure.original_manifest = manifesto.model_dump()
             await db.commit()
@@ -409,7 +418,7 @@ class WorldGenerator:
         starting_equipped_ids: dict[str, str] = {}
         starting_inv_ids: set[str] = set()
         
-        # 0. Sync Quests
+        # 0. Sync Quests and Narrative Meta
         if adventure:
             quests = manifest_dict.get("quests") or []
             for q in quests:
@@ -420,6 +429,23 @@ class WorldGenerator:
             teaser = manifest_dict.get("teaser")
             if teaser:
                 adventure.teaser = teaser
+            
+            # Narrative Meta
+            adventure.plot = manifest_dict.get("plot") or adventure.plot
+            adventure.rules = manifest_dict.get("rules") or adventure.rules
+            adventure.walkthrough = manifest_dict.get("walkthrough") or adventure.walkthrough
+            adventure.completed_condition = manifest_dict.get("completed_condition") or adventure.completed_condition
+            adventure.gameover_condition = manifest_dict.get("gameover_condition") or adventure.gameover_condition
+            
+            # Optional Time Initialization (Convert to minutes since start if possible)
+            # For now we just check if it's there; future logic can normalize this.
+            if manifest_dict.get("start_time"):
+                # Very simple heuristic: 08:00 -> 480 mins
+                try:
+                    h, m = map(int, manifest_dict["start_time"].split(':'))
+                    adventure.starting_timestamp = h * 60 + m
+                except:
+                    pass
             
             awards = manifest_dict.get("awards") or []
             for a in awards:
@@ -433,6 +459,12 @@ class WorldGenerator:
             for state in state_res.scalars().all():
                 if not state.quests:
                     state.quests = quests
+                # Always sync narrative meta during generation/rebuild to keep sessions in sync with the new world logic
+                state.plot = adventure.plot
+                state.rules = adventure.rules
+                state.walkthrough = adventure.walkthrough
+                state.completed_condition = adventure.completed_condition
+                state.gameover_condition = adventure.gameover_condition
             
             # Generate Adventure Cover if missing
             if not adventure.image_url and user:
@@ -440,7 +472,7 @@ class WorldGenerator:
                 try:
                     cover_url = await MediaEngine.generate_adventure_cover(
                         title=adventure.title,
-                        context=adventure.teaser or adventure.description,
+                        context=adventure.teaser or adventure.original_prompt,
                         adventure_id=template_id,
                         user_config={"t2i_settings": user.t2i_settings},
                         api_keys=user.encrypted_api_keys,

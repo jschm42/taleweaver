@@ -36,7 +36,26 @@ class AIEditRequest(BaseModel):
 
 def _serialize_model(obj):
     if not obj: return None
-    return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+    data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+    
+    # Group stats for easier frontend access
+    if isinstance(obj, WorldEntity):
+        if obj.entity_type == "NPC":
+            data["stats"] = {
+                "hp": obj.hp,
+                "mana": obj.mana,
+                "stamina": obj.stamina
+            }
+        elif obj.entity_type == "OBJECT":
+            stats = {}
+            if obj.stat_modifier_strength: stats["STR"] = obj.stat_modifier_strength
+            if obj.stat_modifier_dexterity: stats["DEX"] = obj.stat_modifier_dexterity
+            if obj.stat_modifier_intelligence: stats["INT"] = obj.stat_modifier_intelligence
+            if obj.stat_modifier_wisdom: stats["WIS"] = obj.stat_modifier_wisdom
+            if obj.stat_modifier_charisma: stats["CHA"] = obj.stat_modifier_charisma
+            if obj.stat_modifier_armor_class: stats["AC"] = obj.stat_modifier_armor_class
+            data["stats"] = stats
+    return data
 
 def _is_npc_entity(ent):
     return ent.entity_type == "NPC"
@@ -102,7 +121,7 @@ async def update_editor_entity(
     if payload.target_type == "cover":
         if payload.name is not None: adv.title = payload.name
         if payload.teaser is not None: adv.teaser = payload.teaser
-        if payload.description is not None: adv.context = payload.description
+        if payload.description is not None: adv.original_prompt = payload.description
     elif payload.target_type == "protagonist":
         av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
         avatar = av_res.scalars().first()

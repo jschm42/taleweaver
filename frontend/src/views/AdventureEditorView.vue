@@ -47,7 +47,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'world' | 'advanced'>('world')
+const activeTab = ref<'physical' | 'plot' | 'rebuild' | 'advanced'>('physical')
 
 type VisualKind = 'cover' | 'protagonist' | 'scene' | 'npc' | 'object'
 
@@ -97,13 +97,42 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 const form = ref({
   title: '',
   teaser: '',
-  context: '',
+  original_prompt: '',
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
   min_scenes: 1,
   max_scenes: 5,
-  awards: [] as any[]
+  awards: [] as any[],
+  
+  // New Concept Fields
+  plot: '',
+  rules: '',
+  walkthrough: '',
+  completed_condition: '',
+  gameover_condition: ''
 })
+
+const editingField = ref<string | null>(null)
+const tempValue = ref('')
+
+function startEditing(field: string, value: string) {
+  editingField.value = field
+  tempValue.value = value
+}
+
+function cancelEditing() {
+  editingField.value = null
+  tempValue.value = ''
+}
+
+async function saveField() {
+  if (!editingField.value) return
+  // @ts-ignore
+  form.value[editingField.value] = tempValue.value
+  await saveChanges()
+  editingField.value = null
+}
+
 
 function normalizeEntityType(entity: any): string {
   return String(entity?.entity_type || entity?.type || '').trim().toUpperCase()
@@ -190,12 +219,19 @@ async function fetchAdventure() {
     adventure.value = data
     form.value.title = data.title
     form.value.teaser = data.teaser || ''
-    form.value.context = data.context || ''
+    form.value.original_prompt = data.original_prompt || ''
     form.value.rule_enforcement_mode = data.rule_enforcement_mode || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.min_scenes = data.min_scenes || 1
     form.value.max_scenes = data.max_scenes || 5
     form.value.awards = data.awards || []
+    
+    // New Concept Fields
+    form.value.plot = data.plot || ''
+    form.value.rules = data.rules || ''
+    form.value.walkthrough = data.walkthrough || ''
+    form.value.completed_condition = data.completed_condition || ''
+    form.value.gameover_condition = data.gameover_condition || ''
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -323,7 +359,7 @@ function openRegenerateDialog(kind: VisualKind, id: string, label: string) {
 
 function getVisualDescription(kind: VisualKind, id: string) {
   if (!debugData.value) return ''
-  if (kind === 'cover') return debugData.value.adventure?.context || ''
+  if (kind === 'cover') return debugData.value.adventure?.original_prompt || ''
   if (kind === 'protagonist') return debugData.value.protagonist?.description || ''
   if (kind === 'scene') return (debugData.value.scenes || []).find((s: any) => s.id === id)?.description || ''
   if (kind === 'npc') return (debugData.value.npcs || []).find((n: any) => n.id === id)?.description || ''
@@ -558,7 +594,7 @@ const goBack = () => router.push({ name: 'portal' })
       <div class="flex items-center gap-6">
         <nav class="flex bg-black/40 rounded-xl p-1 border border-white/5 backdrop-blur-md shadow-inner">
           <button 
-            v-for="tab in (['world', 'advanced'] as const)" 
+            v-for="tab in (['physical', 'plot', 'rebuild', 'advanced'] as const)" 
             :key="tab"
             @click="activeTab = tab"
             :class="[
@@ -582,8 +618,8 @@ const goBack = () => router.push({ name: 'portal' })
       </div>
       
       <div v-else class="space-y-10">
-        <!-- World Tab (Merged Settings & Assets) -->
-        <div v-if="activeTab === 'world'" class="space-y-10 animate-page-in">
+        <!-- Physical Tab (World Assets) -->
+        <div v-if="activeTab === 'physical'" class="space-y-10 animate-page-in">
           <!-- Quick Settings Row -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
            <div class="space-y-2">
@@ -622,47 +658,7 @@ const goBack = () => router.push({ name: 'portal' })
             </div>
           </div>
 
-          <!-- AI Weaver Command (More Compact) -->
-          <div class="p-4 bg-gradient-to-r from-slate-900 to-slate-950 border border-white/5 rounded-2xl shadow-xl relative overflow-hidden group">
-            <div class="flex items-center gap-4">
-              <div class="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
-                <i class="ra ra-player-teleport text-emerald-500 text-lg"></i>
-              </div>
-
-              <div class="flex-grow flex items-center gap-3">
-                <div class="relative flex-grow">
-                  <input 
-                    v-model="aiEditPrompt" 
-                    @keyup.enter="runAIEdit" 
-                    :disabled="isAIEditing"
-                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500/50 outline-none transition-all disabled:opacity-50" 
-                    placeholder="Tell the Weaver to change reality... (e.g. 'Add a dragon to the ruins')" 
-                  />
-                </div>
-
-                <!-- Modern Segmented Toggle -->
-                <div class="flex bg-black/60 p-1 rounded-xl border border-white/5 shadow-inner shrink-0">
-                  <button 
-                    @click="aiAutoVisualize = false" 
-                    :class="['px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all', !aiAutoVisualize ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
-                  >
-                    Text Only
-                  </button>
-                  <button 
-                    @click="aiAutoVisualize = true" 
-                    :class="['px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-2', aiAutoVisualize ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
-                  >
-                    <i class="ra ra-eye-shield"></i>
-                    Visuals
-                  </button>
-                </div>
-
-                <button @click="runAIEdit" :disabled="isAIEditing || !aiEditPrompt" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50 transition-all shadow-lg shadow-emerald-900/20 shrink-0">
-                  {{ isAIEditing ? 'Weaving...' : 'Execute' }}
-                </button>
-              </div>
-            </div>
-          </div>
+          <!-- Moved AI Weaver to Rebuild Tab -->
 
           <!-- Assets Section -->
           <div v-if="debugData" class="space-y-12">
@@ -691,17 +687,17 @@ const goBack = () => router.push({ name: 'portal' })
                       <div class="flex items-center gap-3">
                         <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
                         <p v-else class="text-xs font-bold text-slate-500/40 uppercase tracking-widest italic">No teaser set...</p>
-                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context, debugData.adventure.teaser)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-emerald-400 transition-all" title="Edit Teaser & Metadata">
+                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt, debugData.adventure.teaser)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-emerald-400 transition-all" title="Edit Teaser & Metadata">
                           <i class="ra ra-quill-ink text-[10px]"></i>
                         </button>
                       </div>
-                      <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ debugData.adventure.context }}</p>
+                      <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ debugData.adventure.original_prompt }}</p>
                     </div>
                     <div class="flex gap-3 shrink-0">
                        <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all">Fast Gen</button>
-                       <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
+                       <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
                         <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
-                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.context, debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
+                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt, debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
                     </div>
                   </div>
                 </div>
@@ -771,7 +767,7 @@ const goBack = () => router.push({ name: 'portal' })
                    </button>
                  </div>
                   <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                    <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="handleHover({ name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC' }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg">
+                    <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="handleHover({ name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg">
                       <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                          <i class="ra ra-cycle animate-spin text-xl text-emerald-500"></i>
@@ -779,6 +775,20 @@ const goBack = () => router.push({ name: 'portal' })
                       <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
                       <div class="absolute inset-x-0 bottom-0 p-3">
                         <div class="font-bold text-sm text-white truncate">{{ npc.name }}</div>
+                        <!-- NPC Stats Row -->
+                        <div v-if="form.rule_enforcement_mode !== 'chat' && npc.stats" class="flex gap-1.5 mt-1">
+                          <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-[7px] font-black text-red-400">
+                            <i class="ra ra-heart text-[6px]"></i> {{ npc.stats.hp || 10 }}
+                          </div>
+                          <template v-if="form.rule_enforcement_mode === 'rpg'">
+                            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-[7px] font-black text-emerald-400">
+                              <i class="ra ra-muscle-up text-[6px]"></i> {{ npc.stats.stamina || 10 }}
+                            </div>
+                            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-[7px] font-black text-blue-400">
+                              <i class="ra ra-crystal-ball text-[6px]"></i> {{ npc.stats.mana || 0 }}
+                            </div>
+                          </template>
+                        </div>
                       </div>
                       <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0 scale-75 origin-top-right">
                         <button @click="quickRegenerateVisual('npc', npc.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
@@ -799,7 +809,7 @@ const goBack = () => router.push({ name: 'portal' })
                    </button>
                  </div>
                   <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-                    <div v-for="obj in editorObjects" :key="'obj_' + obj.id" @mouseenter="handleHover({ name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM' }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
+                    <div v-for="obj in editorObjects" :key="'obj_' + obj.id" @mouseenter="handleHover({ name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
                       <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                          <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
@@ -807,6 +817,12 @@ const goBack = () => router.push({ name: 'portal' })
                       <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
                       <div class="absolute inset-x-0 bottom-0 p-2">
                         <div class="font-bold text-[10px] text-white truncate text-center">{{ obj.name }}</div>
+                        <!-- Item Stats Row -->
+                        <div v-if="form.rule_enforcement_mode !== 'chat' && obj.stats && Object.keys(obj.stats).length > 0" class="flex justify-center gap-1 mt-1">
+                          <div v-for="(val, stat) in obj.stats" :key="stat" class="flex items-center gap-0.5 px-1 py-0.5 rounded bg-slate-800/80 border border-white/10 text-[6px] font-black text-slate-300">
+                            {{ stat }}: +{{ val }}
+                          </div>
+                        </div>
                       </div>
                       <div class="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-75 origin-top-right">
                         <button @click="quickRegenerateVisual('object', obj.id)" class="p-1.5 bg-black/60 backdrop-blur-md text-emerald-400 rounded border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle text-xs"></i></button>
@@ -882,6 +898,186 @@ const goBack = () => router.push({ name: 'portal' })
         </div>
 
 
+        <!-- Plot Tab (Narrative Meta) -->
+        <div v-if="activeTab === 'plot'" class="space-y-10 animate-page-in">
+          <div class="bg-slate-900/40 p-10 rounded-[3rem] border border-white/5 backdrop-blur-md shadow-2xl space-y-12">
+            <div class="flex justify-between items-center">
+              <div>
+                <h2 class="text-2xl font-black text-white tracking-tight uppercase tracking-[0.2em]">Narrative Blueprint</h2>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Click any section to modify the chronicles</p>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-10">
+              <!-- Adventure Plot Section -->
+              <div class="space-y-4">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Plot (Secret)</label>
+                <div v-if="editingField === 'plot'" class="space-y-4 animate-fade-in">
+                  <textarea v-model="tempValue" rows="10" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-sm text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[200px]" placeholder="The main plotline, hidden goals, and core narrative..."></textarea>
+                  <div class="flex gap-4">
+                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+                      <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+                      <span>Save Plot</span>
+                    </button>
+                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="startEditing('plot', form.plot)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
+                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-[9px] font-black uppercase">
+                    <i class="ra ra-quill-pen"></i> Edit Plot
+                  </div>
+                  <p v-if="form.plot" class="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{{ form.plot }}</p>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No plot defined. Click to weave the story.</p>
+                </div>
+              </div>
+
+              <!-- Rules Section -->
+              <div class="space-y-4">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Rules / Mechanics</label>
+                <div v-if="editingField === 'rules'" class="space-y-4 animate-fade-in">
+                  <textarea v-model="tempValue" rows="6" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-sm text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]" placeholder="Special rules for this world..."></textarea>
+                  <div class="flex gap-4">
+                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+                      <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+                      <span>Save Rules</span>
+                    </button>
+                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="startEditing('rules', form.rules)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
+                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-[9px] font-black uppercase">
+                    <i class="ra ra-quill-pen"></i> Edit Rules
+                  </div>
+                  <p v-if="form.rules" class="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{{ form.rules }}</p>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No specific rules. Click to define world logic.</p>
+                </div>
+              </div>
+
+              <!-- Walkthrough Section -->
+              <div class="space-y-4">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">GM Walkthrough (Solution Path)</label>
+                <div v-if="editingField === 'walkthrough'" class="space-y-4 animate-fade-in">
+                  <textarea v-model="tempValue" rows="10" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-sm text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[200px]" placeholder="Step-by-step secret solution for the GM..."></textarea>
+                  <div class="flex gap-4">
+                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+                      <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+                      <span>Save Walkthrough</span>
+                    </button>
+                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="startEditing('walkthrough', form.walkthrough)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
+                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-[9px] font-black uppercase">
+                    <i class="ra ra-quill-pen"></i> Edit Walkthrough
+                  </div>
+                  <p v-if="form.walkthrough" class="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{{ form.walkthrough }}</p>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No solution path recorded. Click to document the intended flow.</p>
+                </div>
+              </div>
+
+              <!-- Conditions -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div class="space-y-4">
+                  <label class="block text-[10px] font-black text-emerald-500/80 uppercase tracking-[0.3em]">Win Conditions</label>
+                  <div v-if="editingField === 'completed_condition'" class="space-y-4 animate-fade-in">
+                    <textarea v-model="tempValue" rows="4" class="w-full bg-black/60 border border-emerald-500/50 rounded-2xl px-6 py-5 text-sm text-slate-200 outline-none transition-all resize-y" placeholder="What must the player achieve?"></textarea>
+                    <div class="flex gap-4">
+                      <button @click="saveField" :disabled="isSaving" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                      <button @click="cancelEditing" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                    </div>
+                  </div>
+                  <div v-else @click="startEditing('completed_condition', form.completed_condition)" class="group relative cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/30 rounded-2xl p-6 transition-all duration-300">
+                    <p v-if="form.completed_condition" class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{{ form.completed_condition }}</p>
+                    <p v-else class="text-[10px] italic text-slate-600 uppercase tracking-widest text-center">Define Victory Conditions</p>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <label class="block text-[10px] font-black text-red-500/80 uppercase tracking-[0.3em]">Loss Conditions</label>
+                  <div v-if="editingField === 'gameover_condition'" class="space-y-4 animate-fade-in">
+                    <textarea v-model="tempValue" rows="4" class="w-full bg-black/60 border border-red-500/50 rounded-2xl px-6 py-5 text-sm text-slate-200 outline-none transition-all resize-y" placeholder="How can the adventure fail?"></textarea>
+                    <div class="flex gap-4">
+                      <button @click="saveField" :disabled="isSaving" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                      <button @click="cancelEditing" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                    </div>
+                  </div>
+                  <div v-else @click="startEditing('gameover_condition', form.gameover_condition)" class="group relative cursor-pointer bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 rounded-2xl p-6 transition-all duration-300">
+                    <p v-if="form.gameover_condition" class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{{ form.gameover_condition }}</p>
+                    <p v-else class="text-[10px] italic text-slate-600 uppercase tracking-widest text-center">Define Failure Conditions</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rebuild Tab (AI Weaver) -->
+        <div v-if="activeTab === 'rebuild'" class="space-y-10 animate-page-in">
+          <div class="bg-slate-900/40 p-10 rounded-[3rem] border border-white/5 backdrop-blur-md shadow-2xl space-y-8">
+            <div class="flex items-center gap-6">
+              <div class="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center border border-emerald-500/20 shadow-lg">
+                <i class="ra ra-player-teleport text-emerald-500 text-3xl"></i>
+              </div>
+              <div>
+                <h2 class="text-2xl font-black text-white tracking-tight uppercase">AI Reality Weaver</h2>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rebuild or expand your world using natural language</p>
+              </div>
+            </div>
+
+            <div class="space-y-6">
+               <div class="relative">
+                  <textarea 
+                    v-model="aiEditPrompt" 
+                    @keyup.enter.ctrl="runAIEdit" 
+                    :disabled="isAIEditing"
+                    rows="4"
+                    class="w-full bg-black/40 border border-white/5 rounded-3xl px-8 py-6 text-lg text-white focus:border-emerald-500 outline-none transition-all disabled:opacity-50 shadow-inner" 
+                    placeholder="Tell the Weaver to change reality... (e.g. 'Add a hidden basement to the tavern with a smuggler NPC')" 
+                  ></textarea>
+                  <div class="absolute bottom-6 right-8 text-[9px] font-bold text-slate-600 uppercase tracking-widest">Ctrl + Enter to Execute</div>
+               </div>
+
+               <div class="flex flex-wrap items-center justify-between gap-6">
+                  <div class="flex bg-black/60 p-1 rounded-2xl border border-white/5 shadow-inner">
+                    <button 
+                      @click="aiAutoVisualize = false" 
+                      :class="['px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all', !aiAutoVisualize ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
+                    >
+                      Text Only
+                    </button>
+                    <button 
+                      @click="aiAutoVisualize = true" 
+                      :class="['px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2', aiAutoVisualize ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
+                    >
+                      <i class="ra ra-eye-shield"></i>
+                      Visuals
+                    </button>
+                  </div>
+
+                  <button @click="runAIEdit" :disabled="isAIEditing || !aiEditPrompt" class="px-12 py-4 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-black uppercase tracking-widest rounded-2xl disabled:opacity-50 transition-all shadow-xl shadow-emerald-900/40 flex items-center gap-4">
+                    <i v-if="isAIEditing" class="ra ra-cycle animate-spin"></i>
+                    <span>{{ isAIEditing ? 'Weaving Reality...' : 'Execute Command' }}</span>
+                  </button>
+               </div>
+            </div>
+
+            <!-- Helpful Hints -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-8 border-t border-white/5">
+              <div v-for="hint in [
+                { icon: 'ra-quill-ink', title: 'Content', desc: 'Add new scenes, NPCs, or items' },
+                { icon: 'ra-cycle', title: 'Refine', desc: 'Modify existing descriptions or connections' },
+                { icon: 'ra-crystal-ball', title: 'Logic', desc: 'Establish new rules or hidden secrets' }
+              ]" :key="hint.title" class="flex gap-4">
+                <i :class="['ra', hint.icon, 'text-emerald-500/50 mt-1']"></i>
+                <div>
+                  <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{{ hint.title }}</h4>
+                  <p class="text-[10px] text-slate-500 leading-relaxed">{{ hint.desc }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Advanced Tab -->
         <div v-else-if="activeTab === 'advanced'" class="space-y-10 animate-page-in">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -920,7 +1116,7 @@ const goBack = () => router.push({ name: 'portal' })
             </div>
 
             <!-- Content -->
-            <div class="p-4 bg-slate-900">
+            <div class="p-4 bg-slate-900 space-y-3">
               <div class="flex items-center justify-between mb-1">
                 <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
                 <span 
@@ -929,6 +1125,27 @@ const goBack = () => router.push({ name: 'portal' })
                   {{ hoveredEntity.type }}
                 </span>
               </div>
+              
+              <!-- Stats Display (Mode Aware) -->
+              <div v-if="form.rule_enforcement_mode !== 'chat' && hoveredEntity.stats" class="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                <template v-if="hoveredEntity.type === 'NPC'">
+                  <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-[9px] font-black text-red-500">
+                    <i class="ra ra-heart"></i> {{ hoveredEntity.stats.hp || 10 }}
+                  </div>
+                  <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-500">
+                    <i class="ra ra-muscle-up"></i> {{ hoveredEntity.stats.stamina || 10 }}
+                  </div>
+                  <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-500">
+                    <i class="ra ra-crystal-ball"></i> {{ hoveredEntity.stats.mana || 0 }}
+                  </div>
+                </template>
+                <template v-else-if="hoveredEntity.type === 'ITEM'">
+                  <div v-for="(val, stat) in hoveredEntity.stats" :key="stat" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-white/10 text-[9px] font-bold text-slate-300 uppercase">
+                    {{ stat.replace('_', ' ') }}: +{{ val }}
+                  </div>
+                </template>
+              </div>
+
               <p class="text-xs text-slate-400 leading-relaxed italic">{{ hoveredEntity.description }}</p>
             </div>
           </div>

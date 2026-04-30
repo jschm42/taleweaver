@@ -48,7 +48,7 @@ class DebugEngine:
         elif sub == "plot" or sub == "context":
             res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == adv_id))
             adv = res.scalars().first()
-            return f"--- DEBUG: PLOT CONTEXT ---\n{adv.context}"
+            return f"--- DEBUG: PLOT CONTEXT ---\n{adv.original_prompt}"
 
         elif sub == "map":
             # Just some stats
