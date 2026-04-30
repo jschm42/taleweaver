@@ -641,8 +641,8 @@ const goBack = () => router.push({ name: 'portal' })
                 </div>
               </div>
               <select v-model="form.rule_enforcement_mode" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all appearance-none">
-                <option value="rpg">RPG (Strict)</option>
-                <option value="story">Story (Balanced)</option>
+                <option value="rpg">RPG (EXPERIMENTAL)</option>
+                <option value="story">Story (Default)</option>
                 <option value="chat">Chat (Creative)</option>
               </select>
             </div>

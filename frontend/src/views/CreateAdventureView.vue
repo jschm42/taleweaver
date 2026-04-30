@@ -22,7 +22,7 @@ const form = ref({
   automatic_cover_generation: true,
   clock_enabled: true,
   pacing_minutes: 5,
-  rule_enforcement_mode: 'rpg' as RuleMode,
+  rule_enforcement_mode: 'story' as RuleMode,
   selected_style_id: '',
   selected_tone_id: '',
   min_scenes: 3,
@@ -226,7 +226,7 @@ onMounted(() => {
                   class="px-4 py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1"
                   :class="form.rule_enforcement_mode === mode ? 'border-aether-primary bg-aether-primary/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/10'"
                 >
-                  <span class="text-xs font-black uppercase tracking-widest">{{ mode }}</span>
+                  <span class="text-[10px] font-black uppercase tracking-widest">{{ mode === 'rpg' ? 'RPG (EXPERIMENTAL)' : mode }}</span>
                 </button>
               </div>
               <p class="text-[10px] text-white/30 uppercase tracking-widest text-center">{{ ruleModeHelp }}</p>
