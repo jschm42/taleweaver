@@ -140,6 +140,8 @@ class WorldEntitySchema(BaseModel):
     stat_modifier_wisdom: Optional[int] = None
     stat_modifier_charisma: Optional[int] = None
     stat_modifier_armor_class: Optional[int] = None
+    
+    inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in this NPC's or Object's inventory.")
 
 class QuestSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the quest, e.g., FIND_GOLDEN_KEY")
@@ -742,9 +744,19 @@ class WorldGenerator:
                 is_hidden=n.get("is_hidden", False),
             ))
             
-        # Persist Objects
+        # Persist Objects & Collect for NPC Inventories
         objects = manifest_dict.get("objects", [])
         total_objects = len(objects)
+        
+        # Build mapping of NPC inventories: npc_id -> list of item_ids
+        npc_inventories = {n["id"]: n.get("inventory") or [] for n in npcs}
+        all_npc_inventory_item_ids = set()
+        for inv in npc_inventories.values():
+            all_npc_inventory_item_ids.update(inv)
+            
+        # Mapping for full item data resolution
+        resolved_items = {}
+
         for object_index, o in enumerate(objects, start=1):
             if o["id"] in seen_entity_ids:
                 continue
@@ -775,9 +787,6 @@ class WorldGenerator:
                             ),
                             timeout=_image_generation_timeout_seconds(),
                         )
-                    except asyncio.TimeoutError as exc:
-                        logger.warning("Object image generation timed out for %s/%s: %s", template_id, o['id'], exc)
-                        image_url = None
                     except Exception as exc:
                         logger.warning("Object image generation failed for %s/%s: %s", template_id, o['id'], exc)
                         image_url = None
@@ -785,19 +794,17 @@ class WorldGenerator:
                         image_successes += 1
                 
                 if not image_url:
-                    # Items use RPG Awesome fallbacks in the frontend; set to None here.
                     image_url = None
 
             is_starting_inv = o["id"] in starting_inv_ids
             starting_slot = starting_equipped_ids.get(o["id"])
-            is_in_inv = is_starting_inv or (starting_slot is not None)
+            is_in_avatar_inv = is_starting_inv or (starting_slot is not None)
+            is_in_npc_inv = o["id"] in all_npc_inventory_item_ids
 
             from backend.engine.item_logic import get_item_slot
             guessed_slot = get_item_slot(o["name"], o.get("item_type", "PICKABLE"))
-            # Prioritize wearable_slots if defined by LLM, else use our guess
             item_slot = o.get("wearable_slots")[0] if (o.get("wearable_slots") and len(o.get("wearable_slots")) > 0) else guessed_slot
 
-            # Construct the Item Dict for Avatar storage
             item_data = {
                 "id": o["id"],
                 "name": o["name"],
@@ -812,8 +819,9 @@ class WorldGenerator:
                 "stat_modifier_charisma": o.get("stat_modifier_charisma"),
                 "stat_modifier_armor_class": o.get("stat_modifier_armor_class"),
             }
+            resolved_items[o["id"]] = item_data
 
-            if avatar and is_in_inv:
+            if avatar and is_in_avatar_inv:
                 if is_starting_inv:
                     new_inv = list(avatar.inventory)
                     new_inv.append(item_data)
@@ -830,13 +838,13 @@ class WorldGenerator:
                     entity_type="OBJECT",
                     name=o["name"],
                     description=o["description"],
-                    current_scene_id="INVENTORY" if is_in_inv else o["start_scene_id"],
+                    current_scene_id="INVENTORY" if (is_in_avatar_inv or is_in_npc_inv) else o["start_scene_id"],
                     spatial_position=o.get("spatial_position"),
                     image_url=image_url,
                     item_type=o.get("item_type", "PICKABLE"),
                     wearable_slots=o.get("wearable_slots"),
                     is_hidden=o.get("is_hidden", False),
-                    is_in_inventory=is_in_inv,
+                    is_in_inventory=is_in_avatar_inv or is_in_npc_inv,
                     is_portable=o.get("is_portable", o.get("item_type") != "STATIC"),
                     combination_ingredients=o.get("combination_ingredients"),
                     reveals_item_id=o.get("reveals_item_id"),
@@ -849,6 +857,22 @@ class WorldGenerator:
                     stat_modifier_armor_class=o.get("stat_modifier_armor_class"),
                 )
             )
+
+        # Final Pass: Update NPC Inventories with resolved item data
+        # We need to find the WorldEntity objects we just added to the session
+        for npc_id, item_ids in npc_inventories.items():
+            if not item_ids:
+                continue
+            
+            # Find the NPC in the session's new objects
+            for obj in db.new:
+                if isinstance(obj, WorldEntity) and obj.id == npc_id and obj.entity_type == "NPC":
+                    npc_inv = []
+                    for iid in item_ids:
+                        if iid in resolved_items:
+                            npc_inv.append(resolved_items[iid])
+                    obj.inventory = npc_inv
+                    break
 
         log_structured_event(
             "adventure.generation.apply_manifest.complete",

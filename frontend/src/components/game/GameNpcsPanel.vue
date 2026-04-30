@@ -12,6 +12,7 @@ interface Entity {
   max_stamina?: number
   mana?: number
   max_mana?: number
+  inventory?: any[]
 }
 
 const props = defineProps<{

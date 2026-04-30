@@ -46,6 +46,7 @@ class WorldEntityUpdate(BaseModel):
     mana: Optional[int] = None
     stamina: Optional[int] = None
     stat_modifier_armor_class: Optional[int] = None
+    inventory: Optional[List[InventoryItem]] = None
 
 class AttackRequest(BaseModel):
     """Requested by the GM to perform a combat action."""
@@ -99,6 +100,7 @@ class GameEvent(BaseModel):
     mana_change: int
     new_status_effects: List[str]
     new_inventory_items: List[InventoryItem]
+    removed_inventory_item_ids: Optional[List[str]] = None
     
     # Mapping & Navigation
     new_scene_id: Optional[str] = None # Unique ID for the new location (e.g. "FOREST_CLIFF")
@@ -218,6 +220,10 @@ class RuleEngine:
                 new_inv.append(item_dict)
                 if item.id:
                     current_ids.add(item.id)
+            avatar.inventory = new_inv
+            
+        if event.removed_inventory_item_ids:
+            new_inv = [item for item in list(avatar.inventory) if item.get("id") not in event.removed_inventory_item_ids]
             avatar.inventory = new_inv
             
         return event.narrative_description

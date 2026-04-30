@@ -129,7 +129,8 @@ const npcs = computed(() => {
       stamina: sheet.value.stamina,
       max_stamina: sheet.value.max_stamina,
       mana: sheet.value.mana,
-      max_mana: sheet.value.max_mana
+      max_mana: sheet.value.max_mana,
+      inventory: sheet.value.inventory
     }
     return [playerEntity, ...worldNpcs]
   }
@@ -662,6 +663,24 @@ onBeforeUnmount(() => {
                 <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="hoveredEntity.hp" :max="hoveredEntity.max_hp" color="crimson" size="sm" />
                 <StatBar v-if="hoveredEntity.stamina != null && sheet?.rule_enforcement_mode === 'rpg'" label="Stamina" :value="hoveredEntity.stamina" :max="hoveredEntity.max_stamina" color="emerald" size="sm" />
                 <StatBar v-if="hoveredEntity.mana != null && sheet?.rule_enforcement_mode === 'rpg'" label="Mana" :value="hoveredEntity.mana" :max="hoveredEntity.max_mana" color="sapphire" size="sm" />
+              </div>
+
+              <!-- NPC Inventory -->
+              <div v-if="hoveredEntity.entity_type === 'NPC' && hoveredEntity.inventory && hoveredEntity.inventory.length > 0" class="mt-3 pt-3 border-t border-slate-800">
+                <div class="flex items-center gap-1.5 mb-2">
+                  <i class="ra ra-treasure-chest text-[10px] text-slate-500"></i>
+                  <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Possessions</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <div 
+                    v-for="item in hoveredEntity.inventory" 
+                    :key="item.id"
+                    class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-[10px] text-slate-300 flex items-center gap-1.5"
+                  >
+                    <i :class="['ra text-[12px]', getItemIcon(item.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
+                    {{ item.name }}
+                  </div>
+                </div>
               </div>
 
               <!-- Item Stats -->

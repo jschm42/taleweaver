@@ -530,6 +530,26 @@ class GameTurnManager:
                     self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
+            if game_event.removed_inventory_item_ids:
+                for item_id in game_event.removed_inventory_item_ids:
+                    # Resolve item name from pre-turn inventory (where the item actually was)
+                    item_name = item_id
+                    
+                    # 1. Look in avatar's current inventory (which still has items before commit)
+                    match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item_id), None)
+                    if match:
+                        item_name = match.get("name", item_id)
+                    else:
+                        # 2. Fallback: search in template entities if it was a starting object
+                        target_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == item_id, WorldEntity.template_id == self.state.template_id))
+                        target_ent = target_res.scalars().first()
+                        if target_ent:
+                            item_name = target_ent.name
+                    
+                    msg_text = f"Removed {item_name} from your inventory."
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
+
         await self.db.commit()
         
         yield f"event: final\ndata: {json.dumps(jsonable_encoder({
@@ -592,6 +612,8 @@ class GameTurnManager:
                 if update.hp is not None: states[eid]["hp"] = update.hp
                 if update.mana is not None: states[eid]["mana"] = update.mana
                 if update.stamina is not None: states[eid]["stamina"] = update.stamina
+                if update.inventory is not None: 
+                    states[eid]["inventory"] = [i.model_dump(exclude_none=True) for i in update.inventory]
                 state_dirty = True
         
         if event.deleted_entities:
