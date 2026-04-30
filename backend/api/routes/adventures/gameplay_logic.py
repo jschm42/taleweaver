@@ -20,11 +20,11 @@ from backend.models.session_state import SessionState
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
 from backend.models.world_map import WorldMap
-from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException, SkillCheckResult
+from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException, SkillCheckResult, AttackResult, AttackRequest, WorldEntityUpdate
 from backend.engine.map_engine import MapEngine
 from backend.engine.memory_manager import MemoryManager
 from backend.engine.command_parser import CommandParser
-from backend.engine.skill_check import roll_skill_check
+from backend.engine.skill_check import roll_skill_check, roll_attack
 from backend.engine.media_engine import MediaEngine
 from backend.engine.debug_engine import DebugEngine
 from backend.core.llm_router import GameMasterLLM
@@ -352,6 +352,88 @@ class GameTurnManager:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': roll_msg})}\n\n"
                 
                 game_event.skill_check_results = results
+            
+            # 2.5 Resolve Attack Rolls
+            if game_event.requested_attacks:
+                attack_results = []
+                for req in game_event.requested_attacks:
+                    # Fetch target AC
+                    target_ac = 10
+                    ac_reason = "Base AC 10"
+                    target_id = req.target_id
+                    
+                    # Look in session state entities first
+                    entity_states = self.state.entity_states or {}
+                    target_state = entity_states.get(target_id, {})
+                    
+                    if "stat_modifier_armor_class" in target_state and target_state["stat_modifier_armor_class"] is not None:
+                        mod = target_state["stat_modifier_armor_class"]
+                        target_ac += mod
+                        ac_reason = f"Base 10 + {mod} Mod"
+                    else:
+                        # Fetch from template if not in state
+                        target_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == target_id, WorldEntity.session_id == self.game_id))
+                        target_ent = target_res.scalars().first()
+                        if target_ent and target_ent.stat_modifier_armor_class is not None:
+                            mod = target_ent.stat_modifier_armor_class
+                            target_ac += mod
+                            ac_reason = f"Base 10 + {mod} Mod"
+                    
+                    roll = roll_attack(self.avatar, req.hit_stat, target_ac, req.damage_dice)
+                    res = AttackResult(
+                        attacker_id=req.attacker_id,
+                        target_id=req.target_id,
+                        hit_roll=roll["hit_roll"],
+                        hit_modifier=roll["hit_modifier"],
+                        hit_total=roll["hit_total"],
+                        target_ac=target_ac,
+                        is_hit=roll["is_hit"],
+                        damage_dice_str=roll["damage_dice_str"],
+                        damage_rolls=roll["damage_rolls"],
+                        damage_dice_total=roll["damage_dice_total"],
+                        damage_bonus=roll["damage_bonus"],
+                        damage_total=roll["damage_total"],
+                        reason=req.reason
+                    )
+                    attack_results.append(res)
+                    
+                    # Output as system message
+                    hit_label = "HIT" if res.is_hit else "MISS"
+                    roll_msg = (
+                        f"⚔️ **ATTACK**: {res.reason}\n"
+                        f"To-Hit: {res.hit_roll} + {res.hit_modifier} = **{res.hit_total}** (vs AC {res.target_ac}, {ac_reason}) -> **{hit_label}**"
+                    )
+                    if res.is_hit:
+                        rolls_str = " + ".join(str(r) for r in res.damage_rolls)
+                        bonus_str = f" + {res.damage_bonus}" if res.damage_bonus > 0 else (f" - {abs(res.damage_bonus)}" if res.damage_bonus < 0 else "")
+                        roll_msg += f"\nDamage: {res.damage_dice_str} ({rolls_str}{bonus_str}) = **{res.damage_total}** HP dealt to {target_id}."
+                        
+                        # Apply damage to NPC HP in GameEvent for _apply_game_event to pick up
+                        if not game_event.updated_entities:
+                            game_event.updated_entities = []
+                        
+                        # Find current HP
+                        current_hp = 50 # Default
+                        if "hp" in target_state:
+                            current_hp = target_state["hp"]
+                        else:
+                            # Re-fetch entity to get baseline HP if needed
+                            target_res = await self.db.execute(select(WorldEntity).where(WorldEntity.id == target_id, WorldEntity.session_id == self.game_id))
+                            target_ent = target_res.scalars().first()
+                            if target_ent and target_ent.hp is not None:
+                                current_hp = target_ent.hp
+                        
+                        new_hp = max(0, current_hp - res.damage_total)
+                        from backend.engine.rule_engine import WorldEntityUpdate
+                        game_event.updated_entities.append(WorldEntityUpdate(
+                            entity_id=target_id,
+                            hp=new_hp
+                        ))
+                    
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=roll_msg))
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': roll_msg})}\n\n"
+                
+                game_event.attack_results = attack_results
 
             # 3. Apply Changes
             try:

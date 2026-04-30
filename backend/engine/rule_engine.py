@@ -42,8 +42,34 @@ class WorldEntityUpdate(BaseModel):
     spatial_position: Optional[str] = None
     is_hidden: Optional[bool] = None
     hp: Optional[int] = None
+    max_hp: Optional[int] = None
     mana: Optional[int] = None
     stamina: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
+
+class AttackRequest(BaseModel):
+    """Requested by the GM to perform a combat action."""
+    attacker_id: str # Usually "PLAYER" or NPC ID
+    target_id: str # NPC ID or "PLAYER"
+    hit_stat: str = "dexterity" # The stat used for the hit roll
+    damage_dice: str = "1d6" # e.g. "1d8+2"
+    reason: str
+
+class AttackResult(BaseModel):
+    """Detailed result of an attack."""
+    attacker_id: str
+    target_id: str
+    hit_roll: int
+    hit_modifier: int
+    hit_total: int
+    target_ac: int
+    is_hit: bool
+    damage_dice_str: str = "1d6"
+    damage_rolls: List[int] = []
+    damage_dice_total: int = 0
+    damage_bonus: int = 0
+    damage_total: int
+    reason: str
 
 class SkillCheckRequest(BaseModel):
     """Requested by the GM during the mechanics pass."""
@@ -88,9 +114,12 @@ class GameEvent(BaseModel):
     updated_entities: Optional[List[WorldEntityUpdate]] = None
     deleted_entities: Optional[List[str]] = None # List of IDs to remove
     
-    # Skill Checks
+    # Skill Checks & Combat
     requested_skill_checks: Optional[List[SkillCheckRequest]] = None
     skill_check_results: Optional[List[SkillCheckResult]] = None
+    
+    requested_attacks: Optional[List[AttackRequest]] = None
+    attack_results: Optional[List[AttackResult]] = None
     
     # Time Management
     extra_time_minutes: int = 0 # Extra time this action takes (added to turn base)
