@@ -4,6 +4,7 @@ import uuid
 import re
 import time
 from copy import deepcopy
+from backend.engine.quest_manager import QuestManager
 from datetime import datetime
 from typing import Optional, List, Dict, Any, AsyncGenerator
 
@@ -310,7 +311,11 @@ class GameTurnManager:
                 yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
                 return
             
-            mechanics_prompt = system_prompt + "\n\n" + prompts.GM_MECHANICS_SUFFIX.format(
+            mechanics_suffix = prompts.GM_MECHANICS_SUFFIX
+            if self.adventure.rule_enforcement_mode == "story":
+                mechanics_suffix = prompts.GM_STORY_MECHANICS_SUFFIX
+            
+            mechanics_prompt = system_prompt + "\n\n" + mechanics_suffix.format(
                 quests_json=json.dumps(self.state.quests or [], indent=2),
                 awards_json=json.dumps(self.adventure.awards or [], indent=2)
             )
@@ -518,10 +523,30 @@ class GameTurnManager:
                         q["status"] = "completed"
                         modified = True
             
-            # RPG Completion Logic: Check if all main quests are finished
+            if modified:
+                self.state.quests = new_quests
+                state_dirty = True
+
+        # Deterministic Quest Sync (Post-LLM check)
+        det_completed = QuestManager.evaluate_quests(self.avatar, self.state)
+        if det_completed:
+            new_quests = deepcopy(self.state.quests or [])
+            modified = False
+            for qid in det_completed:
+                for q in new_quests:
+                    if q.get("id") == qid and q.get("status") != "completed":
+                        q["status"] = "completed"
+                        logger.info(f"[Turn {self.game_id}] Deterministic Quest Completion: {qid}")
+                        modified = True
+            if modified:
+                self.state.quests = new_quests
+                state_dirty = True
+
+        # RPG Completion Logic: Check if all main quests are finished
+        if state_dirty:
             all_main_done = True
             main_quest_exists = False
-            for q in new_quests:
+            for q in (self.state.quests or []):
                 if q.get("is_main"):
                     main_quest_exists = True
                     if q.get("status") != "completed":
@@ -532,10 +557,6 @@ class GameTurnManager:
                 event.game_completed = True
                 if not event.status_note:
                     event.status_note = "Congratulations! You have completed all main objectives."
-
-            if modified:
-                self.state.quests = new_quests
-                state_dirty = True
 
         # Process Explicit Map Updates (Exits)
         if event.updated_exits:

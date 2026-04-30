@@ -16,6 +16,7 @@ const props = defineProps<{
   debugLogs: { timestamp: string, content: string }[]
   gameOverReason?: string | null
   exp: number
+  mode?: 'rpg' | 'story' | 'chat'
   inventoryGlow?: boolean
   mapGlow?: boolean
   questGlow?: boolean
@@ -80,7 +81,7 @@ defineExpose({ appendText })
       @take-direct="emit('takeDirect', $event)"
     />
 
-    <div class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">
+    <div v-if="props.mode !== 'chat'" class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">
       <span class="text-sm font-black text-slate-300/60 uppercase tracking-[0.2em] tabular-nums">
         {{ props.exp }} XP
       </span>

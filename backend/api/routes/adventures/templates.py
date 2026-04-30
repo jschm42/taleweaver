@@ -108,7 +108,7 @@ async def create_adventure(
         owner_id=current_user.id,
         title=payload.title,
         original_prompt=payload.original_prompt,
-        strict_rules=payload.strict_rules,
+        strict_rules=payload.strict_rules if payload.strict_rules is not None else (payload.rule_enforcement_mode != "chat"),
         rule_enforcement_mode=payload.rule_enforcement_mode or "rpg",
         time_per_turn=payload.time_per_turn,
         pacing_minutes=pacing_minutes,

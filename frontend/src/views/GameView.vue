@@ -519,6 +519,7 @@ onBeforeUnmount(() => {
         <GameNpcsPanel
           :npcs="npcs"
           :show-image="showImage"
+          :mode="sheet?.rule_enforcement_mode"
           @hover="(entity, event) => handleHover(entity, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
@@ -550,6 +551,7 @@ onBeforeUnmount(() => {
         :debug-logs="debugLogs"
         :game-over-reason="gameOverReason"
         :exp="sheet?.exp || 0"
+        :mode="sheet?.rule_enforcement_mode"
         :inventory-glow="inventoryGlow"
         :map-glow="mapGlow"
         :quest-glow="questGlow"
@@ -656,38 +658,40 @@ onBeforeUnmount(() => {
               <p class="text-xs text-slate-400 leading-relaxed italic mb-3">{{ hoveredEntity.description }}</p>
 
               <!-- NPC/Player Bars -->
-              <div v-if="hoveredEntity.entity_type === 'NPC'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
+              <div v-if="hoveredEntity.entity_type === 'NPC' && sheet?.rule_enforcement_mode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
                 <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="hoveredEntity.hp" :max="hoveredEntity.max_hp" color="crimson" size="sm" />
-                <StatBar v-if="hoveredEntity.stamina != null" label="Stamina" :value="hoveredEntity.stamina" :max="hoveredEntity.max_stamina" color="emerald" size="sm" />
-                <StatBar v-if="hoveredEntity.mana != null" label="Mana" :value="hoveredEntity.mana" :max="hoveredEntity.max_mana" color="sapphire" size="sm" />
+                <StatBar v-if="hoveredEntity.stamina != null && sheet?.rule_enforcement_mode === 'rpg'" label="Stamina" :value="hoveredEntity.stamina" :max="hoveredEntity.max_stamina" color="emerald" size="sm" />
+                <StatBar v-if="hoveredEntity.mana != null && sheet?.rule_enforcement_mode === 'rpg'" label="Mana" :value="hoveredEntity.mana" :max="hoveredEntity.max_mana" color="sapphire" size="sm" />
               </div>
 
               <!-- Item Stats -->
-              <div v-if="hoveredEntity.entity_type === 'OBJECT' || hoveredEntity.entity_type === 'ITEM'" class="mt-3 pt-3 border-t border-slate-800">
+              <div v-if="(hoveredEntity.entity_type === 'OBJECT' || hoveredEntity.entity_type === 'ITEM') && sheet?.rule_enforcement_mode !== 'chat'" class="mt-3 pt-3 border-t border-slate-800">
                 <div class="grid grid-cols-2 gap-2 text-[10px] uppercase font-bold tracking-wider">
                   <!-- Preferred Slot -->
                   <div v-if="hoveredEntity.slot" class="col-span-2 text-slate-500 lowercase italic font-medium">
                     {{ hoveredEntity.slot.replace('_', ' ') }}
                   </div>
 
-                  <div v-if="hoveredEntity.stat_modifier_strength != null" class="text-red-400 flex justify-between">
-                    <span>STR</span> <span>+{{ hoveredEntity.stat_modifier_strength }}</span>
-                  </div>
-                  <div v-if="hoveredEntity.stat_modifier_dexterity != null" class="text-emerald-400 flex justify-between">
-                    <span>DEX</span> <span>+{{ hoveredEntity.stat_modifier_dexterity }}</span>
-                  </div>
-                  <div v-if="hoveredEntity.stat_modifier_intelligence != null" class="text-blue-400 flex justify-between">
-                    <span>INT</span> <span>+{{ hoveredEntity.stat_modifier_intelligence }}</span>
-                  </div>
-                  <div v-if="hoveredEntity.stat_modifier_wisdom != null" class="text-purple-400 flex justify-between">
-                    <span>WIS</span> <span>+{{ hoveredEntity.stat_modifier_wisdom }}</span>
-                  </div>
-                  <div v-if="hoveredEntity.stat_modifier_charisma != null" class="text-pink-400 flex justify-between">
-                    <span>CHA</span> <span>+{{ hoveredEntity.stat_modifier_charisma }}</span>
-                  </div>
-                  <div v-if="hoveredEntity.stat_modifier_armor_class != null" class="text-amber-400 flex justify-between">
-                    <span>AC</span> <span>+{{ hoveredEntity.stat_modifier_armor_class }}</span>
-                  </div>
+                  <template v-if="sheet?.rule_enforcement_mode === 'rpg' || sheet?.rule_enforcement_mode === 'story'">
+                    <div v-if="hoveredEntity.stat_modifier_strength != null" class="text-red-400 flex justify-between">
+                      <span>STR</span> <span>+{{ hoveredEntity.stat_modifier_strength }}</span>
+                    </div>
+                    <div v-if="hoveredEntity.stat_modifier_dexterity != null" class="text-emerald-400 flex justify-between">
+                      <span>DEX</span> <span>+{{ hoveredEntity.stat_modifier_dexterity }}</span>
+                    </div>
+                    <div v-if="hoveredEntity.stat_modifier_intelligence != null" class="text-blue-400 flex justify-between">
+                      <span>INT</span> <span>+{{ hoveredEntity.stat_modifier_intelligence }}</span>
+                    </div>
+                    <div v-if="hoveredEntity.stat_modifier_wisdom != null" class="text-purple-400 flex justify-between">
+                      <span>WIS</span> <span>+{{ hoveredEntity.stat_modifier_wisdom }}</span>
+                    </div>
+                    <div v-if="hoveredEntity.stat_modifier_charisma != null" class="text-pink-400 flex justify-between">
+                      <span>CHA</span> <span>+{{ hoveredEntity.stat_modifier_charisma }}</span>
+                    </div>
+                    <div v-if="hoveredEntity.stat_modifier_armor_class != null" class="text-amber-400 flex justify-between">
+                      <span>AC</span> <span>+{{ hoveredEntity.stat_modifier_armor_class }}</span>
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>

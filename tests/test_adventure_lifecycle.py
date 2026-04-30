@@ -24,13 +24,12 @@ async def _seed_adventure(db: AsyncSession, user_id: str) -> str:
         owner_id=user_id,
         title="Lifecycle Test",
         teaser="A test for export and import.",
-        context="Full context here.",
+        original_prompt="Full context here.",
         plot="Test plot",
         rules="Test rules",
         walkthrough="Test walkthrough",
         completed_condition="Win",
         gameover_condition="Lose",
-        original_prompt="The original prompt",
         starting_timestamp=480,
         image_url="/data/adventures/test-adv-123/cover.jpg"
     )

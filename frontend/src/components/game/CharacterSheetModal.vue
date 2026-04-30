@@ -212,13 +212,13 @@ const onClose = () => {
                   <div class="flex flex-col lg:flex-row gap-8 lg:items-start">
                     <!-- Status Bars -->
                     <div class="flex-grow space-y-4">
-                      <StatBar label="Health" :value="sheet.hp" :max="sheet.max_hp" color="crimson" />
-                      <StatBar label="Stamina" :value="sheet.stamina" :max="sheet.max_stamina" color="emerald" />
-                      <StatBar label="Mana" :value="sheet.mana" :max="sheet.max_mana" color="sapphire" />
+                      <StatBar v-if="sheet.rule_enforcement_mode !== 'chat'" label="Health" :value="sheet.hp" :max="sheet.max_hp" color="crimson" />
+                      <StatBar v-if="sheet.rule_enforcement_mode === 'rpg'" label="Stamina" :value="sheet.stamina" :max="sheet.max_stamina" color="emerald" />
+                      <StatBar v-if="sheet.rule_enforcement_mode === 'rpg'" label="Mana" :value="sheet.mana" :max="sheet.max_mana" color="sapphire" />
                     </div>
                     
                     <!-- Core Attributes (Vertical List) -->
-                    <div class="grid grid-cols-1 gap-y-1 shrink-0 py-0 border-l border-slate-800/30 pl-8">
+                    <div v-if="sheet.rule_enforcement_mode === 'rpg'" class="grid grid-cols-1 gap-y-1 shrink-0 py-0 border-l border-slate-800/30 pl-8">
                       <div v-for="attr in coreAttributes" :key="attr.label" class="flex items-center justify-between gap-6">
                         <span class="text-sm font-black text-slate-500 uppercase tracking-widest">{{ attr.label }}</span>
                         <span class="text-sm font-black text-white font-mono">{{ attr.value !== undefined && attr.value !== null ? attr.value : 'N/A' }}</span>

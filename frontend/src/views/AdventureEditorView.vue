@@ -1132,12 +1132,14 @@ const goBack = () => router.push({ name: 'portal' })
                   <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-[9px] font-black text-red-500">
                     <i class="ra ra-heart"></i> {{ hoveredEntity.stats.hp || 10 }}
                   </div>
-                  <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-500">
-                    <i class="ra ra-muscle-up"></i> {{ hoveredEntity.stats.stamina || 10 }}
-                  </div>
-                  <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-500">
-                    <i class="ra ra-crystal-ball"></i> {{ hoveredEntity.stats.mana || 0 }}
-                  </div>
+                  <template v-if="form.rule_enforcement_mode === 'rpg'">
+                    <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-500">
+                      <i class="ra ra-muscle-up"></i> {{ hoveredEntity.stats.stamina || 10 }}
+                    </div>
+                    <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-500">
+                      <i class="ra ra-crystal-ball"></i> {{ hoveredEntity.stats.mana || 0 }}
+                    </div>
+                  </template>
                 </template>
                 <template v-else-if="hoveredEntity.type === 'ITEM'">
                   <div v-for="(val, stat) in hoveredEntity.stats" :key="stat" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-white/10 text-[9px] font-bold text-slate-300 uppercase">

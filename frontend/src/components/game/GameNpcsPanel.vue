@@ -17,6 +17,7 @@ interface Entity {
 const props = defineProps<{
   npcs: Entity[]
   showImage: (path?: string | null) => boolean
+  mode?: 'rpg' | 'story' | 'chat'
 }>()
 
 const emit = defineEmits<{
@@ -58,10 +59,10 @@ const emit = defineEmits<{
         <span class="text-[10px] font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
         
         <!-- Very thin bars -->
-        <div v-if="ent.hp != null || ent.stamina != null || ent.mana != null" class="w-full mt-1 px-1 flex flex-col gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+        <div v-if="mode !== 'chat' && (ent.hp != null || ent.stamina != null || ent.mana != null)" class="w-full mt-1 px-1 flex flex-col gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
           <StatBar v-if="ent.hp != null" :value="ent.hp" :max="ent.max_hp" color="crimson" size="xs" />
-          <StatBar v-if="ent.stamina != null" :value="ent.stamina" :max="ent.max_stamina" color="emerald" size="xs" />
-          <StatBar v-if="ent.mana != null" :value="ent.mana" :max="ent.max_mana" color="sapphire" size="xs" />
+          <StatBar v-if="ent.stamina != null && mode === 'rpg'" :value="ent.stamina" :max="ent.max_stamina" color="emerald" size="xs" />
+          <StatBar v-if="ent.mana != null && mode === 'rpg'" :value="ent.mana" :max="ent.max_mana" color="sapphire" size="xs" />
         </div>
       </div>
     </div>

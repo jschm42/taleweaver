@@ -79,30 +79,43 @@ async def start_session_for_template(
     if adventure.owner_id != current_user.id and not adventure.is_ready:
         raise HTTPException(status_code=403, detail="You do not have access to this adventure yet.")
 
-    avatar_res = await db.execute(select(Avatar).where((Avatar.template_id == template_id) & (Avatar.user_id == current_user.id)))
-    avatar = avatar_res.scalars().first()
-    if not avatar:
-        prot = (adventure.original_manifest or {}).get("protagonist", {})
-        avatar = Avatar(
-            user_id=current_user.id, template_id=template_id, name=prot.get("name", "You"),
-            role=prot.get("role"), description=prot.get("description"), profile_image=prot.get("profile_image"),
-            hp=prot.get("hp", 200), stamina=prot.get("stamina", 200), mana=prot.get("mana", 200),
-            stats=prot.get("stats", {}), inventory=prot.get("inventory", []),
-            equipment=prot.get("equipment", {"Head": None, "Chest": None, "Arms": None, "Legs": None, "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None}),
-            status_effects=prot.get("status_effects", []),
-        )
-        db.add(avatar)
-        await db.flush()
+    # 1. Create a fresh Avatar for this session
+    # We always create a new Avatar to ensure each session is independent and starts fresh
+    prot = (adventure.original_manifest or {}).get("protagonist", {})
+    avatar = Avatar(
+        user_id=current_user.id, 
+        template_id=template_id, 
+        name=prot.get("name", "You"),
+        role=prot.get("role"), 
+        description=prot.get("description"), 
+        profile_image=prot.get("profile_image"),
+        hp=prot.get("hp", 200), 
+        max_hp=prot.get("hp", 200), 
+        stamina=prot.get("stamina", 200), 
+        max_stamina=prot.get("stamina", 200), 
+        mana=prot.get("mana", 200), 
+        max_mana=prot.get("mana", 200),
+        stats=prot.get("stats", {}), 
+        inventory=deepcopy(prot.get("inventory", [])),
+        equipment=deepcopy(prot.get("equipment", {
+            "Head": None, "Chest": None, "Arms": None, "Legs": None, 
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, 
+            "Amulet": None, "Main_Hand": None, "Off_Hand": None
+        })),
+        status_effects=deepcopy(prot.get("status_effects", [])),
+    )
+    db.add(avatar)
+    await db.flush()
 
     scene_res = await db.execute(select(WorldScene.id).where(WorldScene.template_id == template_id).order_by(WorldScene.id.asc()).limit(1))
     first_scene_id = scene_res.scalar_one_or_none() or "START"
 
     new_session = GameSession(
-        user_id=current_user.id, 
-        avatar_id=avatar.id, 
-        template_id=template_id, 
-        adventure_title=adventure.title, 
-        adventure_image_url=adventure.image_url, 
+        user_id=current_user.id,
+        avatar_id=avatar.id,
+        template_id=template_id,
+        adventure_title=adventure.title,
+        adventure_image_url=adventure.image_url,
         status="active"
     )
     db.add(new_session)
@@ -173,6 +186,14 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
     game_session = result.scalars().first()
     if not game_session:
         raise HTTPException(status_code=404, detail="Session not found.")
+    avatar_id = game_session.avatar_id
     await db.delete(game_session)
+    
+    # Also delete the associated avatar as it was session-specific
+    avatar_res = await db.execute(select(Avatar).where(Avatar.id == avatar_id))
+    avatar = avatar_res.scalars().first()
+    if avatar:
+        await db.delete(avatar)
+        
     await db.commit()
     return {"status": "deleted", "game_id": game_id}
