@@ -210,9 +210,14 @@ class RuleEngine:
         if event.new_inventory_items:
             # Reassign for SQLAlchemy state tracking; serialize Pydantic models to dicts
             new_inv = list(avatar.inventory)
+            current_ids = {item.get("id") for item in new_inv if item.get("id")}
             for item in event.new_inventory_items:
+                if item.id and item.id in current_ids:
+                    continue # Skip duplicates
                 item_dict = item.model_dump(exclude_none=True)
                 new_inv.append(item_dict)
+                if item.id:
+                    current_ids.add(item.id)
             avatar.inventory = new_inv
             
         return event.narrative_description

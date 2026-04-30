@@ -436,6 +436,7 @@ class GameTurnManager:
                 game_event.attack_results = attack_results
 
             # 3. Apply Changes
+            pre_inventory_ids = {item.get("id") for item in (self.avatar.inventory or []) if item.get("id")}
             try:
                 await self._apply_game_event(game_event)
                 if game_event.game_completed:
@@ -521,6 +522,10 @@ class GameTurnManager:
             # 3. Items
             if game_event.new_inventory_items:
                 for item in game_event.new_inventory_items:
+                    # Only announce if it's a new item (not already in pre-inventory)
+                    if item.id and 'pre_inventory_ids' in locals() and item.id in pre_inventory_ids:
+                        continue
+                        
                     msg_text = f"Added {item.name} to your inventory."
                     self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
