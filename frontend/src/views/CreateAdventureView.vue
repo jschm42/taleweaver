@@ -6,7 +6,7 @@ import { configState } from '@/store/config'
 import type { CatalogTile } from '@/types'
 import { 
   Sparkles, Palette, Flame, Check, Image, 
-  ImageIcon, Users, Sword, MapPin, Trophy 
+  ImageIcon, Users, Sword, MapPin, Trophy, AlertTriangle
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -230,6 +230,17 @@ onMounted(() => {
                 </button>
               </div>
               <p class="text-[10px] text-white/30 uppercase tracking-widest text-center">{{ ruleModeHelp }}</p>
+              
+              <!-- Experimental Warning -->
+              <div v-if="form.rule_enforcement_mode === 'rpg'" class="mt-4 p-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-4">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
+                  <AlertTriangle class="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 class="text-amber-500 font-black uppercase tracking-widest text-[10px] mb-1">Experimental System</h4>
+                  <p class="text-slate-400 text-[10px] leading-relaxed">The RPG mode is currently under heavy development. Deterministic mechanics like combat, attribute checks, and automatic world updates may behave unexpectedly. Use with caution!</p>
+                </div>
+              </div>
             </div>
 
             <!-- World Pacing & Time -->

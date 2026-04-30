@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState } from '@/store/auth'
-import { ArrowLeft, Save, Trash2, Wand2, Sparkles, Image as ImageIcon, Plus, X } from 'lucide-vue-next'
+import { ArrowLeft, Save, Trash2, Wand2, Sparkles, Image as ImageIcon, Plus, X, AlertTriangle } from 'lucide-vue-next'
 import bronzeTrophy from '@/assets/svg/bronze-award-trophy.svg'
 import silverTrophy from '@/assets/svg/silver-award-trophy.svg'
 import goldTrophy from '@/assets/svg/gold-award-trophy.svg'
@@ -645,6 +645,12 @@ const goBack = () => router.push({ name: 'portal' })
                 <option value="story">Story (Default)</option>
                 <option value="chat">Chat (Creative)</option>
               </select>
+              <div v-if="form.rule_enforcement_mode === 'rpg'" class="mt-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
+                <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <p class="text-slate-400 text-[10px] leading-relaxed">
+                  <span class="text-amber-500 font-black">EXPERIMENTAL:</span> This mode is under development. Mechanics like combat and attribute checks may behave unexpectedly.
+                </p>
+              </div>
             </div>
             <div class="space-y-2">
               <div class="flex justify-between items-center">
