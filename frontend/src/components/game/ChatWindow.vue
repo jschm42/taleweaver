@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed } from 'vue'
+import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
@@ -238,6 +239,8 @@ function displayMessageContent(msg: ChatMessage): string {
             <span class="text-sm font-black">A</span>
           </button>
         </div>
+        
+        <BableFishSelector />
 
         <div 
           v-if="status !== 'connected'"

@@ -258,7 +258,7 @@ Default instruction for standard interactions to keep the game moving.
 """
 
 GM_NARRATION_MANDATORY_FORMATTING = (
-    "Do not mention numbers, IDs, or system terms. Use English. 1-3 paragraphs based on the context above.\n\n"
+    "Do not mention numbers, IDs, or system terms. 1-3 paragraphs based on the context above.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     "Use the format: **Character Name:** \"Dialogue\". "
     "Separate narrative prose from speech with a blank line."

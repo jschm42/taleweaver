@@ -4,7 +4,7 @@
  * Replaces the legacy WebSocket implementation with a robust REST architecture.
  * Manages chat history fetching, message posting, and state synchronization.
  */
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
 import type { ChatMessage, CharacterSheet } from '@/types'
@@ -26,6 +26,7 @@ export interface UseGameSocket {
   quests: Ref<any[]>
   awards: Ref<any[]>
   isCompleted: Ref<boolean>
+  language: Ref<string>
   statusText: Ref<string>
   debugLogs: Ref<{ timestamp: string, content: string }[]>
   inventoryGlow: Ref<boolean>
@@ -54,6 +55,7 @@ export function useGameSocket(): UseGameSocket {
   const quests = ref<any[]>([])
   const awards = ref<any[]>([])
   const isCompleted = ref(false)
+  const language = ref<string>(localStorage.getItem('tw_bable_fish_lang') || '')
   const statusText = ref('')
   const debugLogs = ref<{ timestamp: string, content: string }[]>([])
   const inventoryGlow = ref(false)
@@ -61,6 +63,10 @@ export function useGameSocket(): UseGameSocket {
   const questGlow = ref(false)
   let currentGameId = ''
   let syncTimer: number | null = null
+
+  watch(language, (newLang) => {
+    localStorage.setItem('tw_bable_fish_lang', newLang)
+  })
 
   function _pushMessage(role: ChatMessage['role'], content: string, itemIds?: string[], is_debug?: boolean): void {
     messages.value.push({ role, content, timestamp: new Date(), itemIds, is_debug } as any)
@@ -204,7 +210,8 @@ export function useGameSocket(): UseGameSocket {
         headers: authHeaders(true),
         body: JSON.stringify({ 
           content,
-          auto_visualize: autoVisualize.value
+          auto_visualize: autoVisualize.value,
+          language: language.value || undefined
         })
       })
 
@@ -314,6 +321,7 @@ export function useGameSocket(): UseGameSocket {
     quests,
     awards,
     isCompleted,
+    language,
     statusText,
     debugLogs,
     inventoryGlow,

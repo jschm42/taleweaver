@@ -90,7 +90,7 @@ class GameTurnManager:
         logger.debug(f"[Turn {self.game_id}] Initialization (DB) took {duration:.4f}s")
         return True
 
-    async def process_turn(self, message: str, auto_visualize: bool = False) -> AsyncGenerator[str, None]:
+    async def process_turn(self, message: str, auto_visualize: bool = False, language: Optional[str] = None) -> AsyncGenerator[str, None]:
         if not await self.initialize():
             yield f"event: error\ndata: {json.dumps({'detail': 'Game session not found.'})}\n\n"
             return
@@ -143,7 +143,11 @@ class GameTurnManager:
             await self.db.flush()
 
         # 3. LLM Processing (Pass 1 & Pass 2)
-        async for chunk in self._run_llm_cycle(user_msg, auto_visualize):
+        async def _run_llm_cycle_with_lang(msg, av):
+            async for c in self._run_llm_cycle(msg, av, language=language):
+                yield c
+        
+        async for chunk in _run_llm_cycle_with_lang(user_msg, auto_visualize):
             yield chunk
             
         turn_end = time.perf_counter()
@@ -221,7 +225,7 @@ class GameTurnManager:
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
         self.stop_requested = True # Stop after direct slash response
 
-    async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool) -> AsyncGenerator[str, None]:
+    async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: Optional[str] = None) -> AsyncGenerator[str, None]:
         # Load Context and LLM Settings
         db_start = time.perf_counter()
         hist_res = await self.db.execute(select(ChatMessage).where(ChatMessage.session_id == self.state.session_id).order_by(ChatMessage.created_at.asc()))
@@ -275,6 +279,14 @@ class GameTurnManager:
             time_system=self.state.time_system or self.adventure.time_system or "calendar",
             time_config=self.state.time_config or self.adventure.time_config
         )[0]["content"]
+
+        # Bable Fish / Translation logic
+        if language:
+            system_prompt += (
+                f"\n\nIMPORTANT (Bable Fish Active): You MUST respond in {language.upper()}. "
+                f"Use {language} for all narrative descriptions and NPC dialogue. "
+                f"Ensure the tone matches the requested language perfectly."
+            )
 
         # Override for technical state evaluation (e.g. closing character sheet)
         if user_msg == "[EVALUATE STATE]":

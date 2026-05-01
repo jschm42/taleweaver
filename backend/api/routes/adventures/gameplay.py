@@ -98,6 +98,6 @@ async def post_chat_message(
     """Processes a user message and returns a streaming response."""
     manager = GameTurnManager(db, game_id, current_user)
     return StreamingResponse(
-        manager.process_turn(payload.content, auto_visualize=payload.auto_visualize), 
+        manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
         media_type="text/event-stream"
     )

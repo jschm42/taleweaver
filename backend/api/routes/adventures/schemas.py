@@ -110,6 +110,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
 class ChatRequest(BaseModel):
     content: str
     auto_visualize: bool = False
+    language: Optional[str] = None
 
 class ChatResponse(BaseModel):
     messages: List[Dict[str, Any]]
