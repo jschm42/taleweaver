@@ -500,3 +500,61 @@ async def test_combat_special_event_damage_updates_player_hp_snapshot(setup_test
         combat = (state.entity_states or {}).get("__combat__") or {}
         assert avatar.hp == 80
         assert (combat.get("player") or {}).get("hp") == 80
+
+
+async def test_combat_enemy_without_dexterity_uses_baseline_hit_modifier(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, npc = await _seed_combat_npc(db)
+        npc.stat_modifier_dexterity = None
+        npc.stat_modifier_armor_class = 0
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Ensure player starts, then force player miss and enemy hit with deterministic rolls.
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+
+        def fake_roll_attack(attacker, _hit_stat, target_ac, _damage_dice):
+            is_enemy = getattr(attacker, "name", "") == "Giant Rat"
+            if is_enemy:
+                return {
+                    "hit_roll": 18,
+                    "hit_modifier": int(getattr(attacker, "dexterity", 0)),
+                    "hit_total": 18 + int(getattr(attacker, "dexterity", 0)),
+                    "target_ac": target_ac,
+                    "is_hit": True,
+                    "damage_total": 7,
+                    "damage_dice_total": 7,
+                    "damage_rolls": [7],
+                    "damage_bonus": 0,
+                    "damage_dice_str": "1d6",
+                }
+            return {
+                "hit_roll": 2,
+                "hit_modifier": 0,
+                "hit_total": 2,
+                "target_ac": target_ac,
+                "is_hit": False,
+                "damage_total": 0,
+                "damage_dice_total": 0,
+                "damage_rolls": [],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d8",
+            }
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.roll_attack", fake_roll_attack)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(avatar)
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        enemy_logs = [entry for entry in (combat.get("log") or []) if entry.get("type") == "enemy_action"]
+        assert enemy_logs
+        assert " + 10 = " in enemy_logs[-1].get("text", "")
+        assert avatar.hp == 93

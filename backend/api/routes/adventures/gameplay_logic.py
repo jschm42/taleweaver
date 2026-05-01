@@ -366,7 +366,8 @@ class GameTurnManager:
 
         enemy_hp = self._entity_stat(target, "hp", 50)
         enemy_max_hp = self._entity_stat(target, "max_hp", enemy_hp if enemy_hp > 0 else 50)
-        enemy_dex = self._entity_stat(target, "stat_modifier_dexterity", 0)
+        # If no NPC dexterity value is provided, use a neutral baseline so enemies can act reliably.
+        enemy_dex = self._entity_stat(target, "stat_modifier_dexterity", 10)
         enemy_ac_mod = self._entity_stat(target, "stat_modifier_armor_class", 0)
         player_stats = calculate_total_stats(self.avatar)
         player_dex = int(player_stats.get("dexterity", self.avatar.dexterity))
@@ -550,7 +551,7 @@ class GameTurnManager:
             name=enemy_ent.name,
             hp=enemy_hp,
             strength=self._entity_stat(enemy_ent, "stat_modifier_strength", 0),
-            dexterity=self._entity_stat(enemy_ent, "stat_modifier_dexterity", 0),
+            dexterity=self._entity_stat(enemy_ent, "stat_modifier_dexterity", 10),
             intelligence=self._entity_stat(enemy_ent, "stat_modifier_intelligence", 0),
             wisdom=self._entity_stat(enemy_ent, "stat_modifier_wisdom", 0),
             charisma=self._entity_stat(enemy_ent, "stat_modifier_charisma", 0),
