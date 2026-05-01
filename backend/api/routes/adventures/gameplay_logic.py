@@ -288,6 +288,8 @@ class GameTurnManager:
                 f"TARGET LANGUAGE: {language.upper()}\n"
                 f"INSTRUCTION: You MUST translate ALL your output (narration, dialogue, descriptions) into {language}. "
                 f"Do NOT respond in English or the original world language if it differs. "
+                f"Note: The chat history may contain messages in various languages due to previous Bable Fish settings. "
+                f"IGNORE those languages and strictly use {language} for the current turn. "
                 f"The player has activated their Bable Fish, so everything they hear/see must be in {language}."
                 f"\n----------------------------------------\n"
             )
