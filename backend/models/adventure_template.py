@@ -13,6 +13,7 @@ class AdventureTemplate(Base, TimestampMixin):
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     title = Column(String(50), nullable=False)
     teaser = Column(String(300), nullable=True)
+    language = Column(String(20), nullable=True)
     
     image_url = Column(String(255), nullable=True)
     # context is now replaced by original_prompt below

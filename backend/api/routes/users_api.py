@@ -25,6 +25,7 @@ class UserUpdateRequest(BaseModel):
     role: Optional[str] = None
     password: Optional[str] = None
     bio: Optional[str] = None
+    default_language: Optional[str] = None
 
 class BioUpdateRequest(BaseModel):
     bio: str
@@ -75,6 +76,8 @@ async def update_user(user_id: str, request: UserUpdateRequest, admin: User = De
         user.hashed_password = get_password_hash(request.password)
     if request.bio is not None:
         user.bio = request.bio
+    if request.default_language is not None:
+        user.default_language = request.default_language
         
     await db.commit()
     await db.refresh(user)

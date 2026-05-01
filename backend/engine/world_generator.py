@@ -214,6 +214,7 @@ class WorldManifesto(BaseModel):
     """
     protagonist: ProtagonistSchema
     teaser: str = Field(..., description="A short, atmospheric teaser text for the adventure, max 100 characters.")
+    language: str = Field("English", description="The target language for all generated content.")
     plot: str = Field(..., description="The main plotline, goals, and narrative arc of the adventure.")
     rules: str = Field(..., description="Special rules or mechanics specific to this adventure world.")
     walkthrough: str = Field(..., description="A secret GM walkthrough/solution for the adventure.")
@@ -252,7 +253,8 @@ class WorldGenerator:
         award_generation_enabled: bool = True,
         min_awards: int = 3,
         max_awards: int = 5,
-        selected_image_styles: Optional[List[str]] = None
+        selected_image_styles: Optional[List[str]] = None,
+        language: Optional[str] = None
     ) -> None:
         """
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
@@ -292,6 +294,8 @@ class WorldGenerator:
         )
         
         system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
+        if language:
+            system_prompt += f"\n\nCRITICAL: You MUST generate all content (names, descriptions, teaser, plot, walkthrough, quests) in {language}. Do not use any other language."
         
         award_requirement = ""
         if award_generation_enabled:
@@ -360,6 +364,8 @@ class WorldGenerator:
             # Keep imported/source manifest intact for reproducible resets.
             adventure.teaser = manifesto.teaser
             adventure.original_prompt = original_prompt
+            if language:
+                adventure.language = language
             if not adventure.original_manifest:
                 adventure.original_manifest = manifesto.model_dump()
             await db.commit()

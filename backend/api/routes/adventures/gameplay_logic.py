@@ -282,11 +282,16 @@ class GameTurnManager:
 
         # Bable Fish / Translation logic
         if language:
-            system_prompt += (
-                f"\n\nIMPORTANT (Bable Fish Active): You MUST respond in {language.upper()}. "
-                f"Use {language} for all narrative descriptions and NPC dialogue. "
-                f"Ensure the tone matches the requested language perfectly."
+            logger.info(f"[Turn {self.game_id}] Bable Fish Active: Target Language = {language}")
+            translation_instruction = (
+                f"\n\n--- BABLE FISH TRANSLATION PROTOCOL ---\n"
+                f"TARGET LANGUAGE: {language.upper()}\n"
+                f"INSTRUCTION: You MUST translate ALL your output (narration, dialogue, descriptions) into {language}. "
+                f"Do NOT respond in English or the original world language if it differs. "
+                f"The player has activated their Bable Fish, so everything they hear/see must be in {language}."
+                f"\n----------------------------------------\n"
             )
+            system_prompt += translation_instruction
 
         # Override for technical state evaluation (e.g. closing character sheet)
         if user_msg == "[EVALUATE STATE]":
@@ -478,6 +483,9 @@ class GameTurnManager:
             ) + "\n\n" +
             prompts.GM_NARRATION_MANDATORY_FORMATTING
         )
+        
+        if language:
+            narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
         
         pass2_start = time.perf_counter()
         logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
