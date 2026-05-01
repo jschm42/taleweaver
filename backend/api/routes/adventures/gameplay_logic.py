@@ -524,6 +524,22 @@ class GameTurnManager:
                             self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
                             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
+                    if update.stamina is not None and match and match.stamina is not None:
+                        diff = update.stamina - match.stamina
+                        if diff != 0:
+                            verb = "gains" if diff > 0 else "loses"
+                            msg = f"{ent_name} {verb} {abs(diff)} Stamina."
+                            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
+                    if update.mana is not None and match and match.mana is not None:
+                        diff = update.mana - match.mana
+                        if diff != 0:
+                            verb = "gains" if diff > 0 else "loses"
+                            msg = f"{ent_name} {verb} {abs(diff)} Mana."
+                            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
             # 3. Items
             if game_event.new_inventory_items:
                 for item in game_event.new_inventory_items:

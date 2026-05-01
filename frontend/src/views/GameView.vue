@@ -25,7 +25,7 @@ import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
 import { authState, refreshUser } from '@/store/auth'
-import { getImageUrl } from '@/utils/game_icons'
+import { getImageUrl, getItemIcon } from '@/utils/game_icons'
 
 const props = defineProps<{
   id: string
@@ -91,18 +91,18 @@ const tooltipStyle = computed(() => {
   const y = mousePos.value.y
   const threshold = window.innerHeight * 0.6
   
-  if (y > threshold) {
-    return {
-      left: `${x}px`,
-      bottom: `${window.innerHeight - y + 10}px`,
-      top: 'auto'
-    }
-  }
-  return {
+  const style: Record<string, string> = {
     left: `${x}px`,
-    top: `${y + 10}px`,
-    bottom: 'auto'
   }
+
+  if (y > threshold) {
+    style.bottom = `${window.innerHeight - y + 10}px`
+    style.top = 'auto'
+  } else {
+    style.top = `${y + 10}px`
+    style.bottom = 'auto'
+  }
+  return style
 })
 
 const handleChatNpcHover = (name: string, event: MouseEvent) => {
@@ -120,17 +120,17 @@ const npcs = computed(() => {
     const playerEntity = {
       id: 'PLAYER',
       entity_type: 'NPC',
-      name: `You (${sheet.value.name})`,
-      description: sheet.value.description || '',
-      image_url: sheet.value.profile_image || sheet.value.profile_image || null,
+      name: sheet.value.name ? `You (${sheet.value.name})` : 'You',
+      description: sheet.value.description || 'Your character in this adventure.',
+      image_url: sheet.value.profile_image || null,
       role: sheet.value.role || null,
-      hp: sheet.value.hp,
-      max_hp: sheet.value.max_hp,
-      stamina: sheet.value.stamina,
-      max_stamina: sheet.value.max_stamina,
-      mana: sheet.value.mana,
-      max_mana: sheet.value.max_mana,
-      inventory: sheet.value.inventory
+      hp: typeof sheet.value.hp === 'number' ? sheet.value.hp : 100,
+      max_hp: typeof sheet.value.max_hp === 'number' ? sheet.value.max_hp : 100,
+      mana: typeof sheet.value.mana === 'number' ? sheet.value.mana : 50,
+      max_mana: typeof sheet.value.max_mana === 'number' ? sheet.value.max_mana : 50,
+      stamina: typeof sheet.value.stamina === 'number' ? sheet.value.stamina : 50,
+      max_stamina: typeof sheet.value.max_stamina === 'number' ? sheet.value.max_stamina : 50,
+      inventory: Array.isArray(sheet.value.inventory) ? sheet.value.inventory : []
     }
     return [playerEntity, ...worldNpcs]
   }
@@ -548,7 +548,7 @@ onBeforeUnmount(() => {
           :npcs="npcs"
           :show-image="showImage"
           :mode="sheet?.rule_enforcement_mode"
-          @hover="(entity, event) => handleHover(entity, event)"
+          @hover="(entity, event) => handleHover({ ...entity, entity_type: 'NPC' }, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
           @image-error="(path) => handleImageError(path)"
@@ -662,7 +662,7 @@ onBeforeUnmount(() => {
       <Transition name="tooltip">
         <div 
           v-if="hoveredEntity" 
-          class="fixed z-[100] pointer-events-none transition-all duration-75"
+          class="fixed z-[999] pointer-events-none"
           :style="tooltipStyle"
         >
           <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
@@ -678,34 +678,35 @@ onBeforeUnmount(() => {
                 <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
                 <span 
                   class="text-[8px] px-1.5 py-0.5 rounded border font-mono uppercase"
-                  :class="hoveredEntity.entity_type === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : 'border-amber-500/50 text-amber-400'"
+                  :class="hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : 'border-amber-500/50 text-amber-400'"
                 >
-                  {{ hoveredEntity.entity_type }}
+                  {{ hoveredEntity.entity_type || 'NPC' }}
                 </span>
               </div>
               <p class="text-xs text-slate-400 leading-relaxed italic mb-3">{{ hoveredEntity.description }}</p>
 
-              <!-- NPC/Player Bars -->
-              <div v-if="hoveredEntity.entity_type === 'NPC' && sheet?.rule_enforcement_mode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
-                <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="hoveredEntity.hp" :max="hoveredEntity.max_hp" color="crimson" size="sm" />
-                <StatBar v-if="hoveredEntity.stamina != null && sheet?.rule_enforcement_mode === 'rpg'" label="Stamina" :value="hoveredEntity.stamina" :max="hoveredEntity.max_stamina" color="emerald" size="sm" />
-                <StatBar v-if="hoveredEntity.mana != null && sheet?.rule_enforcement_mode === 'rpg'" label="Mana" :value="hoveredEntity.mana" :max="hoveredEntity.max_mana" color="sapphire" size="sm" />
+              <!-- NPC Stats -->
+              <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && sheet?.rule_enforcement_mode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
+                <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="Number(hoveredEntity.hp)" :max="Number(hoveredEntity.max_hp || 100)" color="crimson" size="sm" />
+                <StatBar v-if="hoveredEntity.stamina != null && sheet?.rule_enforcement_mode !== 'chat'" label="Stamina" :value="Number(hoveredEntity.stamina)" :max="Number(hoveredEntity.max_stamina || 100)" color="emerald" size="sm" />
+                <StatBar v-if="hoveredEntity.mana != null && sheet?.rule_enforcement_mode === 'rpg'" label="Mana" :value="Number(hoveredEntity.mana)" :max="Number(hoveredEntity.max_mana || 100)" color="sapphire" size="sm" />
               </div>
 
               <!-- NPC Inventory -->
-              <div v-if="hoveredEntity.entity_type === 'NPC' && hoveredEntity.inventory && hoveredEntity.inventory.length > 0" class="mt-3 pt-3 border-t border-slate-800">
+              <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && Array.isArray(hoveredEntity.inventory) && hoveredEntity.inventory.length > 0" class="mt-3 pt-3 border-t border-slate-800">
                 <div class="flex items-center gap-1.5 mb-2">
                   <i class="ra ra-treasure-chest text-[10px] text-slate-500"></i>
                   <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Possessions</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                   <div 
-                    v-for="item in hoveredEntity.inventory" 
-                    :key="item.id"
+                    v-for="(item, iidx) in hoveredEntity.inventory" 
+                    :key="item?.id || iidx"
                     class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-[10px] text-slate-300 flex items-center gap-1.5"
                   >
-                    <i :class="['ra text-[12px]', getItemIcon(item.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
-                    {{ item.name }}
+                    <i v-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
+                    <i v-else class="ra ra-emerald text-[12px] text-amber-500/60"></i>
+                    {{ typeof item === 'object' ? item?.name : item }}
                   </div>
                 </div>
               </div>

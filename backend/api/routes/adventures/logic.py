@@ -177,8 +177,6 @@ class AdventureLogic:
         entities = []
         for ent in base_entities:
             eid = ent.get("id")
-            # Clear global leaks for fresh session feel
-            ent["is_in_inventory"] = False
             
             if eid in session_overrides:
                 ent.update(session_overrides[eid])

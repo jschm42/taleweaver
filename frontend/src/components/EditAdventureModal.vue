@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
+import StatBar from './game/StatBar.vue'
 
 const props = defineProps<{
   open: boolean
@@ -22,12 +23,24 @@ const aiEditPrompt = ref('')
 const isAIEditing = ref(false)
 
 const editingEntityId = ref<string | null>(null)
-const editForm = ref({ name: '', description: '' })
+const editForm = ref({ 
+  name: '', 
+  description: '',
+  hp: 0,
+  mana: 0,
+  stamina: 0
+})
 const isSavingText = ref(false)
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string) {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, hp?: number, mana?: number, stamina?: number) {
   editingEntityId.value = `${type}_${id}`
-  editForm.value = { name: currentName || '', description: currentDesc || '' }
+  editForm.value = { 
+    name: currentName || '', 
+    description: currentDesc || '',
+    hp: hp || 0,
+    mana: mana || 0,
+    stamina: stamina || 0
+  }
 }
 
 async function saveEntityText(type: string, id: string) {
@@ -44,7 +57,10 @@ async function saveEntityText(type: string, id: string) {
         target_type: type,
         target_id: id,
         name: editForm.value.name,
-        description: editForm.value.description
+        description: editForm.value.description,
+        hp: editForm.value.hp,
+        mana: editForm.value.mana,
+        stamina: editForm.value.stamina
       })
     })
     if (!res.ok) {
@@ -813,12 +829,17 @@ watch(
                       Generate
                     </button>
                   </div>
-                  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
                       <img v-if="debugData.protagonist.profile_image" :src="buildVisualImageUrl(debugData.protagonist.profile_image)" class="absolute inset-0 w-full h-full object-cover" />
-                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
-                        <div class="font-bold text-[11px]">{{ debugData.protagonist.name || 'Protagonist' }}</div>
-                        <div class="text-white/70">{{ debugData.protagonist.role || 'Player character' }}</div>
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/75 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px] mb-1">{{ debugData.protagonist.name || 'Protagonist' }}</div>
+                        <div class="flex flex-col gap-1 opacity-80 mb-1">
+                           <StatBar v-if="debugData.protagonist.hp != null" label="HP" :value="debugData.protagonist.hp" :max="debugData.protagonist.hp" color="crimson" size="xs" />
+                           <StatBar v-if="debugData.protagonist.stamina != null && (debugData.adventure?.rule_enforcement_mode === 'rpg' || debugData.adventure?.rule_enforcement_mode === 'story')" label="STM" :value="debugData.protagonist.stamina" :max="debugData.protagonist.stamina" color="emerald" size="xs" />
+                           <StatBar v-if="debugData.protagonist.mana != null && debugData.adventure?.rule_enforcement_mode === 'rpg'" label="MAN" :value="debugData.protagonist.mana" :max="debugData.protagonist.mana" color="sapphire" size="xs" />
+                        </div>
+                        <div class="text-white/50 text-[9px] uppercase font-bold tracking-tighter">{{ debugData.protagonist.role || 'Player character' }}</div>
                       </div>
 
                       <!-- Loading Overlay -->
@@ -843,7 +864,7 @@ watch(
                           Custom
                         </button>
                         <button
-                          @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description)"
+                          @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description, debugData.protagonist.hp, debugData.protagonist.mana, debugData.protagonist.stamina)"
                           class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
                         >
                           <i class="ra ra-quill-ink"></i>
@@ -858,6 +879,22 @@ watch(
                           <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
                         </div>
                         <input v-model="editForm.name" placeholder="Name" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        
+                        <div class="grid grid-cols-3 gap-2">
+                          <div>
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">HP</label>
+                            <input v-model.number="editForm.hp" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                          <div v-if="debugData.adventure?.rule_enforcement_mode === 'rpg' || debugData.adventure?.rule_enforcement_mode === 'story'">
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Stamina</label>
+                            <input v-model.number="editForm.stamina" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                          <div v-if="debugData.adventure?.rule_enforcement_mode === 'rpg'">
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Mana</label>
+                            <input v-model.number="editForm.mana" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                        </div>
+
                         <textarea v-model="editForm.description" placeholder="Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
                         <div class="flex justify-end gap-2 mt-1">
                           <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>
@@ -951,8 +988,14 @@ watch(
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-[3/4.5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
                       <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
-                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
-                        <div class="font-bold text-[11px]">{{ npc.name }}</div>
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/75 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px] mb-1">{{ npc.name }}</div>
+                        <div class="flex flex-col gap-1 opacity-80 mb-1">
+                          <StatBar v-if="npc.hp != null" label="HP" :value="npc.hp" :max="npc.hp" color="crimson" size="xs" />
+                          <StatBar v-if="npc.stamina != null && (debugData.adventure?.rule_enforcement_mode === 'rpg' || debugData.adventure?.rule_enforcement_mode === 'story')" label="STM" :value="npc.stamina" :max="npc.stamina" color="emerald" size="xs" />
+                          <StatBar v-if="npc.mana != null && debugData.adventure?.rule_enforcement_mode === 'rpg'" label="MAN" :value="npc.mana" :max="npc.mana" color="sapphire" size="xs" />
+                        </div>
+                        <div class="text-white/50 text-[9px] uppercase font-bold tracking-tighter">{{ npc.npc_type || 'Inhabitant' }}</div>
                       </div>
 
                       <!-- Loading Overlay -->
@@ -977,7 +1020,7 @@ watch(
                           Custom
                         </button>
                         <button
-                          @click="openTextEdit('npc', npc.id, npc.name, npc.description)"
+                          @click="openTextEdit('npc', npc.id, npc.name, npc.description, npc.hp, npc.mana, npc.stamina)"
                           class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
                         >
                           <i class="ra ra-quill-ink"></i>
@@ -992,6 +1035,22 @@ watch(
                           <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
                         </div>
                         <input v-model="editForm.name" placeholder="Name" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        
+                        <div class="grid grid-cols-3 gap-2">
+                          <div>
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">HP</label>
+                            <input v-model.number="editForm.hp" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                          <div>
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Stamina</label>
+                            <input v-model.number="editForm.stamina" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                          <div>
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Mana</label>
+                            <input v-model.number="editForm.mana" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                        </div>
+
                         <textarea v-model="editForm.description" placeholder="Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
                         <div class="flex justify-end gap-2 mt-1">
                           <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>

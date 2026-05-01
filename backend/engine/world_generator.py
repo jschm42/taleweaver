@@ -523,7 +523,7 @@ class WorldGenerator:
                 try:
                     cover_url = await MediaEngine.generate_adventure_cover(
                         title=adventure.title,
-                        context=adventure.teaser or adventure.original_prompt,
+                        original_prompt=adventure.teaser or adventure.original_prompt,
                         adventure_id=template_id,
                         user_config={"t2i_settings": user.t2i_settings},
                         api_keys=user.encrypted_api_keys,
@@ -580,11 +580,11 @@ class WorldGenerator:
                     charisma=prot.get("charisma", 10),
                     armor_class=prot.get("armor_class", 10),
                     stats=prot.get("stats", {}),
-                    inventory=prot.get("starting_inventory") or [],
-                    equipment=prot.get("starting_equipment") or {
+                    inventory=[],
+                    equipment={
                         "Head": None, "Chest": None, "Arms": None, "Legs": None,
                         "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, 
-                        "Amulet": None, "Main_Hand": None, "Off_Hand": None
+                        "Neck": None, "MainHand": None, "OffHand": None
                     }
                 )
                 db.add(avatar)
@@ -609,8 +609,16 @@ class WorldGenerator:
                 avatar.armor_class = prot.get("armor_class", avatar.armor_class)
                 
                 avatar.stats = prot.get("stats") or avatar.stats
-                avatar.inventory = prot.get("starting_inventory") or avatar.inventory
-                avatar.equipment = prot.get("starting_equipment") or avatar.equipment
+                
+                # We do NOT assign inventory/equipment directly here anymore, 
+                # because they are populated during the object resolution loop below.
+                # However, we clear them to ensure a fresh state if we are re-applying.
+                avatar.inventory = []
+                avatar.equipment = {
+                    "Head": None, "Chest": None, "Arms": None, "Legs": None,
+                    "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, 
+                    "Neck": None, "MainHand": None, "OffHand": None
+                }
 
             # Unified Portrait Logic
             image_url = (existing_images or {}).get("PROTAGONIST") or prot.get("profile_image")
@@ -872,10 +880,10 @@ class WorldGenerator:
 
             if avatar and is_in_avatar_inv:
                 if is_starting_inv:
-                    new_inv = list(avatar.inventory)
-                    new_inv.append(item_data)
-                    avatar.inventory = new_inv
+                    # SQLAlchemy mutability: re-assign the list
+                    avatar.inventory = list(avatar.inventory) + [item_data]
                 if starting_slot:
+                    # SQLAlchemy mutability: re-assign the dict
                     new_equip = dict(avatar.equipment)
                     new_equip[starting_slot] = item_data
                     avatar.equipment = new_equip

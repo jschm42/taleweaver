@@ -34,6 +34,7 @@ export interface CharacterSheet {
   start_datetime?: string | null
   current_scene?: string | null
   scene_id?: string | null
+  rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
 }
 
 export interface InventoryItem {

@@ -15,6 +15,9 @@ class Protagonist(BaseModel):
     role: Optional[str] = None
     description: Optional[str] = None
     image_hint: Optional[str] = None
+    hp: Optional[int] = None
+    mana: Optional[int] = None
+    stamina: Optional[int] = None
 
 
 class CharacterSpec(BaseModel):

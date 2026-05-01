@@ -213,7 +213,7 @@ const onClose = () => {
                     <!-- Status Bars -->
                     <div class="flex-grow space-y-4">
                       <StatBar v-if="sheet.rule_enforcement_mode !== 'chat'" label="Health" :value="sheet.hp" :max="sheet.max_hp" color="crimson" />
-                      <StatBar v-if="sheet.rule_enforcement_mode === 'rpg'" label="Stamina" :value="sheet.stamina" :max="sheet.max_stamina" color="emerald" />
+                      <StatBar v-if="sheet.rule_enforcement_mode !== 'chat'" label="Stamina" :value="sheet.stamina" :max="sheet.max_stamina" color="emerald" />
                       <StatBar v-if="sheet.rule_enforcement_mode === 'rpg'" label="Mana" :value="sheet.mana" :max="sheet.max_mana" color="sapphire" />
                     </div>
                     
