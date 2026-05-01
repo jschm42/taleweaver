@@ -159,7 +159,8 @@ function removePendingCreationCard(adventureId: string) {
 }
 
 async function removeFailedPendingCard(adventureId: string, kind: 'creation' | 'import') {
-  const isTemporaryImport = kind === 'import' && adventureId.startsWith('adz-import-')
+  const isTemporaryImport =
+    kind === 'import' && (adventureId.startsWith('adv-import-') || adventureId.startsWith('adz-import-'))
 
   try {
     if (!isTemporaryImport) {
@@ -243,33 +244,6 @@ async function startSession(templateId: string) {
     playSession(result.game_id)
   } catch (error: any) {
     errorMsg.value = error?.message || 'Session could not be started.'
-  }
-}
-
-async function pauseSession(templateId: string) {
-  try {
-    await api.pauseSession(templateId)
-    await fetchPortalData()
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Session could not be paused.'
-  }
-}
-
-async function resumeHeartbeat(templateId: string) {
-  try {
-    await api.resumeSession(templateId)
-    await fetchPortalData()
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Session could not be resumed.'
-  }
-}
-
-async function resetSession(templateId: string) {
-  try {
-    await api.resetSession(templateId)
-    await fetchPortalData()
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Session could not be reset.'
   }
 }
 
@@ -606,9 +580,6 @@ onUnmounted(() => {
                 :key="entry.game_id"
                 :session="entry"
                 @resume="playSession"
-                @pause="pauseSession"
-                @resume-heartbeat="resumeHeartbeat"
-                @reset="resetSession"
                 @delete="confirmDeleteSession(entry.game_id, entry.title)"
               />
             </div>

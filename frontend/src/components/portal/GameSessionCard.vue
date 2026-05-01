@@ -9,15 +9,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'resume', gameId: string): void
-  (e: 'pause', templateId: string): void
-  (e: 'resumeHeartbeat', templateId: string): void
-  (e: 'reset', templateId: string): void
   (e: 'delete', gameId: string, title: string): void
 }>()
-
-function templateIdOfSession(): string {
-  return props.session.template_id || props.session.adventure_id
-}
 
 const isMenuOpen = ref(false)
 
@@ -41,7 +34,7 @@ function formatDate(dateStr?: string): string {
   })
 }
 
-function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'): void {
+function runAction(action: 'resume' | 'delete'): void {
   if (action === 'resume') {
     if (props.session.status === 'game_over' || props.session.status === 'completed') {
       const msg = props.session.status === 'game_over' 
@@ -50,12 +43,6 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
       if (!window.confirm(msg)) return
     }
     emit('resume', props.session.game_id)
-  } else if (action === 'pause') {
-    emit('pause', templateIdOfSession())
-  } else if (action === 'unpause') {
-    emit('resumeHeartbeat', templateIdOfSession())
-  } else if (action === 'reset') {
-    emit('reset', templateIdOfSession())
   } else {
     emit('delete', props.session.game_id, props.session.adventure_title)
   }
@@ -118,27 +105,6 @@ function runAction(action: 'resume' | 'pause' | 'unpause' | 'reset' | 'delete'):
           v-if="isMenuOpen"
           class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
         >
-          <button
-            v-if="!props.session.is_paused"
-            class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-amber-400/80 hover:text-amber-400 hover:bg-amber-500/10"
-            @click="runAction('pause')"
-          >
-            Pause
-          </button>
-          <button
-            v-else
-            class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-sky-400/80 hover:text-sky-400 hover:bg-sky-500/10"
-            @click="runAction('unpause')"
-          >
-            Unpause
-          </button>
-          <button
-            class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
-            @click="runAction('reset')"
-          >
-            Reset
-          </button>
-          <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
           <button
             class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
             @click="runAction('delete')"

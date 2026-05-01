@@ -205,6 +205,20 @@ const editorObjects = computed<any[]>(() => {
   return mergeUniqueById(source, inferred)
 })
 
+function nonZeroStatEntries(stats: Record<string, unknown> | null | undefined): Array<[string, number]> {
+  if (!stats || typeof stats !== 'object') return []
+  return Object.entries(stats)
+    .map(([key, value]) => {
+      if (typeof value === 'number' && Number.isFinite(value)) return [key, value] as [string, number]
+      if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value)
+        if (Number.isFinite(parsed)) return [key, parsed] as [string, number]
+      }
+      return null
+    })
+    .filter((entry): entry is [string, number] => !!entry && entry[1] !== 0)
+}
+
 
 async function fetchAdventure() {
   if (!props.adventureId) return
@@ -830,9 +844,9 @@ const goBack = () => router.push({ name: 'portal' })
                       <div class="absolute inset-x-0 bottom-0 p-2">
                         <div class="font-bold text-[10px] text-white truncate text-center">{{ obj.name }}</div>
                         <!-- Item Stats Row -->
-                        <div v-if="form.rule_enforcement_mode !== 'chat' && obj.stats && Object.keys(obj.stats).length > 0" class="flex justify-center gap-1 mt-1">
-                          <div v-for="(val, stat) in obj.stats" :key="stat" class="flex items-center gap-0.5 px-1 py-0.5 rounded bg-slate-800/80 border border-white/10 text-[6px] font-black text-slate-300">
-                            {{ stat }}: +{{ val }}
+                        <div v-if="form.rule_enforcement_mode !== 'chat' && nonZeroStatEntries(obj.stats).length > 0" class="flex justify-center gap-1 mt-1">
+                          <div v-for="([stat, val]) in nonZeroStatEntries(obj.stats)" :key="stat" class="flex items-center gap-0.5 px-1 py-0.5 rounded bg-slate-800/80 border border-white/10 text-[6px] font-black text-slate-300">
+                            {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
                           </div>
                         </div>
                       </div>
@@ -1154,8 +1168,8 @@ const goBack = () => router.push({ name: 'portal' })
                   </template>
                 </template>
                 <template v-else-if="hoveredEntity.type === 'ITEM'">
-                  <div v-for="(val, stat) in hoveredEntity.stats" :key="stat" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-white/10 text-[9px] font-bold text-slate-300 uppercase">
-                    {{ stat.replace('_', ' ') }}: +{{ val }}
+                  <div v-for="([stat, val]) in nonZeroStatEntries(hoveredEntity.stats)" :key="stat" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-white/10 text-[9px] font-bold text-slate-300 uppercase">
+                    {{ stat.replace('_', ' ') }}: {{ val > 0 ? '+' : '' }}{{ val }}
                   </div>
                 </template>
               </div>

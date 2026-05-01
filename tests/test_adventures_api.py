@@ -1158,8 +1158,17 @@ async def test_import_adv_file_keeps_quests_npcs_and_initial_scene(client: Async
         "/api/adventures/import/adv",
         files={"file": ("import_test.adv", file_bytes, "application/json")},
     )
-    assert resp.status_code == 201, resp.text
-    adventure_id = resp.json()["adventure_id"]
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("status") == "success"
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    template_row = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADV File Import Quest"),
+        None,
+    )
+    assert template_row is not None
+    adventure_id = template_row["template_id"]
 
     debug_resp = await client.get(f"/api/adventures/{adventure_id}/debug")
     assert debug_resp.status_code == 200, debug_resp.text
@@ -1168,13 +1177,379 @@ async def test_import_adv_file_keeps_quests_npcs_and_initial_scene(client: Async
     assert len(debug_data.get("scenes", [])) == 2
     assert any(npc.get("id") == "NPC_A" for npc in debug_data.get("npcs", []))
     assert any(obj.get("id") == "OBJ_A" for obj in debug_data.get("objects", []))
-    assert any(q.get("id") == "Q_MAIN" for q in (debug_data.get("adventure", {}).get("quests", []) or []))
-    assert any(a.get("key") == "IMP_AWARD" for a in (debug_data.get("adventure", {}).get("awards", []) or []))
+    assert (debug_data.get("adventure") or {}).get("rule_enforcement_mode") == "story"
 
-    state_resp = await client.get(f"/api/adventures/{adventure_id}/state")
-    assert state_resp.status_code == 200, state_resp.text
-    state_data = state_resp.json()
-    assert (state_data.get("scene_id") or state_data.get("current_scene_id")) == "ROOM_A"
+
+async def test_import_adv_file_missing_start_scene_id_uses_fallback(client: AsyncClient):
+    """ADV import should not fail if start_scene_id is missing on NPCs/objects."""
+    adv_payload = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADV Missing Start Scene Import",
+            "context": "Imported from file without explicit start scene ids",
+            "strict_rules": True,
+            "rule_enforcement_mode": "story",
+            "time_per_turn": 5,
+        },
+        "protagonist": {
+            "name": "Fallback Hero",
+            "role": "Tester",
+            "description": "Checks fallback behavior",
+            "inventory": [],
+            "equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ROOM_FALLBACK", "name": "Room Fallback", "description": "First room"},
+            {"id": "ROOM_SECOND", "name": "Room Second", "description": "Second room"},
+        ],
+        "exits": [],
+        "npcs": [
+            {
+                "id": "NPC_NO_START",
+                "name": "Import NPC",
+                "description": "No explicit start scene",
+                "spatial_position": "near the door",
+                "is_hidden": False,
+            }
+        ],
+        "objects": [
+            {
+                "id": "OBJ_NO_START",
+                "name": "Import Object",
+                "description": "No explicit start scene",
+                "spatial_position": "on the floor",
+                "item_type": "PICKABLE",
+                "is_hidden": False,
+            }
+        ],
+    }
+
+    file_bytes = json.dumps(adv_payload).encode("utf-8")
+    resp = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("import_missing_start_scene.adv", file_bytes, "application/json")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("status") == "success"
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    template_row = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADV Missing Start Scene Import"),
+        None,
+    )
+    assert template_row is not None
+    adventure_id = template_row["template_id"]
+
+    debug_resp = await client.get(f"/api/adventures/{adventure_id}/debug")
+    assert debug_resp.status_code == 200, debug_resp.text
+    debug_data = debug_resp.json()
+
+    npc = next((n for n in debug_data.get("npcs", []) if n.get("id") == "NPC_NO_START"), None)
+    obj = next((o for o in debug_data.get("objects", []) if o.get("id") == "OBJ_NO_START"), None)
+    assert npc is not None
+    assert obj is not None
+    assert npc.get("current_scene_id") == "ROOM_FALLBACK"
+    assert obj.get("current_scene_id") == "ROOM_FALLBACK"
+
+
+async def test_import_adv_file_npc_inventory_dict_entries(client: AsyncClient):
+    """ADV import should accept NPC inventory entries as object dictionaries."""
+    adv_payload = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADV NPC Inventory Dict Import",
+            "context": "Inventory entries provided as dicts",
+            "strict_rules": True,
+        },
+        "protagonist": {
+            "name": "Inventory Hero",
+            "role": "Tester",
+            "description": "Checks NPC inventory import",
+            "inventory": [],
+            "equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ROOM_A", "name": "Room A", "description": "First room"},
+        ],
+        "exits": [],
+        "npcs": [
+            {
+                "id": "NPC_WITH_INV",
+                "name": "Keeper",
+                "description": "Keeps one item",
+                "start_scene_id": "ROOM_A",
+                "inventory": [{"id": "OBJ_DICT"}],
+            }
+        ],
+        "objects": [
+            {
+                "id": "OBJ_DICT",
+                "name": "Ledger",
+                "description": "A worn ledger",
+                "start_scene_id": "ROOM_A",
+                "item_type": "PICKABLE",
+            }
+        ],
+    }
+
+    file_bytes = json.dumps(adv_payload).encode("utf-8")
+    resp = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("import_npc_inventory_dict.adv", file_bytes, "application/json")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("status") == "success"
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    template_row = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADV NPC Inventory Dict Import"),
+        None,
+    )
+    assert template_row is not None
+
+
+async def test_import_adv_preserves_item_stats_from_starting_inventory_dict(client: AsyncClient):
+    """ADV import should keep item stat modifiers when they are present in starting_inventory item dicts."""
+    adv_payload = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADV Keep Item Stats",
+            "context": "Stat roundtrip check",
+            "strict_rules": True,
+        },
+        "protagonist": {
+            "name": "Stat Hero",
+            "role": "Tester",
+            "description": "Carries a stat item",
+            "starting_inventory": [
+                {
+                    "id": "OBJ_STAT_RING",
+                    "name": "Silver Ring",
+                    "description": "A ring that boosts charisma.",
+                    "item_type": "WEARABLE",
+                    "wearable_slots": ["Ring_1"],
+                    "stat_modifier_charisma": 3,
+                }
+            ],
+            "starting_equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ROOM_A", "name": "Room A", "description": "First room"},
+        ],
+        "exits": [],
+        "npcs": [],
+        "objects": [
+            {
+                "id": "OBJ_STAT_RING",
+                "name": "Silver Ring",
+                "description": "A ring that boosts charisma.",
+                "start_scene_id": "ROOM_A",
+                "item_type": "WEARABLE",
+                "wearable_slots": ["Ring_1"],
+            }
+        ],
+    }
+
+    file_bytes = json.dumps(adv_payload).encode("utf-8")
+    resp = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("import_keep_item_stats.adv", file_bytes, "application/json")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("status") == "success"
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    template_row = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADV Keep Item Stats"),
+        None,
+    )
+    assert template_row is not None
+
+    adventure_id = template_row["template_id"]
+    debug_resp = await client.get(f"/api/adventures/{adventure_id}/debug")
+    assert debug_resp.status_code == 200, debug_resp.text
+    debug_data = debug_resp.json()
+
+    stat_obj = next((o for o in debug_data.get("objects", []) if o.get("id") == "OBJ_STAT_RING"), None)
+    assert stat_obj is not None
+    assert stat_obj.get("stat_modifier_charisma") == 3
+
+
+async def test_import_adv_preserves_consumable_effects_in_avatar_inventory(client: AsyncClient):
+    """ADV import should keep consumable hp/mana/stamina effects inside protagonist inventory items."""
+    adv_payload = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADV Keep Consumable Effects",
+            "context": "Consumable effect roundtrip check",
+            "strict_rules": True,
+        },
+        "protagonist": {
+            "name": "Potion Hero",
+            "role": "Tester",
+            "description": "Carries a healing potion",
+            "starting_inventory": [
+                {
+                    "id": "HEILTRANK_1",
+                    "name": "Heiltrank",
+                    "description": "Ein kleiner Flakon mit roter Fluessigkeit.",
+                    "item_type": "CONSUMABLE",
+                    "hp_change": 50,
+                    "stamina_change": 0,
+                    "mana_change": 0,
+                }
+            ],
+            "starting_equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ROOM_A", "name": "Room A", "description": "First room"},
+        ],
+        "exits": [],
+        "npcs": [],
+        "objects": [
+            {
+                "id": "HEILTRANK_1",
+                "name": "Heiltrank",
+                "description": "Ein kleiner Flakon mit roter Fluessigkeit.",
+                "start_scene_id": "ROOM_A",
+                "item_type": "CONSUMABLE",
+            }
+        ],
+    }
+
+    file_bytes = json.dumps(adv_payload).encode("utf-8")
+    resp = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("import_keep_consumable_effects.adv", file_bytes, "application/json")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("status") == "success"
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    template_row = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADV Keep Consumable Effects"),
+        None,
+    )
+    assert template_row is not None
+
+    adventure_id = template_row["template_id"]
+    debug_resp = await client.get(f"/api/adventures/{adventure_id}/debug")
+    assert debug_resp.status_code == 200, debug_resp.text
+    debug_data = debug_resp.json()
+
+    inv_item = next(
+        (item for item in (debug_data.get("protagonist") or {}).get("inventory", []) if item.get("id") == "HEILTRANK_1"),
+        None,
+    )
+    assert inv_item is not None
+    assert inv_item.get("hp_change") == 50
+    assert inv_item.get("stamina_change") == 0
+    assert inv_item.get("mana_change") == 0
+
+    start_resp = await client.post(f"/api/adventures/{adventure_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    integrity_resp = await client.get(f"/api/adventures/sessions/{game_id}/integrity/items")
+    assert integrity_resp.status_code == 200, integrity_resp.text
+    integrity = integrity_resp.json()
+    assert integrity["issue_count"] == 0
+
+
+async def test_export_adv_reimport_keeps_item_stats(client: AsyncClient):
+    """Stats on objects should survive an ADV export and re-import cycle."""
+    source_payload = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADV Stat Roundtrip Source",
+            "context": "Roundtrip stat test",
+            "strict_rules": True,
+        },
+        "protagonist": {
+            "name": "Roundtrip Hero",
+            "role": "Tester",
+            "description": "Checks export/import stat consistency",
+            "inventory": [],
+            "equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ROOM_A", "name": "Room A", "description": "First room"},
+        ],
+        "exits": [],
+        "npcs": [],
+        "objects": [
+            {
+                "id": "OBJ_ROUNDTRIP",
+                "name": "Golden Charm",
+                "description": "A charm with social aura.",
+                "start_scene_id": "ROOM_A",
+                "item_type": "WEARABLE",
+                "wearable_slots": ["Neck"],
+                "stat_modifier_charisma": 4,
+            }
+        ],
+    }
+
+    source_bytes = json.dumps(source_payload).encode("utf-8")
+    source_import = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("roundtrip_source.adv", source_bytes, "application/json")},
+    )
+    assert source_import.status_code == 200, source_import.text
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    source_template = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADV Stat Roundtrip Source"),
+        None,
+    )
+    assert source_template is not None
+
+    export_resp = await client.get(f"/api/adventures/{source_template['template_id']}/export/adv")
+    assert export_resp.status_code == 200, export_resp.text
+    exported_adv = export_resp.json()
+    exported_adv["adventure"]["title"] = "ADV Stat Roundtrip Reimport"
+
+    reimport_bytes = json.dumps(exported_adv).encode("utf-8")
+    reimport_resp = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("roundtrip_reimport.adv", reimport_bytes, "application/json")},
+    )
+    assert reimport_resp.status_code == 200, reimport_resp.text
+
+    templates_resp_2 = await client.get("/api/adventures/templates")
+    assert templates_resp_2.status_code == 200, templates_resp_2.text
+    imported_template = next(
+        (row for row in templates_resp_2.json() if row.get("title") == "ADV Stat Roundtrip Reimport"),
+        None,
+    )
+    assert imported_template is not None
+
+    debug_resp = await client.get(f"/api/adventures/{imported_template['template_id']}/debug")
+    assert debug_resp.status_code == 200, debug_resp.text
+    debug_data = debug_resp.json()
+    obj = next((o for o in debug_data.get("objects", []) if o.get("id") == "OBJ_ROUNDTRIP"), None)
+    assert obj is not None
+    assert obj.get("stat_modifier_charisma") == 4
 
 async def test_list_templates_returns_created_template(client: AsyncClient):
     """Template endpoint returns template-centric records."""

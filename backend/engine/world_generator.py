@@ -144,6 +144,9 @@ class WorldEntitySchema(BaseModel):
     stat_modifier_wisdom: Optional[int] = None
     stat_modifier_charisma: Optional[int] = None
     stat_modifier_armor_class: Optional[int] = None
+    hp_change: Optional[int] = Field(None, description="For CONSUMABLE objects: HP delta when consumed (positive or negative).")
+    stamina_change: Optional[int] = Field(None, description="For CONSUMABLE objects: Stamina delta when consumed (positive or negative).")
+    mana_change: Optional[int] = Field(None, description="For CONSUMABLE objects: Mana delta when consumed (positive or negative).")
     
     inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in this NPC's or Object's inventory.")
     
@@ -466,6 +469,8 @@ class WorldGenerator:
         seen_entity_ids = set()
         starting_equipped_ids: dict[str, str] = {}
         starting_inv_ids: set[str] = set()
+        protagonist_item_defs: dict[str, dict[str, Any]] = {}
+        avatar = None
         
         # 0. Sync Quests and Narrative Meta
         if adventure:
@@ -556,6 +561,8 @@ class WorldGenerator:
                 item_id = val.get("id") if isinstance(val, dict) else val
                 if item_id:
                     starting_equipped_ids[item_id] = slot
+                    if isinstance(val, dict):
+                        protagonist_item_defs[item_id] = val
 
             raw_inv = prot.get("starting_inventory") or []
             starting_inv_ids = set()
@@ -563,6 +570,8 @@ class WorldGenerator:
                 item_id = item.get("id") if isinstance(item, dict) else item
                 if item_id:
                     starting_inv_ids.add(item_id)
+                    if isinstance(item, dict):
+                        protagonist_item_defs[item_id] = item
 
             if not avatar:
                 # Create new Avatar for this adventure
@@ -741,6 +750,7 @@ class WorldGenerator:
         # Persist NPCs
         npcs = manifest_dict.get("npcs", [])
         total_npcs = len(npcs)
+        default_scene_id = scenes[0]["id"] if scenes else "START"
         for npc_index, n in enumerate(npcs, start=1):
             if n["id"] in seen_entity_ids:
                 continue
@@ -793,7 +803,7 @@ class WorldGenerator:
                 entity_type="NPC",
                 name=n["name"],
                 description=n["description"],
-                current_scene_id=n["start_scene_id"],
+                current_scene_id=n.get("start_scene_id") or n.get("current_scene_id") or default_scene_id,
                 spatial_position=n.get("spatial_position"),
                 image_url=image_url,
                 npc_type=n.get("npc_type"),
@@ -811,11 +821,80 @@ class WorldGenerator:
         objects = manifest_dict.get("objects", [])
         total_objects = len(objects)
         
+        def _inventory_item_id(entry: Any) -> Optional[str]:
+            if isinstance(entry, str):
+                return entry
+            if isinstance(entry, dict):
+                for key in ("id", "item_id", "object_id"):
+                    value = entry.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return value
+            return None
+
         # Build mapping of NPC inventories: npc_id -> list of item_ids
-        npc_inventories = {n["id"]: n.get("inventory") or [] for n in npcs}
+        npc_inventories = {
+            n["id"]: [item_id for item_id in (_inventory_item_id(e) for e in (n.get("inventory") or [])) if item_id]
+            for n in npcs
+        }
         all_npc_inventory_item_ids = set()
         for inv in npc_inventories.values():
             all_npc_inventory_item_ids.update(inv)
+
+        def _extract_numeric_stat(obj: Dict[str, Any], source_item: Dict[str, Any], *keys: str) -> Optional[int]:
+            for key in keys:
+                value = obj.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            for key in keys:
+                value = source_item.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            metadata = obj.get("metadata_json") if isinstance(obj.get("metadata_json"), dict) else {}
+            for key in keys:
+                value = metadata.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            stat_modifiers = metadata.get("stat_modifiers") if isinstance(metadata.get("stat_modifiers"), dict) else {}
+            for key in keys:
+                value = stat_modifiers.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            return None
+
+        def _extract_numeric_effect(obj: Dict[str, Any], source_item: Dict[str, Any], *keys: str) -> Optional[int]:
+            for key in keys:
+                value = obj.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            for key in keys:
+                value = source_item.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            metadata = obj.get("metadata_json") if isinstance(obj.get("metadata_json"), dict) else {}
+            for key in keys:
+                value = metadata.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
+            for key in keys:
+                value = effects.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            source_effects = source_item.get("effects") if isinstance(source_item.get("effects"), dict) else {}
+            for key in keys:
+                value = source_effects.get(key)
+                if isinstance(value, (int, float)):
+                    return int(value)
+
+            return None
             
         # Mapping for full item data resolution
         resolved_items = {}
@@ -824,6 +903,17 @@ class WorldGenerator:
             if o["id"] in seen_entity_ids:
                 continue
             seen_entity_ids.add(o["id"])
+
+            source_item = protagonist_item_defs.get(o["id"], {})
+            stat_strength = _extract_numeric_stat(o, source_item, "stat_modifier_strength", "strength")
+            stat_dexterity = _extract_numeric_stat(o, source_item, "stat_modifier_dexterity", "stat_modifier_agility", "dexterity", "agility")
+            stat_intelligence = _extract_numeric_stat(o, source_item, "stat_modifier_intelligence", "intelligence")
+            stat_wisdom = _extract_numeric_stat(o, source_item, "stat_modifier_wisdom", "wisdom")
+            stat_charisma = _extract_numeric_stat(o, source_item, "stat_modifier_charisma", "charisma")
+            stat_armor_class = _extract_numeric_stat(o, source_item, "stat_modifier_armor_class", "armor_class", "ac")
+            hp_change = _extract_numeric_effect(o, source_item, "hp_change", "health_change", "heal", "heal_amount", "restore_hp", "restore_health", "hp")
+            stamina_change = _extract_numeric_effect(o, source_item, "stamina_change", "restore_stamina", "stamina_restore", "stamina", "energy")
+            mana_change = _extract_numeric_effect(o, source_item, "mana_change", "restore_mana", "mana_restore", "mana")
             
             image_url = (existing_images or {}).get(o["id"]) or o.get("image_url")
             if not image_url:
@@ -875,14 +965,37 @@ class WorldGenerator:
                 "image_url": image_url,
                 "item_type": o.get("item_type", "PICKABLE"),
                 "slot": item_slot,
-                "stat_modifier_strength": o.get("stat_modifier_strength"),
-                "stat_modifier_dexterity": o.get("stat_modifier_dexterity"),
-                "stat_modifier_intelligence": o.get("stat_modifier_intelligence"),
-                "stat_modifier_wisdom": o.get("stat_modifier_wisdom"),
-                "stat_modifier_charisma": o.get("stat_modifier_charisma"),
-                "stat_modifier_armor_class": o.get("stat_modifier_armor_class"),
+                "stat_modifier_strength": stat_strength,
+                "stat_modifier_dexterity": stat_dexterity,
+                "stat_modifier_intelligence": stat_intelligence,
+                "stat_modifier_wisdom": stat_wisdom,
+                "stat_modifier_charisma": stat_charisma,
+                "stat_modifier_armor_class": stat_armor_class,
+                "hp_change": hp_change,
+                "stamina_change": stamina_change,
+                "mana_change": mana_change,
             }
             resolved_items[o["id"]] = item_data
+
+            metadata_json = dict(o.get("metadata_json") or {})
+            if hp_change is not None:
+                metadata_json["hp_change"] = hp_change
+            if stamina_change is not None:
+                metadata_json["stamina_change"] = stamina_change
+            if mana_change is not None:
+                metadata_json["mana_change"] = mana_change
+            if stat_strength is not None:
+                metadata_json["stat_modifier_strength"] = stat_strength
+            if stat_dexterity is not None:
+                metadata_json["stat_modifier_dexterity"] = stat_dexterity
+            if stat_intelligence is not None:
+                metadata_json["stat_modifier_intelligence"] = stat_intelligence
+            if stat_wisdom is not None:
+                metadata_json["stat_modifier_wisdom"] = stat_wisdom
+            if stat_charisma is not None:
+                metadata_json["stat_modifier_charisma"] = stat_charisma
+            if stat_armor_class is not None:
+                metadata_json["stat_modifier_armor_class"] = stat_armor_class
 
             if avatar and is_in_avatar_inv:
                 if is_starting_inv:
@@ -901,7 +1014,7 @@ class WorldGenerator:
                     entity_type="OBJECT",
                     name=o["name"],
                     description=o["description"],
-                    current_scene_id="INVENTORY" if (is_in_avatar_inv or is_in_npc_inv) else o["start_scene_id"],
+                    current_scene_id="INVENTORY" if (is_in_avatar_inv or is_in_npc_inv) else (o.get("start_scene_id") or o.get("current_scene_id") or default_scene_id),
                     spatial_position=o.get("spatial_position"),
                     image_url=image_url,
                     item_type=o.get("item_type", "PICKABLE"),
@@ -912,12 +1025,13 @@ class WorldGenerator:
                     combination_ingredients=o.get("combination_ingredients"),
                     reveals_item_id=o.get("reveals_item_id"),
                     state_comment=o.get("state_comment"),
-                    stat_modifier_strength=o.get("stat_modifier_strength"),
-                    stat_modifier_dexterity=o.get("stat_modifier_dexterity"),
-                    stat_modifier_intelligence=o.get("stat_modifier_intelligence"),
-                    stat_modifier_wisdom=o.get("stat_modifier_wisdom"),
-                    stat_modifier_charisma=o.get("stat_modifier_charisma"),
-                    stat_modifier_armor_class=o.get("stat_modifier_armor_class"),
+                    stat_modifier_strength=stat_strength,
+                    stat_modifier_dexterity=stat_dexterity,
+                    stat_modifier_intelligence=stat_intelligence,
+                    stat_modifier_wisdom=stat_wisdom,
+                    stat_modifier_charisma=stat_charisma,
+                    stat_modifier_armor_class=stat_armor_class,
+                    metadata_json=metadata_json,
                 )
             )
 

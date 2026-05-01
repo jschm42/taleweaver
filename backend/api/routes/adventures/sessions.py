@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from copy import deepcopy
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,12 +11,86 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldScene
+from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.api.routes.adventures.schemas import GameSessionResponse
 from backend.api.routes.adventures.logic import AdventureLogic
 
 router = APIRouter(tags=["Sessions"])
 logger = logging.getLogger(__name__)
+
+ITEM_INTEGRITY_FIELDS = [
+    "stat_modifier_strength",
+    "stat_modifier_dexterity",
+    "stat_modifier_intelligence",
+    "stat_modifier_wisdom",
+    "stat_modifier_charisma",
+    "stat_modifier_armor_class",
+    "hp_change",
+    "stamina_change",
+    "mana_change",
+]
+
+
+def _to_int_or_none(value):
+    if isinstance(value, (int, float)):
+        return int(value)
+    return None
+
+
+def _backfill_item_from_entity(item: dict, entity: WorldEntity) -> dict:
+    merged = dict(item)
+    metadata = entity.metadata_json or {}
+
+    def fill(key: str, *candidates):
+        if merged.get(key) is not None:
+            return
+        for candidate in candidates:
+            val = _to_int_or_none(candidate)
+            if val is not None:
+                merged[key] = val
+                return
+
+    fill("stat_modifier_strength", entity.stat_modifier_strength, metadata.get("stat_modifier_strength"))
+    fill("stat_modifier_dexterity", entity.stat_modifier_dexterity, metadata.get("stat_modifier_dexterity"), metadata.get("stat_modifier_agility"))
+    fill("stat_modifier_intelligence", entity.stat_modifier_intelligence, metadata.get("stat_modifier_intelligence"))
+    fill("stat_modifier_wisdom", entity.stat_modifier_wisdom, metadata.get("stat_modifier_wisdom"))
+    fill("stat_modifier_charisma", entity.stat_modifier_charisma, metadata.get("stat_modifier_charisma"))
+    fill("stat_modifier_armor_class", entity.stat_modifier_armor_class, metadata.get("stat_modifier_armor_class"))
+
+    effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
+    fill("hp_change", metadata.get("hp_change"), metadata.get("health_change"), effects.get("hp"), effects.get("health"))
+    fill("stamina_change", metadata.get("stamina_change"), effects.get("stamina"), effects.get("energy"))
+    fill("mana_change", metadata.get("mana_change"), effects.get("mana"))
+
+    return merged
+
+
+def _backfill_avatar_items_from_template_entities(avatar: Avatar, entities_by_id: dict[str, WorldEntity]) -> None:
+    inventory = []
+    for item in (avatar.inventory or []):
+        if isinstance(item, dict) and item.get("id") in entities_by_id:
+            inventory.append(_backfill_item_from_entity(item, entities_by_id[item["id"]]))
+        else:
+            inventory.append(item)
+    avatar.inventory = inventory
+
+    equipment = {}
+    for slot, item in (avatar.equipment or {}).items():
+        if isinstance(item, dict) and item.get("id") in entities_by_id:
+            equipment[slot] = _backfill_item_from_entity(item, entities_by_id[item["id"]])
+        else:
+            equipment[slot] = item
+    avatar.equipment = equipment
+
+
+def _iter_avatar_items(avatar: Avatar):
+    for index, item in enumerate(avatar.inventory or []):
+        if isinstance(item, dict):
+            yield (f"inventory[{index}]", item)
+
+    for slot, item in (avatar.equipment or {}).items():
+        if isinstance(item, dict):
+            yield (f"equipment.{slot}", item)
 
 async def _resolve_session_asset(state: SessionState, key: str, fallback: Optional[str] = None) -> Optional[str]:
     # Placeholder or import from logic if needed
@@ -60,8 +134,6 @@ async def list_sessions(
         )
         for g, s, a, scene_label, avatar_profile_image in rows
     ]
-
-from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 
 @router.post("/{template_id}/sessions/start", status_code=201)
 async def start_session_for_template(
@@ -144,6 +216,17 @@ async def start_session_for_template(
             }),
             status_effects=deepcopy(prot.get("status_effects", [])),
         )
+
+    # Repair legacy imported avatars: backfill missing item effects/stats from template entities.
+    entity_rows = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.entity_type == "OBJECT",
+        )
+    )
+    entities_by_id = {ent.id: ent for ent in entity_rows.scalars().all() if ent.id}
+    if entities_by_id:
+        _backfill_avatar_items_from_template_entities(avatar, entities_by_id)
     
     db.add(avatar)
     await db.flush()
@@ -238,3 +321,69 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
         
     await db.commit()
     return {"status": "deleted", "game_id": game_id}
+
+
+@router.get("/sessions/{game_id}/integrity/items", status_code=200)
+async def check_session_item_integrity(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Checks if session avatar item modifiers/effects match available template object data."""
+    session_res = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    game_session = session_res.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    avatar_res = await db.execute(select(Avatar).where(Avatar.id == game_session.avatar_id))
+    avatar = avatar_res.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Session avatar not found.")
+
+    template_entities_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == game_session.template_id,
+            WorldEntity.entity_type == "OBJECT",
+        )
+    )
+    entities_by_id = {ent.id: ent for ent in template_entities_res.scalars().all() if ent.id}
+
+    issues: list[Dict[str, Any]] = []
+    checked_items = 0
+
+    for location, item in _iter_avatar_items(avatar):
+        item_id = item.get("id")
+        if not item_id:
+            continue
+        checked_items += 1
+
+        entity = entities_by_id.get(item_id)
+        if not entity:
+            continue
+
+        expected = _backfill_item_from_entity(item, entity)
+        for field in ITEM_INTEGRITY_FIELDS:
+            current_value = item.get(field)
+            expected_value = expected.get(field)
+            if current_value is None and expected_value is not None:
+                issues.append(
+                    {
+                        "location": location,
+                        "item_id": item_id,
+                        "item_name": item.get("name") or entity.name,
+                        "field": field,
+                        "current": current_value,
+                        "expected": expected_value,
+                    }
+                )
+
+    return {
+        "status": "ok",
+        "game_id": game_id,
+        "template_id": game_session.template_id,
+        "checked_items": checked_items,
+        "issue_count": len(issues),
+        "issues": issues,
+    }

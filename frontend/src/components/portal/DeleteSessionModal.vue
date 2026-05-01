@@ -18,15 +18,15 @@ const emit = defineEmits<{
           <i class="ra ra-cancel text-red-400"></i>
         </div>
         <div>
-          <h3 class="text-lg font-black text-white font-display">Session löschen</h3>
-          <p class="text-sm text-slate-300 mt-1">Diese Aktion kann nicht rückgängig gemacht werden. Sämtlicher Fortschritt geht verloren.</p>
+          <h3 class="text-lg font-black text-white font-display">Delete session</h3>
+          <p class="text-sm text-slate-300 mt-1">This action cannot be undone. All progress will be lost.</p>
         </div>
       </div>
 
       <div class="px-6 py-5">
         <p class="text-sm text-slate-200">
-          Bist du sicher, dass du die Session 
-          <span class="font-bold text-white">"{{ props.sessionTitle }}"</span> löschen möchtest?
+          Are you sure you want to delete the session
+          <span class="font-bold text-white">"{{ props.sessionTitle }}"</span>?
         </p>
       </div>
 
@@ -36,7 +36,7 @@ const emit = defineEmits<{
           :disabled="props.isDeleting"
           @click="emit('close')"
         >
-          Abbrechen
+          Cancel
         </button>
         <button
           class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-black uppercase tracking-widest hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -44,7 +44,7 @@ const emit = defineEmits<{
           @click="emit('confirm')"
         >
           <span v-if="props.isDeleting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-          {{ props.isDeleting ? 'Lösche...' : 'Löschen' }}
+          {{ props.isDeleting ? 'Deleting...' : 'Delete' }}
         </button>
       </div>
     </div>

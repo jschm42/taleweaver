@@ -49,6 +49,7 @@ class GameTurnManager:
         self.adventure: Optional[AdventureTemplate] = None
         self.avatar: Optional[Avatar] = None
         self.stop_requested = False
+        self.turn_language: Optional[str] = None
 
     async def initialize(self) -> bool:
         """Loads all necessary context for the turn."""
@@ -93,6 +94,7 @@ class GameTurnManager:
         return True
 
     async def process_turn(self, message: str, auto_visualize: bool = False, language: Optional[str] = None) -> AsyncGenerator[str, None]:
+        self.turn_language = language
         if not await self.initialize():
             yield f"event: error\ndata: {json.dumps({'detail': 'Game session not found.'})}\n\n"
             return
@@ -340,6 +342,58 @@ class GameTurnManager:
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
+    async def _emit_combat_aftermath_narration(self, combat: Dict[str, Any]) -> AsyncGenerator[str, None]:
+        outcome = str(combat.get("outcome") or "").lower()
+        if outcome not in {"victory", "escaped"}:
+            return
+
+        enemy_name = (combat.get("enemy") or {}).get("name") or "the enemy"
+        outcome_note = combat.get("status_note") or "The combat has ended."
+
+        llm_settings = self.user.llm_settings or {}
+        complex_model_provider = (
+            llm_settings.get("complex_model_provider")
+            or llm_settings.get("small_model_provider")
+            or llm_settings.get("preferred_provider")
+            or "openai"
+        )
+        complex_model = llm_settings.get("complex_model") or "gpt-4o"
+
+        try:
+            llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
+        except ValueError:
+            return
+
+        prompt = (
+            "You are the Game Master. Write a short aftermath narration after combat ends. "
+            "Use 2-4 sentences, stay in-world, no mechanics, no bullet points, no command suggestions."
+        )
+        if self.turn_language:
+            prompt += f" Respond only in {self.turn_language.upper()}."
+
+        user_prompt = (
+            f"Protagonist: {self.avatar.name}. "
+            f"Enemy: {enemy_name}. "
+            f"Combat outcome: {outcome}. "
+            f"Outcome note: {outcome_note}. "
+            "Narrate the immediate atmosphere and next beat from the Game Master's perspective."
+        )
+
+        response_text = ""
+        yield f"event: status\ndata: {json.dumps({'content': 'Game Master reflects on the battle outcome...'})}\n\n"
+        stream = await llm.stream_simple_task(prompt, user_prompt, complex_model)
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                response_text += delta
+                yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
+
+        response_text = response_text.strip()
+        if response_text:
+            self.db.add(ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text))
+            self._append_combat_log(combat, response_text, "aftermath")
+            self._set_combat_state(combat)
+
     async def _handle_fight_start(self, user_msg: str) -> AsyncGenerator[str, None]:
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
             msg = "Turn-based combat is only available in RPG mode."
@@ -462,21 +516,95 @@ class GameTurnManager:
         player["ac"] = int(player_stats.get("armor_class", self.avatar.armor_class))
         combat["player"] = player
 
+    @staticmethod
+    def _description_delta(description: str, resource: str) -> int:
+        if not description:
+            return 0
+
+        aliases = {
+            "hp": r"(?:hp|health|lebenspunkte?)",
+            "mana": r"(?:mana|magie|magiekraft)",
+            "stamina": r"(?:stamina|ausdauer|energie)",
+        }
+        resource_rx = aliases.get(resource)
+        if not resource_rx:
+            return 0
+
+        desc = description.lower()
+        pos_words = (
+            "stellt", "wieder her", "heilt", "regeneriert", "restores", "restore", "heals", "heal", "regains", "regain",
+            "replenish", "replenishes", "recover", "recovers", "gain", "gains", "boost"
+        )
+        neg_words = (
+            "kostet", "verliert", "schaden", "schadet", "entzieht", "senkt", "reduziert", "damage", "damages",
+            "lose", "loses", "losing", "drain", "drains", "reduces", "reduce", "consumes", "consume"
+        )
+
+        total = 0
+        for match in re.finditer(rf"([+-]?\d+)\s*{resource_rx}", desc):
+            raw = match.group(1)
+            magnitude = abs(int(raw))
+            start = max(0, match.start() - 40)
+            end = min(len(desc), match.end() + 40)
+            ctx = desc[start:end]
+
+            if raw.startswith("-"):
+                total -= magnitude
+            elif raw.startswith("+"):
+                total += magnitude
+            elif any(word in ctx for word in neg_words):
+                total -= magnitude
+            elif any(word in ctx for word in pos_words):
+                total += magnitude
+
+        return total
+
+    def _resource_delta_from_consumable(self, item: Dict[str, Any], resource: str) -> int:
+        key_map = {
+            "hp": ["hp_change", "health_change", "heal", "heal_amount", "restore_hp", "restore_health", "hp_delta"],
+            "mana": ["mana_change", "restore_mana", "mana_restore", "mana_delta"],
+            "stamina": ["stamina_change", "restore_stamina", "stamina_restore", "stamina_delta"],
+        }
+        keys = key_map.get(resource, [])
+
+        for k in keys:
+            val = item.get(k)
+            if isinstance(val, (int, float)):
+                return int(val)
+
+        effects = item.get("effects")
+        if isinstance(effects, dict):
+            val = effects.get(resource)
+            if isinstance(val, (int, float)):
+                return int(val)
+
+        metadata_json = item.get("metadata_json")
+        if isinstance(metadata_json, dict):
+            for k in keys:
+                val = metadata_json.get(k)
+                if isinstance(val, (int, float)):
+                    return int(val)
+
+            meta_effects = metadata_json.get("effects")
+            if isinstance(meta_effects, dict):
+                val = meta_effects.get(resource)
+                if isinstance(val, (int, float)):
+                    return int(val)
+
+        description = item.get("description")
+        if isinstance(description, str):
+            return self._description_delta(description, resource)
+
+        return 0
+
     def _consume_item_now(self, item_name: str) -> str:
         item = self._find_consumable(item_name)
         if not item:
             return f"You do not have the consumable '{item_name}'."
 
-        def _extract_effect(*keys: str) -> int:
-            for k in keys:
-                val = item.get(k)
-                if isinstance(val, (int, float)):
-                    return int(val)
-            return 0
-
-        hp_delta = _extract_effect("hp_change", "heal", "restore_hp", "hp")
-        mana_delta = _extract_effect("mana_change", "restore_mana", "mana")
-        stamina_delta = _extract_effect("stamina_change", "restore_stamina", "stamina")
+        hp_delta = self._resource_delta_from_consumable(item, "hp")
+        mana_delta = self._resource_delta_from_consumable(item, "mana")
+        stamina_delta = self._resource_delta_from_consumable(item, "stamina")
 
         if hp_delta:
             max_hp = self.avatar.max_hp or RESOURCE_CAP
@@ -496,6 +624,17 @@ class GameTurnManager:
                 continue
             new_inventory.append(inv_item)
         self.avatar.inventory = new_inventory
+
+        changes = []
+        if hp_delta:
+            changes.append(f"HP {hp_delta:+d}")
+        if mana_delta:
+            changes.append(f"Mana {mana_delta:+d}")
+        if stamina_delta:
+            changes.append(f"Stamina {stamina_delta:+d}")
+
+        if changes:
+            return f"{self.avatar.name} uses {item.get('name', item_name)} ({', '.join(changes)})."
         return f"{self.avatar.name} uses {item.get('name', item_name)}."
 
     async def _maybe_trigger_special_event(self, combat: Dict[str, Any]) -> Optional[str]:
@@ -693,6 +832,10 @@ class GameTurnManager:
             loot_msg = await self._resolve_loot_command(user_msg, combat)
             if loot_msg:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': loot_msg})}\n\n"
+                if user_msg.lower().strip().startswith("/loot done"):
+                    combat_after_loot = self._read_combat_state()
+                    async for chunk in self._emit_combat_aftermath_narration(combat_after_loot):
+                        yield chunk
                 async for chunk in self._emit_combat_final(loot_msg):
                     yield chunk
                 return
@@ -761,6 +904,8 @@ class GameTurnManager:
                 self._append_combat_log(combat, f"Run check: {player_roll} vs {enemy_roll}. Escape successful.", "run")
                 self._set_combat_state(combat)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': combat['status_note']})}\n\n"
+                async for chunk in self._emit_combat_aftermath_narration(combat):
+                    yield chunk
                 async for chunk in self._emit_combat_final(combat["status_note"]):
                     yield chunk
                 return
@@ -820,6 +965,8 @@ class GameTurnManager:
                 self._append_combat_log(combat, combat["status_note"], "outcome")
                 self._set_combat_state(combat)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': combat['status_note']})}\n\n"
+                async for chunk in self._emit_combat_aftermath_narration(combat):
+                    yield chunk
                 async for chunk in self._emit_combat_final(combat["status_note"]):
                     yield chunk
                 return

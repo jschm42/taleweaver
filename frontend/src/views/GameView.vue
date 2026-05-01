@@ -82,8 +82,87 @@ const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQues
 const hoveredEntity = ref<any>(null)
 const mousePos = ref({ x: 0, y: 0 })
 
+function toNumberOrNull(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function firstNumeric(...values: unknown[]): number | null {
+  for (const value of values) {
+    const parsed = toNumberOrNull(value)
+    if (parsed !== null) return parsed
+  }
+  return null
+}
+
+function hasNonZero(value: unknown): boolean {
+  const parsed = toNumberOrNull(value)
+  return parsed !== null && parsed !== 0
+}
+
+function normalizeHoverEntity(entity: any): any {
+  if (!entity || typeof entity !== 'object') return entity
+
+  const normalized = { ...entity }
+  const metadata = (normalized.metadata_json && typeof normalized.metadata_json === 'object') ? normalized.metadata_json : {}
+  const embeddedStats = (metadata.stat_modifiers && typeof metadata.stat_modifiers === 'object') ? metadata.stat_modifiers : {}
+  const directStats = (normalized.stat_modifiers && typeof normalized.stat_modifiers === 'object') ? normalized.stat_modifiers : {}
+
+  const stat = (...keys: string[]) => firstNumeric(
+    ...keys.map((k) => normalized[k]),
+    ...keys.map((k) => metadata[k]),
+    ...keys.map((k) => embeddedStats[k]),
+    ...keys.map((k) => directStats[k]),
+  )
+
+  if (normalized.stat_modifier_strength == null) {
+    const value = stat('stat_modifier_strength', 'strength', 'str', 'STR')
+    if (value != null) normalized.stat_modifier_strength = value
+  }
+  if (normalized.stat_modifier_dexterity == null) {
+    const value = stat('stat_modifier_dexterity', 'stat_modifier_agility', 'dexterity', 'agility', 'dex', 'DEX', 'AGI')
+    if (value != null) normalized.stat_modifier_dexterity = value
+  }
+  if (normalized.stat_modifier_intelligence == null) {
+    const value = stat('stat_modifier_intelligence', 'intelligence', 'int', 'INT')
+    if (value != null) normalized.stat_modifier_intelligence = value
+  }
+  if (normalized.stat_modifier_wisdom == null) {
+    const value = stat('stat_modifier_wisdom', 'wisdom', 'wis', 'WIS')
+    if (value != null) normalized.stat_modifier_wisdom = value
+  }
+  if (normalized.stat_modifier_charisma == null) {
+    const value = stat('stat_modifier_charisma', 'charisma', 'cha', 'CHA')
+    if (value != null) normalized.stat_modifier_charisma = value
+  }
+  if (normalized.stat_modifier_armor_class == null) {
+    const value = stat('stat_modifier_armor_class', 'armor_class', 'ac', 'AC')
+    if (value != null) normalized.stat_modifier_armor_class = value
+  }
+
+  const effects = (metadata.effects && typeof metadata.effects === 'object') ? metadata.effects : {}
+  if (normalized.hp_change == null) {
+    const value = firstNumeric(normalized.hp_change, metadata.hp_change, metadata.health_change, effects.hp, effects.health)
+    if (value != null) normalized.hp_change = value
+  }
+  if (normalized.mana_change == null) {
+    const value = firstNumeric(normalized.mana_change, metadata.mana_change, effects.mana)
+    if (value != null) normalized.mana_change = value
+  }
+  if (normalized.stamina_change == null) {
+    const value = firstNumeric(normalized.stamina_change, metadata.stamina_change, effects.stamina, effects.energy)
+    if (value != null) normalized.stamina_change = value
+  }
+
+  return normalized
+}
+
 const handleHover = (ent: any, event: MouseEvent) => {
-  hoveredEntity.value = ent
+  hoveredEntity.value = normalizeHoverEntity(ent)
   mousePos.value = { x: event.clientX, y: event.clientY }
 }
 
@@ -107,10 +186,17 @@ const tooltipStyle = computed(() => {
   return style
 })
 
+const isConsumableHover = computed(() => {
+  const ent = hoveredEntity.value
+  if (!ent) return false
+  const itemType = String(ent.item_type || '').toUpperCase()
+  return itemType === 'CONSUMABLE' || ent.hp_change != null || ent.mana_change != null || ent.stamina_change != null
+})
+
 const handleChatNpcHover = (name: string, event: MouseEvent) => {
   const metadata = npcMetadata.value[name]
   if (metadata) {
-    hoveredEntity.value = metadata
+    hoveredEntity.value = normalizeHoverEntity(metadata)
     mousePos.value = { x: event.clientX, y: event.clientY }
   }
 }
@@ -143,6 +229,10 @@ const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
 const isCombatActive = computed(() => !!combat.value?.active)
 const showCombatDialog = computed(() => !!combat.value && (!!combat.value.active || !!combat.value.loot_pending))
+const showsMechanics = computed(() => {
+  const mode = (sheet.value as any)?.rule_enforcement_mode as string | undefined
+  return mode === 'rpg' || mode === 'story' || mode === 'strict'
+})
 
 // --- WATCHERS FOR UI FEEDBACK (GLOW) ---
 
@@ -776,23 +866,38 @@ onBeforeUnmount(() => {
                     {{ hoveredEntity.slot.replace('_', ' ') }}
                   </div>
 
-                  <template v-if="sheet?.rule_enforcement_mode === 'rpg' || sheet?.rule_enforcement_mode === 'story'">
-                    <div v-if="hoveredEntity.stat_modifier_strength != null" class="text-red-400 flex justify-between">
+                  <template v-if="isConsumableHover">
+                    <div v-if="hasNonZero(hoveredEntity.hp_change)" class="text-red-400 flex justify-between">
+                      <span>HP</span>
+                      <span>{{ Number(hoveredEntity.hp_change) >= 0 ? '+' : '' }}{{ hoveredEntity.hp_change }}</span>
+                    </div>
+                    <div v-if="hasNonZero(hoveredEntity.mana_change)" class="text-blue-400 flex justify-between">
+                      <span>Mana</span>
+                      <span>{{ Number(hoveredEntity.mana_change) >= 0 ? '+' : '' }}{{ hoveredEntity.mana_change }}</span>
+                    </div>
+                    <div v-if="hasNonZero(hoveredEntity.stamina_change)" class="text-emerald-400 flex justify-between">
+                      <span>Stamina</span>
+                      <span>{{ Number(hoveredEntity.stamina_change) >= 0 ? '+' : '' }}{{ hoveredEntity.stamina_change }}</span>
+                    </div>
+                  </template>
+
+                  <template v-if="showsMechanics">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_strength)" class="text-red-400 flex justify-between">
                       <span>STR</span> <span>+{{ hoveredEntity.stat_modifier_strength }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_dexterity != null" class="text-emerald-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_dexterity)" class="text-emerald-400 flex justify-between">
                       <span>DEX</span> <span>+{{ hoveredEntity.stat_modifier_dexterity }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_intelligence != null" class="text-blue-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_intelligence)" class="text-blue-400 flex justify-between">
                       <span>INT</span> <span>+{{ hoveredEntity.stat_modifier_intelligence }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_wisdom != null" class="text-purple-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_wisdom)" class="text-purple-400 flex justify-between">
                       <span>WIS</span> <span>+{{ hoveredEntity.stat_modifier_wisdom }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_charisma != null" class="text-pink-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_charisma)" class="text-pink-400 flex justify-between">
                       <span>CHA</span> <span>+{{ hoveredEntity.stat_modifier_charisma }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_armor_class != null" class="text-amber-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_armor_class)" class="text-amber-400 flex justify-between">
                       <span>AC</span> <span>+{{ hoveredEntity.stat_modifier_armor_class }}</span>
                     </div>
                   </template>

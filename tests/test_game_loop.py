@@ -558,3 +558,197 @@ async def test_combat_enemy_without_dexterity_uses_baseline_hit_modifier(setup_t
         assert enemy_logs
         assert " + 10 = " in enemy_logs[-1].get("text", "")
         assert avatar.hp == 93
+
+
+async def test_combat_consume_parses_description_healing_effect(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, _npc = await _seed_combat_npc(db)
+        avatar.hp = 40
+        avatar.max_hp = 100
+        avatar.inventory = [
+            {
+                "id": "HEALING_POTION_1",
+                "name": "Heiltrank",
+                "description": "Ein kleiner Kristallflakon mit roter Fluessigkeit. Stellt 50 HP wieder her.",
+                "item_type": "CONSUMABLE",
+            }
+        ]
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Ensure player starts; enemy turn after consume should not alter HP in this test.
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 2,
+                "hit_modifier": 0,
+                "hit_total": 2,
+                "target_ac": 18,
+                "is_hit": False,
+                "damage_total": 0,
+                "damage_dice_total": 0,
+                "damage_rolls": [],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d6",
+            },
+        )
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+        async for _ in manager.process_turn("/consume Heiltrank"):
+            pass
+
+        await db.refresh(avatar)
+        await db.refresh(state)
+
+        assert avatar.hp == 90
+        assert not any((item or {}).get("id") == "HEALING_POTION_1" for item in (avatar.inventory or []))
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert (combat.get("player") or {}).get("hp") == 90
+
+
+async def test_combat_consume_uses_explicit_resource_fields(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, _npc = await _seed_combat_npc(db)
+        avatar.hp = 70
+        avatar.max_hp = 120
+        avatar.mana = 20
+        avatar.max_mana = 100
+        avatar.stamina = 15
+        avatar.max_stamina = 80
+        avatar.inventory = [
+            {
+                "id": "COMBAT_TONIC",
+                "name": "Combat Tonic",
+                "description": "Restores combat resources.",
+                "item_type": "CONSUMABLE",
+                "hp_change": 25,
+                "mana_change": 30,
+                "stamina_change": -5,
+            }
+        ]
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Keep the turn deterministic and avoid special-event side effects.
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 1,
+                "hit_modifier": 0,
+                "hit_total": 1,
+                "target_ac": 18,
+                "is_hit": False,
+                "damage_total": 0,
+                "damage_dice_total": 0,
+                "damage_rolls": [],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d6",
+            },
+        )
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+        async for _ in manager.process_turn("/consume Combat Tonic"):
+            pass
+
+        await db.refresh(avatar)
+        await db.refresh(state)
+
+        assert avatar.hp == 95
+        assert avatar.mana == 50
+        assert avatar.stamina == 10
+        assert not any((item or {}).get("id") == "COMBAT_TONIC" for item in (avatar.inventory or []))
+
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert (combat.get("player") or {}).get("hp") == 95
+
+
+async def test_combat_exit_run_triggers_gm_narrative_pass(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        manager = GameTurnManager(db, state.session_id, user)
+
+        mock_llm_instance = MagicMock()
+
+        async def mock_stream(*_args, **_kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The dust settles as you retreat."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        # Start with deterministic player initiative.
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        # Deterministic successful escape.
+        escape_rolls = iter([20, 1])
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: next(escape_rolls, 20))
+
+        async for _ in manager.process_turn("/run"):
+            pass
+
+        res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id, ChatMessage.role == "assistant"))
+        assistant_msgs = [m.content for m in res.scalars().all()]
+        assert any("dust settles" in msg for msg in assistant_msgs)
+
+
+async def test_combat_exit_loot_done_triggers_gm_narrative_pass(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        manager = GameTurnManager(db, state.session_id, user)
+
+        mock_llm_instance = MagicMock()
+
+        async def mock_stream(*_args, **_kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Silence returns after your victory."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        # Force lethal player hit to enter loot phase.
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 20,
+                "hit_modifier": 5,
+                "hit_total": 25,
+                "target_ac": 11,
+                "is_hit": True,
+                "damage_total": 99,
+                "damage_dice_total": 99,
+                "damage_rolls": [99],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d8",
+            },
+        )
+
+        async for _ in manager.process_turn("/attack"):
+            pass
+        async for _ in manager.process_turn("/loot done"):
+            pass
+
+        res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id, ChatMessage.role == "assistant"))
+        assistant_msgs = [m.content for m in res.scalars().all()]
+        assert any("Silence returns" in msg for msg in assistant_msgs)

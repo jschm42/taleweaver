@@ -7,7 +7,7 @@ const props = defineProps<{
 
 <template>
   <div class="z-10">
-    <div class="flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': props.clockTick }">
+    <div class="relative group flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': props.clockTick }">
       <template v-if="props.gameTime">
         <div class="flex items-center gap-3 px-4 py-2 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md shadow-lg transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500/80 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -19,6 +19,9 @@ const props = defineProps<{
               {{ props.gameTime.time }}
             </span>
           </div>
+        </div>
+        <div class="pointer-events-none absolute right-0 top-full mt-2 w-max max-w-xs rounded-lg border border-slate-700/60 bg-slate-900/95 px-3 py-2 text-[11px] font-semibold text-slate-200 shadow-2xl opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          Dies ist die In-Game-Zeit deiner laufenden Session.
         </div>
       </template>
     </div>
