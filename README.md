@@ -58,6 +58,11 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Randomized Action Resolution (Skill Checks):** A virtual D20 roll for risky actions (D20 + stats >= Challenge Rating) executed efficiently in the backend.
 * **Individual Inventory System:** Isolated inventory for looting, dropping, and combining objects.
 * **Equipment Slots:** Dedicated slots for Head, Chest, Arms, Legs, Hands, Feet, Rings (2), and Amulet.
+  
+### 🐟 Bable Fish Multilingualism
+* **Multilingual Generation:** Generate entirely new adventures in your chosen language (German, Italian, French, etc.) from the start.
+* **In-Game Translation:** Switch languages dynamically during gameplay using the "Bable Fish" toggle to translate narration and NPC dialogue.
+* **User Preferences:** Set a global default language in your profile that follows you across all adventures and sessions.
 
 ### Hybrid Interaction
 * **Natural Language Chat:** Free text input for dialogues and complex actions.

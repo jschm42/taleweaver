@@ -64,6 +64,13 @@ export function useGameSocket(): UseGameSocket {
   let currentGameId = ''
   let syncTimer: number | null = null
 
+  // Sync with User Profile default if no local preference exists
+  watch(() => authState.user?.default_language, (newDef) => {
+    if (localStorage.getItem('tw_bable_fish_lang') === null && newDef) {
+      language.value = newDef
+    }
+  }, { immediate: true })
+
   watch(language, (newLang) => {
     localStorage.setItem('tw_bable_fish_lang', newLang)
   })
