@@ -118,6 +118,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     messages: List[Dict[str, Any]]
     sheet: Dict[str, Any]
+    combat: Optional[Dict[str, Any]] = None
     mermaid: Optional[str] = None
     nodes: Optional[Dict[str, Any]] = None
     entities: Optional[List[Dict[str, Any]]] = None

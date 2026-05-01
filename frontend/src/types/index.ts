@@ -39,6 +39,7 @@ export interface CharacterSheet {
 
 export interface InventoryItem {
   name: string
+  id?: string
   image_url?: string | null
   item_type?: string
   hp?: number
@@ -49,6 +50,41 @@ export interface InventoryItem {
   max_mana?: number
   stat_modifiers?: Record<string, number>
   [key: string]: unknown
+}
+
+export interface CombatLogEntry {
+  round: number
+  type: string
+  text: string
+  timestamp?: string
+}
+
+export interface CombatState {
+  active: boolean
+  round: number
+  turn: 'player' | 'enemy'
+  player: {
+    name: string
+    image_url?: string | null
+    hp: number
+    max_hp?: number
+    ac?: number
+  }
+  enemy: {
+    id: string
+    name: string
+    image_url?: string | null
+    hp: number
+    max_hp?: number
+    armor_mod?: number
+    dexterity_mod?: number
+    inventory?: InventoryItem[]
+  }
+  loot_pending?: boolean
+  loot_items?: InventoryItem[]
+  outcome?: string | null
+  status_note?: string | null
+  log?: CombatLogEntry[]
 }
 
 /** Summary of a game session returned by GET /api/adventures. */

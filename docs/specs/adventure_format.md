@@ -119,7 +119,7 @@ Items and interactable elements.
 | `description` | `string` | Physical description. |
 | `is_portable` | `boolean` | If false, the item is `"STATIC"` (e.g., a heavy altar). |
 | `spatial_position` | `string` | Where it is found (e.g., `"on the pedestal"`). |
-| `wearable_slots` | `array` | Valid slots (e.g., `["Head"]`, `["Main_Hand"]`). |
+| `wearable_slots` | `array` | Valid slots (e.g., `["Head"]`, `["MainHand"]`). |
 | `stat_modifiers` | `number` | Modifiers for core attributes (e.g., `stat_modifier_strength`). |
 | `combination_ingredients`| `array` | List of IDs needed to craft/unlock this item. |
 | `reveals_item_id` | `string` | Item revealed when this one is used/triggered. |

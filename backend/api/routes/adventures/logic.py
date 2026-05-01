@@ -52,6 +52,16 @@ class AdventureLogic:
         return snap if isinstance(snap, dict) else {}
 
     @staticmethod
+    def get_combat_snapshot(state: SessionState) -> Optional[Dict[str, Any]]:
+        raw = state.entity_states or {}
+        if not isinstance(raw, dict):
+            return None
+        combat = raw.get("__combat__")
+        if not isinstance(combat, dict):
+            return None
+        return combat
+
+    @staticmethod
     def resolve_session_asset(state: SessionState, key: str, fallback: Optional[str] = None) -> Optional[str]:
         snapshot = AdventureLogic.extract_asset_snapshot(state)
         value = snapshot.get(key)

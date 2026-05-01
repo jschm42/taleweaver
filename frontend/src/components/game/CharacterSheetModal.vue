@@ -45,9 +45,9 @@ const getSlotPlaceholderIcon = (slot: string) => {
     case 'Feet': return 'ra-boot-prints'
     case 'Ring_1':
     case 'Ring_2': return 'ra-ring'
-    case 'Amulet': return 'ra-necklace'
-    case 'Main_Hand': return 'ra-sword'
-    case 'Off_Hand': return 'ra-shield'
+    case 'Neck': return 'ra-necklace'
+    case 'MainHand': return 'ra-sword'
+    case 'OffHand': return 'ra-shield'
     default: return 'ra-help'
   }
 }
@@ -60,11 +60,11 @@ const slotPositions: Record<string, { top: string, left: string }> = {
   'Feet': { top: '85%', left: '42%' },
   'Arms': { top: '25%', left: '10%' },
   'Hands': { top: '45%', left: '10%' },
-  'Main_Hand': { top: '65%', left: '10%' },
-  'Amulet': { top: '15%', left: '75%' },
+  'MainHand': { top: '65%', left: '10%' },
+  'Neck': { top: '15%', left: '75%' },
   'Ring_1': { top: '35%', left: '75%' },
   'Ring_2': { top: '55%', left: '75%' },
-  'Off_Hand': { top: '75%', left: '75%' }
+  'OffHand': { top: '75%', left: '75%' }
 }
 
 function onKeydown(e: KeyboardEvent): void {

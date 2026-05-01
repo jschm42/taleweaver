@@ -28,7 +28,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "- Assign 'stat_modifier_strength', 'stat_modifier_dexterity', 'stat_modifier_intelligence', "
     "'stat_modifier_wisdom', 'stat_modifier_charisma', or 'stat_modifier_armor_class' (integer) "
     "to items if they should improve the player's stats when equipped.\n"
-    "- For WEARABLE/WEAPON items, assign a preferred slot in `wearable_slots`. Valid slots: Head, Chest, Arms, Legs, Hands, Feet, Ring_1, Ring_2, Amulet, Main_Hand, Off_Hand.\n"
+    "- For WEARABLE/WEAPON items, assign a preferred slot in `wearable_slots`. Valid slots: Head, Chest, Arms, Legs, Hands, Feet, Ring_1, Ring_2, Neck, MainHand, OffHand.\n"
     "- For WEAPONS, you can optionally define a `damage_dice` (e.g. '1d6', '1d8+2') in `metadata_json`.\n"
     "Use 'is_hidden: true' for objects revealed by combinations or searching.\n"
     "For NPCs, assign a specific 'npc_type':\n"

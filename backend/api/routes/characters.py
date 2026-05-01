@@ -29,7 +29,8 @@ async def create_character(
         inventory=payload.inventory or [],
         equipment=payload.equipment or {
             "Head": None, "Chest": None, "Arms": None, "Legs": None, "Hands": None, 
-            "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None
+            "Feet": None, "Ring_1": None, "Ring_2": None, "Neck": None,
+            "MainHand": None, "OffHand": None
         },
         status_effects=payload.status_effects or []
     )

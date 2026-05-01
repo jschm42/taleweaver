@@ -21,6 +21,7 @@ import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
 import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
+import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
@@ -63,6 +64,7 @@ const {
   currentSceneImage,
   quests,
   awards,
+  combat,
   isCompleted,
   statusText,
   debugLogs,
@@ -138,6 +140,9 @@ const npcs = computed(() => {
 })
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
+const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
+const isCombatActive = computed(() => !!combat.value?.active)
+const showCombatDialog = computed(() => !!combat.value && (!!combat.value.active || !!combat.value.loot_pending))
 
 // --- WATCHERS FOR UI FEEDBACK (GLOW) ---
 
@@ -391,6 +396,14 @@ const buyHint = async () => {
 }
 
 const handlePlayerInput = async (content: string) => {
+  if (isCombatActive.value) {
+    const msg = content.trim().toLowerCase()
+    const allowed = msg === 'attack' || msg === '/attack' || msg === 'run' || msg === '/run' || msg.startsWith('/consume ')
+    if (!allowed) {
+      return
+    }
+  }
+
   const normalized = content.trim().toLowerCase()
   if (normalized === '/walkthrough') {
     await openWalkthroughPanel()
@@ -416,6 +429,34 @@ const handlePlayerInput = async (content: string) => {
   }
 
   await sendMessage(content)
+}
+
+const handleCombatAttack = async () => {
+  await sendMessage('/attack')
+}
+
+const handleCombatRun = async () => {
+  await sendMessage('/run')
+}
+
+const handleCombatConsume = async (name: string) => {
+  await sendMessage(`/consume ${name}`)
+}
+
+const handleLootTake = async (item: any) => {
+  const key = (item?.id || item?.name || '').toString().trim()
+  if (!key) return
+  await sendMessage(`/loot take ${key}`)
+}
+
+const handleLootLeave = async (item: any) => {
+  const key = (item?.id || item?.name || '').toString().trim()
+  if (!key) return
+  await sendMessage(`/loot leave ${key}`)
+}
+
+const handleLootDone = async () => {
+  await sendMessage('/loot done')
 }
 
 const fetchGameSettings = async () => {
@@ -655,6 +696,22 @@ onBeforeUnmount(() => {
         fullWorld: fullWorldDebug
       }" 
       @close="showDebug = false" 
+    />
+
+    <FightDialogModal
+      :open="showCombatDialog"
+      :combat="combat"
+      :consumables="combatConsumables"
+      :npc-metadata="npcMetadata"
+      :player-sheet="sheet"
+      @attack="handleCombatAttack"
+      @run="handleCombatRun"
+      @consume="handleCombatConsume"
+      @loot-take="handleLootTake"
+      @loot-leave="handleLootLeave"
+      @loot-done="handleLootDone"
+      @entity-hover="(entity, event) => handleHover(entity, event)"
+      @entity-leave="hoveredEntity = null"
     />
 
     <!-- HOVER TOOLTIP -->

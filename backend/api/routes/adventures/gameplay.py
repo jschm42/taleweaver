@@ -1,5 +1,4 @@
 import logging
-from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +9,6 @@ from backend.core.auth import get_current_user
 from backend.models.user import User
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
-from backend.models.session_state import SessionState
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldScene, WorldEntity
 from backend.models.world_map import WorldMap
@@ -74,6 +72,7 @@ async def get_chat_history(
     return ChatResponse(
         messages=history,
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
+        combat=AdventureLogic.get_combat_snapshot(state),
         mermaid=MapEngine.to_mermaid(world_map) if world_map else None,
         nodes=await _enrich_map_nodes(state.template_id, world_map.nodes if world_map else {}, db),
         entities=entities,

@@ -92,9 +92,9 @@ class CommandParser:
         if not slot or slot == "Hands":
             # If it's a weapon or tool, move to Hand slots
             if item_to_equip.get("item_type") == "WEAPON":
-                slot = "Main_Hand"
+                slot = "MainHand"
             elif item_to_equip.get("item_type") == "TOOL" and any(kw in item_to_equip.get("name", "").lower() for kw in ["shield", "buckler", "torch"]):
-                slot = "Off_Hand"
+                slot = "OffHand"
             else:
                 # Last resort: try guessing
                 slot = get_item_slot(item_to_equip.get("name", ""), item_to_equip.get("item_type", "PICKABLE"))
@@ -105,8 +105,8 @@ class CommandParser:
         # Self-healing: Ensure standard slots exist
         DEFAULT_SLOTS = {
             "Head": None, "Chest": None, "Arms": None, "Legs": None,
-            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None,
-            "Main_Hand": None, "Off_Hand": None
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Neck": None,
+            "MainHand": None, "OffHand": None
         }
         
         if slot not in avatar.equipment:

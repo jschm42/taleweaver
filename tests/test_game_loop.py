@@ -8,6 +8,7 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 from backend.models.chat import ChatMessage
+from backend.models.world_entity import WorldEntity
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.engine.rule_engine import GameEvent
 
@@ -290,3 +291,212 @@ async def test_rule_engine_apply_event_game_over():
     with pytest.raises(GameOverException):
         RuleEngine.apply_event(avatar, event)
     assert avatar.hp == 0
+
+
+async def _seed_combat_npc(db) -> tuple[User, AdventureTemplate, Avatar, SessionState, WorldEntity]:
+    user, adv, avatar, state = await _seed_game_context(db)
+    adv.rule_enforcement_mode = "rpg"
+    npc = WorldEntity(
+        id="RAT_ENEMY",
+        session_id=state.session_id,
+        template_id=None,
+        entity_type="NPC",
+        name="Giant Rat",
+        description="A vicious sewer rat.",
+        current_scene_id=state.current_scene_id,
+        hp=40,
+        max_hp=40,
+        stat_modifier_dexterity=2,
+        stat_modifier_armor_class=1,
+        inventory=[{"id": "RAT_TOOTH", "name": "Rat Tooth", "item_type": "PICKABLE"}],
+        is_hidden=False,
+        is_in_inventory=False,
+        is_portable=False,
+    )
+    db.add(npc)
+    await db.commit()
+    return user, adv, avatar, state, npc
+
+
+async def test_combat_start_creates_state(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        manager = GameTurnManager(db, state.session_id, user)
+        chunks = []
+        async for chunk in manager.process_turn("/fight RAT_ENEMY"):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__")
+        assert combat is not None
+        assert combat.get("active") is True
+        assert combat.get("enemy", {}).get("id") == "RAT_ENEMY"
+        assert any("event: final" in c for c in chunks)
+
+
+async def test_combat_attack_defeat_enables_loot_phase(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Start combat.
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        # Force lethal player hit.
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 19,
+                "hit_modifier": 5,
+                "hit_total": 24,
+                "target_ac": 11,
+                "is_hit": True,
+                "damage_total": 60,
+                "damage_dice_total": 60,
+                "damage_rolls": [60],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d8",
+            },
+        )
+
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__")
+        assert combat is not None
+        assert combat.get("active") is False
+        assert combat.get("outcome") == "victory"
+        assert combat.get("loot_pending") is True
+        assert len(combat.get("loot_items") or []) == 1
+
+
+async def test_combat_loot_take_moves_item_to_inventory(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, _npc = await _seed_combat_npc(db)
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Deterministic initiative so the player can act first.
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 20,
+                "hit_modifier": 5,
+                "hit_total": 25,
+                "target_ac": 11,
+                "is_hit": True,
+                "damage_total": 60,
+                "damage_dice_total": 60,
+                "damage_rolls": [60],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d8",
+            },
+        )
+
+        async for _ in manager.process_turn("/attack"):
+            pass
+        async for _ in manager.process_turn("/loot take RAT_TOOTH"):
+            pass
+
+        await db.refresh(avatar)
+        assert any((item or {}).get("id") == "RAT_TOOTH" for item in (avatar.inventory or []))
+
+
+async def test_combat_auto_triggers_from_gm_requested_attacks(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+    from backend.engine.rule_engine import AttackRequest
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)
+
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="The rat leaps forward.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
+            requested_attacks=[
+                AttackRequest(
+                    attacker_id="RAT_ENEMY",
+                    target_id="PLAYER",
+                    hit_stat="dexterity",
+                    damage_dice="1d6",
+                    reason="The rat lunges",
+                )
+            ],
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+
+        async def mock_stream(*_args, **_kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="ignored"))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("I approach the rat"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__")
+        assert combat is not None
+        assert combat.get("active") is True
+        assert combat.get("enemy", {}).get("id") == "RAT_ENEMY"
+
+
+async def test_combat_special_event_damage_updates_player_hp_snapshot(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, _npc = await _seed_combat_npc(db)
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Deterministic initiative so the player acts first.
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        # Player and enemy both miss; only the special-event damage should apply.
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 3,
+                "hit_modifier": 0,
+                "hit_total": 3,
+                "target_ac": 11,
+                "is_hit": False,
+                "damage_total": 0,
+                "damage_dice_total": 0,
+                "damage_rolls": [],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d6",
+            },
+        )
+
+        # First random.random call enters special-event branch, second chooses damage event.
+        rolls = iter([0.0, 0.0])
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: next(rolls, 1.0))
+
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(avatar)
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert avatar.hp == 80
+        assert (combat.get("player") or {}).get("hp") == 80

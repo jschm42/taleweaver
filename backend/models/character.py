@@ -45,7 +45,9 @@ class Character(Base, TimestampMixin):
         "Feet": None,
         "Ring_1": None,
         "Ring_2": None,
-        "Amulet": None
+        "Neck": None,
+        "MainHand": None,
+        "OffHand": None
     }, nullable=False)
     
     status_effects = Column(JSON, default=list, nullable=False)
