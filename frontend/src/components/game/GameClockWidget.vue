@@ -13,8 +13,8 @@ const props = defineProps<{
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500/80 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <div class="flex flex-col items-end">
-            <span class="text-[11px] font-black text-amber-500/60 uppercase tracking-widest leading-none mb-1.5">{{ props.gameTime.dateShort }}</span>
+          <div class="flex flex-col items-end min-w-0">
+            <span class="text-[10px] font-black text-amber-500/60 uppercase tracking-widest leading-none mb-1.5 whitespace-nowrap truncate max-w-[120px]">{{ props.gameTime.dateShort }}</span>
             <span class="clock-time text-2xl font-black text-amber-300 tracking-widest leading-none tabular-nums">
               {{ props.gameTime.time }}
             </span>

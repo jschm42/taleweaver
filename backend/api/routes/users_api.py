@@ -4,6 +4,7 @@ from sqlalchemy import select
 import os
 import shutil
 from uuid import uuid4
+from typing import Optional
 
 from backend.core.database import get_db
 from backend.core.auth import get_current_user, get_current_admin, get_password_hash
@@ -20,17 +21,17 @@ class UserCreateRequest(BaseModel):
     role: str = "user"
 
 class UserUpdateRequest(BaseModel):
-    username: str | None = None
-    role: str | None = None
-    password: str | None = None
-    bio: str | None = None
+    username: Optional[str] = None
+    role: Optional[str] = None
+    password: Optional[str] = None
+    bio: Optional[str] = None
 
 class BioUpdateRequest(BaseModel):
     bio: str
 
 
 class ProfileImageGenerateRequest(BaseModel):
-    bio: str | None = None
+    bio: Optional[str] = None
 
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db)):
@@ -136,7 +137,7 @@ async def generate_my_bio(current_user: User = Depends(get_current_user), db: As
 
 @router.post("/users/me/profile-image/generate", response_model=UserResponse)
 async def generate_my_profile_image(
-    payload: ProfileImageGenerateRequest | None = None,
+    payload: Optional[ProfileImageGenerateRequest] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

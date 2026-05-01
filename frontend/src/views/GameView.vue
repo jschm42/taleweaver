@@ -175,12 +175,39 @@ const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id
  * Formats the session clock as a full datetime derived from the adventure start.
  */
 const gameTime = computed(() => {
-  if (!sheet.value?.start_datetime) return null
+  if (!sheet.value?.start_datetime && sheet.value?.time_system !== 'relative') return null
 
+  const timeSystem = sheet.value?.time_system || 'calendar'
+  const timeConfig = sheet.value?.time_config || {}
+  const dayLabel = timeConfig.day_label || 'Day'
+  const elapsedMinutes = sheet.value?.in_game_time ?? 0
+
+  if (timeSystem === 'relative') {
+    const totalMinutes = elapsedMinutes
+    // Support custom start time in relative mode too
+    let baseHour = 8
+    if (timeConfig.start_time) {
+      const [h] = timeConfig.start_time.split(':').map(Number)
+      if (!isNaN(h)) baseHour = h
+    }
+
+    const totalHours = Math.floor(totalMinutes / 60)
+    const extraMinutes = totalMinutes % 60
+    const currentHour = (baseHour + totalHours) % 24
+    const daysPassed = Math.floor((baseHour + totalHours) / 24)
+    
+    const timeStr = `${currentHour.toString().padStart(2, '0')}:${extraMinutes.toString().padStart(2, '0')}`
+    return {
+      date: `${dayLabel} ${1 + daysPassed}`,
+      dateShort: `${dayLabel} ${1 + daysPassed}`,
+      time: timeStr
+    }
+  }
+
+  // Calendar mode
   const start = new Date(sheet.value.start_datetime)
   if (Number.isNaN(start.getTime())) return null
 
-  const elapsedMinutes = sheet.value.in_game_time ?? 0
   const current = new Date(start.getTime() + elapsedMinutes * 60_000)
 
   const date = current.toLocaleDateString('de-DE', {
@@ -193,12 +220,13 @@ const gameTime = computed(() => {
   const dateShort = (() => {
     const d = current.getDate().toString().padStart(2, '0')
     const m = (current.getMonth() + 1).toString().padStart(2, '0')
-    const y = current.getFullYear().toString().slice(-2)
+    const y = current.getFullYear().toString()
+    const yShort = y.slice(-2)
     
     switch (gameSettings.value.date_format) {
-      case 'MM/DD/YY': return `${m}/${d}/${y}`
-      case 'YY-MM-DD': return `${y}-${m}-${d}`
-      default: return `${d}.${m}.${y}`
+      case 'MM/DD/YY': return `${m}/${d}/${yShort}`
+      case 'YY-MM-DD': return `${yShort}-${m}-${d}`
+      default: return `${d}.${m}.${y}` // Keep full year for sci-fi/historical
     }
   })()
 
@@ -206,9 +234,8 @@ const gameTime = computed(() => {
     hour: '2-digit',
     minute: '2-digit',
     hour12: !gameSettings.value.clock_24h,
-  }).replace(/^0/, '') // Strip leading zero for cleaner look in 12h
+  }).replace(/^0/, '')
 
-  // In 24h mode, ensure 2-digit hour
   const time24 = current.toLocaleTimeString('de-DE', {
     hour: '2-digit',
     minute: '2-digit',

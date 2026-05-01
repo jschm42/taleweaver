@@ -116,7 +116,14 @@ const form = ref({
   strict_rules: true,
   time_per_turn: 5,
   min_scenes: 1,
+  min_scenes: 1,
   max_scenes: 5,
+  time_system: 'calendar',
+  time_config: {
+    day_label: 'Day',
+    start_year_override: null,
+    start_time: '08:00'
+  }
 })
 
 async function fetchAdventure() {
@@ -142,6 +149,8 @@ async function fetchAdventure() {
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.min_scenes = data.min_scenes || 1
     form.value.max_scenes = data.max_scenes || 5
+    form.value.time_system = data.time_system || 'calendar'
+    form.value.time_config = data.time_config || { day_label: 'Day', start_year_override: null, start_time: '08:00' }
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -653,6 +662,57 @@ watch(
                       <strong class="text-emerald-400">{{ form.max_scenes }}</strong>
                     </div>
                     <input type="range" v-model.number="form.max_scenes" min="1" max="20" step="1" class="w-full accent-emerald-500" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Time System Configuration -->
+              <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl space-y-6">
+                <div class="flex items-center gap-3">
+                  <div class="p-2 bg-amber-500/10 rounded-lg text-amber-500">
+                    <i class="ra ra-clockwork text-xl"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Chronicle Time System</h3>
+                    <p class="text-[10px] text-slate-500">How time is measured in this world.</p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                  <button 
+                    @click="form.time_system = 'calendar'"
+                    :class="[
+                      'px-4 py-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all',
+                      form.time_system === 'calendar' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
+                    ]"
+                  >
+                    Calendar (Date/Time)
+                  </button>
+                  <button 
+                    @click="form.time_system = 'relative'"
+                    :class="[
+                      'px-4 py-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all',
+                      form.time_system === 'relative' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
+                    ]"
+                  >
+                    Relative (Day X)
+                  </button>
+                </div>
+
+                <div class="space-y-4 pt-2 border-t border-slate-800/50">
+                  <div v-if="form.time_system === 'relative'">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Day Label</label>
+                    <input v-model="form.time_config.day_label" type="text" placeholder="e.g. Day, Sol, Cycle" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
+                  </div>
+
+                  <div v-if="form.time_system === 'calendar'">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Year Override</label>
+                    <input v-model.number="form.time_config.start_year_override" type="number" placeholder="e.g. 2123, 1975" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
+                  </div>
+
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Start Time</label>
+                    <input v-model="form.time_config.start_time" type="text" placeholder="HH:MM" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
                   </div>
                 </div>
               </div>

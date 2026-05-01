@@ -13,15 +13,32 @@ class MemoryManager:
     MAX_HISTORY_LENGTH = 20 # Can be adjusted based on token limits
 
     @staticmethod
-    def format_game_time(minutes: int) -> str:
-        """Translates total minutes into a Day X, HH:MM format (Starts at Day 1, 08:00 AM)."""
+    def format_game_time(minutes: int, time_system: str = "calendar", time_config: Optional[dict] = None) -> str:
+        """Translates total minutes into a formatted string based on the system."""
+        time_config = time_config or {}
+        day_label = time_config.get("day_label", "Day")
         base_hour = 8
+        
+        # If there's a start_time in config, use it instead of 08:00
+        if time_config.get("start_time"):
+            try:
+                h, m = map(int, time_config["start_time"].split(':'))
+                base_hour = h
+                # We could also use m here if we wanted to be precise
+            except:
+                pass
+
         total_hours = minutes // 60
         extra_minutes = minutes % 60
         
         current_hour = (base_hour + total_hours) % 24
         days_passed = (base_hour + total_hours) // 24
         
+        if time_system == "relative":
+            return f"{day_label} {1 + days_passed}, {current_hour:02d}:{extra_minutes:02d}"
+        
+        # Calendar mode is handled by the frontend mostly, 
+        # but for the LLM prompt we provide a readable string.
         return f"Day {1 + days_passed}, {current_hour:02d}:{extra_minutes:02d}"
 
     @staticmethod
@@ -37,12 +54,14 @@ class MemoryManager:
         rules: Optional[str] = None,
         walkthrough: Optional[str] = None,
         completed_condition: Optional[str] = None,
-        gameover_condition: Optional[str] = None
+        gameover_condition: Optional[str] = None,
+        time_system: str = "calendar",
+        time_config: Optional[dict] = None
     ) -> str:
         """
         Builds the foundational system prompt using the pre-generated world integrity.
         """
-        time_str = MemoryManager.format_game_time(in_game_time)
+        time_str = MemoryManager.format_game_time(in_game_time, time_system=time_system, time_config=time_config)
         total_stats = calculate_total_stats(avatar)
         
         character_sheet = {
@@ -127,7 +146,9 @@ class MemoryManager:
         rules: Optional[str] = None,
         walkthrough: Optional[str] = None,
         completed_condition: Optional[str] = None,
-        gameover_condition: Optional[str] = None
+        gameover_condition: Optional[str] = None,
+        time_system: str = "calendar",
+        time_config: Optional[dict] = None
     ) -> list[dict]:
         """
         Combines the System Prompt with the sliding window of history and structured world state.
@@ -135,7 +156,8 @@ class MemoryManager:
         sys_prompt = MemoryManager.build_system_prompt(
             avatar, world_context, current_scene, entities, exits, in_game_time, awards,
             plot=plot, rules=rules, walkthrough=walkthrough,
-            completed_condition=completed_condition, gameover_condition=gameover_condition
+            completed_condition=completed_condition, gameover_condition=gameover_condition,
+            time_system=time_system, time_config=time_config
         )
         messages = [{"role": "system", "content": sys_prompt}]
         

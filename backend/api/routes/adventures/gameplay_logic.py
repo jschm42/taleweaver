@@ -162,7 +162,7 @@ class GameTurnManager:
             debug_info = "DEBUG: Session forced to COMPLETED."
 
         await self.db.commit()
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+        final_data = jsonable_encoder({
             'messages': [{'role': 'system', 'content': debug_info}],
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'awards': self.adventure.awards,
@@ -171,14 +171,16 @@ class GameTurnManager:
             'game_over_reason': self.state.session.status_note if self.state.session else None,
             'status_note': self.state.session.status_note if self.state.session else None,
             'status': 'success'
-        }))}\n\n"
+        })
+        yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
             map_res = await self.db.execute(select(WorldMap).where(WorldMap.template_id == self.state.template_id))
             world_map = map_res.scalars().first()
-            yield f"event: final\ndata: {json.dumps(jsonable_encoder({'mermaid': MapEngine.to_mermaid(world_map) if world_map else None, 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db)}))}\n\n"
+            final_data = jsonable_encoder({'mermaid': MapEngine.to_mermaid(world_map) if world_map else None, 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db)})
+            yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
             return
             
         if response.startswith("[TRIGGER_TAKE_DIRECT]"):
@@ -215,7 +217,8 @@ class GameTurnManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
 
         await self.db.commit()
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state)}))}\n\n"
+        final_data = jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state)})
+        yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
         self.stop_requested = True # Stop after direct slash response
 
     async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool) -> AsyncGenerator[str, None]:
@@ -268,7 +271,9 @@ class GameTurnManager:
             rules=self.state.rules or self.adventure.rules,
             walkthrough=self.state.walkthrough or self.adventure.walkthrough,
             completed_condition=self.state.completed_condition or self.adventure.completed_condition,
-            gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition
+            gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition,
+            time_system=self.state.time_system or self.adventure.time_system or "calendar",
+            time_config=self.state.time_config or self.adventure.time_config
         )[0]["content"]
 
         # Override for technical state evaluation (e.g. closing character sheet)
@@ -296,8 +301,8 @@ class GameTurnManager:
             or "openai"
         )
         
-        small_model = llm_settings.get("small_model", "gpt-4o-mini")
-        complex_model = llm_settings.get("complex_model", "gpt-4o")
+        small_model = llm_settings.get("small_model") or "gpt-4o-mini"
+        complex_model = llm_settings.get("complex_model") or "gpt-4o"
 
         game_event = None
         response_text = ""
@@ -552,14 +557,15 @@ class GameTurnManager:
 
         await self.db.commit()
         
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+        final_data = jsonable_encoder({
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
             'game_completed': (self.state.session.status == 'completed') if self.state.session else False,
             'status_note': self.state.session.status_note if self.state.session else None,
             'status': 'success'
-        }))}\n\n"
+        })
+        yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
     async def _apply_game_event(self, event: GameEvent):
         """Applies technical mutations from a GameEvent to the database and session state."""

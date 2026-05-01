@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import os
-from typing import List, Optional, Dict, Literal
+from typing import List, Optional, Dict, Literal, Any
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -102,6 +102,8 @@ class WorldSceneSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the scene, e.g., CASTLE_GATES")
     name: str = Field(..., description="Human-readable name")
     description: str = Field(..., description="Atmospheric and detailed description of the location.")
+    
+    model_config = {"extra": "forbid"}
 
 class WorldExitSchema(BaseModel):
     from_scene_id: str
@@ -109,6 +111,8 @@ class WorldExitSchema(BaseModel):
     label: str = Field(..., description="How to describe the transition, e.g., 'a narrow stone staircase'")
     is_locked: bool = False
     lock_description: Optional[str] = None
+    
+    model_config = {"extra": "forbid"}
 
 class WorldEntitySchema(BaseModel):
     id: str = Field(..., description="Unique slug for the entity, e.g., MAD_ALCHEMIST")
@@ -142,6 +146,8 @@ class WorldEntitySchema(BaseModel):
     stat_modifier_armor_class: Optional[int] = None
     
     inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in this NPC's or Object's inventory.")
+    
+    model_config = {"extra": "forbid"}
 
 class QuestSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the quest, e.g., FIND_GOLDEN_KEY")
@@ -152,6 +158,8 @@ class QuestSchema(BaseModel):
     exp_reward: int = Field(250, description="EXP awarded for completion (e.g., 50, 100, 250)")
     is_main: bool = Field(True, description="True if this quest is required to finish the adventure")
     status: str = Field("open", description="Current state: open, completed, failed")
+    
+    model_config = {"extra": "forbid"}
 
 class AwardTemplateSchema(BaseModel):
     key: str = Field(..., description="Unique identifier for the award, e.g., SLAYER_OF_RATS")
@@ -159,6 +167,22 @@ class AwardTemplateSchema(BaseModel):
     description: str = Field(..., description="Short description shown to the player")
     tier: Literal["bronze", "silver", "gold"] = Field("bronze", description="The rarity/tier of the award")
     requirement: str = Field(..., description="The specific rule/condition when the GM should grant this award")
+    
+    model_config = {"extra": "forbid"}
+
+class EquipmentSchema(BaseModel):
+    Head: Optional[str] = None
+    Chest: Optional[str] = None
+    Hands: Optional[str] = None
+    Legs: Optional[str] = None
+    Feet: Optional[str] = None
+    Neck: Optional[str] = None
+    Ring_1: Optional[str] = None
+    Ring_2: Optional[str] = None
+    MainHand: Optional[str] = None
+    OffHand: Optional[str] = None
+    
+    model_config = {"extra": "forbid"}
 
 class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
@@ -171,10 +195,18 @@ class ProtagonistSchema(BaseModel):
     charisma: int = Field(10, description="Base charisma stat (1-99)")
     armor_class: int = Field(10, description="Base armor class stat (1-99)")
     starting_inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in the player's pocket.")
-    starting_equipment: Optional[Dict[str, str]] = Field(None, description="Mapping of slots (e.g. 'Hands', 'Head') to object IDs.")
+    starting_equipment: Optional[EquipmentSchema] = Field(None, description="Initial equipment setup.")
     hp: int = Field(200, description="Base health points")
     mana: int = Field(200, description="Base mana points")
     stamina: int = Field(200, description="Base stamina points")
+    
+    model_config = {"extra": "forbid"}
+
+class TimeConfigSchema(BaseModel):
+    day_label: Optional[str] = Field(None, description="Label for the day unit, e.g. 'Day', 'Sol', 'Cycle'")
+    start_year_override: Optional[int] = Field(None, description="Override for the starting year in calendar mode")
+    
+    model_config = {"extra": "forbid"}
 
 class WorldManifesto(BaseModel):
     """
@@ -197,6 +229,10 @@ class WorldManifesto(BaseModel):
     # Optional Time Initialization
     start_date: Optional[str] = Field(None, description="Initial in-game date, e.g. '2026-04-17'")
     start_time: Optional[str] = Field(None, description="Initial in-game time, e.g. '08:00'")
+    time_system: Optional[str] = Field("calendar", description="One of: calendar, relative")
+    time_config: Optional[TimeConfigSchema] = Field(None, description="Detailed configuration for the time system.")
+    
+    model_config = {"extra": "forbid"}
 
 class WorldGenerator:
     @staticmethod
@@ -206,7 +242,7 @@ class WorldGenerator:
         template_id: str, 
         title: str, 
         original_prompt: str,
-        model: str = "gpt-4o", # default to a complex model
+        model: Optional[str] = None, # Resolve from user settings if not provided
         provider: Optional[str] = None,
         generate_scene_images: bool = False,
         generate_npc_images: bool = False,
@@ -230,6 +266,11 @@ class WorldGenerator:
                 or llm_settings.get("small_model_provider")
                 or llm_settings.get("preferred_provider")
             )
+        
+        if not model:
+            llm_settings = user.llm_settings or {}
+            model = llm_settings.get("complex_model") or llm_settings.get("small_model") or "gpt-4o"
+
         if not provider:
             raise ValueError(
                 "No complex LLM provider configured for this user. "
@@ -439,6 +480,12 @@ class WorldGenerator:
             adventure.completed_condition = manifest_dict.get("completed_condition") or adventure.completed_condition
             adventure.gameover_condition = manifest_dict.get("gameover_condition") or adventure.gameover_condition
             
+            # Flexible Time System
+            if manifest_dict.get("time_system"):
+                adventure.time_system = manifest_dict["time_system"]
+            if manifest_dict.get("time_config"):
+                adventure.time_config = manifest_dict["time_config"]
+            
             # Optional Time Initialization (Convert to minutes since start if possible)
             # For now we just check if it's there; future logic can normalize this.
             if manifest_dict.get("start_time"):
@@ -467,6 +514,8 @@ class WorldGenerator:
                 state.walkthrough = adventure.walkthrough
                 state.completed_condition = adventure.completed_condition
                 state.gameover_condition = adventure.gameover_condition
+                state.time_system = adventure.time_system
+                state.time_config = adventure.time_config
             
             # Generate Adventure Cover if missing
             if not adventure.image_url and user:
