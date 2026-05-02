@@ -34,6 +34,7 @@ export const getTypeColor = (type?: string) => {
 
 export const getImageUrl = (path?: string | null) => {
   if (!path) return ''
+  if (isPlaceholderImagePath(path)) return ''
   const cacheVersion = localStorage.getItem('tw_visual_cache_version') || '0'
 
   if (path.startsWith('http')) {
@@ -42,4 +43,15 @@ export const getImageUrl = (path?: string | null) => {
   }
   const separator = path.includes('?') ? '&' : '?'
   return `${path}${separator}v=${cacheVersion}`
+}
+
+export const isPlaceholderImagePath = (path?: string | null): boolean => {
+  if (!path) return true
+  const normalized = path.trim().toLowerCase()
+  if (!normalized) return true
+  return /(^|\/)placeholder\.svg(\?|$)/.test(normalized)
+}
+
+export const hasRenderableImagePath = (path?: string | null): boolean => {
+  return Boolean(path && path.trim() && !isPlaceholderImagePath(path))
 }

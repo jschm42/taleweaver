@@ -26,7 +26,7 @@ import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
 import { authState, refreshUser } from '@/store/auth'
-import { getImageUrl, getItemIcon } from '@/utils/game_icons'
+import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
 
 const props = defineProps<{
   id: string
@@ -81,6 +81,7 @@ const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQues
 // Tooltip & Hover State
 const hoveredEntity = ref<any>(null)
 const mousePos = ref({ x: 0, y: 0 })
+const tooltipImageFailed = ref(false)
 
 function toNumberOrNull(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -162,8 +163,13 @@ function normalizeHoverEntity(entity: any): any {
 }
 
 const handleHover = (ent: any, event: MouseEvent) => {
+  tooltipImageFailed.value = false
   hoveredEntity.value = normalizeHoverEntity(ent)
   mousePos.value = { x: event.clientX, y: event.clientY }
+}
+
+function onTooltipImageError(): void {
+  tooltipImageFailed.value = true
 }
 
 const tooltipStyle = computed(() => {
@@ -196,10 +202,15 @@ const isConsumableHover = computed(() => {
 const handleChatNpcHover = (name: string, event: MouseEvent) => {
   const metadata = npcMetadata.value[name]
   if (metadata) {
+    tooltipImageFailed.value = false
     hoveredEntity.value = normalizeHoverEntity(metadata)
     mousePos.value = { x: event.clientX, y: event.clientY }
   }
 }
+
+watch(() => hoveredEntity.value?.image_url, () => {
+  tooltipImageFailed.value = false
+})
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
 const npcs = computed(() => {
@@ -814,9 +825,18 @@ onBeforeUnmount(() => {
         >
           <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
             <!-- Image Area -->
-            <div v-if="hoveredEntity.image_url" class="h-48 w-full relative">
-              <img :src="getImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
+            <div v-if="hasRenderableImagePath(hoveredEntity.image_url) && !tooltipImageFailed" class="h-48 w-full relative">
+              <img :src="getImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" @error="onTooltipImageError" />
               <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+            </div>
+            <div v-else class="h-32 w-full relative bg-slate-950 border-b border-slate-800 flex items-center justify-center">
+              <i
+                :class="[
+                  'ra text-4xl',
+                  hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'ra-player text-cyan-400/80' : 'ra-vest text-amber-400/80'
+                ]"
+              ></i>
+              <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.12),transparent_65%)]"></div>
             </div>
 
             <!-- Content -->

@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CombatState, InventoryItem, CharacterSheet } from '@/types'
 import StatBar from './StatBar.vue'
-import { getImageUrl, getItemIcon, getTypeColor } from '@/utils/game_icons'
+import { getImageUrl, getItemIcon, getTypeColor, hasRenderableImagePath } from '@/utils/game_icons'
+
+const LOG_REVEAL_DELAY_MS = 2000
+const DAMAGE_FLOAT_DURATION_MS = 2600
+const IMPACT_DURATION_MS = 620
+const HEAVY_IMPACT_DURATION_MS = 900
+const HEAVY_HIT_MAX_HP_RATIO = 0.15
+const HEAVY_HIT_MIN_DAMAGE = 8
+const HEAVY_HIT_FALLBACK_DAMAGE = 18
 
 const props = defineProps<{
   open: boolean
@@ -33,6 +41,214 @@ const parsedLogs = computed(() => logs.value.map((entry) => ({
 const lootItems = computed(() => props.combat?.loot_items || [])
 const isLootPhase = computed(() => !!props.combat?.loot_pending)
 const activeTurn = computed(() => props.combat?.turn || 'player')
+const playerImageFailed = ref(false)
+const enemyImageFailed = ref(false)
+const visibleLogCount = ref(0)
+const lastSeenLogLength = ref(0)
+const initializedLogView = ref(false)
+const logContainerRef = ref<HTMLElement | null>(null)
+const prefersReducedMotion = ref(false)
+
+type DamageFxItem = {
+  id: number
+  side: 'player' | 'enemy'
+  amount: number
+  offsetX: number
+}
+
+type ImpactFxItem = {
+  id: number
+  side: 'player' | 'enemy'
+  heavy: boolean
+}
+
+const damageFx = ref<DamageFxItem[]>([])
+const playerDamageFx = computed(() => damageFx.value.filter((item) => item.side === 'player'))
+const enemyDamageFx = computed(() => damageFx.value.filter((item) => item.side === 'enemy'))
+const impactFx = ref<ImpactFxItem[]>([])
+const playerImpactFx = computed(() => impactFx.value.filter((item) => item.side === 'player'))
+const enemyImpactFx = computed(() => impactFx.value.filter((item) => item.side === 'enemy'))
+
+let damageFxCounter = 0
+let revealTimeouts: number[] = []
+let cleanupTimeouts: number[] = []
+let motionMediaQuery: MediaQueryList | null = null
+
+const visibleLogs = computed(() => parsedLogs.value.slice(0, visibleLogCount.value))
+
+const combatIdentity = computed(() => {
+  const combat = props.combat
+  if (!combat) return ''
+  return `${combat.player.name}::${combat.enemy.id}`
+})
+
+function clearTimeoutList(timeoutIds: number[]): void {
+  for (const timeoutId of timeoutIds) {
+    window.clearTimeout(timeoutId)
+  }
+  timeoutIds.length = 0
+}
+
+function clearPendingTimers(): void {
+  clearTimeoutList(revealTimeouts)
+  clearTimeoutList(cleanupTimeouts)
+}
+
+function resetAnimatedState(): void {
+  clearPendingTimers()
+  visibleLogCount.value = 0
+  lastSeenLogLength.value = 0
+  initializedLogView.value = false
+  damageFx.value = []
+}
+
+function makeLogKey(entry: any, idx: number): string {
+  const timestamp = entry.timestamp || 'no-ts'
+  return `${timestamp}-${entry.round}-${entry.type}-${idx}`
+}
+
+function maybeSpawnDamageFx(entry: any): void {
+  const roll = entry?.attackRoll
+  if (!roll || !roll.isHit || roll.damageTotal == null || roll.damageTotal <= 0) return
+
+  const side: 'player' | 'enemy' = entry.isPlayerAttack ? 'enemy' : 'player'
+  const fxId = ++damageFxCounter
+  const isHeavy = isHeavyHitByMaxHp(side, roll.damageTotal)
+  damageFx.value.push({
+    id: fxId,
+    side,
+    amount: roll.damageTotal,
+    offsetX: Math.round((Math.random() - 0.5) * 30),
+  })
+  maybeSpawnImpactFx(side, isHeavy)
+
+  const cleanupId = window.setTimeout(() => {
+    damageFx.value = damageFx.value.filter((item) => item.id !== fxId)
+  }, DAMAGE_FLOAT_DURATION_MS)
+  cleanupTimeouts.push(cleanupId)
+}
+
+function maybeSpawnImpactFx(side: 'player' | 'enemy', heavy: boolean): void {
+  const fxId = ++damageFxCounter
+  impactFx.value.push({ id: fxId, side, heavy })
+  const duration = heavy ? HEAVY_IMPACT_DURATION_MS : IMPACT_DURATION_MS
+  const cleanupId = window.setTimeout(() => {
+    impactFx.value = impactFx.value.filter((item) => item.id !== fxId)
+  }, duration)
+  cleanupTimeouts.push(cleanupId)
+}
+
+function getTargetMaxHp(side: 'player' | 'enemy'): number {
+  const raw = side === 'player' ? props.combat?.player?.max_hp : props.combat?.enemy?.max_hp
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0
+}
+
+function isHeavyHitByMaxHp(side: 'player' | 'enemy', damageTotal: number): boolean {
+  const maxHp = getTargetMaxHp(side)
+  if (maxHp <= 0) {
+    return damageTotal >= HEAVY_HIT_FALLBACK_DAMAGE
+  }
+  const threshold = Math.max(HEAVY_HIT_MIN_DAMAGE, Math.ceil(maxHp * HEAVY_HIT_MAX_HP_RATIO))
+  return damageTotal >= threshold
+}
+
+watch(() => props.combat?.player?.image_url, () => {
+  playerImageFailed.value = false
+})
+
+watch(() => props.combat?.enemy?.image_url, () => {
+  enemyImageFailed.value = false
+})
+
+function onPlayerImageError(): void {
+  playerImageFailed.value = true
+}
+
+function onEnemyImageError(): void {
+  enemyImageFailed.value = true
+}
+
+function scrollLogToBottom(behavior: ScrollBehavior): void {
+  const el = logContainerRef.value
+  if (!el) return
+  el.scrollTo({ top: el.scrollHeight, behavior })
+}
+
+function revealNewLogs(startIndex: number, endIndex: number): void {
+  const interval = prefersReducedMotion.value ? 0 : LOG_REVEAL_DELAY_MS
+  for (let idx = startIndex; idx < endIndex; idx += 1) {
+    const step = idx - startIndex
+    const delay = interval * (step + 1)
+    const timeoutId = window.setTimeout(() => {
+      visibleLogCount.value = Math.max(visibleLogCount.value, idx + 1)
+      maybeSpawnDamageFx(parsedLogs.value[idx])
+      nextTick(() => scrollLogToBottom(prefersReducedMotion.value ? 'auto' : 'smooth'))
+    }, delay)
+    revealTimeouts.push(timeoutId)
+  }
+}
+
+watch(() => props.open, (isOpen) => {
+  if (!isOpen) {
+    resetAnimatedState()
+  }
+})
+
+watch(combatIdentity, (nextIdentity, prevIdentity) => {
+  if (nextIdentity !== prevIdentity) {
+    resetAnimatedState()
+  }
+})
+
+watch(
+  parsedLogs,
+  (nextLogs) => {
+    if (!props.open || !props.combat) return
+
+    const nextLength = nextLogs.length
+    if (!initializedLogView.value) {
+      visibleLogCount.value = nextLength
+      lastSeenLogLength.value = nextLength
+      initializedLogView.value = true
+      nextTick(() => scrollLogToBottom('auto'))
+      return
+    }
+
+    if (nextLength < lastSeenLogLength.value) {
+      clearPendingTimers()
+      visibleLogCount.value = nextLength
+      lastSeenLogLength.value = nextLength
+      nextTick(() => scrollLogToBottom('auto'))
+      return
+    }
+
+    if (nextLength === lastSeenLogLength.value) return
+
+    clearTimeoutList(revealTimeouts)
+    const startIndex = lastSeenLogLength.value
+    lastSeenLogLength.value = nextLength
+    revealNewLogs(startIndex, nextLength)
+  },
+  { deep: false },
+)
+
+function onMotionChange(event: MediaQueryListEvent): void {
+  prefersReducedMotion.value = event.matches
+}
+
+onMounted(() => {
+  motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  prefersReducedMotion.value = motionMediaQuery.matches
+  motionMediaQuery.addEventListener('change', onMotionChange)
+})
+
+onBeforeUnmount(() => {
+  clearPendingTimers()
+  if (motionMediaQuery) {
+    motionMediaQuery.removeEventListener('change', onMotionChange)
+    motionMediaQuery = null
+  }
+})
 
 type AttackRollView = {
   attacker: string
@@ -189,9 +405,26 @@ function emitLeave(): void {
               @mouseleave="emitLeave"
             >
               <div class="text-[10px] uppercase tracking-[0.2em] text-emerald-300/80 mb-2">Protagonist</div>
-              <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-emerald-400/40 bg-slate-950">
-                <img v-if="combat.player.image_url" :src="getImageUrl(combat.player.image_url)" class="w-full h-full object-cover object-top" alt="protagonist">
+              <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-emerald-400/40 bg-slate-950">
+                <img v-if="hasRenderableImagePath(combat.player.image_url) && !playerImageFailed" :src="getImageUrl(combat.player.image_url)" class="w-full h-full object-cover object-top" alt="protagonist" @error="onPlayerImageError">
                 <div v-else class="w-full h-full flex items-center justify-center text-emerald-300 ra ra-player text-3xl"></div>
+                <div class="absolute inset-0 pointer-events-none">
+                  <span
+                    v-for="fx in playerImpactFx"
+                    :key="fx.id"
+                    :class="['impact-float', fx.heavy ? 'impact-float-heavy' : 'impact-float-light']"
+                  ></span>
+                </div>
+                <div class="absolute inset-0 pointer-events-none">
+                  <span
+                    v-for="fx in playerDamageFx"
+                    :key="fx.id"
+                    class="damage-float"
+                    :style="{ '--dx': `${fx.offsetX}px` }"
+                  >
+                    -{{ fx.amount }}
+                  </span>
+                </div>
               </div>
               <div class="mt-3 text-xs text-white font-bold text-center">{{ combat.player.name }}</div>
               <div class="mt-2 w-full">
@@ -205,8 +438,8 @@ function emitLeave(): void {
               <div class="px-3 py-2 border-b border-amber-500/15 text-[10px] uppercase tracking-[0.2em] text-amber-300/80">
                 Battle Chronicle
               </div>
-              <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 py-2 space-y-2">
-                <div v-for="(entry, idx) in parsedLogs" :key="idx" class="text-sm md:text-base leading-relaxed border-l-2 pl-2"
+              <div ref="logContainerRef" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 py-2 space-y-2">
+                <div v-for="(entry, idx) in visibleLogs" :key="makeLogKey(entry, idx)" class="combat-log-entry text-sm md:text-base leading-relaxed border-l-2 pl-2"
                   :class="entry.type === 'special' ? 'border-violet-400/60 text-violet-200' : entry.type === 'enemy_action' ? 'border-rose-500/50 text-rose-200' : entry.type === 'player_action' ? 'border-emerald-500/50 text-emerald-200' : 'border-amber-500/40 text-slate-200'">
                   <div class="mb-1.5">
                     <span :class="['text-[10px] px-1.5 py-0.5 rounded border font-black uppercase tracking-[0.12em]', sourceClass(entry.source)]">
@@ -214,7 +447,7 @@ function emitLeave(): void {
                     </span>
                   </div>
                   <template v-if="entry.attackRoll">
-                    <div :class="['rounded-lg border p-2.5', attackCardClass(entry.isPlayerAttack)]">
+                    <div :class="['rounded-lg border p-2.5 attack-roll-card', attackCardClass(entry.isPlayerAttack), entry.attackRoll.isHit ? 'attack-roll-hit' : 'attack-roll-miss']">
                       <div class="flex items-center gap-2 mb-2 flex-wrap">
                         <span :class="['text-[10px] px-1.5 py-0.5 rounded border font-black uppercase tracking-[0.12em]', attackLabelClass(entry.isPlayerAttack)]">
                           ⚔ Attack
@@ -280,9 +513,26 @@ function emitLeave(): void {
               @mouseleave="emitLeave"
             >
               <div class="text-[10px] uppercase tracking-[0.2em] text-rose-300/80 mb-2">Enemy</div>
-              <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-rose-400/40 bg-slate-950">
-                <img v-if="combat.enemy.image_url" :src="getImageUrl(combat.enemy.image_url)" class="w-full h-full object-cover object-top" alt="enemy">
+              <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-rose-400/40 bg-slate-950">
+                <img v-if="hasRenderableImagePath(combat.enemy.image_url) && !enemyImageFailed" :src="getImageUrl(combat.enemy.image_url)" class="w-full h-full object-cover object-top" alt="enemy" @error="onEnemyImageError">
                 <div v-else class="w-full h-full flex items-center justify-center text-rose-300 ra ra-monster-skull text-3xl"></div>
+                <div class="absolute inset-0 pointer-events-none">
+                  <span
+                    v-for="fx in enemyImpactFx"
+                    :key="fx.id"
+                    :class="['impact-float', fx.heavy ? 'impact-float-heavy' : 'impact-float-light']"
+                  ></span>
+                </div>
+                <div class="absolute inset-0 pointer-events-none">
+                  <span
+                    v-for="fx in enemyDamageFx"
+                    :key="fx.id"
+                    class="damage-float"
+                    :style="{ '--dx': `${fx.offsetX}px` }"
+                  >
+                    -{{ fx.amount }}
+                  </span>
+                </div>
               </div>
               <div class="mt-3 text-xs text-white font-bold text-center">{{ combat.enemy.name }}</div>
               <div class="mt-2 w-full">
@@ -327,7 +577,7 @@ function emitLeave(): void {
                 >
                   <div class="w-6 h-6 rounded overflow-hidden border border-cyan-400/30 bg-slate-950 shrink-0 flex items-center justify-center">
                     <img
-                      v-if="item.image_url"
+                      v-if="hasRenderableImagePath(item.image_url as string)"
                       :src="getImageUrl(item.image_url as string)"
                       class="w-full h-full object-cover"
                       :alt="item.name"
@@ -371,6 +621,171 @@ function emitLeave(): void {
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(251, 191, 36, 0.25);
   border-radius: 6px;
+}
+
+.combat-log-entry {
+  animation: combatLogIn 240ms ease-out both;
+}
+
+.attack-roll-card {
+  animation: attackCardIn 260ms ease-out both;
+}
+
+.attack-roll-hit {
+  box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+  animation: attackCardIn 260ms ease-out both, attackHitPulse 560ms ease-out 120ms;
+}
+
+.attack-roll-miss {
+  box-shadow: 0 0 0 rgba(244, 63, 94, 0);
+  animation: attackCardIn 260ms ease-out both, attackMissPulse 560ms ease-out 120ms;
+}
+
+.damage-float {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(calc(-50% + var(--dx, 0px)));
+  font-size: clamp(1.7rem, 3.8vw, 2.5rem);
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: #fecdd3;
+  text-shadow: 0 0 18px rgba(251, 113, 133, 0.85), 0 0 6px rgba(244, 63, 94, 0.75), 0 0 2px rgba(15, 23, 42, 0.9);
+  animation: damageFloatUp 2600ms cubic-bezier(0.2, 0.68, 0.18, 1) forwards;
+}
+
+.impact-float {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.72rem;
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  pointer-events: none;
+}
+
+.impact-float-light {
+  animation: portraitImpactLight 620ms ease-out forwards;
+}
+
+.impact-float-heavy {
+  animation: portraitImpactHeavy 900ms cubic-bezier(0.18, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes combatLogIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes attackCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes attackHitPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(16, 185, 129, 0.28);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes attackMissPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(244, 63, 94, 0);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(244, 63, 94, 0.24);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(244, 63, 94, 0);
+  }
+}
+
+@keyframes damageFloatUp {
+  0% {
+    opacity: 0;
+    transform: translateX(calc(-50% + var(--dx, 0px))) translateY(16px) scale(0.75);
+  }
+  12% {
+    opacity: 1;
+    transform: translateX(calc(-50% + var(--dx, 0px))) translateY(0) scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(calc(-50% + var(--dx, 0px))) translateY(-52px) scale(1.06);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(calc(-50% + var(--dx, 0px))) translateY(-96px) scale(1.08);
+  }
+}
+
+@keyframes portraitImpactLight {
+  0% {
+    opacity: 0;
+    box-shadow: inset 0 0 0 rgba(251, 113, 133, 0), 0 0 0 rgba(251, 113, 133, 0);
+    transform: scale(1);
+  }
+  25% {
+    opacity: 1;
+    box-shadow: inset 0 0 18px rgba(251, 113, 133, 0.26), 0 0 14px rgba(251, 113, 133, 0.25);
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    box-shadow: inset 0 0 0 rgba(251, 113, 133, 0), 0 0 0 rgba(251, 113, 133, 0);
+    transform: scale(1);
+  }
+}
+
+@keyframes portraitImpactHeavy {
+  0% {
+    opacity: 0;
+    transform: translateX(0) scale(1);
+    box-shadow: inset 0 0 0 rgba(244, 63, 94, 0), 0 0 0 rgba(244, 63, 94, 0);
+  }
+  14% {
+    opacity: 1;
+    transform: translateX(-2px) scale(1.03);
+    box-shadow: inset 0 0 26px rgba(244, 63, 94, 0.36), 0 0 22px rgba(244, 63, 94, 0.38);
+  }
+  28% {
+    transform: translateX(2px) scale(1.02);
+  }
+  42% {
+    transform: translateX(-1px) scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(0) scale(1);
+    box-shadow: inset 0 0 0 rgba(244, 63, 94, 0), 0 0 0 rgba(244, 63, 94, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .combat-log-entry,
+  .attack-roll-card,
+  .attack-roll-hit,
+  .attack-roll-miss,
+  .damage-float {
+    animation: none !important;
+  }
 }
 
 .ra {
