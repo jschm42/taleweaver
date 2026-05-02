@@ -240,6 +240,8 @@ const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
 const isCombatActive = computed(() => !!combat.value?.active)
 const showCombatDialog = computed(() => !!combat.value && (!!combat.value.active || !!combat.value.loot_pending))
+const combatActionInFlight = ref(false)
+const isCombatEvaluating = computed(() => combatActionInFlight.value)
 const showsMechanics = computed(() => {
   const mode = (sheet.value as any)?.rule_enforcement_mode as string | undefined
   return mode === 'rpg' || mode === 'story' || mode === 'strict'
@@ -533,32 +535,74 @@ const handlePlayerInput = async (content: string) => {
 }
 
 const handleCombatAttack = async () => {
-  await sendMessage('/attack')
+  if (combatActionInFlight.value) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage('/attack')
+  } finally {
+    combatActionInFlight.value = false
+  }
 }
 
 const handleCombatRun = async () => {
-  await sendMessage('/run')
+  if (combatActionInFlight.value) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage('/run')
+  } finally {
+    combatActionInFlight.value = false
+  }
 }
 
 const handleCombatConsume = async (name: string) => {
-  await sendMessage(`/consume ${name}`)
+  if (combatActionInFlight.value) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage(`/consume ${name}`)
+  } finally {
+    combatActionInFlight.value = false
+  }
 }
 
 const handleLootTake = async (item: any) => {
+  if (combatActionInFlight.value) return
   const key = (item?.id || item?.name || '').toString().trim()
   if (!key) return
-  await sendMessage(`/loot take ${key}`)
+  combatActionInFlight.value = true
+  try {
+    await sendMessage(`/loot take ${key}`)
+  } finally {
+    combatActionInFlight.value = false
+  }
 }
 
 const handleLootLeave = async (item: any) => {
+  if (combatActionInFlight.value) return
   const key = (item?.id || item?.name || '').toString().trim()
   if (!key) return
-  await sendMessage(`/loot leave ${key}`)
+  combatActionInFlight.value = true
+  try {
+    await sendMessage(`/loot leave ${key}`)
+  } finally {
+    combatActionInFlight.value = false
+  }
 }
 
 const handleLootDone = async () => {
-  await sendMessage('/loot done')
+  if (combatActionInFlight.value) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage('/loot done')
+  } finally {
+    combatActionInFlight.value = false
+  }
 }
+
+watch(showCombatDialog, (visible) => {
+  if (!visible) {
+    combatActionInFlight.value = false
+  }
+})
 
 const fetchGameSettings = async () => {
   try {
@@ -805,6 +849,7 @@ onBeforeUnmount(() => {
       :consumables="combatConsumables"
       :npc-metadata="npcMetadata"
       :player-sheet="sheet"
+      :evaluating="isCombatEvaluating"
       @attack="handleCombatAttack"
       @run="handleCombatRun"
       @consume="handleCombatConsume"

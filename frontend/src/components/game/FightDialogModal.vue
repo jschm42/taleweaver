@@ -18,6 +18,7 @@ const props = defineProps<{
   consumables: InventoryItem[]
   npcMetadata: Record<string, any>
   playerSheet: CharacterSheet | null
+  evaluating?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -318,6 +319,7 @@ function sourceClass(source: 'YOU' | 'ENEMY' | 'GAMEMASTER' | 'LOOT'): string {
 }
 
 const isPlayerTurn = computed(() => !isLootPhase.value && activeTurn.value === 'player')
+const isInteractionLocked = computed(() => !!props.evaluating)
 
 function asInt(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -493,13 +495,13 @@ function emitLeave(): void {
                       <span class="text-xs text-slate-200 truncate">{{ item.name }}</span>
                     </div>
                     <div class="flex items-center gap-1 shrink-0">
-                      <button class="px-2 py-1 text-[10px] font-black rounded bg-emerald-700/80 hover:bg-emerald-600 text-white" @click="emit('lootTake', item)">Take</button>
-                      <button class="px-2 py-1 text-[10px] font-black rounded bg-slate-700 hover:bg-slate-600 text-white" @click="emit('lootLeave', item)">Leave</button>
+                      <button class="px-2 py-1 text-[10px] font-black rounded bg-emerald-700/80 hover:bg-emerald-600 text-white disabled:opacity-40" :disabled="isInteractionLocked" @click="emit('lootTake', item)">Take</button>
+                      <button class="px-2 py-1 text-[10px] font-black rounded bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-40" :disabled="isInteractionLocked" @click="emit('lootLeave', item)">Leave</button>
                     </div>
                   </div>
                 </div>
                 <div class="mt-2 flex justify-end">
-                  <button class="px-3 py-1.5 text-[10px] font-black rounded bg-amber-700 hover:bg-amber-600 text-white uppercase tracking-[0.08em]" @click="emit('lootDone')">
+                  <button class="px-3 py-1.5 text-[10px] font-black rounded bg-amber-700 hover:bg-amber-600 text-white uppercase tracking-[0.08em] disabled:opacity-40" :disabled="isInteractionLocked" @click="emit('lootDone')">
                     Finish Loot
                   </button>
                 </div>
@@ -547,19 +549,19 @@ function emitLeave(): void {
             <div class="flex items-center gap-2">
               <button
                 class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-[0.1em] disabled:opacity-40"
-                :disabled="isLootPhase || activeTurn !== 'player'"
+                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked"
                 @click="emit('attack')"
               >
                 Attack
               </button>
               <button
                 class="px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-black uppercase tracking-[0.1em] disabled:opacity-40"
-                :disabled="isLootPhase || activeTurn !== 'player'"
+                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked"
                 @click="emit('run')"
               >
                 Run
               </button>
-              <div class="text-[11px] text-slate-400 ml-2">Use a consumable instead of attacking in this round.</div>
+              <div class="text-[11px] text-slate-400 ml-2">{{ isInteractionLocked ? 'Game Master is resolving the turn...' : 'Use a consumable instead of attacking in this round.' }}</div>
             </div>
 
             <div>
@@ -572,7 +574,7 @@ function emitLeave(): void {
                   @mouseenter="emitHover(toConsumableTooltipEntity(item), $event)"
                   @mousemove="emitHover(toConsumableTooltipEntity(item), $event)"
                   @mouseleave="emitLeave"
-                  :disabled="!isPlayerTurn"
+                  :disabled="!isPlayerTurn || isInteractionLocked"
                   @click="emit('consume', item.name)"
                 >
                   <div class="w-6 h-6 rounded overflow-hidden border border-cyan-400/30 bg-slate-950 shrink-0 flex items-center justify-center">

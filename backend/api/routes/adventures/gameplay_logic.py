@@ -597,6 +597,119 @@ class GameTurnManager:
 
         return 0
 
+    @staticmethod
+    def _parse_json_object(raw: str) -> Optional[Dict[str, Any]]:
+        text = (raw or "").strip()
+        if not text:
+            return None
+
+        try:
+            data = json.loads(text)
+            return data if isinstance(data, dict) else None
+        except Exception:
+            pass
+
+        fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
+        if fence:
+            try:
+                data = json.loads(fence.group(1))
+                return data if isinstance(data, dict) else None
+            except Exception:
+                pass
+
+        obj_match = re.search(r"(\{.*\})", text, re.DOTALL)
+        if obj_match:
+            try:
+                data = json.loads(obj_match.group(1))
+                return data if isinstance(data, dict) else None
+            except Exception:
+                return None
+        return None
+
+    async def _request_llm_combat_special_event(self, combat: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        llm_settings = self.user.llm_settings or {}
+        complex_model_provider = (
+            llm_settings.get("complex_model_provider")
+            or llm_settings.get("small_model_provider")
+            or llm_settings.get("preferred_provider")
+            or "openai"
+        )
+        complex_model = llm_settings.get("complex_model") or "gpt-4o"
+
+        try:
+            llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
+        except ValueError:
+            return None
+
+        enemy = combat.get("enemy") or {}
+        player = combat.get("player") or {}
+        enemy_name = str(enemy.get("name") or "Enemy")
+        player_name = str(player.get("name") or self.avatar.name or "Protagonist")
+        enemy_hp = int(enemy.get("hp") or 0)
+        enemy_max_hp = int(enemy.get("max_hp") or max(enemy_hp, 1))
+        player_hp = int(player.get("hp") or self.avatar.hp or 0)
+        player_max_hp = int(player.get("max_hp") or self.avatar.max_hp or max(player_hp, 1))
+
+        system_prompt = (
+            "You are the Game Master deciding a combat special event. "
+            "Return ONLY valid JSON with this schema: "
+            "{\"mode\":\"story\"|\"special_attack\",\"text\":string,\"damage\":number}. "
+            "Rules: Keep text to 1-2 short in-world sentences. "
+            "If mode is story, set damage to 0. "
+            "If mode is special_attack, damage must be an integer between 5 and 40. "
+            "No markdown, no code fences, no extra keys."
+        )
+        if self.turn_language:
+            system_prompt += f" Text must be in {self.turn_language.upper()}."
+
+        user_prompt = (
+            f"Round: {int(combat.get('round') or 1)}. "
+            f"Attacker: {enemy_name} HP {enemy_hp}/{enemy_max_hp}. "
+            f"Target: {player_name} HP {player_hp}/{player_max_hp}. "
+            "Decide if this special event becomes narrative flavor or a special attack. "
+            "Return only the JSON object."
+        )
+
+        try:
+            raw = await llm.aexecute_simple_task(
+                system_prompt,
+                user_prompt,
+                complex_model,
+                adventure_id=self.state.template_id,
+                game_id=self.game_id,
+                operation="combat.special_event",
+                phase="decision",
+            )
+        except Exception as exc:
+            logger.warning("[Turn %s] Special-event LLM call failed: %s", self.game_id, exc)
+            return None
+
+        data = self._parse_json_object(raw)
+        if not data:
+            logger.warning("[Turn %s] Special-event LLM returned unparsable payload: %r", self.game_id, raw)
+            return None
+
+        mode = str(data.get("mode") or "").strip().lower()
+        text = str(data.get("text") or "").strip()
+        damage_raw = data.get("damage")
+        damage = 0
+        if isinstance(damage_raw, (int, float)):
+            damage = int(damage_raw)
+
+        if mode not in {"story", "special_attack"}:
+            return None
+
+        if mode == "special_attack":
+            damage = max(5, min(40, damage))
+            if not text:
+                text = f"Special Event: {enemy_name} unleashes a sudden devastating strike!"
+        else:
+            damage = 0
+            if not text:
+                text = f"Special Event: {enemy_name} alters the tone of battle with a chilling presence."
+
+        return {"mode": mode, "text": text, "damage": damage}
+
     def _consume_item_now(self, item_name: str) -> str:
         item = self._find_consumable(item_name)
         if not item:
@@ -642,16 +755,33 @@ class GameTurnManager:
             return None
 
         enemy_name = combat.get("enemy", {}).get("name", "Enemy")
-        if random.random() < 0.5:
-            bonus = 20
+        event_data = await self._request_llm_combat_special_event(combat)
+
+        # Safe fallback if LLM is unavailable or returns invalid payload.
+        if not event_data:
+            if random.random() < 0.5:
+                bonus = 20
+                self.avatar.hp = max(0, self.avatar.hp - bonus)
+                text = f"Special Event: {enemy_name} performs a special attack for {bonus} damage!"
+                self._append_combat_log(combat, text, "special")
+                if self.avatar.hp <= 0:
+                    raise GameOverException(f"{self.avatar.name} has fallen! Game Over.")
+                return text
+
+            text = f"Special Event: {enemy_name} bends the battlefield mood to its advantage."
+            self._append_combat_log(combat, text, "special")
+            return text
+
+        if event_data.get("mode") == "special_attack":
+            bonus = int(event_data.get("damage") or 0)
             self.avatar.hp = max(0, self.avatar.hp - bonus)
-            text = f"Special Event: {enemy_name} performs a special attack for +{bonus} damage!"
+            text = str(event_data.get("text") or f"Special Event: {enemy_name} performs a special attack for {bonus} damage!")
             self._append_combat_log(combat, text, "special")
             if self.avatar.hp <= 0:
                 raise GameOverException(f"{self.avatar.name} has fallen! Game Over.")
             return text
 
-        text = f"Special Event: {enemy_name} reels in visible pain. The Game Master shifts the scene tone."
+        text = str(event_data.get("text") or f"Special Event: {enemy_name} bends the battlefield mood to its advantage.")
         self._append_combat_log(combat, text, "special")
         return text
 
