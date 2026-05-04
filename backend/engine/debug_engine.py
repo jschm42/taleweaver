@@ -175,10 +175,19 @@ class DebugEngine:
             flag_modified(avatar, "inventory")
             return f"DEBUG: Item '{item_key}' removed from inventory."
 
-        elif sub == "kill":
+            return f"DEBUG: Entity '{target.name}' (ID: {target.id}) HP set to 0."
+
+        elif sub == "heal":
             parts = args.split(" ")
-            if len(parts) < 2: return "DEBUG ERROR: Usage: /debug kill [NPC_NAME]"
-            npc_name = " ".join(parts[1:]).lower()
+            if len(parts) < 2: return "DEBUG ERROR: Usage: /debug heal [NPC_NAME] [AMOUNT?]"
+            
+            # Find the NPC
+            amount = None
+            try:
+                amount = int(parts[-1])
+                npc_name = " ".join(parts[1:-1]).lower()
+            except ValueError:
+                npc_name = " ".join(parts[1:]).lower()
             
             # Search in session entities
             res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id))
@@ -188,13 +197,15 @@ class DebugEngine:
             if not target:
                 return f"DEBUG: NPC/Entity '{npc_name}' not found in this session."
             
+            final_hp = amount if amount is not None else (target.hp or 50)
+            
             # Update state
             overrides = dict(state.entity_states or {})
             if target.id not in overrides: overrides[target.id] = {}
-            overrides[target.id]["hp"] = 0
+            overrides[target.id]["hp"] = final_hp
             state.entity_states = overrides
             flag_modified(state, "entity_states")
-            return f"DEBUG: Entity '{target.name}' (ID: {target.id}) HP set to 0."
+            return f"DEBUG: Entity '{target.name}' (ID: {target.id}) restored to {final_hp} HP."
 
         elif sub == "open_exit":
             parts = args.split(" ")
@@ -315,4 +326,4 @@ class DebugEngine:
             
             return "DEBUG: World Map fully revealed and synchronized."
 
-        return "DEBUG USAGE: /debug [szene | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID]"
+        return "DEBUG USAGE: /debug [szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID]"

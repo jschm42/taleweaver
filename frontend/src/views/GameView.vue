@@ -239,7 +239,7 @@ const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJEC
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
 const isCombatActive = computed(() => !!combat.value?.active)
-const showCombatDialog = computed(() => !!combat.value && (!!combat.value.active || !!combat.value.loot_pending))
+const showCombatDialog = computed(() => !!combat.value && (!!combat.value.active || !!combat.value.loot_pending || !!combat.value.outcome))
 const combatActionInFlight = ref(false)
 const isCombatEvaluating = computed(() => combatActionInFlight.value)
 const showsMechanics = computed(() => {
@@ -590,6 +590,14 @@ const handleCombatConsume = async (name: string) => {
   }
 }
 
+const handleCombatDebugWin = async () => {
+  await sendMessage('/debug win_fight')
+}
+
+const handleCombatDebugLoose = async () => {
+  await sendMessage('/debug loose_fight')
+}
+
 const handleLootTake = async (item: any) => {
   if (combatActionInFlight.value) return
   const key = (item?.id || item?.name || '').toString().trim()
@@ -619,6 +627,10 @@ const handleLootDone = async () => {
   combatActionInFlight.value = true
   try {
     await sendMessage('/loot done')
+    // Local safety: If no loot is left, we can assume closure is imminent
+    if (combat.value && !combat.value.loot_pending) {
+      combat.value = null
+    }
   } finally {
     combatActionInFlight.value = false
   }
@@ -751,6 +763,9 @@ onBeforeUnmount(() => {
       <div class="flex justify-end lg:order-3 lg:mt-0 mt-[-10px]">
         <GameClockWidget :game-time="gameTime" :clock-tick="clockTick" />
       </div>
+      <div v-if="sheet?.debug_mode" class="absolute top-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-1 bg-rose-600/80 backdrop-blur-md border border-rose-400/50 rounded-full text-[10px] font-black text-white uppercase tracking-[0.2em] animate-pulse shadow-lg">
+        Debug Protocol Active
+      </div>
     </header>
 
 
@@ -758,10 +773,12 @@ onBeforeUnmount(() => {
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
       <aside v-if="entities.length > 0 || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar relative z-10 m-6 shadow-2xl">
         <GameScenePanel
+          :scene-id="sheet?.scene_id"
           :scene-name="sheet?.current_scene"
           :scene-description="currentSceneDescription"
           :scene-image="currentSceneImage"
           :show-image="showImage"
+          :is-debug="!!sheet?.debug_mode"
           @hover="(payload, event) => handleHover(payload, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
@@ -772,6 +789,7 @@ onBeforeUnmount(() => {
           :npcs="npcs"
           :show-image="showImage"
           :mode="sheet?.rule_enforcement_mode"
+          :is-debug="!!sheet?.debug_mode"
           @hover="(entity, event) => handleHover({ ...entity, entity_type: 'NPC' }, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
@@ -781,6 +799,7 @@ onBeforeUnmount(() => {
         <GameItemsPanel
           :items="items"
           :show-image="showImage"
+          :is-debug="!!sheet?.debug_mode"
           @hover="(entity, event) => handleHover(entity, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
@@ -825,6 +844,7 @@ onBeforeUnmount(() => {
     <CharacterSheetModal 
       :open="showSheet" 
       :sheet="sheet" 
+      :is-debug="!!sheet?.debug_mode"
       @close="showSheet = false" 
       @equip="(name) => sendMessage(`/equip ${name}`)"
       @unequip="(slot) => sendMessage(`/unequip ${slot}`)"
@@ -888,12 +908,15 @@ onBeforeUnmount(() => {
       :npc-metadata="npcMetadata"
       :player-sheet="sheet"
       :evaluating="isCombatEvaluating"
+      :is-debug="!!sheet?.debug_mode"
       @attack="handleCombatAttack"
       @run="handleCombatRun"
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"
       @loot-done="handleLootDone"
+      @debug-win="handleCombatDebugWin"
+      @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"
       @entity-leave="hoveredEntity = null"
     />
@@ -928,9 +951,9 @@ onBeforeUnmount(() => {
                 <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
                 <span 
                   class="text-xxs px-1.5 py-0.5 rounded border font-mono uppercase"
-                  :class="hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : 'border-amber-500/50 text-amber-400'"
+                  :class="hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : (hoveredEntity.entity_type?.toUpperCase() === 'SCENE' ? 'border-indigo-500/50 text-indigo-400' : 'border-amber-500/50 text-amber-400')"
                 >
-                  {{ hoveredEntity.entity_type || 'NPC' }}
+                  {{ hoveredEntity.entity_type || 'OBJECT' }}
                 </span>
               </div>
               <p class="text-xs text-slate-400 leading-relaxed italic mb-3">{{ hoveredEntity.description }}</p>

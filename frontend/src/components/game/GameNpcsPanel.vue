@@ -19,6 +19,7 @@ const props = defineProps<{
   npcs: Entity[]
   showImage: (path?: string | null) => boolean
   mode?: 'rpg' | 'story' | 'chat'
+  isDebug?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -62,7 +63,10 @@ const emit = defineEmits<{
             <i :class="['ra text-2xl', getItemIcon('NPC'), 'text-cyan-500/40']"></i>
           </div>
         </div>
-        <span class="text-xs font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
+        <span class="text-xs font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">
+          {{ ent.name }}
+          <span v-if="isDebug" class="block text-[8px] font-mono opacity-50 mt-0.5">ID: {{ ent.id }}</span>
+        </span>
         
         <!-- Very thin bars -->
         <div v-if="mode !== 'chat' && (ent.hp != null || ent.stamina != null || ent.mana != null)" class="w-full mt-1 px-1 flex flex-col gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">

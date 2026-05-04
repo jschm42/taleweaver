@@ -19,6 +19,7 @@ const props = defineProps<{
   npcMetadata: Record<string, any>
   playerSheet: CharacterSheet | null
   evaluating?: boolean
+  isDebug?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -30,6 +31,8 @@ const emit = defineEmits<{
   lootDone: []
   entityHover: [entity: any, event: MouseEvent]
   entityLeave: []
+  debugWin: []
+  debugLoose: []
 }>()
 
 const logs = computed(() => props.combat?.log || [])
@@ -544,7 +547,10 @@ function emitLeave(): void {
                   </span>
                 </div>
               </div>
-              <div class="mt-3 text-xs text-white font-bold text-center">{{ combat.enemy.name }}</div>
+              <div class="mt-3 text-xs text-white font-bold text-center">
+                {{ combat.enemy.name }}
+                <div v-if="isDebug" class="text-[9px] font-mono text-rose-300 opacity-60">ID: {{ combat.enemy.id }}</div>
+              </div>
               <div class="mt-2 w-full">
                 <StatBar label="HP" :value="asInt(combat.enemy.hp)" :max="asInt(combat.enemy.max_hp)" color="crimson" size="sm" />
                 <StatBar label="Stamina" :value="asInt(enemyTooltipEntity?.stamina)" :max="asInt(enemyTooltipEntity?.max_stamina)" color="emerald" size="sm" />
@@ -554,6 +560,23 @@ function emitLeave(): void {
           </div>
 
           <footer class="shrink-0 border-t border-amber-500/20 bg-slate-950/70 p-3 space-y-3">
+            <!-- Debug Controls -->
+            <div v-if="isDebug" class="flex items-center gap-2 pb-2 mb-2 border-b border-rose-500/20">
+              <span class="text-[9px] font-black text-rose-400 uppercase tracking-widest mr-2">Debug Actions:</span>
+              <button 
+                class="px-3 py-1 rounded bg-rose-900/40 border border-rose-500/30 text-rose-200 text-[10px] font-bold hover:bg-rose-800/60 transition-colors"
+                @click="emit('debugWin')"
+              >
+                Win fight (DEBUG)
+              </button>
+              <button 
+                class="px-3 py-1 rounded bg-slate-800 border border-slate-600 text-slate-300 text-[10px] font-bold hover:bg-slate-700 transition-colors"
+                @click="emit('debugLoose')"
+              >
+                Loose fight (DEBUG)
+              </button>
+            </div>
+
             <div class="flex items-center gap-2">
               <button
                 class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-[0.1em] disabled:opacity-40"
@@ -569,7 +592,25 @@ function emitLeave(): void {
               >
                 Run
               </button>
-              <div class="text-[11px] text-slate-400 ml-2">{{ isInteractionLocked ? 'Game Master is resolving the turn...' : 'Use a consumable instead of attacking in this round.' }}</div>
+              
+              <!-- Victory/Defeat Acknowledgment -->
+              <div v-if="!combat.active && !isLootPhase && combat.outcome" class="flex items-center gap-3 ml-auto animate-fade-in">
+                <div 
+                  class="text-sm font-black uppercase tracking-widest px-3 py-1 rounded border shadow-lg"
+                  :class="combat.outcome === 'victory' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-rose-400 border-rose-500/30 bg-rose-500/10'"
+                >
+                  {{ combat.outcome === 'victory' ? 'Victory' : 'Defeat' }}
+                </div>
+                <button
+                  class="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(217,119,6,0.3)] transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="isInteractionLocked"
+                  @click="emit('lootDone')"
+                >
+                  Continue
+                </button>
+              </div>
+
+              <div v-else class="text-[11px] text-slate-400 ml-2">{{ isInteractionLocked ? 'Game Master is resolving the turn...' : 'Use a consumable instead of attacking in this round.' }}</div>
             </div>
 
             <div>

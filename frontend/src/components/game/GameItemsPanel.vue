@@ -12,6 +12,7 @@ interface Entity {
 const props = defineProps<{
   items: Entity[]
   showImage: (path?: string | null) => boolean
+  isDebug?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -53,7 +54,10 @@ const emit = defineEmits<{
             <i :class="['ra text-xl', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
           </div>
         </div>
-        <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
+        <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">
+          {{ ent.name }}
+          <span v-if="isDebug" class="block text-[8px] font-mono opacity-50 mt-0.5">ID: {{ ent.id }}</span>
+        </span>
       </div>
     </div>
   </div>

@@ -122,8 +122,8 @@ class GameTurnManager:
                 yield chunk
             return
 
-        # 2. Fight Trigger
-        if user_msg.lower().startswith("/fight"):
+        # 2. Fight Trigger / Attack
+        if user_msg.lower().startswith("/fight") or user_msg.lower().startswith("/attack"):
             async for chunk in self._handle_fight_start(user_msg):
                 yield chunk
             return
@@ -187,6 +187,42 @@ class GameTurnManager:
         elif debug_info.startswith("[TRIGGER_WALKTHROUGH_REVEAL_FREE]"):
             self.state.is_walkthrough_revealed = True
             debug_info = debug_info[33:].strip()
+        
+        # New: Combat Debug Commands
+        elif cmd_args == "win_fight":
+            combat = self._read_combat_state()
+            if combat and combat.get("active"):
+                combat["active"] = False
+                combat["outcome"] = "victory"
+                combat["enemy"]["hp"] = 0
+                combat["status_note"] = "Combat won via debug command."
+                
+                # Sync back to world entity state
+                enemy_id = combat["enemy"]["id"]
+                states = dict(self.state.entity_states or {})
+                if enemy_id not in states: states[enemy_id] = {}
+                states[enemy_id]["hp"] = 0
+                self.state.entity_states = states
+                flag_modified(self.state, "entity_states")
+                
+                self._append_combat_log(combat, combat["status_note"], "outcome")
+                self._set_combat_state(combat)
+                debug_info = "DEBUG: Combat forced to VICTORY."
+        
+        elif cmd_args == "loose_fight":
+            combat = self._read_combat_state()
+            if combat and combat.get("active"):
+                combat["active"] = False
+                combat["outcome"] = "defeat"
+                combat["player"]["hp"] = 0
+                combat["status_note"] = "Combat lost via debug command."
+                
+                # Sync back to avatar
+                self.avatar.hp = 0
+                
+                self._append_combat_log(combat, combat["status_note"], "outcome")
+                self._set_combat_state(combat)
+                debug_info = "DEBUG: Combat forced to DEFEAT."
 
         # Send debug info as a system message so it appears in chat
         self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=debug_info))
@@ -284,12 +320,15 @@ class GameTurnManager:
 
     def _has_combat_phase(self) -> bool:
         combat = self._read_combat_state()
-        return bool(combat.get("active") or combat.get("loot_pending"))
+        return bool(combat.get("active") or combat.get("loot_pending") or combat.get("outcome"))
 
     def _set_combat_state(self, combat: Dict[str, Any]) -> None:
+        # Sync to both locations to ensure compatibility across the engine
         states = dict(self.state.entity_states or {})
         states["__combat__"] = combat
         self.state.entity_states = states
+        # Also set the dynamic attribute used by some snapshots
+        self.state.combat_json = combat
         flag_modified(self.state, "entity_states")
 
     async def _find_fight_target(self, target_hint: str) -> Optional[WorldEntity]:
@@ -438,7 +477,10 @@ class GameTurnManager:
                 yield chunk
             return
 
-        target_hint = user_msg.split(" ", 1)[1].strip() if " " in user_msg else ""
+        target_hint = ""
+        if " " in user_msg:
+            target_hint = user_msg.split(" ", 1)[1].strip()
+        
         target = await self._find_fight_target(target_hint)
         if not target:
             msg = "No enemy is available in this scene."
@@ -985,16 +1027,29 @@ class GameTurnManager:
                 await self._spawn_scene_item(item)
             combat["loot_items"] = []
             combat["loot_pending"] = False
-            combat["status_note"] = "Combat resolved. Remaining loot has been moved to the scene."
+            combat.pop("outcome", None)
+            combat["status_note"] = "Combat resolved."
+            
+            # If nothing is left to do, clear the combat state entirely from all sources
+            if not combat.get("active") and not combat.get("loot_pending") and not combat.get("outcome"):
+                self.state.combat_json = None
+                states = dict(self.state.entity_states or {})
+                states.pop("__combat__", None)
+                self.state.entity_states = states
+                flag_modified(self.state, "entity_states")
+                # Force commit to ensure state is persisted before final event
+                await self.db.commit()
+            else:
+                self._set_combat_state(combat)
+                
             self._append_combat_log(combat, combat["status_note"], "loot")
-            self._set_combat_state(combat)
-            return combat["status_note"]
+            return "Combat finished."
 
         return "Loot commands: /loot take <item>, /loot leave <item>, /loot done"
 
     async def _handle_combat_turn(self, user_msg: str) -> AsyncGenerator[str, None]:
         combat = self._read_combat_state()
-        if not combat.get("active") and combat.get("loot_pending"):
+        if not combat.get("active") and (combat.get("loot_pending") or combat.get("outcome")):
             loot_msg = await self._resolve_loot_command(user_msg, combat)
             if loot_msg:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': loot_msg})}\n\n"
@@ -1051,7 +1106,7 @@ class GameTurnManager:
             return
 
         action_msg = None
-        if cmd in {"attack", "/attack", "a"}:
+        if cmd == "attack" or cmd == "/attack" or cmd == "a" or cmd.startswith("attack ") or cmd.startswith("/attack "):
             roll = roll_attack(self.avatar, "dexterity", enemy_ac, self._player_damage_dice())
             if roll["is_hit"]:
                 enemy_hp = max(0, enemy_hp - roll["damage_total"])
@@ -1129,12 +1184,13 @@ class GameTurnManager:
                 yield chunk
             return
 
-        if enemy_hp <= max(1, int(combat.get("enemy", {}).get("max_hp") or 1) // 4):
-            flee_roll = random.randint(1, 20) + int(combat.get("enemy", {}).get("dexterity_mod") or 0)
-            if flee_roll >= 16:
+        # NPC Fleeing logic (Improved: 10% chance if HP < 20%)
+        enemy_max_hp_val = int(combat.get("enemy", {}).get("max_hp") or 100)
+        if enemy_hp > 0 and enemy_hp <= (enemy_max_hp_val * 0.2):
+            if random.random() < 0.10: # 10% chance
                 combat["active"] = False
                 combat["outcome"] = "victory"
-                combat["status_note"] = f"{enemy_ent.name} flees in panic."
+                combat["status_note"] = f"{enemy_ent.name} flees in panic! You won the battle."
                 self._append_combat_log(combat, combat["status_note"], "outcome")
                 self._set_combat_state(combat)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': combat['status_note']})}\n\n"

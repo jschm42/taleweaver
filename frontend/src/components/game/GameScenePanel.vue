@@ -9,10 +9,12 @@ interface SceneHoverPayload {
 }
 
 const props = defineProps<{
+  sceneId?: string | null
   sceneName?: string | null
   sceneDescription?: string | null
   sceneImage?: string | null
   showImage: (path?: string | null) => boolean
+  isDebug?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,10 +24,11 @@ const emit = defineEmits<{
   imageError: [path: string]
 }>()
 
-const hoverPayload = computed<SceneHoverPayload>(() => ({
+const hoverPayload = computed<any>(() => ({
   name: props.sceneName || 'Current Scene',
   description: props.sceneDescription || 'The current location of your adventure.',
   image_url: props.sceneImage,
+  entity_type: 'SCENE'
 }))
 </script>
 
@@ -52,7 +55,10 @@ const hoverPayload = computed<SceneHoverPayload>(() => ({
           <i :class="['ra text-7xl opacity-20', getItemIcon('SCENE'), 'text-indigo-400']"></i>
         </div>
         <div class="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-slate-950 to-transparent">
-          <span class="text-xs font-bold text-white uppercase tracking-wider truncate block overflow-hidden shadow-sm">{{ sceneName || 'Unknown' }}</span>
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-bold text-white uppercase tracking-wider truncate block overflow-hidden shadow-sm">{{ sceneName || 'Unknown' }}</span>
+            <span v-if="isDebug && sceneId" class="text-[10px] font-mono text-indigo-300 opacity-60">ID: {{ sceneId }}</span>
+          </div>
         </div>
       </div>
     </div>

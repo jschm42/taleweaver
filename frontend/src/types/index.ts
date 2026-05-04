@@ -35,6 +35,8 @@ export interface CharacterSheet {
   current_scene?: string | null
   scene_id?: string | null
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
+  is_debug_enabled?: boolean
+  debug_mode?: boolean
 }
 
 export interface InventoryItem {

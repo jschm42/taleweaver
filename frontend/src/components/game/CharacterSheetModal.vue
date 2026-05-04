@@ -7,6 +7,7 @@ import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 const props = defineProps<{
   open: boolean
   sheet: CharacterSheet | null
+  isDebug?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -258,6 +259,9 @@ const onClose = () => {
                             <img :src="getImageUrl(inventoryList[idx-1].image_url)" class="w-full h-full object-cover object-top rounded-lg transition-transform group-hover:scale-110" @error="handleImageError(inventoryList[idx-1].image_url)" />
                           </div>
                           <i v-else :class="['ra text-3xl', getItemIcon(inventoryList[idx-1].item_type), getTypeColor(inventoryList[idx-1].item_type)]"></i>
+                          <div v-if="isDebug" class="absolute bottom-1 right-1 px-1 bg-black/60 rounded text-[7px] font-mono text-amber-300 opacity-60">
+                            {{ inventoryList[idx-1].id || inventoryList[idx-1].key }}
+                          </div>
                         </template>
                       </div>
                     </div>

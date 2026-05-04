@@ -14,6 +14,7 @@ from backend.models.world_map import WorldMap
 from backend.engine.world_generator import WorldGenerator
 from backend.engine.map_engine import MapEngine
 from backend.schemas.adventure import AdventureTemplateDebugResponse
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +302,9 @@ class AdventureLogic:
             "exp": avatar.exp,
             "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg",
             "time_system": state.time_system or (adventure.time_system if adventure else "calendar"),
-            "time_config": state.time_config or (adventure.time_config if adventure else None)
+            "time_config": state.time_config or (adventure.time_config if adventure else None),
+            "is_debug_enabled": bool(state.is_debug_enabled),
+            "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED)
         }
         
         return snapshot

@@ -44,6 +44,7 @@ class CommandParser:
             "**Available Commands:**\n"
             "- `/help`: Show this list.\n"
             "- `/map`: Toggle the world map.\n"
+            "- `/attack <target>`: Start a fight with a specific NPC (by name or ID).\n"
             "- `/equip <item>`: Equip an item from your inventory.\n"
             "- `/drop <item>`: Drop an item into the current room.\n"
             "- `/take <item>`: Pick up an item from the room.\n"
