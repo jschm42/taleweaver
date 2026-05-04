@@ -94,14 +94,20 @@ class AdventureTemplateImporter:
                     logger.error("Invalid ADZ: Missing adventure section in manifest")
                     return False
 
-                # Check if template with this title already exists for this owner (if provided)
-                query = select(AdventureTemplate).where(AdventureTemplate.title == adv_data["title"])
-                if owner_id:
-                    query = query.where(AdventureTemplate.owner_id == owner_id)
+                # Check if template with this title or origin_id already exists for this owner
+                origin_id = adv_data.get("origin_id") or manifest_data.get("origin_id")
+                
+                query = select(AdventureTemplate).where(
+                    (AdventureTemplate.owner_id == owner_id) if owner_id else (AdventureTemplate.owner_id == None)
+                )
+                if origin_id:
+                    query = query.where((AdventureTemplate.title == adv_data["title"]) | (AdventureTemplate.origin_id == origin_id))
+                else:
+                    query = query.where(AdventureTemplate.title == adv_data["title"])
                 
                 existing_res = await db.execute(query)
                 if existing_res.scalars().first():
-                    logger.info(f"AdventureTemplate template '{adv_data['title']}' already exists. Skipping.")
+                    logger.info(f"AdventureTemplate '{adv_data['title']}' (origin: {origin_id}) already exists. Skipping.")
                     return False
 
 
@@ -140,7 +146,8 @@ class AdventureTemplateImporter:
                     is_ready=True,
                     creation_status="Ready",
                     original_manifest=manifest_data,
-                    language=adv_data.get("language") or manifest_data.get("language")
+                    language=adv_data.get("language") or manifest_data.get("language"),
+                    origin_id=origin_id
                 )
                 db.add(new_template)
                 
@@ -249,14 +256,19 @@ class AdventureTemplateImporter:
             
             is_session = payload.get("type") == "SESSION_BUNDLE"
             title = payload.get("adventure", {}).get("title") if is_session else payload.get("title", "Imported AdventureTemplate")
-            
-            query = select(AdventureTemplate).where(AdventureTemplate.title == title)
-            if owner_id:
-                query = query.where(AdventureTemplate.owner_id == owner_id)
+            origin_id = payload.get("adventure", {}).get("origin_id") if is_session else payload.get("origin_id")
+
+            query = select(AdventureTemplate).where(
+                (AdventureTemplate.owner_id == owner_id) if owner_id else (AdventureTemplate.owner_id == None)
+            )
+            if origin_id:
+                query = query.where((AdventureTemplate.title == title) | (AdventureTemplate.origin_id == origin_id))
+            else:
+                query = query.where(AdventureTemplate.title == title)
             
             existing_res = await db.execute(query)
             if existing_res.scalars().first():
-                logger.info(f"AdventureTemplate template '{title}' already exists. Skipping.")
+                logger.info(f"AdventureTemplate '{title}' (origin: {origin_id}) already exists. Skipping.")
                 return False
 
             user = None
@@ -300,6 +312,7 @@ class AdventureTemplateImporter:
 
                     starting_timestamp=old_adv.get("starting_timestamp", 0),
                     language=old_adv.get("language") or data.get("language"),
+                    origin_id=origin_id,
                     is_ready=True,
                     creation_status="Ready"
                 )
@@ -388,6 +401,7 @@ class AdventureTemplateImporter:
 
                     starting_timestamp=adv_meta.get("starting_timestamp") or manifest.get("starting_timestamp", 0),
                     language=adv_meta.get("language") or manifest.get("language"),
+                    origin_id=origin_id,
                     is_ready=True,
                     creation_status="Ready"
                 )

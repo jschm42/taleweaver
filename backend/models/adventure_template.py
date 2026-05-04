@@ -14,6 +14,8 @@ class AdventureTemplate(Base, TimestampMixin):
     title = Column(String(50), nullable=False)
     teaser = Column(String(300), nullable=True)
     language = Column(String(20), nullable=True)
+    origin_id = Column(String(50), nullable=True) # Stable ID for default/sample templates
+
     
     image_url = Column(String(255), nullable=True)
     # context is now replaced by original_prompt below

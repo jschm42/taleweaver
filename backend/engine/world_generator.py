@@ -232,6 +232,7 @@ class WorldManifesto(BaseModel):
     start_time: Optional[str] = Field(None, description="Initial in-game time, e.g. '08:00'")
     time_system: Optional[str] = Field("calendar", description="One of: calendar, relative")
     time_config: Optional[TimeConfigSchema] = Field(None, description="Detailed configuration for the time system.")
+    origin_id: Optional[str] = Field(None, description="A stable ID for this adventure template.")
     
     model_config = {"extra": "forbid"}
 
@@ -366,6 +367,8 @@ class WorldGenerator:
             adventure.original_prompt = original_prompt
             if language:
                 adventure.language = language
+            if not adventure.origin_id:
+                adventure.origin_id = manifesto.origin_id or template_id
             if not adventure.original_manifest:
                 adventure.original_manifest = manifesto.model_dump()
             await db.commit()

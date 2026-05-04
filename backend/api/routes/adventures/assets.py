@@ -2,11 +2,11 @@ import logging
 import os
 import uuid
 import json
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Dict, Any, Literal, List
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from backend.core.database import get_db
 from backend.core.auth import get_current_user
 from backend.core.config import settings
@@ -16,9 +16,83 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.engine.world_generator import WorldGenerator
 from backend.engine.media_engine import MediaEngine
 from backend.engine.adventure_importer import AdventureTemplateImporter
+from backend.api.routes.adventures.schemas import ImportCheckResponse, ImportCheckItem
+import zipfile
+import io
 
 router = APIRouter(tags=["Assets"])
 logger = logging.getLogger(__name__)
+
+async def _get_import_check_items(db: AsyncSession, user_id: str, directories: List[str]) -> List[ImportCheckItem]:
+    """Scans directories for adventures and checks if they already exist in the user's library."""
+    check_items = []
+    
+    for directory in directories:
+        if not os.path.exists(directory):
+            continue
+            
+        files = [f for f in os.listdir(directory) if f.endswith(".adv") or f.endswith(".adz")]
+        for filename in files:
+            file_path = os.path.join(directory, filename)
+            title = None
+            origin_id = None
+            
+            try:
+                if filename.endswith(".adz"):
+                    with open(file_path, "rb") as f:
+                        with zipfile.ZipFile(io.BytesIO(f.read()), "r") as zip_file:
+                            manifest = json.loads(zip_file.read("adventure.adv").decode("utf-8"))
+                            adv_data = manifest.get("adventure") or {}
+                            title = adv_data.get("title")
+                            origin_id = adv_data.get("origin_id") or manifest.get("origin_id")
+                else:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        payload = json.load(f)
+                        is_session = payload.get("type") == "SESSION_BUNDLE"
+                        title = payload.get("adventure", {}).get("title") if is_session else payload.get("title")
+                        origin_id = payload.get("adventure", {}).get("origin_id") if is_session else payload.get("origin_id")
+                
+                if title:
+                    query = select(AdventureTemplate).where(AdventureTemplate.owner_id == user_id)
+                    if origin_id:
+                        query = query.where(or_(AdventureTemplate.title == title, AdventureTemplate.origin_id == origin_id))
+                    else:
+                        query = query.where(AdventureTemplate.title == title)
+                    
+                    res = await db.execute(query)
+                    existing = res.scalars().first()
+                    
+                    check_items.append(ImportCheckItem(
+                        title=title,
+                        origin_id=origin_id,
+                        already_exists=existing is not None,
+                        existing_template_id=existing.id if existing else None
+                    ))
+            except Exception as e:
+                logger.error(f"Error checking import file {file_path}: {e}")
+                
+    return check_items
+
+@router.get("/check-defaults", response_model=ImportCheckResponse)
+async def check_defaults(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns a list of default adventures and their existence status."""
+    defaults_dir = os.path.join("adventures", "default")
+    items = await _get_import_check_items(db, current_user.id, [defaults_dir])
+    return ImportCheckResponse(available_imports=items)
+
+@router.get("/check-examples", response_model=ImportCheckResponse)
+async def check_examples(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns a list of example/sample adventures and their existence status."""
+    samples_dir = os.path.join("adventures", "samples")
+    presets_dir = os.path.join(settings.DATA_DIR, "presets", "adventures")
+    items = await _get_import_check_items(db, current_user.id, [samples_dir, presets_dir])
+    return ImportCheckResponse(available_imports=items)
 
 @router.post("/import-examples")
 async def import_examples(

@@ -14,6 +14,7 @@ import GameSessionCard from '@/components/portal/GameSessionCard.vue'
 import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
 import ImportExamplesCard from '@/components/portal/ImportExamplesCard.vue'
 import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
+import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
 import { configState } from '@/store/config'
 
@@ -74,6 +75,9 @@ const showImportConfirm = ref(false)
 const isSeeding = ref(false)
 const isDeleting = ref(false)
 const isDeletingSession = ref(false)
+const showImportWarning = ref(false)
+const importWarningType = ref<'defaults' | 'samples'>('defaults')
+const importConflicts = ref<Array<{ title: string; already_exists: boolean }>>([])
 
 const importInput = ref<HTMLInputElement | null>(null)
 const pendingImports = ref<PendingAdventureCard[]>([])
@@ -326,6 +330,27 @@ function openCreateModal() {
 
 async function executeImportExamples() {
   showImportConfirm.value = false
+  
+  // Check for conflicts first
+  try {
+    const checkRes = await api.checkExamples()
+    const conflicts = checkRes.available_imports.filter(i => i.already_exists)
+    
+    if (conflicts.length > 0) {
+      importConflicts.value = checkRes.available_imports
+      importWarningType.value = 'samples'
+      showImportWarning.value = true
+      return
+    }
+  } catch (error) {
+    console.error('Error checking for example conflicts:', error)
+  }
+
+  await performImportExamples()
+}
+
+async function performImportExamples() {
+  showImportWarning.value = false
   isSeeding.value = true
   try {
     await api.importExamples()
@@ -338,6 +363,26 @@ async function executeImportExamples() {
 }
 
 async function executeRestoreDefaults() {
+  // Check for conflicts first
+  try {
+    const checkRes = await api.checkDefaults()
+    const conflicts = checkRes.available_imports.filter(i => i.already_exists)
+    
+    if (conflicts.length > 0) {
+      importConflicts.value = checkRes.available_imports
+      importWarningType.value = 'defaults'
+      showImportWarning.value = true
+      return
+    }
+  } catch (error) {
+    console.error('Error checking for default conflicts:', error)
+  }
+
+  await performRestoreDefaults()
+}
+
+async function performRestoreDefaults() {
+  showImportWarning.value = false
   isSeeding.value = true
   try {
     await api.reimportDefaults()
@@ -665,6 +710,15 @@ onUnmounted(() => {
         :is-deleting="isDeletingSession"
         @close="showDeleteSessionConfirm = false"
         @confirm="executeDeleteSession"
+      />
+
+      <ImportWarningModal
+        v-if="showImportWarning"
+        :type="importWarningType"
+        :conflicts="importConflicts"
+        :is-importing="isSeeding"
+        @close="showImportWarning = false"
+        @confirm="importWarningType === 'defaults' ? performRestoreDefaults() : performImportExamples()"
       />
     </Teleport>
 

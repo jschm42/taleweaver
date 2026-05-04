@@ -44,6 +44,8 @@ class AdventureTemplateResponse(BaseModel):
     title: str
     teaser: Optional[str] = None
     language: Optional[str] = None
+    origin_id: Optional[str] = None
+
     strict_rules: bool
     rule_enforcement_mode: str
     time_per_turn: int
@@ -109,6 +111,16 @@ class AdventureTemplateSummaryResponse(BaseModel):
     has_active_session: bool = False
     scene_id: Optional[str] = None
     current_scene_name: Optional[str] = None
+    origin_id: Optional[str] = None
+
+class ImportCheckItem(BaseModel):
+    title: str
+    origin_id: Optional[str] = None
+    already_exists: bool
+    existing_template_id: Optional[str] = None
+
+class ImportCheckResponse(BaseModel):
+    available_imports: List[ImportCheckItem]
 
 class ChatRequest(BaseModel):
     content: str

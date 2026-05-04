@@ -89,6 +89,16 @@ export const api = {
     return request('/adventures/reimport-defaults', { method: 'POST' })
   },
 
+  /** Check for conflicts before restoring defaults. */
+  checkDefaults(): Promise<{ available_imports: Array<{ title: string; origin_id?: string; already_exists: boolean }> }> {
+    return request('/adventures/check-defaults', { method: 'GET' })
+  },
+
+  /** Check for conflicts before importing examples. */
+  checkExamples(): Promise<{ available_imports: Array<{ title: string; origin_id?: string; already_exists: boolean }> }> {
+    return request('/adventures/check-examples', { method: 'GET' })
+  },
+
   /** Lists all game sessions. */
   listAdventures(): Promise<GameSession[]> {
     return request<GameSession[]>('/adventures/sessions')
