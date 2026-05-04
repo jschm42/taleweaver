@@ -73,6 +73,9 @@ class AdventureTemplateResponse(BaseModel):
             return [{"id": s, "name": s.capitalize()} for s in v]
         return v
 
+    # GM Capabilities
+    allow_dynamic_items: bool = True
+
     # Narrative Meta (User editable in Plot tab)
     plot: Optional[str] = None
     rules: Optional[str] = None

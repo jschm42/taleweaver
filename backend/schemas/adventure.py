@@ -57,6 +57,9 @@ class AdventureTemplateBase(BaseModel):
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
 
+    # GM Capabilities
+    allow_dynamic_items: Optional[bool] = True
+
 
 class AdventureTemplateCreate(AdventureTemplateBase):
     pass
@@ -84,6 +87,9 @@ class AdventureTemplateUpdate(BaseModel):
     walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
+
+    # GM Capabilities
+    allow_dynamic_items: Optional[bool] = None
     
     # Extra fields for frontend convenience
     selected_style_id: Optional[str] = None

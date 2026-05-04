@@ -24,6 +24,14 @@ class InventoryItem(BaseModel):
     stat_modifier_charisma: Optional[int] = None
     stat_modifier_armor_class: Optional[int] = None
 
+    # Consumable Effects (on-the-fly definition)
+    hp_change: Optional[int] = None
+    mana_change: Optional[int] = None
+    stamina_change: Optional[int] = None
+
+    # For spawned items
+    spatial_position: Optional[str] = None
+
 class EntityMovement(BaseModel):
     entity_id: str
     to_scene_id: Optional[str] = None
@@ -101,6 +109,7 @@ class GameEvent(BaseModel):
     new_status_effects: List[str]
     new_inventory_items: List[InventoryItem]
     removed_inventory_item_ids: Optional[List[str]] = None
+    spawned_items: Optional[List[InventoryItem]] = None
     
     # Mapping & Navigation
     new_scene_id: Optional[str] = None # Unique ID for the new location (e.g. "FOREST_CLIFF")

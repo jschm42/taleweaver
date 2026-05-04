@@ -200,6 +200,11 @@ class GameTurnManager:
         elif debug_info.startswith("[TRIGGER_WALKTHROUGH_REVEAL_FREE]"):
             self.state.is_walkthrough_revealed = True
             debug_info = debug_info[33:].strip()
+        elif debug_info.startswith("[TRIGGER_GEN_ITEM]"):
+            prompt = debug_info.replace("[TRIGGER_GEN_ITEM]", "").strip()
+            async for chunk in self._handle_debug_gen_item(prompt):
+                yield chunk
+            return
         
         # New: Combat Debug Commands
         elif cmd_args == "win_fight":
@@ -241,6 +246,13 @@ class GameTurnManager:
         self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=debug_info))
         await self.db.commit()
         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': debug_info, 'is_debug': True})}\n\n"
+
+    async def _handle_debug_gen_item(self, prompt: str) -> AsyncGenerator[str, None]:
+        """Debug helper to force-generate an item based on a prompt."""
+        instruction = f"DEBUG COMMAND: The user wants you to generate an item now. Instruction: {prompt}"
+        # We temporarily set the prompt as if it was the user message
+        async for chunk in self._run_llm_cycle(instruction, self.avatar):
+            yield chunk
 
         world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
         final_data = jsonable_encoder({
@@ -309,6 +321,13 @@ class GameTurnManager:
                 response = f"Hint: Look closer at the surroundings. (Cost: {WALKTHROUGH_HINT_COST} XP)"
             else:
                 response = f"You do not have enough XP for a hint ({self.avatar.exp}/{WALKTHROUGH_HINT_COST})."
+
+        if response.startswith("[TRIGGER_CONSUME]"):
+            item_name = response.replace("[TRIGGER_CONSUME]", "").strip()
+            action_msg = self._consume_item_now(item_name)
+            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=action_msg))
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': action_msg})}\n\n"
+            response = action_msg # Allow it to fall through to persist and yield final state
 
         # PERSIST AND YIELD RESPONSE (For all commands including equip/unequip)
         if response and not response.startswith("[TRIGGER_"):
@@ -980,7 +999,7 @@ class GameTurnManager:
             name=name,
             description=str(item.get("description") or f"Loot from battle: {name}"),
             current_scene_id=self.state.current_scene_id,
-            spatial_position="on the ground",
+            spatial_position=item.get("spatial_position") or "on the ground",
             image_url=item.get("image_url"),
             item_type=item.get("item_type") or "PICKABLE",
             wearable_slots=item.get("wearable_slots"),
@@ -993,6 +1012,11 @@ class GameTurnManager:
             stat_modifier_wisdom=item.get("stat_modifier_wisdom"),
             stat_modifier_charisma=item.get("stat_modifier_charisma"),
             stat_modifier_armor_class=item.get("stat_modifier_armor_class"),
+            metadata_json={
+                "hp_change": item.get("hp_change"),
+                "mana_change": item.get("mana_change"),
+                "stamina_change": item.get("stamina_change"),
+            }
         )
         self.db.add(entity)
 
@@ -1337,9 +1361,17 @@ class GameTurnManager:
             if self.adventure.rule_enforcement_mode == "story":
                 mechanics_suffix = prompts.GM_STORY_MECHANICS_SUFFIX
             
+            dynamic_instr = ""
+            if self.adventure.allow_dynamic_items:
+                dynamic_instr = (
+                    "- To add an item directly to the player (even if it's not in the pre-generated world), use `new_inventory_items`. You can create new items on-the-fly.\n"
+                    "- To place a new item in the current scene (e.g., something the player finds but hasn't taken yet), use `spawned_items`.\n"
+                )
+
             mechanics_prompt = system_prompt + "\n\n" + mechanics_suffix.format(
                 quests_json=json.dumps(self.state.quests or [], indent=2),
-                awards_json=json.dumps(self.adventure.awards or [], indent=2)
+                awards_json=json.dumps(self.adventure.awards or [], indent=2),
+                dynamic_items_instruction=dynamic_instr
             )
             
             pass1_start = time.perf_counter()
@@ -1684,6 +1716,11 @@ class GameTurnManager:
                 if eid not in states: states[eid] = {}
                 states[eid]["is_hidden"] = True
                 state_dirty = True
+        
+        if event.spawned_items:
+            for item in event.spawned_items:
+                await self._spawn_scene_item(item.model_dump(exclude_none=True))
+            state_dirty = True
 
         # Quest Updates
         if event.completed_quest_ids:

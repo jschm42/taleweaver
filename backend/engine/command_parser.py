@@ -198,27 +198,4 @@ class CommandParser:
     def _handle_consume(avatar: Avatar, item_name: str) -> str:
         if not item_name:
             return "Usage: /consume <item name>"
-
-        # Find item in inventory
-        item_idx = -1
-        for idx, item in enumerate(avatar.inventory):
-            if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
-                item_idx = idx
-                break
-
-        if item_idx == -1:
-            return f"You don't have '{item_name}' in your inventory."
-
-        item_to_consume = avatar.inventory[item_idx]
-        if item_to_consume.get("item_type") != "CONSUMABLE":
-            return f"{item_to_consume.get('name')} is not consumable."
-
-        # Apply basic effects if any (simplified)
-        msg = f"You consume the {item_to_consume.get('name')}."
-        
-        # Remove from inventory
-        new_inventory = list(avatar.inventory)
-        del new_inventory[item_idx]
-        avatar.inventory = new_inventory
-        
-        return msg + " (Note: Effects will be applied by the Game Master upon closing the character sheet.)"
+        return f"[TRIGGER_CONSUME] {item_name}"

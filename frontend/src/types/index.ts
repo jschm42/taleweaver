@@ -159,6 +159,7 @@ export interface CreateAdventurePayload {
   award_generation_enabled?: boolean
   min_awards?: number
   max_awards?: number
+  allow_dynamic_items?: boolean
 }
 
 export interface CatalogTile {

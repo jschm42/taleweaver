@@ -139,7 +139,8 @@ const form = ref({
     day_label: 'Day',
     start_year_override: null,
     start_time: '08:00'
-  }
+  },
+  allow_dynamic_items: true,
 })
 
 async function fetchAdventure() {
@@ -167,6 +168,7 @@ async function fetchAdventure() {
     form.value.max_scenes = data.max_scenes || 5
     form.value.time_system = data.time_system || 'calendar'
     form.value.time_config = data.time_config || { day_label: 'Day', start_year_override: null, start_time: '08:00' }
+    form.value.allow_dynamic_items = data.allow_dynamic_items ?? true
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -730,6 +732,44 @@ watch(
                     <label class="block text-xxs font-bold text-slate-500 uppercase tracking-widest mb-2">Start Time</label>
                     <input v-model="form.time_config.start_time" type="text" placeholder="HH:MM" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
                   </div>
+                </div>
+              </div>
+
+              <!-- GM Capabilities -->
+              <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
+                <div class="flex items-center gap-3">
+                  <div class="p-2 bg-violet-500/10 rounded-lg text-violet-500">
+                    <i class="ra ra-magic-axe text-xl"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Game Master Capabilities</h3>
+                    <p class="text-xs text-slate-500">Control what the GM can do during a live session.</p>
+                  </div>
+                </div>
+
+                <!-- allow_dynamic_items toggle -->
+                <div class="flex items-center justify-between py-3 border-t border-slate-800/60">
+                  <div>
+                    <p class="text-sm font-semibold text-white">The Game Master may create new items in-game</p>
+                    <p class="text-xs text-slate-500 mt-0.5 max-w-xs">Allows the GM to invent and drop new items (e.g. potions, loot) that were not in the original world manifest.</p>
+                  </div>
+                  <button
+                    id="toggle-allow-dynamic-items"
+                    type="button"
+                    @click="form.allow_dynamic_items = !form.allow_dynamic_items"
+                    :class="[
+                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
+                      form.allow_dynamic_items ? 'bg-violet-600' : 'bg-slate-700'
+                    ]"
+                    :aria-pressed="form.allow_dynamic_items"
+                  >
+                    <span
+                      :class="[
+                        'inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-200',
+                        form.allow_dynamic_items ? 'translate-x-6' : 'translate-x-1'
+                      ]"
+                    />
+                  </button>
                 </div>
               </div>
             </div>

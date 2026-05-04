@@ -41,6 +41,7 @@ class SessionState(Base, TimestampMixin):
     is_completed = Column(Boolean, default=False)
     is_debug_enabled = Column(Boolean, default=False)
     is_walkthrough_revealed = Column(Boolean, default=False)
+    allow_dynamic_items = Column(Boolean, default=True, nullable=False)
 
     # Relationships
     session = relationship("GameSession", back_populates="state")

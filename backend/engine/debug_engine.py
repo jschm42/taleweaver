@@ -326,4 +326,9 @@ class DebugEngine:
             
             return "DEBUG: World Map fully revealed and synchronized."
 
-        return "DEBUG USAGE: /debug [szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID]"
+        elif sub == "gen_item":
+            parts = args.split(" ", 1)
+            if len(parts) < 2: return "DEBUG ERROR: Usage: /debug gen_item [PROMPT]"
+            return f"[TRIGGER_GEN_ITEM] {parts[1]}"
+
+        return "DEBUG USAGE: /debug [szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID | gen_item PROMPT]"
