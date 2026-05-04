@@ -159,6 +159,7 @@ const statusLabel = computed(() => {
     connected: 'Connected',
     error: 'Error',
     game_over: 'Game Over',
+    completed: 'Completed',
   }
   return map[props.status]
 })
@@ -170,6 +171,7 @@ const statusColor = computed(() => {
     connected: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
     error: 'text-red-500 bg-red-500/10 border-red-500/20',
     game_over: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+    completed: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
   }
   return map[props.status]
 })
