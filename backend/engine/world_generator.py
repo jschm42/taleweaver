@@ -664,10 +664,11 @@ class WorldGenerator:
                         image_successes += 1
                 
                 if not image_url:
-                    # Fallback to procedural SVG or keep existing if it's already a valid /data/ path
+                    # Fallback to high-quality placeholder
                     if not avatar.profile_image or not avatar.profile_image.startswith("/data/"):
-                        image_url = await MediaEngine.generate_svg_placeholder(
-                            template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", template_id)
+                        image_url = await MediaEngine.generate_placeholder(
+                            template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", template_id),
+                            category="AVATAR"
                         )
                     else:
                         image_url = avatar.profile_image
@@ -717,9 +718,10 @@ class WorldGenerator:
                         image_successes += 1
                 
                 if not image_url:
-                    # Fallback to procedural SVG
-                    image_url = await MediaEngine.generate_svg_placeholder(
-                        template_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "scenes")
+                    # Fallback to high-quality placeholder
+                    image_url = await MediaEngine.generate_placeholder(
+                        template_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "scenes"),
+                        category="SCENE"
                     )
  
             db.add(WorldScene(
@@ -784,8 +786,8 @@ class WorldGenerator:
                         image_successes += 1
                 
                 if not image_url:
-                    # Fallback to mage silhouette for NPCs
-                    image_url = await MediaEngine.generate_svg_placeholder(
+                    # Fallback to high-quality placeholder for NPCs
+                    image_url = await MediaEngine.generate_placeholder(
                         template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities"),
                         category="NPC"
                     )
@@ -860,7 +862,11 @@ class WorldGenerator:
                         image_successes += 1
                 
                 if not image_url:
-                    image_url = None
+                    # Fallback to high-quality placeholder for Items
+                    image_url = await MediaEngine.generate_placeholder(
+                        template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities"),
+                        category="ITEM"
+                    )
 
             is_starting_inv = o["id"] in starting_inv_ids
             starting_slot = starting_equipped_ids.get(o["id"])

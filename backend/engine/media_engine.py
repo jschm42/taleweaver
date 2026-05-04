@@ -15,6 +15,12 @@ from backend.core.security import encryption_util
 from backend.core.config import settings
 from backend.core import prompts
 from backend.utils.svg_generator import SVGPlaceholderGenerator
+from backend.utils.image_generator import (
+    PlaceholderImageGenerator, 
+    OrganicGradientStrategy, 
+    BlobIconStrategy, 
+    ColorTheme
+)
 import litellm
 from backend.utils.text_utils import slugify
 
@@ -734,6 +740,79 @@ class MediaEngine:
             filename=filename,
             provider_options=t2i,
         )
+
+    @staticmethod
+    async def generate_placeholder(
+        adventure_id: str,
+        entity_id: str,
+        target_dir: str,
+        filename: Optional[str] = None,
+        category: str = "",
+        theme: Optional[str] = None
+    ) -> str:
+        """
+        Generates a high-quality PIL-based placeholder image.
+        Uses organic gradients for scenes and blob-icons for entities.
+        """
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            
+            # Determine format and extension
+            # Default to PNG for placeholders to preserve transparency if needed, 
+            # though we currently convert to RGB in the strategy.
+            ext = "png"
+            if filename:
+                if filename.lower().endswith((".jpg", ".jpeg")):
+                    ext = "jpg"
+                elif filename.lower().endswith(".png"):
+                    ext = "png"
+            
+            if not filename:
+                filename = f"placeholder_{entity_id}_{uuid.uuid4().hex[:6]}.{ext}"
+            elif not any(filename.lower().endswith(e) for e in (".png", ".jpg", ".jpeg")):
+                filename += f".{ext}"
+            
+            filepath = os.path.join(target_dir, filename)
+            
+            # Select strategy and theme based on category
+            cat = category.upper()
+            
+            # Map theme string to ColorTheme enum
+            color_theme = ColorTheme.COLORFUL
+            if theme:
+                try:
+                    color_theme = ColorTheme[theme.upper()]
+                except (KeyError, AttributeError):
+                    pass
+            
+            if cat in ["SCENE", "COVER", "LANDSCAPE"]:
+                # Scenes use random generation with subtle blur
+                strategy = OrganicGradientStrategy(theme=color_theme)
+                width, height = 1200, 800
+            elif cat in ["NPC", "CHARACTER", "ITEM", "AVATAR"]:
+                # NPCs, Items, and Avatars (Protagonist) use the classic SVG system with margins
+                return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
+            else:
+                strategy = OrganicGradientStrategy(theme=color_theme)
+                width, height = 800, 600
+
+            generator = PlaceholderImageGenerator(strategy=strategy)
+            
+            # Run in thread pool as PIL operations are blocking
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None, 
+                generator.create_and_save, 
+                filepath, 
+                (width, height)
+            )
+            
+            rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
+            return f"/data/{rel_path}"
+        except Exception as e:
+            logger.error(f"Failed to generate high-quality placeholder: {e}")
+            # Fallback to SVG if PIL fails
+            return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
 
     @staticmethod
     async def generate_svg_placeholder(

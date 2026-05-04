@@ -232,8 +232,9 @@ class AdventureTemplateImporter:
                     new_template.image_url = existing_images_mapping[adv_data["image_url"]]
                 else:
                     from backend.engine.media_engine import MediaEngine
-                    new_template.image_url = await MediaEngine.generate_svg_placeholder(
-                        new_template_id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template_id), "cover_placeholder.svg"
+                    new_template.image_url = await MediaEngine.generate_placeholder(
+                        new_template_id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template_id),
+                        category="COVER"
                     )
                 
 
@@ -410,8 +411,9 @@ class AdventureTemplateImporter:
                 
                 if not new_template.image_url:
                     from backend.engine.media_engine import MediaEngine
-                    new_template.image_url = await MediaEngine.generate_svg_placeholder(
-                        new_template.id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template.id), "cover_placeholder.svg"
+                    new_template.image_url = await MediaEngine.generate_placeholder(
+                        new_template.id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template.id),
+                        category="COVER"
                     )
                     await db.flush()
                 
