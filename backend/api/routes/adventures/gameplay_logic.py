@@ -610,7 +610,7 @@ class GameTurnManager:
         RuleEngine.apply_event(self.avatar, event)
         
         state_dirty = False
-        if event.new_scene_id:
+        if event.new_scene_id and event.new_scene_id != self.state.current_scene_id:
             old_scene_id = self.state.current_scene_id
             self.state.current_scene_id = event.new_scene_id
             state_dirty = True

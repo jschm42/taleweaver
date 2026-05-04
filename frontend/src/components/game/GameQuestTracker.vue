@@ -9,7 +9,7 @@ const props = defineProps<{
     <transition name="fade">
       <div v-if="props.trackedQuest" class="animate-fade-in pointer-events-none w-full">
         <div :class="['quest-panel-header glassmorphism flex items-start gap-3 md:gap-4 px-3 py-2 md:px-5 md:py-4 rounded-xl md:rounded-2xl border border-white/5 pointer-events-auto shadow-2xl', props.trackedQuest.status === 'completed' ? 'opacity-60' : '']">
-          <div class="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center bg-indigo-500/10 rounded-lg md:rounded-xl border border-indigo-500/20 text-indigo-400 shrink-0 mt-0.5 shadow-inner">
+          <div class="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center  text-indigo-400 shrink-0 mt-0.5 shadow-inner">
             <i :class="['ra text-xs md:text-sm', props.trackedQuest.status === 'completed' ? 'ra-check' : 'ra-scroll']"></i>
           </div>
           <div class="flex-grow min-w-0">
@@ -22,8 +22,8 @@ const props = defineProps<{
                 <span v-else class="text-xs md:text-xxs font-black text-indigo-400 tabular-nums uppercase tracking-widest">{{ props.trackedQuest.exp_reward }} XP</span>
               </div>
             </div>
-            <div :class="['text-xs md:text-xs text-slate-400 leading-relaxed line-clamp-2 md:line-clamp-3', props.trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
-              {{ props.trackedQuest.description }}
+            <div :class="['text-sm md:text-sm text-slate-300 leading-relaxed line-clamp-3 md:line-clamp-4', props.trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
+              {{ props.trackedQuest.description || props.trackedQuest.goal }}
             </div>
           </div>
         </div>
