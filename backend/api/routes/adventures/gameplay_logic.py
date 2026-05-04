@@ -1,4 +1,5 @@
 import json
+import asyncio
 import logging
 import uuid
 import re
@@ -1478,35 +1479,46 @@ class GameTurnManager:
                 game_event.status_note = str(goe)
 
         # Pass 2: Narration
-        yield f"event: status\ndata: {json.dumps({'content': 'Generating narrative...'})}\n\n"
-        try:
-            llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
-        except ValueError as e:
-            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
-            return
-        narration_prompt = (
-            system_prompt + "\n\n" + 
-            prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
-                outcome_json=game_event.model_dump_json() if game_event else "{}"
-            ) + "\n\n" +
-            prompts.GM_NARRATION_MANDATORY_FORMATTING
-        )
-        
-        if language:
-            narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
-        
-        pass2_start = time.perf_counter()
-        logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
-        stream = await llm.stream_simple_task(narration_prompt, user_msg, complex_model)
-        
-        async for chunk in stream:
-            delta = chunk.choices[0].delta.content or ""
-            if delta:
-                response_text += delta
-                yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
-        
-        pass2_duration = time.perf_counter() - pass2_start
-        logger.debug(f"[Turn {self.game_id}] [Pass 2] Narration took {pass2_duration:.4f}s")
+        if game_event and game_event.instant_narrative:
+            logger.info(f"[Turn {self.game_id}] Short-circuit active: Using instant_narrative from Pass 1.")
+            response_text = game_event.instant_narrative
+            # Stream the instant narrative back as chunks to maintain UI consistency
+            words = response_text.split(" ")
+            for i, word in enumerate(words):
+                chunk_str = word + (" " if i < len(words)-1 else "")
+                yield f"event: chunk\ndata: {json.dumps({'content': chunk_str})}\n\n"
+                # Small delay to simulate "typing" but much faster than an actual LLM pass
+                await asyncio.sleep(0.02)
+        else:
+            yield f"event: status\ndata: {json.dumps({'content': 'Generating narrative...'})}\n\n"
+            try:
+                llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
+            except ValueError as e:
+                yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+                return
+            narration_prompt = (
+                system_prompt + "\n\n" + 
+                prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
+                    outcome_json=game_event.model_dump_json() if game_event else "{}"
+                ) + "\n\n" +
+                prompts.GM_NARRATION_MANDATORY_FORMATTING
+            )
+            
+            if language:
+                narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
+            
+            pass2_start = time.perf_counter()
+            logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
+            stream = await llm.stream_simple_task(narration_prompt, user_msg, complex_model)
+            
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content or ""
+                if delta:
+                    response_text += delta
+                    yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
+            
+            pass2_duration = time.perf_counter() - pass2_start
+            logger.debug(f"[Turn {self.game_id}] [Pass 2] Narration took {pass2_duration:.4f}s")
 
         # Finalize
         assistant_chat = ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text)

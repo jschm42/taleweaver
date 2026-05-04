@@ -138,6 +138,7 @@ class GameEvent(BaseModel):
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
+    instant_narrative: Optional[str] = None # If provided, skip the narration pass.
 
 # Maximum resource cap
 RESOURCE_CAP = 200

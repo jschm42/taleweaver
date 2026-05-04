@@ -194,6 +194,9 @@ GM_MECHANICS_SUFFIX = (
     "GAME OVER & COMPLETION:\n"
     "- If the situation is hopeless or the player has violated core rules, set `game_over: true` and provide a `status_note` explanation.\n"
     "- If the story has reached its logical conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
+    "SHORT-CIRCUIT (LATENCY OPTIMIZATION):\n"
+    "- For simple or standard actions (e.g., examining a generic object, a basic greeting, a failed simple check), you can provide a complete, well-formatted narration directly in `instant_narrative`.\n"
+    "- If `instant_narrative` is provided, the system will skip the expensive second narration pass. Use this for 1-2 sentence responses to keep the game snappy.\n"
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """
@@ -214,6 +217,8 @@ GM_STORY_MECHANICS_SUFFIX = (
     "GAME OVER & COMPLETION:\n"
     "- If the story has reached a logical turning point or conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
     "- If the player is in an inescapable situation (e.g. HP <= 0), set `game_over: true` and provide a `status_note` explanation.\n"
+    "SHORT-CIRCUIT (LATENCY OPTIMIZATION):\n"
+    "- For simple narrative actions, provide a complete response in `instant_narrative` to bypass the secondary narration pass.\n"
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """
