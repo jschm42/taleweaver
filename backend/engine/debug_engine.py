@@ -9,6 +9,8 @@ from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
+from backend.models.world_map import WorldMap
+from backend.engine.map_engine import MapEngine
 
 class DebugEngine:
     @staticmethod
@@ -283,4 +285,34 @@ class DebugEngine:
                 lines.append(f"- {e.label} (ID: {e.id if hasattr(e, 'id') else 'N/A'}): {e.from_scene_id} -> {e.to_scene_id} {locked}")
             return "\n".join(lines)
 
-        return "DEBUG USAGE: /debug [szene | scenes | npcs | items | exits | plot | context | map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID]"
+        elif sub == "reveal_map":
+            # 1. Fetch all world data for this session (snapshots)
+            scenes_res = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
+            exits_res = await db.execute(select(WorldExit).where(WorldExit.session_id == state.session_id))
+            
+            scenes = scenes_res.scalars().all()
+            exits = exits_res.scalars().all()
+            
+            # 2. Get or create the map
+            map_res = await db.execute(select(WorldMap).where(WorldMap.template_id == state.template_id))
+            world_map = map_res.scalars().first()
+            if not world_map:
+                world_map = WorldMap(template_id=state.template_id)
+                db.add(world_map)
+                await db.flush()
+            
+            # 3. Register everything
+            for s in scenes:
+                MapEngine.register_visit(world_map, s.id, label=s.label, description=s.description, image_url=s.image_url)
+            
+            # 4. Restore the actual current position
+            # register_visit overwrites current_scene_id with the last one in the loop.
+            # We must set it back to the safe version of our actual current scene_id.
+            world_map.current_scene_id = MapEngine._safe_id(state.scene_id)
+            
+            for e in exits:
+                MapEngine.register_exit(world_map, e.from_scene_id, e.to_scene_id, exit_label=e.label, is_locked=e.is_locked)
+            
+            return "DEBUG: World Map fully revealed and synchronized."
+
+        return "DEBUG USAGE: /debug [szene | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID]"

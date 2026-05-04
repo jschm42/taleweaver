@@ -415,6 +415,12 @@ const handlePlayerInput = async (content: string) => {
     return
   }
 
+  if (normalized === '/debug reveal_map') {
+    await sendMessage('/debug reveal_map')
+    showMap.value = true
+    return
+  }
+
   await sendMessage(content)
 }
 

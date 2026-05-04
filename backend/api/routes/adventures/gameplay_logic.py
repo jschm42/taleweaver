@@ -177,7 +177,9 @@ class GameTurnManager:
         await self.db.commit()
         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': debug_info, 'is_debug': True})}\n\n"
 
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
         final_data = jsonable_encoder({
+            'mermaid': MapEngine.to_mermaid(world_map),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'awards': self.adventure.awards,
             'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
