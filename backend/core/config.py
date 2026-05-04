@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     BLACK_FOREST_LABS_API_KEY: Optional[str] = None
     
+    # Debug / Development
+    TALEWEAVER_DEBUG_ENABLED: bool = False
+    
     def get_env_api_key(self, provider: str) -> Optional[str]:
         """Returns the API key for a provider if set in environment variables."""
         p = provider.lower()

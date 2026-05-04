@@ -40,6 +40,7 @@ class SessionState(Base, TimestampMixin):
     # Runtime flags
     is_completed = Column(Boolean, default=False)
     is_debug_enabled = Column(Boolean, default=False)
+    is_walkthrough_revealed = Column(Boolean, default=False)
 
     # Relationships
     session = relationship("GameSession", back_populates="state")
