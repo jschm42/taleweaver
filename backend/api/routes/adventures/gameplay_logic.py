@@ -90,7 +90,7 @@ class GameTurnManager:
         logger.debug(f"[Turn {self.game_id}] Initialization (DB) took {duration:.4f}s")
         return True
 
-    async def process_turn(self, message: str, auto_visualize: bool = False) -> AsyncGenerator[str, None]:
+    async def process_turn(self, message: str, auto_visualize: bool = False, language: Optional[str] = None) -> AsyncGenerator[str, None]:
         if not await self.initialize():
             yield f"event: error\ndata: {json.dumps({'detail': 'Game session not found.'})}\n\n"
             return
@@ -143,7 +143,11 @@ class GameTurnManager:
             await self.db.flush()
 
         # 3. LLM Processing (Pass 1 & Pass 2)
-        async for chunk in self._run_llm_cycle(user_msg, auto_visualize):
+        async def _run_llm_cycle_with_lang(msg, av):
+            async for c in self._run_llm_cycle(msg, av, language=language):
+                yield c
+        
+        async for chunk in _run_llm_cycle_with_lang(user_msg, auto_visualize):
             yield chunk
             
         turn_end = time.perf_counter()
@@ -162,7 +166,7 @@ class GameTurnManager:
             debug_info = "DEBUG: Session forced to COMPLETED."
 
         await self.db.commit()
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+        final_data = jsonable_encoder({
             'messages': [{'role': 'system', 'content': debug_info}],
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'awards': self.adventure.awards,
@@ -171,14 +175,16 @@ class GameTurnManager:
             'game_over_reason': self.state.session.status_note if self.state.session else None,
             'status_note': self.state.session.status_note if self.state.session else None,
             'status': 'success'
-        }))}\n\n"
+        })
+        yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
             map_res = await self.db.execute(select(WorldMap).where(WorldMap.template_id == self.state.template_id))
             world_map = map_res.scalars().first()
-            yield f"event: final\ndata: {json.dumps(jsonable_encoder({'mermaid': MapEngine.to_mermaid(world_map) if world_map else None, 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db)}))}\n\n"
+            final_data = jsonable_encoder({'mermaid': MapEngine.to_mermaid(world_map) if world_map else None, 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db)})
+            yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
             return
             
         if response.startswith("[TRIGGER_TAKE_DIRECT]"):
@@ -215,10 +221,11 @@ class GameTurnManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
 
         await self.db.commit()
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state)}))}\n\n"
+        final_data = jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state)})
+        yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
         self.stop_requested = True # Stop after direct slash response
 
-    async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool) -> AsyncGenerator[str, None]:
+    async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: Optional[str] = None) -> AsyncGenerator[str, None]:
         # Load Context and LLM Settings
         db_start = time.perf_counter()
         hist_res = await self.db.execute(select(ChatMessage).where(ChatMessage.session_id == self.state.session_id).order_by(ChatMessage.created_at.asc()))
@@ -268,8 +275,25 @@ class GameTurnManager:
             rules=self.state.rules or self.adventure.rules,
             walkthrough=self.state.walkthrough or self.adventure.walkthrough,
             completed_condition=self.state.completed_condition or self.adventure.completed_condition,
-            gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition
+            gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition,
+            time_system=self.state.time_system or self.adventure.time_system or "calendar",
+            time_config=self.state.time_config or self.adventure.time_config
         )[0]["content"]
+
+        # Bable Fish / Translation logic
+        if language:
+            logger.info(f"[Turn {self.game_id}] Bable Fish Active: Target Language = {language}")
+            translation_instruction = (
+                f"\n\n--- BABLE FISH TRANSLATION PROTOCOL ---\n"
+                f"TARGET LANGUAGE: {language.upper()}\n"
+                f"INSTRUCTION: You MUST translate ALL your output (narration, dialogue, descriptions) into {language}. "
+                f"Do NOT respond in English or the original world language if it differs. "
+                f"Note: The chat history may contain messages in various languages due to previous Bable Fish settings. "
+                f"IGNORE those languages and strictly use {language} for the current turn. "
+                f"The player has activated their Bable Fish, so everything they hear/see must be in {language}."
+                f"\n----------------------------------------\n"
+            )
+            system_prompt += translation_instruction
 
         # Override for technical state evaluation (e.g. closing character sheet)
         if user_msg == "[EVALUATE STATE]":
@@ -296,8 +320,8 @@ class GameTurnManager:
             or "openai"
         )
         
-        small_model = llm_settings.get("small_model", "gpt-4o-mini")
-        complex_model = llm_settings.get("complex_model", "gpt-4o")
+        small_model = llm_settings.get("small_model") or "gpt-4o-mini"
+        complex_model = llm_settings.get("complex_model") or "gpt-4o"
 
         game_event = None
         response_text = ""
@@ -462,6 +486,9 @@ class GameTurnManager:
             prompts.GM_NARRATION_MANDATORY_FORMATTING
         )
         
+        if language:
+            narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
+        
         pass2_start = time.perf_counter()
         logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
         stream = await llm.stream_simple_task(narration_prompt, user_msg, complex_model)
@@ -519,6 +546,22 @@ class GameTurnManager:
                             self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
                             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
+                    if update.stamina is not None and match and match.stamina is not None:
+                        diff = update.stamina - match.stamina
+                        if diff != 0:
+                            verb = "gains" if diff > 0 else "loses"
+                            msg = f"{ent_name} {verb} {abs(diff)} Stamina."
+                            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
+                    if update.mana is not None and match and match.mana is not None:
+                        diff = update.mana - match.mana
+                        if diff != 0:
+                            verb = "gains" if diff > 0 else "loses"
+                            msg = f"{ent_name} {verb} {abs(diff)} Mana."
+                            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
             # 3. Items
             if game_event.new_inventory_items:
                 for item in game_event.new_inventory_items:
@@ -552,14 +595,15 @@ class GameTurnManager:
 
         await self.db.commit()
         
-        yield f"event: final\ndata: {json.dumps(jsonable_encoder({
+        final_data = jsonable_encoder({
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
             'game_completed': (self.state.session.status == 'completed') if self.state.session else False,
             'status_note': self.state.session.status_note if self.state.session else None,
             'status': 'success'
-        }))}\n\n"
+        })
+        yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
     async def _apply_game_event(self, event: GameEvent):
         """Applies technical mutations from a GameEvent to the database and session state."""

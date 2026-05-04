@@ -1,3 +1,4 @@
+from typing import List, Optional
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -20,11 +21,12 @@ class UserResponse(BaseModel):
     id: str
     username: str
     role: str
-    profile_image_url: str | None = None
-    bio: str | None = None
-    earned_awards: list | None = None
-    adventure_count: int = 0
-    game_log: list | None = None
+    profile_image_url: Optional[str] = None
+    bio: Optional[str] = None
+    default_language: Optional[str] = None
+    earned_awards: Optional[list] = None
+    is_admin: bool = False
+    game_log: Optional[list] = None
 
 class SetupRootRequest(BaseModel):
     username: str
@@ -78,6 +80,7 @@ async def read_users_me(current_user: User = Depends(get_current_user), db: Asyn
         "role": current_user.role,
         "profile_image_url": current_user.profile_image_url,
         "bio": current_user.bio,
+        "default_language": current_user.default_language,
         "earned_awards": current_user.earned_awards or [],
         "adventure_count": adventure_count,
         "game_log": current_user.game_log or []

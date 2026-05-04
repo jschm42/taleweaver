@@ -137,7 +137,8 @@ class AdventureTemplateImporter:
                     starting_timestamp=adv_data.get("starting_timestamp") or manifest_data.get("starting_timestamp", 0),
                     is_ready=True,
                     creation_status="Ready",
-                    original_manifest=manifest_data
+                    original_manifest=manifest_data,
+                    language=adv_data.get("language") or manifest_data.get("language")
                 )
                 db.add(new_template)
                 
@@ -295,6 +296,7 @@ class AdventureTemplateImporter:
                     gameover_condition=old_adv.get("gameover_condition"),
 
                     starting_timestamp=old_adv.get("starting_timestamp", 0),
+                    language=old_adv.get("language") or data.get("language"),
                     is_ready=True,
                     creation_status="Ready"
                 )
@@ -381,6 +383,7 @@ class AdventureTemplateImporter:
                     gameover_condition=adv_meta.get("gameover_condition") or manifest.get("gameover_condition"),
 
                     starting_timestamp=adv_meta.get("starting_timestamp") or manifest.get("starting_timestamp", 0),
+                    language=adv_meta.get("language") or manifest.get("language"),
                     is_ready=True,
                     creation_status="Ready"
                 )

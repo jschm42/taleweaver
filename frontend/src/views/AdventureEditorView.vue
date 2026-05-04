@@ -260,12 +260,15 @@ async function fetchDebugInfo() {
   }
 }
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '') {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number) {
   editEntityContext.value = { type, id }
   editForm.value = { 
     name: currentName || '', 
     description: currentDesc || '',
-    teaser: currentTeaser || ''
+    teaser: currentTeaser || '',
+    hp: hp || 0,
+    stamina: stamina || 0,
+    mana: mana || 0
   }
   showEditModal.value = true
 }
@@ -282,7 +285,10 @@ async function saveEntityText(type: string, id: string) {
         target_id: id,
         name: editForm.value.name,
         teaser: type === 'cover' ? editForm.value.teaser : undefined,
-        description: editForm.value.description
+        description: editForm.value.description,
+        hp: editForm.value.hp || undefined,
+        stamina: editForm.value.stamina || undefined,
+        mana: editForm.value.mana || undefined
       })
     })
     if (!res.ok) {
@@ -717,7 +723,7 @@ const goBack = () => router.push({ name: 'portal' })
                <section v-if="debugData.protagonist" class="space-y-3">
                  <h3 class="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">The Protagonist</h3>
                  <div class="max-w-[200px]">
-                      <div @mouseenter="handleHover({ name: debugData.protagonist.name, description: debugData.protagonist.description, image_url: debugData.protagonist.profile_image, type: 'PROTAGONIST' }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
+                      <div @mouseenter="handleHover({ name: debugData.protagonist.name, description: debugData.protagonist.description, image_url: debugData.protagonist.profile_image, type: 'PROTAGONIST', stats: { hp: debugData.protagonist.hp, stamina: debugData.protagonist.stamina, mana: debugData.protagonist.mana } }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
                         <img v-if="debugData.protagonist.profile_image" :src="buildVisualImageUrl(debugData.protagonist.profile_image)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                         <div v-if="isQuickGenerating['protagonist_' + debugData.protagonist.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                            <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
@@ -730,7 +736,7 @@ const goBack = () => router.push({ name: 'portal' })
                           <button @click="quickRegenerateVisual('protagonist', debugData.protagonist.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
                           <button @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
                           <button @click="openUploadPicker('protagonist', debugData.protagonist.id, debugData.protagonist.name)" :disabled="isUploading" :title="getUploadHint('protagonist')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-player"></i></button>
-                          <button @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
+                          <button @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description, '', debugData.protagonist.hp, debugData.protagonist.stamina, debugData.protagonist.mana)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
                         </div>
                       </div>
                  </div>
@@ -786,11 +792,11 @@ const goBack = () => router.push({ name: 'portal' })
                           <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-[7px] font-black text-red-400">
                             <i class="ra ra-heart text-[6px]"></i> {{ npc.stats.hp || 10 }}
                           </div>
-                          <template v-if="form.rule_enforcement_mode === 'rpg'">
+                          <template v-if="form.rule_enforcement_mode === 'rpg' || form.rule_enforcement_mode === 'story'">
                             <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-[7px] font-black text-emerald-400">
                               <i class="ra ra-muscle-up text-[6px]"></i> {{ npc.stats.stamina || 10 }}
                             </div>
-                            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-[7px] font-black text-blue-400">
+                            <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-[7px] font-black text-blue-400">
                               <i class="ra ra-crystal-ball text-[6px]"></i> {{ npc.stats.mana || 0 }}
                             </div>
                           </template>
@@ -800,7 +806,7 @@ const goBack = () => router.push({ name: 'portal' })
                         <button @click="quickRegenerateVisual('npc', npc.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
                         <button @click="openRegenerateDialog('npc', npc.id, npc.name, npc.description)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
                         <button @click="openUploadPicker('npc', npc.id, npc.name)" :disabled="isUploading" :title="getUploadHint('npc')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-player"></i></button>
-                        <button @click="openTextEdit('npc', npc.id, npc.name, npc.description)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
+                        <button @click="openTextEdit('npc', npc.id, npc.name, npc.description, '', npc.stats?.hp, npc.stats?.stamina, npc.stats?.mana)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
                       </div>
                     </div>
                   </div>
@@ -1003,8 +1009,8 @@ const goBack = () => router.push({ name: 'portal' })
                   <div v-if="editingField === 'gameover_condition'" class="space-y-4 animate-fade-in">
                     <textarea v-model="tempValue" rows="4" class="w-full bg-black/60 border border-red-500/50 rounded-2xl px-6 py-5 text-sm text-slate-200 outline-none transition-all resize-y" placeholder="How can the adventure fail?"></textarea>
                     <div class="flex gap-4">
-                      <button @click="saveField" :disabled="isSaving" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
-                      <button @click="cancelEditing" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                      <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                      <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
                     </div>
                   </div>
                   <div v-else @click="startEditing('gameover_condition', form.gameover_condition)" class="group relative cursor-pointer bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 rounded-2xl p-6 transition-all duration-300">
@@ -1134,15 +1140,15 @@ const goBack = () => router.push({ name: 'portal' })
               
               <!-- Stats Display (Mode Aware) -->
               <div v-if="form.rule_enforcement_mode !== 'chat' && hoveredEntity.stats" class="flex flex-wrap gap-2 pt-2 border-t border-white/5">
-                <template v-if="hoveredEntity.type === 'NPC'">
+                <template v-if="hoveredEntity.type === 'NPC' || hoveredEntity.type === 'PROTAGONIST'">
                   <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-[9px] font-black text-red-500">
                     <i class="ra ra-heart"></i> {{ hoveredEntity.stats.hp || 10 }}
                   </div>
-                  <template v-if="form.rule_enforcement_mode === 'rpg'">
+                  <template v-if="form.rule_enforcement_mode === 'rpg' || form.rule_enforcement_mode === 'story'">
                     <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-500">
                       <i class="ra ra-muscle-up"></i> {{ hoveredEntity.stats.stamina || 10 }}
                     </div>
-                    <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-500">
+                    <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-500">
                       <i class="ra ra-crystal-ball"></i> {{ hoveredEntity.stats.mana || 0 }}
                     </div>
                   </template>
@@ -1232,6 +1238,22 @@ const goBack = () => router.push({ name: 'portal' })
                 <div class="space-y-3">
                   <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Entity Name</label>
                   <input v-model="editForm.name" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-2xl font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" />
+                
+                <!-- Stats Inputs -->
+                <div v-if="['protagonist', 'npc'].includes(editEntityContext.type) && form.rule_enforcement_mode !== 'chat'" class="grid grid-cols-3 gap-4">
+                  <div class="space-y-2">
+                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest">Health (HP)</label>
+                    <input v-model.number="editForm.hp" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-red-500/50 outline-none transition-all" />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest">Stamina (STM)</label>
+                    <input v-model.number="editForm.stamina" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-emerald-500/50 outline-none transition-all" />
+                  </div>
+                  <div v-if="form.rule_enforcement_mode === 'rpg'" class="space-y-2">
+                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest">Mana (MAN)</label>
+                    <input v-model.number="editForm.mana" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-blue-500/50 outline-none transition-all" />
+                  </div>
+                </div>
                 </div>
                 
                 <div v-if="editEntityContext.type === 'cover'" class="space-y-3">

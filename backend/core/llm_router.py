@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from pydantic import BaseModel
-from typing import TypeVar, Type, Any
+from typing import TypeVar, Type, Any, Optional
 import litellm
 
 from backend.models.user import User
@@ -270,11 +270,11 @@ class GameMasterLLM:
         user_prompt: str,
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         Free narrative task (Hallucination Mode).
@@ -301,9 +301,7 @@ class GameMasterLLM:
         else:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
-                # Route through OpenAI-compatible chat endpoint to avoid provider-specific
-                # request fields that some local dependency combos reject (e.g. usage).
-                kwargs["custom_llm_provider"] = "openai"
+                kwargs["custom_llm_provider"] = "openrouter"
         
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
@@ -347,11 +345,11 @@ class GameMasterLLM:
         user_prompt: str,
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         Async version of execute_simple_task.
@@ -377,7 +375,7 @@ class GameMasterLLM:
         else:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openai"
+                kwargs["custom_llm_provider"] = "openrouter"
         
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -420,11 +418,11 @@ class GameMasterLLM:
         user_prompt: str,
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ):
         """
         Streams a free narrative task.
@@ -451,7 +449,7 @@ class GameMasterLLM:
         else:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openai"
+                kwargs["custom_llm_provider"] = "openrouter"
         
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -476,11 +474,11 @@ class GameMasterLLM:
         response_model: Type[T],
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> T:
         """
         Async version of execute_complex_task.
@@ -507,7 +505,7 @@ class GameMasterLLM:
         else:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openai"
+                kwargs["custom_llm_provider"] = "openrouter"
 
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -573,11 +571,11 @@ class GameMasterLLM:
         response_model: Type[T],
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> T:
         """
         Strict mechanics task (Strict Mode).
@@ -610,7 +608,7 @@ class GameMasterLLM:
             if self.provider == "openrouter":
                 # Route through OpenAI-compatible chat endpoint to avoid provider-specific
                 # request fields that some local dependency combos reject (e.g. usage).
-                kwargs["custom_llm_provider"] = "openai"
+                kwargs["custom_llm_provider"] = "openrouter"
 
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):

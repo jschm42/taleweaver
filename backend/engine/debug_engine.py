@@ -1,3 +1,4 @@
+from typing import Optional, Any
 from copy import deepcopy
 from datetime import datetime
 from sqlalchemy import select
@@ -15,8 +16,8 @@ class DebugEngine:
         db: AsyncSession,
         state: SessionState,
         args: str,
-        user: User | None = None,
-        adventure: AdventureTemplate | None = None,
+        user: Optional[User] = None,
+        adventure: Optional[AdventureTemplate] = None,
     ) -> str:
         """
         Processes /debug sub-commands and returns atmospheric yet technical info.

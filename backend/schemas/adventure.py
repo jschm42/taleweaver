@@ -29,6 +29,8 @@ class AdventureTemplateBase(BaseModel):
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
     clock_enabled: Optional[bool] = False
+    time_system: Optional[str] = "calendar"
+    time_config: Optional[Dict[str, Any]] = None
     
     generate_npc_images: bool = True
     generate_item_images: bool = True
@@ -68,6 +70,8 @@ class AdventureTemplateUpdate(BaseModel):
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = None
+    time_system: Optional[str] = None
+    time_config: Optional[Dict[str, Any]] = None
     selected_image_styles: Optional[List[str]] = None
     selected_tone: Optional[str] = None
     game_over_rules: Optional[Dict[str, Any]] = None

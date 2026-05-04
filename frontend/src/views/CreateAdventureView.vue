@@ -30,6 +30,7 @@ const form = ref({
   award_generation_enabled: true,
   min_awards: 3,
   max_awards: 8,
+  language: '',
 })
 
 const automatedAssetsEnabled = ref(true)
@@ -116,6 +117,15 @@ async function loadCatalogs() {
   }
 }
 
+import { configState, refreshConfig } from '@/store/config'
+import { authState } from '@/store/auth'
+
+function initializeLanguage() {
+  if (authState.user?.default_language) {
+    form.value.language = authState.user.default_language
+  }
+}
+
 async function handleCreate() {
   if (!form.value.title.trim()) {
     errorMsg.value = 'Title is required.'
@@ -145,7 +155,9 @@ async function handleCreate() {
 }
 
 onMounted(() => {
+  void refreshConfig()
   void loadCatalogs()
+  initializeLanguage()
 })
 </script>
 
@@ -240,6 +252,34 @@ onMounted(() => {
                   <h4 class="text-amber-500 font-black uppercase tracking-widest text-[10px] mb-1">Experimental System</h4>
                   <p class="text-slate-400 text-[10px] leading-relaxed">The RPG mode is currently under heavy development. Deterministic mechanics like combat, attribute checks, and automatic world updates may behave unexpectedly. Use with caution!</p>
                 </div>
+              </div>
+            </div>
+
+            <!-- Target Language -->
+            <div class="p-6 bg-cyan-500/5 border border-cyan-500/10 rounded-2xl space-y-4">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <Sparkles class="w-5 h-5" />
+                </div>
+                <span class="text-xs font-black text-white/80 uppercase tracking-widest">Target Generation Language</span>
+              </div>
+              <div class="grid grid-cols-1 gap-3">
+                <select 
+                  v-model="form.language"
+                  class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-400 outline-none transition-all cursor-pointer appearance-none"
+                >
+                  <option value="">Default (English)</option>
+                  <option value="German">Deutsch</option>
+                  <option value="English">English</option>
+                  <option value="French">Français</option>
+                  <option value="Spanish">Español</option>
+                  <option value="Italian">Italiano</option>
+                  <option value="Japanese">Japanese</option>
+                  <option value="Chinese">Chinese</option>
+                  <option value="Russian">Russian</option>
+                  <option value="Portuguese">Portuguese</option>
+                </select>
+                <p class="text-[9px] text-white/30 uppercase tracking-[0.1em]">The Weaver will generate all names, descriptions, and plot points in this language.</p>
               </div>
             </div>
 

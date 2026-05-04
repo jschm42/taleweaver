@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { authState } from '@/store/auth'
 import { api } from '@/composables/useApi'
+import StatBar from './game/StatBar.vue'
 
 const props = defineProps<{
   open: boolean
@@ -22,12 +23,24 @@ const aiEditPrompt = ref('')
 const isAIEditing = ref(false)
 
 const editingEntityId = ref<string | null>(null)
-const editForm = ref({ name: '', description: '' })
+const editForm = ref({ 
+  name: '', 
+  description: '',
+  hp: 0,
+  mana: 0,
+  stamina: 0
+})
 const isSavingText = ref(false)
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string) {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, hp?: number, mana?: number, stamina?: number) {
   editingEntityId.value = `${type}_${id}`
-  editForm.value = { name: currentName || '', description: currentDesc || '' }
+  editForm.value = { 
+    name: currentName || '', 
+    description: currentDesc || '',
+    hp: hp || 0,
+    mana: mana || 0,
+    stamina: stamina || 0
+  }
 }
 
 async function saveEntityText(type: string, id: string) {
@@ -44,7 +57,10 @@ async function saveEntityText(type: string, id: string) {
         target_type: type,
         target_id: id,
         name: editForm.value.name,
-        description: editForm.value.description
+        description: editForm.value.description,
+        hp: editForm.value.hp,
+        mana: editForm.value.mana,
+        stamina: editForm.value.stamina
       })
     })
     if (!res.ok) {
@@ -116,7 +132,14 @@ const form = ref({
   strict_rules: true,
   time_per_turn: 5,
   min_scenes: 1,
+  min_scenes: 1,
   max_scenes: 5,
+  time_system: 'calendar',
+  time_config: {
+    day_label: 'Day',
+    start_year_override: null,
+    start_time: '08:00'
+  }
 })
 
 async function fetchAdventure() {
@@ -142,6 +165,8 @@ async function fetchAdventure() {
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.min_scenes = data.min_scenes || 1
     form.value.max_scenes = data.max_scenes || 5
+    form.value.time_system = data.time_system || 'calendar'
+    form.value.time_config = data.time_config || { day_label: 'Day', start_year_override: null, start_time: '08:00' }
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -656,6 +681,57 @@ watch(
                   </div>
                 </div>
               </div>
+
+              <!-- Time System Configuration -->
+              <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl space-y-6">
+                <div class="flex items-center gap-3">
+                  <div class="p-2 bg-amber-500/10 rounded-lg text-amber-500">
+                    <i class="ra ra-clockwork text-xl"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">Chronicle Time System</h3>
+                    <p class="text-[10px] text-slate-500">How time is measured in this world.</p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                  <button 
+                    @click="form.time_system = 'calendar'"
+                    :class="[
+                      'px-4 py-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all',
+                      form.time_system === 'calendar' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
+                    ]"
+                  >
+                    Calendar (Date/Time)
+                  </button>
+                  <button 
+                    @click="form.time_system = 'relative'"
+                    :class="[
+                      'px-4 py-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all',
+                      form.time_system === 'relative' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
+                    ]"
+                  >
+                    Relative (Day X)
+                  </button>
+                </div>
+
+                <div class="space-y-4 pt-2 border-t border-slate-800/50">
+                  <div v-if="form.time_system === 'relative'">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Day Label</label>
+                    <input v-model="form.time_config.day_label" type="text" placeholder="e.g. Day, Sol, Cycle" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
+                  </div>
+
+                  <div v-if="form.time_system === 'calendar'">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Year Override</label>
+                    <input v-model.number="form.time_config.start_year_override" type="number" placeholder="e.g. 2123, 1975" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
+                  </div>
+
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Start Time</label>
+                    <input v-model="form.time_config.start_time" type="text" placeholder="HH:MM" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div v-else-if="activeTab === 'editor'" class="space-y-8">
@@ -753,12 +829,17 @@ watch(
                       Generate
                     </button>
                   </div>
-                  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative group aspect-[4/5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
                       <img v-if="debugData.protagonist.profile_image" :src="buildVisualImageUrl(debugData.protagonist.profile_image)" class="absolute inset-0 w-full h-full object-cover" />
-                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
-                        <div class="font-bold text-[11px]">{{ debugData.protagonist.name || 'Protagonist' }}</div>
-                        <div class="text-white/70">{{ debugData.protagonist.role || 'Player character' }}</div>
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/75 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px] mb-1">{{ debugData.protagonist.name || 'Protagonist' }}</div>
+                        <div class="flex flex-col gap-1 opacity-80 mb-1">
+                           <StatBar v-if="debugData.protagonist.hp != null" label="HP" :value="debugData.protagonist.hp" :max="debugData.protagonist.hp" color="crimson" size="xs" />
+                           <StatBar v-if="debugData.protagonist.stamina != null && (debugData.adventure?.rule_enforcement_mode === 'rpg' || debugData.adventure?.rule_enforcement_mode === 'story')" label="STM" :value="debugData.protagonist.stamina" :max="debugData.protagonist.stamina" color="emerald" size="xs" />
+                           <StatBar v-if="debugData.protagonist.mana != null && debugData.adventure?.rule_enforcement_mode === 'rpg'" label="MAN" :value="debugData.protagonist.mana" :max="debugData.protagonist.mana" color="sapphire" size="xs" />
+                        </div>
+                        <div class="text-white/50 text-[9px] uppercase font-bold tracking-tighter">{{ debugData.protagonist.role || 'Player character' }}</div>
                       </div>
 
                       <!-- Loading Overlay -->
@@ -783,7 +864,7 @@ watch(
                           Custom
                         </button>
                         <button
-                          @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description)"
+                          @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description, debugData.protagonist.hp, debugData.protagonist.mana, debugData.protagonist.stamina)"
                           class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
                         >
                           <i class="ra ra-quill-ink"></i>
@@ -798,6 +879,22 @@ watch(
                           <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
                         </div>
                         <input v-model="editForm.name" placeholder="Name" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        
+                        <div class="grid grid-cols-3 gap-2">
+                          <div>
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">HP</label>
+                            <input v-model.number="editForm.hp" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                          <div v-if="debugData.adventure?.rule_enforcement_mode === 'rpg' || debugData.adventure?.rule_enforcement_mode === 'story'">
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Stamina</label>
+                            <input v-model.number="editForm.stamina" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                          <div v-if="debugData.adventure?.rule_enforcement_mode === 'rpg'">
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Mana</label>
+                            <input v-model.number="editForm.mana" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                        </div>
+
                         <textarea v-model="editForm.description" placeholder="Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
                         <div class="flex justify-end gap-2 mt-1">
                           <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>
@@ -891,8 +988,14 @@ watch(
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div v-for="npc in (debugData.npcs || [])" :key="npc.id" class="relative group aspect-[3/4.5] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
                       <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
-                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
-                        <div class="font-bold text-[11px]">{{ npc.name }}</div>
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/75 text-[10px] text-white leading-tight">
+                        <div class="font-bold text-[11px] mb-1">{{ npc.name }}</div>
+                        <div class="flex flex-col gap-1 opacity-80 mb-1">
+                          <StatBar v-if="npc.hp != null" label="HP" :value="npc.hp" :max="npc.hp" color="crimson" size="xs" />
+                          <StatBar v-if="npc.stamina != null && (debugData.adventure?.rule_enforcement_mode === 'rpg' || debugData.adventure?.rule_enforcement_mode === 'story')" label="STM" :value="npc.stamina" :max="npc.stamina" color="emerald" size="xs" />
+                          <StatBar v-if="npc.mana != null && debugData.adventure?.rule_enforcement_mode === 'rpg'" label="MAN" :value="npc.mana" :max="npc.mana" color="sapphire" size="xs" />
+                        </div>
+                        <div class="text-white/50 text-[9px] uppercase font-bold tracking-tighter">{{ npc.npc_type || 'Inhabitant' }}</div>
                       </div>
 
                       <!-- Loading Overlay -->
@@ -917,7 +1020,7 @@ watch(
                           Custom
                         </button>
                         <button
-                          @click="openTextEdit('npc', npc.id, npc.name, npc.description)"
+                          @click="openTextEdit('npc', npc.id, npc.name, npc.description, npc.hp, npc.mana, npc.stamina)"
                           class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
                         >
                           <i class="ra ra-quill-ink"></i>
@@ -932,6 +1035,22 @@ watch(
                           <button @click="editingEntityId = null" class="text-slate-500 hover:text-white">X</button>
                         </div>
                         <input v-model="editForm.name" placeholder="Name" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none" />
+                        
+                        <div class="grid grid-cols-3 gap-2">
+                          <div>
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">HP</label>
+                            <input v-model.number="editForm.hp" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                          <div>
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Stamina</label>
+                            <input v-model.number="editForm.stamina" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                          <div>
+                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Mana</label>
+                            <input v-model.number="editForm.mana" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
+                          </div>
+                        </div>
+
                         <textarea v-model="editForm.description" placeholder="Description" class="w-full flex-grow bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white resize-none focus:border-emerald-500 outline-none"></textarea>
                         <div class="flex justify-end gap-2 mt-1">
                           <button @click="editingEntityId = null" class="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white transition-colors">Cancel</button>

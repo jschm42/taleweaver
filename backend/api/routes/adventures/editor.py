@@ -29,6 +29,9 @@ class EntityUpdateRequest(BaseModel):
     name: Optional[str] = None
     teaser: Optional[str] = None
     description: Optional[str] = None
+    hp: Optional[int] = None
+    mana: Optional[int] = None
+    stamina: Optional[int] = None
 
 class AIEditRequest(BaseModel):
     prompt: str
@@ -128,6 +131,15 @@ async def update_editor_entity(
         if avatar:
             if payload.name is not None: avatar.name = payload.name
             if payload.description is not None: avatar.description = payload.description
+            if payload.hp is not None: 
+                avatar.hp = payload.hp
+                avatar.max_hp = payload.hp
+            if payload.mana is not None: 
+                avatar.mana = payload.mana
+                avatar.max_mana = payload.mana
+            if payload.stamina is not None: 
+                avatar.stamina = payload.stamina
+                avatar.max_stamina = payload.stamina
     elif payload.target_type == "scene":
         sc_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.id == payload.target_id))
         scene = sc_res.scalars().first()
@@ -140,6 +152,15 @@ async def update_editor_entity(
         if ent:
             if payload.name is not None: ent.name = payload.name
             if payload.description is not None: ent.description = payload.description
+            if payload.hp is not None: 
+                ent.hp = payload.hp
+                ent.max_hp = payload.hp
+            if payload.mana is not None: 
+                ent.mana = payload.mana
+                ent.max_mana = payload.mana
+            if payload.stamina is not None: 
+                ent.stamina = payload.stamina
+                ent.max_stamina = payload.stamina
             
     await db.commit()
     return {"status": "success"}

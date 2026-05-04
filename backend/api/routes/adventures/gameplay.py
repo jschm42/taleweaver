@@ -24,7 +24,12 @@ logger = logging.getLogger(__name__)
 
 async def _get_npc_metadata(template_id: str, db: AsyncSession) -> dict:
     npc_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type.in_(["NPC", "npc"])))
-    return {npc.id: {"name": npc.name, "description": npc.description} for npc in npc_res.scalars().all()}
+    metadata = {}
+    for npc in npc_res.scalars().all():
+        data = {"name": npc.name, "description": npc.description, "image_url": npc.image_url, "entity_type": "NPC"}
+        metadata[npc.id] = data
+        metadata[npc.name] = data
+    return metadata
 
 async def _enrich_map_nodes(template_id: str, nodes: dict, db: AsyncSession) -> dict:
     scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
@@ -93,6 +98,6 @@ async def post_chat_message(
     """Processes a user message and returns a streaming response."""
     manager = GameTurnManager(db, game_id, current_user)
     return StreamingResponse(
-        manager.process_turn(payload.content, auto_visualize=payload.auto_visualize), 
+        manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
         media_type="text/event-stream"
     )

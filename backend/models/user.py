@@ -12,6 +12,7 @@ class User(Base, TimestampMixin):
     
     profile_image_url = Column(String(255), nullable=True)
     bio = Column(String(1000), nullable=True)
+    default_language = Column(String(20), nullable=True)
 
     # Store encrypted keys mapping, e.g., {"openai": "gAAAAAB...", "anthropic": "..."}
     encrypted_api_keys = Column(JSON, nullable=True)

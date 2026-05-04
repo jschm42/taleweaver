@@ -126,6 +126,7 @@ async def create_adventure(
         is_ready=False,
         creation_status="Initializing...",
         original_manifest=payload.original_manifest,
+        language=payload.language
     )
     db.add(adv)
     
@@ -177,6 +178,7 @@ async def create_adventure(
                     min_awards=payload.min_awards,
                     max_awards=payload.max_awards,
                     selected_image_styles=adv.selected_image_styles,
+                    language=payload.language
                 )
 
                 # Finalize template

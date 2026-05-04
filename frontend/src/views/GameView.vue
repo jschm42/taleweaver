@@ -25,7 +25,7 @@ import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
 import { authState, refreshUser } from '@/store/auth'
-import { getImageUrl } from '@/utils/game_icons'
+import { getImageUrl, getItemIcon } from '@/utils/game_icons'
 
 const props = defineProps<{
   id: string
@@ -91,18 +91,18 @@ const tooltipStyle = computed(() => {
   const y = mousePos.value.y
   const threshold = window.innerHeight * 0.6
   
-  if (y > threshold) {
-    return {
-      left: `${x}px`,
-      bottom: `${window.innerHeight - y + 10}px`,
-      top: 'auto'
-    }
-  }
-  return {
+  const style: Record<string, string> = {
     left: `${x}px`,
-    top: `${y + 10}px`,
-    bottom: 'auto'
   }
+
+  if (y > threshold) {
+    style.bottom = `${window.innerHeight - y + 10}px`
+    style.top = 'auto'
+  } else {
+    style.top = `${y + 10}px`
+    style.bottom = 'auto'
+  }
+  return style
 })
 
 const handleChatNpcHover = (name: string, event: MouseEvent) => {
@@ -120,17 +120,17 @@ const npcs = computed(() => {
     const playerEntity = {
       id: 'PLAYER',
       entity_type: 'NPC',
-      name: `You (${sheet.value.name})`,
-      description: sheet.value.description || '',
-      image_url: sheet.value.profile_image || sheet.value.profile_image || null,
+      name: sheet.value.name ? `You (${sheet.value.name})` : 'You',
+      description: sheet.value.description || 'Your character in this adventure.',
+      image_url: sheet.value.profile_image || null,
       role: sheet.value.role || null,
-      hp: sheet.value.hp,
-      max_hp: sheet.value.max_hp,
-      stamina: sheet.value.stamina,
-      max_stamina: sheet.value.max_stamina,
-      mana: sheet.value.mana,
-      max_mana: sheet.value.max_mana,
-      inventory: sheet.value.inventory
+      hp: typeof sheet.value.hp === 'number' ? sheet.value.hp : 100,
+      max_hp: typeof sheet.value.max_hp === 'number' ? sheet.value.max_hp : 100,
+      mana: typeof sheet.value.mana === 'number' ? sheet.value.mana : 50,
+      max_mana: typeof sheet.value.max_mana === 'number' ? sheet.value.max_mana : 50,
+      stamina: typeof sheet.value.stamina === 'number' ? sheet.value.stamina : 50,
+      max_stamina: typeof sheet.value.max_stamina === 'number' ? sheet.value.max_stamina : 50,
+      inventory: Array.isArray(sheet.value.inventory) ? sheet.value.inventory : []
     }
     return [playerEntity, ...worldNpcs]
   }
@@ -175,12 +175,39 @@ const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id
  * Formats the session clock as a full datetime derived from the adventure start.
  */
 const gameTime = computed(() => {
-  if (!sheet.value?.start_datetime) return null
+  if (!sheet.value?.start_datetime && sheet.value?.time_system !== 'relative') return null
 
+  const timeSystem = sheet.value?.time_system || 'calendar'
+  const timeConfig = sheet.value?.time_config || {}
+  const dayLabel = timeConfig.day_label || 'Day'
+  const elapsedMinutes = sheet.value?.in_game_time ?? 0
+
+  if (timeSystem === 'relative') {
+    const totalMinutes = elapsedMinutes
+    // Support custom start time in relative mode too
+    let baseHour = 8
+    if (timeConfig.start_time) {
+      const [h] = timeConfig.start_time.split(':').map(Number)
+      if (!isNaN(h)) baseHour = h
+    }
+
+    const totalHours = Math.floor(totalMinutes / 60)
+    const extraMinutes = totalMinutes % 60
+    const currentHour = (baseHour + totalHours) % 24
+    const daysPassed = Math.floor((baseHour + totalHours) / 24)
+    
+    const timeStr = `${currentHour.toString().padStart(2, '0')}:${extraMinutes.toString().padStart(2, '0')}`
+    return {
+      date: `${dayLabel} ${1 + daysPassed}`,
+      dateShort: `${dayLabel} ${1 + daysPassed}`,
+      time: timeStr
+    }
+  }
+
+  // Calendar mode
   const start = new Date(sheet.value.start_datetime)
   if (Number.isNaN(start.getTime())) return null
 
-  const elapsedMinutes = sheet.value.in_game_time ?? 0
   const current = new Date(start.getTime() + elapsedMinutes * 60_000)
 
   const date = current.toLocaleDateString('de-DE', {
@@ -193,12 +220,13 @@ const gameTime = computed(() => {
   const dateShort = (() => {
     const d = current.getDate().toString().padStart(2, '0')
     const m = (current.getMonth() + 1).toString().padStart(2, '0')
-    const y = current.getFullYear().toString().slice(-2)
+    const y = current.getFullYear().toString()
+    const yShort = y.slice(-2)
     
     switch (gameSettings.value.date_format) {
-      case 'MM/DD/YY': return `${m}/${d}/${y}`
-      case 'YY-MM-DD': return `${y}-${m}-${d}`
-      default: return `${d}.${m}.${y}`
+      case 'MM/DD/YY': return `${m}/${d}/${yShort}`
+      case 'YY-MM-DD': return `${yShort}-${m}-${d}`
+      default: return `${d}.${m}.${y}` // Keep full year for sci-fi/historical
     }
   })()
 
@@ -206,9 +234,8 @@ const gameTime = computed(() => {
     hour: '2-digit',
     minute: '2-digit',
     hour12: !gameSettings.value.clock_24h,
-  }).replace(/^0/, '') // Strip leading zero for cleaner look in 12h
+  }).replace(/^0/, '')
 
-  // In 24h mode, ensure 2-digit hour
   const time24 = current.toLocaleTimeString('de-DE', {
     hour: '2-digit',
     minute: '2-digit',
@@ -521,7 +548,7 @@ onBeforeUnmount(() => {
           :npcs="npcs"
           :show-image="showImage"
           :mode="sheet?.rule_enforcement_mode"
-          @hover="(entity, event) => handleHover(entity, event)"
+          @hover="(entity, event) => handleHover({ ...entity, entity_type: 'NPC' }, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
           @image-error="(path) => handleImageError(path)"
@@ -635,7 +662,7 @@ onBeforeUnmount(() => {
       <Transition name="tooltip">
         <div 
           v-if="hoveredEntity" 
-          class="fixed z-[100] pointer-events-none transition-all duration-75"
+          class="fixed z-[999] pointer-events-none"
           :style="tooltipStyle"
         >
           <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
@@ -651,34 +678,35 @@ onBeforeUnmount(() => {
                 <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
                 <span 
                   class="text-[8px] px-1.5 py-0.5 rounded border font-mono uppercase"
-                  :class="hoveredEntity.entity_type === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : 'border-amber-500/50 text-amber-400'"
+                  :class="hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : 'border-amber-500/50 text-amber-400'"
                 >
-                  {{ hoveredEntity.entity_type }}
+                  {{ hoveredEntity.entity_type || 'NPC' }}
                 </span>
               </div>
               <p class="text-xs text-slate-400 leading-relaxed italic mb-3">{{ hoveredEntity.description }}</p>
 
-              <!-- NPC/Player Bars -->
-              <div v-if="hoveredEntity.entity_type === 'NPC' && sheet?.rule_enforcement_mode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
-                <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="hoveredEntity.hp" :max="hoveredEntity.max_hp" color="crimson" size="sm" />
-                <StatBar v-if="hoveredEntity.stamina != null && sheet?.rule_enforcement_mode === 'rpg'" label="Stamina" :value="hoveredEntity.stamina" :max="hoveredEntity.max_stamina" color="emerald" size="sm" />
-                <StatBar v-if="hoveredEntity.mana != null && sheet?.rule_enforcement_mode === 'rpg'" label="Mana" :value="hoveredEntity.mana" :max="hoveredEntity.max_mana" color="sapphire" size="sm" />
+              <!-- NPC Stats -->
+              <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && sheet?.rule_enforcement_mode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
+                <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="Number(hoveredEntity.hp)" :max="Number(hoveredEntity.max_hp || 100)" color="crimson" size="sm" />
+                <StatBar v-if="hoveredEntity.stamina != null && sheet?.rule_enforcement_mode !== 'chat'" label="Stamina" :value="Number(hoveredEntity.stamina)" :max="Number(hoveredEntity.max_stamina || 100)" color="emerald" size="sm" />
+                <StatBar v-if="hoveredEntity.mana != null && sheet?.rule_enforcement_mode === 'rpg'" label="Mana" :value="Number(hoveredEntity.mana)" :max="Number(hoveredEntity.max_mana || 100)" color="sapphire" size="sm" />
               </div>
 
               <!-- NPC Inventory -->
-              <div v-if="hoveredEntity.entity_type === 'NPC' && hoveredEntity.inventory && hoveredEntity.inventory.length > 0" class="mt-3 pt-3 border-t border-slate-800">
+              <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && Array.isArray(hoveredEntity.inventory) && hoveredEntity.inventory.length > 0" class="mt-3 pt-3 border-t border-slate-800">
                 <div class="flex items-center gap-1.5 mb-2">
                   <i class="ra ra-treasure-chest text-[10px] text-slate-500"></i>
                   <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Possessions</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                   <div 
-                    v-for="item in hoveredEntity.inventory" 
-                    :key="item.id"
+                    v-for="(item, iidx) in hoveredEntity.inventory" 
+                    :key="item?.id || iidx"
                     class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-[10px] text-slate-300 flex items-center gap-1.5"
                   >
-                    <i :class="['ra text-[12px]', getItemIcon(item.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
-                    {{ item.name }}
+                    <i v-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
+                    <i v-else class="ra ra-emerald text-[12px] text-amber-500/60"></i>
+                    {{ typeof item === 'object' ? item?.name : item }}
                   </div>
                 </div>
               </div>

@@ -13,6 +13,7 @@ class AdventureTemplate(Base, TimestampMixin):
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     title = Column(String(50), nullable=False)
     teaser = Column(String(300), nullable=True)
+    language = Column(String(20), nullable=True)
     
     image_url = Column(String(255), nullable=True)
     # context is now replaced by original_prompt below
@@ -23,6 +24,8 @@ class AdventureTemplate(Base, TimestampMixin):
     time_per_turn = Column(Integer, default=5, nullable=False)
     pacing_minutes = Column(Integer, default=5, nullable=False)
     clock_enabled = Column(Boolean, default=False, nullable=False)
+    time_system = Column(String(20), default="calendar", nullable=False)
+    time_config = Column(JSON, nullable=True)
     
     generate_scene_images = Column(Boolean, default=False, nullable=False)
     generate_npc_images = Column(Boolean, default=False, nullable=False)

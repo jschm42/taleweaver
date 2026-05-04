@@ -81,6 +81,35 @@
             </div>
           </div>
         </div>
+        
+        <!-- Bable Fish Default Settings -->
+        <div class="settings-section mb-12">
+          <div class="flex items-center justify-between p-6 bg-cyan-500/5 border border-cyan-500/10 rounded-[30px] hover:bg-cyan-500/10 transition-all group">
+            <div class="flex items-center gap-5">
+              <div class="stat-icon bg-cyan-500/10 text-cyan-400">
+                <i class="ra ra-fish"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-black uppercase tracking-widest text-cyan-400">Default Bable Fish Language</h4>
+                <p class="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider italic">Your universal translator's primary tongue</p>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+              <select 
+                v-model="selectedLanguage" 
+                @change="saveDefaultLanguage"
+                :disabled="isSavingLanguage"
+                class="bg-black/60 border border-cyan-500/30 rounded-xl px-4 py-2 text-xs font-bold text-white outline-none focus:border-cyan-400 transition-all cursor-pointer min-w-[140px]"
+              >
+                <option v-for="lang in languages" :key="lang.code" :value="lang.code">
+                  {{ lang.name }}
+                </option>
+              </select>
+              <i v-if="isSavingLanguage" class="ra ra-cycle animate-spin text-cyan-400 text-xs"></i>
+            </div>
+          </div>
+        </div>
 
         <div class="awards-section">
           <h3><span class="section-icon">🏆</span> Trophy Room</h3>
@@ -198,7 +227,23 @@ function formatDate(dateStr?: string): string {
 const isEditingBio = ref(false)
 const isSavingBio = ref(false)
 const isGeneratingBio = ref(false)
+const isSavingLanguage = ref(false)
 const editBio = ref('')
+
+const languages = [
+  { code: '', name: 'Default (English)' },
+  { code: 'German', name: 'Deutsch' },
+  { code: 'English', name: 'English' },
+  { code: 'French', name: 'Français' },
+  { code: 'Spanish', name: 'Español' },
+  { code: 'Italian', name: 'Italiano' },
+  { code: 'Japanese', name: '日本語' },
+  { code: 'Chinese', name: '中文' },
+  { code: 'Russian', name: 'Русский' },
+  { code: 'Portuguese', name: 'Português' },
+]
+
+const selectedLanguage = ref(user.value?.default_language || '')
 
 function startEditBio() {
   editBio.value = user.value?.bio || ''
@@ -246,6 +291,29 @@ async function generateBio() {
     addNotification(error.message, 'error')
   } finally {
     isGeneratingBio.value = false
+  }
+}
+
+async function saveDefaultLanguage() {
+  if (!user.value) return
+  isSavingLanguage.value = true
+  try {
+    const res = await fetch(`${BASE}/users/${user.value.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authState.token}`
+      },
+      body: JSON.stringify({ default_language: selectedLanguage.value })
+    })
+    if (!res.ok) throw new Error('Failed to save language preference')
+    await refreshUser()
+    addNotification('Universal translator recalibrated.', 'success')
+  } catch (error: any) {
+    addNotification(error.message, 'error')
+    selectedLanguage.value = user.value.default_language || ''
+  } finally {
+    isSavingLanguage.value = false
   }
 }
 

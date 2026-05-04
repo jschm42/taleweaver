@@ -6,6 +6,7 @@ export interface User {
   role: string
   profile_image_url?: string | null
   bio?: string | null
+  default_language?: string | null
   earned_awards?: any[] | null
   adventure_count?: number
 }

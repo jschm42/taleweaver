@@ -11,9 +11,9 @@ def get_item_slot(name: str, item_type: str) -> Optional[str]:
     type_upper = item_type.upper()
     name_lower = name.lower()
     
-    # Weapons always go to Main_Hand by default
+    # Weapons always go to MainHand by default
     if type_upper == "WEAPON":
-        return "Main_Hand"
+        return "MainHand"
         
     if type_upper == "WEARABLE":
         # Hands / Arms
@@ -35,12 +35,12 @@ def get_item_slot(name: str, item_type: str) -> Optional[str]:
         if "ring" in name_lower or "band" in name_lower or "signet" in name_lower:
             return "Ring_1"
         if any(kw in name_lower for kw in ["amulet", "necklace", "pendant", "locket", "talisman"]):
-            return "Amulet"
+            return "Neck"
             
-    # Tools might go to Off_Hand if they are held
+    # Tools might go to OffHand if they are held
     if type_upper == "TOOL":
         if any(kw in name_lower for kw in ["shield", "buckler", "torch", "lantern"]):
-            return "Off_Hand"
-        return "Main_Hand" # Pickaxes, hammers, etc.
+            return "OffHand"
+        return "MainHand" # Pickaxes, hammers, etc.
 
     return None

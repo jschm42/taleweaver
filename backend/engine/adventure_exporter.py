@@ -52,6 +52,7 @@ class AdventureExporter:
             "adventure": {
                 "title": adv.title,
                 "teaser": adv.teaser,
+                "language": adv.language,
                 "original_prompt": adv.original_prompt,
                 "image_url": adv.image_url,
                 "strict_rules": adv.strict_rules,

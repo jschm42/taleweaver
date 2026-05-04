@@ -17,6 +17,8 @@ class SessionState(Base, TimestampMixin):
     # Current Runtime State
     current_scene_id = Column(String(100), nullable=False, default="START")
     in_game_time = Column(Integer, default=0, nullable=False)
+    time_system = Column(String(20), default="calendar", nullable=False)
+    time_config = Column(JSON, nullable=True)
     inventory = Column(JSON, nullable=True, default=[])
     
     # Progress trackers

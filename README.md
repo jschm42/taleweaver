@@ -29,7 +29,7 @@ To get started with your first adventure, follow these simple steps:
 
 1.  **Configure LLM**: Navigate to **Administration** and provide an API key for your preferred provider (OpenAI, Anthropic, Gemini, or local Ollama). This is required for the AI Gamemaster.
 2.  **Explore the Library**: Browse the **Library** for pre-seeded adventures or imported blueprints.
-3.  **Generate a World**: If you want something unique, use the **World Generator** to create a completely new setting from a simple prompt.
+3.  **Generate a World**: If you want something unique, use the **World Generator** to create a completely new setting from a simple prompt in your preferred language (e.g., German, French, Italian).
 4.  **Begin Journey**: Select your adventure and click **Begin Journey** to start playing! (Your hero's stats and appearance are automatically initialized from the adventure's protagonist definition).
 
 > [!TIP]
@@ -42,7 +42,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ## 2. Core Features
 
 ### AI as Gamemaster & Content Generator
-* **Dynamic Generation:** Generation of complete text adventure RPGs (story plots, puzzles, explorable scenes).
+* **Dynamic Generation:** Generation of complete text adventure RPGs (story plots, puzzles, explorable scenes) in any supported language.
 * **NPCs & Dialogues:** Creation and control of NPCs, including dynamic dialogues where the AI assumes the role of the NPC in the chat.
 * **Loot & Objects:** Placement of interactive objects and loot to improve character stats.
 * **Challenge Ratings:** Autonomous decision-making by the GM regarding the difficulty of a player's planned action by setting a dynamic "challenge rating" (Difficulty Class).
@@ -58,6 +58,11 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Randomized Action Resolution (Skill Checks):** A virtual D20 roll for risky actions (D20 + stats >= Challenge Rating) executed efficiently in the backend.
 * **Individual Inventory System:** Isolated inventory for looting, dropping, and combining objects.
 * **Equipment Slots:** Dedicated slots for Head, Chest, Arms, Legs, Hands, Feet, Rings (2), and Amulet.
+  
+### 🐟 Bable Fish Multilingualism
+* **Multilingual Generation:** Generate entirely new adventures in your chosen language (German, Italian, French, etc.) from the start.
+* **In-Game Translation:** Switch languages dynamically during gameplay using the "Bable Fish" toggle to translate narration and NPC dialogue.
+* **User Preferences:** Set a global default language in your profile that follows you across all adventures and sessions.
 
 ### Hybrid Interaction
 * **Natural Language Chat:** Free text input for dialogues and complex actions.

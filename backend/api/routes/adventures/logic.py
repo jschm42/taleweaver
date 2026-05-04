@@ -58,18 +58,35 @@ class AdventureLogic:
         return value if isinstance(value, str) and value else fallback
 
     @staticmethod
-    def resolve_start_datetime(manifest: dict[str, Any] | None, state: Optional[SessionState] = None) -> Optional[str]:
+    def resolve_start_datetime(manifest: Optional[dict[str, Any]], state: Optional[SessionState] = None) -> Optional[str]:
         """Returns a usable ISO datetime string. Prioritizes session-specific state over manifest."""
         if state and state.start_datetime:
             return state.start_datetime
-        if not manifest:
+        
+        # If relative time system is used, we don't necessarily need a start_datetime, 
+        # but for backward compatibility and internal logic, we might still want a base.
+        # However, if it's explicitly relative, we might return None or a dummy.
+        
+        target_manifest = manifest
+        if not target_manifest:
             return None
-        start_datetime = manifest.get("start_datetime")
+            
+        start_datetime = target_manifest.get("start_datetime")
         if isinstance(start_datetime, str) and start_datetime.strip():
             return start_datetime
         start_date = manifest.get("start_date")
         start_time = manifest.get("start_time")
         if not (isinstance(start_date, str) and start_date.strip() and isinstance(start_time, str) and start_time.strip()):
+            # Check for year override in time_config
+            time_config = target_manifest.get("time_config") or {}
+            year_override = time_config.get("start_year_override")
+            if year_override:
+                # If we have a year override but no full date, we can construct a default date with that year
+                try:
+                    dt = datetime(year=int(year_override), month=1, day=1, hour=8, minute=0)
+                    return dt.isoformat()
+                except:
+                    pass
             return None
         try:
             dt = datetime.fromisoformat(f"{start_date.strip()}T{start_time.strip()}")
@@ -160,8 +177,6 @@ class AdventureLogic:
         entities = []
         for ent in base_entities:
             eid = ent.get("id")
-            # Clear global leaks for fresh session feel
-            ent["is_in_inventory"] = False
             
             if eid in session_overrides:
                 ent.update(session_overrides[eid])
@@ -274,7 +289,9 @@ class AdventureLogic:
             "adventure_title": adventure.title if adventure else "Unknown",
             "template_id": state.template_id, 
             "exp": avatar.exp,
-            "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg"
+            "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg",
+            "time_system": state.time_system or (adventure.time_system if adventure else "calendar"),
+            "time_config": state.time_config or (adventure.time_config if adventure else None)
         }
         
         return snapshot

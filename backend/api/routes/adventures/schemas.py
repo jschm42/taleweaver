@@ -9,6 +9,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     title: str
     avatar_name: Optional[str] = None
     image_url: Optional[str] = None
+    language: Optional[str] = None
     original_prompt: Optional[str] = None
     strict_rules: bool = True
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
@@ -42,6 +43,7 @@ class AdventureTemplateResponse(BaseModel):
     id: str
     title: str
     teaser: Optional[str] = None
+    language: Optional[str] = None
     strict_rules: bool
     rule_enforcement_mode: str
     time_per_turn: int
@@ -94,6 +96,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
     template_id: str
     title: str
     teaser: Optional[str] = None
+    language: Optional[str] = None
     image_url: Optional[str] = None
     is_ready: bool = True
     creation_status: Optional[str] = None
@@ -110,6 +113,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
 class ChatRequest(BaseModel):
     content: str
     auto_visualize: bool = False
+    language: Optional[str] = None
 
 class ChatResponse(BaseModel):
     messages: List[Dict[str, Any]]

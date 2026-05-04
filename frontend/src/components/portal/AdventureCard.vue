@@ -12,6 +12,22 @@ const emit = defineEmits<{
   (e: 'exportAdv', adventureId: string, title: string): void
   (e: 'delete', adventure: any): void
 }>()
+
+const langCode = computed(() => {
+  const lang = props.adv.language || ''
+  if (!lang || lang === 'English') return 'EN'
+  if (lang === 'German') return 'DE'
+  if (lang === 'French') return 'FR'
+  if (lang === 'Spanish') return 'ES'
+  if (lang === 'Italian') return 'IT'
+  if (lang === 'Japanese') return 'JA'
+  if (lang === 'Chinese') return 'ZH'
+  if (lang === 'Russian') return 'RU'
+  if (lang === 'Portuguese') return 'PT'
+  return lang.substring(0, 2).toUpperCase()
+})
+
+import { computed } from 'vue'
 </script>
 
 <template>
@@ -80,11 +96,16 @@ const emit = defineEmits<{
 
         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
       </div>
-
       <div class="absolute top-4 left-4">
         <span class="px-3 py-1 bg-aether-secondary/20 backdrop-blur-md border border-white/10 rounded-full text-[9px] font-black uppercase tracking-widest text-aether-secondary">
-          {{ props.adv.genre || 'No Tone' }}
+          {{ props.adv.selected_tone || 'No Tone' }}
         </span>
+      </div>
+
+      <div class="absolute bottom-4 right-4 z-20">
+        <div class="w-7 h-7 flex items-center justify-center bg-black/60 backdrop-blur-md border border-white/20 rounded-lg text-[9px] font-black text-white shadow-xl shadow-black/40">
+          {{ langCode }}
+        </div>
       </div>
     </div>
 
