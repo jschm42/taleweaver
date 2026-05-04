@@ -27,6 +27,8 @@ const emit = defineEmits<{
   move: [event: MouseEvent]
   leave: []
   imageError: [path: string]
+  contextmenu: [entity: Entity, event: MouseEvent]
+  click: [entity: Entity]
 }>()
 </script>
 
@@ -46,6 +48,8 @@ const emit = defineEmits<{
         @mouseenter="emit('hover', ent, $event)"
         @mousemove="emit('move', $event)"
         @mouseleave="emit('leave')"
+        @contextmenu.prevent="emit('contextmenu', ent, $event)"
+        @click="emit('click', ent)"
       >
         <div class="w-16 h-16 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2 relative">
           <!-- Defeated Ribbon -->

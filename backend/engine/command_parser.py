@@ -27,6 +27,10 @@ class CommandParser:
             return f"[TRIGGER_TAKE] {args}"
         elif command == "/take_direct":
             return f"[TRIGGER_TAKE_DIRECT] {args}"
+        elif command == "/talk":
+            return f"[TRIGGER_TALK] {args}"
+        elif command == "/inspect":
+            return f"[TRIGGER_INSPECT] {args}"
         elif command == "/unequip":
             return CommandParser._handle_unequip(avatar, args)
         elif command == "/consume":
@@ -44,6 +48,8 @@ class CommandParser:
             "**Available Commands:**\n"
             "- `/help`: Show this list.\n"
             "- `/map`: Toggle the world map.\n"
+            "- `/talk <target>`: Talk to an NPC.\n"
+            "- `/inspect <target>`: Inspect an NPC, object or the surroundings.\n"
             "- `/attack <target>`: Start a fight with a specific NPC (by name or ID).\n"
             "- `/equip <item>`: Equip an item from your inventory.\n"
             "- `/drop <item>`: Drop an item into the current room.\n"

@@ -136,6 +136,18 @@ class GameTurnManager:
                 is_rule_pass = True
                 user_msg = "[EVALUATE STATE]"
                 yield f"event: status\ndata: {json.dumps({'content': 'The Game Master evaluates your situation...'})}\n\n"
+            elif response.startswith("[TRIGGER_TALK]"):
+                user_msg = f"Talk to {response[14:].strip()}"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_INSPECT]"):
+                user_msg = f"Inspect {response[17:].strip()}"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_TAKE]"):
+                user_msg = f"Take {response[14:].strip()}"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_COMBINE]"):
+                user_msg = f"Use {response[17:].strip()}"
+                # Continue turn as normal
             else:
                 # Standard slash command handling (equip, take_direct, etc.)
                 async for chunk in self._handle_slash(user_msg, response): yield chunk

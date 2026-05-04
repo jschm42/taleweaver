@@ -20,8 +20,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   hover: [payload: SceneHoverPayload, event: MouseEvent]
   move: [event: MouseEvent]
-  leave: []
   imageError: [path: string]
+  contextmenu: [payload: SceneHoverPayload, event: MouseEvent]
+  click: [payload: SceneHoverPayload]
 }>()
 
 const hoverPayload = computed<any>(() => ({
@@ -43,6 +44,8 @@ const hoverPayload = computed<any>(() => ({
       @mouseenter="emit('hover', hoverPayload, $event)"
       @mousemove="emit('move', $event)"
       @mouseleave="emit('leave')"
+      @contextmenu.prevent="emit('contextmenu', hoverPayload, $event)"
+      @click="emit('click', hoverPayload)"
     >
       <div class="aspect-video w-full relative overflow-hidden bg-slate-900 flex items-center justify-center">
         <img

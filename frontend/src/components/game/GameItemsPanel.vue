@@ -21,6 +21,8 @@ const emit = defineEmits<{
   leave: []
   imageError: [path: string]
   takeDirect: [entity: Entity]
+  contextmenu: [entity: Entity, event: MouseEvent]
+  click: [entity: Entity]
 }>()
 </script>
 
@@ -41,7 +43,8 @@ const emit = defineEmits<{
         @mouseenter="emit('hover', ent, $event)"
         @mousemove="emit('move', $event)"
         @mouseleave="emit('leave')"
-        @click="ent.is_portable !== false ? emit('takeDirect', ent) : null"
+        @click="emit('click', ent)"
+        @contextmenu.prevent="emit('contextmenu', ent, $event)"
       >
         <div class="w-12 h-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
           <img

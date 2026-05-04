@@ -3,6 +3,7 @@ import { ref, watch, nextTick, computed } from 'vue'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
 import CommandPopup from '@/components/game/CommandPopup.vue'
+import GameActionBar from '@/components/game/GameActionBar.vue'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
@@ -19,6 +20,8 @@ const props = defineProps<{
   inventoryGlow?: boolean
   mapGlow?: boolean
   questGlow?: boolean
+  activeActionId?: string | null
+  mode?: string
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +36,11 @@ const emit = defineEmits<{
   openDebug: []
   toggleDebugLog: [enabled: boolean]
   takeDirect: [entity: any]
+  npcContextmenu: [entity: any, event: MouseEvent]
+  itemContextmenu: [entity: any, event: MouseEvent]
+  selectAction: [actionId: string | null]
+  npcClick: [name: string]
+  itemClick: [item: any]
 }>()
 
 const inputText = ref('')
@@ -304,6 +312,34 @@ function handleMouseMove(e: MouseEvent) {
   }
   emit('npcLeave')
 }
+function handleClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  const npcWrapper = target.closest('[data-npc-name]')
+  if (npcWrapper) {
+    const name = npcWrapper.getAttribute('data-npc-name')
+    if (name) {
+      emit('npcClick', name)
+      return
+    }
+  }
+}
+function handleContextMenu(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  const npcWrapper = target.closest('[data-npc-name]')
+  if (npcWrapper) {
+    const name = npcWrapper.getAttribute('data-npc-name')
+    if (name) {
+      e.preventDefault()
+      const metadata = props.npcMetadata[name]
+      if (metadata) {
+        emit('npcContextmenu', { ...metadata, entity_type: 'NPC' }, e)
+      } else {
+        emit('npcContextmenu', { name, entity_type: 'NPC' }, e)
+      }
+      return
+    }
+  }
+}
 
 function normalizeLineBreaks(text: string): string {
   // Keep intentional paragraph breaks, but cap excessive blank lines.
@@ -380,6 +416,8 @@ function displayMessageContent(msg: ChatMessage): string {
       aria-label="Game log"
       @mousemove="handleMouseMove"
       @mouseleave="emit('npcLeave')"
+      @click="handleClick"
+      @contextmenu="handleContextMenu"
     >
 
       <div
@@ -431,7 +469,9 @@ function displayMessageContent(msg: ChatMessage): string {
             v-for="itemId in msg.itemIds" 
             :key="itemId"
             v-show="entities.find(e => e.id === itemId)"
-            class="item-card flex flex-col w-56 bg-slate-800/80 border border-slate-700/50 rounded-xl overflow-hidden shadow-xl backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-500/30"
+            class="item-card flex flex-col w-56 bg-slate-800/80 border border-slate-700/50 rounded-xl overflow-hidden shadow-xl backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-500/30 cursor-help"
+            @click="emit('itemClick', entities.find(e => e.id === itemId))"
+            @contextmenu.prevent="emit('itemContextmenu', entities.find(e => e.id === itemId), $event)"
           >
             <!-- Item Image -->
             <div class="h-32 bg-slate-900 relative overflow-hidden group/img flex items-center justify-center">
@@ -495,6 +535,13 @@ function displayMessageContent(msg: ChatMessage): string {
         </div>
       </template>
     </div>
+
+    <!-- ACTION BAR -->
+    <GameActionBar 
+      :active-action-id="props.activeActionId" 
+      :mode="props.mode"
+      @select-action="emit('selectAction', $event)" 
+    />
 
     <!-- Input bar -->
     <div class="border-t border-slate-800 bg-slate-950 p-4 shrink-0">
@@ -567,12 +614,6 @@ function displayMessageContent(msg: ChatMessage): string {
         </button>
       </div>
       
-      <div class="flex gap-4 mt-3 px-1 text-xs text-slate-500">
-        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/sheet</kbd> to view character</span>
-        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/equip</kbd> to equip</span>
-        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/hint</kbd> 50 XP</span>
-        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/walkthrough</kbd> reveal 200 XP</span>
-      </div>
     </div>
   </div>
 </template>

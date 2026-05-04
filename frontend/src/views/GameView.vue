@@ -22,6 +22,8 @@ import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
+import ContextMenu from '@/components/game/ContextMenu.vue'
+import GameActionBar from '@/components/game/GameActionBar.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
@@ -82,6 +84,89 @@ const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQues
 const hoveredEntity = ref<any>(null)
 const mousePos = ref({ x: 0, y: 0 })
 const tooltipImageFailed = ref(false)
+
+// Context Menu State
+const contextMenu = ref<{
+  x: number
+  y: number
+  items: any[]
+  title: string
+} | null>(null)
+
+const activeActionId = ref<string | null>(null)
+
+const handleEntityClick = async (entity: any) => {
+  if (activeActionId.value) {
+    const action = activeActionId.value
+    const targetName = entity.name || entity.id
+    let command = ""
+
+    switch (action) {
+      case 'talk': command = `/talk ${targetName}`; break
+      case 'inspect': command = `/inspect ${targetName}`; break
+      case 'take': command = `/take ${targetName}`; break
+      case 'attack': command = `/attack ${targetName}`; break
+      case 'push': command = `Push ${targetName}`; break
+      case 'pull': command = `Pull ${targetName}`; break
+      default: command = `${action} ${targetName}`; break
+    }
+
+    activeActionId.value = null
+    await handlePlayerInput(command)
+  } else {
+    // Default behavior for click (e.g. pick up if portable item)
+    if (entity.entity_type === 'OBJECT' && entity.is_portable !== false) {
+      await handleTakeDirect(entity)
+    }
+  }
+}
+
+const openContextMenu = (entity: any, event: MouseEvent) => {
+  const items: any[] = []
+  let title = entity.name || 'Action'
+  
+  if (entity.id === 'PLAYER') {
+    title = 'You'
+    items.push({ label: 'Inspect', action: '/sheet', icon: 'ra ra-player', color: 'text-cyan-400' })
+    items.push({ label: 'Rest', action: 'Take a rest', icon: 'ra ra-sleeping-bag', color: 'text-emerald-400' })
+    items.push({ label: 'Sing', action: 'Sing a song', icon: 'ra ra-music-spell', color: 'text-pink-400' })
+    items.push({ label: 'Dance', action: 'Start dancing', icon: 'ra ra-double-team', color: 'text-orange-400' })
+  } else if (entity.entity_type === 'NPC') {
+    items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+    if (sheet.value?.rule_enforcement_mode === 'rpg') {
+      items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
+    }
+    items.push({ label: 'Chat', action: `/talk ${entity.name}`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
+  } else if (entity.entity_type === 'SCENE') {
+    items.push({ label: 'Look around', action: 'Look around', icon: 'ra ra-eye', color: 'text-indigo-400' })
+    items.push({ label: 'Search', action: 'Search the area', icon: 'ra ra-magnifying-glass', color: 'text-emerald-400' })
+  } else if (entity.entity_type === 'OBJECT' || entity.entity_type === 'ITEM') {
+    items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+    items.push({ label: 'Pick up', action: `/take ${entity.name}`, icon: 'ra ra-hand', color: 'text-amber-400' })
+    items.push({ label: 'Push', action: `Push ${entity.name}`, icon: 'ra ra-cog', color: 'text-slate-400' })
+    items.push({ label: 'Pull', action: `Pull ${entity.name}`, icon: 'ra ra-tread', color: 'text-slate-400' })
+    items.push({ label: 'Hit', action: `Hit ${entity.name}`, icon: 'ra ra-hammer', color: 'text-red-400' })
+    items.push({ label: 'Smell', action: `Smell ${entity.name}`, icon: 'ra ra-scent', color: 'text-pink-400' })
+  }
+
+  if (items.length > 0) {
+    contextMenu.value = {
+      x: event.clientX,
+      y: event.clientY,
+      items,
+      title
+    }
+    // Also hide tooltip when menu opens
+    hoveredEntity.value = null
+  }
+}
+
+const handleMenuSelect = async (item: any) => {
+  const action = item.action
+  contextMenu.value = null
+  await handlePlayerInput(action)
+}
+
 
 function toNumberOrNull(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -726,7 +811,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="h-full min-h-0 bg-slate-950 flex flex-col font-sans overflow-hidden relative">
+  <main 
+    class="h-full min-h-0 bg-slate-950 flex flex-col font-sans overflow-hidden relative"
+    :class="{ 'selection-mode': activeActionId }"
+  >
     <!-- Full-Width Adventure Background (Top Third) -->
     <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
       <img 
@@ -782,6 +870,8 @@ onBeforeUnmount(() => {
           @hover="(payload, event) => handleHover(payload, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
+          @contextmenu="(payload, event) => openContextMenu(payload, event)"
+          @click="handleEntityClick"
           @image-error="(path) => handleImageError(path)"
         />
 
@@ -793,6 +883,8 @@ onBeforeUnmount(() => {
           @hover="(entity, event) => handleHover({ ...entity, entity_type: 'NPC' }, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
+          @contextmenu="(entity, event) => openContextMenu({ ...entity, entity_type: 'NPC' }, event)"
+          @click="handleEntityClick"
           @image-error="(path) => handleImageError(path)"
         />
 
@@ -803,6 +895,8 @@ onBeforeUnmount(() => {
           @hover="(entity, event) => handleHover(entity, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
+          @contextmenu="(entity, event) => openContextMenu(entity, event)"
+          @click="handleEntityClick"
           @image-error="(path) => handleImageError(path)"
           @take-direct="handleTakeDirect"
         />
@@ -826,17 +920,23 @@ onBeforeUnmount(() => {
         :inventory-glow="inventoryGlow"
         :map-glow="mapGlow"
         :quest-glow="questGlow"
+        :active-action-id="activeActionId"
         @send="handlePlayerInput"
         @open-sheet="showSheet = true"
         @open-map="showMap = true"
         @open-quests="showQuests = true"
+        @select-action="(id) => activeActionId = id"
         @npc-hover="handleChatNpcHover"
         @npc-leave="hoveredEntity = null"
+        @npc-click="(name) => handleEntityClick({ name, entity_type: 'NPC' })"
         @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
         @item-leave="hoveredEntity = null"
+        @item-click="handleEntityClick"
         @take-direct="handleTakeDirect"
         @open-debug="openDebugInspector"
         @toggle-debug-log="(val) => showDebugLog = val"
+        @npc-contextmenu="(entity, event) => openContextMenu(entity, event)"
+        @item-contextmenu="(entity, event) => openContextMenu(entity, event)"
       />
     </div>
 
@@ -1034,6 +1134,20 @@ onBeforeUnmount(() => {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- CONTEXT MENU -->
+    <Teleport to="body">
+      <ContextMenu
+        v-if="contextMenu"
+        :x="contextMenu.x"
+        :y="contextMenu.y"
+        :items="contextMenu.items"
+        :title="contextMenu.title"
+        @close="contextMenu = null"
+        @select="handleMenuSelect"
+      />
+    </Teleport>
+
   
     <!-- TOAST NOTIFICATIONS -->
     <Teleport to="body">
@@ -1144,6 +1258,20 @@ onBeforeUnmount(() => {
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+.selection-mode {
+  cursor: crosshair !important;
+}
+
+.selection-mode .cursor-help {
+  cursor: crosshair !important;
+}
+
+.selection-mode aside, 
+.selection-mode .chat-log-container {
+  /* Subtle highlight for interactive areas in selection mode */
+  /* background: rgba(16, 185, 129, 0.02); */
 }
 </style>
 
