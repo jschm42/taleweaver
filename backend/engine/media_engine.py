@@ -1,6 +1,6 @@
 """
 MediaEngine — Handles AI image generation for scenes and entities.
-Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Midjourney, while using the direct BFL API for Black Forest Labs.
+Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imagen), while using the direct BFL API for Black Forest Labs.
 """
 import logging
 import os
@@ -75,7 +75,7 @@ class MediaEngine:
             return BFL_DEFAULT_MODEL
 
         lowered = normalized.lower()
-        if lowered.startswith(("openai/", "dall-e", "openrouter/", "midjourney/")):
+        if lowered.startswith(("openai/", "dall-e", "openrouter/", "google/", "gemini/")):
             return BFL_DEFAULT_MODEL.removeprefix("black_forest_labs/")
 
         if normalized.startswith("black_forest_labs/"):

@@ -595,7 +595,6 @@ watch(
                   <option value="openai">OpenAI</option>
                   <option value="google">Google Gemini</option>
                   <option value="openrouter">OpenRouter</option>
-                  <option value="midjourney">Midjourney / Proxy</option>
                   <option value="black_forest_labs">Black Forest Labs</option>
                   <option value="anthropic">Anthropic</option>
                   <option value="ollama">Ollama (Local)</option>

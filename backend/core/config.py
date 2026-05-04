@@ -60,7 +60,6 @@ class Settings(BaseSettings):
     MISTRAL_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     BLACK_FOREST_LABS_API_KEY: Optional[str] = None
-    MIDJOURNEY_API_KEY: Optional[str] = None
     
     def get_env_api_key(self, provider: str) -> Optional[str]:
         """Returns the API key for a provider if set in environment variables."""
@@ -72,7 +71,6 @@ class Settings(BaseSettings):
         if p == "mistral": return self.MISTRAL_API_KEY
         if p == "groq": return self.GROQ_API_KEY
         if p == "black_forest_labs": return self.BLACK_FOREST_LABS_API_KEY
-        if p == "midjourney": return self.MIDJOURNEY_API_KEY
         return None
     
     model_config = {"env_file": ".env", "extra": "ignore"}
