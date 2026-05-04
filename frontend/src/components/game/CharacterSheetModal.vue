@@ -11,6 +11,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  itemHover: [item: any, event: MouseEvent]
   itemLeave: []
   equip: [name: string]
   unequip: [slot: string]

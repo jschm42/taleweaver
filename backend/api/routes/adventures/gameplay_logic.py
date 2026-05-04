@@ -172,9 +172,12 @@ class GameTurnManager:
             self.state.is_walkthrough_revealed = True
             debug_info = debug_info[33:].strip()
 
+        # Send debug info as a system message so it appears in chat
+        self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=debug_info))
         await self.db.commit()
+        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': debug_info, 'is_debug': True})}\n\n"
+
         final_data = jsonable_encoder({
-            'messages': [{'role': 'system', 'content': debug_info}],
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'awards': self.adventure.awards,
             'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
