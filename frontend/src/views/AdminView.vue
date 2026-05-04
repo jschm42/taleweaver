@@ -42,8 +42,8 @@ const t2iForm = ref({
   advanced_model_provider: 'openai',
   provider: 'openai',
   ollama_url: 'http://localhost:11434',
-  width: null as number | null,
-  height: null as number | null,
+  width: 512,
+  height: 512,
   steps: null as number | null,
   seed: null as number | null,
   image_format: 'jpeg',
@@ -399,7 +399,13 @@ const testLlm = async (key: string, model: string, provider: string) => {
 const testVision = async (key: string, model: string, provider: string) => {
   testResults.value[key] = { status: 'loading', message: 'Generating test image...' }
   try {
-    const data = await api.testVision({ model, provider, ollama_url: t2iForm.value.ollama_url })
+    const data = await api.testVision({ 
+      model, 
+      provider, 
+      ollama_url: t2iForm.value.ollama_url,
+      width: t2iForm.value.width,
+      height: t2iForm.value.height
+    })
     testResults.value[key] = { 
       status: data.status === 'success' ? 'success' : 'error', 
       message: data.message,
@@ -966,11 +972,11 @@ watch(
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="space-y-2 font-mono">
-                    <label class="block text-sm font-semibold text-slate-300">Width (optional)</label>
+                    <label class="block text-sm font-semibold text-slate-300">Width (px)</label>
                     <input v-model.number="t2iForm.width" type="number" min="64" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
                   </div>
                   <div class="space-y-2 font-mono">
-                    <label class="block text-sm font-semibold text-slate-300">Height (optional)</label>
+                    <label class="block text-sm font-semibold text-slate-300">Height (px)</label>
                     <input v-model.number="t2iForm.height" type="number" min="64" step="1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50" />
                   </div>
                 </div>
