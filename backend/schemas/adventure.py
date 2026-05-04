@@ -37,8 +37,8 @@ class AdventureTemplateBase(BaseModel):
     generate_scene_images: bool = True
     automatic_cover_generation: bool = True
     
-    selected_image_styles: Optional[List[str]] = None
-    selected_tone: Optional[str] = None
+    selected_image_styles: Optional[List[Dict[str, Any]]] = None
+    selected_tone: Optional[Dict[str, Any]] = None
     game_over_rules: Optional[Dict[str, Any]] = None
     quests: Optional[List[QuestSchema]] = None
     awards: Optional[List[AwardSchema]] = None
@@ -72,8 +72,8 @@ class AdventureTemplateUpdate(BaseModel):
     clock_enabled: Optional[bool] = None
     time_system: Optional[str] = None
     time_config: Optional[Dict[str, Any]] = None
-    selected_image_styles: Optional[List[str]] = None
-    selected_tone: Optional[str] = None
+    selected_image_styles: Optional[List[Dict[str, Any]]] = None
+    selected_tone: Optional[Dict[str, Any]] = None
     game_over_rules: Optional[Dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None

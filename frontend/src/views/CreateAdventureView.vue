@@ -136,13 +136,25 @@ async function handleCreate() {
   errorMsg.value = ''
   
   const payload: any = {
-    ...form.value,
     id: crypto.randomUUID(),
     title: form.value.title.trim() || 'Untitled Odyssey',
     original_prompt: form.value.storyIdea.trim(),
+    language: form.value.language,
+    rule_enforcement_mode: form.value.rule_enforcement_mode,
+    generate_scene_images: form.value.generate_scene_images,
+    generate_npc_images: form.value.generate_npc_images,
+    generate_item_images: form.value.generate_item_images,
+    automatic_cover_generation: form.value.automatic_cover_generation,
     time_per_turn: form.value.pacing_minutes,
-    selected_image_styles: [form.value.selected_style_id],
-    selected_tone: form.value.selected_tone_id
+    pacing_minutes: form.value.pacing_minutes,
+    clock_enabled: form.value.clock_enabled,
+    selected_image_styles: imageStyles.value.filter(s => s.id === form.value.selected_style_id),
+    selected_tone: tones.value.find(t => t.id === form.value.selected_tone_id) || null,
+    min_scenes: form.value.min_scenes,
+    max_scenes: form.value.max_scenes,
+    award_generation_enabled: form.value.award_generation_enabled,
+    min_awards: form.value.min_awards,
+    max_awards: form.value.max_awards
   }
 
   try {

@@ -656,6 +656,7 @@ class MediaEngine:
             target_dir=target_dir, 
             filename=filename,
             provider_options=t2i,
+            style_instruction=style_instruction,
         )
 
     @staticmethod
@@ -696,6 +697,7 @@ class MediaEngine:
             target_dir=target_dir, 
             filename=filename,
             provider_options=t2i,
+            style_instruction=style_instruction,
         )
 
     @staticmethod
@@ -739,6 +741,7 @@ class MediaEngine:
             target_dir=target_dir, 
             filename=filename,
             provider_options=t2i,
+            style_instruction=style_instruction,
         )
 
     @staticmethod

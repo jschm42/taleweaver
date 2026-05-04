@@ -35,6 +35,21 @@ def _build_local_default_user() -> User:
 
 class AdventureTemplateImporter:
     @staticmethod
+    def _normalize_metadata_objects(data: dict):
+        """Ensures selected_tone and selected_image_styles are complex objects."""
+        # Normalize Tone
+        tone = data.get("selected_tone")
+        if tone and isinstance(tone, str):
+            data["selected_tone"] = {"id": tone}
+            
+        # Normalize Styles
+        styles = data.get("selected_image_styles")
+        if styles and isinstance(styles, list):
+            data["selected_image_styles"] = [
+                {"id": s} if isinstance(s, str) else s for s in styles
+            ]
+
+    @staticmethod
     async def import_from_directory(db: AsyncSession, directory: str, owner_id: Optional[str] = None, delete_after: bool = False, allow_session: bool = False):
         """Scans a directory for .adv or .adz files and imports them."""
         if not os.path.exists(directory):
@@ -93,6 +108,10 @@ class AdventureTemplateImporter:
                 if not adv_data:
                     logger.error("Invalid ADZ: Missing adventure section in manifest")
                     return False
+
+                # Normalize metadata
+                AdventureTemplateImporter._normalize_metadata_objects(adv_data)
+                AdventureTemplateImporter._normalize_metadata_objects(manifest_data)
 
                 # Check if template with this title or origin_id already exists for this owner
                 origin_id = adv_data.get("origin_id") or manifest_data.get("origin_id")
@@ -254,6 +273,11 @@ class AdventureTemplateImporter:
             except ValueError as exc:
                 logger.error("Invalid ADV format: %s", exc)
                 return False
+            
+            # Normalize metadata
+            AdventureTemplateImporter._normalize_metadata_objects(payload)
+            if "adventure" in payload:
+                AdventureTemplateImporter._normalize_metadata_objects(payload["adventure"])
             
             is_session = payload.get("type") == "SESSION_BUNDLE"
             title = payload.get("adventure", {}).get("title") if is_session else payload.get("title", "Imported AdventureTemplate")

@@ -264,6 +264,18 @@ class GameTurnManager:
         logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
 
         # Build prompt using MemoryManager with session-local plot/rules
+        tone_instruction = ""
+        if self.adventure.selected_tone:
+            if isinstance(self.adventure.selected_tone, dict):
+                tone_instruction = self.adventure.selected_tone.get("instruction", "")
+            elif isinstance(self.adventure.selected_tone, str):
+                # Fallback for legacy ID strings
+                catalog = (await self.db.execute(select(User).where(User.id == self.adventure.owner_id))).scalars().first().tone_catalog or []
+                for t in catalog:
+                    if t.get("id") == self.adventure.selected_tone:
+                        tone_instruction = t.get("instruction", "")
+                        break
+
         system_prompt = MemoryManager.build_context(
             self.avatar, self.adventure.original_prompt or "", history, 
             current_scene=current_scene,
@@ -277,7 +289,8 @@ class GameTurnManager:
             completed_condition=self.state.completed_condition or self.adventure.completed_condition,
             gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition,
             time_system=self.state.time_system or self.adventure.time_system or "calendar",
-            time_config=self.state.time_config or self.adventure.time_config
+            time_config=self.state.time_config or self.adventure.time_config,
+            tone_instruction=tone_instruction
         )[0]["content"]
 
         # Bable Fish / Translation logic

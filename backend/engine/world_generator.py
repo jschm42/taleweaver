@@ -254,7 +254,7 @@ class WorldGenerator:
         award_generation_enabled: bool = True,
         min_awards: int = 3,
         max_awards: int = 5,
-        selected_image_styles: Optional[List[str]] = None,
+        selected_image_styles: Optional[List[Dict[str, Any]]] = None,
         language: Optional[str] = None
     ) -> None:
         """
@@ -405,7 +405,7 @@ class WorldGenerator:
         gen_scenes: bool = False,
         gen_protagonist_image: bool = False,
         existing_images: Optional[dict] = None,
-        selected_image_styles: Optional[List[str]] = None
+        selected_image_styles: Optional[List[Dict[str, Any]]] = None
     ) -> None:
         """
         Populates (or re-populates) the world entities based on a manifest dictionary.
@@ -420,14 +420,18 @@ class WorldGenerator:
 
         # Resolve Style Instructions
         style_instruction = ""
-        if selected_image_styles and user:
-            catalog = user.image_styles_catalog or []
-            # For now we take the first selected style
-            style_id = selected_image_styles[0]
-            for s_entry in catalog:
-                if s_entry.get("id") == style_id:
-                    style_instruction = s_entry.get("instruction", "")
-                    break
+        if selected_image_styles:
+            # Check if we have a complex object with 'instruction'
+            first_style = selected_image_styles[0]
+            if isinstance(first_style, dict) and "instruction" in first_style:
+                style_instruction = first_style["instruction"]
+            elif isinstance(first_style, str) and user:
+                # Fallback for legacy ID-based strings
+                catalog = user.image_styles_catalog or []
+                for s_entry in catalog:
+                    if s_entry.get("id") == first_style:
+                        style_instruction = s_entry.get("instruction", "")
+                        break
         
         logger.info(f"Applying manifest with style instruction: '{style_instruction}'")
 

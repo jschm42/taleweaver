@@ -213,13 +213,17 @@ async def regenerate_visual(
 
     # Resolve Style Instruction
     style_instruction = ""
-    if adv.selected_image_styles and current_user:
-        catalog = current_user.image_styles_catalog or []
-        style_id = adv.selected_image_styles[0]
-        for s_entry in catalog:
-            if s_entry.get("id") == style_id:
-                style_instruction = s_entry.get("instruction", "")
-                break
+    if adv.selected_image_styles:
+        first_style = adv.selected_image_styles[0]
+        if isinstance(first_style, dict) and "instruction" in first_style:
+            style_instruction = first_style["instruction"]
+        elif isinstance(first_style, str) and current_user:
+            # Fallback for legacy ID-based strings
+            catalog = current_user.image_styles_catalog or []
+            for s_entry in catalog:
+                if s_entry.get("id") == first_style:
+                    style_instruction = s_entry.get("instruction", "")
+                    break
 
     try:
         if payload.target_type == "cover":

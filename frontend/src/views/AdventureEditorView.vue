@@ -115,8 +115,8 @@ const form = ref({
   gameover_condition: '',
   
   // Visual & Tone
-  selected_style_id: '',
-  selected_tone_id: ''
+  selected_style: null as any,
+  selected_tone: null as any
 })
 
 const editingField = ref<string | null>(null)
@@ -255,10 +255,10 @@ async function fetchAdventure() {
     form.value.completed_condition = data.completed_condition || ''
     form.value.gameover_condition = data.gameover_condition || ''
 
-    form.value.selected_style_id = Array.isArray(data.selected_image_styles) && data.selected_image_styles.length > 0 
+    form.value.selected_style = Array.isArray(data.selected_image_styles) && data.selected_image_styles.length > 0 
       ? data.selected_image_styles[0] 
-      : ''
-    form.value.selected_tone_id = data.selected_tone || ''
+      : null
+    form.value.selected_tone = data.selected_tone || null
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -364,8 +364,8 @@ async function saveChanges() {
   try {
     const payload = {
       ...form.value,
-      selected_image_styles: form.value.selected_style_id ? [form.value.selected_style_id] : [],
-      selected_tone: form.value.selected_tone_id || null
+      selected_image_styles: form.value.selected_style ? [form.value.selected_style] : [],
+      selected_tone: form.value.selected_tone || null
     }
     const res = await fetch(`${BASE}/adventures/${props.adventureId}`, {
       method: 'PATCH',
@@ -683,8 +683,10 @@ const goBack = () => router.push({ name: 'portal' })
             <div class="space-y-2 flex flex-col justify-center">
               <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Active Style</label>
               <div class="flex items-center gap-2">
-                <div class="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-400 uppercase tracking-widest">
-                  {{ imageStylesCatalog.find(s => s.id === form.selected_style_id)?.name || 'Default' }}
+                <div class="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                  <span v-if="form.selected_style">{{ form.selected_style.name }}</span>
+                  <span v-else>Default Style</span>
+                  <span v-if="form.selected_style && !imageStylesCatalog.find(s => s.id === form.selected_style.id)" class="text-[8px] px-1 bg-amber-500/20 text-amber-500 rounded border border-amber-500/30">Archived</span>
                 </div>
                 <span class="text-[10px] text-slate-600 uppercase font-black">Scroll down to change</span>
               </div>
@@ -703,8 +705,8 @@ const goBack = () => router.push({ name: 'portal' })
                       <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Select the aesthetic direction for generated images</p>
                    </div>
                 </div>
-                <div v-if="form.selected_style_id !== (adventure?.selected_image_styles?.[0] || '')" class="flex gap-4 animate-fade-in">
-                   <button @click="form.selected_style_id = adventure?.selected_image_styles?.[0] || ''" class="px-4 py-2 rounded-xl bg-slate-800 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-white transition-all">Discard</button>
+                <div v-if="form.selected_style?.id !== (adventure?.selected_image_styles?.[0]?.id || '')" class="flex gap-4 animate-fade-in">
+                   <button @click="form.selected_style = adventure?.selected_image_styles?.[0] || null" class="px-4 py-2 rounded-xl bg-slate-800 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-white transition-all">Discard</button>
                    <button @click="saveChanges" class="px-6 py-2 rounded-xl bg-emerald-600 text-xs font-black text-white uppercase tracking-widest hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/40">Apply Style</button>
                 </div>
              </div>
@@ -712,16 +714,16 @@ const goBack = () => router.push({ name: 'portal' })
                 <button 
                   v-for="style in imageStylesCatalog" 
                   :key="style.id" 
-                  @click="form.selected_style_id = style.id"
+                  @click="form.selected_style = { id: style.id, name: style.name, description: style.description, instruction: style.instruction }"
                   class="relative aspect-[4/5] rounded-2xl overflow-hidden border-2 transition-all duration-500 group"
-                  :class="form.selected_style_id === style.id ? 'border-emerald-500 ring-4 ring-emerald-500/20' : 'border-transparent hover:border-white/10'"
+                  :class="form.selected_style?.id === style.id ? 'border-emerald-500 ring-4 ring-emerald-500/20' : 'border-transparent hover:border-white/10'"
                 >
                   <img :src="style.image_url" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80 group-hover:opacity-40 transition-opacity"></div>
                   <div class="absolute bottom-3 left-3 right-3">
                     <p class="text-[10px] font-black text-white uppercase tracking-tighter truncate">{{ style.name }}</p>
                   </div>
-                  <div v-if="form.selected_style_id === style.id" class="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg">
+                  <div v-if="form.selected_style?.id === style.id" class="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg">
                     <i class="ra ra-checkmark text-[10px] text-white"></i>
                   </div>
                 </button>
@@ -1009,15 +1011,15 @@ const goBack = () => router.push({ name: 'portal' })
                <div class="space-y-4">
                  <div class="flex justify-between items-center">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Narrative Tone</label>
-                    <button v-if="form.selected_tone_id !== (adventure?.selected_tone || '')" @click="saveChanges" class="text-xs font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 transition-colors">Apply Tone</button>
+                    <button v-if="form.selected_tone?.id !== (adventure?.selected_tone?.id || '')" @click="saveChanges" class="text-xs font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 transition-colors">Apply Tone</button>
                  </div>
                  <div class="grid grid-cols-2 gap-3">
                     <button 
                       v-for="tone in toneCatalog" 
                       :key="tone.id" 
-                      @click="form.selected_tone_id = tone.id"
+                      @click="form.selected_tone = { id: tone.id, name: tone.name, description: tone.description, instruction: tone.instruction }"
                       class="relative h-14 rounded-xl overflow-hidden border-2 transition-all group"
-                      :class="form.selected_tone_id === tone.id ? 'border-emerald-500 ring-4 ring-emerald-500/20' : 'border-transparent hover:border-white/10'"
+                      :class="form.selected_tone?.id === tone.id ? 'border-emerald-500 ring-4 ring-emerald-500/20' : 'border-transparent hover:border-white/10'"
                     >
                        <img :src="tone.image_url" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex items-center justify-center group-hover:bg-slate-900/40 transition-colors">

@@ -133,6 +133,24 @@ else:
     # Standard mount for development
     app.mount("/assets", StaticFiles(directory="backend/static/assets"), name="assets")
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    import json
+    error_info = {
+        "error": exc.errors(),
+        "body": await request.body().decode() if await request.body() else None
+    }
+    with open("data/logs/validation_error.json", "w") as f:
+        json.dump(error_info, f, indent=2)
+    logger.error(f"Validation Error: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": error_info["body"]},
+    )
+
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict:
     """Returns a simple liveness signal for load-balancer health checks."""

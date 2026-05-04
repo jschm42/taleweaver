@@ -56,7 +56,8 @@ class MemoryManager:
         completed_condition: Optional[str] = None,
         gameover_condition: Optional[str] = None,
         time_system: str = "calendar",
-        time_config: Optional[dict] = None
+        time_config: Optional[dict] = None,
+        tone_instruction: Optional[str] = None
     ) -> str:
         """
         Builds the foundational system prompt using the pre-generated world integrity.
@@ -130,6 +131,10 @@ class MemoryManager:
             location_context=location_context,
             sheet_json=sheet_json
         )
+        
+        if tone_instruction:
+            system_instruction += f"\n\nNARRATIVE TONE & STYLE INSTRUCTION:\n{tone_instruction}\n"
+            
         return system_instruction
 
     @staticmethod
@@ -148,7 +153,8 @@ class MemoryManager:
         completed_condition: Optional[str] = None,
         gameover_condition: Optional[str] = None,
         time_system: str = "calendar",
-        time_config: Optional[dict] = None
+        time_config: Optional[dict] = None,
+        tone_instruction: Optional[str] = None
     ) -> list[dict]:
         """
         Combines the System Prompt with the sliding window of history and structured world state.
@@ -157,7 +163,8 @@ class MemoryManager:
             avatar, world_context, current_scene, entities, exits, in_game_time, awards,
             plot=plot, rules=rules, walkthrough=walkthrough,
             completed_condition=completed_condition, gameover_condition=gameover_condition,
-            time_system=time_system, time_config=time_config
+            time_system=time_system, time_config=time_config,
+            tone_instruction=tone_instruction
         )
         messages = [{"role": "system", "content": sys_prompt}]
         

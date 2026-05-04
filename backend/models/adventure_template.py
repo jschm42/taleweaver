@@ -33,7 +33,7 @@ class AdventureTemplate(Base, TimestampMixin):
     generate_npc_images = Column(Boolean, default=False, nullable=False)
     generate_item_images = Column(Boolean, default=False, nullable=False)
     selected_image_styles = Column(JSON, nullable=True)
-    selected_tone = Column(String(100), nullable=True)
+    selected_tone = Column(JSON, nullable=True)
 
     game_over_rules = Column(JSON, nullable=True)
     quests = Column(JSON, nullable=True)

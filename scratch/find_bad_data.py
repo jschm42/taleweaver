@@ -8,8 +8,10 @@ cursor.execute("SELECT title, selected_tone, selected_image_styles FROM adventur
 rows = cursor.fetchall()
 
 for title, tone, styles in rows:
-    print(f"Title: {title}")
-    print(f"  Tone: {tone} ({type(tone)})")
-    print(f"  Styles: {styles} ({type(styles)})")
+    try:
+        if tone: json.loads(tone)
+        if styles: json.loads(styles)
+    except Exception as e:
+        print(f"INVALID DATA for '{title}': Tone={tone}, Styles={styles}, Error={e}")
 
 conn.close()

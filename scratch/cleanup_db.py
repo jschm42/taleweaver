@@ -1,22 +1,50 @@
 import sqlite3
+import json
+import os
 
 db_path = "data/taleweaver.db"
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
-def remove_column(table, column):
-    try:
-        cursor.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
-        print(f"Dropped {column} from {table}")
-    except Exception as e:
-        print(f"Error dropping {column} from {table}: {e}")
+try:
+    cursor.execute("SELECT id, selected_tone, selected_image_styles FROM adventure_templates;")
+    rows = cursor.fetchall()
+    
+    for row_id, tone, styles in rows:
+        updated = False
+        new_tone = tone
+        new_styles = styles
+        
+        if tone:
+            try:
+                parsed_tone = json.loads(tone)
+                if not isinstance(parsed_tone, dict):
+                    new_tone = json.dumps({"id": str(parsed_tone)})
+                    updated = True
+            except:
+                new_tone = json.dumps({"id": tone})
+                updated = True
 
-cols_to_remove = ['plot', 'rules', 'walkthrough', 'completed_condition', 'gameover_condition', 'original_prompt', 'starting_timestamp']
-for col in cols_to_remove:
-    remove_column('adventure_templates', col)
+        if styles:
+            try:
+                parsed_styles = json.loads(styles)
+                if isinstance(parsed_styles, list) and len(parsed_styles) > 0 and not isinstance(parsed_styles[0], dict):
+                    new_styles = json.dumps([{"id": str(s)} for s in parsed_styles])
+                    updated = True
+                elif not isinstance(parsed_styles, list):
+                    new_styles = json.dumps([{"id": str(parsed_styles)}])
+                    updated = True
+            except:
+                new_styles = json.dumps([{"id": styles}])
+                updated = True
 
-# Also stamp back to previous version to be sure
-# Actually, I'll just run it and then try upgrade again.
-
-conn.commit()
-conn.close()
+        if updated:
+            cursor.execute(
+                "UPDATE adventure_templates SET selected_tone = ?, selected_image_styles = ? WHERE id = ?;",
+                (new_tone, new_styles, row_id)
+            )
+    
+    conn.commit()
+    print("DB cleanup complete.")
+finally:
+    conn.close()

@@ -88,11 +88,23 @@ async def get_adventure(
 
 @router.post("/", status_code=201)
 async def create_adventure(
-    payload: CreateAdventureTemplatePayload,
+    raw_payload: Dict[str, Any],
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    try:
+        payload = CreateAdventureTemplatePayload.model_validate(raw_payload)
+    except Exception as e:
+        import json
+        error_info = {
+            "error": str(e),
+            "payload": raw_payload
+        }
+        with open("data/logs/validation_error.json", "w") as f:
+            json.dump(error_info, f, indent=2)
+        logger.error(f"Payload validation failed: {e}")
+        raise HTTPException(status_code=422, detail=str(e))
     """
     Creates a new adventure template, initializes the protagonist avatar and first game session,
     and starts the background world generation task.
