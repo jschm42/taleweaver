@@ -408,8 +408,12 @@ function emitLeave(): void {
             >
               <div class="text-[10px] uppercase tracking-[0.2em] text-emerald-300/80 mb-2">Protagonist</div>
               <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-emerald-400/40 bg-slate-950">
-                <img v-if="hasRenderableImagePath(combat.player.image_url) && !playerImageFailed" :src="getImageUrl(combat.player.image_url)" class="w-full h-full object-cover object-top" alt="protagonist" @error="onPlayerImageError">
-                <div v-else class="w-full h-full flex items-center justify-center text-emerald-300 ra ra-player text-3xl"></div>
+                <!-- Defeated Ribbon -->
+                <div v-if="combat.player.hp <= 0" class="absolute -right-10 top-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.15em] py-1 w-32 text-center rotate-45 shadow-lg z-10">
+                  Defeated
+                </div>
+                <img v-if="hasRenderableImagePath(combat.player.image_url) && !playerImageFailed" :src="getImageUrl(combat.player.image_url)" class="w-full h-full object-cover object-top transition-all" :class="{ 'grayscale opacity-50': combat.player.hp <= 0 }" alt="protagonist" @error="onPlayerImageError">
+                <div v-else class="w-full h-full flex items-center justify-center text-emerald-300 ra ra-player text-3xl" :class="{ 'grayscale opacity-40': combat.player.hp <= 0 }"></div>
                 <div class="absolute inset-0 pointer-events-none">
                   <span
                     v-for="fx in playerImpactFx"
@@ -516,8 +520,12 @@ function emitLeave(): void {
             >
               <div class="text-[10px] uppercase tracking-[0.2em] text-rose-300/80 mb-2">Enemy</div>
               <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-rose-400/40 bg-slate-950">
-                <img v-if="hasRenderableImagePath(combat.enemy.image_url) && !enemyImageFailed" :src="getImageUrl(combat.enemy.image_url)" class="w-full h-full object-cover object-top" alt="enemy" @error="onEnemyImageError">
-                <div v-else class="w-full h-full flex items-center justify-center text-rose-300 ra ra-monster-skull text-3xl"></div>
+                <!-- Defeated Ribbon -->
+                <div v-if="combat.enemy.hp <= 0" class="absolute -right-10 top-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.15em] py-1 w-32 text-center rotate-45 shadow-lg z-10">
+                  Defeated
+                </div>
+                <img v-if="hasRenderableImagePath(combat.enemy.image_url) && !enemyImageFailed" :src="getImageUrl(combat.enemy.image_url)" class="w-full h-full object-cover object-top transition-all" :class="{ 'grayscale opacity-50': combat.enemy.hp <= 0 }" alt="enemy" @error="onEnemyImageError">
+                <div v-else class="w-full h-full flex items-center justify-center text-rose-300 ra ra-monster-skull text-3xl" :class="{ 'grayscale opacity-40': combat.enemy.hp <= 0 }"></div>
                 <div class="absolute inset-0 pointer-events-none">
                   <span
                     v-for="fx in enemyImpactFx"
@@ -549,14 +557,14 @@ function emitLeave(): void {
             <div class="flex items-center gap-2">
               <button
                 class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-[0.1em] disabled:opacity-40"
-                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked"
+                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked || combat.enemy.hp <= 0"
                 @click="emit('attack')"
               >
                 Attack
               </button>
               <button
                 class="px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-black uppercase tracking-[0.1em] disabled:opacity-40"
-                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked"
+                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked || combat.enemy.hp <= 0"
                 @click="emit('run')"
               >
                 Run

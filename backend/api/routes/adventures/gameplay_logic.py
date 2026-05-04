@@ -115,6 +115,18 @@ class GameTurnManager:
                 return
             else:
                 logger.warning(f"[Turn {self.game_id}] Debug command ignored: TALEWEAVER_DEBUG_ENABLED is False.")
+
+        # 1. Combat & Loot Handling (Active Phase)
+        if self._has_combat_phase():
+            async for chunk in self._handle_combat_turn(user_msg):
+                yield chunk
+            return
+
+        # 2. Fight Trigger
+        if user_msg.lower().startswith("/fight"):
+            async for chunk in self._handle_fight_start(user_msg):
+                yield chunk
+            return
             
         is_rule_pass = False
         if user_msg.startswith("/"):
@@ -436,6 +448,13 @@ class GameTurnManager:
             return
 
         enemy_hp = self._entity_stat(target, "hp", 50)
+        if enemy_hp <= 0:
+            msg = f"{target.name} is already defeated."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
+
         enemy_max_hp = self._entity_stat(target, "max_hp", enemy_hp if enemy_hp > 0 else 50)
         # If no NPC dexterity value is provided, use a neutral baseline so enemies can act reliably.
         enemy_dex = self._entity_stat(target, "stat_modifier_dexterity", 10)
@@ -1023,6 +1042,13 @@ class GameTurnManager:
 
         enemy_hp = int(combat.get("enemy", {}).get("hp") or 0)
         enemy_ac = 10 + int(combat.get("enemy", {}).get("armor_mod") or 0)
+
+        if enemy_hp <= 0:
+            msg = f"{enemy_ent.name} is already defeated."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
 
         action_msg = None
         if cmd in {"attack", "/attack", "a"}:
