@@ -22,3 +22,4 @@ export async function refreshConfig() {
     console.error('Failed to refresh config:', error)
   }
 }
+

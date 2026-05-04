@@ -51,7 +51,7 @@ const conflictList = computed(() => props.conflicts.filter(c => c.already_exists
             >
               <i class="ra ra-book-tome text-amber-500/60"></i>
               <span class="text-slate-200 font-bold">{{ item.title }}</span>
-              <span class="ml-auto text-[10px] uppercase tracking-widest text-slate-500 font-black">Existing</span>
+              <span class="ml-auto text-xs uppercase tracking-widest text-slate-500 font-black">Existing</span>
             </li>
           </ul>
         </div>
@@ -99,3 +99,4 @@ const conflictList = computed(() => props.conflicts.filter(c => c.already_exists
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 </style>
+

@@ -18,11 +18,11 @@ const props = defineProps<{
                 {{ props.trackedQuest.title }}
               </div>
               <div class="shrink-0 text-right ml-2 md:ml-4">
-                <span v-if="props.trackedQuest.status === 'completed'" class="text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400 bg-emerald-400/10 px-1.5 md:px-2 py-0.5 rounded">Completed</span>
-                <span v-else class="text-[8px] md:text-[10px] font-black text-indigo-400 tabular-nums uppercase tracking-widest">{{ props.trackedQuest.exp_reward }} XP</span>
+                <span v-if="props.trackedQuest.status === 'completed'" class="text-xxs md:text-xxs font-black uppercase tracking-[0.2em] text-emerald-400 bg-emerald-400/10 px-1.5 md:px-2 py-0.5 rounded">Completed</span>
+                <span v-else class="text-xs md:text-xxs font-black text-indigo-400 tabular-nums uppercase tracking-widest">{{ props.trackedQuest.exp_reward }} XP</span>
               </div>
             </div>
-            <div :class="['text-[10px] md:text-xs text-slate-400 leading-relaxed line-clamp-2 md:line-clamp-3', props.trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
+            <div :class="['text-xs md:text-xs text-slate-400 leading-relaxed line-clamp-2 md:line-clamp-3', props.trackedQuest.status === 'completed' ? 'line-through text-slate-500' : '']">
               {{ props.trackedQuest.description }}
             </div>
           </div>
@@ -47,3 +47,5 @@ const props = defineProps<{
   transform: translateY(-10px);
 }
 </style>
+
+

@@ -51,35 +51,35 @@ import { computed } from 'vue'
       >
         <button
           @click.stop="emit('edit', props.adv.adventure_id)"
-          class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-aether-primary/20 hover:text-aether-primary transition-colors flex items-center gap-3 border-b border-white/5"
+          class="w-full px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-300 hover:bg-aether-primary/20 hover:text-aether-primary transition-colors flex items-center gap-3 border-b border-white/5"
         >
           <i class="ra ra-wrench text-sm"></i>
           Edit Blueprint
         </button>
         <button
           @click.stop="emit('play', props.adv.game_id)"
-          class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors flex items-center gap-3 border-b border-white/5"
+          class="w-full px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors flex items-center gap-3 border-b border-white/5"
         >
           <i class="ra ra-player text-sm"></i>
           Play Chronicle
         </button>
         <button
           @click.stop="emit('exportAdz', props.adv.adventure_id, props.adv.adventure_title)"
-          class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-cyan-500/20 hover:text-cyan-300 transition-colors flex items-center gap-3 border-b border-white/5"
+          class="w-full px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-300 hover:bg-cyan-500/20 hover:text-cyan-300 transition-colors flex items-center gap-3 border-b border-white/5"
         >
           <i class="ra ra-save text-sm"></i>
           Export ADZ
         </button>
         <button
           @click.stop="emit('exportAdv', props.adv.adventure_id, props.adv.adventure_title)"
-          class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-300 hover:bg-blue-500/20 hover:text-blue-300 transition-colors flex items-center gap-3 border-b border-white/5"
+          class="w-full px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-slate-300 hover:bg-blue-500/20 hover:text-blue-300 transition-colors flex items-center gap-3 border-b border-white/5"
         >
           <i class="ra ra-scroll-unfurled text-sm"></i>
           Export ADV
         </button>
         <button
           @click.stop="emit('delete', props.adv)"
-          class="w-full px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-3"
+          class="w-full px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-3"
         >
           <i class="ra ra-burning-embers text-sm"></i>
           Delete Adventure
@@ -97,13 +97,13 @@ import { computed } from 'vue'
         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
       </div>
       <div class="absolute top-4 left-4">
-        <span class="px-3 py-1 bg-aether-secondary/20 backdrop-blur-md border border-white/10 rounded-full text-[9px] font-black uppercase tracking-widest text-aether-secondary">
+        <span class="px-3 py-1 bg-aether-secondary/20 backdrop-blur-md border border-white/10 rounded-full text-xs font-black uppercase tracking-widest text-aether-secondary">
           {{ props.adv.selected_tone || 'No Tone' }}
         </span>
       </div>
 
       <div class="absolute bottom-4 right-4 z-20">
-        <div class="w-7 h-7 flex items-center justify-center bg-black/60 backdrop-blur-md border border-white/20 rounded-lg text-[9px] font-black text-white shadow-xl shadow-black/40">
+        <div class="w-7 h-7 flex items-center justify-center bg-black/60 backdrop-blur-md border border-white/20 rounded-lg text-xs font-black text-white shadow-xl shadow-black/40">
           {{ langCode }}
         </div>
       </div>
@@ -113,18 +113,18 @@ import { computed } from 'vue'
       <h3 class="text-2xl font-black text-white mb-2 font-display line-clamp-1 group-hover:text-aether-primary transition-colors tracking-tight">
         {{ props.adv.adventure_title }}
       </h3>
-      <p class="text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest mb-6 line-clamp-2 opacity-90 leading-relaxed min-h-[2.5rem]">
+      <p class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest mb-6 line-clamp-2 opacity-90 leading-relaxed min-h-[2.5rem]">
         {{ props.adv.description }}
       </p>
 
       <div class="space-y-3">
         <div class="flex flex-col gap-0.5">
-          <span class="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">Location</span>
-          <span class="text-[10px] font-bold text-white truncate">{{ props.adv.current_scene_name || 'The Unknown' }}</span>
+          <span class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Location</span>
+          <span class="text-xs font-bold text-white truncate">{{ props.adv.current_scene_name || 'The Unknown' }}</span>
         </div>
 
         <div v-if="props.adv.quest_count > 0" class="space-y-2">
-          <div class="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+          <div class="flex justify-between items-center text-xs font-black uppercase tracking-widest">
             <span class="text-slate-500">Progress</span>
             <span class="text-aether-primary">
               {{ props.adv.completed_quest_count || 0 }} / {{ props.adv.quest_count }} Quests
@@ -138,11 +138,13 @@ import { computed } from 'vue'
             ></div>
           </div>
         </div>
-        <div v-else class="text-[10px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
-          <i class="ra ra-scroll text-[8px] opacity-40"></i>
+        <div v-else class="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+          <i class="ra ra-scroll text-xs opacity-40"></i>
           No Quests active
         </div>
       </div>
     </div>
   </div>
 </template>
+
+

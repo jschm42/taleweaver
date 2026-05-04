@@ -591,9 +591,9 @@ const goBack = () => router.push({ name: 'portal' })
             <h1 class="text-xl font-black text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
               {{ adventure?.title || 'Adventure Editor' }}
             </h1>
-            <span class="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold text-emerald-400 uppercase tracking-widest">Editor</span>
+            <span class="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-400 uppercase tracking-widest">Editor</span>
           </div>
-          <p class="text-[9px] text-slate-500 font-mono uppercase tracking-tighter">Instance: {{ adventureId }}</p>
+          <p class="text-xs text-slate-500 font-mono uppercase tracking-tighter">Instance: {{ adventureId }}</p>
         </div>
       </div>
       
@@ -604,7 +604,7 @@ const goBack = () => router.push({ name: 'portal' })
             :key="tab"
             @click="activeTab = tab"
             :class="[
-              'px-4 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] rounded-lg transition-all duration-300',
+              'px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] rounded-lg transition-all duration-300',
               activeTab === tab ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
             ]"
           >
@@ -630,20 +630,20 @@ const goBack = () => router.push({ name: 'portal' })
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
            <div class="space-y-2">
               <div class="flex justify-between items-center">
-                <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
                 <div v-if="form.title !== adventure?.title" class="flex gap-2 animate-fade-in">
-                  <button @click="form.title = adventure.title" class="text-[8px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
-                  <button @click="saveChanges" class="text-[8px] font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
+                  <button @click="form.title = adventure.title" class="text-xs font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+                  <button @click="saveChanges" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
                 </div>
               </div>
               <input v-model="form.title" type="text" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all" />
             </div>
             <div class="space-y-2">
               <div class="flex justify-between items-center">
-                <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Game Mode</label>
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Game Mode</label>
                 <div v-if="form.rule_enforcement_mode !== adventure?.rule_enforcement_mode" class="flex gap-2 animate-fade-in">
-                  <button @click="form.rule_enforcement_mode = adventure.rule_enforcement_mode" class="text-[8px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
-                  <button @click="saveChanges" class="text-[8px] font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
+                  <button @click="form.rule_enforcement_mode = adventure.rule_enforcement_mode" class="text-xs font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+                  <button @click="saveChanges" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
                 </div>
               </div>
               <select v-model="form.rule_enforcement_mode" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all appearance-none">
@@ -653,17 +653,17 @@ const goBack = () => router.push({ name: 'portal' })
               </select>
               <div v-if="form.rule_enforcement_mode === 'rpg'" class="mt-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
                 <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                <p class="text-slate-400 text-[10px] leading-relaxed">
+                <p class="text-slate-400 text-xs leading-relaxed">
                   <span class="text-amber-500 font-black">EXPERIMENTAL:</span> This mode is under development. Mechanics like combat and attribute checks may behave unexpectedly.
                 </p>
               </div>
             </div>
             <div class="space-y-2">
               <div class="flex justify-between items-center">
-                <label class="block text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Pacing ({{ form.time_per_turn }}m)</label>
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Pacing ({{ form.time_per_turn }}m)</label>
                 <div v-if="form.time_per_turn !== adventure?.time_per_turn" class="flex gap-2 animate-fade-in">
-                  <button @click="form.time_per_turn = adventure.time_per_turn" class="text-[8px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
-                  <button @click="saveChanges" class="text-[8px] font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
+                  <button @click="form.time_per_turn = adventure.time_per_turn" class="text-xs font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+                  <button @click="saveChanges" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
                 </div>
               </div>
               <input v-model.number="form.time_per_turn" type="range" min="1" max="60" class="w-full accent-emerald-500 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer mt-3" />
@@ -677,8 +677,8 @@ const goBack = () => router.push({ name: 'portal' })
             <!-- Cover -->
             <section v-if="debugData.adventure" class="space-y-4">
               <div class="flex items-center justify-between">
-                <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">World Essence</h3>
-                <button @click="regenerateAll('cover')" :disabled="isBatchGenerating['cover']" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/10 border border-white/5 text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2 transition-all">
+                <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">World Essence</h3>
+                <button @click="regenerateAll('cover')" :disabled="isBatchGenerating['cover']" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-emerald-500/10 border border-white/5 text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2 transition-all">
                   <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['cover'] }"></i>
                   Regenerate Cover
                 </button>
@@ -688,7 +688,7 @@ const goBack = () => router.push({ name: 'portal' })
                 <div v-if="isQuickGenerating['cover_' + debugData.adventure.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                   <div class="flex flex-col items-center gap-2">
                     <i class="ra ra-cycle animate-spin text-3xl text-emerald-500"></i>
-                    <span class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Reweaving Essence...</span>
+                    <span class="text-xs font-black text-emerald-500 uppercase tracking-widest">Reweaving Essence...</span>
                   </div>
                 </div>
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
@@ -700,16 +700,16 @@ const goBack = () => router.push({ name: 'portal' })
                         <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
                         <p v-else class="text-xs font-bold text-slate-500/40 uppercase tracking-widest italic">No teaser set...</p>
                         <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt, debugData.adventure.teaser)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-emerald-400 transition-all" title="Edit Teaser & Metadata">
-                          <i class="ra ra-quill-ink text-[10px]"></i>
+                          <i class="ra ra-quill-ink text-xs"></i>
                         </button>
                       </div>
                       <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ debugData.adventure.original_prompt }}</p>
                     </div>
                     <div class="flex gap-3 shrink-0">
-                       <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-emerald-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all">Fast Gen</button>
-                       <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
-                        <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
-                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt, debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
+                       <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all">Fast Gen</button>
+                       <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
+                        <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
+                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt, debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
                     </div>
                   </div>
                 </div>
@@ -721,7 +721,7 @@ const goBack = () => router.push({ name: 'portal' })
             <div class="space-y-8">
                <!-- Protagonist (Compact) -->
                <section v-if="debugData.protagonist" class="space-y-3">
-                 <h3 class="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">The Protagonist</h3>
+                 <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">The Protagonist</h3>
                  <div class="max-w-[200px]">
                       <div @mouseenter="handleHover({ name: debugData.protagonist.name, description: debugData.protagonist.description, image_url: debugData.protagonist.profile_image, type: 'PROTAGONIST', stats: { hp: debugData.protagonist.hp, stamina: debugData.protagonist.stamina, mana: debugData.protagonist.mana } }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
                         <img v-if="debugData.protagonist.profile_image" :src="buildVisualImageUrl(debugData.protagonist.profile_image)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
@@ -745,8 +745,8 @@ const goBack = () => router.push({ name: 'portal' })
                <!-- Scenes -->
                <section v-if="editorScenes.length" class="space-y-6">
                  <div class="flex items-center justify-between">
-                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">World Locations ({{ editorScenes.length }})</h3>
-                   <button @click="regenerateAll('scene')" :disabled="isBatchGenerating['scene']" class="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                   <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">World Locations ({{ editorScenes.length }})</h3>
+                   <button @click="regenerateAll('scene')" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Regenerate All
                    </button>
                  </div>
@@ -773,8 +773,8 @@ const goBack = () => router.push({ name: 'portal' })
                <!-- NPCs -->
                <section v-if="editorNpcs.length" class="space-y-6">
                  <div class="flex items-center justify-between">
-                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Notable Inhabitants ({{ editorNpcs.length }})</h3>
-                   <button @click="regenerateAll('npc')" :disabled="isBatchGenerating['npc']" class="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                   <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Notable Inhabitants ({{ editorNpcs.length }})</h3>
+                   <button @click="regenerateAll('npc')" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
                    </button>
                  </div>
@@ -789,14 +789,14 @@ const goBack = () => router.push({ name: 'portal' })
                         <div class="font-bold text-sm text-white truncate">{{ npc.name }}</div>
                         <!-- NPC Stats Row -->
                         <div v-if="form.rule_enforcement_mode !== 'chat' && npc.stats" class="flex gap-1.5 mt-1">
-                          <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-[7px] font-black text-red-400">
+                          <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-xs font-black text-red-400">
                             <i class="ra ra-heart text-[6px]"></i> {{ npc.stats.hp || 10 }}
                           </div>
                           <template v-if="form.rule_enforcement_mode === 'rpg' || form.rule_enforcement_mode === 'story'">
-                            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-[7px] font-black text-emerald-400">
+                            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-xs font-black text-emerald-400">
                               <i class="ra ra-muscle-up text-[6px]"></i> {{ npc.stats.stamina || 10 }}
                             </div>
-                            <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-[7px] font-black text-blue-400">
+                            <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-xs font-black text-blue-400">
                               <i class="ra ra-crystal-ball text-[6px]"></i> {{ npc.stats.mana || 0 }}
                             </div>
                           </template>
@@ -815,8 +815,8 @@ const goBack = () => router.push({ name: 'portal' })
                <!-- Items -->
                <section v-if="editorObjects.length" class="space-y-6">
                  <div class="flex items-center justify-between">
-                   <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Mystical Objects ({{ editorObjects.length }})</h3>
-                   <button @click="regenerateAll('object')" :disabled="isBatchGenerating['object']" class="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                   <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Mystical Objects ({{ editorObjects.length }})</h3>
+                   <button @click="regenerateAll('object')" :disabled="isBatchGenerating['object']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['object'] }"></i> Regenerate All
                    </button>
                  </div>
@@ -828,7 +828,7 @@ const goBack = () => router.push({ name: 'portal' })
                       </div>
                       <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
                       <div class="absolute inset-x-0 bottom-0 p-2">
-                        <div class="font-bold text-[10px] text-white truncate text-center">{{ obj.name }}</div>
+                        <div class="font-bold text-xs text-white truncate text-center">{{ obj.name }}</div>
                         <!-- Item Stats Row -->
                         <div v-if="form.rule_enforcement_mode !== 'chat' && obj.stats && Object.keys(obj.stats).length > 0" class="flex justify-center gap-1 mt-1">
                           <div v-for="(val, stat) in obj.stats" :key="stat" class="flex items-center gap-0.5 px-1 py-0.5 rounded bg-slate-800/80 border border-white/10 text-[6px] font-black text-slate-300">
@@ -849,7 +849,7 @@ const goBack = () => router.push({ name: 'portal' })
  
                <!-- Quests -->
                <section v-if="adventure?.quests?.length" class="space-y-6">
-                 <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Quest Log ({{ adventure.quests.length }})</h3>
+                 <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Quest Log ({{ adventure.quests.length }})</h3>
                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                    <div v-for="quest in adventure.quests" :key="'quest_' + quest.id" class="bg-slate-900/40 border border-white/5 rounded-2xl p-4 hover:border-emerald-500/20 transition-all group">
                      <div class="flex items-start justify-between mb-2">
@@ -859,17 +859,17 @@ const goBack = () => router.push({ name: 'portal' })
                          </div>
                          <div>
                            <h4 class="text-sm font-bold text-white">{{ quest.title }}</h4>
-                           <span class="text-[8px] text-slate-500 uppercase tracking-widest">{{ quest.is_main ? 'Main Quest' : 'Side Quest' }}</span>
+                           <span class="text-xs text-slate-500 uppercase tracking-widest">{{ quest.is_main ? 'Main Quest' : 'Side Quest' }}</span>
                          </div>
                        </div>
-                       <span class="px-2 py-0.5 rounded bg-black/40 text-[8px] font-black text-emerald-500 uppercase border border-emerald-500/20">{{ quest.exp_reward }} XP</span>
+                       <span class="px-2 py-0.5 rounded bg-black/40 text-xs font-black text-emerald-500 uppercase border border-emerald-500/20">{{ quest.exp_reward }} XP</span>
                      </div>
-                     <p class="text-[11px] text-slate-400 leading-relaxed line-clamp-2 mb-3">{{ quest.description }}</p>
+                     <p class="text-xs text-slate-400 leading-relaxed line-clamp-2 mb-3">{{ quest.description }}</p>
                      <div class="flex items-center gap-2">
                         <div class="flex-grow h-1 bg-black/40 rounded-full overflow-hidden">
                            <div class="h-full bg-emerald-500/40" :style="{ width: quest.status === 'completed' ? '100%' : '0%' }"></div>
                         </div>
-                        <span class="text-[8px] font-black uppercase tracking-tighter" :class="quest.status === 'completed' ? 'text-emerald-500' : 'text-slate-600'">{{ quest.status }}</span>
+                        <span class="text-xs font-black uppercase tracking-tighter" :class="quest.status === 'completed' ? 'text-emerald-500' : 'text-slate-600'">{{ quest.status }}</span>
                      </div>
                    </div>
                  </div>
@@ -877,7 +877,7 @@ const goBack = () => router.push({ name: 'portal' })
  
                <!-- Awards (Read-only) -->
                <section v-if="adventure?.awards?.length" class="space-y-6">
-                 <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Achievements & Awards ({{ adventure.awards.length }})</h3>
+                 <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Achievements & Awards ({{ adventure.awards.length }})</h3>
                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                    <div v-for="award in adventure.awards" :key="'award_' + award.key" class="bg-slate-900/40 border border-white/5 rounded-2xl p-5 hover:border-emerald-500/20 transition-all group flex items-start gap-4">
                      <div :class="[
@@ -892,14 +892,14 @@ const goBack = () => router.push({ name: 'portal' })
                        <div class="flex items-center gap-2">
                          <h4 class="text-sm font-black text-white uppercase tracking-tight">{{ award.title }}</h4>
                          <span :class="[
-                           'text-[7px] font-black uppercase px-1.5 py-0.5 rounded border',
+                           'text-xs font-black uppercase px-1.5 py-0.5 rounded border',
                            award.tier === 'gold' ? 'bg-amber-500/20 border-amber-500/30 text-amber-500' :
                            award.tier === 'silver' ? 'bg-slate-300/20 border-slate-300/30 text-slate-300' :
                            'bg-orange-700/20 border-orange-700/30 text-orange-700'
                          ]">{{ award.tier }}</span>
                        </div>
-                       <p class="text-[10px] text-slate-400 leading-relaxed">{{ award.description }}</p>
-                       <p class="text-[8px] text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
+                       <p class="text-xs text-slate-400 leading-relaxed">{{ award.description }}</p>
+                       <p class="text-xs text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
                      </div>
                    </div>
                  </div>
@@ -916,26 +916,26 @@ const goBack = () => router.push({ name: 'portal' })
             <div class="flex justify-between items-center">
               <div>
                 <h2 class="text-2xl font-black text-white tracking-tight uppercase tracking-[0.2em]">Narrative Blueprint</h2>
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Click any section to modify the chronicles</p>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Click any section to modify the chronicles</p>
               </div>
             </div>
 
             <div class="flex flex-col gap-10">
               <!-- Adventure Plot Section -->
               <div class="space-y-4">
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Plot (Secret)</label>
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Plot (Secret)</label>
                 <div v-if="editingField === 'plot'" class="space-y-4 animate-fade-in">
                   <textarea v-model="tempValue" rows="10" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-sm text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[200px]" placeholder="The main plotline, hidden goals, and core narrative..."></textarea>
                   <div class="flex gap-4">
-                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                       <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                       <span>Save Plot</span>
                     </button>
-                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
                   </div>
                 </div>
                 <div v-else @click="startEditing('plot', form.plot)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
-                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-[9px] font-black uppercase">
+                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
                     <i class="ra ra-quill-pen"></i> Edit Plot
                   </div>
                   <p v-if="form.plot" class="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{{ form.plot }}</p>
@@ -945,19 +945,19 @@ const goBack = () => router.push({ name: 'portal' })
 
               <!-- Rules Section -->
               <div class="space-y-4">
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Rules / Mechanics</label>
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Rules / Mechanics</label>
                 <div v-if="editingField === 'rules'" class="space-y-4 animate-fade-in">
                   <textarea v-model="tempValue" rows="6" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-sm text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]" placeholder="Special rules for this world..."></textarea>
                   <div class="flex gap-4">
-                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                       <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                       <span>Save Rules</span>
                     </button>
-                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
                   </div>
                 </div>
                 <div v-else @click="startEditing('rules', form.rules)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
-                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-[9px] font-black uppercase">
+                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
                     <i class="ra ra-quill-pen"></i> Edit Rules
                   </div>
                   <p v-if="form.rules" class="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{{ form.rules }}</p>
@@ -967,19 +967,19 @@ const goBack = () => router.push({ name: 'portal' })
 
               <!-- Walkthrough Section -->
               <div class="space-y-4">
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">GM Walkthrough (Solution Path)</label>
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">GM Walkthrough (Solution Path)</label>
                 <div v-if="editingField === 'walkthrough'" class="space-y-4 animate-fade-in">
                   <textarea v-model="tempValue" rows="10" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-sm text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[200px]" placeholder="Step-by-step secret solution for the GM..."></textarea>
                   <div class="flex gap-4">
-                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                       <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                       <span>Save Walkthrough</span>
                     </button>
-                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
                   </div>
                 </div>
                 <div v-else @click="startEditing('walkthrough', form.walkthrough)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
-                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-[9px] font-black uppercase">
+                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
                     <i class="ra ra-quill-pen"></i> Edit Walkthrough
                   </div>
                   <p v-if="form.walkthrough" class="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap">{{ form.walkthrough }}</p>
@@ -990,32 +990,32 @@ const goBack = () => router.push({ name: 'portal' })
               <!-- Conditions -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div class="space-y-4">
-                  <label class="block text-[10px] font-black text-emerald-500/80 uppercase tracking-[0.3em]">Win Conditions</label>
+                  <label class="block text-xs font-black text-emerald-500/80 uppercase tracking-[0.3em]">Win Conditions</label>
                   <div v-if="editingField === 'completed_condition'" class="space-y-4 animate-fade-in">
                     <textarea v-model="tempValue" rows="4" class="w-full bg-black/60 border border-emerald-500/50 rounded-2xl px-6 py-5 text-sm text-slate-200 outline-none transition-all resize-y" placeholder="What must the player achieve?"></textarea>
                     <div class="flex gap-4">
-                      <button @click="saveField" :disabled="isSaving" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
-                      <button @click="cancelEditing" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                      <button @click="saveField" :disabled="isSaving" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                      <button @click="cancelEditing" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
                     </div>
                   </div>
                   <div v-else @click="startEditing('completed_condition', form.completed_condition)" class="group relative cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/30 rounded-2xl p-6 transition-all duration-300">
                     <p v-if="form.completed_condition" class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{{ form.completed_condition }}</p>
-                    <p v-else class="text-[10px] italic text-slate-600 uppercase tracking-widest text-center">Define Victory Conditions</p>
+                    <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center">Define Victory Conditions</p>
                   </div>
                 </div>
 
                 <div class="space-y-4">
-                  <label class="block text-[10px] font-black text-red-500/80 uppercase tracking-[0.3em]">Loss Conditions</label>
+                  <label class="block text-xs font-black text-red-500/80 uppercase tracking-[0.3em]">Loss Conditions</label>
                   <div v-if="editingField === 'gameover_condition'" class="space-y-4 animate-fade-in">
                     <textarea v-model="tempValue" rows="4" class="w-full bg-black/60 border border-red-500/50 rounded-2xl px-6 py-5 text-sm text-slate-200 outline-none transition-all resize-y" placeholder="How can the adventure fail?"></textarea>
                     <div class="flex gap-4">
-                      <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
-                      <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                      <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                      <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
                     </div>
                   </div>
                   <div v-else @click="startEditing('gameover_condition', form.gameover_condition)" class="group relative cursor-pointer bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 rounded-2xl p-6 transition-all duration-300">
                     <p v-if="form.gameover_condition" class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{{ form.gameover_condition }}</p>
-                    <p v-else class="text-[10px] italic text-slate-600 uppercase tracking-widest text-center">Define Failure Conditions</p>
+                    <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center">Define Failure Conditions</p>
                   </div>
                 </div>
               </div>
@@ -1032,7 +1032,7 @@ const goBack = () => router.push({ name: 'portal' })
               </div>
               <div>
                 <h2 class="text-2xl font-black text-white tracking-tight uppercase">AI Reality Weaver</h2>
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rebuild or expand your world using natural language</p>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Rebuild or expand your world using natural language</p>
               </div>
             </div>
 
@@ -1046,20 +1046,20 @@ const goBack = () => router.push({ name: 'portal' })
                     class="w-full bg-black/40 border border-white/5 rounded-3xl px-8 py-6 text-lg text-white focus:border-emerald-500 outline-none transition-all disabled:opacity-50 shadow-inner" 
                     placeholder="Tell the Weaver to change reality... (e.g. 'Add a hidden basement to the tavern with a smuggler NPC')" 
                   ></textarea>
-                  <div class="absolute bottom-6 right-8 text-[9px] font-bold text-slate-600 uppercase tracking-widest">Ctrl + Enter to Execute</div>
+                  <div class="absolute bottom-6 right-8 text-xs font-bold text-slate-600 uppercase tracking-widest">Ctrl + Enter to Execute</div>
                </div>
 
                <div class="flex flex-wrap items-center justify-between gap-6">
                   <div class="flex bg-black/60 p-1 rounded-2xl border border-white/5 shadow-inner">
                     <button 
                       @click="aiAutoVisualize = false" 
-                      :class="['px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all', !aiAutoVisualize ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
+                      :class="['px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all', !aiAutoVisualize ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
                     >
                       Text Only
                     </button>
                     <button 
                       @click="aiAutoVisualize = true" 
-                      :class="['px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2', aiAutoVisualize ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
+                      :class="['px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2', aiAutoVisualize ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400']"
                     >
                       <i class="ra ra-eye-shield"></i>
                       Visuals
@@ -1082,8 +1082,8 @@ const goBack = () => router.push({ name: 'portal' })
               ]" :key="hint.title" class="flex gap-4">
                 <i :class="['ra', hint.icon, 'text-emerald-500/50 mt-1']"></i>
                 <div>
-                  <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{{ hint.title }}</h4>
-                  <p class="text-[10px] text-slate-500 leading-relaxed">{{ hint.desc }}</p>
+                  <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{{ hint.title }}</h4>
+                  <p class="text-xs text-slate-500 leading-relaxed">{{ hint.desc }}</p>
                 </div>
               </div>
             </div>
@@ -1095,13 +1095,13 @@ const goBack = () => router.push({ name: 'portal' })
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <!-- Data Debug -->
             <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6">
-              <h4 class="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+              <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
                 <i class="ra ra-crystal-ball text-cyan-500"></i> Adventure Data Debug
               </h4>
               <p class="text-xs text-slate-400 leading-relaxed">View raw JSON data structures of this adventure template. Useful for deep analysis.</p>
               <div class="grid grid-cols-1 gap-3">
                 <button @click="showDebug = true" class="flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/30 rounded-2xl transition-all group">
-                  <span class="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-cyan-400">Open JSON Debug Inspector</span>
+                  <span class="text-xs font-black uppercase tracking-widest text-slate-300 group-hover:text-cyan-400">Open JSON Debug Inspector</span>
                   <i class="ra ra-search text-cyan-500"></i>
                 </button>
               </div>
@@ -1132,7 +1132,7 @@ const goBack = () => router.push({ name: 'portal' })
               <div class="flex items-center justify-between mb-1">
                 <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
                 <span 
-                  class="text-[8px] px-1.5 py-0.5 rounded border font-mono uppercase border-emerald-500/50 text-emerald-400"
+                  class="text-xs px-1.5 py-0.5 rounded border font-mono uppercase border-emerald-500/50 text-emerald-400"
                 >
                   {{ hoveredEntity.type }}
                 </span>
@@ -1141,20 +1141,20 @@ const goBack = () => router.push({ name: 'portal' })
               <!-- Stats Display (Mode Aware) -->
               <div v-if="form.rule_enforcement_mode !== 'chat' && hoveredEntity.stats" class="flex flex-wrap gap-2 pt-2 border-t border-white/5">
                 <template v-if="hoveredEntity.type === 'NPC' || hoveredEntity.type === 'PROTAGONIST'">
-                  <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-[9px] font-black text-red-500">
+                  <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-xs font-black text-red-500">
                     <i class="ra ra-heart"></i> {{ hoveredEntity.stats.hp || 10 }}
                   </div>
                   <template v-if="form.rule_enforcement_mode === 'rpg' || form.rule_enforcement_mode === 'story'">
-                    <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-500">
+                    <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-xs font-black text-emerald-500">
                       <i class="ra ra-muscle-up"></i> {{ hoveredEntity.stats.stamina || 10 }}
                     </div>
-                    <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-500">
+                    <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-xs font-black text-blue-500">
                       <i class="ra ra-crystal-ball"></i> {{ hoveredEntity.stats.mana || 0 }}
                     </div>
                   </template>
                 </template>
                 <template v-else-if="hoveredEntity.type === 'ITEM'">
-                  <div v-for="(val, stat) in hoveredEntity.stats" :key="stat" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-white/10 text-[9px] font-bold text-slate-300 uppercase">
+                  <div v-for="(val, stat) in hoveredEntity.stats" :key="stat" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-white/10 text-xs font-bold text-slate-300 uppercase">
                     {{ stat.replace('_', ' ') }}: +{{ val }}
                   </div>
                 </template>
@@ -1176,7 +1176,7 @@ const goBack = () => router.push({ name: 'portal' })
               <div class="flex justify-between items-center">
                 <div class="space-y-1">
                   <h3 class="text-xs font-black text-cyan-500 uppercase tracking-widest">Manual Vision Weaver</h3>
-                  <p class="text-slate-500 text-[10px] uppercase font-bold tracking-tighter">Target: {{ selectedVisual.label }}</p>
+                  <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">Target: {{ selectedVisual.label }}</p>
                 </div>
                 <button @click="showPromptDialog = false" class="text-slate-500 hover:text-white transition-colors">
                   <i class="ra ra-cancel text-xl"></i>
@@ -1188,15 +1188,15 @@ const goBack = () => router.push({ name: 'portal' })
                   <div class="flex items-start gap-4">
                     <i class="ra ra-crystal-ball text-2xl text-cyan-500/50"></i>
                     <div class="space-y-1">
-                      <h4 class="text-[10px] font-black text-slate-500 uppercase">Current description</h4>
+                      <h4 class="text-xs font-black text-slate-500 uppercase">Current description</h4>
                       <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-3">"{{ selectedVisual.description }}"</p>
                     </div>
                   </div>
                 </div>
 
                 <div class="space-y-3">
-                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Override Prompt</label>
-                  <p class="text-[10px] text-amber-300/80 leading-relaxed">Upload hint: {{ selectedVisual.hint }} Max file size: {{ formatBytes(VISUAL_UPLOAD_LIMITS[selectedVisual.kind].maxBytes) }}.</p>
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Override Prompt</label>
+                  <p class="text-xs text-amber-300/80 leading-relaxed">Upload hint: {{ selectedVisual.hint }} Max file size: {{ formatBytes(VISUAL_UPLOAD_LIMITS[selectedVisual.kind].maxBytes) }}.</p>
                   <textarea 
                     v-model="visualPrompt" 
                     rows="5" 
@@ -1227,7 +1227,7 @@ const goBack = () => router.push({ name: 'portal' })
               <div class="flex justify-between items-center">
                 <div class="space-y-1">
                   <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">Editing {{ editEntityContext.type }}</h3>
-                  <p class="text-slate-500 text-[10px] uppercase font-bold tracking-tighter">ID: {{ editEntityContext.id }}</p>
+                  <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">ID: {{ editEntityContext.id }}</p>
                 </div>
                 <button @click="showEditModal = false" class="text-slate-500 hover:text-white transition-colors">
                   <i class="ra ra-cancel text-xl"></i>
@@ -1236,21 +1236,21 @@ const goBack = () => router.push({ name: 'portal' })
 
               <div class="space-y-6">
                 <div class="space-y-3">
-                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Entity Name</label>
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Entity Name</label>
                   <input v-model="editForm.name" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-2xl font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" />
                 
                 <!-- Stats Inputs -->
                 <div v-if="['protagonist', 'npc'].includes(editEntityContext.type) && form.rule_enforcement_mode !== 'chat'" class="grid grid-cols-3 gap-4">
                   <div class="space-y-2">
-                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest">Health (HP)</label>
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Health (HP)</label>
                     <input v-model.number="editForm.hp" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-red-500/50 outline-none transition-all" />
                   </div>
                   <div class="space-y-2">
-                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest">Stamina (STM)</label>
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Stamina (STM)</label>
                     <input v-model.number="editForm.stamina" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-emerald-500/50 outline-none transition-all" />
                   </div>
                   <div v-if="form.rule_enforcement_mode === 'rpg'" class="space-y-2">
-                    <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest">Mana (MAN)</label>
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Mana (MAN)</label>
                     <input v-model.number="editForm.mana" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-blue-500/50 outline-none transition-all" />
                   </div>
                 </div>
@@ -1258,8 +1258,8 @@ const goBack = () => router.push({ name: 'portal' })
                 
                 <div v-if="editEntityContext.type === 'cover'" class="space-y-3">
                   <div class="flex justify-between items-center">
-                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Teaser (Max 300 Characters)</label>
-                    <span :class="['text-[9px] font-bold tracking-widest', editForm.teaser.length > 300 ? 'text-red-500' : 'text-emerald-500/50']">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Teaser (Max 300 Characters)</label>
+                    <span :class="['text-xs font-bold tracking-widest', editForm.teaser.length > 300 ? 'text-red-500' : 'text-emerald-500/50']">
                       {{ editForm.teaser.length }} / 300
                     </span>
                   </div>
@@ -1267,7 +1267,7 @@ const goBack = () => router.push({ name: 'portal' })
                 </div>
 
                 <div class="space-y-3">
-                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">{{ editEntityContext.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }}</label>
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ editEntityContext.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }}</label>
                   <textarea v-model="editForm.description" rows="8" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"></textarea>
                 </div>
               </div>
@@ -1313,7 +1313,7 @@ const goBack = () => router.push({ name: 'portal' })
               n.type === 'success' ? 'ra ra-circle' : 'ra ra-light-bulb'
             ]"></i>
             <div class="flex-grow">
-              <p class="text-[10px] font-black uppercase tracking-widest opacity-50">{{ n.type }}</p>
+              <p class="text-xs font-black uppercase tracking-widest opacity-50">{{ n.type }}</p>
               <p class="text-xs font-bold leading-relaxed">{{ n.message }}</p>
             </div>
             <button @click="notifications = notifications.filter(x => x.id !== n.id)" class="opacity-50 hover:opacity-100 transition-opacity">
@@ -1336,7 +1336,7 @@ const goBack = () => router.push({ name: 'portal' })
                 </div>
                 <div>
                   <h3 class="text-lg font-black text-white uppercase tracking-widest">Chronicle Debug Inspector</h3>
-                  <p class="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Raw Adventure Manifest & Entities</p>
+                  <p class="text-xs text-slate-500 font-bold uppercase tracking-tighter">Raw Adventure Manifest & Entities</p>
                 </div>
               </div>
               <button @click="showDebug = false" class="p-3 rounded-full hover:bg-white/5 text-slate-500 hover:text-white transition-all">
@@ -1345,7 +1345,7 @@ const goBack = () => router.push({ name: 'portal' })
             </div>
             
             <div class="flex-grow overflow-hidden flex">
-              <div class="flex-grow p-8 overflow-auto font-mono text-[11px] leading-relaxed">
+              <div class="flex-grow p-8 overflow-auto font-mono text-xs leading-relaxed">
                 <div class="space-y-8">
                   <section v-if="adventure" class="space-y-4">
                     <h4 class="text-xs font-black text-emerald-500 uppercase tracking-widest border-l-2 border-emerald-500 pl-4">Adventure Core</h4>
@@ -1431,4 +1431,6 @@ input, textarea {
   to { opacity: 1; transform: translateX(0); }
 }
 </style>
+
+
 

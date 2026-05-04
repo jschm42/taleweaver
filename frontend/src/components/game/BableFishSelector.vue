@@ -56,8 +56,8 @@ const currentLanguageName = () => {
           <div v-if="language" class="absolute -top-1 -right-1 w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]"></div>
         </div>
         <div class="flex flex-col leading-tight">
-          <span class="text-[7px] font-black uppercase tracking-[0.15em] text-cyan-400/80">Bable Fish</span>
-          <span class="text-[9px] font-bold text-slate-300 uppercase tracking-wider truncate max-w-[60px]">{{ currentLanguageName() }}</span>
+          <span class="text-xs font-black uppercase tracking-[0.15em] text-cyan-400/80">Bable Fish</span>
+          <span class="text-xs font-bold text-slate-300 uppercase tracking-wider truncate max-w-[60px]">{{ currentLanguageName() }}</span>
         </div>
       </div>
     </div>
@@ -72,9 +72,9 @@ const currentLanguageName = () => {
         >
           <div class="flex items-center gap-2 mb-2">
             <i class="ra ra-fish text-cyan-400"></i>
-            <span class="text-[10px] font-black uppercase tracking-widest text-white">Bable Fish Translation</span>
+            <span class="text-xxs font-black uppercase tracking-widest text-white">Bable Fish Translation</span>
           </div>
-          <p class="text-[10px] leading-relaxed text-slate-400 italic">
+          <p class="text-xxs leading-relaxed text-slate-400 italic">
             "Small, yellow, and probably the oddest thing in the Universe. It automatically translates all narration and dialogue into your chosen tongue."
           </p>
         </div>
@@ -98,7 +98,7 @@ const currentLanguageName = () => {
               :class="language === lang.code ? 'bg-cyan-500/20 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'"
             >
               <span class="text-xs font-bold tracking-wide">{{ lang.name }}</span>
-              <i v-if="language === lang.code" class="ra ra-circle text-[8px] ml-auto text-cyan-400"></i>
+              <i v-if="language === lang.code" class="ra ra-circle text-xxs ml-auto text-cyan-400"></i>
             </button>
           </div>
         </div>
@@ -123,3 +123,5 @@ const currentLanguageName = () => {
   user-select: none;
 }
 </style>
+
+

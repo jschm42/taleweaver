@@ -264,7 +264,7 @@ onMounted(async () => {
                       <div class="flex items-center justify-between mb-2">
                         <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label }}</span>
                         <div class="flex gap-1.5">
-                          <span class="text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
+                          <span class="text-xxs px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
                             Room
                           </span>
                         </div>
@@ -334,3 +334,5 @@ onMounted(async () => {
   }
 }
 </style>
+
+

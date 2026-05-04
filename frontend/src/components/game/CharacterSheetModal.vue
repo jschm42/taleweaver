@@ -152,18 +152,18 @@ const onClose = () => {
                     </div>
                     <!-- Avatar Bio Hover Popup -->
                     <div class="absolute top-0 left-full ml-4 w-64 p-4 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl opacity-0 invisible group-hover/avatar:opacity-100 group-hover/avatar:visible transition-all z-50 pointer-events-none">
-                      <div class="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">Biography</div>
-                      <p class="text-[11px] text-slate-300 leading-relaxed italic font-serif opacity-90 whitespace-pre-line">{{ sheet.description || 'No detailed records found.' }}</p>
+                      <div class="text-xs font-black text-amber-500 uppercase tracking-widest mb-2">Biography</div>
+                      <p class="text-xs text-slate-300 leading-relaxed italic font-serif opacity-90 whitespace-pre-line">{{ sheet.description || 'No detailed records found.' }}</p>
                     </div>
                   </div>
                   <div class="identity-header -mt-1.5">
                     <h3 class="text-xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">{{ sheet.name || 'Unnamed' }}</h3>
-                    <div class="text-[10px] font-black text-amber-500 uppercase tracking-[0.4em] mt-2">{{ sheet.role || 'Adventurer' }}</div>
+                    <div class="text-xs font-black text-amber-500 uppercase tracking-[0.4em] mt-2">{{ sheet.role || 'Adventurer' }}</div>
                   </div>
 
                   <!-- Bio Block -->
                   <div v-if="sheet.description" class="hidden lg:block flex-grow max-w-[65%] border-l border-slate-800 pl-8 -mt-1.5">
-                    <p class="text-[11px] text-slate-400 leading-relaxed italic line-clamp-5 font-serif">
+                    <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-5 font-serif">
                       {{ sheet.description }}
                     </p>
                   </div>
@@ -190,7 +190,7 @@ const onClose = () => {
                       @click="equipment[slot] && handleUnequip(slot)"
                     >
                       <!-- Slot Label Tooltip -->
-                      <div class="absolute -top-7 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest text-slate-400 opacity-0 group-hover/slot:opacity-100 transition-opacity bg-slate-800 px-2 py-0.5 rounded border border-slate-700 z-20 shadow-xl whitespace-nowrap pointer-events-none">
+                      <div class="absolute -top-7 left-1/2 -translate-x-1/2 text-xxs font-black uppercase tracking-widest text-slate-400 opacity-0 group-hover/slot:opacity-100 transition-opacity bg-slate-800 px-2 py-0.5 rounded border border-slate-700 z-20 shadow-xl whitespace-nowrap pointer-events-none">
                         {{ slot.replace('_', ' ') }}
                       </div>
 
@@ -239,7 +239,7 @@ const onClose = () => {
                     <div class="flex items-center gap-4">
                       <h4 class="text-lg font-black text-white uppercase tracking-widest">Backpack</h4>
                     </div>
-                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">{{ inventoryList.length }} / 24</span>
+                    <span class="text-xs font-black text-slate-500 uppercase tracking-widest">{{ inventoryList.length }} / 24</span>
                   </div>
                   <div class="flex-grow overflow-y-auto custom-scrollbar pr-2">
                     <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-4">
@@ -317,3 +317,5 @@ const onClose = () => {
   }
 }
 </style>
+
+

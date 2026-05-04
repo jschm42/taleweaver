@@ -53,3 +53,4 @@ export async function refreshUser() {
     authState.isInitialized = true
   }
 }
+

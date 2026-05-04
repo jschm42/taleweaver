@@ -55,13 +55,13 @@ function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
         class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
         alt="Adventure cover"
       />
-      <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-[10px] font-bold uppercase tracking-widest">
+      <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold uppercase tracking-widest">
         No Cover
       </div>
 
       <!-- Tone Badge -->
       <div v-if="props.template.selected_tone" class="absolute top-3 left-3">
-        <span class="px-2.5 py-1 rounded-full bg-aether-primary/20 text-aether-primary text-[9px] uppercase tracking-widest font-black border border-aether-primary/20">
+        <span class="px-2.5 py-1 rounded-full bg-aether-primary/20 text-aether-primary text-xs uppercase tracking-widest font-black border border-aether-primary/20">
           {{ props.template.selected_tone }}
         </span>
       </div>
@@ -89,26 +89,26 @@ function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
             class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
           >
             <button
-              class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
               @click="runAction('edit')"
             >
               Edit blueprint
             </button>
             <button
-              class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
               @click="runAction('adz')"
             >
               Export (.adz)
             </button>
             <button
-              class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
               @click="runAction('adv')"
             >
               Export (.adv)
             </button>
             <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
             <button
-              class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
               @click="runAction('delete')"
             >
               Archive world
@@ -122,7 +122,7 @@ function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
     <div class="p-6 flex flex-col gap-4 flex-1">
       <div class="space-y-2 flex-1">
         <h3 class="text-2xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
-        <p v-if="props.template.teaser" class="text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-3 leading-relaxed">
+        <p v-if="props.template.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-3 leading-relaxed">
           {{ props.template.teaser }}
         </p>
       </div>
@@ -138,3 +138,4 @@ function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
     </div>
   </article>
 </template>
+

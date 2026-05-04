@@ -36,11 +36,11 @@
   }
   
   .btn-primary {
-    @apply px-6 py-3 bg-aether-primary text-aether-background font-bold rounded-xl transition-all duration-300 hover:shadow-ambient-emerald hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 font-ui uppercase tracking-widest text-xs;
+    @apply px-6 py-3 bg-aether-primary text-aether-background font-bold rounded-xl transition-all duration-300 hover:shadow-ambient-emerald hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 font-ui uppercase tracking-widest text-sm;
   }
 
   .btn-secondary {
-    @apply px-6 py-3 bg-white/5 border border-white/10 text-white font-bold rounded-xl transition-all duration-300 hover:bg-white/10 hover:border-aether-primary/30 font-ui uppercase tracking-widest text-xs;
+    @apply px-6 py-3 bg-white/5 border border-white/10 text-white font-bold rounded-xl transition-all duration-300 hover:bg-white/10 hover:border-aether-primary/30 font-ui uppercase tracking-widest text-sm;
   }
 
   .nav-link {
@@ -56,4 +56,5 @@
     @apply absolute bottom-0 left-4 right-4 h-0.5 bg-aether-primary shadow-ambient-emerald;
   }
 }
+
 

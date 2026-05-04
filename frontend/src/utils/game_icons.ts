@@ -43,3 +43,4 @@ export const getImageUrl = (path?: string | null) => {
   const separator = path.includes('?') ? '&' : '?'
   return `${path}${separator}v=${cacheVersion}`
 }
+

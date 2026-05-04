@@ -185,3 +185,4 @@ export interface EarnedAward extends Award {
   session_id: string
   earned_at: string
 }
+

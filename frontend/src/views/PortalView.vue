@@ -603,7 +603,7 @@ onUnmounted(() => {
         <!-- Loading State -->
         <div v-if="isLoading && templates.length === 0 && sessions.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
           <div class="w-16 h-16 border-4 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
-          <p class="text-aether-primary font-bold uppercase tracking-[0.3em] text-[10px]">Accessing Archives...</p>
+          <p class="text-aether-primary font-bold uppercase tracking-[0.3em] text-xxs">Accessing Archives...</p>
         </div>
 
         <div v-else>
@@ -618,7 +618,7 @@ onUnmounted(() => {
             <!-- Loading indicator for seeding -->
             <div v-if="isSeeding" class="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl aspect-[3/2] bg-white/5 gap-3">
               <div class="w-8 h-8 border-2 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
-              <span class="text-[10px] text-aether-primary uppercase tracking-widest font-bold">Importing Tales...</span>
+              <span class="text-xxs text-aether-primary uppercase tracking-widest font-bold">Importing Tales...</span>
             </div>
 
             <PendingAdventureCard
@@ -652,7 +652,7 @@ onUnmounted(() => {
               </p>
               <button 
                 @click="activeSection = 'templates'"
-                class="mt-2 px-6 py-3 rounded-xl bg-aether-primary/10 border border-aether-primary/30 text-aether-primary font-bold hover:bg-aether-primary/20 transition-all uppercase tracking-widest text-[10px] flex items-center gap-3"
+                class="mt-2 px-6 py-3 rounded-xl bg-aether-primary/10 border border-aether-primary/30 text-aether-primary font-bold hover:bg-aether-primary/20 transition-all uppercase tracking-widest text-xxs flex items-center gap-3"
               >
                 <i class="ra ra-book text-sm"></i>
                 Adventure Library
@@ -724,3 +724,4 @@ onUnmounted(() => {
 
   </div>
 </template>
+

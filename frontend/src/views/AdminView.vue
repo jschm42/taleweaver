@@ -572,7 +572,7 @@ watch(
       </nav>
 
       <div class="mt-auto pt-6 border-t border-slate-800 opacity-50">
-        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">TaleWeaver Engine v{{ configState.appVersion }}</div>
+        <div class="text-xs font-bold text-slate-500 uppercase tracking-widest">TaleWeaver Engine v{{ configState.appVersion }}</div>
       </div>
     </aside>
 
@@ -622,9 +622,9 @@ watch(
               <div v-for="(info, provider) in configuredKeys" :key="provider" class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-xl">
                  <div class="flex flex-col">
                    <span class="capitalize font-bold text-slate-300">{{ provider }}</span>
-                   <span v-if="info.is_env" class="text-[9px] text-amber-500/80 uppercase font-black tracking-tighter">Imported from ENV</span>
+                   <span v-if="info.is_env" class="text-xxs text-amber-500/80 uppercase font-black tracking-tighter">Imported from ENV</span>
                  </div>
-                 <span :class="[info.is_env ? 'text-amber-500 bg-amber-500/10' : 'text-emerald-500 bg-emerald-500/10', 'text-[10px] font-mono font-black tracking-widest px-2 py-1 rounded']">
+                 <span :class="[info.is_env ? 'text-amber-500 bg-amber-500/10' : 'text-emerald-500 bg-emerald-500/10', 'text-xxs font-mono font-black tracking-widest px-2 py-1 rounded']">
                    {{ info.is_env ? 'READ-ONLY' : 'SECURED' }}
                  </span>
               </div>
@@ -684,7 +684,7 @@ watch(
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
                 <input v-model="llmForm.small_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
               </div>
-              <p class="text-[10px] text-slate-500">Efficient logic for rule enforcement and mechanical reasoning (Pass 1).</p>
+              <p class="text-xxs text-slate-500">Efficient logic for rule enforcement and mechanical reasoning (Pass 1).</p>
 
               <div v-if="testResults.simple" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.simple.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.simple.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
                  <div class="flex items-center justify-between gap-2">
@@ -758,7 +758,7 @@ watch(
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
                 <input v-model="llmForm.complex_model" type="text" maxlength="100" placeholder="e.g. gpt-4o" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
               </div>
-              <p class="text-[10px] text-slate-500">Rich storytelling, complex world-building, and high-fidelity prose (Pass 2).</p>
+              <p class="text-xxs text-slate-500">Rich storytelling, complex world-building, and high-fidelity prose (Pass 2).</p>
 
               <!-- Test Result Feedback -->
               <div v-if="testResults.complex" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.complex.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.complex.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
@@ -798,7 +798,7 @@ watch(
                 <div v-if="llmForm.small_model_provider === 'ollama' || llmForm.complex_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
                   <label class="block text-sm font-semibold text-slate-300">Ollama API Base URL</label>
                   <input v-model="llmForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-                  <p class="text-[10px] text-slate-500">Local endpoint used for local model execution.</p>
+                  <p class="text-xxs text-slate-500">Local endpoint used for local model execution.</p>
                 </div>
               </div>
             </div>
@@ -952,7 +952,7 @@ watch(
                       <option value="jpeg">JPEG (Recommended)</option>
                       <option value="png">PNG (Lossless)</option>
                     </select>
-                    <p class="text-[10px] text-slate-500">JPEG significantly reduces file size for assets.</p>
+                    <p class="text-xxs text-slate-500">JPEG significantly reduces file size for assets.</p>
                   </div>
                   
                   <div v-if="t2iForm.image_format === 'jpeg'" class="space-y-2">
@@ -1006,7 +1006,7 @@ watch(
                     <path d="M12 8v4l3 3" />
                     <path d="M9 3v2" /><path d="M5 5L6.5 6.5" /><path d="M3 9h2" /><path d="M3 15h2" /><path d="M5 19l1.5-1.5" /><path d="M9 21v-2" /><path d="M15 21v-2" /><path d="M19 19l-1.5-1.5" /><path d="M21 15h-2" /><path d="M21 9h-2" /><path d="M19 5L17.5 6.5" /><path d="M15 3v2" />
                   </svg>
-                  <span class="text-[10px] uppercase tracking-widest font-bold opacity-30">No Style Image</span>
+                  <span class="text-xxs uppercase tracking-widest font-bold opacity-30">No Style Image</span>
                 </div>
                 
                 <!-- Overlay Buttons -->
@@ -1034,7 +1034,7 @@ watch(
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
                     <h3 class="text-white font-bold truncate">{{ style.name }}</h3>
-                    <p class="text-slate-500 text-[10px] uppercase font-mono truncate">{{ style.id }}</p>
+                    <p class="text-slate-500 text-xxs uppercase font-mono truncate">{{ style.id }}</p>
                   </div>
                   <div class="relative">
                     <button @click.stop="openMenuId = openMenuId === 'style-' + index ? null : 'style-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors text-lg font-bold leading-none flex items-center justify-center min-w-[32px] h-8" title="Options">
@@ -1093,7 +1093,7 @@ watch(
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
-                  <span class="text-[10px] uppercase tracking-widest font-bold opacity-30">No Tone Image</span>
+                  <span class="text-xxs uppercase tracking-widest font-bold opacity-30">No Tone Image</span>
                 </div>
                 
                 <!-- Overlay Buttons -->
@@ -1121,7 +1121,7 @@ watch(
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
                     <h3 class="text-white font-bold truncate">{{ tone.name }}</h3>
-                    <p class="text-slate-500 text-[10px] uppercase font-mono truncate">{{ tone.id }}</p>
+                    <p class="text-slate-500 text-xxs uppercase font-mono truncate">{{ tone.id }}</p>
                   </div>
                   <div class="relative">
                     <button @click.stop="openMenuId = openMenuId === 'tone-' + index ? null : 'tone-' + index" class="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors text-lg font-bold leading-none flex items-center justify-center min-w-[32px] h-8" title="Options">
@@ -1218,9 +1218,9 @@ watch(
             <table class="w-full text-left">
               <thead>
                 <tr class="border-b border-slate-800 bg-slate-950/50">
-                  <th class="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">User</th>
-                  <th class="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Role</th>
-                  <th class="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
+                  <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">User</th>
+                  <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest">Role</th>
+                  <th class="px-6 py-4 text-xxs font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-800">
@@ -1237,7 +1237,7 @@ watch(
                     </div>
                   </td>
                   <td class="px-6 py-4">
-                    <span :class="['px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter', user.role === 'admin' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400']">
+                    <span :class="['px-2 py-0.5 rounded text-xxs font-black uppercase tracking-tighter', user.role === 'admin' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400']">
                       {{ user.role }}
                     </span>
                   </td>
@@ -1282,19 +1282,19 @@ watch(
 
             <form @submit.prevent="saveUser" class="space-y-6">
               <div class="space-y-2">
-                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Username</label>
+                <label class="text-xxs font-black text-slate-500 uppercase tracking-widest">Username</label>
                 <input v-model="editingUser.username" type="text" required class="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:border-red-500/50" />
               </div>
 
               <div class="space-y-2">
-                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                <label class="text-xxs font-black text-slate-500 uppercase tracking-widest">
                   {{ isEditingExistingUser ? 'Reset Password (optional)' : 'Master Password' }}
                 </label>
                 <input v-model="editingUser.password" type="password" :required="!isEditingExistingUser" class="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:border-red-500/50" />
               </div>
 
               <div class="space-y-2">
-                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Role</label>
+                <label class="text-xxs font-black text-slate-500 uppercase tracking-widest">Role</label>
                 <select v-model="editingUser.role" class="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white outline-none focus:border-red-500/50">
                   <option value="user">User (Storyteller)</option>
                   <option value="admin">Admin (World Weaver)</option>
@@ -1364,21 +1364,21 @@ watch(
             <div>
               <div class="flex justify-between items-center mb-2">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">Display Name</label>
-                <span class="text-[10px] font-mono text-slate-600">{{ (editingItem.name || '').length }} / 30</span>
+                <span class="text-xxs font-mono text-slate-600">{{ (editingItem.name || '').length }} / 30</span>
               </div>
               <input v-model="editingItem.name" type="text" maxlength="30" placeholder="e.g. Dark Fantasy" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" />
             </div>
             <div>
               <div class="flex justify-between items-center mb-2">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">Description</label>
-                <span class="text-[10px] font-mono text-slate-600">{{ (editingItem.description || '').length }} / 200</span>
+                <span class="text-xxs font-mono text-slate-600">{{ (editingItem.description || '').length }} / 200</span>
               </div>
               <textarea v-model="editingItem.description" rows="2" maxlength="200" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-y"></textarea>
             </div>
             <div>
               <div class="flex justify-between items-center mb-2">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest">System Instruction / Prompt Prefix</label>
-                <span class="text-[10px] font-mono text-slate-600">{{ (editingItem.instruction || '').length }} / 500</span>
+                <span class="text-xxs font-mono text-slate-600">{{ (editingItem.instruction || '').length }} / 500</span>
               </div>
               <textarea v-model="editingItem.instruction" rows="3" maxlength="500" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none resize-y font-mono text-xs"></textarea>
             </div>
@@ -1446,3 +1446,4 @@ watch(
   border-radius: 10px;
 }
 </style>
+

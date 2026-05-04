@@ -44,7 +44,7 @@ function handleLogout() {
       </div>
       <div class="flex items-baseline gap-2">
         <span class="text-sm font-black text-white font-display tracking-tight">TaleWeaver</span>
-        <span class="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">v{{ configState.appVersion }}</span>
+        <span class="text-xs font-bold text-slate-600 uppercase tracking-[0.2em]">v{{ configState.appVersion }}</span>
       </div>
     </router-link>
 
@@ -80,7 +80,7 @@ function handleLogout() {
           class="absolute right-0 mt-2 w-48 bg-[#0a111c] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1 z-50"
         >
           <div class="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
-            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Account Role</p>
+            <p class="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Account Role</p>
             <p class="text-xs font-bold text-aether-primary capitalize">{{ authState.user?.role }}</p>
           </div>
 
@@ -105,3 +105,5 @@ function handleLogout() {
     </div>
   </header>
 </template>
+
+

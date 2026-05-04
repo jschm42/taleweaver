@@ -343,3 +343,4 @@ export const api = {
     return request('/users/me/profile-image/generate', { method: 'POST', body })
   }
 }
+

@@ -28,7 +28,7 @@ const emit = defineEmits<{
     <div class="flex items-center justify-between gap-2 mb-4">
       <div class="flex items-center gap-2">
         <i class="ra ra-locked-fortress text-amber-500"></i>
-        <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500/80">Discovery</h3>
+        <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-amber-500/80">Discovery</h3>
       </div>
     </div>
     <div class="grid grid-cols-2 gap-3">
@@ -53,8 +53,9 @@ const emit = defineEmits<{
             <i :class="['ra text-xl', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
           </div>
         </div>
-        <span class="text-[9px] font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
+        <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
       </div>
     </div>
   </div>
 </template>
+

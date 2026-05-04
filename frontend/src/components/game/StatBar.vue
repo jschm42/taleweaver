@@ -32,8 +32,8 @@ const barHeight = computed(() => {
 <template>
   <div :class="['flex flex-col', size === 'xs' ? 'gap-0.5' : 'gap-1.5', size !== 'xs' ? 'mb-3' : 'mb-1']">
     <div v-if="label" class="flex justify-between items-center text-xs">
-      <span class="font-medium text-slate-300 uppercase tracking-widest text-[10px]">{{ label }}</span>
-      <span :class="['font-mono', colorClasses.text, size === 'sm' ? 'text-[9px]' : '']">{{ value }}<span class="text-slate-600">/{{ maxVal }}</span></span>
+      <span class="font-medium text-slate-300 uppercase tracking-widest text-xs">{{ label }}</span>
+      <span :class="['font-mono', colorClasses.text, size === 'sm' ? 'text-xs' : '']">{{ value }}<span class="text-slate-600">/{{ maxVal }}</span></span>
     </div>
     <div :class="['w-full bg-slate-800 rounded-full overflow-hidden', barHeight]">
       <div
@@ -47,3 +47,4 @@ const barHeight = computed(() => {
     </div>
   </div>
 </template>
+

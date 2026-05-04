@@ -14,7 +14,7 @@ const props = defineProps<{
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div class="flex flex-col items-end min-w-0">
-            <span class="text-[10px] font-black text-amber-500/60 uppercase tracking-widest leading-none mb-1.5 whitespace-nowrap truncate max-w-[120px]">{{ props.gameTime.dateShort }}</span>
+            <span class="text-xs font-black text-amber-500/60 uppercase tracking-widest leading-none mb-1.5 whitespace-nowrap truncate max-w-[120px]">{{ props.gameTime.dateShort }}</span>
             <span class="clock-time text-2xl font-black text-amber-300 tracking-widest leading-none tabular-nums">
               {{ props.gameTime.time }}
             </span>
@@ -47,3 +47,4 @@ const props = defineProps<{
   100% { color: inherit;  text-shadow: none; }
 }
 </style>
+
