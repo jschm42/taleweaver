@@ -82,7 +82,7 @@ defineExpose({ appendText })
     />
 
     <div v-if="props.mode !== 'chat'" class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">
-      <span class="text-sm font-black text-slate-300/60 uppercase tracking-[0.2em] tabular-nums">
+      <span class="text-xl font-black text-slate-300/60 uppercase tracking-[0.2em] tabular-nums">
         {{ props.exp }} XP
       </span>
     </div>
