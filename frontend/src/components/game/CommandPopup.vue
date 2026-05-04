@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 
 interface Command {
   id: string
   label: string
   description: string
-  icon: string
   category: 'game' | 'debug'
 }
 
@@ -21,20 +20,20 @@ const emit = defineEmits<{
 }>()
 
 const commands: Command[] = [
-  { id: '/sheet', label: '/sheet', description: 'Open your character sheet', icon: 'ra-player', category: 'game' },
-  { id: '/inventory', label: '/inventory', description: 'View your items and equipment', icon: 'ra-treasure-chest', category: 'game' },
-  { id: '/map', label: '/map', description: 'View the world map', icon: 'ra-compass', category: 'game' },
-  { id: '/quests', label: '/quests', description: 'View active and completed quests', icon: 'ra-scroll-unfurled', category: 'game' },
-  { id: '/hint', label: '/hint', description: 'Get a hint for your next step (50 XP)', icon: 'ra-light-bulb', category: 'game' },
-  { id: '/walkthrough', label: '/walkthrough', description: 'Open the adventure walkthrough', icon: 'ra-book', category: 'game' },
-  { id: '/equip', label: '/equip', description: 'Equip an item from your inventory', icon: 'ra-sword', category: 'game' },
-  { id: '/unequip', label: '/unequip', description: 'Remove an equipped item', icon: 'ra-hand', category: 'game' },
-  { id: '/consume', label: '/consume', description: 'Use a consumable item', icon: 'ra-potion', category: 'game' },
-  { id: '/debug session', label: '/debug session', description: 'Open the debug inspector', icon: 'ra-gears', category: 'debug' },
-  { id: '/debug reveal_map', label: '/debug reveal_map', description: 'Reveal all locations on the map', icon: 'ra-eyeball', category: 'debug' },
-  { id: '/debug walkthrough', label: '/debug walkthrough', description: 'Reveal walkthrough for free', icon: 'ra-search', category: 'debug' },
-  { id: '/debug log on', label: '/debug log on', description: 'Enable technical debug logs', icon: 'ra-plain-dagger', category: 'debug' },
-  { id: '/debug log off', label: '/debug log off', description: 'Disable technical debug logs', icon: 'ra-cancel', category: 'debug' },
+  { id: '/sheet', label: '/sheet', description: 'Open your character sheet', category: 'game' },
+  { id: '/inventory', label: '/inventory', description: 'View your items and equipment', category: 'game' },
+  { id: '/map', label: '/map', description: 'View the world map', category: 'game' },
+  { id: '/quests', label: '/quests', description: 'View active and completed quests', category: 'game' },
+  { id: '/hint', label: '/hint', description: 'Get a hint for your next step (50 XP)', category: 'game' },
+  { id: '/walkthrough', label: '/walkthrough', description: 'Open the adventure walkthrough', category: 'game' },
+  { id: '/equip', label: '/equip', description: 'Equip an item from your inventory', category: 'game' },
+  { id: '/unequip', label: '/unequip', description: 'Remove an equipped item', category: 'game' },
+  { id: '/consume', label: '/consume', description: 'Use a consumable item', category: 'game' },
+  { id: '/debug session', label: '/debug session', description: 'Open the debug inspector', category: 'debug' },
+  { id: '/debug reveal_map', label: '/debug reveal_map', description: 'Reveal all locations on the map', category: 'debug' },
+  { id: '/debug walkthrough', label: '/debug walkthrough', description: 'Reveal walkthrough for free', category: 'debug' },
+  { id: '/debug log on', label: '/debug log on', description: 'Enable technical debug logs', category: 'debug' },
+  { id: '/debug log off', label: '/debug log off', description: 'Disable technical debug logs', category: 'debug' },
 ]
 
 const filteredCommands = computed(() => {
@@ -42,6 +41,28 @@ const filteredCommands = computed(() => {
   if (!q) return commands
   return commands.filter(c => c.label.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
 })
+
+const scrollContainer = ref<HTMLElement | null>(null)
+const lastMouseX = ref(0)
+const lastMouseY = ref(0)
+
+watch(() => props.activeIndex, (newIdx) => {
+  if (!scrollContainer.value) return
+  const items = scrollContainer.value.querySelectorAll('.command-item')
+  const activeItem = items[newIdx] as HTMLElement
+  if (activeItem) {
+    activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
+})
+
+const handleMouseEnter = (e: MouseEvent, idx: number) => {
+  // Only update if the mouse actually moved (prevents jumping during scroll)
+  if (Math.abs(e.clientX - lastMouseX.value) > 2 || Math.abs(e.clientY - lastMouseY.value) > 2) {
+    emit('update:activeIndex', idx)
+  }
+  lastMouseX.value = e.clientX
+  lastMouseY.value = e.clientY
+}
 
 const handleSelect = (cmd: Command) => {
   emit('select', cmd.id)
@@ -55,7 +76,11 @@ const handleSelect = (cmd: Command) => {
       <span class="text-[10px] text-slate-500 font-mono">ESC to close</span>
     </div>
     
-    <div class="overflow-y-auto max-h-80 custom-scrollbar p-1">
+    <div 
+      ref="scrollContainer" 
+      class="overflow-y-auto max-h-80 custom-scrollbar p-1"
+      @mousemove="e => { lastMouseX = e.clientX; lastMouseY = e.clientY }"
+    >
       <div 
         v-for="(cmd, idx) in filteredCommands" 
         :key="cmd.id"
@@ -65,21 +90,13 @@ const handleSelect = (cmd: Command) => {
           'border'
         ]"
         @click="handleSelect(cmd)"
-        @mouseenter="$emit('update:activeIndex', idx)"
+        @mouseenter="e => handleMouseEnter(e, idx)"
       >
         <!-- Selection Indicator -->
         <div 
           v-if="activeIndex === idx"
           class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-emerald-500 rounded-r-full shadow-[0_0_10px_rgba(16,185,129,0.8)]"
         ></div>
-
-        <!-- Icon -->
-        <div 
-          class="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg bg-slate-950/50 border border-slate-800 transition-colors"
-          :class="activeIndex === idx ? 'text-emerald-400 border-emerald-500/30' : 'text-slate-500'"
-        >
-          <i :class="['ra text-xl', cmd.icon]"></i>
-        </div>
 
         <!-- Content -->
         <div class="flex-grow min-w-0">
