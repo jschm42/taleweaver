@@ -106,6 +106,7 @@ const form = ref({
   min_scenes: 1,
   max_scenes: 5,
   awards: [] as any[],
+  allow_dynamic_items: true,
   
   // New Concept Fields
   plot: '',
@@ -261,6 +262,7 @@ async function fetchAdventure() {
     form.value.min_scenes = data.min_scenes || 1
     form.value.max_scenes = data.max_scenes || 5
     form.value.awards = data.awards || []
+    form.value.allow_dynamic_items = data.allow_dynamic_items ?? true
     
     // New Concept Fields
     form.value.plot = data.plot || ''
@@ -1230,6 +1232,39 @@ const goBack = () => router.push({ name: 'portal' })
                 <button @click="showDebug = true" class="flex items-center justify-between px-6 py-4 bg-white/5 hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/30 rounded-2xl transition-all group">
                   <span class="text-xs font-black uppercase tracking-widest text-slate-300 group-hover:text-cyan-400">Open JSON Debug Inspector</span>
                   <i class="ra ra-search text-cyan-500"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- GM Capabilities -->
+            <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6">
+              <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+                <i class="ra ra-crystal-wand text-violet-400"></i> Game Master Capabilities
+              </h4>
+              <p class="text-xs text-slate-400 leading-relaxed">Control what the GM is allowed to do during live sessions of this adventure.</p>
+
+              <!-- allow_dynamic_items toggle -->
+              <div class="flex items-center justify-between p-5 bg-black/30 rounded-2xl border border-white/5">
+                <div class="space-y-1 pr-6">
+                  <p class="text-sm font-bold text-white">GM may create new items in-game</p>
+                  <p class="text-xs text-slate-500 leading-relaxed">Allows the GM to invent and drop new items (e.g. potions, loot) that were not in the original world manifest.</p>
+                </div>
+                <button
+                  id="toggle-allow-dynamic-items"
+                  type="button"
+                  @click="form.allow_dynamic_items = !form.allow_dynamic_items; saveChanges()"
+                  :class="[
+                    'relative inline-flex h-7 w-13 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
+                    form.allow_dynamic_items ? 'bg-violet-600' : 'bg-slate-700'
+                  ]"
+                  :aria-pressed="form.allow_dynamic_items"
+                >
+                  <span
+                    :class="[
+                      'inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200',
+                      form.allow_dynamic_items ? 'translate-x-7' : 'translate-x-1'
+                    ]"
+                  />
                 </button>
               </div>
             </div>

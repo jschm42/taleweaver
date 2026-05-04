@@ -132,12 +132,11 @@ const form = ref({
   strict_rules: true,
   time_per_turn: 5,
   min_scenes: 1,
-  min_scenes: 1,
   max_scenes: 5,
   time_system: 'calendar',
   time_config: {
     day_label: 'Day',
-    start_year_override: null,
+    start_year_override: null as number | null,
     start_time: '08:00'
   },
   allow_dynamic_items: true,
@@ -739,7 +738,7 @@ watch(
               <div class="p-6 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
                 <div class="flex items-center gap-3">
                   <div class="p-2 bg-violet-500/10 rounded-lg text-violet-500">
-                    <i class="ra ra-magic-axe text-xl"></i>
+                    <i class="ra ra-crystal-wand text-xl"></i>
                   </div>
                   <div>
                     <h3 class="text-sm font-bold text-white uppercase tracking-wider">Game Master Capabilities</h3>
