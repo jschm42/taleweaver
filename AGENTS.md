@@ -59,3 +59,14 @@ To understand the internal processes of TaleWeaver, refer to the following Merma
 * **Adventure Import/Export:** [adventure_import.mermaid](docs/diagrams/adventure_import.mermaid) | [adventure_export.mermaid](docs/diagrams/adventure_export.mermaid) - Logic for .adz and .adv portability.
 * **Game Session Loop:** [game_session_loop.mermaid](docs/diagrams/game_session_loop.mermaid) | [Activity Diagram](docs/diagrams/game_session_loop_activity.mermaid) - Detailed flow of a single chat turn (user input to GM response).
 * **Data Formats:** [Adventure Format Specification](docs/specs/adventure_format.md) - Standardized structure for `.adv` and `.adz` files.
+
+---
+
+## 5. Database & Migrations
+
+* **Alembic Migrations:**
+  * For **any** change to the database schema (adding columns, creating tables, changing types), a corresponding Alembic migration script **must** be created.
+  * Use `alembic revision --autogenerate -m "description"` to generate the script and review it before applying.
+  * Avoid manual migrations via `ALTER TABLE` in the application code (e.g., in `database.py`), unless there is a very specific technical reason.
+  * Always verify the migration by running `alembic upgrade head`.
+

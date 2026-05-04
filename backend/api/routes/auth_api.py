@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     earned_awards: Optional[list] = None
     is_admin: bool = False
     game_log: Optional[list] = None
+    has_imported_defaults: bool = False
 
 class SetupRootRequest(BaseModel):
     username: str
@@ -63,9 +64,28 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/auth/me", response_model=UserResponse)
-async def read_users_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def read_users_me(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     from backend.models.game_session import GameSession
+    from backend.engine.adventure_importer import AdventureTemplateImporter
+    import os
     
+    # 1. Trigger background import of defaults if never done
+    if not current_user.has_imported_defaults:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"First login for user '{current_user.username}'. Importing default adventures...")
+        
+        defaults_dir = os.path.join("adventures", "default")
+        try:
+            await AdventureTemplateImporter.import_from_directory(db, defaults_dir, owner_id=current_user.id, delete_after=False)
+            current_user.has_imported_defaults = True
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Failed to auto-import defaults for {current_user.username}: {e}")
+
     # Count unique adventures played by this user
     result = await db.execute(
         select(func.count(GameSession.template_id.distinct()))
@@ -83,7 +103,8 @@ async def read_users_me(current_user: User = Depends(get_current_user), db: Asyn
         "default_language": current_user.default_language,
         "earned_awards": current_user.earned_awards or [],
         "adventure_count": adventure_count,
-        "game_log": current_user.game_log or []
+        "game_log": current_user.game_log or [],
+        "has_imported_defaults": current_user.has_imported_defaults
     }
     return user_data
 

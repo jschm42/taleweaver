@@ -337,6 +337,18 @@ async function executeImportExamples() {
   }
 }
 
+async function executeRestoreDefaults() {
+  isSeeding.value = true
+  try {
+    await api.reimportDefaults()
+    await fetchPortalData()
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Restoration of defaults failed.'
+  } finally {
+    isSeeding.value = false
+  }
+}
+
 function triggerImportPicker() {
   importInput.value?.click()
 }
@@ -540,6 +552,7 @@ onUnmounted(() => {
           @change-section="activeSection = $event"
           @create="openCreateModal"
           @import="triggerImportPicker"
+          @restore-defaults="executeRestoreDefaults"
         />
 
         <!-- Loading State -->

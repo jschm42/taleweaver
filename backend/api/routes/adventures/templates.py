@@ -21,6 +21,7 @@ from backend.api.routes.adventures.schemas import (
     CreateAdventureTemplatePayload, AdventureTemplateUpdate
 )
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.utils.text_utils import generate_adventure_id
 
 router = APIRouter(tags=["Adventures"], redirect_slashes=False)
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ async def get_adventure(
     response_data["awards"] = enriched_awards
     return response_data
 
+
 @router.post("/", status_code=201)
 async def create_adventure(
     payload: CreateAdventureTemplatePayload,
@@ -96,7 +98,7 @@ async def create_adventure(
     and starts the background world generation task.
     """
     # 1. Create the template record
-    new_id = payload.id or str(uuid.uuid4())
+    new_id = payload.id or generate_adventure_id(payload.title)
     
     # Backward compatibility for pacing configs
     pacing_minutes = payload.pacing_minutes or payload.time_per_turn

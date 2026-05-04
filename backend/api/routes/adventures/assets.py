@@ -25,13 +25,42 @@ async def import_examples(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manually triggers import of example adventures from the bundled /adventures and presets folder."""
+    """Manually triggers import of example adventures from the 'adventures/samples' and presets folder."""
     user_id = current_user.id
-    await AdventureTemplateImporter.import_from_directory(db, "adventures", owner_id=user_id, delete_after=False)
+    # Import from the 'samples' subfolder
+    samples_dir = os.path.join("adventures", "samples")
+    await AdventureTemplateImporter.import_from_directory(db, samples_dir, owner_id=user_id, delete_after=False)
+    
     presets_dir = os.path.join(settings.DATA_DIR, "presets", "adventures")
     if os.path.exists(presets_dir):
         await AdventureTemplateImporter.import_from_directory(db, presets_dir, owner_id=user_id, delete_after=False)
     return {"status": "success", "message": "Example adventures imported successfully."}
+
+@router.post("/import-defaults")
+async def import_defaults(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Triggers import of default adventures from 'adventures/default' if not already done."""
+    if current_user.has_imported_defaults:
+        return {"status": "skipped", "message": "Defaults already imported."}
+    
+    defaults_dir = os.path.join("adventures", "default")
+    await AdventureTemplateImporter.import_from_directory(db, defaults_dir, owner_id=current_user.id, delete_after=False)
+    
+    current_user.has_imported_defaults = True
+    await db.commit()
+    return {"status": "success", "message": "Default adventures imported successfully."}
+
+@router.post("/reimport-defaults")
+async def reimport_defaults(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually re-triggers import of default adventures (restoration)."""
+    defaults_dir = os.path.join("adventures", "default")
+    await AdventureTemplateImporter.import_from_directory(db, defaults_dir, owner_id=current_user.id, delete_after=False)
+    return {"status": "success", "message": "Default adventures re-imported successfully."}
 
 @router.post("/import")
 async def import_adventure(

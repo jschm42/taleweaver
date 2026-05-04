@@ -16,6 +16,7 @@ from backend.core.config import settings
 from backend.core import prompts
 from backend.utils.svg_generator import SVGPlaceholderGenerator
 import litellm
+from backend.utils.text_utils import slugify
 
 logger = logging.getLogger(__name__)
 
@@ -635,7 +636,10 @@ class MediaEngine:
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        filename = f"{uuid.uuid4().hex}.{ext}"
+        
+        # Use adventure_id as prefix for clarity
+        safe_id = slugify(adventure_id)
+        filename = f"{safe_id}_scene_{uuid.uuid4().hex[:8]}.{ext}"
         
         return await MediaEngine.generate_image(
             prompt=prompt, 
@@ -671,7 +675,11 @@ class MediaEngine:
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        filename = f"{entity_id}_{uuid.uuid4().hex}.{ext}"
+        
+        # Use adventure_id and entity_id as prefix for clarity
+        safe_adv_id = slugify(adventure_id)
+        safe_ent_id = slugify(entity_id)
+        filename = f"{safe_adv_id}_{safe_ent_id}_{uuid.uuid4().hex[:8]}.{ext}"
         
         return await MediaEngine.generate_image(
             prompt=prompt, 
@@ -707,7 +715,10 @@ class MediaEngine:
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        filename = f"cover_{uuid.uuid4().hex}.{ext}"
+        
+        # Use adventure_id as prefix for clarity
+        safe_id = slugify(adventure_id)
+        filename = f"{safe_id}_cover_{uuid.uuid4().hex[:8]}.{ext}"
         
         prompt = prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
             title=title, original_prompt=original_prompt

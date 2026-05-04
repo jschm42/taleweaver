@@ -79,9 +79,14 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
 }
 
 export const api = {
-  /** Manually trigger import of example adventures. */
+  /** Manually trigger import of example adventures (samples). */
   importExamples(): Promise<{ status: string; message: string }> {
     return request('/adventures/import-examples', { method: 'POST' })
+  },
+
+  /** Manually restore default adventures. */
+  reimportDefaults(): Promise<{ status: string; message: string }> {
+    return request('/adventures/reimport-defaults', { method: 'POST' })
   },
 
   /** Lists all game sessions. */

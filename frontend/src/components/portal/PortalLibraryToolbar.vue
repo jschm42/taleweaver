@@ -7,6 +7,7 @@ const emit = defineEmits<{
   (e: 'changeSection', section: 'templates' | 'sessions'): void
   (e: 'create'): void
   (e: 'import'): void
+  (e: 'restore-defaults'): void
 }>()
 </script>
 
@@ -35,6 +36,14 @@ const emit = defineEmits<{
         >
           <i class="ra ra-download"></i>
           Import Adventure
+        </button>
+        <button
+          class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2"
+          title="Restore default adventures"
+          @click="emit('restore-defaults')"
+        >
+          <i class="ra ra-recycle"></i>
+          Restore Defaults
         </button>
       </div>
     </div>

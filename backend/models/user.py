@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, JSON
+from sqlalchemy import Column, String, JSON, Boolean
 from backend.models.base import Base, TimestampMixin
 
 class User(Base, TimestampMixin):
@@ -13,6 +13,7 @@ class User(Base, TimestampMixin):
     profile_image_url = Column(String(255), nullable=True)
     bio = Column(String(1000), nullable=True)
     default_language = Column(String(20), nullable=True)
+    has_imported_defaults = Column(Boolean, nullable=False, default=False)
 
     # Store encrypted keys mapping, e.g., {"openai": "gAAAAAB...", "anthropic": "..."}
     encrypted_api_keys = Column(JSON, nullable=True)

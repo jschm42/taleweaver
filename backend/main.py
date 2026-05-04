@@ -45,21 +45,16 @@ async def lifespan(app: FastAPI):
     from backend.models.adventure_template import AdventureTemplate
     
     async with AsyncSessionLocal() as db:
-        # Check if we have any adventures in the database
-        result = await db.execute(select(AdventureTemplate).limit(1))
-        is_empty_db = result.scalars().first() is None
+        # Check if we have any admins in the database
+        result = await db.execute(select(backend.models.user.User).where(backend.models.user.User.role == "admin").limit(1))
+        has_admin = result.scalars().first() is not None
 
-        if is_empty_db:
-            # 0. Import bundled adventures (committed to repo) 
-            # These are only imported ONCE when the database is first created/empty
-            logger.info("Fresh database detected. Importing bundled adventures from /adventures...")
-            await AdventureTemplateImporter.import_from_directory(db, "adventures", delete_after=False)
+        if not has_admin:
+            logger.info("No admin user found. Please use the setup flow or create a root user.")
             
-            # 1. Also seed with presets (examples) on first start
-            await AdventureTemplateImporter.import_from_directory(db, "data/presets/adventures", delete_after=False)
-            
-        # 2. Always check for manual drops in the import folder (useful for migrations/sharing)
-        # These are deleted after successful import to keep the folder clean
+        # We no longer auto-import adventures here. 
+        # Default adventures are imported per-user on their first login.
+        # Manual drops in data/imports/adventures are still processed for convenience.
         await AdventureTemplateImporter.import_from_directory(db, "data/imports/adventures", delete_after=True)
 
     yield

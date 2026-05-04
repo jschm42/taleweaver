@@ -20,6 +20,7 @@ from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.engine.world_generator import WorldGenerator
 from backend.core.auth import get_password_hash
 from backend.core.adventure_format import validate_manifest_version
+from backend.utils.text_utils import generate_adventure_id
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +104,9 @@ class AdventureTemplateImporter:
                     logger.info(f"AdventureTemplate template '{adv_data['title']}' already exists. Skipping.")
                     return False
 
+
                 # Create new template ID
-                new_template_id = str(uuid.uuid4())
+                new_template_id = generate_adventure_id(adv_data["title"])
                 
                 # Create AdventureTemplate record
                 new_template = AdventureTemplate(
@@ -276,6 +278,7 @@ class AdventureTemplateImporter:
                 old_adv = data["adventure"]
                 
                 new_template = AdventureTemplate(
+                    id=generate_adventure_id(old_adv['title']),
                     owner_id=user.id,
                     title=old_adv['title'],
                     teaser=old_adv.get("teaser"),
@@ -362,6 +365,7 @@ class AdventureTemplateImporter:
                 adv_meta = payload.get("adventure") or payload
                 
                 new_template = AdventureTemplate(
+                    id=generate_adventure_id(adv_meta.get("title") or manifest.get("title") or "Imported Blueprint"),
                     owner_id=owner_id,
                     title=adv_meta.get("title") or manifest.get("title") or "Imported Blueprint",
                     teaser=adv_meta.get("teaser") or manifest.get("teaser"),
