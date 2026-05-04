@@ -286,8 +286,8 @@ def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
         "advanced_model_provider": "openai",
         "provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
-        "width": 512,
-        "height": 512,
+        "width": None,
+        "height": None,
         "steps": None,
         "seed": None,
         "image_format": "jpeg",
@@ -371,8 +371,8 @@ class T2ISettingsPayload(BaseModel):
     advanced_model_provider: str
     provider: str # Legacy
     ollama_url: Optional[str] = None
-    width: Optional[int] = 512
-    height: Optional[int] = 512
+    width: Optional[int] = None
+    height: Optional[int] = None
     steps: Optional[int] = None
     seed: Optional[int] = None
     image_format: Optional[str] = "jpeg"
@@ -570,8 +570,6 @@ class TestVisionPayload(BaseModel):
     model: str
     provider: str
     ollama_url: Optional[str] = None
-    width: Optional[int] = 512
-    height: Optional[int] = 512
 
 @router.post("/test-vision")
 async def test_vision_connection(
@@ -596,11 +594,7 @@ async def test_vision_connection(
         test_dir = os.path.join(settings.DATA_DIR, "scratch", "test_connection")
         os.makedirs(test_dir, exist_ok=True)
         
-        provider_options = {
-            "ollama_url": payload.ollama_url,
-            "width": payload.width,
-            "height": payload.height
-        }
+        provider_options = {"ollama_url": payload.ollama_url} if payload.ollama_url else {}
         
         img_url = await MediaEngine.generate_image(
             prompt="A Wizard",
