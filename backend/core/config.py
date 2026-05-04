@@ -79,3 +79,5 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 settings = Settings()
+print(f"DEBUG: TaleWeaver Debug Mode: {'ENABLED' if settings.TALEWEAVER_DEBUG_ENABLED else 'DISABLED'}")
+logger.info(f"TaleWeaver Debug Mode: {'ENABLED' if settings.TALEWEAVER_DEBUG_ENABLED else 'DISABLED'}")
