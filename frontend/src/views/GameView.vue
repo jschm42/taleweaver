@@ -421,6 +421,26 @@ const handlePlayerInput = async (content: string) => {
     return
   }
 
+  if (normalized === '/debug session') {
+    await openDebugInspector()
+    return
+  }
+
+  if (normalized === '/map') {
+    showMap.value = true
+    return
+  }
+
+  if (normalized === '/sheet' || normalized === '/inventory') {
+    showSheet.value = true
+    return
+  }
+
+  if (normalized === '/quests') {
+    showQuests.value = true
+    return
+  }
+
   await sendMessage(content)
 }
 
@@ -474,6 +494,16 @@ const connectWithRouteFallback = async (routeId: string) => {
   await router.replace({ name: 'game', params: { id: resolvedGameId } })
 }
 
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    showSheet.value = false
+    showMap.value = false
+    showQuests.value = false
+    showWalkthrough.value = false
+    showDebug.value = false
+  }
+}
+
 onMounted(() => {
   void (async () => {
     await fetchGameSettings()
@@ -481,6 +511,7 @@ onMounted(() => {
       await connectWithRouteFallback(props.id)
     }
   })()
+  window.addEventListener('keydown', handleGlobalKeydown)
 })
 
 watch(() => props.id, (newId) => {
@@ -492,6 +523,7 @@ watch(() => props.id, (newId) => {
 
 onBeforeUnmount(() => {
   disconnect()
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 

@@ -2,6 +2,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
+import CommandPopup from '@/components/game/CommandPopup.vue'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
@@ -38,6 +39,50 @@ const inputText = ref('')
 const fontSize = ref<'small' | 'medium' | 'large'>((localStorage.getItem('tw_chat_font_size') as any) || 'medium')
 const logEl = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
+
+// Command Auto-completion
+const showCommandPopup = ref(false)
+const commandPopupIndex = ref(0)
+const commands = [
+  { id: '/sheet', label: '/sheet' },
+  { id: '/inventory', label: '/inventory' },
+  { id: '/map', label: '/map' },
+  { id: '/quests', label: '/quests' },
+  { id: '/hint', label: '/hint' },
+  { id: '/walkthrough', label: '/walkthrough' },
+  { id: '/equip', label: '/equip' },
+  { id: '/unequip', label: '/unequip' },
+  { id: '/consume', label: '/consume' },
+  { id: '/debug session', label: '/debug session' },
+  { id: '/debug reveal_map', label: '/debug reveal_map' },
+  { id: '/debug walkthrough', label: '/debug walkthrough' },
+  { id: '/debug log on', label: '/debug log on' },
+  { id: '/debug log off', label: '/debug log off' },
+]
+
+const filteredCommands = computed(() => {
+  if (!inputText.value.startsWith('/')) return []
+  const q = inputText.value.toLowerCase().slice(1)
+  if (!q) return commands
+  return commands.filter(c => c.label.toLowerCase().includes(q))
+})
+
+watch(inputText, (newVal) => {
+  if (newVal.startsWith('/')) {
+    showCommandPopup.value = true
+    // Reset index if query changes and index is out of bounds
+    if (commandPopupIndex.value >= filteredCommands.value.length) {
+      commandPopupIndex.value = 0
+    }
+  } else {
+    showCommandPopup.value = false
+  }
+})
+
+function selectCommand(cmdId: string) {
+  inputText.value = cmdId + ' '
+  showCommandPopup.value = false
+}
 
 watch(fontSize, (newSize) => {
   localStorage.setItem('tw_chat_font_size', newSize)
@@ -102,21 +147,15 @@ function handleSend(): void {
   const text = inputText.value.trim()
   if (!text) return
 
-  if (text.startsWith('/debug')) {
+  if (text.startsWith('/debug log')) {
     const parts = text.split(' ')
-    const cmd = parts[1] // session, log
     const sub = parts[2] // on, off
 
-    if (cmd === 'session') {
-      emit('openDebug')
-    } else if (cmd === 'log') {
-      if (sub === 'on') {
-        emit('toggleDebugLog', true)
-      } else if (sub === 'off') {
-        emit('toggleDebugLog', false)
-      }
+    if (sub === 'on') {
+      emit('toggleDebugLog', true)
+    } else if (sub === 'off') {
+      emit('toggleDebugLog', false)
     }
-    // Continue so it reaches the backend too
   }
 
   emit('send', text)
@@ -124,6 +163,35 @@ function handleSend(): void {
 }
 
 function handleKeydown(e: KeyboardEvent): void {
+  if (showCommandPopup.value && filteredCommands.value.length > 0) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      commandPopupIndex.value = (commandPopupIndex.value + 1) % filteredCommands.value.length
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      commandPopupIndex.value = (commandPopupIndex.value - 1 + filteredCommands.value.length) % filteredCommands.value.length
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const selected = filteredCommands.value[commandPopupIndex.value]
+      if (selected) {
+        selectCommand(selected.id)
+      } else {
+        showCommandPopup.value = false
+        handleSend()
+      }
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      showCommandPopup.value = false
+      return
+    }
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleSend()
@@ -399,6 +467,16 @@ function displayMessageContent(msg: ChatMessage): string {
             placeholder="What do you do next?"
             class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
             @keydown="handleKeydown"
+          />
+
+          <!-- Command Popup -->
+          <CommandPopup 
+            v-if="showCommandPopup && filteredCommands.length > 0"
+            :query="inputText"
+            :active-index="commandPopupIndex"
+            @select="selectCommand"
+            @close="showCommandPopup = false"
+            @update:active-index="val => commandPopupIndex = val"
           />
         </div>
 
