@@ -60,6 +60,41 @@ const commands = [
   { id: '/debug log off', label: '/debug log off' },
 ]
 
+// Command History
+const history = ref<string[]>(JSON.parse(sessionStorage.getItem('tw_chat_history') || '[]'))
+const historyIndex = ref(-1)
+
+function addToHistory(text: string) {
+  if (!text) return
+  // Don't add if same as last entry
+  if (history.value[0] === text) return
+  
+  history.value.unshift(text)
+  if (history.value.length > 20) {
+    history.value.pop()
+  }
+  sessionStorage.setItem('tw_chat_history', JSON.stringify(history.value))
+}
+
+function navigateHistory(direction: 'up' | 'down') {
+  if (history.value.length === 0) return
+
+  if (direction === 'up') {
+    if (historyIndex.value < history.value.length - 1) {
+      historyIndex.value++
+      inputText.value = history.value[historyIndex.value]
+    }
+  } else {
+    if (historyIndex.value > 0) {
+      historyIndex.value--
+      inputText.value = history.value[historyIndex.value]
+    } else if (historyIndex.value === 0) {
+      historyIndex.value = -1
+      inputText.value = ''
+    }
+  }
+}
+
 const filteredCommands = computed(() => {
   if (!inputText.value.startsWith('/')) return []
   const q = inputText.value.toLowerCase().slice(1)
@@ -158,11 +193,20 @@ function handleSend(): void {
     }
   }
 
+  addToHistory(text)
   emit('send', text)
   inputText.value = ''
+  historyIndex.value = -1
 }
 
 function handleKeydown(e: KeyboardEvent): void {
+  // History Navigation (Ctrl + Up/Down)
+  if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault()
+    navigateHistory(e.key === 'ArrowUp' ? 'up' : 'down')
+    return
+  }
+
   if (showCommandPopup.value && filteredCommands.value.length > 0) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
