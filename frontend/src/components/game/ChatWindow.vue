@@ -2,6 +2,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
+import CommandPopup from '@/components/game/CommandPopup.vue'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
@@ -38,6 +39,85 @@ const inputText = ref('')
 const fontSize = ref<'small' | 'medium' | 'large'>((localStorage.getItem('tw_chat_font_size') as any) || 'medium')
 const logEl = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
+
+// Command Auto-completion
+const showCommandPopup = ref(false)
+const commandPopupIndex = ref(0)
+const commands = [
+  { id: '/sheet', label: '/sheet' },
+  { id: '/inventory', label: '/inventory' },
+  { id: '/map', label: '/map' },
+  { id: '/quests', label: '/quests' },
+  { id: '/hint', label: '/hint' },
+  { id: '/walkthrough', label: '/walkthrough' },
+  { id: '/equip', label: '/equip' },
+  { id: '/unequip', label: '/unequip' },
+  { id: '/consume', label: '/consume' },
+  { id: '/debug session', label: '/debug session' },
+  { id: '/debug reveal_map', label: '/debug reveal_map' },
+  { id: '/debug walkthrough', label: '/debug walkthrough' },
+  { id: '/debug log on', label: '/debug log on' },
+  { id: '/debug log off', label: '/debug log off' },
+]
+
+// Command History
+const history = ref<string[]>(JSON.parse(sessionStorage.getItem('tw_chat_history') || '[]'))
+const historyIndex = ref(-1)
+
+function addToHistory(text: string) {
+  if (!text) return
+  // Don't add if same as last entry
+  if (history.value[0] === text) return
+  
+  history.value.unshift(text)
+  if (history.value.length > 20) {
+    history.value.pop()
+  }
+  sessionStorage.setItem('tw_chat_history', JSON.stringify(history.value))
+}
+
+function navigateHistory(direction: 'up' | 'down') {
+  if (history.value.length === 0) return
+
+  if (direction === 'up') {
+    if (historyIndex.value < history.value.length - 1) {
+      historyIndex.value++
+      inputText.value = history.value[historyIndex.value]
+    }
+  } else {
+    if (historyIndex.value > 0) {
+      historyIndex.value--
+      inputText.value = history.value[historyIndex.value]
+    } else if (historyIndex.value === 0) {
+      historyIndex.value = -1
+      inputText.value = ''
+    }
+  }
+}
+
+const filteredCommands = computed(() => {
+  if (!inputText.value.startsWith('/')) return []
+  const q = inputText.value.toLowerCase().slice(1)
+  if (!q) return commands
+  return commands.filter(c => c.label.toLowerCase().includes(q))
+})
+
+watch(inputText, (newVal) => {
+  if (newVal.startsWith('/')) {
+    showCommandPopup.value = true
+    // Reset index if query changes and index is out of bounds
+    if (commandPopupIndex.value >= filteredCommands.value.length) {
+      commandPopupIndex.value = 0
+    }
+  } else {
+    showCommandPopup.value = false
+  }
+})
+
+function selectCommand(cmdId: string) {
+  inputText.value = cmdId + ' '
+  showCommandPopup.value = false
+}
 
 watch(fontSize, (newSize) => {
   localStorage.setItem('tw_chat_font_size', newSize)
@@ -79,6 +159,7 @@ const statusLabel = computed(() => {
     connected: 'Connected',
     error: 'Error',
     game_over: 'Game Over',
+    completed: 'Completed',
   }
   return map[props.status]
 })
@@ -90,6 +171,7 @@ const statusColor = computed(() => {
     connected: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
     error: 'text-red-500 bg-red-500/10 border-red-500/20',
     game_over: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+    completed: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
   }
   return map[props.status]
 })
@@ -102,28 +184,60 @@ function handleSend(): void {
   const text = inputText.value.trim()
   if (!text) return
 
-  if (text.startsWith('/debug')) {
+  if (text.startsWith('/debug log')) {
     const parts = text.split(' ')
-    const cmd = parts[1] // session, log
     const sub = parts[2] // on, off
 
-    if (cmd === 'session') {
-      emit('openDebug')
-    } else if (cmd === 'log') {
-      if (sub === 'on') {
-        emit('toggleDebugLog', true)
-      } else if (sub === 'off') {
-        emit('toggleDebugLog', false)
-      }
+    if (sub === 'on') {
+      emit('toggleDebugLog', true)
+    } else if (sub === 'off') {
+      emit('toggleDebugLog', false)
     }
-    // Continue so it reaches the backend too
   }
 
+  addToHistory(text)
   emit('send', text)
   inputText.value = ''
+  historyIndex.value = -1
 }
 
 function handleKeydown(e: KeyboardEvent): void {
+  // History Navigation (Ctrl + Up/Down)
+  if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault()
+    navigateHistory(e.key === 'ArrowUp' ? 'up' : 'down')
+    return
+  }
+
+  if (showCommandPopup.value && filteredCommands.value.length > 0) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      commandPopupIndex.value = (commandPopupIndex.value + 1) % filteredCommands.value.length
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      commandPopupIndex.value = (commandPopupIndex.value - 1 + filteredCommands.value.length) % filteredCommands.value.length
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const selected = filteredCommands.value[commandPopupIndex.value]
+      if (selected) {
+        selectCommand(selected.id)
+      } else {
+        showCommandPopup.value = false
+        handleSend()
+      }
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      showCommandPopup.value = false
+      return
+    }
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleSend()
@@ -222,7 +336,7 @@ function displayMessageContent(msg: ChatMessage): string {
             :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all transform active:scale-90', fontSize === 'small' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] ring-2 ring-emerald-400/50 scale-105 z-10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80']"
             title="Small Font"
           >
-            <span class="text-[10px] font-black">A</span>
+            <span class="text-xs font-black">A</span>
           </button>
           <button 
             @click="fontSize = 'medium'" 
@@ -247,7 +361,7 @@ function displayMessageContent(msg: ChatMessage): string {
           :class="['px-2.5 py-1 text-xs font-semibold rounded-full border flex items-center gap-2 animate-fade-in', statusColor]"
         >
           <template v-if="status === 'connecting' || status === 'loading'">
-            <span v-if="statusText" class="text-[9px] uppercase font-black opacity-70 tracking-widest">{{ statusText }}</span>
+            <span v-if="statusText" class="text-xs uppercase font-black opacity-70 tracking-widest">{{ statusText }}</span>
             <div class="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
           </template>
           <template v-else>
@@ -277,7 +391,7 @@ function displayMessageContent(msg: ChatMessage): string {
         <div class="flex items-center gap-3 mb-1.5">
           <span 
             :class="[
-              'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded',
+              'text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded',
               (msg as any).is_debug ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50' :
               msg.role === 'user' ? 'bg-cyan-500/20 text-cyan-400' :
               msg.role === 'assistant' ? 'bg-amber-500/20 text-amber-500' :
@@ -305,9 +419,9 @@ function displayMessageContent(msg: ChatMessage): string {
             <span v-if="part.type === 'text'" v-html="formatBolds(normalizeLineBreaks(part.value))"></span>
             <div v-else-if="part.type === 'image'" class="my-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
               <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />
-              <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-[10px] text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>
+              <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-xxs text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>
             </div>
-            <pre v-else-if="part.type === 'code'" class="my-3 p-4 bg-slate-950 border border-slate-800 rounded-xl text-[11px] font-mono text-cyan-400 overflow-x-auto whitespace-pre custom-scrollbar shadow-inner">{{ part.value }}</pre>
+            <pre v-else-if="part.type === 'code'" class="my-3 p-4 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-cyan-400 overflow-x-auto whitespace-pre custom-scrollbar shadow-inner">{{ part.value }}</pre>
           </template>
         </div>
 
@@ -330,7 +444,7 @@ function displayMessageContent(msg: ChatMessage): string {
               <div v-else class="w-full h-full flex items-center justify-center text-slate-700 bg-slate-900/50">
                 <i :class="['ra text-5xl', getItemIcon(entities.find(e => e.id === itemId)?.item_type), getTypeColor(entities.find(e => e.id === itemId)?.item_type)]"></i>
               </div>
-              <div class="absolute top-2 right-2 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase rounded border border-emerald-500/30">
+              <div class="absolute top-2 right-2 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-xxs font-bold uppercase rounded border border-emerald-500/30">
                 New Discovery
               </div>
             </div>
@@ -338,13 +452,13 @@ function displayMessageContent(msg: ChatMessage): string {
             <!-- Item Details -->
             <div class="p-3 flex flex-col gap-1 flex-1">
               <h4 class="text-white font-bold text-sm truncate">{{ entities.find(e => e.id === itemId)?.name }}</h4>
-              <p class="text-slate-400 text-[11px] leading-tight line-clamp-3 mb-2 italic">
+              <p class="text-slate-400 text-xs leading-tight line-clamp-3 mb-2 italic">
                 {{ entities.find(e => e.id === itemId)?.description }}
               </p>
               
               <button 
                 v-if="entities.find(e => e.id === itemId)?.is_portable !== false"
-                class="mt-auto py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 active:scale-95 shadow-lg shadow-emerald-500/10"
+                class="mt-auto py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 active:scale-95 shadow-lg shadow-emerald-500/10"
                 @click="emit('takeDirect', entities.find(e => e.id === itemId))"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -372,9 +486,9 @@ function displayMessageContent(msg: ChatMessage): string {
           :key="'debug-' + lidx"
           class="flex items-center gap-3 py-1 opacity-40 hover:opacity-100 transition-opacity"
         >
-          <div class="shrink-0 w-12 text-[9px] font-mono text-slate-600 tabular-nums">{{ log.timestamp }}</div>
+          <div class="shrink-0 w-12 text-xs font-mono text-slate-600 tabular-nums">{{ log.timestamp }}</div>
           <div class="flex-grow h-px bg-slate-800/50"></div>
-          <div class="shrink-0 text-[9px] font-mono text-cyan-500 uppercase tracking-widest bg-cyan-500/5 px-2 py-0.5 rounded border border-cyan-500/10">
+          <div class="shrink-0 text-xs font-mono text-cyan-500 uppercase tracking-widest bg-cyan-500/5 px-2 py-0.5 rounded border border-cyan-500/10">
             [DEBUG] {{ log.content }}
           </div>
           <div class="flex-grow h-px bg-slate-800/50"></div>
@@ -399,6 +513,16 @@ function displayMessageContent(msg: ChatMessage): string {
             placeholder="What do you do next?"
             class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
             @keydown="handleKeydown"
+          />
+
+          <!-- Command Popup -->
+          <CommandPopup 
+            v-if="showCommandPopup && filteredCommands.length > 0"
+            :query="inputText"
+            :active-index="commandPopupIndex"
+            @select="selectCommand"
+            @close="showCommandPopup = false"
+            @update:active-index="val => commandPopupIndex = val"
           />
         </div>
 
@@ -443,7 +567,7 @@ function displayMessageContent(msg: ChatMessage): string {
         </button>
       </div>
       
-      <div class="flex gap-4 mt-3 px-1 text-[11px] text-slate-500">
+      <div class="flex gap-4 mt-3 px-1 text-xs text-slate-500">
         <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/sheet</kbd> to view character</span>
         <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/equip</kbd> to equip</span>
         <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/hint</kbd> 50 XP</span>
@@ -534,3 +658,4 @@ function displayMessageContent(msg: ChatMessage): string {
 .glow-map { animation: tool-glow-map 1s ease-in-out infinite; }
 .glow-quest { animation: tool-glow-quest 1s ease-in-out infinite; }
 </style>
+

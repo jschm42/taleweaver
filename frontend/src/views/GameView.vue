@@ -531,6 +531,32 @@ const handlePlayerInput = async (content: string) => {
     return
   }
 
+  if (normalized === '/debug reveal_map') {
+    await sendMessage('/debug reveal_map')
+    showMap.value = true
+    return
+  }
+
+  if (normalized === '/debug session') {
+    await openDebugInspector()
+    return
+  }
+
+  if (normalized === '/map') {
+    showMap.value = true
+    return
+  }
+
+  if (normalized === '/sheet' || normalized === '/inventory') {
+    showSheet.value = true
+    return
+  }
+
+  if (normalized === '/quests') {
+    showQuests.value = true
+    return
+  }
+
   await sendMessage(content)
 }
 
@@ -654,6 +680,16 @@ const connectWithRouteFallback = async (routeId: string) => {
   await router.replace({ name: 'game', params: { id: resolvedGameId } })
 }
 
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    showSheet.value = false
+    showMap.value = false
+    showQuests.value = false
+    showWalkthrough.value = false
+    showDebug.value = false
+  }
+}
+
 onMounted(() => {
   void (async () => {
     await fetchGameSettings()
@@ -661,6 +697,7 @@ onMounted(() => {
       await connectWithRouteFallback(props.id)
     }
   })()
+  window.addEventListener('keydown', handleGlobalKeydown)
 })
 
 watch(() => props.id, (newId) => {
@@ -672,6 +709,7 @@ watch(() => props.id, (newId) => {
 
 onBeforeUnmount(() => {
   disconnect()
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
@@ -697,7 +735,7 @@ onBeforeUnmount(() => {
           title="Return to Portal"
         >
           <i class="ra ra-back-arrow text-sm text-slate-100 group-hover:text-emerald-400 transition-colors"></i>
-          <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-100 group-hover:text-white transition-colors">Back</span>
+          <span class="text-xxs font-black uppercase tracking-[0.2em] text-slate-100 group-hover:text-white transition-colors">Back</span>
         </button>
         <h1 class="text-xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide whitespace-nowrap truncate" style="font-family: 'Acme', sans-serif;">
           {{ sheet?.adventure_title || 'Chronicle' }}
@@ -889,7 +927,7 @@ onBeforeUnmount(() => {
               <div class="flex items-center justify-between mb-1">
                 <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
                 <span 
-                  class="text-[8px] px-1.5 py-0.5 rounded border font-mono uppercase"
+                  class="text-xxs px-1.5 py-0.5 rounded border font-mono uppercase"
                   :class="hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : 'border-amber-500/50 text-amber-400'"
                 >
                   {{ hoveredEntity.entity_type || 'NPC' }}
@@ -907,14 +945,14 @@ onBeforeUnmount(() => {
               <!-- NPC Inventory -->
               <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && Array.isArray(hoveredEntity.inventory) && hoveredEntity.inventory.length > 0" class="mt-3 pt-3 border-t border-slate-800">
                 <div class="flex items-center gap-1.5 mb-2">
-                  <i class="ra ra-treasure-chest text-[10px] text-slate-500"></i>
-                  <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Possessions</span>
+                  <i class="ra ra-treasure-chest text-xxs text-slate-500"></i>
+                  <span class="text-xxs font-black uppercase tracking-widest text-slate-500">Possessions</span>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                   <div 
                     v-for="(item, iidx) in hoveredEntity.inventory" 
                     :key="item?.id || iidx"
-                    class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-[10px] text-slate-300 flex items-center gap-1.5"
+                    class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-xxs text-slate-300 flex items-center gap-1.5"
                   >
                     <i v-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
                     <i v-else class="ra ra-emerald text-[12px] text-amber-500/60"></i>
@@ -925,7 +963,7 @@ onBeforeUnmount(() => {
 
               <!-- Item Stats -->
               <div v-if="(hoveredEntity.entity_type === 'OBJECT' || hoveredEntity.entity_type === 'ITEM') && sheet?.rule_enforcement_mode !== 'chat'" class="mt-3 pt-3 border-t border-slate-800">
-                <div class="grid grid-cols-2 gap-2 text-[10px] uppercase font-bold tracking-wider">
+                <div class="grid grid-cols-2 gap-2 text-xxs uppercase font-bold tracking-wider">
                   <!-- Preferred Slot -->
                   <div v-if="hoveredEntity.slot" class="col-span-2 text-slate-500 lowercase italic font-medium">
                     {{ hoveredEntity.slot.replace('_', ' ') }}
@@ -994,7 +1032,7 @@ onBeforeUnmount(() => {
               n.type === 'success' ? 'ra ra-circle' : 'ra ra-light-bulb'
             ]"></i>
             <div class="flex-grow">
-              <p class="text-[10px] font-black uppercase tracking-widest opacity-50">{{ n.type }}</p>
+              <p class="text-xxs font-black uppercase tracking-widest opacity-50">{{ n.type }}</p>
               <p class="text-xs font-bold leading-relaxed">{{ n.message }}</p>
             </div>
             <button @click="removeNotification(n.id)" class="opacity-50 hover:opacity-100 transition-opacity">
@@ -1085,3 +1123,5 @@ onBeforeUnmount(() => {
   transform: translateY(-10px);
 }
 </style>
+
+

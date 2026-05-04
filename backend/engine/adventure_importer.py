@@ -20,6 +20,7 @@ from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.engine.world_generator import WorldGenerator
 from backend.core.auth import get_password_hash
 from backend.core.adventure_format import validate_manifest_version
+from backend.utils.text_utils import generate_adventure_id
 
 logger = logging.getLogger(__name__)
 
@@ -93,18 +94,25 @@ class AdventureTemplateImporter:
                     logger.error("Invalid ADZ: Missing adventure section in manifest")
                     return False
 
-                # Check if template with this title already exists for this owner (if provided)
-                query = select(AdventureTemplate).where(AdventureTemplate.title == adv_data["title"])
-                if owner_id:
-                    query = query.where(AdventureTemplate.owner_id == owner_id)
+                # Check if template with this title or origin_id already exists for this owner
+                origin_id = adv_data.get("origin_id") or manifest_data.get("origin_id")
+                
+                query = select(AdventureTemplate).where(
+                    (AdventureTemplate.owner_id == owner_id) if owner_id else (AdventureTemplate.owner_id == None)
+                )
+                if origin_id:
+                    query = query.where((AdventureTemplate.title == adv_data["title"]) | (AdventureTemplate.origin_id == origin_id))
+                else:
+                    query = query.where(AdventureTemplate.title == adv_data["title"])
                 
                 existing_res = await db.execute(query)
                 if existing_res.scalars().first():
-                    logger.info(f"AdventureTemplate template '{adv_data['title']}' already exists. Skipping.")
+                    logger.info(f"AdventureTemplate '{adv_data['title']}' (origin: {origin_id}) already exists. Skipping.")
                     return False
 
+
                 # Create new template ID
-                new_template_id = str(uuid.uuid4())
+                new_template_id = generate_adventure_id(adv_data["title"])
                 
                 # Create AdventureTemplate record
                 new_template = AdventureTemplate(
@@ -138,7 +146,8 @@ class AdventureTemplateImporter:
                     is_ready=True,
                     creation_status="Ready",
                     original_manifest=manifest_data,
-                    language=adv_data.get("language") or manifest_data.get("language")
+                    language=adv_data.get("language") or manifest_data.get("language"),
+                    origin_id=origin_id
                 )
                 db.add(new_template)
                 
@@ -223,8 +232,9 @@ class AdventureTemplateImporter:
                     new_template.image_url = existing_images_mapping[adv_data["image_url"]]
                 else:
                     from backend.engine.media_engine import MediaEngine
-                    new_template.image_url = await MediaEngine.generate_svg_placeholder(
-                        new_template_id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template_id), "cover_placeholder.svg"
+                    new_template.image_url = await MediaEngine.generate_placeholder(
+                        new_template_id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template_id),
+                        category="COVER"
                     )
                 
 
@@ -247,14 +257,19 @@ class AdventureTemplateImporter:
             
             is_session = payload.get("type") == "SESSION_BUNDLE"
             title = payload.get("adventure", {}).get("title") if is_session else payload.get("title", "Imported AdventureTemplate")
-            
-            query = select(AdventureTemplate).where(AdventureTemplate.title == title)
-            if owner_id:
-                query = query.where(AdventureTemplate.owner_id == owner_id)
+            origin_id = payload.get("adventure", {}).get("origin_id") if is_session else payload.get("origin_id")
+
+            query = select(AdventureTemplate).where(
+                (AdventureTemplate.owner_id == owner_id) if owner_id else (AdventureTemplate.owner_id == None)
+            )
+            if origin_id:
+                query = query.where((AdventureTemplate.title == title) | (AdventureTemplate.origin_id == origin_id))
+            else:
+                query = query.where(AdventureTemplate.title == title)
             
             existing_res = await db.execute(query)
             if existing_res.scalars().first():
-                logger.info(f"AdventureTemplate template '{title}' already exists. Skipping.")
+                logger.info(f"AdventureTemplate '{title}' (origin: {origin_id}) already exists. Skipping.")
                 return False
 
             user = None
@@ -276,6 +291,7 @@ class AdventureTemplateImporter:
                 old_adv = data["adventure"]
                 
                 new_template = AdventureTemplate(
+                    id=generate_adventure_id(old_adv['title']),
                     owner_id=user.id,
                     title=old_adv['title'],
                     teaser=old_adv.get("teaser"),
@@ -298,6 +314,7 @@ class AdventureTemplateImporter:
 
                     starting_timestamp=old_adv.get("starting_timestamp", 0),
                     language=old_adv.get("language") or data.get("language"),
+                    origin_id=origin_id,
                     is_ready=True,
                     creation_status="Ready"
                 )
@@ -363,6 +380,7 @@ class AdventureTemplateImporter:
                 adv_meta = payload.get("adventure") or payload
                 
                 new_template = AdventureTemplate(
+                    id=generate_adventure_id(adv_meta.get("title") or manifest.get("title") or "Imported Blueprint"),
                     owner_id=owner_id,
                     title=adv_meta.get("title") or manifest.get("title") or "Imported Blueprint",
                     teaser=adv_meta.get("teaser") or manifest.get("teaser"),
@@ -386,6 +404,7 @@ class AdventureTemplateImporter:
 
                     starting_timestamp=adv_meta.get("starting_timestamp") or manifest.get("starting_timestamp", 0),
                     language=adv_meta.get("language") or manifest.get("language"),
+                    origin_id=origin_id,
                     is_ready=True,
                     creation_status="Ready"
                 )
@@ -394,8 +413,9 @@ class AdventureTemplateImporter:
                 
                 if not new_template.image_url:
                     from backend.engine.media_engine import MediaEngine
-                    new_template.image_url = await MediaEngine.generate_svg_placeholder(
-                        new_template.id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template.id), "cover_placeholder.svg"
+                    new_template.image_url = await MediaEngine.generate_placeholder(
+                        new_template.id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template.id),
+                        category="COVER"
                     )
                     await db.flush()
                 

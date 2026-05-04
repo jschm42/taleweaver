@@ -55,10 +55,10 @@ function runAction(action: 'resume' | 'delete'): void {
     <!-- Top Cover Area -->
     <div class="aspect-[3/2] relative overflow-hidden bg-black/30 border-b border-white/5">
       <!-- Ribbon for Game Over / Completed -->
-      <div v-if="props.session.status === 'game_over'" class="absolute -right-12 top-6 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
+      <div v-if="props.session.status === 'game_over'" class="absolute -right-12 top-6 bg-red-600 text-white text-xs font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
         Game Over
       </div>
-      <div v-if="props.session.status === 'completed'" class="absolute -right-12 top-6 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
+      <div v-if="props.session.status === 'completed'" class="absolute -right-12 top-6 bg-emerald-500 text-white text-xs font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
         Completed
       </div>
       <img
@@ -67,14 +67,14 @@ function runAction(action: 'resume' | 'delete'): void {
         class="w-full h-full object-cover object-top opacity-60 group-hover:opacity-80 transition-opacity"
         alt="Adventure cover"
       />
-      <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-[10px] font-bold uppercase tracking-widest">
+      <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold uppercase tracking-widest">
         No Cover
       </div>
       
       <!-- Status Badge -->
       <div class="absolute top-3 left-3">
         <span
-          class="px-2.5 py-1 rounded-full text-[9px] uppercase tracking-widest font-black"
+          class="px-2.5 py-1 rounded-full text-xs uppercase tracking-widest font-black"
           :class="{
             'bg-amber-500/20 text-amber-300': props.session.is_paused && (!props.session.status || props.session.status === 'active'),
             'bg-emerald-500/20 text-emerald-300': !props.session.is_paused && (!props.session.status || props.session.status === 'active'),
@@ -105,8 +105,9 @@ function runAction(action: 'resume' | 'delete'): void {
           v-if="isMenuOpen"
           class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
         >
+          <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
           <button
-            class="w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
+            class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
             @click="runAction('delete')"
           >
             Delete Session
@@ -124,7 +125,7 @@ function runAction(action: 'resume' | 'delete'): void {
             <span class="w-2 h-2 rounded-full bg-emerald-500/60"></span>
             {{ props.session.current_scene_name || 'Exploring...' }}
           </p>
-          <p class="text-[10px] text-slate-500 flex items-center gap-2 font-black uppercase tracking-widest">
+          <p class="text-xs text-slate-500 flex items-center gap-2 font-black uppercase tracking-widest">
             <Clock class="w-3 h-3 opacity-50" />
             Started: {{ formatDate(props.session.created_at) }}
           </p>
@@ -136,7 +137,7 @@ function runAction(action: 'resume' | 'delete'): void {
         <!-- Quests -->
         <div v-if="props.session.quest_count" class="flex-1 flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Quests</span>
+            <span class="text-xs font-black uppercase tracking-widest text-slate-500">Quests</span>
             <span class="text-xs font-bold text-slate-300">{{ props.session.completed_quest_count }}/{{ props.session.quest_count }}</span>
           </div>
           <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -150,7 +151,7 @@ function runAction(action: 'resume' | 'delete'): void {
         <!-- Awards -->
         <div v-if="props.session.award_count" class="flex-1 flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Awards</span>
+            <span class="text-xs font-black uppercase tracking-widest text-slate-500">Awards</span>
             <span class="text-xs font-bold text-slate-300">{{ props.session.earned_award_count }}/{{ props.session.award_count }}</span>
           </div>
           <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -163,7 +164,7 @@ function runAction(action: 'resume' | 'delete'): void {
 
         <!-- Time Played -->
         <div class="flex flex-col gap-1.5 items-end shrink-0">
-          <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Playtime</span>
+          <span class="text-xs font-black uppercase tracking-widest text-slate-500">Playtime</span>
           <span class="text-sm font-black text-slate-200 tracking-widest">{{ props.session.in_game_time }} MIN</span>
         </div>
       </div>
@@ -193,3 +194,4 @@ function runAction(action: 'resume' | 'delete'): void {
     </div>
   </article>
 </template>
+

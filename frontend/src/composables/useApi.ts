@@ -79,9 +79,24 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
 }
 
 export const api = {
-  /** Manually trigger import of example adventures. */
+  /** Manually trigger import of example adventures (samples). */
   importExamples(): Promise<{ status: string; message: string }> {
     return request('/adventures/import-examples', { method: 'POST' })
+  },
+
+  /** Manually restore default adventures. */
+  reimportDefaults(): Promise<{ status: string; message: string }> {
+    return request('/adventures/reimport-defaults', { method: 'POST' })
+  },
+
+  /** Check for conflicts before restoring defaults. */
+  checkDefaults(): Promise<{ available_imports: Array<{ title: string; origin_id?: string; already_exists: boolean }> }> {
+    return request('/adventures/check-defaults', { method: 'GET' })
+  },
+
+  /** Check for conflicts before importing examples. */
+  checkExamples(): Promise<{ available_imports: Array<{ title: string; origin_id?: string; already_exists: boolean }> }> {
+    return request('/adventures/check-examples', { method: 'GET' })
   },
 
   /** Lists all game sessions. */
@@ -328,3 +343,4 @@ export const api = {
     return request('/users/me/profile-image/generate', { method: 'POST', body })
   }
 }
+

@@ -49,12 +49,12 @@ async function handleLogin() {
           <img src="@/assets/svg/app-logo.svg" class="w-16 h-16 drop-shadow-[0_0_10px_rgba(78,222,163,0.4)]" alt="Logo" />
         </div>
         <h1 class="text-5xl font-black text-white font-display tracking-tighter mb-2">TaleWeaver</h1>
-        <p class="text-aether-primary/40 text-[10px] font-bold uppercase tracking-[0.4em]">Chronicle Intelligence v{{ configState.appVersion }}</p>
+        <p class="text-aether-primary/40 text-xxs font-bold uppercase tracking-[0.4em]">Chronicle Intelligence v{{ configState.appVersion }}</p>
       </div>
 
       <form @submit.prevent="handleLogin" class="space-y-6">
         <div class="space-y-2">
-          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Username</label>
+          <label class="text-xxs font-black text-slate-500 uppercase tracking-widest ml-1">Username</label>
           <div class="relative">
             <i class="ra ra-person absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
             <input 
@@ -68,7 +68,7 @@ async function handleLogin() {
         </div>
 
         <div class="space-y-2">
-          <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Password</label>
+          <label class="text-xxs font-black text-slate-500 uppercase tracking-widest ml-1">Password</label>
           <div class="relative">
             <i class="ra ra-hood absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
             <input 
@@ -96,7 +96,7 @@ async function handleLogin() {
       </form>
 
       <div class="mt-12 text-center">
-        <span class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Powered by Advanced Agentic Intelligence</span>
+        <span class="text-xxs font-bold text-slate-600 uppercase tracking-widest">Powered by Advanced Agentic Intelligence</span>
       </div>
     </div>
   </div>
@@ -114,3 +114,4 @@ async function handleLogin() {
   40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 </style>
+

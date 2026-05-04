@@ -30,6 +30,7 @@ from backend.engine.stat_aggregator import calculate_total_stats
 from backend.engine.debug_engine import DebugEngine
 from backend.core.llm_router import GameMasterLLM
 from backend.core import prompts
+from backend.core.config import settings
 from backend.api.routes.adventures.logic import AdventureLogic
 
 logger = logging.getLogger(__name__)
@@ -109,20 +110,11 @@ class GameTurnManager:
 
         # Unified logic for /debug and / (slash) commands
         if user_msg.startswith("/debug"):
-            async for chunk in self._handle_debug(user_msg): yield chunk
-            return
-
-        # Dedicated encounter entry point for RPG mode.
-        if user_msg.lower().startswith("/fight"):
-            async for chunk in self._handle_fight_start(user_msg):
-                yield chunk
-            return
-
-        # Route turn-based combat actions while combat is active.
-        if self._has_combat_phase():
-            async for chunk in self._handle_combat_turn(user_msg):
-                yield chunk
-            return
+            if settings.TALEWEAVER_DEBUG_ENABLED:
+                async for chunk in self._handle_debug(user_msg): yield chunk
+                return
+            else:
+                logger.warning(f"[Turn {self.game_id}] Debug command ignored: TALEWEAVER_DEBUG_ENABLED is False.")
             
         is_rule_pass = False
         if user_msg.startswith("/"):
@@ -171,7 +163,7 @@ class GameTurnManager:
 
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
         cmd_args = user_msg[7:].strip()
-        debug_info = await DebugEngine.handle_debug_command(self.db, self.state, cmd_args, user=self.user, adventure=self.adventure)
+        debug_info = await DebugEngine.handle_debug_command(self.db, self.state, cmd_args, user=self.user, adventure=self.adventure, avatar=self.avatar)
         
         # Handle status overrides from debug engine
         if debug_info.startswith("[TRIGGER_GAME_OVER]"):
@@ -180,10 +172,18 @@ class GameTurnManager:
         elif debug_info.startswith("[TRIGGER_GAME_COMPLETED]"):
             await self._finalize_session("completed", debug_info)
             debug_info = "DEBUG: Session forced to COMPLETED."
+        elif debug_info.startswith("[TRIGGER_WALKTHROUGH_REVEAL_FREE]"):
+            self.state.is_walkthrough_revealed = True
+            debug_info = debug_info[33:].strip()
 
+        # Send debug info as a system message so it appears in chat
+        self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=debug_info))
         await self.db.commit()
+        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': debug_info, 'is_debug': True})}\n\n"
+
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
         final_data = jsonable_encoder({
-            'messages': [{'role': 'system', 'content': debug_info}],
+            'mermaid': MapEngine.to_mermaid(world_map),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'awards': self.adventure.awards,
@@ -230,7 +230,24 @@ class GameTurnManager:
                 flag_modified(self.state, "entity_states")
                 response = f"Added {ent.name} to your inventory."
             else:
-                response = "You cannot take that."
+                response = f"You cannot take that."
+        
+        elif response.startswith("[TRIGGER_WALKTHROUGH_REVEAL]"):
+            if self.avatar.exp >= WALKTHROUGH_REVEAL_COST:
+                self.avatar.exp -= WALKTHROUGH_REVEAL_COST
+                self.state.is_walkthrough_revealed = True
+                response = f"Walkthrough revealed! You spent {WALKTHROUGH_REVEAL_COST} XP. You can now open it via the menu."
+            else:
+                response = f"You do not have enough XP to reveal the walkthrough ({self.avatar.exp}/{WALKTHROUGH_REVEAL_COST})."
+
+        elif response.startswith("[TRIGGER_WALKTHROUGH_HINT]"):
+            if self.avatar.exp >= WALKTHROUGH_HINT_COST:
+                # For now, hint just reveals the whole thing or we could implement a smarter hint system.
+                # User specifically asked for walkthrough reveal, so let's stick to that for now.
+                self.avatar.exp -= WALKTHROUGH_HINT_COST
+                response = f"Hint: Look closer at the surroundings. (Cost: {WALKTHROUGH_HINT_COST} XP)"
+            else:
+                response = f"You do not have enough XP for a hint ({self.avatar.exp}/{WALKTHROUGH_HINT_COST})."
 
         # PERSIST AND YIELD RESPONSE (For all commands including equip/unequip)
         if response and not response.startswith("[TRIGGER_"):
@@ -1506,7 +1523,7 @@ class GameTurnManager:
         RuleEngine.apply_event(self.avatar, event)
         
         state_dirty = False
-        if event.new_scene_id:
+        if event.new_scene_id and event.new_scene_id != self.state.current_scene_id:
             old_scene_id = self.state.current_scene_id
             self.state.current_scene_id = event.new_scene_id
             state_dirty = True

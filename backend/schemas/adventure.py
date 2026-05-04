@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any, List, Literal
 
 class QuestSchema(BaseModel):
@@ -37,8 +37,8 @@ class AdventureTemplateBase(BaseModel):
     generate_scene_images: bool = True
     automatic_cover_generation: bool = True
     
-    selected_image_styles: Optional[List[str]] = None
-    selected_tone: Optional[str] = None
+    selected_image_styles: Optional[List[Dict[str, Any]]] = None
+    selected_tone: Optional[Dict[str, Any]] = None
     game_over_rules: Optional[Dict[str, Any]] = None
     quests: Optional[List[QuestSchema]] = None
     awards: Optional[List[AwardSchema]] = None
@@ -66,14 +66,14 @@ class AdventureTemplateUpdate(BaseModel):
     teaser: Optional[str] = Field(None, max_length=300)
     original_prompt: Optional[str] = Field(None, max_length=5000)
     strict_rules: Optional[bool] = None
-    rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = None
+    rule_enforcement_mode: Optional[Literal["rpg", "story", "chat", "strict"]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = None
     time_system: Optional[str] = None
     time_config: Optional[Dict[str, Any]] = None
-    selected_image_styles: Optional[List[str]] = None
-    selected_tone: Optional[str] = None
+    selected_image_styles: Optional[List[Dict[str, Any]]] = None
+    selected_tone: Optional[Dict[str, Any]] = None
     game_over_rules: Optional[Dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
@@ -84,6 +84,24 @@ class AdventureTemplateUpdate(BaseModel):
     walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
+    
+    # Extra fields for frontend convenience
+    selected_style_id: Optional[str] = None
+    selected_tone_id: Optional[str] = None
+
+    @field_validator("selected_tone", mode="before")
+    @classmethod
+    def parse_legacy_tone(cls, v):
+        if isinstance(v, str):
+            return {"id": v, "name": v.capitalize()}
+        return v
+
+    @field_validator("selected_image_styles", mode="before")
+    @classmethod
+    def parse_legacy_styles(cls, v):
+        if isinstance(v, list) and len(v) > 0 and isinstance(v[0], str):
+            return [{"id": s, "name": s.capitalize()} for s in v]
+        return v
 
 class AdventureTemplateInDBBase(AdventureTemplateBase):
     id: str

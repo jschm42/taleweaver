@@ -4,7 +4,7 @@
       <header class="modal-header">
         <div class="header-title">
           <img src="@/assets/svg/fantasy-spellbook.svg" alt="Quests" class="header-icon" />
-          <h2>Quest Log</h2>
+          <h3 class="text-xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">Quest Log</h3>
         </div>
         <button class="close-btn" @click="close">&times;</button>
       </header>
@@ -38,7 +38,7 @@
                   </div>
                   <span class="quest-reward">{{ quest.exp_reward }} EXP</span>
                 </div>
-                <p class="quest-desc">{{ quest.description }}</p>
+                <p class="quest-desc">{{ quest.description || quest.goal }}</p>
                 <div class="quest-footer">
                   <div class="status-badge" :class="quest.status">
                     <span class="status-dot"></span>
@@ -69,7 +69,7 @@
                   </div>
                   <span class="quest-reward">{{ quest.exp_reward }} EXP</span>
                 </div>
-                <p class="quest-desc">{{ quest.description }}</p>
+                <p class="quest-desc">{{ quest.description || quest.goal }}</p>
                 <div class="quest-footer">
                   <div class="status-badge" :class="quest.status">
                     <span class="status-dot"></span>
@@ -205,8 +205,8 @@ export default {
 }
 
 .header-icon {
-  width: 32px;
-  height: 32px;
+  width: 64px;
+  height: 64px;
   filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.5));
 }
 
@@ -338,9 +338,9 @@ export default {
 }
 
 .quest-desc {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.95rem;
-  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.05rem;
+  line-height: 1.6;
   margin: 0 0 15px 0;
 }
 
@@ -384,7 +384,7 @@ export default {
   border: none;
   border-bottom: 2px solid transparent;
   color: rgba(255, 255, 255, 0.4);
-  font-size: 9px;
+  font-size: 1.4rem;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -554,3 +554,4 @@ export default {
   background: rgba(255, 255, 255, 0.2);
 }
 </style>
+

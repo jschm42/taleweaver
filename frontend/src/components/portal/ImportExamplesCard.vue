@@ -22,7 +22,8 @@ const emit = defineEmits<{
     
     <div class="p-6 flex flex-col gap-2">
       <h3 class="text-2xl font-black text-white leading-tight tracking-tight">Import Examples</h3>
-      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Seed your library with classic tales.</p>
+      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Seed your library with classic tales.</p>
     </div>
   </button>
 </template>
+

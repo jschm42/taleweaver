@@ -35,7 +35,7 @@ const emit = defineEmits<{
       
       <span
         :class="[
-          'px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border',
+          'px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border',
           props.pending.hasError
             ? 'bg-red-500/15 border-red-500/30 text-red-400'
             : 'bg-aether-primary/15 border-aether-primary/30 text-aether-primary',
@@ -57,14 +57,14 @@ const emit = defineEmits<{
 
     <div class="p-6 flex-1 flex flex-col gap-2">
       <h3 class="text-2xl font-black text-white leading-tight tracking-tight line-clamp-1">{{ props.pending.title }}</h3>
-      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed">
+      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed">
         {{ props.pending.status }}
       </p>
 
       <div class="mt-auto pt-4">
         <button
           v-if="props.pending.hasError"
-          class="w-full px-3 py-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
+          class="w-full px-3 py-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
           @click="emit('removeFailed', props.pending.adventureId, props.pending.kind)"
         >
           Remove Adventure
@@ -91,3 +91,4 @@ const emit = defineEmits<{
   100% { background-position: 200% 0; }
 }
 </style>
+

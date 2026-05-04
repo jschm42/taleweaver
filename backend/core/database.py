@@ -402,3 +402,4 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE users ADD COLUMN earned_awards TEXT"
             )
             logger.info("SQLite migration: added users.earned_awards")
+

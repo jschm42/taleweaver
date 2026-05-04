@@ -114,7 +114,7 @@ const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
         <div class="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col">
           <header class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
             <div>
-              <p class="text-[10px] uppercase tracking-[0.2em] text-fuchsia-400/70 font-black">Secret Utility</p>
+              <p class="text-xs uppercase tracking-[0.2em] text-fuchsia-400/70 font-black">Secret Utility</p>
               <h2 class="text-xl text-slate-100 font-bold">Walkthrough</h2>
             </div>
             <button class="text-slate-400 hover:text-white" @click="emit('close')">Close</button>
@@ -156,7 +156,7 @@ const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
 
               <ol class="space-y-2">
                 <li v-for="(step, index) in data?.steps || []" :key="index" class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                  <p class="text-[10px] uppercase tracking-widest text-slate-500 font-black">Step {{ index + 1 }}</p>
+                  <p class="text-xxs uppercase tracking-widest text-slate-500 font-black">Step {{ index + 1 }}</p>
                   <p class="text-sm text-slate-100 font-bold mt-1">{{ step.title }}</p>
                   <p class="text-sm text-slate-300 mt-1 leading-relaxed">
                     <template v-for="(part, partIndex) in parseWalkthroughContent(step.content || '')" :key="`${index}-${partIndex}`">
@@ -177,7 +177,7 @@ const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
             </div>
 
             <div v-if="data?.latest_hint" class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-              <p class="text-[10px] uppercase tracking-widest text-amber-300 font-black">Latest Hint</p>
+              <p class="text-xxs uppercase tracking-widest text-amber-300 font-black">Latest Hint</p>
               <p class="text-sm text-amber-100 mt-1">{{ data.latest_hint }}</p>
             </div>
           </div>
@@ -193,3 +193,4 @@ const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 3px; }
 </style>
+

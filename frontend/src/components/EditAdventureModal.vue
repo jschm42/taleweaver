@@ -605,7 +605,7 @@ watch(
               :key="tab"
               @click="activeTab = tab as any"
               :class="[
-                'px-6 py-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2',
+                'px-6 py-4 text-xs font-bold uppercase tracking-widest transition-all border-b-2',
                 activeTab === tab ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-500 hover:text-slate-300'
               ]"
             >
@@ -640,7 +640,7 @@ watch(
                   </div>
                   <div>
                     <h3 class="text-sm font-bold text-white uppercase tracking-wider">Time Pacing</h3>
-                    <p class="text-[10px] text-slate-500">How many minutes pass per action?</p>
+                    <p class="text-xs text-slate-500">How many minutes pass per action?</p>
                   </div>
                 </div>
 
@@ -648,7 +648,7 @@ watch(
                   <input type="range" v-model.number="form.time_per_turn" min="1" max="60" step="1" class="flex-grow accent-emerald-500" />
                   <div class="w-20 text-center">
                     <span class="text-xl font-bold text-emerald-500">{{ form.time_per_turn }}</span>
-                    <span class="text-[10px] text-slate-500 block uppercase pt-0.5">Minutes</span>
+                    <span class="text-xs text-slate-500 block uppercase pt-0.5">Minutes</span>
                   </div>
                 </div>
               </div>
@@ -660,20 +660,20 @@ watch(
                   </div>
                   <div>
                     <h3 class="text-sm font-bold text-white uppercase tracking-wider">World Size</h3>
-                    <p class="text-[10px] text-slate-500">Min/Max scenes for regeneration</p>
+                    <p class="text-xs text-slate-500">Min/Max scenes for regeneration</p>
                   </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-6">
                   <div>
-                    <div class="flex items-center justify-between text-[10px] mb-2 uppercase tracking-widest text-slate-500">
+                    <div class="flex items-center justify-between text-xxs mb-2 uppercase tracking-widest text-slate-500">
                       <span>Min Scenes</span>
                       <strong class="text-emerald-400">{{ form.min_scenes }}</strong>
                     </div>
                     <input type="range" v-model.number="form.min_scenes" min="1" max="10" step="1" class="w-full accent-emerald-500" />
                   </div>
                   <div>
-                    <div class="flex items-center justify-between text-[10px] mb-2 uppercase tracking-widest text-slate-500">
+                    <div class="flex items-center justify-between text-xxs mb-2 uppercase tracking-widest text-slate-500">
                       <span>Max Scenes</span>
                       <strong class="text-emerald-400">{{ form.max_scenes }}</strong>
                     </div>
@@ -690,7 +690,7 @@ watch(
                   </div>
                   <div>
                     <h3 class="text-sm font-bold text-white uppercase tracking-wider">Chronicle Time System</h3>
-                    <p class="text-[10px] text-slate-500">How time is measured in this world.</p>
+                    <p class="text-xs text-slate-500">How time is measured in this world.</p>
                   </div>
                 </div>
 
@@ -698,7 +698,7 @@ watch(
                   <button 
                     @click="form.time_system = 'calendar'"
                     :class="[
-                      'px-4 py-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all',
+                      'px-4 py-3 rounded-xl border text-xxs font-bold uppercase tracking-widest transition-all',
                       form.time_system === 'calendar' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
                     ]"
                   >
@@ -707,7 +707,7 @@ watch(
                   <button 
                     @click="form.time_system = 'relative'"
                     :class="[
-                      'px-4 py-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all',
+                      'px-4 py-3 rounded-xl border text-xxs font-bold uppercase tracking-widest transition-all',
                       form.time_system === 'relative' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
                     ]"
                   >
@@ -717,17 +717,17 @@ watch(
 
                 <div class="space-y-4 pt-2 border-t border-slate-800/50">
                   <div v-if="form.time_system === 'relative'">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Day Label</label>
+                    <label class="block text-xxs font-bold text-slate-500 uppercase tracking-widest mb-2">Day Label</label>
                     <input v-model="form.time_config.day_label" type="text" placeholder="e.g. Day, Sol, Cycle" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
                   </div>
 
                   <div v-if="form.time_system === 'calendar'">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Year Override</label>
+                    <label class="block text-xxs font-bold text-slate-500 uppercase tracking-widest mb-2">Year Override</label>
                     <input v-model.number="form.time_config.start_year_override" type="number" placeholder="e.g. 2123, 1975" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
                   </div>
 
                   <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Start Time</label>
+                    <label class="block text-xxs font-bold text-slate-500 uppercase tracking-widest mb-2">Start Time</label>
                     <input v-model="form.time_config.start_time" type="text" placeholder="HH:MM" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:border-amber-500 outline-none" />
                   </div>
                 </div>
@@ -742,10 +742,10 @@ watch(
                   <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
                     <i class="ra ra-player-teleport text-emerald-500"></i> AI World Editor
                   </h3>
-                  <p class="text-[11px] text-slate-400 mb-3">Describe what you want to change in the adventure (e.g. "Add a hacker NPC", "Change the sword to a laser rifle"). The AI will adjust the texts. Images are not re-generated automatically.</p>
+                  <p class="text-xs text-slate-400 mb-3">Describe what you want to change in the adventure (e.g. "Add a hacker NPC", "Change the sword to a laser rifle"). The AI will adjust the texts. Images are not re-generated automatically.</p>
                   <textarea v-model="aiEditPrompt" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mb-3 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors" placeholder="Your instructions..."></textarea>
                   <div class="flex justify-end">
-                    <button @click="runAIEdit" :disabled="isAIEditing || !aiEditPrompt" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors">
+                    <button @click="runAIEdit" :disabled="isAIEditing || !aiEditPrompt" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xxs font-bold uppercase tracking-widest rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors">
                       <i v-if="isAIEditing" class="ra ra-cycle animate-spin"></i>
                       <i v-else class="ra ra-light-bulb"></i>
                       Apply AI Changes
@@ -755,8 +755,8 @@ watch(
 
                 <section v-if="debugData.adventure">
                   <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
-                    <h3 class="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Adventure Cover</h3>
-                    <button @click="regenerateAll('cover')" :disabled="isBatchGenerating['cover']" class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 disabled:opacity-50 transition-colors flex items-center gap-1">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Adventure Cover</h3>
+                    <button @click="regenerateAll('cover')" :disabled="isBatchGenerating['cover']" class="text-xxs font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 disabled:opacity-50 transition-colors flex items-center gap-1">
                       <i v-if="isBatchGenerating['cover']" class="ra ra-cycle animate-spin"></i>
                       <i v-else class="ra ra-cycle"></i>
                       Generate
@@ -765,35 +765,35 @@ watch(
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div class="relative group aspect-[3/2] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden col-span-2 lg:col-span-3">
                       <img v-if="debugData.adventure.image_url" :src="buildVisualImageUrl(debugData.adventure.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
-                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-[10px] text-white leading-tight">
-                        <div class="font-bold text-[11px]">{{ debugData.adventure.title || 'Adventure Cover' }}</div>
+                      <div class="absolute inset-x-0 bottom-0 p-2 bg-black/55 text-xxs text-white leading-tight">
+                        <div class="font-bold text-xs">{{ debugData.adventure.title || 'Adventure Cover' }}</div>
                         <div class="text-white/70">Cinematic title artwork</div>
                       </div>
                       
                       <!-- Loading Overlay -->
                       <div v-if="isQuickGenerating['cover_' + debugData.adventure.id]" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
                         <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mb-2"></div>
-                        <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-widest animate-pulse">Generating...</span>
+                        <span class="text-xs font-bold text-emerald-500 uppercase tracking-widest animate-pulse">Generating...</span>
                       </div>
 
                       <div v-if="!isQuickGenerating['cover_' + debugData.adventure.id]" class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           @click="quickRegenerateVisual('cover', debugData.adventure.id)"
                           :disabled="isQuickGenerating['cover_' + debugData.adventure.id]"
-                          class="px-2 py-1 rounded-md bg-emerald-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-emerald-500/50 hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-1"
+                          class="px-2 py-1 rounded-md bg-emerald-600/90 text-xxs font-bold uppercase tracking-widest text-white border border-emerald-500/50 hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-1"
                         >
                           <i v-if="isQuickGenerating['cover_' + debugData.adventure.id]" class="ra ra-cycle animate-spin"></i>
                           <span>Fast Gen</span>
                         </button>
                         <button
                           @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title || 'Adventure Cover')"
-                          class="px-2 py-1 rounded-md bg-black/70 text-[10px] font-bold uppercase tracking-widest text-white/90 border border-white/10 hover:bg-black/90 transition-colors"
+                          class="px-2 py-1 rounded-md bg-black/70 text-xxs font-bold uppercase tracking-widest text-white/90 border border-white/10 hover:bg-black/90 transition-colors"
                         >
                           Custom
                         </button>
                         <button
                           @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt)"
-                          class="px-2 py-1 rounded-md bg-blue-600/90 text-[10px] font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
+                          class="px-2 py-1 rounded-md bg-blue-600/90 text-xxs font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
                         >
                           <i class="ra ra-quill-ink"></i>
                           <span>Edit Text</span>
@@ -882,15 +882,15 @@ watch(
                         
                         <div class="grid grid-cols-3 gap-2">
                           <div>
-                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">HP</label>
+                            <label class="text-xs text-slate-500 uppercase font-bold block mb-1">HP</label>
                             <input v-model.number="editForm.hp" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
                           </div>
                           <div v-if="debugData.adventure?.rule_enforcement_mode === 'rpg' || debugData.adventure?.rule_enforcement_mode === 'story'">
-                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Stamina</label>
+                            <label class="text-xs text-slate-500 uppercase font-bold block mb-1">Stamina</label>
                             <input v-model.number="editForm.stamina" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
                           </div>
                           <div v-if="debugData.adventure?.rule_enforcement_mode === 'rpg'">
-                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Mana</label>
+                            <label class="text-xs text-slate-500 uppercase font-bold block mb-1">Mana</label>
                             <input v-model.number="editForm.mana" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
                           </div>
                         </div>
@@ -1038,15 +1038,15 @@ watch(
                         
                         <div class="grid grid-cols-3 gap-2">
                           <div>
-                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">HP</label>
+                            <label class="text-xs text-slate-500 uppercase font-bold block mb-1">HP</label>
                             <input v-model.number="editForm.hp" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
                           </div>
                           <div>
-                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Stamina</label>
+                            <label class="text-xs text-slate-500 uppercase font-bold block mb-1">Stamina</label>
                             <input v-model.number="editForm.stamina" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
                           </div>
                           <div>
-                            <label class="text-[8px] text-slate-500 uppercase font-bold block mb-1">Mana</label>
+                            <label class="text-xs text-slate-500 uppercase font-bold block mb-1">Mana</label>
                             <input v-model.number="editForm.mana" type="number" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
                           </div>
                         </div>
@@ -1270,3 +1270,4 @@ watch(
   background: rgba(16, 185, 129, 0.4);
 }
 </style>
+

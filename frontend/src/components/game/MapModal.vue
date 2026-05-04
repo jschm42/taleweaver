@@ -10,6 +10,7 @@
  */
 import { watch, ref, nextTick, onMounted } from 'vue'
 import mermaid from 'mermaid'
+import mapSvg from '@/assets/svg/fantasy-rpg-map.svg'
 
 const props = defineProps<{
   open: boolean
@@ -46,12 +47,13 @@ mermaid.initialize({
   themeCSS: `
     .node rect, .node circle, .node polygon {
       stroke-width: 2px !important;
-      filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.6));
+      filter: drop-shadow(0px 8px 12px rgba(0,0,0,0.8));
       pointer-events: all;
     }
     .edgePath .path {
       stroke-width: 2px !important;
       stroke: #c9a84c !important;
+      filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
     }
     .marker {
       fill: #c9a84c !important;
@@ -196,7 +198,7 @@ onMounted(async () => {
             </div>
             <div class="flex items-center gap-4">
               <!-- Legend -->
-              <div class="hidden sm:flex items-center gap-4 text-xs text-slate-400">
+              <div class="hidden sm:flex items-center gap-4 text-xxs text-slate-400">
                 <span class="flex items-center gap-1.5">
                   <span class="inline-block w-3 h-3 rounded bg-emerald-500"></span> Current Location
                 </span>
@@ -217,7 +219,7 @@ onMounted(async () => {
           </div>
 
           <!-- Map Container -->
-          <div class="flex-grow overflow-auto p-6 relative bg-slate-950 bg-grid-pattern">
+          <div class="flex-grow overflow-auto p-6 relative bg-slate-950 bg-radial-gradient">
             <!-- Empty state -->
             <div
               v-if="!mermaidSrc"
@@ -241,8 +243,22 @@ onMounted(async () => {
             <div
               v-else
               ref="mapContainer"
-              class="w-full h-full flex items-center justify-center [&_svg]:max-w-full [&_svg]:max-h-full transition-transform duration-300"
+              class="w-full h-full flex items-center justify-center [&_svg]:max-w-full [&_svg]:max-h-full transition-transform duration-300 relative z-10"
             />
+
+            <!-- Background SVG Overlay -->
+            <div 
+              class="absolute inset-0 pointer-events-none opacity-[0.06] z-0"
+              :style="{ 
+                backgroundImage: `url(${mapSvg})`,
+                backgroundSize: '85% auto',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat'
+              }"
+            ></div>
+
+            <!-- Gradient Glow -->
+            <div class="absolute inset-0 bg-gradient-to-tr from-emerald-500/5 via-transparent to-amber-500/5 pointer-events-none z-0"></div>
 
             <!-- HOVER TOOLTIP -->
             <Teleport to="body">
@@ -264,7 +280,7 @@ onMounted(async () => {
                       <div class="flex items-center justify-between mb-2">
                         <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label }}</span>
                         <div class="flex gap-1.5">
-                          <span class="text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
+                          <span class="text-xxs px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
                             Room
                           </span>
                         </div>
@@ -290,11 +306,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.bg-grid-pattern {
-  background-image: 
-    linear-gradient(rgba(100, 116, 139, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(100, 116, 139, 0.05) 1px, transparent 1px);
-  background-size: 40px 40px;
+.bg-radial-gradient {
+  background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
 }
 
 /* Tooltip Animations */
@@ -334,3 +347,5 @@ onMounted(async () => {
   }
 }
 </style>
+
+

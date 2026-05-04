@@ -55,3 +55,4 @@ export const isPlaceholderImagePath = (path?: string | null): boolean => {
 export const hasRenderableImagePath = (path?: string | null): boolean => {
   return Boolean(path && path.trim() && !isPlaceholderImagePath(path))
 }
+

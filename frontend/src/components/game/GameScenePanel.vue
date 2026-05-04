@@ -33,7 +33,7 @@ const hoverPayload = computed<SceneHoverPayload>(() => ({
   <div class="mb-8">
     <div class="flex items-center gap-2 mb-4">
       <i class="ra ra-mountain-cave text-indigo-500"></i>
-      <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500/80">Location</h3>
+      <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-indigo-500/80">Location</h3>
     </div>
     <div
       class="relative group cursor-help overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 transition-all hover:border-indigo-500/50"
@@ -58,3 +58,4 @@ const hoverPayload = computed<SceneHoverPayload>(() => ({
     </div>
   </div>
 </template>
+

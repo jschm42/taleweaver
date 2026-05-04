@@ -14,6 +14,7 @@ import GameSessionCard from '@/components/portal/GameSessionCard.vue'
 import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
 import ImportExamplesCard from '@/components/portal/ImportExamplesCard.vue'
 import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
+import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
 import { configState } from '@/store/config'
 
@@ -49,14 +50,16 @@ function isFailureStatus(status: string): boolean {
   return value.includes('failed') || value.includes('error') || value.includes('cancelled')
 }
 
-function formatToneLabel(value?: string | null): string {
+function formatToneLabel(value?: any): string {
   if (!value) return ''
-  const normalized = value
+  const valStr = typeof value === 'string' ? value : (value.name || value.id || '')
+  if (!valStr) return ''
+  const normalized = valStr
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!normalized) return ''
-  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
+  return normalized.replace(/\b\w/g, (ch: string) => ch.toUpperCase())
 }
 
 const templates = ref<AdventureTemplateSummary[]>([])
@@ -74,6 +77,9 @@ const showImportConfirm = ref(false)
 const isSeeding = ref(false)
 const isDeleting = ref(false)
 const isDeletingSession = ref(false)
+const showImportWarning = ref(false)
+const importWarningType = ref<'defaults' | 'samples'>('defaults')
+const importConflicts = ref<Array<{ title: string; already_exists: boolean }>>([])
 
 const importInput = ref<HTMLInputElement | null>(null)
 const pendingImports = ref<PendingAdventureCard[]>([])
@@ -300,12 +306,65 @@ function openCreateModal() {
 
 async function executeImportExamples() {
   showImportConfirm.value = false
+  
+  // Check for conflicts first
+  try {
+    const checkRes = await api.checkExamples()
+    const conflicts = checkRes.available_imports.filter(i => i.already_exists)
+    
+    if (conflicts.length > 0) {
+      importConflicts.value = checkRes.available_imports
+      importWarningType.value = 'samples'
+      showImportWarning.value = true
+      return
+    }
+  } catch (error) {
+    console.error('Error checking for example conflicts:', error)
+  }
+
+  await performImportExamples()
+}
+
+async function performImportExamples() {
+  showImportWarning.value = false
   isSeeding.value = true
   try {
     await api.importExamples()
     await fetchPortalData()
   } catch (error: any) {
     errorMsg.value = error?.message || 'Import of examples failed.'
+  } finally {
+    isSeeding.value = false
+  }
+}
+
+async function executeRestoreDefaults() {
+  // Check for conflicts first
+  try {
+    const checkRes = await api.checkDefaults()
+    const conflicts = checkRes.available_imports.filter(i => i.already_exists)
+    
+    if (conflicts.length > 0) {
+      importConflicts.value = checkRes.available_imports
+      importWarningType.value = 'defaults'
+      showImportWarning.value = true
+      return
+    }
+  } catch (error) {
+    console.error('Error checking for default conflicts:', error)
+  }
+
+  await performRestoreDefaults()
+}
+
+async function performRestoreDefaults() {
+  showImportWarning.value = false
+  isSeeding.value = true
+  try {
+    await api.reimportDefaults()
+    await fetchPortalData()
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Restoration of defaults failed.'
   } finally {
     isSeeding.value = false
   }
@@ -514,16 +573,17 @@ onUnmounted(() => {
           @change-section="activeSection = $event"
           @create="openCreateModal"
           @import="triggerImportPicker"
+          @restore-defaults="executeRestoreDefaults"
         />
 
         <!-- Loading State -->
         <div v-if="isLoading && templates.length === 0 && sessions.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
           <div class="w-16 h-16 border-4 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
-          <p class="text-aether-primary font-bold uppercase tracking-[0.3em] text-[10px]">Accessing Archives...</p>
+          <p class="text-aether-primary font-bold uppercase tracking-[0.3em] text-xxs">Accessing Archives...</p>
         </div>
 
         <div v-else>
-          <div v-if="activeSection === 'templates'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+          <div v-if="activeSection === 'templates'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
             <PortalCreateAdventureCard @click="openCreateModal" />
             
             <ImportExamplesCard 
@@ -534,7 +594,7 @@ onUnmounted(() => {
             <!-- Loading indicator for seeding -->
             <div v-if="isSeeding" class="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl aspect-[3/2] bg-white/5 gap-3">
               <div class="w-8 h-8 border-2 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
-              <span class="text-[10px] text-aether-primary uppercase tracking-widest font-bold">Importing Tales...</span>
+              <span class="text-xxs text-aether-primary uppercase tracking-widest font-bold">Importing Tales...</span>
             </div>
 
             <PendingAdventureCard
@@ -568,13 +628,13 @@ onUnmounted(() => {
               </p>
               <button 
                 @click="activeSection = 'templates'"
-                class="mt-2 px-6 py-3 rounded-xl bg-aether-primary/10 border border-aether-primary/30 text-aether-primary font-bold hover:bg-aether-primary/20 transition-all uppercase tracking-widest text-[10px] flex items-center gap-3"
+                class="mt-2 px-6 py-3 rounded-xl bg-aether-primary/10 border border-aether-primary/30 text-aether-primary font-bold hover:bg-aether-primary/20 transition-all uppercase tracking-widest text-xxs flex items-center gap-3"
               >
                 <i class="ra ra-book text-sm"></i>
                 Adventure Library
               </button>
             </div>
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+            <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
               <GameSessionCard
                 v-for="entry in sessions"
                 :key="entry.game_id"
@@ -624,7 +684,17 @@ onUnmounted(() => {
         @close="showDeleteSessionConfirm = false"
         @confirm="executeDeleteSession"
       />
+
+      <ImportWarningModal
+        v-if="showImportWarning"
+        :type="importWarningType"
+        :conflicts="importConflicts"
+        :is-importing="isSeeding"
+        @close="showImportWarning = false"
+        @confirm="importWarningType === 'defaults' ? performRestoreDefaults() : performImportExamples()"
+      />
     </Teleport>
 
   </div>
 </template>
+

@@ -70,7 +70,7 @@ async function handleSetup() {
 
         <form @submit.prevent="handleSetup" class="space-y-6">
           <div class="space-y-2">
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Admin Username</label>
+            <label class="text-xxs font-black text-slate-500 uppercase tracking-widest">Admin Username</label>
             <input 
               v-model="username"
               type="text" 
@@ -81,7 +81,7 @@ async function handleSetup() {
 
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
-              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Master Password</label>
+              <label class="text-xxs font-black text-slate-500 uppercase tracking-widest">Master Password</label>
               <input 
                 v-model="password"
                 type="password" 
@@ -90,7 +90,7 @@ async function handleSetup() {
               />
             </div>
             <div class="space-y-2">
-              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Confirm Password</label>
+              <label class="text-xxs font-black text-slate-500 uppercase tracking-widest">Confirm Password</label>
               <input 
                 v-model="confirmPassword"
                 type="password" 
@@ -102,7 +102,7 @@ async function handleSetup() {
 
           <div v-if="error" class="text-red-400 text-xs font-bold bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex flex-col gap-2">
             <span>{{ error }}</span>
-            <router-link to="/login" class="text-aether-primary hover:underline uppercase tracking-widest text-[9px]">Go to Login &rarr;</router-link>
+            <router-link to="/login" class="text-aether-primary hover:underline uppercase tracking-widest text-xxs">Go to Login &rarr;</router-link>
           </div>
 
           <button 
@@ -117,3 +117,4 @@ async function handleSetup() {
     </div>
   </div>
 </template>
+

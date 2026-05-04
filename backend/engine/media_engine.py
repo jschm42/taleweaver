@@ -1,6 +1,6 @@
 """
 MediaEngine — Handles AI image generation for scenes and entities.
-Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Midjourney, while using the direct BFL API for Black Forest Labs.
+Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imagen), while using the direct BFL API for Black Forest Labs.
 """
 import logging
 import os
@@ -15,7 +15,14 @@ from backend.core.security import encryption_util
 from backend.core.config import settings
 from backend.core import prompts
 from backend.utils.svg_generator import SVGPlaceholderGenerator
+from backend.utils.image_generator import (
+    PlaceholderImageGenerator, 
+    OrganicGradientStrategy, 
+    BlobIconStrategy, 
+    ColorTheme
+)
 import litellm
+from backend.utils.text_utils import slugify
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +82,7 @@ class MediaEngine:
             return BFL_DEFAULT_MODEL
 
         lowered = normalized.lower()
-        if lowered.startswith(("openai/", "dall-e", "openrouter/", "midjourney/")):
+        if lowered.startswith(("openai/", "dall-e", "openrouter/", "google/", "gemini/")):
             return BFL_DEFAULT_MODEL.removeprefix("black_forest_labs/")
 
         if normalized.startswith("black_forest_labs/"):
@@ -635,7 +642,10 @@ class MediaEngine:
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        filename = f"{uuid.uuid4().hex}.{ext}"
+        
+        # Use adventure_id as prefix for clarity
+        safe_id = slugify(adventure_id)
+        filename = f"{safe_id}_scene_{uuid.uuid4().hex[:8]}.{ext}"
         
         return await MediaEngine.generate_image(
             prompt=prompt, 
@@ -671,7 +681,11 @@ class MediaEngine:
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        filename = f"{entity_id}_{uuid.uuid4().hex}.{ext}"
+        
+        # Use adventure_id and entity_id as prefix for clarity
+        safe_adv_id = slugify(adventure_id)
+        safe_ent_id = slugify(entity_id)
+        filename = f"{safe_adv_id}_{safe_ent_id}_{uuid.uuid4().hex[:8]}.{ext}"
         
         return await MediaEngine.generate_image(
             prompt=prompt, 
@@ -707,7 +721,10 @@ class MediaEngine:
         
         target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-        filename = f"cover_{uuid.uuid4().hex}.{ext}"
+        
+        # Use adventure_id as prefix for clarity
+        safe_id = slugify(adventure_id)
+        filename = f"{safe_id}_cover_{uuid.uuid4().hex[:8]}.{ext}"
         
         prompt = prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
             title=title, original_prompt=original_prompt
@@ -723,6 +740,79 @@ class MediaEngine:
             filename=filename,
             provider_options=t2i,
         )
+
+    @staticmethod
+    async def generate_placeholder(
+        adventure_id: str,
+        entity_id: str,
+        target_dir: str,
+        filename: Optional[str] = None,
+        category: str = "",
+        theme: Optional[str] = None
+    ) -> str:
+        """
+        Generates a high-quality PIL-based placeholder image.
+        Uses organic gradients for scenes and blob-icons for entities.
+        """
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            
+            # Determine format and extension
+            # Default to PNG for placeholders to preserve transparency if needed, 
+            # though we currently convert to RGB in the strategy.
+            ext = "png"
+            if filename:
+                if filename.lower().endswith((".jpg", ".jpeg")):
+                    ext = "jpg"
+                elif filename.lower().endswith(".png"):
+                    ext = "png"
+            
+            if not filename:
+                filename = f"placeholder_{entity_id}_{uuid.uuid4().hex[:6]}.{ext}"
+            elif not any(filename.lower().endswith(e) for e in (".png", ".jpg", ".jpeg")):
+                filename += f".{ext}"
+            
+            filepath = os.path.join(target_dir, filename)
+            
+            # Select strategy and theme based on category
+            cat = category.upper()
+            
+            # Map theme string to ColorTheme enum
+            color_theme = ColorTheme.COLORFUL
+            if theme:
+                try:
+                    color_theme = ColorTheme[theme.upper()]
+                except (KeyError, AttributeError):
+                    pass
+            
+            if cat in ["SCENE", "COVER", "LANDSCAPE"]:
+                # Scenes use random generation with subtle blur
+                strategy = OrganicGradientStrategy(theme=color_theme)
+                width, height = 1200, 800
+            elif cat in ["NPC", "CHARACTER", "ITEM", "AVATAR"]:
+                # NPCs, Items, and Avatars (Protagonist) use the classic SVG system with margins
+                return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
+            else:
+                strategy = OrganicGradientStrategy(theme=color_theme)
+                width, height = 800, 600
+
+            generator = PlaceholderImageGenerator(strategy=strategy)
+            
+            # Run in thread pool as PIL operations are blocking
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None, 
+                generator.create_and_save, 
+                filepath, 
+                (width, height)
+            )
+            
+            rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
+            return f"/data/{rel_path}"
+        except Exception as e:
+            logger.error(f"Failed to generate high-quality placeholder: {e}")
+            # Fallback to SVG if PIL fails
+            return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
 
     @staticmethod
     async def generate_svg_placeholder(

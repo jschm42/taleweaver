@@ -1,15 +1,17 @@
 import sqlite3
 
-db_path = "data/taleweaver.db"
-conn = sqlite3.connect(db_path)
+conn = sqlite3.connect('data/taleweaver.db')
 cursor = conn.cursor()
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+tables = cursor.fetchall()
+print("Tables:", [t[0] for t in tables])
 
-def get_columns(table_name):
-    cursor.execute(f"PRAGMA table_info({table_name})")
-    return [row[1] for row in cursor.fetchall()]
+cursor.execute("PRAGMA table_info(users);")
+columns = cursor.fetchall()
+print("Columns in users:", [c[1] for c in columns])
 
-tables = ["adventure_templates", "session_states", "world_entities", "world_exits", "world_scenes"]
-for table in tables:
-    print(f"Columns in {table}: {get_columns(table)}")
+cursor.execute("PRAGMA table_info(avatars);")
+columns = cursor.fetchall()
+print("Columns in avatars:", [c[1] for c in columns])
 
 conn.close()

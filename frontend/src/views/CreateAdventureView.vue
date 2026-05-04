@@ -135,14 +135,17 @@ async function handleCreate() {
   isGenerating.value = true
   errorMsg.value = ''
   
+  const fullStyleObj = imageStyles.value.find(s => s.id === form.value.selected_style_id) || { id: form.value.selected_style_id, name: form.value.selected_style_id }
+  const fullToneObj = tones.value.find(t => t.id === form.value.selected_tone_id) || { id: form.value.selected_tone_id, name: form.value.selected_tone_id }
+
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
     title: form.value.title.trim() || 'Untitled Odyssey',
     original_prompt: form.value.storyIdea.trim(),
     time_per_turn: form.value.pacing_minutes,
-    selected_image_styles: [form.value.selected_style_id],
-    selected_tone: form.value.selected_tone_id
+    selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
+    selected_tone: form.value.selected_tone_id ? fullToneObj : null
   }
 
   try {
@@ -189,7 +192,7 @@ onMounted(() => {
             <p class="text-slate-400 text-xs">No AI provider is configured for world generation. You cannot weave new realities without a connection.</p>
           </div>
         </div>
-        <router-link to="/admin" class="px-6 py-3 rounded-xl bg-red-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-red-500 transition-all whitespace-nowrap">
+        <router-link to="/admin" class="px-6 py-3 rounded-xl bg-red-600 text-white font-black text-xxs uppercase tracking-widest hover:bg-red-500 transition-all whitespace-nowrap">
           Go to Configuration
         </router-link>
       </div>
@@ -207,7 +210,7 @@ onMounted(() => {
             <!-- Basic Info -->
             <div class="space-y-6">
               <div>
-                <label class="block text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-3">Adventure Title</label>
+                <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em] mb-3">Adventure Title</label>
                 <input
                   v-model="form.title"
                   type="text"
@@ -217,7 +220,7 @@ onMounted(() => {
               </div>
 
               <div>
-                <label class="block text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-3">Story Idea & Context</label>
+                <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em] mb-3">Story Idea & Context</label>
                 <textarea
                   v-model="form.storyIdea"
                   rows="4"
@@ -229,7 +232,7 @@ onMounted(() => {
 
             <!-- Rule Enforcement -->
             <div class="space-y-4">
-              <label class="block text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Rule Enforcement Mode</label>
+              <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Rule Enforcement Mode</label>
               <div class="grid grid-cols-3 gap-3">
                 <button
                   v-for="mode in ['rpg', 'story', 'chat']"
@@ -238,10 +241,10 @@ onMounted(() => {
                   class="px-4 py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1"
                   :class="form.rule_enforcement_mode === mode ? 'border-aether-primary bg-aether-primary/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/10'"
                 >
-                  <span class="text-[10px] font-black uppercase tracking-widest">{{ mode === 'rpg' ? 'RPG (EXPERIMENTAL)' : mode }}</span>
+                  <span class="text-xxs font-black uppercase tracking-widest">{{ mode === 'rpg' ? 'RPG (EXPERIMENTAL)' : mode }}</span>
                 </button>
               </div>
-              <p class="text-[10px] text-white/30 uppercase tracking-widest text-center">{{ ruleModeHelp }}</p>
+              <p class="text-xxs text-white/30 uppercase tracking-widest text-center">{{ ruleModeHelp }}</p>
               
               <!-- Experimental Warning -->
               <div v-if="form.rule_enforcement_mode === 'rpg'" class="mt-4 p-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-4">
@@ -249,8 +252,8 @@ onMounted(() => {
                   <AlertTriangle class="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 class="text-amber-500 font-black uppercase tracking-widest text-[10px] mb-1">Experimental System</h4>
-                  <p class="text-slate-400 text-[10px] leading-relaxed">The RPG mode is currently under heavy development. Deterministic mechanics like combat, attribute checks, and automatic world updates may behave unexpectedly. Use with caution!</p>
+                  <h4 class="text-amber-500 font-black uppercase tracking-widest text-xxs mb-1">Experimental System</h4>
+                  <p class="text-slate-400 text-xxs leading-relaxed">The RPG mode is currently under heavy development. Deterministic mechanics like combat, attribute checks, and automatic world updates may behave unexpectedly. Use with caution!</p>
                 </div>
               </div>
             </div>
@@ -279,7 +282,7 @@ onMounted(() => {
                   <option value="Russian">Russian</option>
                   <option value="Portuguese">Portuguese</option>
                 </select>
-                <p class="text-[9px] text-white/30 uppercase tracking-[0.1em]">The Weaver will generate all names, descriptions, and plot points in this language.</p>
+                <p class="text-xxs text-white/30 uppercase tracking-[0.1em]">The Weaver will generate all names, descriptions, and plot points in this language.</p>
               </div>
             </div>
 
@@ -302,7 +305,7 @@ onMounted(() => {
 
               <div class="space-y-4" v-if="form.clock_enabled">
                 <div class="flex justify-between items-center">
-                  <span class="text-[10px] font-black text-white/40 uppercase tracking-widest">Pacing (Min/Action)</span>
+                  <span class="text-xxs font-black text-white/40 uppercase tracking-widest">Pacing (Min/Action)</span>
                   <span class="text-xs font-mono text-emerald-400">{{ form.pacing_minutes }}m</span>
                 </div>
                 <input 
@@ -318,7 +321,7 @@ onMounted(() => {
             <!-- Asset Toggles -->
             <div class="space-y-6">
               <div class="flex items-center justify-between">
-                <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Automated Assets</label>
+                <label class="text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Automated Assets</label>
                 <div 
                   @click="toggleAllAssets"
                   :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', automatedAssetsEnabled ? 'bg-aether-primary' : 'bg-slate-700']"
@@ -337,7 +340,7 @@ onMounted(() => {
                   :class="form[asset.key] ? 'border-sky-500/50 bg-sky-500/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/10'"
                 >
                   <component :is="asset.icon" class="w-4 h-4" />
-                  <span class="text-[10px] font-black uppercase tracking-widest">{{ asset.label }}</span>
+                  <span class="text-xxs font-black uppercase tracking-widest">{{ asset.label }}</span>
                 </button>
               </div>
             </div>
@@ -354,14 +357,14 @@ onMounted(() => {
               <div class="grid grid-cols-2 gap-8">
                 <div class="space-y-3">
                   <div class="flex justify-between">
-                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest">Min</label>
+                    <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Min</label>
                     <span class="text-xs font-mono text-blue-400">{{ form.min_scenes }}</span>
                   </div>
                   <input type="range" v-model.number="form.min_scenes" min="1" :max="form.max_scenes" class="w-full accent-blue-500" />
                 </div>
                 <div class="space-y-3">
                   <div class="flex justify-between">
-                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest">Max</label>
+                    <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max</label>
                     <span class="text-xs font-mono text-blue-400">{{ form.max_scenes }}</span>
                   </div>
                   <input type="range" v-model.number="form.max_scenes" :min="form.min_scenes" max="20" class="w-full accent-blue-500" />
@@ -389,14 +392,14 @@ onMounted(() => {
               <div v-if="form.award_generation_enabled" class="grid grid-cols-2 gap-8">
                 <div class="space-y-3">
                   <div class="flex justify-between">
-                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest">Min</label>
+                    <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Min</label>
                     <span class="text-xs font-mono text-indigo-400">{{ form.min_awards }}</span>
                   </div>
                   <input type="range" v-model.number="form.min_awards" min="1" :max="form.max_awards" class="w-full accent-indigo-500" />
                 </div>
                 <div class="space-y-3">
                   <div class="flex justify-between">
-                    <label class="text-[10px] font-black text-white/40 uppercase tracking-widest">Max</label>
+                    <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max</label>
                     <span class="text-xs font-mono text-indigo-400">{{ form.max_awards }}</span>
                   </div>
                   <input type="range" v-model.number="form.max_awards" :min="form.min_awards" max="20" class="w-full accent-indigo-500" />
@@ -416,7 +419,7 @@ onMounted(() => {
               </div>
               <div>
                 <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Visual Style</h3>
-                <p class="text-[10px] text-white/40 uppercase tracking-widest">Select one aesthetic direction</p>
+                <p class="text-xxs text-white/40 uppercase tracking-widest">Select one aesthetic direction</p>
               </div>
             </div>
 
@@ -431,7 +434,7 @@ onMounted(() => {
                 <img :src="style.image_url" class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110" />
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
                 <div class="absolute bottom-4 left-4 right-4">
-                  <p class="text-[10px] font-black text-white uppercase tracking-widest">{{ style.name }}</p>
+                  <p class="text-xxs font-black text-white uppercase tracking-widest">{{ style.name }}</p>
                 </div>
               </button>
             </div>
@@ -445,7 +448,7 @@ onMounted(() => {
               </div>
               <div>
                 <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">Narrative Tone</h3>
-                <p class="text-[10px] text-white/40 uppercase tracking-widest">Atmosphere and description style</p>
+                <p class="text-xxs text-white/40 uppercase tracking-widest">Atmosphere and description style</p>
               </div>
             </div>
 
@@ -460,7 +463,7 @@ onMounted(() => {
                 <img :src="tone.image_url" class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110" />
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
                 <div class="absolute bottom-4 left-4 right-4">
-                  <p class="text-[10px] font-black text-white uppercase tracking-widest">{{ tone.name }}</p>
+                  <p class="text-xxs font-black text-white uppercase tracking-widest">{{ tone.name }}</p>
                 </div>
               </button>
             </div>
@@ -482,7 +485,7 @@ onMounted(() => {
             <span class="text-xl tracking-[0.2em]">{{ isGenerating ? 'WEAVING REALITY...' : (!hasLlmConfig ? 'CONFIGURATION REQUIRED' : 'BEGIN WEAVING') }}</span>
           </div>
         </button>
-        <p class="text-[10px] text-white/20 uppercase tracking-[0.3em]">The process may take a few minutes as the world is manifest</p>
+        <p class="text-xxs text-white/20 uppercase tracking-[0.3em]">The process may take a few minutes as the world is manifest</p>
       </div>
     </main>
   </div>
@@ -513,3 +516,4 @@ onMounted(() => {
   animation: shake 0.2s ease-in-out 0s 2;
 }
 </style>
+

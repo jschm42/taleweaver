@@ -9,6 +9,10 @@ Responsibilities:
 from __future__ import annotations
 
 from typing import Optional
+from sqlalchemy.orm.attributes import flag_modified
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MapEngine:
@@ -70,92 +74,94 @@ class MapEngine:
 
     @staticmethod
     def register_exit(
-        world_map,
-        from_scene: str,
-        to_scene: str,
-        exit_label: str = "",
-        is_locked: bool = False,
+        world_map, 
+        from_scene: str, 
+        to_scene: str, 
+        exit_label: str = "", 
+        is_locked: bool = False
     ) -> None:
         """
-        Add a directed edge (exit) between two scenes, deduplicating by
-        (from, to) pair so repeated visits don't bloat the graph.
-
-        Args:
-            world_map:   WorldMap ORM instance (mutated in-place).
-            from_scene:  Source scene_id.
-            to_scene:    Destination scene_id.
-            exit_label:  Optional direction / action label (e.g. "north", "open door").
-            is_locked:   Whether the path is currently blocked.
+        Adds a directed edge between two scenes. 
+        Normalizes IDs and prevents self-loops.
         """
-        edges: list = list(world_map.edges or [])
+        if not (from_scene and to_scene):
+            return
 
-        # Find existing edge to update or add new
-        existing_idx = -1
+        # Normalize IDs
+        src_id = MapEngine._safe_id(from_scene)
+        dst_id = MapEngine._safe_id(to_scene)
+
+        # Prevent self-loops
+        if src_id == dst_id:
+            logger.debug(f"MapEngine: Ignoring self-loop registration for {src_id}")
+            return
+
+        edges = list(world_map.edges or [])
+
+        # Check for existing
         for idx, e in enumerate(edges):
-            if e["from"] == from_scene and e["to"] == to_scene:
-                existing_idx = idx
-                break
+            # Compare normalized IDs
+            if MapEngine._safe_id(e["from"]) == src_id and MapEngine._safe_id(e["to"]) == dst_id:
+                # Update existing edge (e.g. label or lock status)
+                edges[idx]["label"] = exit_label
+                edges[idx]["is_locked"] = is_locked
+                world_map.edges = edges
+                flag_modified(world_map, "edges")
+                return
 
-        if existing_idx != -1:
-            edges[existing_idx]["is_locked"] = is_locked
-            if exit_label: edges[existing_idx]["label"] = exit_label
-        else:
-            edges.append({
-                "from": from_scene, 
-                "to": to_scene, 
-                "label": exit_label,
-                "is_locked": is_locked
-            })
-            
+        # Add new edge
+        edges.append({
+            "from": from_scene, 
+            "to": to_scene, 
+            "label": exit_label,
+            "is_locked": is_locked
+        })
         world_map.edges = edges
+        flag_modified(world_map, "edges")
 
     @staticmethod
     def to_mermaid(world_map, direction: str = "LR") -> str:
         """
-        Serialise the scene graph to Mermaid.js flowchart notation.
-
-        Complexity: O(V + E) — one pass over nodes, one pass over edges.
-
-        Args:
-            world_map: WorldMap ORM instance.
-            direction: Mermaid graph direction — "LR", "TD", "RL", "BT".
-
-        Returns:
-            A Mermaid diagram string ready to be rendered by the frontend.
+        Serializes the WorldMap into a Mermaid.js flowchart string.
         """
-        nodes: dict = world_map.nodes or {}
-        edges: list = world_map.edges or []
-        current: Optional[str] = world_map.current_scene_id
+        if not world_map or not world_map.nodes:
+            return ""
+
+        nodes = world_map.nodes
+        edges = world_map.edges or []
+        current = world_map.current_scene_id
 
         lines: list[str] = [f"flowchart {direction}"]
-
-        # Emit node definitions.
-        # Collect all unique scene IDs from both the visited nodes and the discovered edges.
+        
+        # Track IDs to ensure they are added to the graph even if they have no edges
         all_scene_ids = set(nodes.keys())
         for edge in edges:
-            all_scene_ids.add(edge["from"])
-            all_scene_ids.add(edge["to"])
+            all_scene_ids.add(MapEngine._safe_id(edge["from"]))
+            all_scene_ids.add(MapEngine._safe_id(edge["to"]))
 
-        for scene_id in all_scene_ids:
+        # 1. Add Nodes with styles
+        for scene_id in sorted(all_scene_ids):
+            node_data = nodes.get(scene_id, {})
+            label = node_data.get("label", scene_id)
             safe_id = MapEngine._safe_id(scene_id)
-            is_visited = scene_id in nodes
-            meta = nodes.get(scene_id, {})
             
-            if is_visited:
-                label = meta.get("label", scene_id).replace('"', "'")
-                if scene_id == current:
-                    lines.append(f'  {safe_id}["{label} 📍"]:::current')
-                else:
-                    lines.append(f'  {safe_id}["{label}"]:::visited')
+            if scene_id == current:
+                lines.append(f'  {safe_id}["{label} 📍"]:::current')
             else:
-                # Discovered but not yet visited (Fog of War)
-                lines.append(f'  {safe_id}["?"]:::unvisited')
+                lines.append(f'  {safe_id}["{label}"]:::visited')
 
-        # Emit edges.
+        # 2. Add Edges (Connections)
         locked_indices = []
         for idx, edge in enumerate(edges):
-            src = MapEngine._safe_id(edge["from"])
-            dst = MapEngine._safe_id(edge["to"])
+            src_raw = edge["from"]
+            dst_raw = edge["to"]
+            src = MapEngine._safe_id(src_raw)
+            dst = MapEngine._safe_id(dst_raw)
+            
+            # Skip self-loops in rendering
+            if src == dst:
+                continue
+
             is_locked = edge.get("is_locked", False)
             
             lbl = edge.get("label", "").replace('"', "'")

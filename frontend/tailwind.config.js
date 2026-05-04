@@ -9,6 +9,12 @@ export default {
         ui: ['Acme', 'sans-serif'],
         sans: ['Acme', 'sans-serif'], // Default to UI font
       },
+      fontSize: {
+        'xxs': ['0.75rem', { lineHeight: '1rem' }],    // 12px
+        'xs': ['0.8125rem', { lineHeight: '1.125rem' }], // 13px
+        'sm': ['0.9375rem', { lineHeight: '1.25rem' }],  // 15px
+        'base': ['1.0625rem', { lineHeight: '1.5rem' }], // 17px
+      },
       colors: {
         aether: {
           background: '#081425',

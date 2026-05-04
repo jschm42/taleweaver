@@ -39,7 +39,7 @@ async def client(auth_client: AsyncClient) -> AsyncClient:
 async def _create_adventure(client: AsyncClient, title: str = "Test Quest") -> dict:
     """Creates a minimal adventure and returns the response JSON."""
     resp = await client.post(
-        "/api/adventures",
+        "/api/adventures/",
         json={"title": title, "avatar_name": "Hero"},
     )
     assert resp.status_code == 201, resp.text
@@ -47,7 +47,7 @@ async def _create_adventure(client: AsyncClient, title: str = "Test Quest") -> d
 
 
 # ---------------------------------------------------------------------------
-# POST /api/adventures
+# POST /api/adventures/
 # ---------------------------------------------------------------------------
 
 async def test_create_adventure_returns_ids(client: AsyncClient):
@@ -67,7 +67,7 @@ async def test_create_adventure_creates_one_visible_session(client: AsyncClient)
     ids = await _create_adventure(client)
 
     # Assert
-    resp = await client.get("/api/adventures")
+    resp = await client.get("/api/adventures/sessions")
     assert resp.status_code == 200
     sessions = resp.json()
     assert len(sessions) == 1
@@ -86,7 +86,7 @@ async def test_create_adventure_with_heartbeat(client: AsyncClient):
     }
 
     # Act
-    resp = await client.post("/api/adventures", json=payload)
+    resp = await client.post("/api/adventures/", json=payload)
     data = resp.json()
 
     # Assert
@@ -110,7 +110,7 @@ async def test_create_adventure_with_rule_mode_and_style_tone(client: AsyncClien
         "selected_tone": "horror",
     }
 
-    resp = await client.post("/api/adventures", json=payload)
+    resp = await client.post("/api/adventures/", json=payload)
     assert resp.status_code == 201
     ids = resp.json()
 
@@ -146,7 +146,7 @@ async def test_create_adventure_preserves_advanced_manifest_fields(client: Async
         },
     }
 
-    resp = await client.post("/api/adventures", json=payload)
+    resp = await client.post("/api/adventures/", json=payload)
     assert resp.status_code == 201, resp.text
     ids = resp.json()
 
@@ -208,7 +208,7 @@ async def test_create_adventure_persists_generation_status_before_world_gen(clie
     monkeypatch.setattr("backend.api.routes.adventures.WorldGenerator.generate_world", fake_generate_world)
 
     resp = await client.post(
-        "/api/adventures",
+        "/api/adventures/",
         json={"title": "Status Quest", "avatar_name": "Hero"},
     )
     assert resp.status_code == 201, resp.text
@@ -738,7 +738,7 @@ async def test_export_manifest_returns_original_manifest_only(client: AsyncClien
         },
     }
 
-    resp = await client.post("/api/adventures", json=payload)
+    resp = await client.post("/api/adventures/", json=payload)
     assert resp.status_code == 201, resp.text
     adventure_id = resp.json()["adventure_id"]
 
@@ -785,7 +785,7 @@ async def test_export_manifest_backfills_core_metadata_without_runtime_state(cli
         },
     }
 
-    resp = await client.post("/api/adventures", json=payload)
+    resp = await client.post("/api/adventures/", json=payload)
     assert resp.status_code == 201, resp.text
     adventure_id = resp.json()["adventure_id"]
 
@@ -833,7 +833,7 @@ async def test_export_manifest_backfills_core_metadata_without_runtime_state(cli
 
 async def test_list_adventures_empty(client: AsyncClient):
     """Listing adventures on a fresh DB returns an empty list."""
-    resp = await client.get("/api/adventures")
+    resp = await client.get("/api/adventures/sessions")
     assert resp.status_code == 200
     assert resp.json() == []
 
@@ -843,7 +843,7 @@ async def test_list_adventures_returns_created(client: AsyncClient):
     await _create_adventure(client, "Quest A")
     await _create_adventure(client, "Quest B")
 
-    resp = await client.get("/api/adventures")
+    resp = await client.get("/api/adventures/sessions")
     assert resp.status_code == 200
     assert len(resp.json()) == 2
 
@@ -1658,3 +1658,38 @@ async def test_started_sessions_keep_snapshot_images_after_template_avatar_edit(
         chat_data = chat_resp.json()
         assert chat_data["adventure_image"] == old_cover
         assert chat_data["sheet"]["profile_image"] == old_profile
+
+async def test_update_adventure_frontend_payload(client: AsyncClient):
+    """Patching with frontend payload should not give 422."""
+    ids = await _create_adventure(client, "Test Quest")
+    adv_id = ids["adventure_id"]
+
+    payload = {
+      "title": 'The RPG Testing Grounds',
+      "teaser": '...',
+      "original_prompt": '',
+      "strict_rules": True,
+      "rule_enforcement_mode": 'rpg',
+      "time_per_turn": 5,
+      "pacing_minutes": 5,
+      "clock_enabled": False,
+      "time_system": 'calendar',
+      "selected_style_id": 'dark-fantasy',
+      "selected_tone_id": 'serious',
+      "game_over_rules": {},
+      "min_scenes": 1,
+      "max_scenes": 5,
+      "plot": '',
+      "rules": '',
+      "walkthrough": '',
+      "completed_condition": '',
+      "gameover_condition": '',
+      "selected_image_styles": [{"id": "dark-fantasy", "name": "dark-fantasy"}],
+      "selected_tone": {"id": "serious", "name": "serious"}
+    }
+    
+    resp2 = await client.patch(
+        f"/api/adventures/{adv_id}",
+        json=payload,
+    )
+    assert resp2.status_code == 200, resp2.text

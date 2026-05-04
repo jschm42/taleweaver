@@ -46,13 +46,13 @@
                   placeholder="Tell your story..."
                 ></textarea>
                 <div class="flex justify-between items-center">
-                  <button @click="generateBio" :disabled="isGeneratingBio" class="text-[9px] font-black uppercase tracking-widest text-emerald-500/60 hover:text-emerald-400 flex items-center gap-2">
+                  <button @click="generateBio" :disabled="isGeneratingBio" class="text-xs font-black uppercase tracking-widest text-emerald-500/60 hover:text-emerald-400 flex items-center gap-2">
                     <i :class="['ra ra-crystal-ball', { 'animate-spin': isGeneratingBio }]"></i>
                     {{ isGeneratingBio ? 'Weaving...' : 'AI Lore Weaver' }}
                   </button>
                   <div class="flex gap-3">
-                    <button @click="cancelEditBio" class="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-white">Discard</button>
-                    <button @click="saveBio" :disabled="isSavingBio" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-900/20">
+                    <button @click="cancelEditBio" class="text-xxs font-black uppercase tracking-widest text-slate-500 hover:text-white">Discard</button>
+                    <button @click="saveBio" :disabled="isSavingBio" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-900/20">
                       {{ isSavingBio ? 'Saving...' : 'Save Entry' }}
                     </button>
                   </div>
@@ -91,7 +91,7 @@
               </div>
               <div>
                 <h4 class="text-sm font-black uppercase tracking-widest text-cyan-400">Default Bable Fish Language</h4>
-                <p class="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider italic">Your universal translator's primary tongue</p>
+                <p class="text-xxs text-slate-500 mt-1 uppercase font-bold tracking-wider italic">Your universal translator's primary tongue</p>
               </div>
             </div>
             
@@ -142,10 +142,10 @@
               <div class="flex justify-between items-start gap-4">
                 <div class="flex-grow">
                   <div class="flex items-center gap-3 mb-2">
-                    <span :class="entry.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'" class="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border border-current/20">
+                    <span :class="entry.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'" class="text-xxs font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border border-current/20">
                       {{ entry.status === 'completed' ? 'Victory' : 'Defeat' }}
                     </span>
-                    <span class="text-[9px] text-slate-600 font-bold uppercase tracking-widest">{{ formatDate(entry.completed_at) }}</span>
+                    <span class="text-xxs text-slate-600 font-bold uppercase tracking-widest">{{ formatDate(entry.completed_at) }}</span>
                   </div>
                   <h4 class="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors leading-snug">{{ entry.adventure_title }}</h4>
                   <p class="text-xs text-slate-400 mt-2 italic line-clamp-2 leading-relaxed">"{{ entry.outcome_note }}"</p>
@@ -173,7 +173,7 @@
           >
             <i :class="['text-lg', n.type === 'error' ? 'ra ra-cancel' : n.type === 'success' ? 'ra ra-circle' : 'ra ra-light-bulb']"></i>
             <div class="flex-grow">
-              <p class="text-[10px] font-black uppercase tracking-widest opacity-50">{{ n.type }}</p>
+              <p class="text-xxs font-black uppercase tracking-widest opacity-50">{{ n.type }}</p>
               <p class="text-xs font-bold leading-relaxed">{{ n.message }}</p>
             </div>
             <button @click="notifications = notifications.filter(x => x.id !== n.id)" class="opacity-50 hover:opacity-100 transition-opacity">
@@ -720,3 +720,4 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 .notification-enter-from { opacity: 0; transform: translateX(50px); }
 .notification-leave-to { opacity: 0; transform: scale(0.9); }
 </style>
+
