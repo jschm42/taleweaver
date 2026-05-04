@@ -50,14 +50,16 @@ function isFailureStatus(status: string): boolean {
   return value.includes('failed') || value.includes('error') || value.includes('cancelled')
 }
 
-function formatToneLabel(value?: string | null): string {
+function formatToneLabel(value?: any): string {
   if (!value) return ''
-  const normalized = value
+  const valStr = typeof value === 'string' ? value : (value.name || value.id || '')
+  if (!valStr) return ''
+  const normalized = valStr
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!normalized) return ''
-  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
+  return normalized.replace(/\b\w/g, (ch: string) => ch.toUpperCase())
 }
 
 const templates = ref<AdventureTemplateSummary[]>([])

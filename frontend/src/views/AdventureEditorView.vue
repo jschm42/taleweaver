@@ -256,9 +256,11 @@ async function fetchAdventure() {
     form.value.gameover_condition = data.gameover_condition || ''
 
     form.value.selected_style_id = Array.isArray(data.selected_image_styles) && data.selected_image_styles.length > 0 
-      ? data.selected_image_styles[0] 
+      ? (typeof data.selected_image_styles[0] === 'string' ? data.selected_image_styles[0] : data.selected_image_styles[0].id)
       : ''
-    form.value.selected_tone_id = data.selected_tone || ''
+    form.value.selected_tone_id = data.selected_tone 
+      ? (typeof data.selected_tone === 'string' ? data.selected_tone : data.selected_tone.id)
+      : ''
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -362,10 +364,13 @@ async function saveChanges() {
   isSaving.value = true
   errorMsg.value = ''
   try {
+    const fullStyleObj = imageStylesCatalog.value.find(s => s.id === form.value.selected_style_id) || { id: form.value.selected_style_id, name: form.value.selected_style_id }
+    const fullToneObj = toneCatalog.value.find(t => t.id === form.value.selected_tone_id) || { id: form.value.selected_tone_id, name: form.value.selected_tone_id }
+    
     const payload = {
       ...form.value,
-      selected_image_styles: form.value.selected_style_id ? [form.value.selected_style_id] : [],
-      selected_tone: form.value.selected_tone_id || null
+      selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
+      selected_tone: form.value.selected_tone_id ? fullToneObj : null
     }
     const res = await fetch(`${BASE}/adventures/${props.adventureId}`, {
       method: 'PATCH',

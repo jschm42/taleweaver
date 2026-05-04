@@ -420,14 +420,17 @@ class WorldGenerator:
 
         # Resolve Style Instructions
         style_instruction = ""
-        if selected_image_styles and user:
-            catalog = user.image_styles_catalog or []
-            # For now we take the first selected style
-            style_id = selected_image_styles[0]
-            for s_entry in catalog:
-                if s_entry.get("id") == style_id:
-                    style_instruction = s_entry.get("instruction", "")
-                    break
+        if selected_image_styles and isinstance(selected_image_styles, list) and len(selected_image_styles) > 0:
+            first_style = selected_image_styles[0]
+            if isinstance(first_style, dict):
+                style_instruction = first_style.get("instruction", "")
+            elif isinstance(first_style, str) and user:
+                # Fallback for old string IDs if somehow passed
+                catalog = user.image_styles_catalog or []
+                for s_entry in catalog:
+                    if s_entry.get("id") == first_style:
+                        style_instruction = s_entry.get("instruction", "")
+                        break
         
         logger.info(f"Applying manifest with style instruction: '{style_instruction}'")
 
