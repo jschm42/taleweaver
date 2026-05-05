@@ -670,8 +670,8 @@ async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkey
         assert any("Generation finished successfully" in c for c in confirm_chunks)
 
 
-async def test_chat_mode_narration_only_skips_first_pass_and_keeps_progress_unchanged(setup_test_db, monkeypatch):
-    """Normal chat mode should skip first-pass tool/mechanics extraction and only stream narration."""
+async def test_chat_mode_runs_progression_pass_and_keeps_progress_unchanged(setup_test_db, monkeypatch):
+    """Normal chat mode should run a lightweight progression pass before narration."""
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -682,10 +682,35 @@ async def test_chat_mode_narration_only_skips_first_pass_and_keeps_progress_unch
         adv.awards = [{"key": "heroic-heart", "title": "Heroic Heart", "tier": "silver"}]
         state.quests = [{"id": "q-1", "title": "Open the Gate", "status": "open", "is_main": True}]
         user.earned_awards = []
+        db.add(WorldScene(
+            id="START",
+            session_id="session-1",
+            label="Gate Hall",
+            description="A stone corridor leads to an ancient gate.",
+        ))
+        db.add(WorldEntity(
+            id="GUARDIAN",
+            session_id="session-1",
+            entity_type="NPC",
+            name="Gate Guardian",
+            description="A vigilant armored watcher.",
+            current_scene_id="START",
+            is_hidden=False,
+            is_in_inventory=False,
+        ))
         await db.commit()
 
         mock_llm_instance = MagicMock()
-        mock_llm_instance.aexecute_complex_task = AsyncMock()
+
+        async def mock_progression(_system_prompt, _user_prompt, **_kwargs):
+            return AdventureGeneratorToolIntent(
+                completed_quest_ids=[],
+                earned_award_keys=[],
+                game_over=False,
+                game_completed=False,
+            )
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=mock_progression)
 
         async def mock_stream(*args, **kwargs):
             yield MagicMock(choices=[MagicMock(delta=MagicMock(content="A quiet wind passes through the gate."))])
@@ -701,11 +726,292 @@ async def test_chat_mode_narration_only_skips_first_pass_and_keeps_progress_unch
         await db.refresh(state)
         await db.refresh(user)
 
-        assert mock_llm_instance.aexecute_complex_task.await_count == 0
+        assert mock_llm_instance.aexecute_complex_task.await_count == 1
         assert mock_llm_instance.stream_simple_task.await_count == 1
         assert any("quiet wind" in c for c in chunks)
         assert (state.quests or [])[0].get("status") == "open"
         assert user.earned_awards == []
+
+
+async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, monkeypatch):
+    """Lightweight chat progression pass should update quests and awards."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = False
+        adv.awards = [{"key": "heroic-heart", "title": "Heroic Heart", "tier": "silver"}]
+        state.quests = [{"id": "q-1", "title": "Open the Gate", "status": "open", "is_main": True}]
+        user.earned_awards = []
+        db.add(WorldScene(
+            id="START",
+            session_id="session-1",
+            label="Gate Hall",
+            description="A stone corridor leads to an ancient gate.",
+        ))
+        db.add(WorldEntity(
+            id="GUARDIAN",
+            session_id="session-1",
+            entity_type="NPC",
+            name="Gate Guardian",
+            description="A vigilant armored watcher.",
+            current_scene_id="START",
+            is_hidden=False,
+            is_in_inventory=False,
+        ))
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+
+        async def mock_progression(system_prompt, _user_prompt, **_kwargs):
+            assert "OPEN QUESTS:" in system_prompt
+            assert "AVAILABLE UNEARNED AWARDS:" in system_prompt
+            assert '"id":"q-1"' in system_prompt
+            assert '"key":"heroic-heart"' in system_prompt
+            assert "NPCS:" in system_prompt
+            assert "Gate Guardian" in system_prompt
+            return AdventureGeneratorToolIntent(
+                completed_quest_ids=["q-1"],
+                earned_award_keys=["heroic-heart"],
+                status_note="Quest and award granted.",
+            )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You feel a surge of accomplishment."))])
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=mock_progression)
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("I open the gate with confidence"):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+        await db.refresh(user)
+
+        assert mock_llm_instance.aexecute_complex_task.await_count == 1
+        assert mock_llm_instance.stream_simple_task.await_count == 1
+        assert any("accomplishment" in c for c in chunks)
+        assert (state.quests or [])[0].get("status") == "completed"
+        earned = user.earned_awards or []
+        assert any(
+            ea.get("key") == "heroic-heart"
+            and (ea.get("template_id") == adv.id or ea.get("adventure_id") == adv.id)
+            for ea in earned
+        )
+
+
+async def test_chat_mode_progression_persists_and_reuses_notes(setup_test_db, monkeypatch):
+    """Chat progression notes should be persisted and included in subsequent prompts."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = False
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        seen_progression_prompts = []
+
+        async def mock_progression(system_prompt, _user_prompt, **_kwargs):
+            seen_progression_prompts.append(system_prompt)
+            if len(seen_progression_prompts) == 1:
+                assert "SESSION NOTES:" in system_prompt
+                assert "- none" in system_prompt
+                return AdventureGeneratorToolIntent(
+                    remember_notes=["Innkeeper owes the player a favor"],
+                )
+
+            assert "SESSION NOTES:" in system_prompt
+            assert "Innkeeper owes the player a favor" in system_prompt
+            return AdventureGeneratorToolIntent()
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Narration."))])
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=mock_progression)
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+
+        async for _ in manager.process_turn("I tell the innkeeper my plan"):
+            pass
+
+        await db.refresh(state)
+        assert (state.exit_states or {}).get("__gm_notes__") == ["Innkeeper owes the player a favor"]
+
+        async for _ in manager.process_turn("I return to the inn"):
+            pass
+
+        assert mock_llm_instance.aexecute_complex_task.await_count == 2
+        assert len(seen_progression_prompts) == 2
+
+
+async def test_rpg_strict_mode_persists_and_reuses_notes(setup_test_db, monkeypatch):
+    """Strict RPG mode should persist notes from mechanics pass and reuse them next turn."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = True
+        adv.rule_enforcement_mode = "strict"
+        adv.is_adventure_generator = False
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        seen_mechanics_prompts = []
+
+        async def mock_mechanics(system_prompt, _user_prompt, **_kwargs):
+            seen_mechanics_prompts.append(system_prompt)
+            if len(seen_mechanics_prompts) == 1:
+                assert "SESSION NOTES:" in system_prompt
+                assert "- none" in system_prompt
+                return GameEvent(
+                    narrative_description="Noted.",
+                    hp_change=0,
+                    stamina_change=0,
+                    mana_change=0,
+                    new_status_effects=[],
+                    new_inventory_items=[],
+                    remember_notes=["The sheriff distrusts the mayor"],
+                )
+
+            assert "SESSION NOTES:" in system_prompt
+            assert "The sheriff distrusts the mayor" in system_prompt
+            return GameEvent(
+                narrative_description="Still noted.",
+                hp_change=0,
+                stamina_change=0,
+                mana_change=0,
+                new_status_effects=[],
+                new_inventory_items=[],
+            )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Narration."))])
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=mock_mechanics)
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+
+        async for _ in manager.process_turn("I question the sheriff"):
+            pass
+
+        await db.refresh(state)
+        assert (state.exit_states or {}).get("__gm_notes__") == ["The sheriff distrusts the mayor"]
+
+        async for _ in manager.process_turn("I meet the mayor"):
+            pass
+
+        assert mock_llm_instance.aexecute_complex_task.await_count == 2
+        assert len(seen_mechanics_prompts) == 2
+
+
+async def test_story_mode_persists_and_reuses_notes(setup_test_db, monkeypatch):
+    """Strict Story mode should persist and reuse notes via story mechanics pass."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = True
+        adv.rule_enforcement_mode = "story"
+        adv.is_adventure_generator = False
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        seen_mechanics_prompts = []
+
+        async def mock_story_mechanics(system_prompt, _user_prompt, **_kwargs):
+            seen_mechanics_prompts.append(system_prompt)
+            assert "STORY MODE" in system_prompt
+            if len(seen_mechanics_prompts) == 1:
+                return GameEvent(
+                    narrative_description="You remember a rumor.",
+                    hp_change=0,
+                    stamina_change=0,
+                    mana_change=0,
+                    new_status_effects=[],
+                    new_inventory_items=[],
+                    remember_notes=["Old clocktower bell rings at midnight"],
+                )
+
+            assert "Old clocktower bell rings at midnight" in system_prompt
+            return GameEvent(
+                narrative_description="The rumor returns to mind.",
+                hp_change=0,
+                stamina_change=0,
+                mana_change=0,
+                new_status_effects=[],
+                new_inventory_items=[],
+            )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Narration."))])
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=mock_story_mechanics)
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+
+        async for _ in manager.process_turn("I listen to village rumors"):
+            pass
+
+        await db.refresh(state)
+        assert (state.exit_states or {}).get("__gm_notes__") == ["Old clocktower bell rings at midnight"]
+
+        async for _ in manager.process_turn("I wait at the square"):
+            pass
+
+        assert mock_llm_instance.aexecute_complex_task.await_count == 2
+        assert len(seen_mechanics_prompts) == 2
+
+
+async def test_notes_are_rotated_to_maximum_size(setup_test_db, monkeypatch):
+    """Persisted notes should be capped to avoid unbounded prompt growth."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = False
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        notes = [f"note-{i}" for i in range(25)]
+
+        async def mock_progression(system_prompt, _user_prompt, **_kwargs):
+            if "note-24" in system_prompt:
+                return AdventureGeneratorToolIntent()
+            return AdventureGeneratorToolIntent(remember_notes=notes)
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Narration."))])
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=mock_progression)
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+
+        async for _ in manager.process_turn("I list many facts"):
+            pass
+
+        await db.refresh(state)
+        persisted = (state.exit_states or {}).get("__gm_notes__") or []
+        assert len(persisted) == 20
+        assert persisted[0] == "note-5"
+        assert persisted[-1] == "note-24"
 
 async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
     """Verifies that slash commands (like /inventory) are handled directly without LLM calls."""

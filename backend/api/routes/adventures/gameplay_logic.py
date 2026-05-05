@@ -8,7 +8,7 @@ import random
 from copy import deepcopy
 from backend.engine.quest_manager import QuestManager
 from datetime import datetime
-from typing import Optional, Dict, Any, AsyncGenerator, Callable, Awaitable
+from typing import Optional, Dict, Any, AsyncGenerator, Callable, Awaitable, List
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +43,8 @@ WALKTHROUGH_HINT_COST = 50
 AG_IMAGE_CONFIRMATION_STATE_KEY = "__ag_image_confirmation__"
 AG_LAST_REQUEST_STATE_KEY = "__ag_last_generation_request__"
 AG_LAST_ERROR_STATE_KEY = "__ag_last_generation_error__"
+GM_NOTES_STATE_KEY = "__gm_notes__"
+GM_NOTES_MAX_ITEMS = 20
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -146,9 +148,80 @@ class GameTurnManager:
         earned_keys = {
             entry.get("key")
             for entry in earned_awards
-            if entry.get("key") and entry.get("template_id") == self.adventure.id
+            if entry.get("key") and (entry.get("template_id") == self.adventure.id or entry.get("adventure_id") == self.adventure.id)
         }
         return [a for a in awards if not a.get("key") or a.get("key") not in earned_keys]
+
+    def _get_gm_notes(self) -> List[str]:
+        exit_states = self.state.exit_states or {}
+        notes = exit_states.get(GM_NOTES_STATE_KEY)
+        if not isinstance(notes, list):
+            return []
+        return [str(n).strip() for n in notes if str(n).strip()]
+
+    def _apply_gm_notes_update(
+        self,
+        remember_notes: Optional[List[str]],
+        forget_notes: Optional[List[str]],
+        clear_notes: bool,
+    ) -> None:
+        existing = self._get_gm_notes()
+        if clear_notes:
+            existing = []
+
+        forget_set = {
+            str(note).strip().lower()
+            for note in (forget_notes or [])
+            if str(note).strip()
+        }
+        if forget_set:
+            existing = [n for n in existing if n.strip().lower() not in forget_set]
+
+        for note in (remember_notes or []):
+            normalized = str(note).strip()
+            if not normalized:
+                continue
+            if any(n.strip().lower() == normalized.lower() for n in existing):
+                continue
+            existing.append(normalized)
+
+        if len(existing) > GM_NOTES_MAX_ITEMS:
+            existing = existing[-GM_NOTES_MAX_ITEMS:]
+
+        exit_states = dict(self.state.exit_states or {})
+        if existing:
+            exit_states[GM_NOTES_STATE_KEY] = existing
+        else:
+            exit_states.pop(GM_NOTES_STATE_KEY, None)
+        self.state.exit_states = exit_states
+        flag_modified(self.state, "exit_states")
+
+    def _build_gm_notes_prompt_block(self) -> str:
+        notes = self._get_gm_notes()
+        if not notes:
+            return "\n\nSESSION NOTES:\n- none"
+        lines = "\n".join(f"- {note}" for note in notes)
+        return "\n\nSESSION NOTES:\n" + lines
+
+    @staticmethod
+    def _build_progression_event(intent: AdventureGeneratorToolIntent) -> GameEvent:
+        return GameEvent(
+            narrative_description=intent.narrative_description or "",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
+            completed_quest_ids=intent.completed_quest_ids,
+            earned_award_keys=intent.earned_award_keys,
+            remember_notes=intent.remember_notes,
+            forget_notes=intent.forget_notes,
+            clear_notes=bool(intent.clear_notes),
+            game_over=bool(intent.game_over),
+            game_completed=bool(intent.game_completed),
+            status_note=intent.status_note,
+            instant_narrative=intent.instant_narrative,
+        )
 
     async def initialize(self) -> bool:
         """Loads all necessary context for the turn."""
@@ -1459,6 +1532,9 @@ class GameTurnManager:
             is_adventure_generator=self.adventure.is_adventure_generator,
             location_detail_level="full",
         )[0]["content"]
+        notes_prompt_block = self._build_gm_notes_prompt_block()
+        mechanics_system_prompt += notes_prompt_block
+        narration_system_prompt += notes_prompt_block
         mechanics_awards = self._build_mechanics_awards()
         mechanics_prompt_chars = len(mechanics_system_prompt or "")
         narration_prompt_chars = len(narration_system_prompt or "")
@@ -1540,8 +1616,10 @@ class GameTurnManager:
         pre_inventory_ids = set()
         response_text = ""
 
-        # Pass 1: Mechanics (strict adventures) or lightweight tool-intent pass (adventure-generator chat mode)
+        # Pass 1: Mechanics (strict adventures), chat progression intent (normal chat),
+        # or adventure-generator tool-intent pass (generator chat mode).
         run_mechanics_pass = self.adventure.strict_rules
+        run_chat_progression_pass = not self.adventure.strict_rules and not self.adventure.is_adventure_generator
         run_generator_tool_intent_pass = self.adventure.is_adventure_generator and not self.adventure.strict_rules
         handled_generator_confirmation = False
 
@@ -1858,6 +1936,62 @@ class GameTurnManager:
                 async for tool_chunk in self._stream_adventure_generator_tools(game_event):
                     yield tool_chunk
 
+        elif run_chat_progression_pass:
+            yield f"event: status\ndata: {json.dumps({'content': 'Checking progression...'})}\n\n"
+            try:
+                llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
+            except ValueError as e:
+                yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+                return
+
+            progression_prompt = (
+                mechanics_system_prompt
+                + "\n\n"
+                + prompts.GM_CHAT_TOOL_INTENT_SUFFIX.format(
+                    quests_json=self._compact_json(self.state.quests or []),
+                    awards_json=self._compact_json(mechanics_awards),
+                )
+            )
+
+            progression_start = time.perf_counter()
+            try:
+                progression_intent = await llm.aexecute_complex_task(
+                    progression_prompt,
+                    user_msg,
+                    response_model=AdventureGeneratorToolIntent,
+                    model=small_model,
+                )
+            except Exception as e:
+                user_safe_error = _friendly_llm_error_message(e)
+                if user_safe_error:
+                    yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
+                    return
+                raise
+
+            log_structured_event(
+                "gm.turn.pipeline.pass",
+                adventure_id=self.adventure.id,
+                game_id=self.game_id,
+                operation="chat_turn",
+                phase="chat_progression",
+                duration_ms=round((time.perf_counter() - progression_start) * 1000, 2),
+                model=small_model,
+                provider=small_model_provider,
+            )
+
+            game_event = self._build_progression_event(progression_intent)
+
+            try:
+                await self._apply_game_event(game_event)
+                if game_event.game_completed:
+                    await self._finalize_session("completed", game_event.status_note)
+                elif game_event.game_over:
+                    await self._finalize_session("game_over", game_event.status_note or "Game over.")
+            except GameOverException as goe:
+                await self._finalize_session("game_over", str(goe))
+                game_event.game_over = True
+                game_event.status_note = str(goe)
+
         # Pass 2: Narration
         if game_event and game_event.instant_narrative:
             logger.info(f"[Turn {self.game_id}] Short-circuit active: Using instant_narrative from Pass 1.")
@@ -1883,6 +2017,9 @@ class GameTurnManager:
                 ) + "\n\n" +
                 prompts.GM_NARRATION_MANDATORY_FORMATTING
             )
+
+            if run_chat_progression_pass:
+                narration_prompt += "\n\n" + prompts.GM_CHAT_NARRATION_SUFFIX
             
             if language:
                 narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
@@ -2148,6 +2285,9 @@ class GameTurnManager:
                 await self._spawn_scene_item(item.model_dump(exclude_none=True))
             state_dirty = True
 
+        if event.remember_notes or event.forget_notes or event.clear_notes:
+            self._apply_gm_notes_update(event.remember_notes, event.forget_notes, bool(event.clear_notes))
+
         # Quest Updates
         if event.completed_quest_ids:
             new_quests = deepcopy(self.state.quests or [])
@@ -2161,6 +2301,46 @@ class GameTurnManager:
             if modified:
                 self.state.quests = new_quests
                 state_dirty = True
+
+        if event.earned_award_keys:
+            now = datetime.utcnow().isoformat()
+            award_defs = {
+                (aw.get("key") or ""): aw
+                for aw in (self.adventure.awards or [])
+                if aw.get("key")
+            }
+            user_awards = list(self.user.earned_awards or [])
+            modified = False
+            for key in event.earned_award_keys:
+                if not key:
+                    continue
+                already_earned = any(
+                    ea.get("key") == key
+                    and (ea.get("template_id") == self.adventure.id or ea.get("adventure_id") == self.adventure.id)
+                    for ea in user_awards
+                )
+                if already_earned:
+                    continue
+
+                aw = award_defs.get(key, {})
+                user_awards.append(
+                    {
+                        "key": key,
+                        "title": aw.get("title") or key,
+                        "description": aw.get("description"),
+                        "tier": aw.get("tier"),
+                        "template_id": self.adventure.id,
+                        "adventure_id": self.adventure.id,
+                        "adventure_title": self.adventure.title,
+                        "session_id": self.state.session_id,
+                        "earned_at": now,
+                    }
+                )
+                modified = True
+
+            if modified:
+                self.user.earned_awards = user_awards
+                flag_modified(self.user, "earned_awards")
 
         # Deterministic Quest Sync (Post-LLM check)
         det_completed = QuestManager.evaluate_quests(self.avatar, self.state)

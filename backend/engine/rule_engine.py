@@ -136,6 +136,9 @@ class AdventureGeneratorToolIntent(BaseModel):
     # Chat-mode progression intent (lightweight technical signals)
     completed_quest_ids: Optional[List[str]] = None
     earned_award_keys: Optional[List[str]] = None
+    remember_notes: Optional[List[str]] = None
+    forget_notes: Optional[List[str]] = None
+    clear_notes: bool = False
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
@@ -192,6 +195,11 @@ class GameEvent(BaseModel):
     
     # Award System
     earned_award_keys: Optional[List[str]] = None
+
+    # Notes Tool
+    remember_notes: Optional[List[str]] = None
+    forget_notes: Optional[List[str]] = None
+    clear_notes: bool = False
 
     # Status Updates
     game_over: bool = False
