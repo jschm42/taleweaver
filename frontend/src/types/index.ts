@@ -123,7 +123,7 @@ export interface AdventureTemplateSummary {
   is_ready: boolean
   creation_status?: string | null
   creation_error?: string | null
-  selected_tone?: CatalogTile | null
+  selected_tone?: CatalogTile | string | null
   progress?: number
   quest_count?: number
   completed_quest_count?: number
@@ -146,7 +146,7 @@ export interface CreateAdventurePayload {
   generate_item_images?: boolean
   generate_scene_images?: boolean
   selected_image_styles?: CatalogTile[]
-  selected_tone?: CatalogTile
+  selected_tone?: CatalogTile | string | null
   min_scenes?: number
   max_scenes?: number
   clock_enabled?: boolean

@@ -47,15 +47,18 @@ function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
 const toneLabel = computed(() => {
   const tone = props.template.selected_tone
   if (!tone) return ''
-  if (tone.startsWith('{')) {
-    try {
-      const obj = JSON.parse(tone)
-      return obj.id || obj.name || tone
-    } catch (e) {
-      return tone
+  if (typeof tone === 'string') {
+    if (tone.startsWith('{')) {
+      try {
+        const obj = JSON.parse(tone)
+        return obj.name || obj.id || tone
+      } catch (e) {
+        return tone
+      }
     }
+    return tone
   }
-  return tone
+  return tone.name || tone.id || ''
 })
 
 </script>

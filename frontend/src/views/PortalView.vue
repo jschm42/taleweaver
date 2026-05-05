@@ -52,13 +52,18 @@ function isFailureStatus(status: string): boolean {
 
 function formatToneLabel(value?: any): string {
   if (!value) return ''
-  let text = value
-  if (text.startsWith('{')) {
-    try {
-      const obj = JSON.parse(text)
-      text = obj.id || obj.name || text
-    } catch (e) {
-      // Not JSON, continue
+  let text = ''
+  if (typeof value === 'object') {
+    text = value.name || value.id || ''
+  } else {
+    text = String(value)
+    if (text.startsWith('{')) {
+      try {
+        const obj = JSON.parse(text)
+        text = obj.name || obj.id || text
+      } catch (e) {
+        // Not JSON, continue
+      }
     }
   }
   const normalized = text
@@ -650,7 +655,7 @@ onUnmounted(() => {
                 :key="entry.game_id"
                 :session="entry"
                 @resume="playSession"
-                @delete="confirmDeleteSession(entry.game_id, entry.title)"
+                @delete="confirmDeleteSession(entry.game_id, entry.adventure_title)"
               />
             </div>
           </div>

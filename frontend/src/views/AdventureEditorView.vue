@@ -38,7 +38,7 @@ const isAIEditing = ref(false)
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
-const editForm = ref({ name: '', teaser: '', description: '' })
+const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0 })
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -259,7 +259,7 @@ async function fetchAdventure() {
     form.value.title = data.title
     form.value.teaser = data.teaser || ''
     form.value.original_prompt = data.original_prompt || ''
-    form.value.rule_enforcement_mode = data.rule_enforcement_mode || 'rpg'
+    form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
     form.value.min_scenes = data.min_scenes || 1
     form.value.max_scenes = data.max_scenes || 5
@@ -798,7 +798,7 @@ const goBack = () => router.push({ name: 'portal' })
                     </div>
                     <div class="flex gap-3 shrink-0">
                        <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all">Fast Gen</button>
-                       <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
+                       <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
                         <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
                         <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt, debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
                     </div>
@@ -825,7 +825,7 @@ const goBack = () => router.push({ name: 'portal' })
                         </div>
                         <div class="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all scale-75 origin-top-right">
                           <button @click="quickRegenerateVisual('protagonist', debugData.protagonist.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
-                          <button @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
+                          <button @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
                           <button @click="openUploadPicker('protagonist', debugData.protagonist.id, debugData.protagonist.name)" :disabled="isUploading" :title="getUploadHint('protagonist')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-player"></i></button>
                           <button @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description, '', debugData.protagonist.hp, debugData.protagonist.stamina, debugData.protagonist.mana)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
                         </div>
@@ -853,7 +853,7 @@ const goBack = () => router.push({ name: 'portal' })
                       </div>
                       <div class="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0">
                         <button @click="quickRegenerateVisual('scene', scene.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
-                        <button @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name, scene.description)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
+                        <button @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
                         <button @click="openUploadPicker('scene', scene.id, scene.label || scene.name)" :disabled="isUploading" :title="getUploadHint('scene')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-layer-group"></i></button>
                         <button @click="openTextEdit('scene', scene.id, scene.label || scene.name, scene.description)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
                       </div>
@@ -895,7 +895,7 @@ const goBack = () => router.push({ name: 'portal' })
                       </div>
                       <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0 scale-75 origin-top-right">
                         <button @click="quickRegenerateVisual('npc', npc.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
-                        <button @click="openRegenerateDialog('npc', npc.id, npc.name, npc.description)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
+                        <button @click="openRegenerateDialog('npc', npc.id, npc.name)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
                         <button @click="openUploadPicker('npc', npc.id, npc.name)" :disabled="isUploading" :title="getUploadHint('npc')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-player"></i></button>
                         <button @click="openTextEdit('npc', npc.id, npc.name, npc.description, '', npc.stats?.hp, npc.stats?.stamina, npc.stats?.mana)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
                       </div>
@@ -929,7 +929,7 @@ const goBack = () => router.push({ name: 'portal' })
                       </div>
                       <div class="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-75 origin-top-right">
                         <button @click="quickRegenerateVisual('object', obj.id)" class="p-1.5 bg-black/60 backdrop-blur-md text-emerald-400 rounded border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle text-xs"></i></button>
-                        <button @click="openRegenerateDialog('object', obj.id, obj.name, obj.description)" class="p-1.5 bg-black/60 backdrop-blur-md text-cyan-400 rounded border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield text-xs"></i></button>
+                        <button @click="openRegenerateDialog('object', obj.id, obj.name)" class="p-1.5 bg-black/60 backdrop-blur-md text-cyan-400 rounded border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield text-xs"></i></button>
                         <button @click="openUploadPicker('object', obj.id, obj.name)" :disabled="isUploading" :title="getUploadHint('object')" class="p-1.5 bg-black/60 backdrop-blur-md text-amber-300 rounded border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-chest text-xs"></i></button>
                         <button @click="openTextEdit('object', obj.id, obj.name, obj.description)" class="p-1.5 bg-black/60 backdrop-blur-md text-blue-400 rounded border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink text-xs"></i></button>
                       </div>
@@ -1353,7 +1353,7 @@ const goBack = () => router.push({ name: 'portal' })
                 </template>
                 <template v-else-if="hoveredEntity.type === 'ITEM'">
                   <div v-for="(val, stat) in hoveredEntity.stats" :key="stat" class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-white/10 text-xs font-bold text-slate-300 uppercase">
-                    {{ stat.replace('_', ' ') }}: +{{ val }}
+                    {{ String(stat).replace('_', ' ') }}: +{{ val }}
                   </div>
                 </template>
               </div>

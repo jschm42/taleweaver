@@ -21,6 +21,10 @@ const isBatchGenerating = ref<Record<string, boolean>>({})
 // Editor State
 const aiEditPrompt = ref('')
 const isAIEditing = ref(false)
+const promptError = ref('')
+const showPromptDialog = ref(false)
+const isRegenerating = ref(false)
+const isUploading = ref(false)
 
 const editingEntityId = ref<string | null>(null)
 const editForm = ref({ 
