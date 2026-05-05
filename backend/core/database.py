@@ -312,6 +312,29 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added adventures.owner_id")
 
+        # game_sessions fields introduced after early local schemas
+        if "game_sessions" in table_names:
+            game_session_cols_result = await conn.exec_driver_sql("PRAGMA table_info(game_sessions)")
+            game_session_cols = {row[1] for row in game_session_cols_result.fetchall()}
+
+            if "adventure_title" not in game_session_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE game_sessions ADD COLUMN adventure_title TEXT"
+                )
+                logger.info("SQLite migration: added game_sessions.adventure_title")
+
+            if "adventure_image_url" not in game_session_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE game_sessions ADD COLUMN adventure_image_url TEXT"
+                )
+                logger.info("SQLite migration: added game_sessions.adventure_image_url")
+
+            if "status_note" not in game_session_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE game_sessions ADD COLUMN status_note TEXT"
+                )
+                logger.info("SQLite migration: added game_sessions.status_note")
+
         # New split model uses adventure_templates; backfill columns that older local DBs may miss.
         if "adventure_templates" in table_names:
             template_cols_result = await conn.exec_driver_sql("PRAGMA table_info(adventure_templates)")
@@ -368,6 +391,85 @@ async def apply_sqlite_compat_migrations() -> None:
         # Cleanup: Drop is_paused from session_states
         session_state_cols_result = await conn.exec_driver_sql("PRAGMA table_info(session_states)")
         session_state_cols = {row[1] for row in session_state_cols_result.fetchall()}
+
+        if "time_system" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN time_system TEXT NOT NULL DEFAULT 'calendar'"
+            )
+            logger.info("SQLite migration: added session_states.time_system")
+
+        if "time_config" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN time_config TEXT"
+            )
+            logger.info("SQLite migration: added session_states.time_config")
+
+        if "quests" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN quests TEXT"
+            )
+            logger.info("SQLite migration: added session_states.quests")
+
+        if "start_datetime" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN start_datetime TEXT"
+            )
+            logger.info("SQLite migration: added session_states.start_datetime")
+
+        if "plot" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN plot TEXT"
+            )
+            logger.info("SQLite migration: added session_states.plot")
+
+        if "rules" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN rules TEXT"
+            )
+            logger.info("SQLite migration: added session_states.rules")
+
+        if "walkthrough" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN walkthrough TEXT"
+            )
+            logger.info("SQLite migration: added session_states.walkthrough")
+
+        if "completed_condition" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN completed_condition TEXT"
+            )
+            logger.info("SQLite migration: added session_states.completed_condition")
+
+        if "gameover_condition" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN gameover_condition TEXT"
+            )
+            logger.info("SQLite migration: added session_states.gameover_condition")
+
+        if "selected_image_styles" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN selected_image_styles TEXT"
+            )
+            logger.info("SQLite migration: added session_states.selected_image_styles")
+
+        if "selected_tone" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN selected_tone TEXT"
+            )
+            logger.info("SQLite migration: added session_states.selected_tone")
+
+        if "is_walkthrough_revealed" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN is_walkthrough_revealed BOOLEAN DEFAULT 0"
+            )
+            logger.info("SQLite migration: added session_states.is_walkthrough_revealed")
+
+        if "allow_dynamic_items" not in session_state_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE session_states ADD COLUMN allow_dynamic_items BOOLEAN NOT NULL DEFAULT 1"
+            )
+            logger.info("SQLite migration: added session_states.allow_dynamic_items")
+
         if "is_paused" in session_state_cols:
             try:
                 await conn.exec_driver_sql("ALTER TABLE session_states DROP COLUMN is_paused")

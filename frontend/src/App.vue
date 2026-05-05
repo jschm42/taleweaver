@@ -49,9 +49,11 @@ async function checkAuth() {
   }
 }
 
-onMounted(() => {
-  checkAuth()
-  refreshConfig()
+onMounted(async () => {
+  await checkAuth()
+  if (authState.token) {
+    await refreshConfig()
+  }
   
   // Listen for 401 events from useApi
   window.addEventListener('auth-unauthorized', () => {

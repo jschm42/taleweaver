@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { api } from '@/composables/useApi'
+import { authState } from '@/store/auth'
 
 export const configState = reactive({
   appVersion: '0.0.0-loading',
@@ -9,6 +10,11 @@ export const configState = reactive({
 })
 
 export async function refreshConfig() {
+  // Settings endpoint is protected; skip until a token exists.
+  if (!authState.token) {
+    return
+  }
+
   try {
     const data = await api.getSettings()
     if (data.app_version) {

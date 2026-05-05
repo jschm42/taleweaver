@@ -19,6 +19,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+
+    # Clean up leftovers from interrupted SQLite batch migrations.
+    conn.execute(sa.text("DROP TABLE IF EXISTS _alembic_tmp_world_entities"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS _alembic_tmp_world_scenes"))
+
+    # Backfill nullable legacy PK values so SQLite batch copy does not fail on NOT NULL.
+    conn.execute(sa.text("UPDATE world_entities SET pk = rowid WHERE pk IS NULL"))
+    conn.execute(sa.text("UPDATE world_scenes SET pk = rowid WHERE pk IS NULL"))
+
     # Fix world_entities
     with op.batch_alter_table('world_entities', schema=None) as batch_op:
         # We need to recreate the table with pk as the primary key.

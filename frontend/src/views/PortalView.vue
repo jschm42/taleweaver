@@ -518,7 +518,11 @@ async function pollAdventureStatus(adventureId: string, options?: PollAdventureO
 }
 
 onMounted(() => {
-  void fetchPortalData()
+  if (authState.token) {
+    void fetchPortalData()
+  } else {
+    isLoading.value = false
+  }
 
   loadingWordTimer = window.setInterval(() => {
     loadingWordIndex.value = (loadingWordIndex.value + 1) % loadingWords.length
@@ -541,6 +545,16 @@ onMounted(() => {
     router.replace({ name: 'portal', query: {} })
   }
 })
+
+watch(
+  () => authState.token,
+  (token) => {
+    if (token) {
+      isLoading.value = true
+      void fetchPortalData()
+    }
+  },
+)
 
 watch(() => route.query.section, (section) => {
   if (section === 'profile') activeSection.value = 'profile'
