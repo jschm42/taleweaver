@@ -15,6 +15,7 @@ from sqlalchemy import delete, select
 from PIL import Image
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
+from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
 from backend.models.game_state import GameState
 from backend.models.world_entity import WorldEntity
@@ -1615,6 +1616,19 @@ async def test_delete_single_session_keeps_template(client: AsyncClient):
 
     template_resp = await client.get(f"/api/adventures/{ids['adventure_id']}")
     assert template_resp.status_code == 200
+
+
+async def test_delete_session_with_chat_messages_succeeds(client: AsyncClient):
+    """Deleting a session with stored chat rows should not fail with FK/500 errors."""
+    ids = await _create_adventure(client, "Delete Session With Chat")
+
+    async with TestSessionLocal() as session:
+        session.add(ChatMessage(session_id=ids["game_id"], role="user", content="hello there"))
+        session.add(ChatMessage(session_id=ids["game_id"], role="assistant", content="general kenobi"))
+        await session.commit()
+
+    del_resp = await client.delete(f"/api/adventures/sessions/{ids['game_id']}")
+    assert del_resp.status_code == 200, del_resp.text
 
 
 async def test_started_session_persists_asset_snapshot(client: AsyncClient):

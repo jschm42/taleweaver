@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from copy import deepcopy
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from backend.core.database import get_db
 from backend.core.auth import get_current_user
 from backend.models.user import User
@@ -315,14 +315,27 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
     game_session = result.scalars().first()
     if not game_session:
         raise HTTPException(status_code=404, detail="Session not found.")
+
     avatar_id = game_session.avatar_id
+
+    # Explicitly remove session-bound rows that may not be ORM-cascaded.
+    await db.execute(delete(ChatMessage).where(ChatMessage.session_id == game_id))
+    await db.execute(delete(SessionState).where(SessionState.session_id == game_id))
+    await db.execute(delete(WorldEntity).where(WorldEntity.session_id == game_id))
+    await db.execute(delete(WorldScene).where(WorldScene.session_id == game_id))
+    await db.execute(delete(WorldExit).where(WorldExit.session_id == game_id))
+
     await db.delete(game_session)
-    
-    # Also delete the associated avatar as it was session-specific
-    avatar_res = await db.execute(select(Avatar).where(Avatar.id == avatar_id))
-    avatar = avatar_res.scalars().first()
-    if avatar:
-        await db.delete(avatar)
+
+    # Remove avatar only if no other session references it.
+    other_session_res = await db.execute(
+        select(GameSession.id).where(GameSession.avatar_id == avatar_id, GameSession.id != game_id).limit(1)
+    )
+    if not other_session_res.scalar_one_or_none():
+        avatar_res = await db.execute(select(Avatar).where(Avatar.id == avatar_id))
+        avatar = avatar_res.scalars().first()
+        if avatar:
+            await db.delete(avatar)
         
     await db.commit()
     return {"status": "deleted", "game_id": game_id}

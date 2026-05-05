@@ -40,6 +40,8 @@ logger = logging.getLogger(__name__)
 WALKTHROUGH_REVEAL_COST = 200
 WALKTHROUGH_HINT_COST = 50
 AG_IMAGE_CONFIRMATION_STATE_KEY = "__ag_image_confirmation__"
+AG_LAST_REQUEST_STATE_KEY = "__ag_last_generation_request__"
+AG_LAST_ERROR_STATE_KEY = "__ag_last_generation_error__"
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -106,6 +108,18 @@ def _friendly_llm_error_message(exc: Exception) -> Optional[str]:
         return "The Game Master took too long to respond. Please try again."
     if _is_service_unavailable_error(exc):
         return "The Game Master is temporarily unavailable. Please try again shortly."
+    return None
+
+
+def _llm_error_type(exc: Exception) -> Optional[str]:
+    if _is_token_limit_error(exc):
+        return "token_limit"
+    if _is_rate_limit_error(exc):
+        return "rate_limit"
+    if _is_timeout_error(exc):
+        return "timeout"
+    if _is_service_unavailable_error(exc):
+        return "service_unavailable"
     return None
 
 class GameTurnManager:
@@ -1446,11 +1460,13 @@ class GameTurnManager:
                     )
                 else:
                     self._clear_pending_ag_image_confirmation()
+                    if decision == "with_images":
+                        pending_request.generate_scene_images = True
                     if decision == "without_images":
                         pending_request.generate_scene_images = False
                         msg = "SYSTEM: Image generation disabled by user confirmation. Continuing with text-only world generation."
                         self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
-                        yield f"event: system\\ndata: {json.dumps({'role': 'system', 'content': msg})}\\n\\n"
+                        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
                     game_event = AdventureGeneratorToolIntent(
                         requested_adventure_generation=pending_request,
@@ -1682,10 +1698,22 @@ class GameTurnManager:
                     return
                 raise
 
-            if game_event.requested_adventure_generation and game_event.requested_adventure_generation.generate_scene_images:
+            if (
+                not game_event.requested_adventure_generation
+                and self._is_generation_retry_request(user_msg)
+            ):
+                last_request = self._get_last_ag_generation_request()
+                if last_request:
+                    if self._get_last_ag_generation_error() == "token_limit":
+                        last_request.generate_scene_images = False
+                    game_event.requested_adventure_generation = last_request
+                    if not game_event.instant_narrative:
+                        game_event.instant_narrative = "Understood. I will retry the last adventure generation now."
+
+            if game_event.requested_adventure_generation:
                 self._set_pending_ag_image_confirmation(game_event.requested_adventure_generation)
                 confirmation_msg = (
-                    "SYSTEM: Before I start generation with automatic scene images, please confirm: "
+                    "SYSTEM: Before I start generation, please confirm image mode: "
                     "reply with 'yes with images', 'yes without images', or 'cancel'."
                 )
                 self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=confirmation_msg))
@@ -2079,6 +2107,52 @@ class GameTurnManager:
             return "with_images"
         return "unknown"
 
+    def _is_generation_retry_request(self, user_msg: str) -> bool:
+        text = (user_msg or "").strip().lower()
+        if not text:
+            return False
+        retry_patterns = (
+            r"\bnochmal\b",
+            r"\bnoch einmal\b",
+            r"\berneut\b",
+            r"\bwieder\b",
+            r"\bagain\b",
+            r"\bretry\b",
+            r"\btry again\b",
+            r"\bplease retry\b",
+        )
+        return any(re.search(p, text) for p in retry_patterns)
+
+    def _set_last_ag_generation_request(self, request: AdventureGenerationRequest) -> None:
+        exit_states = dict(self.state.exit_states or {})
+        exit_states[AG_LAST_REQUEST_STATE_KEY] = request.model_dump()
+        self.state.exit_states = exit_states
+        flag_modified(self.state, "exit_states")
+
+    def _get_last_ag_generation_request(self) -> Optional[AdventureGenerationRequest]:
+        exit_states = dict(self.state.exit_states or {})
+        raw = exit_states.get(AG_LAST_REQUEST_STATE_KEY)
+        if not isinstance(raw, dict):
+            return None
+        try:
+            return AdventureGenerationRequest.model_validate(raw)
+        except Exception:
+            return None
+
+    def _set_last_ag_generation_error(self, error_type: Optional[str]) -> None:
+        exit_states = dict(self.state.exit_states or {})
+        if error_type:
+            exit_states[AG_LAST_ERROR_STATE_KEY] = error_type
+        else:
+            exit_states.pop(AG_LAST_ERROR_STATE_KEY, None)
+        self.state.exit_states = exit_states
+        flag_modified(self.state, "exit_states")
+
+    def _get_last_ag_generation_error(self) -> Optional[str]:
+        exit_states = dict(self.state.exit_states or {})
+        value = exit_states.get(AG_LAST_ERROR_STATE_KEY)
+        return value if isinstance(value, str) and value else None
+
     async def _stream_adventure_generator_tools(self, event) -> AsyncGenerator[str, None]:
         progress_queue: asyncio.Queue[str] = asyncio.Queue()
 
@@ -2095,7 +2169,7 @@ class GameTurnManager:
         while True:
             try:
                 msg = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
-                yield f"event: system\\ndata: {json.dumps({'role': 'system', 'content': msg})}\\n\\n"
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             except asyncio.TimeoutError:
                 if tool_task.done():
                     break
@@ -2103,7 +2177,7 @@ class GameTurnManager:
         await tool_task
         while not progress_queue.empty():
             msg = progress_queue.get_nowait()
-            yield f"event: system\\ndata: {json.dumps({'role': 'system', 'content': msg})}\\n\\n"
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
     async def _apply_adventure_generator_tools(
         self,
@@ -2134,6 +2208,8 @@ class GameTurnManager:
             await self._emit_system_message(msg, stream_callback=stream_callback)
 
         if event.requested_adventure_generation:
+            self._set_last_ag_generation_request(event.requested_adventure_generation)
+
             async def _post_generation_system_message(status: str) -> None:
                 msg = f"SYSTEM: Adventure Generator: {status}"
                 await self._emit_system_message(msg, stream_callback=stream_callback)
@@ -2153,6 +2229,7 @@ class GameTurnManager:
                     event.tool_results = ToolResults()
                 event.tool_results.generation_success = True
                 event.tool_results.new_adventure_id = new_adv_id
+                self._set_last_ag_generation_error(None)
 
                 await _post_generation_system_message("Generation finished successfully.")
 
@@ -2163,6 +2240,7 @@ class GameTurnManager:
                     event.tool_results = ToolResults()
                 event.tool_results.generation_success = False
                 event.tool_results.generation_error = str(e)
+                self._set_last_ag_generation_error(_llm_error_type(e))
 
                 await _post_generation_system_message("Generation aborted due to an error.")
 

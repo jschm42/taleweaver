@@ -297,6 +297,7 @@ GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX = (
     "You are in Adventure-Generator chat mode. Return ONLY tool intent fields for this turn. "
     "Use `request_available_image_styles` or `request_available_tones` when asked. "
     "Use `requested_adventure_generation` only when all generation inputs are present. "
+    "If the player asks to retry/regenerate after a prior failure, prefer returning `requested_adventure_generation` using the most recent known parameters (with reasonable defaults) instead of asking repeated clarification questions. "
     "If no tool action is needed, leave all tool fields unset/false. "
     "You may provide a short `instant_narrative` for simple acknowledgements."
 )

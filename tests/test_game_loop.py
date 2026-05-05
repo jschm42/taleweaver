@@ -410,6 +410,8 @@ async def test_adventure_generator_requires_image_confirmation_before_generation
 
         await db.refresh(state)
         assert any("please confirm" in c.lower() for c in turn1_chunks)
+        assert any("event: system\ndata:" in c for c in turn1_chunks)
+        assert not any("event: system\\ndata:" in c for c in turn1_chunks)
         assert generate_adventure_mock.await_count == 0
         assert "__ag_image_confirmation__" in (state.exit_states or {})
 
@@ -423,6 +425,69 @@ async def test_adventure_generator_requires_image_confirmation_before_generation
         assert req_arg.generate_scene_images is False
         assert "__ag_image_confirmation__" not in (state.exit_states or {})
         assert any("text-only world generation" in c for c in turn2_chunks)
+        assert any("event: system\ndata:" in c for c in turn2_chunks)
+        assert not any("event: system\\ndata:" in c for c in turn2_chunks)
+
+
+async def test_adventure_generator_always_confirms_image_mode_before_generation(setup_test_db, monkeypatch):
+    """Generator requests must always ask for explicit image-mode confirmation."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = True
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=AdventureGeneratorToolIntent(
+            requested_adventure_generation={
+                "title": "Quiet Archive",
+                "prompt": "Create a library world with hidden passages.",
+                "min_scenes": 4,
+                "max_scenes": 6,
+                "generate_scene_images": False,
+                "selected_image_styles": ["cinematic-realism"],
+                "selected_tone": "mystery",
+                "min_awards": 1,
+                "max_awards": 3,
+                "award_generation_enabled": True,
+            }
+        ))
+
+        async def empty_stream():
+            if False:
+                yield None
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=empty_stream())
+
+        generate_adventure_mock = AsyncMock(return_value="adv-confirm-1")
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        monkeypatch.setattr(
+            "backend.engine.adventure_generator_service.AdventureGeneratorService.generate_adventure",
+            generate_adventure_mock,
+        )
+
+        manager = GameTurnManager(db, "session-1", user)
+        turn1_chunks = []
+        async for chunk in manager.process_turn("generate archive world"):
+            turn1_chunks.append(chunk)
+
+        await db.refresh(state)
+        assert any("please confirm image mode" in c.lower() for c in turn1_chunks)
+        assert generate_adventure_mock.await_count == 0
+        assert "__ag_image_confirmation__" in (state.exit_states or {})
+
+        turn2_chunks = []
+        async for chunk in manager.process_turn("yes with images"):
+            turn2_chunks.append(chunk)
+
+        assert generate_adventure_mock.await_count == 1
+        req_arg = generate_adventure_mock.await_args.args[2]
+        assert req_arg.generate_scene_images is True
+        assert any("generation finished successfully" in c.lower() for c in turn2_chunks)
 
 
 async def test_token_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch):
@@ -465,6 +530,61 @@ async def test_rate_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch)
 
         assert any("event: error" in c and "busy right now" in c.lower() for c in chunks)
         assert not any("429" in c or "rate limit exceeded" in c.lower() for c in chunks)
+
+
+async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkeypatch):
+    """A retry phrase should continue generation from the stored last request if the LLM omits tool fields."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = True
+        state.exit_states = {
+            "__ag_last_generation_request__": {
+                "title": "Bundy Boulevard",
+                "prompt": "A suburban sitcom house with absurd family conflicts.",
+                "min_scenes": 5,
+                "max_scenes": 8,
+                "generate_scene_images": True,
+                "selected_image_styles": ["cinematic-realism"],
+                "selected_tone": "satirical",
+                "min_awards": 2,
+                "max_awards": 4,
+                "award_generation_enabled": True,
+            },
+            "__ag_last_generation_error__": "token_limit",
+        }
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=AdventureGeneratorToolIntent())
+
+        async def empty_stream():
+            if False:
+                yield None
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=empty_stream())
+
+        generate_adventure_mock = AsyncMock(return_value="adv-retry-1")
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        monkeypatch.setattr(
+            "backend.engine.adventure_generator_service.AdventureGeneratorService.generate_adventure",
+            generate_adventure_mock,
+        )
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("bitte nochmal erstellen"):
+            chunks.append(chunk)
+
+        assert generate_adventure_mock.await_count == 1
+        req_arg = generate_adventure_mock.await_args.args[2]
+        assert req_arg.title == "Bundy Boulevard"
+        assert req_arg.generate_scene_images is False
+        assert any("Generation finished successfully" in c for c in chunks)
 
 async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
     """Verifies that slash commands (like /inventory) are handled directly without LLM calls."""
