@@ -67,9 +67,11 @@ Used in WorldGenerator.generate_world.
 
 WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "AdventureTemplate Title: {title}\n"
-    "Story Idea: {original_prompt}\n\n"
+    "Story Idea: {original_prompt}\n"
+    "Narrative Tone: {selected_tone}\n\n"
     "WORLD SIZE REQUIREMENTS:\n"
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
+
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
     "- Generate 1-2 Main Quests and 2-3 Side Quests that fit the narrative context."
     "{award_requirement}"
@@ -262,6 +264,22 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     "Use the format: **Character Name:** \"Dialogue\". "
     "Separate narrative prose from speech with a blank line."
+)
+
+ADVENTURE_GENERATOR_INSTRUCTIONS = (
+
+    "\nADVENTURE GENERATOR TOOLS ENABLED:\n"
+    "You are in a special 'Game Designer' mode. You have access to tools to help the player create a new adventure.\n"
+    "1. `request_available_image_styles`: Use this to get the list of supported visual styles for adventures.\n"
+    "2. `request_available_tones`: Use this to get the list of supported narrative tones (e.g., Grimdark, Heroic).\n"
+    "3. `requested_adventure_generation`: Use this ONLY when you have collected all necessary parameters from the player:\n"
+    "   - `title`: A catchy name for the adventure.\n"
+    "   - `prompt`: A detailed description of the setting and plot.\n"
+    "   - `min_scenes` / `max_scenes`: (Optional) Constraints for the world size.\n"
+    "   - `generate_scene_images`: (Optional) Whether to generate AI images for every scene.\n"
+    "   - `selected_image_styles`: (Optional) A list of styles chosen by the player.\n"
+    "   - `selected_tone`: (Optional) The tone chosen by the player.\n\n"
+    "The new adventure will be added to the player's library. You should narrate the success to the player once the system confirms the generation.\n"
 )
 """
 Final formatting instructions for the narration pass.

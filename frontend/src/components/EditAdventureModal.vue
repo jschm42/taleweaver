@@ -139,8 +139,10 @@ const form = ref({
     day_label: 'Day',
     start_year_override: null,
     start_time: '08:00'
-  }
+  },
+  is_adventure_generator: false
 })
+
 
 async function fetchAdventure() {
   if (!props.adventureId) {
@@ -167,6 +169,8 @@ async function fetchAdventure() {
     form.value.max_scenes = data.max_scenes || 5
     form.value.time_system = data.time_system || 'calendar'
     form.value.time_config = data.time_config || { day_label: 'Day', start_year_override: null, start_time: '08:00' }
+    form.value.is_adventure_generator = !!data.is_adventure_generator
+
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -1152,6 +1156,21 @@ watch(
                   <span class="ml-2 font-bold">{{ debugData?.exits?.length || 0 }}</span>
                 </div>
               </div>
+
+              <!-- Special Features Toggle -->
+              <div class="p-4 bg-slate-950 border border-slate-800 rounded-xl group hover:border-emerald-500/30 transition-all flex items-center justify-between">
+                <div>
+                  <span class="text-[10px] font-black uppercase tracking-widest text-slate-200 block">Adventure Generator</span>
+                  <span class="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Enable Game-Designer NPC & Tools</span>
+                </div>
+                <button 
+                  @click="form.is_adventure_generator = !form.is_adventure_generator"
+                  :class="['w-10 h-6 rounded-full transition-all relative flex items-center px-0.5', form.is_adventure_generator ? 'bg-emerald-600' : 'bg-slate-800']"
+                >
+                  <div :class="['w-4 h-4 bg-white rounded-full shadow transition-transform duration-300', form.is_adventure_generator ? 'translate-x-4' : 'translate-x-0']"></div>
+                </button>
+              </div>
+
 
               <div class="grid grid-cols-3 gap-4">
                 <button @click="exportADZ" class="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 text-left col-span-3">

@@ -49,6 +49,8 @@ class AdventureTemplateBase(BaseModel):
     award_generation_enabled: bool = True
     min_awards: int = 3
     max_awards: int = 8
+    is_adventure_generator: bool = False
+
 
     # Narrative Meta (User editable in Plot tab)
     plot: Optional[str] = None
@@ -77,6 +79,8 @@ class AdventureTemplateUpdate(BaseModel):
     game_over_rules: Optional[Dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
+    max_awards: Optional[int] = None
+    is_adventure_generator: Optional[bool] = None
     
     # Editable Narrative Meta
     plot: Optional[str] = None

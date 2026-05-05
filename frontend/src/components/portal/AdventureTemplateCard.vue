@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
 import { MoreHorizontal } from 'lucide-vue-next'
 
@@ -43,6 +43,21 @@ function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
   else if (action === 'delete') emit('delete', props.template.template_id, props.template.title)
   isMenuOpen.value = false
 }
+
+const toneLabel = computed(() => {
+  const tone = props.template.selected_tone
+  if (!tone) return ''
+  if (tone.startsWith('{')) {
+    try {
+      const obj = JSON.parse(tone)
+      return obj.id || obj.name || tone
+    } catch (e) {
+      return tone
+    }
+  }
+  return tone
+})
+
 </script>
 
 <template>
@@ -62,7 +77,8 @@ function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
       <!-- Tone Badge -->
       <div v-if="props.template.selected_tone" class="absolute top-3 left-3">
         <span class="px-2.5 py-1 rounded-full bg-aether-primary/20 text-aether-primary text-xs uppercase tracking-widest font-black border border-aether-primary/20">
-          {{ props.template.selected_tone }}
+          {{ toneLabel }}
+
         </span>
       </div>
 

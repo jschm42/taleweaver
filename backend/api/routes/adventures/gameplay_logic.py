@@ -277,8 +277,10 @@ class GameTurnManager:
             completed_condition=self.state.completed_condition or self.adventure.completed_condition,
             gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition,
             time_system=self.state.time_system or self.adventure.time_system or "calendar",
-            time_config=self.state.time_config or self.adventure.time_config
+            time_config=self.state.time_config or self.adventure.time_config,
+            is_adventure_generator=self.adventure.is_adventure_generator
         )[0]["content"]
+
 
         # Bable Fish / Translation logic
         if language:
@@ -729,7 +731,44 @@ class GameTurnManager:
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
             
+        # Adventure Generator Tools
+        if self.adventure.is_adventure_generator:
+            from backend.engine.adventure_generator_service import AdventureGeneratorService
+            if event.request_available_image_styles:
+                styles = await AdventureGeneratorService.get_available_image_styles(self.user)
+                if not event.tool_results: event.tool_results = {}
+                event.tool_results["available_image_styles"] = styles
+                
+                msg = f"SYSTEM: Available Image Styles: {', '.join(styles)}"
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+            
+            if event.request_available_tones:
+                tones = await AdventureGeneratorService.get_available_tones(self.user)
+                if not event.tool_results: event.tool_results = {}
+                event.tool_results["available_tones"] = tones
+                
+                msg = f"SYSTEM: Available Tones: {', '.join(tones)}"
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+
+            if event.requested_adventure_generation:
+                try:
+                    new_adv_id = await AdventureGeneratorService.generate_adventure(self.db, self.user, event.requested_adventure_generation)
+                    if not event.tool_results: event.tool_results = {}
+                    event.tool_results["generation_success"] = True
+                    event.tool_results["new_adventure_id"] = new_adv_id
+                    
+                    msg = f"SYSTEM: Adventure '{event.requested_adventure_generation.title}' generated successfully and added to library (ID: {new_adv_id})."
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                except Exception as e:
+                    if not event.tool_results: event.tool_results = {}
+                    event.tool_results["generation_success"] = False
+                    event.tool_results["generation_error"] = str(e)
+                    
+                    msg = f"SYSTEM ERROR: Adventure generation failed: {e}"
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+
         await self.db.flush()
+
     async def _finalize_session(self, status: str, note: Optional[str] = None):
         """Updates the session status and records the outcome in the user's game log."""
         if self.state.session:

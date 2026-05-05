@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+
 from backend.models.avatar import Avatar
 
 class GameOverException(Exception):
@@ -89,6 +90,24 @@ class SkillCheckResult(BaseModel):
     reason: str
 
 
+class AdventureGenerationRequest(BaseModel):
+    """
+    Requested by the GM (NPC) to create a brand new adventure.
+    """
+    title: str
+    prompt: str
+    min_scenes: int = 1
+    max_scenes: int = 5
+    generate_scene_images: bool = False
+    selected_image_styles: Optional[List[str]] = None
+    selected_tone: Optional[str] = None
+    min_awards: int = 3
+    max_awards: int = 8
+    award_generation_enabled: bool = False
+
+
+
+
 class GameEvent(BaseModel):
     """
     Structured Output Schema for the LLM when in `strict_rules` mode.
@@ -138,6 +157,14 @@ class GameEvent(BaseModel):
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
+
+    # Adventure Generator Tools
+    request_available_image_styles: bool = False
+    request_available_tones: bool = False
+    requested_adventure_generation: Optional[AdventureGenerationRequest] = None
+    tool_results: Optional[Dict[str, Any]] = None
+
+
 
 # Maximum resource cap
 RESOURCE_CAP = 200

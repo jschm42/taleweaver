@@ -255,7 +255,9 @@ class WorldGenerator:
         min_awards: int = 3,
         max_awards: int = 5,
         selected_image_styles: Optional[List[str]] = None,
+        selected_tone: Optional[str] = None,
         language: Optional[str] = None
+
     ) -> None:
         """
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
@@ -307,10 +309,12 @@ class WorldGenerator:
         user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(
             title=title, 
             original_prompt=original_prompt, 
+            selected_tone=selected_tone or "Standard RPG",
             min_scenes=min_scenes, 
             max_scenes=max_scenes,
             award_requirement=award_requirement
         )
+
         
         # 1. Update Status
         adventure = await db.get(AdventureTemplate, template_id)

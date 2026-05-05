@@ -56,8 +56,10 @@ class MemoryManager:
         completed_condition: Optional[str] = None,
         gameover_condition: Optional[str] = None,
         time_system: str = "calendar",
-        time_config: Optional[dict] = None
+        time_config: Optional[dict] = None,
+        is_adventure_generator: bool = False
     ) -> str:
+
         """
         Builds the foundational system prompt using the pre-generated world integrity.
         """
@@ -130,7 +132,12 @@ class MemoryManager:
             location_context=location_context,
             sheet_json=sheet_json
         )
+        
+        if is_adventure_generator:
+            system_instruction += prompts.ADVENTURE_GENERATOR_INSTRUCTIONS
+            
         return system_instruction
+
 
     @staticmethod
     def build_context(
@@ -148,8 +155,10 @@ class MemoryManager:
         completed_condition: Optional[str] = None,
         gameover_condition: Optional[str] = None,
         time_system: str = "calendar",
-        time_config: Optional[dict] = None
+        time_config: Optional[dict] = None,
+        is_adventure_generator: bool = False
     ) -> list[dict]:
+
         """
         Combines the System Prompt with the sliding window of history and structured world state.
         """
@@ -157,8 +166,10 @@ class MemoryManager:
             avatar, world_context, current_scene, entities, exits, in_game_time, awards,
             plot=plot, rules=rules, walkthrough=walkthrough,
             completed_condition=completed_condition, gameover_condition=gameover_condition,
-            time_system=time_system, time_config=time_config
+            time_system=time_system, time_config=time_config,
+            is_adventure_generator=is_adventure_generator
         )
+
         messages = [{"role": "system", "content": sys_prompt}]
         
         history_window = recent_history[-MemoryManager.MAX_HISTORY_LENGTH:]

@@ -77,7 +77,9 @@ class AdventureExporter:
                 "gameover_condition": adv.gameover_condition,
                 "original_prompt": adv.original_prompt,
                 "starting_timestamp": adv.starting_timestamp,
+                "is_adventure_generator": adv.is_adventure_generator,
             },
+
             
             "protagonist": {
                 "name": avatar.name if avatar else "Hero",

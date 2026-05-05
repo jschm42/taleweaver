@@ -52,13 +52,23 @@ function isFailureStatus(status: string): boolean {
 
 function formatToneLabel(value?: string | null): string {
   if (!value) return ''
-  const normalized = value
+  let text = value
+  if (text.startsWith('{')) {
+    try {
+      const obj = JSON.parse(text)
+      text = obj.id || obj.name || text
+    } catch (e) {
+      // Not JSON, continue
+    }
+  }
+  const normalized = text
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!normalized) return ''
   return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
+
 
 const templates = ref<AdventureTemplateSummary[]>([])
 const sessions = ref<GameSession[]>([])
@@ -199,13 +209,15 @@ async function fetchPortalData() {
       api.listSessions(),
     ])
 
-    templates.value = fetchedTemplates.map((entry) => ({
-      ...entry,
-      selected_tone: formatToneLabel(entry.selected_tone),
-    }))
-    sessions.value = fetchedSessions
+    templates.value = Array.isArray(fetchedTemplates)
+      ? fetchedTemplates.map((entry) => ({
+          ...entry,
+          selected_tone: formatToneLabel(entry.selected_tone),
+        }))
+      : []
+    sessions.value = Array.isArray(fetchedSessions) ? fetchedSessions : []
 
-    for (const template of fetchedTemplates) {
+    for (const template of templates.value) {
       if (!template.is_ready) {
         const isAlreadyPending = pendingCreations.value.some((p) => p.adventureId === template.template_id)
         if (!isAlreadyPending) {

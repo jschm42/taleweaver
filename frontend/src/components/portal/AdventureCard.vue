@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 const props = defineProps<{
   adv: any
   activeMenuId: string | null
@@ -27,7 +29,19 @@ const langCode = computed(() => {
   return lang.substring(0, 2).toUpperCase()
 })
 
-import { computed } from 'vue'
+const toneLabel = computed(() => {
+  const tone = props.adv.selected_tone
+  if (!tone) return 'No Tone'
+  if (tone.startsWith('{')) {
+    try {
+      const obj = JSON.parse(tone)
+      return obj.id || obj.name || tone
+    } catch (e) {
+      return tone
+    }
+  }
+  return tone
+})
 </script>
 
 <template>
@@ -98,7 +112,8 @@ import { computed } from 'vue'
       </div>
       <div class="absolute top-4 left-4">
         <span class="px-3 py-1 bg-aether-secondary/20 backdrop-blur-md border border-white/10 rounded-full text-xs font-black uppercase tracking-widest text-aether-secondary">
-          {{ props.adv.selected_tone || 'No Tone' }}
+          {{ toneLabel }}
+
         </span>
       </div>
 

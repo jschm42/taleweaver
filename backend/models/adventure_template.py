@@ -65,3 +65,6 @@ class AdventureTemplate(Base, TimestampMixin):
     award_generation_enabled = Column(Boolean, default=False, nullable=False)
     min_awards = Column(Integer, default=3, nullable=False)
     max_awards = Column(Integer, default=8, nullable=False)
+    
+    # Adventure Generator Mode
+    is_adventure_generator = Column(Boolean, default=False, nullable=False)

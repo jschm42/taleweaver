@@ -116,8 +116,10 @@ const form = ref({
   
   // Visual & Tone
   selected_style_id: '',
-  selected_tone_id: ''
+  selected_tone_id: '',
+  is_adventure_generator: false
 })
+
 
 const editingField = ref<string | null>(null)
 const tempValue = ref('')
@@ -258,7 +260,19 @@ async function fetchAdventure() {
     form.value.selected_style_id = Array.isArray(data.selected_image_styles) && data.selected_image_styles.length > 0 
       ? data.selected_image_styles[0] 
       : ''
-    form.value.selected_tone_id = data.selected_tone || ''
+    let rawTone = data.selected_tone || ''
+    if (typeof rawTone === 'string' && rawTone.startsWith('{')) {
+      try {
+        const obj = JSON.parse(rawTone)
+        rawTone = obj.id || obj.name || rawTone
+      } catch (e) {
+        // Not valid JSON or parsing error, keep raw
+      }
+    }
+    form.value.selected_tone_id = rawTone
+
+    form.value.is_adventure_generator = !!data.is_adventure_generator
+
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error loading adventure.'
   } finally {
@@ -1201,7 +1215,31 @@ const goBack = () => router.push({ name: 'portal' })
         <!-- Advanced Tab -->
         <div v-else-if="activeTab === 'advanced'" class="space-y-10 animate-page-in">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Meta-Adventure Features -->
+            <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6">
+              <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+                <i class="ra ra-gear text-amber-500"></i> Special Features
+              </h4>
+              <p class="text-xs text-slate-400 leading-relaxed">Enable specialized behaviors for this adventure.</p>
+              
+              <div class="space-y-4">
+                <div class="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                  <div class="space-y-1">
+                    <span class="text-xs font-black uppercase tracking-widest text-slate-200">Adventure Generator</span>
+                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Enable Game-Designer NPC & Tools</p>
+                  </div>
+                  <button 
+                    @click="form.is_adventure_generator = !form.is_adventure_generator; saveChanges()"
+                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', form.is_adventure_generator ? 'bg-emerald-600' : 'bg-slate-800']"
+                  >
+                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', form.is_adventure_generator ? 'translate-x-6' : 'translate-x-0']"></div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <!-- Data Debug -->
+
             <div class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl space-y-6">
               <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
                 <i class="ra ra-crystal-ball text-cyan-500"></i> Adventure Data Debug

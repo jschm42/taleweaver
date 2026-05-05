@@ -147,8 +147,10 @@ class AdventureTemplateImporter:
                     creation_status="Ready",
                     original_manifest=manifest_data,
                     language=adv_data.get("language") or manifest_data.get("language"),
-                    origin_id=origin_id
+                    origin_id=origin_id,
+                    is_adventure_generator=adv_data.get("is_adventure_generator", False)
                 )
+
                 db.add(new_template)
                 
                 target_base_dir = os.path.join(settings.DATA_DIR, "adventures", new_template_id)
@@ -314,9 +316,11 @@ class AdventureTemplateImporter:
                     starting_timestamp=old_adv.get("starting_timestamp", 0),
                     language=old_adv.get("language") or data.get("language"),
                     origin_id=origin_id,
+                    is_adventure_generator=old_adv.get("is_adventure_generator", False),
                     is_ready=True,
                     creation_status="Ready"
                 )
+
                 db.add(new_template)
                 await db.flush()
                 
@@ -403,9 +407,11 @@ class AdventureTemplateImporter:
                     starting_timestamp=adv_meta.get("starting_timestamp") or manifest.get("starting_timestamp", 0),
                     language=adv_meta.get("language") or manifest.get("language"),
                     origin_id=origin_id,
+                    is_adventure_generator=adv_meta.get("is_adventure_generator", False),
                     is_ready=True,
                     creation_status="Ready"
                 )
+
                 db.add(new_template)
                 await db.flush()
                 
