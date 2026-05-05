@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import os
-from typing import List, Optional, Dict, Literal, Any
+from typing import List, Optional, Dict, Literal, Any, Callable, Awaitable
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -89,6 +89,21 @@ async def _publish_generation_status(db: AsyncSession, adventure: Optional[Adven
         
     adventure.creation_status = status
     await db.flush()
+
+
+async def _publish_generation_status_with_callback(
+    db: AsyncSession,
+    adventure: Optional[AdventureTemplate],
+    status: str,
+    status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+) -> None:
+    """Persist generation status and optionally forward it to an external observer (e.g., in-game chat)."""
+    await _publish_generation_status(db, adventure, status)
+    if status_callback:
+        try:
+            await status_callback(status)
+        except Exception as exc:
+            logger.warning("Generation status callback failed for %s: %s", status, exc)
 
 
 def _uses_ollama_t2i(user: Optional[User]) -> bool:
@@ -260,7 +275,8 @@ class WorldGenerator:
         max_awards: int = 5,
         selected_image_styles: Optional[List[str]] = None,
         selected_tone: Optional[str] = None,
-        language: Optional[str] = None
+        language: Optional[str] = None,
+        status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
 
     ) -> None:
         """
@@ -323,9 +339,12 @@ class WorldGenerator:
         # 1. Update Status
         adventure = await db.get(AdventureTemplate, template_id)
         if adventure:
-            if adventure.creation_status == "Cancelled":
-                raise GenerationCancelled("Generation stopped due to user cancellation.")
-            adventure.creation_status = "Analyzing Story Idea..."
+            await _publish_generation_status_with_callback(
+                db,
+                adventure,
+                "Analyzing Story Idea...",
+                status_callback=status_callback,
+            )
             log_structured_event(
                 "adventure.generation.status",
                 template_id=template_id,
@@ -361,9 +380,12 @@ class WorldGenerator:
         # 2. Update Status
         if adventure:
             await db.refresh(adventure)
-            if adventure.creation_status == "Cancelled":
-                raise GenerationCancelled("Generation stopped due to user cancellation.")
-            adventure.creation_status = "Building Scenes & Plot..."
+            await _publish_generation_status_with_callback(
+                db,
+                adventure,
+                "Building Scenes & Plot...",
+                status_callback=status_callback,
+            )
             log_structured_event(
                 "adventure.generation.status",
                 template_id=template_id,
@@ -390,7 +412,8 @@ class WorldGenerator:
             gen_items=generate_item_images,
             gen_scenes=generate_scene_images,
             gen_protagonist_image=True, # Always generate protagonist image
-            selected_image_styles=selected_image_styles
+            selected_image_styles=selected_image_styles,
+            status_callback=status_callback,
         )
         log_structured_event(
             "adventure.generation.world_applied",
@@ -413,7 +436,8 @@ class WorldGenerator:
         gen_scenes: bool = False,
         gen_protagonist_image: bool = False,
         existing_images: Optional[dict] = None,
-        selected_image_styles: Optional[List[str]] = None
+        selected_image_styles: Optional[List[str]] = None,
+        status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
     ) -> None:
         """
         Populates (or re-populates) the world entities based on a manifest dictionary.
@@ -533,7 +557,12 @@ class WorldGenerator:
             
             # Generate Adventure Cover if missing
             if not adventure.image_url and user:
-                await _publish_generation_status(db, adventure, "Painting Adventure Cover...")
+                await _publish_generation_status_with_callback(
+                    db,
+                    adventure,
+                    "Painting Adventure Cover...",
+                    status_callback=status_callback,
+                )
                 try:
                     cover_url = await MediaEngine.generate_adventure_cover(
                         title=adventure.title,
@@ -642,10 +671,11 @@ class WorldGenerator:
             image_url = (existing_images or {}).get("PROTAGONIST") or prot.get("profile_image")
             if not image_url or image_url.startswith("assets/"): # If it's a relative path from manifest, it should have been in existing_images
                 if user and gen_protagonist_image:
-                    await _publish_generation_status(
+                    await _publish_generation_status_with_callback(
                         db,
                         adventure,
                         f"Envisioning Portrait for {avatar.name}...",
+                        status_callback=status_callback,
                     )
                     prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
                         name=avatar.name,
@@ -695,10 +725,11 @@ class WorldGenerator:
             image_url = (existing_images or {}).get(s["id"]) or s.get("image_url")
             if not image_url:
                 if user and gen_scenes:
-                    await _publish_generation_status(
+                    await _publish_generation_status_with_callback(
                         db,
                         adventure,
                         f"Envisioning Scene {scene_index}/{total_scenes}: {s['name']}...",
+                        status_callback=status_callback,
                     )
                     prompt = prompts.SCENE_IMAGE_PROMPT_TEMPLATE.format(
                         name=s['name'], description=s['description']
@@ -764,10 +795,11 @@ class WorldGenerator:
             image_url = (existing_images or {}).get(n["id"]) or n.get("image_url")
             if not image_url:
                 if user and gen_npc:
-                    await _publish_generation_status(
+                    await _publish_generation_status_with_callback(
                         db,
                         adventure,
                         f"Envisioning Portrait {npc_index}/{total_npcs}: {n['name']}...",
+                        status_callback=status_callback,
                     )
                     prompt = prompts.NPC_IMAGE_PROMPT_TEMPLATE.format(
                         name=n['name'], description=n['description']
@@ -923,10 +955,11 @@ class WorldGenerator:
             image_url = (existing_images or {}).get(o["id"]) or o.get("image_url")
             if not image_url:
                 if user and gen_items:
-                    await _publish_generation_status(
+                    await _publish_generation_status_with_callback(
                         db,
                         adventure,
                         f"Reifying Artifact {object_index}/{total_objects}: {o['name']}...",
+                        status_callback=status_callback,
                     )
                     prompt = prompts.OBJECT_IMAGE_PROMPT_TEMPLATE.format(
                         name=o['name'], description=o['description']

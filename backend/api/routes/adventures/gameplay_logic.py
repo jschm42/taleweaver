@@ -1811,12 +1811,28 @@ class GameTurnManager:
                 self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
 
             if event.requested_adventure_generation:
+                async def _post_generation_system_message(status: str) -> None:
+                    msg = f"SYSTEM: Adventure Generator: {status}"
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                    await self.db.flush()
+
                 try:
-                    new_adv_id = await AdventureGeneratorService.generate_adventure(self.db, self.user, event.requested_adventure_generation)
+                    await _post_generation_system_message(
+                        f"Preparing generation for '{event.requested_adventure_generation.title}'..."
+                    )
+
+                    new_adv_id = await AdventureGeneratorService.generate_adventure(
+                        self.db,
+                        self.user,
+                        event.requested_adventure_generation,
+                        progress_callback=_post_generation_system_message,
+                    )
                     if not event.tool_results:
                         event.tool_results = ToolResults()
                     event.tool_results.generation_success = True
                     event.tool_results.new_adventure_id = new_adv_id
+
+                    await _post_generation_system_message("Generation finished successfully.")
                     
                     msg = f"SYSTEM: Adventure '{event.requested_adventure_generation.title}' generated successfully and added to library (ID: {new_adv_id})."
                     self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
@@ -1825,6 +1841,8 @@ class GameTurnManager:
                         event.tool_results = ToolResults()
                     event.tool_results.generation_success = False
                     event.tool_results.generation_error = str(e)
+
+                    await _post_generation_system_message("Generation aborted due to an error.")
                     
                     msg = f"SYSTEM ERROR: Adventure generation failed: {e}"
                     self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))

@@ -1,6 +1,6 @@
 import uuid
 import logging
-from typing import List, Optional
+from typing import List, Optional, Callable, Awaitable
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
@@ -33,7 +33,8 @@ class AdventureGeneratorService:
     async def generate_adventure(
         db: AsyncSession,
         user: User,
-        request: AdventureGenerationRequest
+        request: AdventureGenerationRequest,
+        progress_callback: Optional[Callable[[str], Awaitable[None]]] = None,
     ) -> str:
         """
         Triggers the world generation and saves the new template to the user's library.
@@ -69,6 +70,9 @@ class AdventureGeneratorService:
         db.add(new_template)
         await db.flush()
 
+        if progress_callback:
+            await progress_callback("Initializing adventure generation...")
+
         logger.info(f"Starting background generation for adventure '{request.title}' ({new_id})")
 
         try:
@@ -91,7 +95,8 @@ class AdventureGeneratorService:
                 min_awards=request.min_awards,
                 max_awards=request.max_awards,
                 selected_image_styles=request.selected_image_styles,
-                selected_tone=new_template.selected_tone
+                selected_tone=new_template.selected_tone,
+                status_callback=progress_callback,
             )
 
             
@@ -100,12 +105,17 @@ class AdventureGeneratorService:
             new_template.is_ready = True
             new_template.creation_status = "Ready"
             await db.flush()
+
+            if progress_callback:
+                await progress_callback("Adventure generation complete. Finalizing...")
             
             logger.info(f"Adventure generation successful: {new_id}")
             return new_id
             
         except Exception as e:
             logger.exception(f"Adventure generation failed for {new_id}: {e}")
+            if progress_callback:
+                await progress_callback(f"Adventure generation failed: {e}")
             # Ensure we update the template status so the user doesn't see it hanging
             try:
                 await db.refresh(new_template)
