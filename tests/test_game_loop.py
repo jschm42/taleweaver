@@ -238,6 +238,40 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
         await db.refresh(state)
         assert state.current_scene_id == "CELLAR"
 
+
+async def test_adventure_generator_runs_mechanics_in_chat_mode(setup_test_db, monkeypatch):
+    """Adventure-generator sessions must execute Pass 1 even when strict_rules is disabled."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, _state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = True
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=GameEvent(
+            narrative_description="Preparing generation.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[]
+        ))
+
+        async def mock_stream():
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Ready."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        async for _ in manager.process_turn("generate now"):
+            pass
+
+        assert mock_llm_instance.aexecute_complex_task.await_count == 1
+
 async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
     """Verifies that slash commands (like /inventory) are handled directly without LLM calls."""
     from tests.conftest import TestSessionLocal
@@ -291,6 +325,17 @@ async def test_rule_engine_apply_event_game_over():
     with pytest.raises(GameOverException):
         RuleEngine.apply_event(avatar, event)
     assert avatar.hp == 0
+
+
+async def test_game_event_schema_tool_results_is_strict_object():
+    """The structured response schema for tool_results must disallow arbitrary keys."""
+    schema = GameEvent.model_json_schema()
+    tool_results_ref = schema["properties"]["tool_results"]["anyOf"][0]["$ref"]
+    definition_key = tool_results_ref.split("/")[-1]
+    tool_results_schema = schema["$defs"][definition_key]
+
+    assert tool_results_schema["type"] == "object"
+    assert tool_results_schema.get("additionalProperties") is False
 
 
 async def _seed_combat_npc(db) -> tuple[User, AdventureTemplate, Avatar, SessionState, WorldEntity]:

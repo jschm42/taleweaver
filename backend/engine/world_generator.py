@@ -13,6 +13,7 @@ from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.models.adventure_template import AdventureTemplate, GenerationCancelled
 from backend.core.config import settings
 from backend.core import prompts
+from backend.core.style_catalog import resolve_style_instruction
 
 logger = logging.getLogger(__name__)
 
@@ -426,18 +427,10 @@ class WorldGenerator:
         image_successes = 0
 
         # Resolve Style Instructions
-        style_instruction = ""
-        if selected_image_styles and isinstance(selected_image_styles, list) and len(selected_image_styles) > 0:
-            first_style = selected_image_styles[0]
-            if isinstance(first_style, dict):
-                style_instruction = first_style.get("instruction", "")
-            elif isinstance(first_style, str) and user:
-                # Fallback for old string IDs if somehow passed
-                catalog = user.image_styles_catalog or []
-                for s_entry in catalog:
-                    if s_entry.get("id") == first_style:
-                        style_instruction = s_entry.get("instruction", "")
-                        break
+        style_instruction = resolve_style_instruction(
+            selected_image_styles,
+            (user.image_styles_catalog if user else None),
+        )
         
         logger.info(f"Applying manifest with style instruction: '{style_instruction}'")
 

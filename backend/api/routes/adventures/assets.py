@@ -16,6 +16,7 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.engine.world_generator import WorldGenerator
 from backend.engine.media_engine import MediaEngine
 from backend.engine.adventure_importer import AdventureTemplateImporter
+from backend.core.style_catalog import resolve_style_instruction
 from backend.api.routes.adventures.schemas import ImportCheckResponse, ImportCheckItem
 import zipfile
 import io
@@ -216,14 +217,10 @@ async def regenerate_visual(
     api_keys = current_user.encrypted_api_keys
 
     # Resolve Style Instruction
-    style_instruction = ""
-    if adv.selected_image_styles and current_user:
-        catalog = current_user.image_styles_catalog or []
-        style_id = adv.selected_image_styles[0]
-        for s_entry in catalog:
-            if s_entry.get("id") == style_id:
-                style_instruction = s_entry.get("instruction", "")
-                break
+    style_instruction = resolve_style_instruction(
+        adv.selected_image_styles,
+        current_user.image_styles_catalog,
+    )
 
     try:
         if payload.target_type == "cover":

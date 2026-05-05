@@ -175,3 +175,27 @@ async def test_generate_image_ollama_rejects_cloud_model_prefix():
             target_dir="/tmp",
             provider_options={"ollama_url": "http://localhost:11434"},
         )
+
+
+async def test_generate_entity_image_forwards_style_instruction(monkeypatch):
+    """Entity wrapper must pass style_instruction through to base generate_image."""
+    captured = {}
+
+    async def fake_generate_image(**kwargs):
+        captured.update(kwargs)
+        return "/data/adventures/test/entity.png"
+
+    monkeypatch.setattr(MediaEngine, "generate_image", fake_generate_image)
+
+    result = await MediaEngine.generate_entity_image(
+        prompt="Item asset: Lost Fragment",
+        adventure_id="adv-1",
+        entity_id="OBJ_1",
+        entity_type="OBJECT",
+        user_config={"t2i_settings": {"provider": "ollama", "simple_model": "x/flux2-klein", "ollama_url": "http://localhost:11434"}},
+        api_keys={},
+        style_instruction="pixel art, warm rim light",
+    )
+
+    assert result == "/data/adventures/test/entity.png"
+    assert captured.get("style_instruction") == "pixel art, warm rim light"

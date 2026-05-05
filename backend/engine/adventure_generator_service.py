@@ -6,6 +6,7 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.engine.rule_engine import AdventureGenerationRequest
 from backend.engine.world_generator import WorldGenerator
+from backend.core.style_catalog import default_image_styles_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,8 @@ class AdventureGeneratorService:
     async def get_available_image_styles(user: User) -> List[str]:
         """Returns the list of available image styles for the user."""
         catalog = user.image_styles_catalog or []
+        if not catalog:
+            catalog = default_image_styles_catalog()
         # Return names/IDs of styles
         return [s.get("id") or s.get("name") for s in catalog if s.get("id") or s.get("name")]
 

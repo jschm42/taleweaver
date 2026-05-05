@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, ConfigDict
+from typing import List, Optional
 
 from backend.models.avatar import Avatar
 
@@ -114,6 +114,17 @@ class AdventureGenerationRequest(BaseModel):
     award_generation_enabled: bool = False
 
 
+class ToolResults(BaseModel):
+    """Structured backend-filled tool outputs for adventure-generator interactions."""
+    model_config = ConfigDict(extra="forbid")
+
+    available_image_styles: Optional[List[str]] = None
+    available_tones: Optional[List[str]] = None
+    generation_success: Optional[bool] = None
+    new_adventure_id: Optional[str] = None
+    generation_error: Optional[str] = None
+
+
 
 
 class GameEvent(BaseModel):
@@ -172,7 +183,7 @@ class GameEvent(BaseModel):
     request_available_image_styles: bool = False
     request_available_tones: bool = False
     requested_adventure_generation: Optional[AdventureGenerationRequest] = None
-    tool_results: Optional[Dict[str, Any]] = None
+    tool_results: Optional[ToolResults] = None
 
 
 

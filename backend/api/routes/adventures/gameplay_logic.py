@@ -22,7 +22,7 @@ from backend.models.session_state import SessionState
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
 from backend.models.world_map import WorldMap
-from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException, SkillCheckResult, AttackResult, WorldEntityUpdate, RESOURCE_CAP
+from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException, SkillCheckResult, AttackResult, WorldEntityUpdate, RESOURCE_CAP, ToolResults
 from backend.engine.map_engine import MapEngine
 from backend.engine.memory_manager import MemoryManager
 from backend.engine.command_parser import CommandParser
@@ -1351,7 +1351,9 @@ class GameTurnManager:
         response_text = ""
 
         # Pass 1: Mechanics
-        if self.adventure.strict_rules:
+        # Adventure-generator sessions rely on structured GameEvent tool fields even in chat mode.
+        run_mechanics_pass = self.adventure.strict_rules or self.adventure.is_adventure_generator
+        if run_mechanics_pass:
             yield f"event: status\ndata: {json.dumps({'content': 'Validating rules...'})}\n\n"
             try:
                 llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
@@ -1792,16 +1794,18 @@ class GameTurnManager:
             from backend.engine.adventure_generator_service import AdventureGeneratorService
             if event.request_available_image_styles:
                 styles = await AdventureGeneratorService.get_available_image_styles(self.user)
-                if not event.tool_results: event.tool_results = {}
-                event.tool_results["available_image_styles"] = styles
+                if not event.tool_results:
+                    event.tool_results = ToolResults()
+                event.tool_results.available_image_styles = styles
                 
                 msg = f"SYSTEM: Available Image Styles: {', '.join(styles)}"
                 self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
             
             if event.request_available_tones:
                 tones = await AdventureGeneratorService.get_available_tones(self.user)
-                if not event.tool_results: event.tool_results = {}
-                event.tool_results["available_tones"] = tones
+                if not event.tool_results:
+                    event.tool_results = ToolResults()
+                event.tool_results.available_tones = tones
                 
                 msg = f"SYSTEM: Available Tones: {', '.join(tones)}"
                 self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
@@ -1809,16 +1813,18 @@ class GameTurnManager:
             if event.requested_adventure_generation:
                 try:
                     new_adv_id = await AdventureGeneratorService.generate_adventure(self.db, self.user, event.requested_adventure_generation)
-                    if not event.tool_results: event.tool_results = {}
-                    event.tool_results["generation_success"] = True
-                    event.tool_results["new_adventure_id"] = new_adv_id
+                    if not event.tool_results:
+                        event.tool_results = ToolResults()
+                    event.tool_results.generation_success = True
+                    event.tool_results.new_adventure_id = new_adv_id
                     
                     msg = f"SYSTEM: Adventure '{event.requested_adventure_generation.title}' generated successfully and added to library (ID: {new_adv_id})."
                     self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
                 except Exception as e:
-                    if not event.tool_results: event.tool_results = {}
-                    event.tool_results["generation_success"] = False
-                    event.tool_results["generation_error"] = str(e)
+                    if not event.tool_results:
+                        event.tool_results = ToolResults()
+                    event.tool_results.generation_success = False
+                    event.tool_results.generation_error = str(e)
                     
                     msg = f"SYSTEM ERROR: Adventure generation failed: {e}"
                     self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
