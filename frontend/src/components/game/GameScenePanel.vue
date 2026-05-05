@@ -20,6 +20,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   hover: [payload: SceneHoverPayload, event: MouseEvent]
   move: [event: MouseEvent]
+  leave: []
   imageError: [path: string]
   contextmenu: [payload: SceneHoverPayload, event: MouseEvent]
   click: [payload: SceneHoverPayload]

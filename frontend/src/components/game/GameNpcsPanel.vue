@@ -15,7 +15,7 @@ interface Entity {
   inventory?: any[]
 }
 
-const props = defineProps<{
+defineProps<{
   npcs: Entity[]
   showImage: (path?: string | null) => boolean
   mode?: 'rpg' | 'story' | 'chat'
@@ -75,7 +75,7 @@ const emit = defineEmits<{
         <!-- Very thin bars -->
         <div v-if="mode !== 'chat' && (ent.hp != null || ent.stamina != null || ent.mana != null)" class="w-full mt-1 px-1 flex flex-col gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
           <StatBar v-if="ent.hp != null" :value="ent.hp" :max="ent.max_hp" color="crimson" size="xs" />
-          <StatBar v-if="ent.stamina != null && mode !== 'chat'" :value="ent.stamina" :max="ent.max_stamina" color="emerald" size="xs" />
+          <StatBar v-if="ent.stamina != null" :value="ent.stamina" :max="ent.max_stamina" color="emerald" size="xs" />
           <StatBar v-if="ent.mana != null && mode === 'rpg'" :value="ent.mana" :max="ent.max_mana" color="sapphire" size="xs" />
         </div>
       </div>

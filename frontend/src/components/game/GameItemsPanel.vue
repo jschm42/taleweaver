@@ -9,7 +9,7 @@ interface Entity {
    is_portable?: boolean
  }
 
-const props = defineProps<{
+defineProps<{
   items: Entity[]
   showImage: (path?: string | null) => boolean
   isDebug?: boolean
@@ -54,7 +54,7 @@ const emit = defineEmits<{
             @error="emit('imageError', ent.image_url)"
           />
           <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
-            <i :class="['ra text-xl', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
+            <i :class="['ra text-xl', getItemIcon(ent.item_type ?? undefined), getTypeColor(ent.item_type ?? undefined)]"></i>
           </div>
         </div>
         <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">

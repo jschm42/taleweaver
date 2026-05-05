@@ -23,7 +23,6 @@ import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
-import GameActionBar from '@/components/game/GameActionBar.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
@@ -1061,7 +1060,7 @@ onBeforeUnmount(() => {
               <!-- NPC Stats -->
               <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && sheet?.rule_enforcement_mode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
                 <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="Number(hoveredEntity.hp)" :max="Number(hoveredEntity.max_hp || 100)" color="crimson" size="sm" />
-                <StatBar v-if="hoveredEntity.stamina != null && sheet?.rule_enforcement_mode !== 'chat'" label="Stamina" :value="Number(hoveredEntity.stamina)" :max="Number(hoveredEntity.max_stamina || 100)" color="emerald" size="sm" />
+                <StatBar v-if="hoveredEntity.stamina != null" label="Stamina" :value="Number(hoveredEntity.stamina)" :max="Number(hoveredEntity.max_stamina || 100)" color="emerald" size="sm" />
                 <StatBar v-if="hoveredEntity.mana != null && sheet?.rule_enforcement_mode === 'rpg'" label="Mana" :value="Number(hoveredEntity.mana)" :max="Number(hoveredEntity.max_mana || 100)" color="sapphire" size="sm" />
               </div>
 
