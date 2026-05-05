@@ -1,5 +1,4 @@
 import logging
-from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +9,7 @@ from backend.core.auth import get_current_user
 from backend.models.user import User
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
+from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldScene, WorldEntity
@@ -74,6 +74,7 @@ async def get_chat_history(
     return ChatResponse(
         messages=history,
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
+        combat=AdventureLogic.get_combat_snapshot(state),
         mermaid=MapEngine.to_mermaid(world_map) if world_map else None,
         nodes=await _enrich_map_nodes(state.template_id, world_map.nodes if world_map else {}, db),
         entities=entities,
@@ -101,3 +102,26 @@ async def post_chat_message(
         manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
         media_type="text/event-stream"
     )
+
+@router.get("/{game_id}/walkthrough")
+async def get_walkthrough(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns the walkthrough for the current session if revealed or in debug mode."""
+    res = await db.execute(
+        select(SessionState)
+        .join(GameSession, GameSession.id == SessionState.session_id)
+        .where(SessionState.session_id == game_id, GameSession.user_id == current_user.id)
+    )
+    state = res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="Session state not found.")
+    
+    # Check if revealed or debug enabled
+    from backend.core.config import settings
+    if not state.is_walkthrough_revealed and not settings.TALEWEAVER_DEBUG_ENABLED:
+        raise HTTPException(status_code=403, detail="The walkthrough is not revealed yet.")
+
+    return {"walkthrough": state.walkthrough or "No walkthrough available for this adventure."}

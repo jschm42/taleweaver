@@ -2,6 +2,8 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
+import CommandPopup from '@/components/game/CommandPopup.vue'
+import GameActionBar from '@/components/game/GameActionBar.vue'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
@@ -18,6 +20,8 @@ const props = defineProps<{
   inventoryGlow?: boolean
   mapGlow?: boolean
   questGlow?: boolean
+  activeActionId?: string | null
+  mode?: string
 }>()
 
 const emit = defineEmits<{
@@ -32,12 +36,96 @@ const emit = defineEmits<{
   openDebug: []
   toggleDebugLog: [enabled: boolean]
   takeDirect: [entity: any]
+  npcContextmenu: [entity: any, event: MouseEvent]
+  itemContextmenu: [entity: any, event: MouseEvent]
+  selectAction: [actionId: string | null]
+  npcClick: [name: string]
+  itemClick: [item: any]
 }>()
 
 const inputText = ref('')
 const fontSize = ref<'small' | 'medium' | 'large'>((localStorage.getItem('tw_chat_font_size') as any) || 'medium')
 const logEl = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
+
+// Command Auto-completion
+const showCommandPopup = ref(false)
+const commandPopupIndex = ref(0)
+const commands = [
+  { id: '/sheet', label: '/sheet' },
+  { id: '/inventory', label: '/inventory' },
+  { id: '/map', label: '/map' },
+  { id: '/quests', label: '/quests' },
+  { id: '/hint', label: '/hint' },
+  { id: '/walkthrough', label: '/walkthrough' },
+  { id: '/equip', label: '/equip' },
+  { id: '/unequip', label: '/unequip' },
+  { id: '/consume', label: '/consume' },
+  { id: '/debug session', label: '/debug session' },
+  { id: '/debug reveal_map', label: '/debug reveal_map' },
+  { id: '/debug walkthrough', label: '/debug walkthrough' },
+  { id: '/debug log on', label: '/debug log on' },
+  { id: '/debug log off', label: '/debug log off' },
+]
+
+// Command History
+const history = ref<string[]>(JSON.parse(sessionStorage.getItem('tw_chat_history') || '[]'))
+const historyIndex = ref(-1)
+
+function addToHistory(text: string) {
+  if (!text) return
+  // Don't add if same as last entry
+  if (history.value[0] === text) return
+  
+  history.value.unshift(text)
+  if (history.value.length > 20) {
+    history.value.pop()
+  }
+  sessionStorage.setItem('tw_chat_history', JSON.stringify(history.value))
+}
+
+function navigateHistory(direction: 'up' | 'down') {
+  if (history.value.length === 0) return
+
+  if (direction === 'up') {
+    if (historyIndex.value < history.value.length - 1) {
+      historyIndex.value++
+      inputText.value = history.value[historyIndex.value]
+    }
+  } else {
+    if (historyIndex.value > 0) {
+      historyIndex.value--
+      inputText.value = history.value[historyIndex.value]
+    } else if (historyIndex.value === 0) {
+      historyIndex.value = -1
+      inputText.value = ''
+    }
+  }
+}
+
+const filteredCommands = computed(() => {
+  if (!inputText.value.startsWith('/')) return []
+  const q = inputText.value.toLowerCase().slice(1)
+  if (!q) return commands
+  return commands.filter(c => c.label.toLowerCase().includes(q))
+})
+
+watch(inputText, (newVal) => {
+  if (newVal.startsWith('/')) {
+    showCommandPopup.value = true
+    // Reset index if query changes and index is out of bounds
+    if (commandPopupIndex.value >= filteredCommands.value.length) {
+      commandPopupIndex.value = 0
+    }
+  } else {
+    showCommandPopup.value = false
+  }
+})
+
+function selectCommand(cmdId: string) {
+  inputText.value = cmdId + ' '
+  showCommandPopup.value = false
+}
 
 watch(fontSize, (newSize) => {
   localStorage.setItem('tw_chat_font_size', newSize)
@@ -79,6 +167,7 @@ const statusLabel = computed(() => {
     connected: 'Connected',
     error: 'Error',
     game_over: 'Game Over',
+    completed: 'Completed',
   }
   return map[props.status]
 })
@@ -90,6 +179,7 @@ const statusColor = computed(() => {
     connected: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
     error: 'text-red-500 bg-red-500/10 border-red-500/20',
     game_over: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+    completed: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
   }
   return map[props.status]
 })
@@ -102,28 +192,60 @@ function handleSend(): void {
   const text = inputText.value.trim()
   if (!text) return
 
-  if (text.startsWith('/debug')) {
+  if (text.startsWith('/debug log')) {
     const parts = text.split(' ')
-    const cmd = parts[1] // session, log
     const sub = parts[2] // on, off
 
-    if (cmd === 'session') {
-      emit('openDebug')
-    } else if (cmd === 'log') {
-      if (sub === 'on') {
-        emit('toggleDebugLog', true)
-      } else if (sub === 'off') {
-        emit('toggleDebugLog', false)
-      }
+    if (sub === 'on') {
+      emit('toggleDebugLog', true)
+    } else if (sub === 'off') {
+      emit('toggleDebugLog', false)
     }
-    // Continue so it reaches the backend too
   }
 
+  addToHistory(text)
   emit('send', text)
   inputText.value = ''
+  historyIndex.value = -1
 }
 
 function handleKeydown(e: KeyboardEvent): void {
+  // History Navigation (Ctrl + Up/Down)
+  if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault()
+    navigateHistory(e.key === 'ArrowUp' ? 'up' : 'down')
+    return
+  }
+
+  if (showCommandPopup.value && filteredCommands.value.length > 0) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      commandPopupIndex.value = (commandPopupIndex.value + 1) % filteredCommands.value.length
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      commandPopupIndex.value = (commandPopupIndex.value - 1 + filteredCommands.value.length) % filteredCommands.value.length
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const selected = filteredCommands.value[commandPopupIndex.value]
+      if (selected) {
+        selectCommand(selected.id)
+      } else {
+        showCommandPopup.value = false
+        handleSend()
+      }
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      showCommandPopup.value = false
+      return
+    }
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleSend()
@@ -189,6 +311,34 @@ function handleMouseMove(e: MouseEvent) {
     }
   }
   emit('npcLeave')
+}
+function handleClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  const npcWrapper = target.closest('[data-npc-name]')
+  if (npcWrapper) {
+    const name = npcWrapper.getAttribute('data-npc-name')
+    if (name) {
+      emit('npcClick', name)
+      return
+    }
+  }
+}
+function handleContextMenu(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  const npcWrapper = target.closest('[data-npc-name]')
+  if (npcWrapper) {
+    const name = npcWrapper.getAttribute('data-npc-name')
+    if (name) {
+      e.preventDefault()
+      const metadata = props.npcMetadata[name]
+      if (metadata) {
+        emit('npcContextmenu', { ...metadata, entity_type: 'NPC' }, e)
+      } else {
+        emit('npcContextmenu', { name, entity_type: 'NPC' }, e)
+      }
+      return
+    }
+  }
 }
 
 function normalizeLineBreaks(text: string): string {
@@ -266,6 +416,8 @@ function displayMessageContent(msg: ChatMessage): string {
       aria-label="Game log"
       @mousemove="handleMouseMove"
       @mouseleave="emit('npcLeave')"
+      @click="handleClick"
+      @contextmenu="handleContextMenu"
     >
 
       <div
@@ -317,7 +469,9 @@ function displayMessageContent(msg: ChatMessage): string {
             v-for="itemId in msg.itemIds" 
             :key="itemId"
             v-show="entities.find(e => e.id === itemId)"
-            class="item-card flex flex-col w-56 bg-slate-800/80 border border-slate-700/50 rounded-xl overflow-hidden shadow-xl backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-500/30"
+            class="item-card flex flex-col w-56 bg-slate-800/80 border border-slate-700/50 rounded-xl overflow-hidden shadow-xl backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-500/30 cursor-help"
+            @click="emit('itemClick', entities.find(e => e.id === itemId))"
+            @contextmenu.prevent="emit('itemContextmenu', entities.find(e => e.id === itemId), $event)"
           >
             <!-- Item Image -->
             <div class="h-32 bg-slate-900 relative overflow-hidden group/img flex items-center justify-center">
@@ -382,6 +536,13 @@ function displayMessageContent(msg: ChatMessage): string {
       </template>
     </div>
 
+    <!-- ACTION BAR -->
+    <GameActionBar 
+      :active-action-id="props.activeActionId" 
+      :mode="props.mode"
+      @select-action="emit('selectAction', $event)" 
+    />
+
     <!-- Input bar -->
     <div class="border-t border-slate-800 bg-slate-950 p-4 shrink-0">
       <div class="flex items-center gap-2">
@@ -399,6 +560,16 @@ function displayMessageContent(msg: ChatMessage): string {
             placeholder="What do you do next?"
             class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
             @keydown="handleKeydown"
+          />
+
+          <!-- Command Popup -->
+          <CommandPopup 
+            v-if="showCommandPopup && filteredCommands.length > 0"
+            :query="inputText"
+            :active-index="commandPopupIndex"
+            @select="selectCommand"
+            @close="showCommandPopup = false"
+            @update:active-index="val => commandPopupIndex = val"
           />
         </div>
 
@@ -443,12 +614,6 @@ function displayMessageContent(msg: ChatMessage): string {
         </button>
       </div>
       
-      <div class="flex gap-4 mt-3 px-1 text-xs text-slate-500">
-        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/sheet</kbd> to view character</span>
-        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/equip</kbd> to equip</span>
-        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/hint</kbd> 50 XP</span>
-        <span><kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400">/walkthrough</kbd> reveal 200 XP</span>
-      </div>
     </div>
   </div>
 </template>

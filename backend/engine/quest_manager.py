@@ -62,15 +62,17 @@ class QuestManager:
         if "hands" in text: slots_to_check.append("hands")
         if "feet" in text: slots_to_check.append("feet")
         if "legs" in text: slots_to_check.append("legs")
-        if "main_hand" in text or "weapon" in text: slots_to_check.append("main_hand")
-        if "off_hand" in text or "shield" in text: slots_to_check.append("off_hand")
+        if "mainhand" in text or "main hand" in text or "weapon" in text: slots_to_check.append("mainhand")
+        if "offhand" in text or "off hand" in text or "shield" in text: slots_to_check.append("offhand")
+        if "neck" in text or "amulet" in text or "necklace" in text: slots_to_check.append("neck")
         
         if not slots_to_check:
             return False
             
         equipment = avatar.equipment or {}
+        equipment_lower = {str(key).lower(): value for key, value in equipment.items()}
         for slot in slots_to_check:
-            if not equipment.get(slot):
+            if not equipment_lower.get(slot):
                 return False
         
         return True

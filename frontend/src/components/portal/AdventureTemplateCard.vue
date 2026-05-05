@@ -127,7 +127,7 @@ const toneLabel = computed(() => {
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
               @click="runAction('delete')"
             >
-              Archive world
+              Delete world
             </button>
           </div>
         </Transition>

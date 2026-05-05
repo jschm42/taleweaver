@@ -300,6 +300,7 @@ class AdventureTemplateImporter:
                     original_prompt=old_adv.get("original_prompt") or old_adv.get("context"),
                     image_url=old_adv.get("image_url"),
                     strict_rules=old_adv.get("strict_rules", True),
+                    rule_enforcement_mode=old_adv.get("rule_enforcement_mode") or data.get("rule_enforcement_mode") or "rpg",
                     time_per_turn=old_adv.get("time_per_turn", 10),
                     pacing_minutes=old_adv.get("pacing_minutes", 5),
                     clock_enabled=old_adv.get("clock_enabled", False),
@@ -390,6 +391,7 @@ class AdventureTemplateImporter:
                     original_prompt=adv_meta.get("original_prompt") or adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
                     image_url=adv_meta.get("image_url") or manifest.get("image_url"),
                     strict_rules=adv_meta.get("strict_rules", True),
+                    rule_enforcement_mode=adv_meta.get("rule_enforcement_mode") or manifest.get("rule_enforcement_mode") or "rpg",
                     time_per_turn=adv_meta.get("time_per_turn", 5),
                     pacing_minutes=adv_meta.get("pacing_minutes", 5),
                     clock_enabled=adv_meta.get("clock_enabled", False),
@@ -431,6 +433,14 @@ class AdventureTemplateImporter:
                         p["starting_inventory"] = p.get("inventory", [])
                     if "starting_equipment" not in p:
                         p["starting_equipment"] = p.get("equipment", {})
+
+                default_scene_id = manifest.get("scenes", [{}])[0].get("id") if manifest.get("scenes") else "START"
+                for n in manifest.get("npcs", []):
+                    if "start_scene_id" not in n:
+                        n["start_scene_id"] = n.get("current_scene_id") or n.get("scene_id") or default_scene_id
+                for o in manifest.get("objects", []):
+                    if "start_scene_id" not in o:
+                        o["start_scene_id"] = o.get("current_scene_id") or o.get("scene_id") or default_scene_id
 
                 await WorldGenerator.apply_manifest(db, new_template.id, manifest, user=user)
                 await db.commit()

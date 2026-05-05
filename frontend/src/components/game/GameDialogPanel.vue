@@ -20,6 +20,7 @@ const props = defineProps<{
   inventoryGlow?: boolean
   mapGlow?: boolean
   questGlow?: boolean
+  activeActionId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +35,11 @@ const emit = defineEmits<{
   openDebug: []
   toggleDebugLog: [enabled: boolean]
   takeDirect: [entity: any]
+  npcContextmenu: [entity: any, event: MouseEvent]
+  itemContextmenu: [entity: any, event: MouseEvent]
+  selectAction: [actionId: string | null]
+  npcClick: [name: string]
+  itemClick: [item: any]
 }>()
 
 const chatWindow = ref<any>(null)
@@ -68,6 +74,8 @@ defineExpose({ appendText })
       :inventory-glow="props.inventoryGlow"
       :map-glow="props.mapGlow"
       :quest-glow="props.questGlow"
+      :active-action-id="props.activeActionId"
+      :mode="props.mode"
       @send="emit('send', $event)"
       @open-sheet="emit('openSheet')"
       @open-map="emit('openMap')"
@@ -77,8 +85,12 @@ defineExpose({ appendText })
       @item-hover="(item, event) => emit('itemHover', item, event)"
       @item-leave="emit('itemLeave')"
       @open-debug="emit('openDebug')"
-      @toggle-debug-log="emit('toggleDebugLog', $event)"
       @take-direct="emit('takeDirect', $event)"
+      @npc-contextmenu="(entity, event) => emit('npcContextmenu', entity, event)"
+      @item-contextmenu="(entity, event) => emit('itemContextmenu', entity, event)"
+      @select-action="emit('selectAction', $event)"
+      @npc-click="emit('npcClick', $event)"
+      @item-click="emit('itemClick', $event)"
     />
 
     <div v-if="props.mode !== 'chat'" class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">

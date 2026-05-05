@@ -19,6 +19,7 @@ const props = defineProps<{
   npcs: Entity[]
   showImage: (path?: string | null) => boolean
   mode?: 'rpg' | 'story' | 'chat'
+  isDebug?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -26,6 +27,8 @@ const emit = defineEmits<{
   move: [event: MouseEvent]
   leave: []
   imageError: [path: string]
+  contextmenu: [entity: Entity, event: MouseEvent]
+  click: [entity: Entity]
 }>()
 </script>
 
@@ -45,19 +48,29 @@ const emit = defineEmits<{
         @mouseenter="emit('hover', ent, $event)"
         @mousemove="emit('move', $event)"
         @mouseleave="emit('leave')"
+        @contextmenu.prevent="emit('contextmenu', ent, $event)"
+        @click="emit('click', ent)"
       >
-        <div class="w-16 h-16 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
+        <div class="w-16 h-16 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2 relative">
+          <!-- Defeated Ribbon -->
+          <div v-if="ent.hp === 0" class="absolute -right-8 top-1 bg-red-600 text-white text-[8px] font-black uppercase tracking-[0.1em] py-0.5 w-24 text-center rotate-45 shadow-lg z-10">
+            Defeated
+          </div>
           <img
             v-if="ent.image_url && showImage(ent.image_url)"
             :src="getImageUrl(ent.image_url)"
-            class="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
+            class="w-full h-full object-cover object-top transition-all duration-500 group-hover:scale-110"
+            :class="{ 'grayscale opacity-50': ent.hp === 0 }"
             @error="emit('imageError', ent.image_url)"
           />
-          <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
+          <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50" :class="{ 'grayscale opacity-40': ent.hp === 0 }">
             <i :class="['ra text-2xl', getItemIcon('NPC'), 'text-cyan-500/40']"></i>
           </div>
         </div>
-        <span class="text-xs font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
+        <span class="text-xs font-bold text-slate-400 group-hover:text-cyan-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">
+          {{ ent.name }}
+          <span v-if="isDebug" class="block text-[8px] font-mono opacity-50 mt-0.5">ID: {{ ent.id }}</span>
+        </span>
         
         <!-- Very thin bars -->
         <div v-if="mode !== 'chat' && (ent.hp != null || ent.stamina != null || ent.mana != null)" class="w-full mt-1 px-1 flex flex-col gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">

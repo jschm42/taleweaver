@@ -50,7 +50,7 @@ function isFailureStatus(status: string): boolean {
   return value.includes('failed') || value.includes('error') || value.includes('cancelled')
 }
 
-function formatToneLabel(value?: string | null): string {
+function formatToneLabel(value?: any): string {
   if (!value) return ''
   let text = value
   if (text.startsWith('{')) {
@@ -66,7 +66,7 @@ function formatToneLabel(value?: string | null): string {
     .replace(/\s+/g, ' ')
     .trim()
   if (!normalized) return ''
-  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
+  return normalized.replace(/\b\w/g, (ch: string) => ch.toUpperCase())
 }
 
 
@@ -173,7 +173,8 @@ function removePendingCreationCard(adventureId: string) {
 }
 
 async function removeFailedPendingCard(adventureId: string, kind: 'creation' | 'import') {
-  const isTemporaryImport = kind === 'import' && adventureId.startsWith('adz-import-')
+  const isTemporaryImport =
+    kind === 'import' && (adventureId.startsWith('adv-import-') || adventureId.startsWith('adz-import-'))
 
   try {
     if (!isTemporaryImport) {
@@ -259,33 +260,6 @@ async function startSession(templateId: string) {
     playSession(result.game_id)
   } catch (error: any) {
     errorMsg.value = error?.message || 'Session could not be started.'
-  }
-}
-
-async function pauseSession(templateId: string) {
-  try {
-    await api.pauseSession(templateId)
-    await fetchPortalData()
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Session could not be paused.'
-  }
-}
-
-async function resumeHeartbeat(templateId: string) {
-  try {
-    await api.resumeSession(templateId)
-    await fetchPortalData()
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Session could not be resumed.'
-  }
-}
-
-async function resetSession(templateId: string) {
-  try {
-    await api.resetSession(templateId)
-    await fetchPortalData()
-  } catch (error: any) {
-    errorMsg.value = error?.message || 'Session could not be reset.'
   }
 }
 
@@ -619,7 +593,7 @@ onUnmounted(() => {
         </div>
 
         <div v-else>
-          <div v-if="activeSection === 'templates'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+          <div v-if="activeSection === 'templates'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
             <PortalCreateAdventureCard @click="openCreateModal" />
             
             <ImportExamplesCard 
@@ -670,15 +644,12 @@ onUnmounted(() => {
                 Adventure Library
               </button>
             </div>
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+            <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
               <GameSessionCard
                 v-for="entry in sessions"
                 :key="entry.game_id"
                 :session="entry"
                 @resume="playSession"
-                @pause="pauseSession"
-                @resume-heartbeat="resumeHeartbeat"
-                @reset="resetSession"
                 @delete="confirmDeleteSession(entry.game_id, entry.title)"
               />
             </div>

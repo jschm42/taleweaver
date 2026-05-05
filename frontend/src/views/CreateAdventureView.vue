@@ -135,14 +135,17 @@ async function handleCreate() {
   isGenerating.value = true
   errorMsg.value = ''
   
+  const fullStyleObj = imageStyles.value.find(s => s.id === form.value.selected_style_id) || { id: form.value.selected_style_id, name: form.value.selected_style_id }
+  const fullToneObj = tones.value.find(t => t.id === form.value.selected_tone_id) || { id: form.value.selected_tone_id, name: form.value.selected_tone_id }
+
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
     title: form.value.title.trim() || 'Untitled Odyssey',
     original_prompt: form.value.storyIdea.trim(),
     time_per_turn: form.value.pacing_minutes,
-    selected_image_styles: [form.value.selected_style_id],
-    selected_tone: form.value.selected_tone_id
+    selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
+    selected_tone: form.value.selected_tone_id ? fullToneObj : null
   }
 
   try {

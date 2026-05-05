@@ -35,10 +35,13 @@ export interface CharacterSheet {
   current_scene?: string | null
   scene_id?: string | null
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
+  is_debug_enabled?: boolean
+  debug_mode?: boolean
 }
 
 export interface InventoryItem {
   name: string
+  id?: string
   image_url?: string | null
   item_type?: string
   hp?: number
@@ -49,6 +52,41 @@ export interface InventoryItem {
   max_mana?: number
   stat_modifiers?: Record<string, number>
   [key: string]: unknown
+}
+
+export interface CombatLogEntry {
+  round: number
+  type: string
+  text: string
+  timestamp?: string
+}
+
+export interface CombatState {
+  active: boolean
+  round: number
+  turn: 'player' | 'enemy'
+  player: {
+    name: string
+    image_url?: string | null
+    hp: number
+    max_hp?: number
+    ac?: number
+  }
+  enemy: {
+    id: string
+    name: string
+    image_url?: string | null
+    hp: number
+    max_hp?: number
+    armor_mod?: number
+    dexterity_mod?: number
+    inventory?: InventoryItem[]
+  }
+  loot_pending?: boolean
+  loot_items?: InventoryItem[]
+  outcome?: string | null
+  status_note?: string | null
+  log?: CombatLogEntry[]
 }
 
 /** Summary of a game session returned by GET /api/adventures. */
@@ -85,7 +123,7 @@ export interface AdventureTemplateSummary {
   is_ready: boolean
   creation_status?: string | null
   creation_error?: string | null
-  selected_tone?: string | null
+  selected_tone?: CatalogTile | null
   progress?: number
   quest_count?: number
   completed_quest_count?: number
@@ -107,8 +145,8 @@ export interface CreateAdventurePayload {
   generate_npc_images?: boolean
   generate_item_images?: boolean
   generate_scene_images?: boolean
-  selected_image_styles?: string[]
-  selected_tone?: string
+  selected_image_styles?: CatalogTile[]
+  selected_tone?: CatalogTile
   min_scenes?: number
   max_scenes?: number
   clock_enabled?: boolean
@@ -121,6 +159,7 @@ export interface CreateAdventurePayload {
   award_generation_enabled?: boolean
   min_awards?: number
   max_awards?: number
+  allow_dynamic_items?: boolean
 }
 
 export interface CatalogTile {

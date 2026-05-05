@@ -12,6 +12,7 @@ interface Entity {
 const props = defineProps<{
   items: Entity[]
   showImage: (path?: string | null) => boolean
+  isDebug?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -20,6 +21,8 @@ const emit = defineEmits<{
   leave: []
   imageError: [path: string]
   takeDirect: [entity: Entity]
+  contextmenu: [entity: Entity, event: MouseEvent]
+  click: [entity: Entity]
 }>()
 </script>
 
@@ -40,7 +43,8 @@ const emit = defineEmits<{
         @mouseenter="emit('hover', ent, $event)"
         @mousemove="emit('move', $event)"
         @mouseleave="emit('leave')"
-        @click="ent.is_portable !== false ? emit('takeDirect', ent) : null"
+        @click="emit('click', ent)"
+        @contextmenu.prevent="emit('contextmenu', ent, $event)"
       >
         <div class="w-12 h-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
           <img
@@ -53,7 +57,10 @@ const emit = defineEmits<{
             <i :class="['ra text-xl', getItemIcon(ent.item_type), getTypeColor(ent.item_type)]"></i>
           </div>
         </div>
-        <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">{{ ent.name }}</span>
+        <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">
+          {{ ent.name }}
+          <span v-if="isDebug" class="block text-[8px] font-mono opacity-50 mt-0.5">ID: {{ ent.id }}</span>
+        </span>
       </div>
     </div>
   </div>

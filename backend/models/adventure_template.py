@@ -33,7 +33,7 @@ class AdventureTemplate(Base, TimestampMixin):
     generate_npc_images = Column(Boolean, default=False, nullable=False)
     generate_item_images = Column(Boolean, default=False, nullable=False)
     selected_image_styles = Column(JSON, nullable=True)
-    selected_tone = Column(String(100), nullable=True)
+    selected_tone = Column(JSON, nullable=True)
 
     game_over_rules = Column(JSON, nullable=True)
     quests = Column(JSON, nullable=True)
@@ -59,6 +59,7 @@ class AdventureTemplate(Base, TimestampMixin):
     gameover_condition = Column(String(1000), nullable=True)
     original_prompt = Column(String(5000), nullable=True)
     starting_timestamp = Column(Integer, default=0, nullable=False) # Minutes from Day 1, 00:00
+    allow_dynamic_items = Column(Boolean, default=True, nullable=False)
 
     # Award System
     awards = Column(JSON, nullable=True)

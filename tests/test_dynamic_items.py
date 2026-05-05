@@ -1,0 +1,153 @@
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from sqlalchemy import select
+
+from backend.models.user import User
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.avatar import Avatar
+from backend.models.session_state import SessionState
+from backend.models.world_entity import WorldEntity
+from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.engine.rule_engine import GameEvent, InventoryItem
+
+pytestmark = pytest.mark.asyncio
+
+async def _seed_game_context(db):
+    """Seeds a minimal game context for turn testing."""
+    user = User(username="player1", hashed_password="pw", role="user")
+    adv = AdventureTemplate(
+        id="adv-dynamic", 
+        title="Dynamic Item Adventure", 
+        owner_id="admin",
+        time_per_turn=5,
+        strict_rules=True
+    )
+    db.add_all([user, adv])
+    await db.flush()
+    
+    avatar = Avatar(
+        id="av-dynamic",
+        template_id=adv.id,
+        user_id=user.id,
+        name="Dynamic Hero",
+        role="Explorer",
+        hp=50,
+        max_hp=100,
+        stats={"strength": 10, "dexterity": 10}
+    )
+    db.add(avatar)
+    await db.flush()
+    
+    state = SessionState(
+        session_id="session-dynamic",
+        template_id=adv.id,
+        avatar_id=avatar.id,
+        user_id=user.id,
+        current_scene_id="START",
+        in_game_time=0
+    )
+    db.add(state)
+    await db.commit()
+    return user, adv, avatar, state
+
+async def test_spawned_items_logic(setup_test_db, monkeypatch):
+    """Verifies that the GM can spawn new items into the scene."""
+    from tests.conftest import TestSessionLocal
+    
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        
+        # Mock LLM Pass 1 to return a spawned item
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="A mysterious potion appears on the altar.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
+            spawned_items=[
+                InventoryItem(
+                    name="Magic Potion",
+                    description="A potion created on-the-fly.",
+                    item_type="CONSUMABLE",
+                    hp_change=30,
+                    spatial_position="on the altar"
+                )
+            ]
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+        
+        # Mock Pass 2
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The potion glows."))])
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        
+        # Act
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("I search the altar"):
+            pass
+            
+        # Assert: Check if WorldEntity was created
+        res = await db.execute(select(WorldEntity).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.name == "Magic Potion"
+        ))
+        potion_ent = res.scalars().first()
+        assert potion_ent is not None
+        assert potion_ent.spatial_position == "on the altar"
+        assert potion_ent.metadata_json.get("hp_change") == 30
+
+async def test_on_the_fly_inventory_item_effects(setup_test_db, monkeypatch):
+    """Verifies that on-the-fly inventory items have correct resource effects when consumed."""
+    from tests.conftest import TestSessionLocal
+    
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        
+        # Mock LLM Pass 1 to give item directly
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="You find a health herb and eat it (or keep it).",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[
+                InventoryItem(
+                    name="Health Herb",
+                    description="A fresh herb.",
+                    item_type="CONSUMABLE",
+                    hp_change=15
+                )
+            ]
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+        
+        # Mock Pass 2
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You tuck it away."))])
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        
+        # Act 1: Get the item
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("I look for herbs"):
+            pass
+            
+        # Assert 1: Item in inventory
+        await db.refresh(avatar)
+        assert any(it.get("name") == "Health Herb" for it in avatar.inventory)
+        
+        # Act 2: Consume the item
+        # We need to re-initialize manager or at least ensure db session is fresh
+        async for _ in manager.process_turn("/consume Health Herb"):
+            pass
+            
+        # Assert 2: HP increased
+        await db.refresh(avatar)
+        assert avatar.hp == 65 # 50 + 15
+        assert not any(it.get("name") == "Health Herb" for it in avatar.inventory)

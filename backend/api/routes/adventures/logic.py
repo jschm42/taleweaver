@@ -14,6 +14,7 @@ from backend.models.world_map import WorldMap
 from backend.engine.world_generator import WorldGenerator
 from backend.engine.map_engine import MapEngine
 from backend.schemas.adventure import AdventureTemplateDebugResponse
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,16 @@ class AdventureLogic:
             return {}
         snap = raw.get("__asset_snapshot__")
         return snap if isinstance(snap, dict) else {}
+
+    @staticmethod
+    def get_combat_snapshot(state: SessionState) -> Optional[Dict[str, Any]]:
+        raw = state.entity_states or {}
+        if not isinstance(raw, dict):
+            return None
+        combat = raw.get("__combat__")
+        if not isinstance(combat, dict):
+            return None
+        return combat
 
     @staticmethod
     def resolve_session_asset(state: SessionState, key: str, fallback: Optional[str] = None) -> Optional[str]:
@@ -291,7 +302,9 @@ class AdventureLogic:
             "exp": avatar.exp,
             "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg",
             "time_system": state.time_system or (adventure.time_system if adventure else "calendar"),
-            "time_config": state.time_config or (adventure.time_config if adventure else None)
+            "time_config": state.time_config or (adventure.time_config if adventure else None),
+            "is_debug_enabled": bool(state.is_debug_enabled),
+            "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED)
         }
         
         return snapshot

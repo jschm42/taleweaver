@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
 from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
 from backend.schemas.adventure import AdventureTemplateUpdate, AdventureTemplateDebugResponse
@@ -20,8 +20,8 @@ class CreateAdventureTemplatePayload(BaseModel):
     pacing_minutes: Optional[int] = None
     clock_enabled: Optional[bool] = False
     game_over_rules: Optional[Dict[str, Any]] = None
-    selected_image_styles: Optional[List[str]] = None
-    selected_tone: Optional[str] = None
+    selected_image_styles: Optional[List[Dict[str, Any]]] = None
+    selected_tone: Optional[Dict[str, Any]] = None
     # Advanced/import fields
     original_manifest: Optional[Dict[str, Any]] = None
     automatic_cover_generation: Optional[bool] = False
@@ -52,12 +52,29 @@ class AdventureTemplateResponse(BaseModel):
     pacing_minutes: int
     clock_enabled: bool
     game_over_rules: Optional[Dict[str, Any]]
-    selected_image_styles: Optional[List[str]] = None
-    selected_tone: Optional[str] = None
+    selected_image_styles: Optional[List[Dict[str, Any]]] = None
+    selected_tone: Optional[Dict[str, Any]] = None
     original_prompt: Optional[str] = None
     quests: Optional[List[Dict[str, Any]]] = None
     awards: Optional[List[Dict[str, Any]]] = None
     is_completed: bool = False
+
+    @field_validator("selected_tone", mode="before")
+    @classmethod
+    def parse_legacy_tone(cls, v):
+        if isinstance(v, str):
+            return {"id": v, "name": v.capitalize()}
+        return v
+
+    @field_validator("selected_image_styles", mode="before")
+    @classmethod
+    def parse_legacy_styles(cls, v):
+        if isinstance(v, list) and len(v) > 0 and isinstance(v[0], str):
+            return [{"id": s, "name": s.capitalize()} for s in v]
+        return v
+
+    # GM Capabilities
+    allow_dynamic_items: bool = True
 
     # Narrative Meta (User editable in Plot tab)
     plot: Optional[str] = None
@@ -83,7 +100,7 @@ class GameSessionResponse(BaseModel):
     is_ready: bool = True
     creation_status: Optional[str] = None
     creation_error: Optional[str] = None
-    selected_tone: Optional[str] = None
+    selected_tone: Optional[Dict[str, Any]] = None
     progress: int = 0
     quest_count: int = 0
     completed_quest_count: int = 0
@@ -92,6 +109,13 @@ class GameSessionResponse(BaseModel):
     created_at: Optional[datetime] = None
     status: str = "active"
     status_note: Optional[str] = None
+
+    @field_validator("selected_tone", mode="before")
+    @classmethod
+    def parse_legacy_tone(cls, v):
+        if isinstance(v, str):
+            return {"id": v, "name": v.capitalize()}
+        return v
 
 class AdventureTemplateSummaryResponse(BaseModel):
     """Summary of an adventure template for management views."""
@@ -103,7 +127,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
     is_ready: bool = True
     creation_status: Optional[str] = None
     creation_error: Optional[str] = None
-    selected_tone: Optional[str] = None
+    selected_tone: Optional[Dict[str, Any]] = None
     progress: int = 0
     quest_count: int = 0
     completed_quest_count: int = 0
@@ -112,6 +136,13 @@ class AdventureTemplateSummaryResponse(BaseModel):
     scene_id: Optional[str] = None
     current_scene_name: Optional[str] = None
     origin_id: Optional[str] = None
+
+    @field_validator("selected_tone", mode="before")
+    @classmethod
+    def parse_legacy_tone(cls, v):
+        if isinstance(v, str):
+            return {"id": v, "name": v.capitalize()}
+        return v
 
 class ImportCheckItem(BaseModel):
     title: str
@@ -130,6 +161,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     messages: List[Dict[str, Any]]
     sheet: Dict[str, Any]
+    combat: Optional[Dict[str, Any]] = None
     mermaid: Optional[str] = None
     nodes: Optional[Dict[str, Any]] = None
     entities: Optional[List[Dict[str, Any]]] = None

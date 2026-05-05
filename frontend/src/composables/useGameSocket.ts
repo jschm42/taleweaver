@@ -7,7 +7,7 @@
 import { ref, watch, type Ref } from 'vue'
 import { useNotifications } from '@/composables/useNotifications'
 import { authState } from '@/store/auth'
-import type { ChatMessage, CharacterSheet } from '@/types'
+import type { ChatMessage, CharacterSheet, CombatState } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
 
@@ -19,6 +19,7 @@ export interface UseGameSocket {
   npcMetadata: Ref<Record<string, any>>
   currentSceneImage: Ref<string | null>
   entities: Ref<any[]>
+  combat: Ref<CombatState | null>
   status: Ref<ConnectionStatus>
   gameOverReason: Ref<string>
   autoVisualize: Ref<boolean>
@@ -48,6 +49,7 @@ export function useGameSocket(): UseGameSocket {
   const npcMetadata = ref<Record<string, any>>({})
   const currentSceneImage = ref<string | null>(null)
   const entities = ref<any[]>([])
+  const combat = ref<CombatState | null>(null)
   const status = ref<ConnectionStatus>('disconnected')
   const gameOverReason = ref('')
   const autoVisualize = ref(false)
@@ -119,6 +121,9 @@ export function useGameSocket(): UseGameSocket {
     if (data.nodes) nodes.value = data.nodes
     if (data.npc_metadata) npcMetadata.value = data.npc_metadata
     entities.value = data.entities || []
+    if (data.combat !== undefined) {
+      combat.value = data.combat || null
+    }
     if (data.image_url !== undefined) {
       currentSceneImage.value = data.image_url
     }
@@ -321,6 +326,7 @@ export function useGameSocket(): UseGameSocket {
     npcMetadata,
     currentSceneImage,
     entities,
+    combat,
     status,
     gameOverReason,
     autoVisualize,

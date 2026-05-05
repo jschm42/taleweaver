@@ -164,6 +164,8 @@ async def import_adventure_adz(
             raise HTTPException(status_code=400, detail="Failed to import ADZ. Ensure the file is a valid TaleWeaver bundle.")
         
         return {"status": "success", "message": "Adventure imported successfully."}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("ADZ Import failed")
         raise HTTPException(status_code=500, detail=str(e))
@@ -183,6 +185,8 @@ async def import_adventure_adv(
             raise HTTPException(status_code=400, detail="Failed to import ADV. Ensure the file is a valid TaleWeaver manifest.")
         
         return {"status": "success", "message": "Adventure imported successfully."}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("ADV Import failed")
         raise HTTPException(status_code=500, detail=str(e))

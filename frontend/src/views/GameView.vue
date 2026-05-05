@@ -21,11 +21,14 @@ import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
 import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
+import FightDialogModal from '@/components/game/FightDialogModal.vue'
+import ContextMenu from '@/components/game/ContextMenu.vue'
+import GameActionBar from '@/components/game/GameActionBar.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
 import { authState, refreshUser } from '@/store/auth'
-import { getImageUrl, getItemIcon } from '@/utils/game_icons'
+import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
 
 const props = defineProps<{
   id: string
@@ -63,6 +66,7 @@ const {
   currentSceneImage,
   quests,
   awards,
+  combat,
   isCompleted,
   statusText,
   debugLogs,
@@ -79,10 +83,178 @@ const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQues
 // Tooltip & Hover State
 const hoveredEntity = ref<any>(null)
 const mousePos = ref({ x: 0, y: 0 })
+const tooltipImageFailed = ref(false)
+
+// Context Menu State
+const contextMenu = ref<{
+  x: number
+  y: number
+  items: any[]
+  title: string
+} | null>(null)
+
+const activeActionId = ref<string | null>(null)
+
+const handleEntityClick = async (entity: any) => {
+  if (activeActionId.value) {
+    const action = activeActionId.value
+    const targetName = entity.name || entity.id
+    let command = ""
+
+    switch (action) {
+      case 'talk': command = `/talk ${targetName}`; break
+      case 'inspect': command = `/inspect ${targetName}`; break
+      case 'take': command = `/take ${targetName}`; break
+      case 'attack': command = `/attack ${targetName}`; break
+      case 'push': command = `Push ${targetName}`; break
+      case 'pull': command = `Pull ${targetName}`; break
+      default: command = `${action} ${targetName}`; break
+    }
+
+    activeActionId.value = null
+    await handlePlayerInput(command)
+  } else {
+    // Default behavior for click (e.g. pick up if portable item)
+    if (entity.entity_type === 'OBJECT' && entity.is_portable !== false) {
+      await handleTakeDirect(entity)
+    }
+  }
+}
+
+const openContextMenu = (entity: any, event: MouseEvent) => {
+  const items: any[] = []
+  let title = entity.name || 'Action'
+  
+  if (entity.id === 'PLAYER') {
+    title = 'You'
+    items.push({ label: 'Inspect', action: '/sheet', icon: 'ra ra-player', color: 'text-cyan-400' })
+    items.push({ label: 'Rest', action: 'Take a rest', icon: 'ra ra-sleeping-bag', color: 'text-emerald-400' })
+    items.push({ label: 'Sing', action: 'Sing a song', icon: 'ra ra-music-spell', color: 'text-pink-400' })
+    items.push({ label: 'Dance', action: 'Start dancing', icon: 'ra ra-double-team', color: 'text-orange-400' })
+  } else if (entity.entity_type === 'NPC') {
+    items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+    if (sheet.value?.rule_enforcement_mode === 'rpg') {
+      items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
+    }
+    items.push({ label: 'Chat', action: `/talk ${entity.name}`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
+  } else if (entity.entity_type === 'SCENE') {
+    items.push({ label: 'Look around', action: 'Look around', icon: 'ra ra-eye', color: 'text-indigo-400' })
+    items.push({ label: 'Search', action: 'Search the area', icon: 'ra ra-magnifying-glass', color: 'text-emerald-400' })
+  } else if (entity.entity_type === 'OBJECT' || entity.entity_type === 'ITEM') {
+    items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+    items.push({ label: 'Pick up', action: `/take ${entity.name}`, icon: 'ra ra-hand', color: 'text-amber-400' })
+    items.push({ label: 'Push', action: `Push ${entity.name}`, icon: 'ra ra-cog', color: 'text-slate-400' })
+    items.push({ label: 'Pull', action: `Pull ${entity.name}`, icon: 'ra ra-tread', color: 'text-slate-400' })
+    items.push({ label: 'Hit', action: `Hit ${entity.name}`, icon: 'ra ra-hammer', color: 'text-red-400' })
+    items.push({ label: 'Smell', action: `Smell ${entity.name}`, icon: 'ra ra-scent', color: 'text-pink-400' })
+  }
+
+  if (items.length > 0) {
+    contextMenu.value = {
+      x: event.clientX,
+      y: event.clientY,
+      items,
+      title
+    }
+    // Also hide tooltip when menu opens
+    hoveredEntity.value = null
+  }
+}
+
+const handleMenuSelect = async (item: any) => {
+  const action = item.action
+  contextMenu.value = null
+  await handlePlayerInput(action)
+}
+
+
+function toNumberOrNull(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function firstNumeric(...values: unknown[]): number | null {
+  for (const value of values) {
+    const parsed = toNumberOrNull(value)
+    if (parsed !== null) return parsed
+  }
+  return null
+}
+
+function hasNonZero(value: unknown): boolean {
+  const parsed = toNumberOrNull(value)
+  return parsed !== null && parsed !== 0
+}
+
+function normalizeHoverEntity(entity: any): any {
+  if (!entity || typeof entity !== 'object') return entity
+
+  const normalized = { ...entity }
+  const metadata = (normalized.metadata_json && typeof normalized.metadata_json === 'object') ? normalized.metadata_json : {}
+  const embeddedStats = (metadata.stat_modifiers && typeof metadata.stat_modifiers === 'object') ? metadata.stat_modifiers : {}
+  const directStats = (normalized.stat_modifiers && typeof normalized.stat_modifiers === 'object') ? normalized.stat_modifiers : {}
+
+  const stat = (...keys: string[]) => firstNumeric(
+    ...keys.map((k) => normalized[k]),
+    ...keys.map((k) => metadata[k]),
+    ...keys.map((k) => embeddedStats[k]),
+    ...keys.map((k) => directStats[k]),
+  )
+
+  if (normalized.stat_modifier_strength == null) {
+    const value = stat('stat_modifier_strength', 'strength', 'str', 'STR')
+    if (value != null) normalized.stat_modifier_strength = value
+  }
+  if (normalized.stat_modifier_dexterity == null) {
+    const value = stat('stat_modifier_dexterity', 'stat_modifier_agility', 'dexterity', 'agility', 'dex', 'DEX', 'AGI')
+    if (value != null) normalized.stat_modifier_dexterity = value
+  }
+  if (normalized.stat_modifier_intelligence == null) {
+    const value = stat('stat_modifier_intelligence', 'intelligence', 'int', 'INT')
+    if (value != null) normalized.stat_modifier_intelligence = value
+  }
+  if (normalized.stat_modifier_wisdom == null) {
+    const value = stat('stat_modifier_wisdom', 'wisdom', 'wis', 'WIS')
+    if (value != null) normalized.stat_modifier_wisdom = value
+  }
+  if (normalized.stat_modifier_charisma == null) {
+    const value = stat('stat_modifier_charisma', 'charisma', 'cha', 'CHA')
+    if (value != null) normalized.stat_modifier_charisma = value
+  }
+  if (normalized.stat_modifier_armor_class == null) {
+    const value = stat('stat_modifier_armor_class', 'armor_class', 'ac', 'AC')
+    if (value != null) normalized.stat_modifier_armor_class = value
+  }
+
+  const effects = (metadata.effects && typeof metadata.effects === 'object') ? metadata.effects : {}
+  if (normalized.hp_change == null) {
+    const value = firstNumeric(normalized.hp_change, metadata.hp_change, metadata.health_change, effects.hp, effects.health)
+    if (value != null) normalized.hp_change = value
+  }
+  if (normalized.mana_change == null) {
+    const value = firstNumeric(normalized.mana_change, metadata.mana_change, effects.mana)
+    if (value != null) normalized.mana_change = value
+  }
+  if (normalized.stamina_change == null) {
+    const value = firstNumeric(normalized.stamina_change, metadata.stamina_change, effects.stamina, effects.energy)
+    if (value != null) normalized.stamina_change = value
+  }
+
+  return normalized
+}
 
 const handleHover = (ent: any, event: MouseEvent) => {
-  hoveredEntity.value = ent
+  tooltipImageFailed.value = false
+  hoveredEntity.value = normalizeHoverEntity(ent)
   mousePos.value = { x: event.clientX, y: event.clientY }
+}
+
+function onTooltipImageError(): void {
+  tooltipImageFailed.value = true
 }
 
 const tooltipStyle = computed(() => {
@@ -105,13 +277,25 @@ const tooltipStyle = computed(() => {
   return style
 })
 
+const isConsumableHover = computed(() => {
+  const ent = hoveredEntity.value
+  if (!ent) return false
+  const itemType = String(ent.item_type || '').toUpperCase()
+  return itemType === 'CONSUMABLE' || ent.hp_change != null || ent.mana_change != null || ent.stamina_change != null
+})
+
 const handleChatNpcHover = (name: string, event: MouseEvent) => {
   const metadata = npcMetadata.value[name]
   if (metadata) {
-    hoveredEntity.value = metadata
+    tooltipImageFailed.value = false
+    hoveredEntity.value = normalizeHoverEntity(metadata)
     mousePos.value = { x: event.clientX, y: event.clientY }
   }
 }
+
+watch(() => hoveredEntity.value?.image_url, () => {
+  tooltipImageFailed.value = false
+})
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
 const npcs = computed(() => {
@@ -138,6 +322,15 @@ const npcs = computed(() => {
 })
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
+const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
+const isCombatActive = computed(() => !!combat.value?.active)
+const showCombatDialog = computed(() => !!combat.value && (!!combat.value.active || !!combat.value.loot_pending || !!combat.value.outcome))
+const combatActionInFlight = ref(false)
+const isCombatEvaluating = computed(() => combatActionInFlight.value)
+const showsMechanics = computed(() => {
+  const mode = (sheet.value as any)?.rule_enforcement_mode as string | undefined
+  return mode === 'rpg' || mode === 'story' || mode === 'strict'
+})
 
 // --- WATCHERS FOR UI FEEDBACK (GLOW) ---
 
@@ -391,6 +584,14 @@ const buyHint = async () => {
 }
 
 const handlePlayerInput = async (content: string) => {
+  if (isCombatActive.value) {
+    const msg = content.trim().toLowerCase()
+    const allowed = msg === 'attack' || msg === '/attack' || msg === 'run' || msg === '/run' || msg.startsWith('/consume ')
+    if (!allowed) {
+      return
+    }
+  }
+
   const normalized = content.trim().toLowerCase()
   if (normalized === '/walkthrough') {
     await openWalkthroughPanel()
@@ -415,8 +616,116 @@ const handlePlayerInput = async (content: string) => {
     return
   }
 
+  if (normalized === '/debug reveal_map') {
+    await sendMessage('/debug reveal_map')
+    showMap.value = true
+    return
+  }
+
+  if (normalized === '/debug session') {
+    await openDebugInspector()
+    return
+  }
+
+  if (normalized === '/map') {
+    showMap.value = true
+    return
+  }
+
+  if (normalized === '/sheet' || normalized === '/inventory') {
+    showSheet.value = true
+    return
+  }
+
+  if (normalized === '/quests') {
+    showQuests.value = true
+    return
+  }
+
   await sendMessage(content)
 }
+
+const handleCombatAttack = async () => {
+  if (combatActionInFlight.value) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage('/attack')
+  } finally {
+    combatActionInFlight.value = false
+  }
+}
+
+const handleCombatRun = async () => {
+  if (combatActionInFlight.value) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage('/run')
+  } finally {
+    combatActionInFlight.value = false
+  }
+}
+
+const handleCombatConsume = async (name: string) => {
+  if (combatActionInFlight.value) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage(`/consume ${name}`)
+  } finally {
+    combatActionInFlight.value = false
+  }
+}
+
+const handleCombatDebugWin = async () => {
+  await sendMessage('/debug win_fight')
+}
+
+const handleCombatDebugLoose = async () => {
+  await sendMessage('/debug loose_fight')
+}
+
+const handleLootTake = async (item: any) => {
+  if (combatActionInFlight.value) return
+  const key = (item?.id || item?.name || '').toString().trim()
+  if (!key) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage(`/loot take ${key}`)
+  } finally {
+    combatActionInFlight.value = false
+  }
+}
+
+const handleLootLeave = async (item: any) => {
+  if (combatActionInFlight.value) return
+  const key = (item?.id || item?.name || '').toString().trim()
+  if (!key) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage(`/loot leave ${key}`)
+  } finally {
+    combatActionInFlight.value = false
+  }
+}
+
+const handleLootDone = async () => {
+  if (combatActionInFlight.value) return
+  combatActionInFlight.value = true
+  try {
+    await sendMessage('/loot done')
+    // Local safety: If no loot is left, we can assume closure is imminent
+    if (combat.value && !combat.value.loot_pending) {
+      combat.value = null
+    }
+  } finally {
+    combatActionInFlight.value = false
+  }
+}
+
+watch(showCombatDialog, (visible) => {
+  if (!visible) {
+    combatActionInFlight.value = false
+  }
+})
 
 const fetchGameSettings = async () => {
   try {
@@ -468,6 +777,16 @@ const connectWithRouteFallback = async (routeId: string) => {
   await router.replace({ name: 'game', params: { id: resolvedGameId } })
 }
 
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    showSheet.value = false
+    showMap.value = false
+    showQuests.value = false
+    showWalkthrough.value = false
+    showDebug.value = false
+  }
+}
+
 onMounted(() => {
   void (async () => {
     await fetchGameSettings()
@@ -475,6 +794,7 @@ onMounted(() => {
       await connectWithRouteFallback(props.id)
     }
   })()
+  window.addEventListener('keydown', handleGlobalKeydown)
 })
 
 watch(() => props.id, (newId) => {
@@ -486,11 +806,15 @@ watch(() => props.id, (newId) => {
 
 onBeforeUnmount(() => {
   disconnect()
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
 <template>
-  <main class="h-full min-h-0 bg-slate-950 flex flex-col font-sans overflow-hidden relative">
+  <main 
+    class="h-full min-h-0 bg-slate-950 flex flex-col font-sans overflow-hidden relative"
+    :class="{ 'selection-mode': activeActionId }"
+  >
     <!-- Full-Width Adventure Background (Top Third) -->
     <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
       <img 
@@ -527,6 +851,9 @@ onBeforeUnmount(() => {
       <div class="flex justify-end lg:order-3 lg:mt-0 mt-[-10px]">
         <GameClockWidget :game-time="gameTime" :clock-tick="clockTick" />
       </div>
+      <div v-if="sheet?.debug_mode" class="absolute top-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-1 bg-rose-600/80 backdrop-blur-md border border-rose-400/50 rounded-full text-[10px] font-black text-white uppercase tracking-[0.2em] animate-pulse shadow-lg">
+        Debug Protocol Active
+      </div>
     </header>
 
 
@@ -534,13 +861,17 @@ onBeforeUnmount(() => {
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
       <aside v-if="entities.length > 0 || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar relative z-10 m-6 shadow-2xl">
         <GameScenePanel
+          :scene-id="sheet?.scene_id"
           :scene-name="sheet?.current_scene"
           :scene-description="currentSceneDescription"
           :scene-image="currentSceneImage"
           :show-image="showImage"
+          :is-debug="!!sheet?.debug_mode"
           @hover="(payload, event) => handleHover(payload, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
+          @contextmenu="(payload, event) => openContextMenu(payload, event)"
+          @click="handleEntityClick"
           @image-error="(path) => handleImageError(path)"
         />
 
@@ -548,18 +879,24 @@ onBeforeUnmount(() => {
           :npcs="npcs"
           :show-image="showImage"
           :mode="sheet?.rule_enforcement_mode"
+          :is-debug="!!sheet?.debug_mode"
           @hover="(entity, event) => handleHover({ ...entity, entity_type: 'NPC' }, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
+          @contextmenu="(entity, event) => openContextMenu({ ...entity, entity_type: 'NPC' }, event)"
+          @click="handleEntityClick"
           @image-error="(path) => handleImageError(path)"
         />
 
         <GameItemsPanel
           :items="items"
           :show-image="showImage"
+          :is-debug="!!sheet?.debug_mode"
           @hover="(entity, event) => handleHover(entity, event)"
           @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
           @leave="hoveredEntity = null"
+          @contextmenu="(entity, event) => openContextMenu(entity, event)"
+          @click="handleEntityClick"
           @image-error="(path) => handleImageError(path)"
           @take-direct="handleTakeDirect"
         />
@@ -583,17 +920,23 @@ onBeforeUnmount(() => {
         :inventory-glow="inventoryGlow"
         :map-glow="mapGlow"
         :quest-glow="questGlow"
+        :active-action-id="activeActionId"
         @send="handlePlayerInput"
         @open-sheet="showSheet = true"
         @open-map="showMap = true"
         @open-quests="showQuests = true"
+        @select-action="(id) => activeActionId = id"
         @npc-hover="handleChatNpcHover"
         @npc-leave="hoveredEntity = null"
+        @npc-click="(name) => handleEntityClick({ name, entity_type: 'NPC' })"
         @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
         @item-leave="hoveredEntity = null"
+        @item-click="handleEntityClick"
         @take-direct="handleTakeDirect"
         @open-debug="openDebugInspector"
         @toggle-debug-log="(val) => showDebugLog = val"
+        @npc-contextmenu="(entity, event) => openContextMenu(entity, event)"
+        @item-contextmenu="(entity, event) => openContextMenu(entity, event)"
       />
     </div>
 
@@ -601,6 +944,7 @@ onBeforeUnmount(() => {
     <CharacterSheetModal 
       :open="showSheet" 
       :sheet="sheet" 
+      :is-debug="!!sheet?.debug_mode"
       @close="showSheet = false" 
       @equip="(name) => sendMessage(`/equip ${name}`)"
       @unequip="(slot) => sendMessage(`/unequip ${slot}`)"
@@ -657,6 +1001,26 @@ onBeforeUnmount(() => {
       @close="showDebug = false" 
     />
 
+    <FightDialogModal
+      :open="showCombatDialog"
+      :combat="combat"
+      :consumables="combatConsumables"
+      :npc-metadata="npcMetadata"
+      :player-sheet="sheet"
+      :evaluating="isCombatEvaluating"
+      :is-debug="!!sheet?.debug_mode"
+      @attack="handleCombatAttack"
+      @run="handleCombatRun"
+      @consume="handleCombatConsume"
+      @loot-take="handleLootTake"
+      @loot-leave="handleLootLeave"
+      @loot-done="handleLootDone"
+      @debug-win="handleCombatDebugWin"
+      @debug-loose="handleCombatDebugLoose"
+      @entity-hover="(entity, event) => handleHover(entity, event)"
+      @entity-leave="hoveredEntity = null"
+    />
+
     <!-- HOVER TOOLTIP -->
     <Teleport to="body">
       <Transition name="tooltip">
@@ -667,9 +1031,18 @@ onBeforeUnmount(() => {
         >
           <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
             <!-- Image Area -->
-            <div v-if="hoveredEntity.image_url" class="h-48 w-full relative">
-              <img :src="getImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
+            <div v-if="hasRenderableImagePath(hoveredEntity.image_url) && !tooltipImageFailed" class="h-48 w-full relative">
+              <img :src="getImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" @error="onTooltipImageError" />
               <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+            </div>
+            <div v-else class="h-32 w-full relative bg-slate-950 border-b border-slate-800 flex items-center justify-center">
+              <i
+                :class="[
+                  'ra text-4xl',
+                  hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'ra-player text-cyan-400/80' : 'ra-vest text-amber-400/80'
+                ]"
+              ></i>
+              <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.12),transparent_65%)]"></div>
             </div>
 
             <!-- Content -->
@@ -678,9 +1051,9 @@ onBeforeUnmount(() => {
                 <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
                 <span 
                   class="text-xxs px-1.5 py-0.5 rounded border font-mono uppercase"
-                  :class="hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : 'border-amber-500/50 text-amber-400'"
+                  :class="hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : (hoveredEntity.entity_type?.toUpperCase() === 'SCENE' ? 'border-indigo-500/50 text-indigo-400' : 'border-amber-500/50 text-amber-400')"
                 >
-                  {{ hoveredEntity.entity_type || 'NPC' }}
+                  {{ hoveredEntity.entity_type || 'OBJECT' }}
                 </span>
               </div>
               <p class="text-xs text-slate-400 leading-relaxed italic mb-3">{{ hoveredEntity.description }}</p>
@@ -719,23 +1092,38 @@ onBeforeUnmount(() => {
                     {{ hoveredEntity.slot.replace('_', ' ') }}
                   </div>
 
-                  <template v-if="sheet?.rule_enforcement_mode === 'rpg' || sheet?.rule_enforcement_mode === 'story'">
-                    <div v-if="hoveredEntity.stat_modifier_strength != null" class="text-red-400 flex justify-between">
+                  <template v-if="isConsumableHover">
+                    <div v-if="hasNonZero(hoveredEntity.hp_change)" class="text-red-400 flex justify-between">
+                      <span>HP</span>
+                      <span>{{ Number(hoveredEntity.hp_change) >= 0 ? '+' : '' }}{{ hoveredEntity.hp_change }}</span>
+                    </div>
+                    <div v-if="hasNonZero(hoveredEntity.mana_change)" class="text-blue-400 flex justify-between">
+                      <span>Mana</span>
+                      <span>{{ Number(hoveredEntity.mana_change) >= 0 ? '+' : '' }}{{ hoveredEntity.mana_change }}</span>
+                    </div>
+                    <div v-if="hasNonZero(hoveredEntity.stamina_change)" class="text-emerald-400 flex justify-between">
+                      <span>Stamina</span>
+                      <span>{{ Number(hoveredEntity.stamina_change) >= 0 ? '+' : '' }}{{ hoveredEntity.stamina_change }}</span>
+                    </div>
+                  </template>
+
+                  <template v-if="showsMechanics">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_strength)" class="text-red-400 flex justify-between">
                       <span>STR</span> <span>+{{ hoveredEntity.stat_modifier_strength }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_dexterity != null" class="text-emerald-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_dexterity)" class="text-emerald-400 flex justify-between">
                       <span>DEX</span> <span>+{{ hoveredEntity.stat_modifier_dexterity }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_intelligence != null" class="text-blue-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_intelligence)" class="text-blue-400 flex justify-between">
                       <span>INT</span> <span>+{{ hoveredEntity.stat_modifier_intelligence }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_wisdom != null" class="text-purple-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_wisdom)" class="text-purple-400 flex justify-between">
                       <span>WIS</span> <span>+{{ hoveredEntity.stat_modifier_wisdom }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_charisma != null" class="text-pink-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_charisma)" class="text-pink-400 flex justify-between">
                       <span>CHA</span> <span>+{{ hoveredEntity.stat_modifier_charisma }}</span>
                     </div>
-                    <div v-if="hoveredEntity.stat_modifier_armor_class != null" class="text-amber-400 flex justify-between">
+                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_armor_class)" class="text-amber-400 flex justify-between">
                       <span>AC</span> <span>+{{ hoveredEntity.stat_modifier_armor_class }}</span>
                     </div>
                   </template>
@@ -746,6 +1134,20 @@ onBeforeUnmount(() => {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- CONTEXT MENU -->
+    <Teleport to="body">
+      <ContextMenu
+        v-if="contextMenu"
+        :x="contextMenu.x"
+        :y="contextMenu.y"
+        :items="contextMenu.items"
+        :title="contextMenu.title"
+        @close="contextMenu = null"
+        @select="handleMenuSelect"
+      />
+    </Teleport>
+
   
     <!-- TOAST NOTIFICATIONS -->
     <Teleport to="body">
@@ -856,6 +1258,20 @@ onBeforeUnmount(() => {
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+.selection-mode {
+  cursor: crosshair !important;
+}
+
+.selection-mode .cursor-help {
+  cursor: crosshair !important;
+}
+
+.selection-mode aside, 
+.selection-mode .chat-log-container {
+  /* Subtle highlight for interactive areas in selection mode */
+  /* background: rgba(16, 185, 129, 0.02); */
 }
 </style>
 

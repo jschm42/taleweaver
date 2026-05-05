@@ -27,6 +27,10 @@ class CommandParser:
             return f"[TRIGGER_TAKE] {args}"
         elif command == "/take_direct":
             return f"[TRIGGER_TAKE_DIRECT] {args}"
+        elif command == "/talk":
+            return f"[TRIGGER_TALK] {args}"
+        elif command == "/inspect":
+            return f"[TRIGGER_INSPECT] {args}"
         elif command == "/unequip":
             return CommandParser._handle_unequip(avatar, args)
         elif command == "/consume":
@@ -44,6 +48,9 @@ class CommandParser:
             "**Available Commands:**\n"
             "- `/help`: Show this list.\n"
             "- `/map`: Toggle the world map.\n"
+            "- `/talk <target>`: Talk to an NPC.\n"
+            "- `/inspect <target>`: Inspect an NPC, object or the surroundings.\n"
+            "- `/attack <target>`: Start a fight with a specific NPC (by name or ID).\n"
             "- `/equip <item>`: Equip an item from your inventory.\n"
             "- `/drop <item>`: Drop an item into the current room.\n"
             "- `/take <item>`: Pick up an item from the room.\n"
@@ -92,9 +99,9 @@ class CommandParser:
         if not slot or slot == "Hands":
             # If it's a weapon or tool, move to Hand slots
             if item_to_equip.get("item_type") == "WEAPON":
-                slot = "Main_Hand"
+                slot = "MainHand"
             elif item_to_equip.get("item_type") == "TOOL" and any(kw in item_to_equip.get("name", "").lower() for kw in ["shield", "buckler", "torch"]):
-                slot = "Off_Hand"
+                slot = "OffHand"
             else:
                 # Last resort: try guessing
                 slot = get_item_slot(item_to_equip.get("name", ""), item_to_equip.get("item_type", "PICKABLE"))
@@ -105,8 +112,8 @@ class CommandParser:
         # Self-healing: Ensure standard slots exist
         DEFAULT_SLOTS = {
             "Head": None, "Chest": None, "Arms": None, "Legs": None,
-            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Amulet": None,
-            "Main_Hand": None, "Off_Hand": None
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, "Neck": None,
+            "MainHand": None, "OffHand": None
         }
         
         if slot not in avatar.equipment:
@@ -191,27 +198,4 @@ class CommandParser:
     def _handle_consume(avatar: Avatar, item_name: str) -> str:
         if not item_name:
             return "Usage: /consume <item name>"
-
-        # Find item in inventory
-        item_idx = -1
-        for idx, item in enumerate(avatar.inventory):
-            if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
-                item_idx = idx
-                break
-
-        if item_idx == -1:
-            return f"You don't have '{item_name}' in your inventory."
-
-        item_to_consume = avatar.inventory[item_idx]
-        if item_to_consume.get("item_type") != "CONSUMABLE":
-            return f"{item_to_consume.get('name')} is not consumable."
-
-        # Apply basic effects if any (simplified)
-        msg = f"You consume the {item_to_consume.get('name')}."
-        
-        # Remove from inventory
-        new_inventory = list(avatar.inventory)
-        del new_inventory[item_idx]
-        avatar.inventory = new_inventory
-        
-        return msg + " (Note: Effects will be applied by the Game Master upon closing the character sheet.)"
+        return f"[TRIGGER_CONSUME] {item_name}"
