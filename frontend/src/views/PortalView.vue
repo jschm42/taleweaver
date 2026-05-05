@@ -290,7 +290,11 @@ async function executeDeleteSession() {
 }
 
 function editAdventure(templateId: string) {
-  router.push({ name: 'adventure-editor', params: { adventureId: templateId } })
+  router.push({ 
+    name: 'adventure-editor', 
+    params: { adventureId: templateId },
+    query: { from: activeSection.value }
+  })
 }
 
 function confirmDeleteTemplate(templateId: string, title: string) {

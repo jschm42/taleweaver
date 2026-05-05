@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { authState } from '@/store/auth'
 import { ArrowLeft, Save, Trash2, Wand2, Sparkles, Image as ImageIcon, Plus, X, AlertTriangle } from 'lucide-vue-next'
 import bronzeTrophy from '@/assets/svg/bronze-award-trophy.svg'
@@ -12,6 +12,7 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+const route = useRoute()
 const BASE = '/api'
 const ASSET_BASE = ''
 
@@ -633,7 +634,14 @@ watch(
 
 
 
-const goBack = () => router.push({ name: 'portal' })
+const goBack = () => {
+  const from = route.query.from as string
+  if (from) {
+    router.push({ name: 'portal', query: { section: from } })
+  } else {
+    router.push({ name: 'portal' })
+  }
+}
 </script>
 
 <template>
