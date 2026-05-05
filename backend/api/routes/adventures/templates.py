@@ -63,6 +63,8 @@ async def list_templates(
             has_active_session=(game_session is not None),
             scene_id=(state.current_scene_id if state else None),
             current_scene_name=(scene_label if scene_label else None),
+            origin_id=template.origin_id,
+            is_adventure_generator=template.is_adventure_generator,
         ))
     return response
 
@@ -128,7 +130,8 @@ async def create_adventure(
         is_ready=False,
         creation_status="Initializing...",
         original_manifest=payload.original_manifest,
-        language=payload.language
+        language=payload.language,
+        is_adventure_generator=payload.is_adventure_generator
     )
     db.add(adv)
     
@@ -226,6 +229,10 @@ async def update_adventure(
     # Apply updates to template
     for field, value in update_data.items():
         setattr(adv, field, value)
+
+    # Sync strict_rules internally if mode changed
+    if "rule_enforcement_mode" in update_data:
+        adv.strict_rules = (update_data["rule_enforcement_mode"] != "chat")
 
     # Sync to active sessions if narrative fields changed
     narrative_fields = {"plot", "rules", "walkthrough", "completed_condition", "gameover_condition"}

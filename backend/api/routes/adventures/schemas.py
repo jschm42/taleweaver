@@ -30,6 +30,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     award_generation_enabled: bool = False
     min_awards: int = 3
     max_awards: int = 8
+    is_adventure_generator: bool = False
 
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventureTemplatePayload':
@@ -56,6 +57,14 @@ class AdventureTemplateResponse(BaseModel):
     quests: Optional[List[Dict[str, Any]]] = None
     awards: Optional[List[Dict[str, Any]]] = None
     is_completed: bool = False
+    is_ready: bool = True
+    creation_status: Optional[str] = None
+    creation_error: Optional[str] = None
+    image_url: Optional[str] = None
+    is_adventure_generator: bool = False
+    min_scenes: int = 1
+    max_scenes: int = 5
+
 
     @field_validator("selected_tone", mode="before")
     @classmethod
@@ -134,6 +143,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
     scene_id: Optional[str] = None
     current_scene_name: Optional[str] = None
     origin_id: Optional[str] = None
+    is_adventure_generator: bool = False
 
     @field_validator("selected_tone", mode="before")
     @classmethod

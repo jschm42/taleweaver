@@ -348,7 +348,9 @@ function normalizeLineBreaks(text: string): string {
 
 function displayMessageContent(msg: ChatMessage): string {
   if (msg.role === 'system') {
-    return msg.content.replace(/^\s*\[system\]\s*/i, '')
+    return msg.content
+      .replace(/^\s*\[system\]\s*/i, '')
+      .replace(/^\s*SYSTEM:\s*/i, '')
   }
   return msg.content
 }
@@ -446,11 +448,11 @@ function displayMessageContent(msg: ChatMessage): string {
         <!-- Content -->
         <div
           :class="[
-            'leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2',
+            'leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2 transition-all',
             fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm',
             msg.role === 'user' ? 'text-slate-300 border-cyan-500/50' :
             msg.role === 'assistant' ? 'text-amber-50/90 border-amber-500/50' :
-            'text-emerald-300 border-emerald-500/50 italic opacity-80'
+            'text-emerald-400 border-emerald-500/30 bg-emerald-500/5 py-2 px-4 rounded-r-lg italic font-medium'
           ]"
         >
           <template v-for="(part, pIdx) in parseContent(displayMessageContent(msg))" :key="pIdx">
