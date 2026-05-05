@@ -54,6 +54,7 @@ class AdventureTemplateBase(BaseModel):
     # Narrative Meta (User editable in Plot tab)
     plot: Optional[str] = None
     rules: Optional[str] = None
+    intro_text: Optional[str] = None
     walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
@@ -86,6 +87,7 @@ class AdventureTemplateUpdate(BaseModel):
     # Editable Narrative Meta
     plot: Optional[str] = None
     rules: Optional[str] = None
+    intro_text: Optional[str] = None
     walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None

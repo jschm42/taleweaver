@@ -11,6 +11,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     image_url: Optional[str] = None
     language: Optional[str] = None
     original_prompt: Optional[str] = None
+    intro_text: Optional[str] = None
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     generate_scene_images: bool = False
     generate_npc_images: bool = False
@@ -86,6 +87,7 @@ class AdventureTemplateResponse(BaseModel):
     # Narrative Meta (User editable in Plot tab)
     plot: Optional[str] = None
     rules: Optional[str] = None
+    intro_text: Optional[str] = None
     walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None

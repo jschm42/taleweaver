@@ -10,6 +10,7 @@ from backend.models.user import User
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
+from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.api.routes.adventures.schemas import GameSessionResponse
@@ -257,6 +258,10 @@ async def start_session_for_template(
         gameover_condition=adventure.gameover_condition
     )
     db.add(new_state)
+
+    intro_text = (adventure.intro_text or "").strip()
+    if intro_text:
+        db.add(ChatMessage(session_id=new_session.id, role="system", content=intro_text))
     
     # --- DEEP CLONE WORLD DATA ---
     # 1. Clone Scenes

@@ -182,8 +182,11 @@ export function useGameSocket(): UseGameSocket {
         status.value = 'connected'
         startSyncTimer()
 
-        // If no history, trigger prologue automatically
-        if (messages.value.length === 0) {
+        // Trigger prologue for fresh sessions that only contain system notes (e.g. intro_text).
+        const hasUserOrAssistantTurn = messages.value.some(
+          (m) => m.role === 'user' || m.role === 'assistant'
+        )
+        if (!hasUserOrAssistantTurn) {
           await sendMessage('')
         }
       } else {

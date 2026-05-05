@@ -350,6 +350,12 @@ async def apply_sqlite_compat_migrations() -> None:
                 )
                 logger.info("SQLite migration: added adventure_templates.teaser")
 
+            if "intro_text" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN intro_text TEXT"
+                )
+                logger.info("SQLite migration: added adventure_templates.intro_text")
+
         # Avatar link for cleanup
         avatar_cols_result = await conn.exec_driver_sql("PRAGMA table_info(avatars)")
         avatar_cols = {row[1] for row in avatar_cols_result.fetchall()}

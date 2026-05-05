@@ -11,6 +11,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "interconnected game world based on a provided Story Idea. "
     "The world must consist of unique scenes, connections (exits), NPCs, and interactable objects. "
     "IMPORTANT: You must also generate a 'plot' (narrative goals and arc), 'rules' (adventure-specific mechanics), "
+    "an optional 'intro_text' (shown once when a new session starts; use it for setting notes or brief guidance), "
     "a 'walkthrough' (the secret solution path for the GM), a 'completed_condition' (what defines a win), "
     "and a 'gameover_condition' (what defines a loss).\n\n"
     "NPC & OBJECT SPATIAL LOGIC:\n"

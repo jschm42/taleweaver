@@ -8,7 +8,7 @@ import random
 from copy import deepcopy
 from backend.engine.quest_manager import QuestManager
 from datetime import datetime
-from typing import Optional, Dict, Any, AsyncGenerator
+from typing import Optional, Dict, Any, AsyncGenerator, Callable, Awaitable
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1522,7 +1522,30 @@ class GameTurnManager:
                 yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
                 return
 
-            tool_intent_prompt = system_prompt + "\n\n" + prompts.GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX
+            # Provide compact prior chat context so tool parameters can be derived from discussed details.
+            history_lines = []
+            for msg in history[-12:]:
+                role = msg.get("role")
+                if role not in ("user", "assistant"):
+                    continue
+                content = (msg.get("content") or "").strip()
+                if not content:
+                    continue
+                history_lines.append(f"{role.upper()}: {content[:400]}")
+
+            tool_context_block = ""
+            if history_lines:
+                tool_context_block = (
+                    "\n\nRECENT CHAT CONTEXT (use this to infer generation parameters):\n"
+                    + "\n".join(history_lines)
+                )
+
+            tool_intent_prompt = (
+                system_prompt
+                + "\n\n"
+                + prompts.GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX
+                + tool_context_block
+            )
             game_event = await llm.aexecute_complex_task(
                 tool_intent_prompt,
                 user_msg,
@@ -1535,7 +1558,30 @@ class GameTurnManager:
                 or game_event.request_available_tones
                 or game_event.requested_adventure_generation
             ):
-                await self._apply_adventure_generator_tools(game_event)
+                progress_queue: asyncio.Queue[str] = asyncio.Queue()
+
+                async def _stream_progress_message(message: str) -> None:
+                    await progress_queue.put(message)
+
+                tool_task = asyncio.create_task(
+                    self._apply_adventure_generator_tools(
+                        game_event,
+                        stream_callback=_stream_progress_message,
+                    )
+                )
+
+                while True:
+                    try:
+                        msg = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
+                        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                    except asyncio.TimeoutError:
+                        if tool_task.done():
+                            break
+
+                await tool_task
+                while not progress_queue.empty():
+                    msg = progress_queue.get_nowait()
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
         # Pass 2: Narration
         if game_event and game_event.instant_narrative:
@@ -1578,6 +1624,26 @@ class GameTurnManager:
             
             pass2_duration = time.perf_counter() - pass2_start
             logger.debug(f"[Turn {self.game_id}] [Pass 2] Narration took {pass2_duration:.4f}s")
+
+        if run_generator_tool_intent_pass and not (response_text or "").strip():
+            fallback = "The Architect inclines his head, the Construct awaiting your next directive."
+            if game_event and getattr(game_event, "requested_adventure_generation", None):
+                tool_results = getattr(game_event, "tool_results", None)
+                generation_success = getattr(tool_results, "generation_success", None) if tool_results else None
+                if generation_success is True:
+                    fallback = "The Architect steps aside as your new world settles into the library archives."
+                elif generation_success is False:
+                    fallback = "The Architect frowns as unstable code dissipates from the unfinished world."
+                else:
+                    fallback = "The Architect watches the Construct flare to life as your requested world takes shape."
+            elif game_event and (
+                getattr(game_event, "request_available_image_styles", False)
+                or getattr(game_event, "request_available_tones", False)
+            ):
+                fallback = "The Architect gestures toward the floating catalogs, inviting your selection."
+
+            response_text = fallback
+            yield f"event: chunk\ndata: {json.dumps({'content': fallback})}\n\n"
 
         # Finalize
         assistant_chat = ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text)
@@ -1816,7 +1882,22 @@ class GameTurnManager:
 
         await self.db.flush()
 
-    async def _apply_adventure_generator_tools(self, event) -> None:
+    async def _emit_system_message(
+        self,
+        message: str,
+        stream_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    ) -> None:
+        """Persist a system message and optionally stream it via callback."""
+        self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=message))
+        await self.db.flush()
+        if stream_callback:
+            await stream_callback(message)
+
+    async def _apply_adventure_generator_tools(
+        self,
+        event,
+        stream_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    ) -> None:
         """Executes adventure-generator tool requests from a structured event/intent model."""
         if not self.adventure.is_adventure_generator:
             return
@@ -1829,7 +1910,7 @@ class GameTurnManager:
             event.tool_results.available_image_styles = styles
 
             msg = f"SYSTEM: Available Image Styles: {', '.join(styles)}"
-            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+            await self._emit_system_message(msg, stream_callback=stream_callback)
 
         if event.request_available_tones:
             tones = await AdventureGeneratorService.get_available_tones(self.user)
@@ -1838,13 +1919,12 @@ class GameTurnManager:
             event.tool_results.available_tones = tones
 
             msg = f"SYSTEM: Available Tones: {', '.join(tones)}"
-            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+            await self._emit_system_message(msg, stream_callback=stream_callback)
 
         if event.requested_adventure_generation:
             async def _post_generation_system_message(status: str) -> None:
                 msg = f"SYSTEM: Adventure Generator: {status}"
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
-                await self.db.flush()
+                await self._emit_system_message(msg, stream_callback=stream_callback)
 
             try:
                 await _post_generation_system_message(
@@ -1865,7 +1945,7 @@ class GameTurnManager:
                 await _post_generation_system_message("Generation finished successfully.")
 
                 msg = f"SYSTEM: Adventure '{event.requested_adventure_generation.title}' generated successfully and added to library (ID: {new_adv_id})."
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                await self._emit_system_message(msg, stream_callback=stream_callback)
             except Exception as e:
                 if not event.tool_results:
                     event.tool_results = ToolResults()
@@ -1875,7 +1955,7 @@ class GameTurnManager:
                 await _post_generation_system_message("Generation aborted due to an error.")
 
                 msg = f"SYSTEM ERROR: Adventure generation failed: {e}"
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                await self._emit_system_message(msg, stream_callback=stream_callback)
 
     async def _finalize_session(self, status: str, note: Optional[str] = None):
         """Updates the session status and records the outcome in the user's game log."""

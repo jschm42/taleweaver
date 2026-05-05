@@ -236,6 +236,7 @@ class WorldManifesto(BaseModel):
     language: str = Field("English", description="The target language for all generated content.")
     plot: str = Field(..., description="The main plotline, goals, and narrative arc of the adventure.")
     rules: str = Field(..., description="Special rules or mechanics specific to this adventure world.")
+    intro_text: Optional[str] = Field(None, description="Optional intro text shown once when a new session starts.")
     walkthrough: str = Field(..., description="A secret GM walkthrough/solution for the adventure.")
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
@@ -318,7 +319,7 @@ class WorldGenerator:
         
         system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
         if language:
-            system_prompt += f"\n\nCRITICAL: You MUST generate all content (names, descriptions, teaser, plot, walkthrough, quests) in {language}. Do not use any other language."
+            system_prompt += f"\n\nCRITICAL: You MUST generate all content (names, descriptions, teaser, plot, intro_text, walkthrough, quests) in {language}. Do not use any other language."
         
         award_requirement = ""
         if award_generation_enabled:
@@ -514,6 +515,7 @@ class WorldGenerator:
             # Narrative Meta
             adventure.plot = manifest_dict.get("plot") or adventure.plot
             adventure.rules = manifest_dict.get("rules") or adventure.rules
+            adventure.intro_text = manifest_dict.get("intro_text") or adventure.intro_text
             adventure.walkthrough = manifest_dict.get("walkthrough") or adventure.walkthrough
             adventure.completed_condition = manifest_dict.get("completed_condition") or adventure.completed_condition
             adventure.gameover_condition = manifest_dict.get("gameover_condition") or adventure.gameover_condition

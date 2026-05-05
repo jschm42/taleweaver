@@ -112,6 +112,7 @@ const form = ref({
   // New Concept Fields
   plot: '',
   rules: '',
+  intro_text: '',
   walkthrough: '',
   completed_condition: '',
   gameover_condition: '',
@@ -270,6 +271,7 @@ async function fetchAdventure() {
     // New Concept Fields
     form.value.plot = data.plot || ''
     form.value.rules = data.rules || ''
+    form.value.intro_text = data.intro_text || ''
     form.value.walkthrough = data.walkthrough || ''
     form.value.completed_condition = data.completed_condition || ''
     form.value.gameover_condition = data.gameover_condition || ''
@@ -1114,6 +1116,28 @@ const goBack = () => {
                   </div>
                   <p v-if="form.rules" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ form.rules }}</p>
                   <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No specific rules. Click to define world logic.</p>
+                </div>
+              </div>
+
+              <!-- Session Intro Section -->
+              <div class="space-y-4">
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Session Intro Text (Shown Once)</label>
+                <div v-if="editingField === 'intro_text'" class="space-y-4 animate-fade-in">
+                  <textarea v-model="tempValue" rows="6" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]" placeholder="Optional opening system text for a newly started session..."></textarea>
+                  <div class="flex gap-4">
+                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+                      <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+                      <span>Save Intro</span>
+                    </button>
+                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="startEditing('intro_text', form.intro_text)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
+                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
+                    <i class="ra ra-quill-pen"></i> Edit Intro
+                  </div>
+                  <p v-if="form.intro_text" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ form.intro_text }}</p>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No intro text set. Click to add a one-time session opener.</p>
                 </div>
               </div>
 

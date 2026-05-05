@@ -131,6 +131,7 @@ async def create_adventure(
         creation_status="Initializing...",
         original_manifest=payload.original_manifest,
         language=payload.language,
+        intro_text=payload.intro_text,
         is_adventure_generator=payload.is_adventure_generator
     )
     db.add(adv)

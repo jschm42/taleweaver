@@ -61,6 +61,27 @@ async def test_create_adventure_returns_ids(client: AsyncClient):
     assert "avatar_id" in data
 
 
+async def test_start_session_emits_intro_text_once(client: AsyncClient):
+    """A new session should include adventure intro_text as initial system message when provided."""
+    ids = await _create_adventure(client, "Intro Session Quest")
+    adv_id = ids["adventure_id"]
+
+    patch_resp = await client.patch(
+        f"/api/adventures/{adv_id}",
+        json={"intro_text": "Welcome to the Archivum. Read the codex before proceeding."},
+    )
+    assert patch_resp.status_code == 200, patch_resp.text
+
+    start_resp = await client.post(f"/api/adventures/{adv_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    chat_resp = await client.get(f"/api/adventures/{game_id}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
+    messages = chat_resp.json().get("messages", [])
+    assert any(m.get("role") == "system" and "Welcome to the Archivum" in (m.get("content") or "") for m in messages)
+
+
 async def test_create_adventure_creates_one_visible_session(client: AsyncClient):
     """A single create call should result in exactly one visible session row."""
     # Arrange & Act

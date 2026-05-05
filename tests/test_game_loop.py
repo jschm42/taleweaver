@@ -282,13 +282,21 @@ async def test_adventure_generator_chat_mode_uses_tool_intent_pass(setup_test_db
         adv.strict_rules = False
         adv.rule_enforcement_mode = "chat"
         adv.is_adventure_generator = True
+        db.add(ChatMessage(session_id=state.session_id, role="user", content="The adventure should be called Neon Citadel."))
+        db.add(ChatMessage(session_id=state.session_id, role="assistant", content="Great, noted. We can set a cyberpunk tone and 6 scenes."))
         await db.commit()
 
+        captured = {}
         mock_llm_instance = MagicMock()
-        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=AdventureGeneratorToolIntent(
-            request_available_tones=True,
-            instant_narrative="I can offer tones for your new world."
-        ))
+
+        async def _mock_intent(system_prompt, _user_prompt, **_kwargs):
+            captured["system_prompt"] = system_prompt
+            return AdventureGeneratorToolIntent(
+                request_available_tones=True,
+                instant_narrative="I can offer tones for your new world."
+            )
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=_mock_intent)
 
         async def mock_stream():
             yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Narrative fallback."))])
@@ -307,10 +315,51 @@ async def test_adventure_generator_chat_mode_uses_tool_intent_pass(setup_test_db
             chunks.append(chunk)
 
         assert mock_llm_instance.aexecute_complex_task.await_count == 1
+        assert "RECENT CHAT CONTEXT" in captured.get("system_prompt", "")
+        assert "The adventure should be called Neon Citadel." in captured.get("system_prompt", "")
+        assert "cyberpunk tone and 6 scenes" in captured.get("system_prompt", "")
+        assert any("Available Tones: heroic, horror" in c for c in chunks)
 
         res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id, ChatMessage.role == "system"))
         system_msgs = [m.content for m in res.scalars().all()]
         assert any("Available Tones: heroic, horror" in m for m in system_msgs)
+
+
+async def test_adventure_generator_chat_mode_emits_fallback_narrative_when_empty(setup_test_db, monkeypatch):
+    """If no instant/pass2 narrative is produced, chat mode should emit a deterministic fallback narrative."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, _state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = True
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=AdventureGeneratorToolIntent(
+            request_available_tones=True,
+            instant_narrative=None,
+        ))
+
+        async def empty_stream():
+            if False:
+                yield None
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=empty_stream())
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        monkeypatch.setattr(
+            "backend.engine.adventure_generator_service.AdventureGeneratorService.get_available_tones",
+            AsyncMock(return_value=["heroic"]),
+        )
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("show tones"):
+            chunks.append(chunk)
+
+        assert any("floating catalogs" in c for c in chunks)
 
 async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
     """Verifies that slash commands (like /inventory) are handled directly without LLM calls."""
