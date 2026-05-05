@@ -1073,6 +1073,14 @@ class GameTurnManager:
         if not safe_id:
             safe_id = f"LOOT_{uuid.uuid4().hex[:8]}"
 
+        # Prevent duplicate IDs in the same running session by suffixing collisions.
+        base_id = safe_id
+        counter = 1
+        while await self._session_entity_id_exists(safe_id):
+            suffix = f"_{counter}"
+            safe_id = f"{base_id[: max(1, 50 - len(suffix))]}{suffix}"
+            counter += 1
+
         entity = WorldEntity(
             id=safe_id,
             session_id=self.game_id,
@@ -1101,6 +1109,28 @@ class GameTurnManager:
             }
         )
         self.db.add(entity)
+
+    async def _session_entity_id_exists(self, entity_id: str) -> bool:
+        res = await self.db.execute(
+            select(WorldEntity.pk).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.id == entity_id,
+            ).limit(1)
+        )
+        return res.first() is not None
+
+    async def _collect_existing_item_ids(self) -> set[str]:
+        existing_ids: set[str] = {
+            str(item.get("id"))
+            for item in (self.avatar.inventory or [])
+            if isinstance(item, dict) and item.get("id")
+        }
+
+        res = await self.db.execute(
+            select(WorldEntity.id).where(WorldEntity.session_id == self.game_id)
+        )
+        existing_ids.update({row.id for row in res.all() if row.id})
+        return existing_ids
 
     async def _resolve_loot_command(self, user_msg: str, combat: Dict[str, Any]) -> Optional[str]:
         low = user_msg.lower().strip()
@@ -1904,6 +1934,38 @@ class GameTurnManager:
 
     async def _apply_game_event(self, event: GameEvent):
         """Applies technical mutations from a GameEvent to the database and session state."""
+        existing_item_ids = await self._collect_existing_item_ids()
+
+        if event.new_inventory_items:
+            filtered_inventory_items = []
+            for item in event.new_inventory_items:
+                if item.id and item.id in existing_item_ids:
+                    logger.info(
+                        "[Turn %s] Skipping duplicate generated inventory item id: %s",
+                        self.game_id,
+                        item.id,
+                    )
+                    continue
+                filtered_inventory_items.append(item)
+                if item.id:
+                    existing_item_ids.add(item.id)
+            event.new_inventory_items = filtered_inventory_items
+
+        if event.spawned_items:
+            filtered_spawned_items = []
+            for item in event.spawned_items:
+                if item.id and item.id in existing_item_ids:
+                    logger.info(
+                        "[Turn %s] Skipping duplicate generated spawned item id: %s",
+                        self.game_id,
+                        item.id,
+                    )
+                    continue
+                filtered_spawned_items.append(item)
+                if item.id:
+                    existing_item_ids.add(item.id)
+            event.spawned_items = filtered_spawned_items
+
         RuleEngine.apply_event(self.avatar, event)
         
         state_dirty = False

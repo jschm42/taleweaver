@@ -151,3 +151,73 @@ async def test_on_the_fly_inventory_item_effects(setup_test_db, monkeypatch):
         await db.refresh(avatar)
         assert avatar.hp == 65 # 50 + 15
         assert not any(it.get("name") == "Health Herb" for it in avatar.inventory)
+
+
+async def test_generated_item_ids_are_deduplicated_against_session(setup_test_db, monkeypatch):
+    """GM-generated items with existing IDs in the session must be skipped."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+
+        existing = WorldEntity(
+            id="ANCIENT_KEY",
+            session_id=state.session_id,
+            template_id=None,
+            entity_type="OBJECT",
+            name="Ancient Key",
+            description="An old key already present in this session.",
+            current_scene_id=state.current_scene_id,
+            is_in_inventory=False,
+            is_hidden=False,
+            is_portable=True,
+        )
+        db.add(existing)
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="You try to craft another key and summon one in the room.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[
+                InventoryItem(
+                    id="ANCIENT_KEY",
+                    name="Duplicate Ancient Key",
+                    description="Should be ignored due to duplicate id."
+                )
+            ],
+            spawned_items=[
+                InventoryItem(
+                    id="ANCIENT_KEY",
+                    name="Duplicate Ancient Key (Spawned)",
+                    description="Should be ignored due to duplicate id.",
+                    spatial_position="on the floor"
+                )
+            ]
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Nothing new materializes."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("I craft a new key"):
+            pass
+
+        await db.refresh(avatar)
+        assert not any(it.get("id") == "ANCIENT_KEY" and it.get("name") == "Duplicate Ancient Key" for it in (avatar.inventory or []))
+
+        res = await db.execute(select(WorldEntity).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.id == "ANCIENT_KEY"
+        ))
+        entities = res.scalars().all()
+        assert len(entities) == 1
+        assert entities[0].name == "Ancient Key"
