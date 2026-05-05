@@ -10,7 +10,7 @@ from backend.models.session_state import SessionState
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import GameEvent
+from backend.engine.rule_engine import GameEvent, AdventureGeneratorToolIntent
 
 pytestmark = pytest.mark.asyncio
 
@@ -271,6 +271,46 @@ async def test_adventure_generator_runs_mechanics_in_chat_mode(setup_test_db, mo
             pass
 
         assert mock_llm_instance.aexecute_complex_task.await_count == 1
+
+
+async def test_adventure_generator_chat_mode_uses_tool_intent_pass(setup_test_db, monkeypatch):
+    """Adventure-generator in chat mode should process tool intents without strict GameEvent mechanics."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = True
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=AdventureGeneratorToolIntent(
+            request_available_tones=True,
+            instant_narrative="I can offer tones for your new world."
+        ))
+
+        async def mock_stream():
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Narrative fallback."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        monkeypatch.setattr(
+            "backend.engine.adventure_generator_service.AdventureGeneratorService.get_available_tones",
+            AsyncMock(return_value=["heroic", "horror"]),
+        )
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("show tones"):
+            chunks.append(chunk)
+
+        assert mock_llm_instance.aexecute_complex_task.await_count == 1
+
+        res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id, ChatMessage.role == "system"))
+        system_msgs = [m.content for m in res.scalars().all()]
+        assert any("Available Tones: heroic, horror" in m for m in system_msgs)
 
 async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
     """Verifies that slash commands (like /inventory) are handled directly without LLM calls."""

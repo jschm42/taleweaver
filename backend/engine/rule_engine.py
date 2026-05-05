@@ -125,6 +125,18 @@ class ToolResults(BaseModel):
     generation_error: Optional[str] = None
 
 
+class AdventureGeneratorToolIntent(BaseModel):
+    """Lightweight intent payload for adventure-generator tools in chat mode."""
+    model_config = ConfigDict(extra="forbid")
+
+    request_available_image_styles: bool = False
+    request_available_tones: bool = False
+    requested_adventure_generation: Optional[AdventureGenerationRequest] = None
+    tool_results: Optional[ToolResults] = None
+    instant_narrative: Optional[str] = None
+    narrative_description: str = ""
+
+
 
 
 class GameEvent(BaseModel):
