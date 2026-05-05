@@ -159,6 +159,12 @@ watch(
 )
 
 const isConnected = computed(() => props.status === 'connected')
+const messageTypographyClass = computed(() => {
+  if (fontSize.value === 'small') return 'text-xs'
+  if (fontSize.value === 'large') return 'text-lg md:text-xl'
+  return 'text-sm md:text-base'
+})
+
 const statusLabel = computed(() => {
   const map: Record<ConnectionStatus, string> = {
     loading: 'Loading…',
@@ -449,7 +455,7 @@ function displayMessageContent(msg: ChatMessage): string {
         <div
           :class="[
             'leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2 transition-all',
-            fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm',
+            messageTypographyClass,
             msg.role === 'user' ? 'text-slate-300 border-cyan-500/50' :
             msg.role === 'assistant' ? 'text-amber-50/90 border-amber-500/50' :
             'text-emerald-400 border-emerald-500/30 bg-emerald-500/5 py-2 px-4 rounded-r-lg italic font-medium'

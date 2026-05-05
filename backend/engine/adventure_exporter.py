@@ -71,6 +71,7 @@ class AdventureExporter:
                 "max_awards": adv.max_awards,
                 "plot": adv.plot,
                 "rules": adv.rules,
+                "intro_text": adv.intro_text,
                 "walkthrough": adv.walkthrough,
                 "completed_condition": adv.completed_condition,
                 "gameover_condition": adv.gameover_condition,

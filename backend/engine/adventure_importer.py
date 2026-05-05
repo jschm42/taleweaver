@@ -142,6 +142,7 @@ class AdventureTemplateImporter:
                     award_generation_enabled=adv_data.get("award_generation_enabled") or manifest_data.get("award_generation_enabled", False),
                     plot=adv_data.get("plot") or manifest_data.get("plot"),
                     rules=adv_data.get("rules") or manifest_data.get("rules"),
+                    intro_text=adv_data.get("intro_text") or manifest_data.get("intro_text"),
                     walkthrough=adv_data.get("walkthrough") or manifest_data.get("walkthrough"),
                     completed_condition=adv_data.get("completed_condition") or manifest_data.get("completed_condition"),
                     gameover_condition=adv_data.get("gameover_condition") or manifest_data.get("gameover_condition"),
@@ -201,7 +202,8 @@ class AdventureTemplateImporter:
                     "objects": manifest_data.get("objects", []),
                     "quests": manifest_data.get("quests") or adv_data.get("quests", []),
                     "awards": manifest_data.get("awards") or adv_data.get("awards", []),
-                    "teaser": manifest_data.get("teaser") or adv_data.get("teaser")
+                    "teaser": manifest_data.get("teaser") or adv_data.get("teaser"),
+                    "intro_text": manifest_data.get("intro_text") or adv_data.get("intro_text"),
                 }
 
                 default_scene_id = manifest_data["scenes"][0]["id"] if manifest_data.get("scenes") else "START"
@@ -313,6 +315,7 @@ class AdventureTemplateImporter:
                     original_manifest=old_adv.get("original_manifest"),
                     plot=old_adv.get("plot"),
                     rules=old_adv.get("rules"),
+                    intro_text=old_adv.get("intro_text"),
                     walkthrough=old_adv.get("walkthrough"),
                     completed_condition=old_adv.get("completed_condition"),
                     gameover_condition=old_adv.get("gameover_condition"),
@@ -408,6 +411,7 @@ class AdventureTemplateImporter:
                     original_manifest=manifest,
                     plot=adv_meta.get("plot") or manifest.get("plot"),
                     rules=adv_meta.get("rules") or manifest.get("rules"),
+                    intro_text=adv_meta.get("intro_text") or manifest.get("intro_text"),
                     walkthrough=adv_meta.get("walkthrough") or manifest.get("walkthrough"),
                     completed_condition=adv_meta.get("completed_condition") or manifest.get("completed_condition"),
                     gameover_condition=adv_meta.get("gameover_condition") or manifest.get("gameover_condition"),

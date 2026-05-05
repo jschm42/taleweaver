@@ -27,6 +27,7 @@ async def _seed_adventure(db: AsyncSession, user_id: str) -> str:
         original_prompt="Full context here.",
         plot="Test plot",
         rules="Test rules",
+        intro_text="Welcome to the lifecycle test adventure.",
         walkthrough="Test walkthrough",
         completed_condition="Win",
         gameover_condition="Lose",
@@ -132,6 +133,7 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
             assert manifest["adventure"]["title"] == "Lifecycle Test"
             assert manifest["adventure"]["plot"] == "Test plot"
             assert manifest["adventure"]["rules"] == "Test rules"
+            assert manifest["adventure"]["intro_text"] == "Welcome to the lifecycle test adventure."
             assert manifest["adventure"]["completed_condition"] == "Win"
             assert manifest["adventure"]["starting_timestamp"] == 480
             assert manifest["protagonist"]["name"] == "Test Hero"
@@ -206,6 +208,7 @@ async def test_adventure_import_restores_protagonist(auth_client, setup_test_db,
                 "context": "Context",
                 "plot": "Import plot",
                 "rules": "Import rules",
+                "intro_text": "Import intro text",
                 "completed_condition": "Win if...",
                 "gameover_condition": "Lose if..."
             },
@@ -250,6 +253,7 @@ async def test_adventure_import_restores_protagonist(auth_client, setup_test_db,
         assert new_adv is not None
         assert new_adv.plot == "Import plot"
         assert new_adv.rules == "Import rules"
+        assert new_adv.intro_text == "Import intro text"
         assert new_adv.completed_condition == "Win if..."
         
         # Check Avatar
