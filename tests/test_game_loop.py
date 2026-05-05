@@ -8,7 +8,7 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 from backend.models.chat import ChatMessage
-from backend.models.world_entity import WorldEntity
+from backend.models.world_entity import WorldEntity, WorldScene
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 from backend.engine.rule_engine import GameEvent, AdventureGeneratorToolIntent
 
@@ -237,6 +237,81 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
         # Assert
         await db.refresh(state)
         assert state.current_scene_id == "CELLAR"
+
+
+async def test_rule_pass_payload_is_compact_and_scene_split(setup_test_db, monkeypatch):
+    """Mechanics payload should be compact/filtered while narration keeps full scene detail."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        state.quests = [{"id": "quest-1", "status": "active", "goal": "Find the key"}]
+        adv.awards = [
+            {"key": "earned-award", "title": "Already won"},
+            {"key": "fresh-award", "title": "Still available"},
+        ]
+        user.earned_awards = [{"key": "earned-award", "template_id": adv.id}]
+        avatar.inventory = [{
+            "id": "ITEM-1",
+            "name": "Test Blade",
+            "item_type": "WEAPON",
+            "metadata_json": {"damage_dice": "1d8"},
+            "extra_field": "drop-me",
+            "hp_change": None,
+        }]
+        db.add(WorldScene(
+            id="START",
+            session_id="session-1",
+            label="Start Chamber",
+            description="A very long description. " * 40,
+        ))
+        await db.commit()
+
+        captured: dict[str, str] = {}
+        mock_llm_instance = MagicMock()
+
+        async def _mock_mechanics(system_prompt, _user_prompt, **_kwargs):
+            captured["mechanics_prompt"] = system_prompt
+            return GameEvent(
+                narrative_description="OK",
+                hp_change=0,
+                stamina_change=0,
+                mana_change=0,
+                new_status_effects=[],
+                new_inventory_items=[]
+            )
+
+        async def _mock_stream_simple(system_prompt, _user_prompt, _model):
+            captured["narration_prompt"] = system_prompt
+
+            async def _stream():
+                yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Narrative"))])
+
+            return _stream()
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=_mock_mechanics)
+        mock_llm_instance.stream_simple_task = AsyncMock(side_effect=_mock_stream_simple)
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        async for _ in manager.process_turn("Check state"):
+            pass
+
+        mechanics_prompt = captured.get("mechanics_prompt", "")
+        narration_prompt = captured.get("narration_prompt", "")
+
+        assert "SCENE SUMMARY:" in mechanics_prompt
+        assert "DESCRIPTION:" not in mechanics_prompt
+        assert "DESCRIPTION:" in narration_prompt
+        assert "SCENE SUMMARY: A very long description." in mechanics_prompt
+        assert "..." in mechanics_prompt
+
+        assert 'ACTIVE QUESTS:\n[{"id":"quest-1"' in mechanics_prompt
+        assert '"key":"fresh-award"' in mechanics_prompt
+        assert '"key":"earned-award"' not in mechanics_prompt
+        assert '"metadata_json"' not in mechanics_prompt
+        assert '"extra_field"' not in mechanics_prompt
 
 
 async def test_adventure_generator_runs_mechanics_in_chat_mode(setup_test_db, monkeypatch):

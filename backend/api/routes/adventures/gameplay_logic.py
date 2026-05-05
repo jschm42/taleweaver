@@ -136,6 +136,20 @@ class GameTurnManager:
         self.stop_requested = False
         self.turn_language: Optional[str] = None
 
+    @staticmethod
+    def _compact_json(payload: object) -> str:
+        return json.dumps(payload, separators=(",", ":"))
+
+    def _build_mechanics_awards(self) -> list[dict]:
+        awards = list(self.adventure.awards or [])
+        earned_awards = list(self.user.earned_awards or [])
+        earned_keys = {
+            entry.get("key")
+            for entry in earned_awards
+            if entry.get("key") and entry.get("template_id") == self.adventure.id
+        }
+        return [a for a in awards if not a.get("key") or a.get("key") not in earned_keys]
+
     async def initialize(self) -> bool:
         """Loads all necessary context for the turn."""
         start = time.perf_counter()
@@ -1409,8 +1423,8 @@ class GameTurnManager:
         db_duration = time.perf_counter() - db_start
         logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
 
-        # Build prompt using MemoryManager with session-local plot/rules
-        system_prompt = MemoryManager.build_context(
+        # Build prompts using MemoryManager with session-local plot/rules
+        mechanics_system_prompt = MemoryManager.build_context(
             self.avatar, self.adventure.original_prompt or "", history, 
             current_scene=current_scene,
             entities=entities,
@@ -1424,8 +1438,32 @@ class GameTurnManager:
             gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition,
             time_system=self.state.time_system or self.adventure.time_system or "calendar",
             time_config=self.state.time_config or self.adventure.time_config,
-            is_adventure_generator=self.adventure.is_adventure_generator
+            is_adventure_generator=self.adventure.is_adventure_generator,
+            location_detail_level="concise",
         )[0]["content"]
+
+        narration_system_prompt = MemoryManager.build_context(
+            self.avatar, self.adventure.original_prompt or "", history,
+            current_scene=current_scene,
+            entities=entities,
+            exits=exits,
+            in_game_time=self.state.in_game_time,
+            awards=self.adventure.awards,
+            plot=self.state.plot or self.adventure.plot,
+            rules=self.state.rules or self.adventure.rules,
+            walkthrough=self.state.walkthrough or self.adventure.walkthrough,
+            completed_condition=self.state.completed_condition or self.adventure.completed_condition,
+            gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition,
+            time_system=self.state.time_system or self.adventure.time_system or "calendar",
+            time_config=self.state.time_config or self.adventure.time_config,
+            is_adventure_generator=self.adventure.is_adventure_generator,
+            location_detail_level="full",
+        )[0]["content"]
+        mechanics_awards = self._build_mechanics_awards()
+        mechanics_prompt_chars = len(mechanics_system_prompt or "")
+        narration_prompt_chars = len(narration_system_prompt or "")
+        prompt_delta_chars = narration_prompt_chars - mechanics_prompt_chars
+        prompt_reduction_pct = round((prompt_delta_chars / narration_prompt_chars) * 100, 2) if narration_prompt_chars else 0.0
 
         log_structured_event(
             "gm.turn.pipeline.context",
@@ -1436,9 +1474,13 @@ class GameTurnManager:
             db_prep_ms=round(db_duration * 1000, 2),
             history_count=len(history),
             history_chars=sum(len((m.get("content") or "")) for m in history),
-            system_prompt_chars=len(system_prompt or ""),
+            mechanics_system_prompt_chars=mechanics_prompt_chars,
+            narration_system_prompt_chars=narration_prompt_chars,
+            prompt_delta_chars=prompt_delta_chars,
+            prompt_reduction_pct=prompt_reduction_pct,
             entities_count=len(entities),
             exits_count=len(exits),
+            mechanics_awards_count=len(mechanics_awards),
             strict_rules=bool(self.adventure.strict_rules),
             is_adventure_generator=bool(self.adventure.is_adventure_generator),
         )
@@ -1457,11 +1499,18 @@ class GameTurnManager:
                 f"The player has activated their Bable Fish, so everything they hear/see must be in {language}."
                 f"\n----------------------------------------\n"
             )
-            system_prompt += translation_instruction
+            mechanics_system_prompt += translation_instruction
+            narration_system_prompt += translation_instruction
 
         # Override for technical state evaluation (e.g. closing character sheet)
         if user_msg == "[EVALUATE STATE]":
-            system_prompt += (
+            mechanics_system_prompt += (
+                "\n\nIMPORTANT: The player just synchronized their character sheet or world state (e.g., closing a menu). "
+                "This is a TECHNICAL turn. Respond only if something meaningful changed (e.g., equipment effects). "
+                "Do NOT list available actions, do NOT provide suggestions, and do NOT use meta-formatting like '---' or 'You can:'. "
+                "Keep the narrative flow natural if you speak at all."
+            )
+            narration_system_prompt += (
                 "\n\nIMPORTANT: The player just synchronized their character sheet or world state (e.g., closing a menu). "
                 "This is a TECHNICAL turn. Respond only if something meaningful changed (e.g., equipment effects). "
                 "Do NOT list available actions, do NOT provide suggestions, and do NOT use meta-formatting like '---' or 'You can:'. "
@@ -1557,9 +1606,9 @@ class GameTurnManager:
                     "- To place a new item in the current scene (e.g., something the player finds but hasn't taken yet), use `spawned_items`.\n"
                 )
 
-            mechanics_prompt = system_prompt + "\n\n" + mechanics_suffix.format(
-                quests_json=json.dumps(self.state.quests or [], indent=2),
-                awards_json=json.dumps(self.adventure.awards or [], indent=2),
+            mechanics_prompt = mechanics_system_prompt + "\n\n" + mechanics_suffix.format(
+                quests_json=self._compact_json(self.state.quests or []),
+                awards_json=self._compact_json(mechanics_awards),
                 dynamic_items_instruction=dynamic_instr
             )
             
@@ -1748,7 +1797,7 @@ class GameTurnManager:
                 )
 
             tool_intent_prompt = (
-                system_prompt
+                mechanics_system_prompt
                 + "\n\n"
                 + prompts.GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX
                 + tool_context_block
@@ -1828,7 +1877,7 @@ class GameTurnManager:
                 yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
                 return
             narration_prompt = (
-                system_prompt + "\n\n" + 
+                narration_system_prompt + "\n\n" + 
                 prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
                     outcome_json=game_event.model_dump_json() if game_event else "{}"
                 ) + "\n\n" +

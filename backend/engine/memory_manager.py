@@ -11,6 +11,120 @@ class MemoryManager:
     """
     
     MAX_HISTORY_LENGTH = 12 # Reduced for lower turn latency while keeping short-term context
+    INVENTORY_CORE_FIELDS = {
+        "id",
+        "name",
+        "item_type",
+        "wearable_slots",
+        "hp_change",
+        "mana_change",
+        "stamina_change",
+        "stat_modifier_strength",
+        "stat_modifier_dexterity",
+        "stat_modifier_intelligence",
+        "stat_modifier_wisdom",
+        "stat_modifier_charisma",
+        "stat_modifier_armor_class",
+    }
+
+    @staticmethod
+    def _is_meaningful(value: object) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return bool(value.strip())
+        if isinstance(value, (list, dict)):
+            return bool(value)
+        return True
+
+    @staticmethod
+    def _compact_json(payload: object) -> str:
+        return json.dumps(payload, separators=(",", ":"))
+
+    @staticmethod
+    def _prune_payload(data: dict) -> dict:
+        return {k: v for k, v in data.items() if MemoryManager._is_meaningful(v)}
+
+    @staticmethod
+    def _project_inventory_item(item: object) -> object:
+        if not isinstance(item, dict):
+            return item
+        projected = {
+            key: value
+            for key, value in item.items()
+            if key in MemoryManager.INVENTORY_CORE_FIELDS and MemoryManager._is_meaningful(value)
+        }
+        return projected if projected else {"name": item.get("name") or item.get("id") or "Unknown Item"}
+
+    @staticmethod
+    def _build_location_context(current_scene=None, entities=None, exits=None, detail_level: str = "full") -> str:
+        if not current_scene:
+            return ""
+
+        detail = detail_level if detail_level in {"full", "concise"} else "full"
+        if detail == "concise":
+            description = (current_scene.description or "").strip().replace("\n", " ")
+            if len(description) > 240:
+                description = description[:240].rstrip() + "..."
+
+            location_context = (
+                f"\nCURRENT LOCATION: {current_scene.label} (ID: {current_scene.id})\n"
+                f"SCENE SUMMARY: {description}\n"
+            )
+        else:
+            location_context = (
+                f"\nCURRENT LOCATION:\n"
+                f"NAME: {current_scene.label} (ID: {current_scene.id})\n"
+                f"DESCRIPTION: {current_scene.description}\n"
+            )
+
+        if entities:
+            npcs = []
+            for e in entities:
+                if e.entity_type != "NPC":
+                    continue
+                stats = []
+                if e.hp is not None:
+                    stats.append(f"HP:{e.hp}/{e.max_hp or e.hp}")
+                if e.mana is not None:
+                    stats.append(f"Mana:{e.mana}/{e.max_mana or e.mana}")
+                if e.stamina is not None:
+                    stats.append(f"Stamina:{e.stamina}/{e.max_stamina or e.stamina}")
+
+                stat_str = f" [{' '.join(stats)}]" if stats else ""
+                pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
+                npcs.append(f"{e.name}{stat_str}{pos_str}")
+
+            objects = [
+                f"{e.name} (Position: {e.spatial_position})" if e.spatial_position else e.name
+                for e in entities
+                if e.entity_type == "OBJECT"
+            ]
+
+            if npcs:
+                prefix = "NPCS" if detail == "concise" else "PRESENT NPCs"
+                location_context += f"{prefix}: {', '.join(npcs)}\n"
+            if objects:
+                prefix = "OBJECTS" if detail == "concise" else "INTERACTABLE OBJECTS"
+                location_context += f"{prefix}: {', '.join(objects)}\n"
+
+        if exits:
+            if detail == "concise":
+                exit_list = []
+                for e in exits:
+                    status = "[LOCKED]" if e.is_locked else "[OPEN]"
+                    exit_list.append(f"{e.label}->{e.to_scene_id}{status}")
+                location_context += "EXITS: " + "; ".join(exit_list) + "\n"
+            else:
+                exit_list = []
+                for e in exits:
+                    status = "[LOCKED]" if e.is_locked else "[OPEN]"
+                    desc = f" ({e.lock_description})" if e.is_locked and e.lock_description else ""
+                    exit_list.append(f"- {e.label} to {e.to_scene_id} {status}{desc}")
+
+                location_context += "AVAILABLE EXITS:\n" + "\n".join(exit_list) + "\n"
+
+        return location_context
 
     @staticmethod
     def format_game_time(minutes: int, time_system: str = "calendar", time_config: Optional[dict] = None) -> str:
@@ -57,7 +171,8 @@ class MemoryManager:
         gameover_condition: Optional[str] = None,
         time_system: str = "calendar",
         time_config: Optional[dict] = None,
-        is_adventure_generator: bool = False
+        is_adventure_generator: bool = False,
+        location_detail_level: str = "full"
     ) -> str:
 
         """
@@ -76,50 +191,19 @@ class MemoryManager:
             "mana": avatar.mana,
             "stats": total_stats,
             "equipment": avatar.equipment,
-            "inventory": avatar.inventory,
+            "inventory": [MemoryManager._project_inventory_item(i) for i in (avatar.inventory or [])],
             "status_effects": avatar.status_effects
         }
+        character_sheet = MemoryManager._prune_payload(character_sheet)
         
-        location_context = ""
-        if current_scene:
-            location_context = (
-                f"\nCURRENT LOCATION:\n"
-                f"NAME: {current_scene.label} (ID: {current_scene.id})\n"
-                f"DESCRIPTION: {current_scene.description}\n"
-            )
-            
-            # Entities present here
-            if entities:
-                npcs = []
-                for e in entities:
-                    if e.entity_type == "NPC":
-                        stats = []
-                        if e.hp is not None: stats.append(f"HP: {e.hp}/{e.max_hp or e.hp}")
-                        if e.mana is not None: stats.append(f"Mana: {e.mana}/{e.max_mana or e.mana}")
-                        if e.stamina is not None: stats.append(f"Stamina: {e.stamina}/{e.max_stamina or e.stamina}")
-                        
-                        stat_str = f" [{', '.join(stats)}]" if stats else ""
-                        pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
-                        npcs.append(f"{e.name}{stat_str}{pos_str}")
-                
-                objects = [f"{e.name} (Position: {e.spatial_position})" if e.spatial_position else e.name for e in entities if e.entity_type == "OBJECT"]
-                
-                if npcs:
-                    location_context += f"PRESENT NPCs: {', '.join(npcs)}\n"
-                if objects:
-                    location_context += f"INTERACTABLE OBJECTS: {', '.join(objects)}\n"
-            
-            # Exits from here
-            if exits:
-                exit_list = []
-                for e in exits:
-                    status = "[LOCKED]" if e.is_locked else "[OPEN]"
-                    desc = f" ({e.lock_description})" if e.is_locked and e.lock_description else ""
-                    exit_list.append(f"- {e.label} to {e.to_scene_id} {status}{desc}")
-                
-                location_context += "AVAILABLE EXITS:\n" + "\n".join(exit_list) + "\n"
+        location_context = MemoryManager._build_location_context(
+            current_scene=current_scene,
+            entities=entities,
+            exits=exits,
+            detail_level=location_detail_level,
+        )
 
-        sheet_json = json.dumps(character_sheet, indent=2)
+        sheet_json = MemoryManager._compact_json(character_sheet)
         
         system_instruction = prompts.GAME_MASTER_SYSTEM_PROMPT_TEMPLATE.format(
             plot=plot or "Explore and survive.",
@@ -156,7 +240,8 @@ class MemoryManager:
         gameover_condition: Optional[str] = None,
         time_system: str = "calendar",
         time_config: Optional[dict] = None,
-        is_adventure_generator: bool = False
+        is_adventure_generator: bool = False,
+        location_detail_level: str = "full"
     ) -> list[dict]:
 
         """
@@ -167,7 +252,8 @@ class MemoryManager:
             plot=plot, rules=rules, walkthrough=walkthrough,
             completed_condition=completed_condition, gameover_condition=gameover_condition,
             time_system=time_system, time_config=time_config,
-            is_adventure_generator=is_adventure_generator
+            is_adventure_generator=is_adventure_generator,
+            location_detail_level=location_detail_level,
         )
 
         messages = [{"role": "system", "content": sys_prompt}]
