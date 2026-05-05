@@ -27,6 +27,9 @@ from backend.core.style_catalog import default_image_styles_catalog
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
+DEFAULT_SMALL_MAX_TOKENS = 12288
+DEFAULT_COMPLEX_MAX_TOKENS = 24576
+
 
 async def _resolve_global_settings_owner(db: AsyncSession, fallback_user: User) -> User:
     """Return the user that acts as global settings source (prefer admin)."""
@@ -156,12 +159,12 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
     fallback = {
         "small_model": "",
         "small_model_provider": "openai",
-        "small_max_tokens": 4096,
+        "small_max_tokens": DEFAULT_SMALL_MAX_TOKENS,
         "small_enable_thinking": False,
         "small_max_thinking_tokens": 1024,
         "complex_model": "",
         "complex_model_provider": "openai",
-        "complex_max_tokens": 8192,
+        "complex_max_tokens": DEFAULT_COMPLEX_MAX_TOKENS,
         "complex_enable_thinking": False,
         "complex_max_thinking_tokens": 2048,
         "preferred_provider": "openai",  # Legacy/Default
@@ -180,9 +183,9 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
 
     # Per-model Max Tokens
     if "small_max_tokens" not in normalized:
-        normalized["small_max_tokens"] = normalized.get("max_tokens") or 4096
+        normalized["small_max_tokens"] = normalized.get("max_tokens") or DEFAULT_SMALL_MAX_TOKENS
     if "complex_max_tokens" not in normalized:
-        normalized["complex_max_tokens"] = normalized.get("max_tokens") or 4096
+        normalized["complex_max_tokens"] = normalized.get("max_tokens") or DEFAULT_COMPLEX_MAX_TOKENS
 
     # Per-model Thinking Mode
     if "small_enable_thinking" not in normalized:
@@ -295,13 +298,13 @@ class ApiKeyPayload(BaseModel):
 class SettingsPayload(BaseModel):
     small_model: str
     small_model_provider: str
-    small_max_tokens: int = 4096
+    small_max_tokens: int = DEFAULT_SMALL_MAX_TOKENS
     small_enable_thinking: bool = False
     small_max_thinking_tokens: int = 1024
     
     complex_model: str
     complex_model_provider: str
-    complex_max_tokens: int = 4096
+    complex_max_tokens: int = DEFAULT_COMPLEX_MAX_TOKENS
     complex_enable_thinking: bool = False
     complex_max_thinking_tokens: int = 1024
     

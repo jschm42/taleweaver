@@ -21,13 +21,13 @@ const keyForm = ref({
 const llmForm = ref({
   small_model: '',
   small_model_provider: 'openai',
-  small_max_tokens: 4096,
+  small_max_tokens: 12288,
   small_enable_thinking: false,
   small_max_thinking_tokens: 1024,
   
   complex_model: '',
   complex_model_provider: 'openai',
-  complex_max_tokens: 4096,
+  complex_max_tokens: 24576,
   complex_enable_thinking: false,
   complex_max_thinking_tokens: 1024,
   

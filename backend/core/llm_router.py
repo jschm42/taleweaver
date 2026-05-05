@@ -13,6 +13,9 @@ T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 class GameMasterLLM:
+    DEFAULT_SMALL_MAX_TOKENS = 12288
+    DEFAULT_COMPLEX_MAX_TOKENS = 24576
+
 
     @staticmethod
     def _extract_openrouter_available_providers(exc: Exception) -> list[str]:
@@ -178,7 +181,12 @@ class GameMasterLLM:
         raw_max_tokens = llm_settings.get(f"{prefix}max_tokens")
         if raw_max_tokens is None:
             raw_max_tokens = llm_settings.get("max_tokens")
-        self.max_tokens = self._coerce_int(raw_max_tokens, default=4096)
+        default_max_tokens = (
+            self.DEFAULT_SMALL_MAX_TOKENS
+            if model_category == "small"
+            else self.DEFAULT_COMPLEX_MAX_TOKENS
+        )
+        self.max_tokens = self._coerce_int(raw_max_tokens, default=default_max_tokens)
 
         if self.provider == "ollama":
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")

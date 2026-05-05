@@ -164,10 +164,10 @@ async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
     resp = await client.get("/api/settings")
     assert resp.status_code == 200
     llm = resp.json()["llm_settings"]
-    assert llm["small_model"] == "gpt-4o-mini"
-    assert llm["complex_model"] == "gpt-4o"
     assert llm["small_model_provider"] == "openai"
     assert llm["complex_model_provider"] == "openai"
+    assert llm["small_max_tokens"] == 12288
+    assert llm["complex_max_tokens"] == 24576
     assert llm["preferred_provider"] == "openai"
     assert llm["ollama_url"] == "http://localhost:11434"
 

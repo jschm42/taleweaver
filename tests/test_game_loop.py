@@ -361,6 +361,111 @@ async def test_adventure_generator_chat_mode_emits_fallback_narrative_when_empty
 
         assert any("floating catalogs" in c for c in chunks)
 
+
+async def test_adventure_generator_requires_image_confirmation_before_generation(setup_test_db, monkeypatch):
+    """Image-enabled generation must wait for user confirmation and allow a no-image continuation."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = True
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=AdventureGeneratorToolIntent(
+            requested_adventure_generation={
+                "title": "Neon Foundry",
+                "prompt": "Build a neon city under a broken moon.",
+                "min_scenes": 4,
+                "max_scenes": 6,
+                "generate_scene_images": True,
+                "selected_image_styles": ["cinematic-realism"],
+                "selected_tone": "mystery",
+                "min_awards": 2,
+                "max_awards": 4,
+                "award_generation_enabled": True,
+            }
+        ))
+
+        async def empty_stream():
+            if False:
+                yield None
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=empty_stream())
+
+        generate_adventure_mock = AsyncMock(return_value="adv-generated-2")
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        monkeypatch.setattr(
+            "backend.engine.adventure_generator_service.AdventureGeneratorService.generate_adventure",
+            generate_adventure_mock,
+        )
+
+        manager = GameTurnManager(db, "session-1", user)
+        turn1_chunks = []
+        async for chunk in manager.process_turn("generate a world with fitting images"):
+            turn1_chunks.append(chunk)
+
+        await db.refresh(state)
+        assert any("please confirm" in c.lower() for c in turn1_chunks)
+        assert generate_adventure_mock.await_count == 0
+        assert "__ag_image_confirmation__" in (state.exit_states or {})
+
+        turn2_chunks = []
+        async for chunk in manager.process_turn("yes without images"):
+            turn2_chunks.append(chunk)
+
+        await db.refresh(state)
+        assert generate_adventure_mock.await_count == 1
+        req_arg = generate_adventure_mock.await_args.args[2]
+        assert req_arg.generate_scene_images is False
+        assert "__ag_image_confirmation__" not in (state.exit_states or {})
+        assert any("text-only world generation" in c for c in turn2_chunks)
+
+
+async def test_token_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch):
+    """Token limit exceptions should be surfaced as a short user-safe message without technical details."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, _state = await _seed_game_context(db)
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=Exception("maximum context length exceeded"))
+        mock_llm_instance.stream_simple_task = AsyncMock()
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("tell a very long story"):
+            chunks.append(chunk)
+
+        assert any("event: error" in c and "shorter context" in c for c in chunks)
+        assert not any("maximum context length" in c.lower() for c in chunks)
+
+
+async def test_rate_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch):
+    """Rate-limit exceptions should be surfaced as a short user-safe message without raw provider details."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, _state = await _seed_game_context(db)
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=Exception("429 Too Many Requests: provider rate limit exceeded"))
+        mock_llm_instance.stream_simple_task = AsyncMock()
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("respond please"):
+            chunks.append(chunk)
+
+        assert any("event: error" in c and "busy right now" in c.lower() for c in chunks)
+        assert not any("429" in c or "rate limit exceeded" in c.lower() for c in chunks)
+
 async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
     """Verifies that slash commands (like /inventory) are handled directly without LLM calls."""
     from tests.conftest import TestSessionLocal
