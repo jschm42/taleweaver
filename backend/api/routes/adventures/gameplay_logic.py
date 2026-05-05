@@ -45,6 +45,8 @@ AG_LAST_REQUEST_STATE_KEY = "__ag_last_generation_request__"
 AG_LAST_ERROR_STATE_KEY = "__ag_last_generation_error__"
 GM_NOTES_STATE_KEY = "__gm_notes__"
 GM_NOTES_MAX_ITEMS = 20
+GM_NOTES_PROMPT_MAX_ITEMS = 12
+GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS = 10
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -151,6 +153,68 @@ class GameTurnManager:
             if entry.get("key") and (entry.get("template_id") == self.adventure.id or entry.get("adventure_id") == self.adventure.id)
         }
         return [a for a in awards if not a.get("key") or a.get("key") not in earned_keys]
+
+    def _build_chat_progression_quests(self) -> list[dict]:
+        reduced_quests = []
+        for quest in list(self.state.quests or []):
+            status = quest.get("status")
+            if status == "completed":
+                continue
+            if not quest.get("id"):
+                continue
+            reduced_quests.append(
+                {
+                    "id": quest.get("id"),
+                    "title": quest.get("title"),
+                    "status": status,
+                    "is_main": bool(quest.get("is_main")),
+                }
+            )
+        return reduced_quests
+
+    @staticmethod
+    def _build_chat_progression_awards(unearned_awards: list[dict]) -> list[dict]:
+        reduced_awards = []
+        for award in unearned_awards:
+            key = award.get("key")
+            if not key:
+                continue
+            reduced_awards.append(
+                {
+                    "key": key,
+                    "title": award.get("title"),
+                    "tier": award.get("tier"),
+                }
+            )
+        return reduced_awards
+
+    @staticmethod
+    def _build_chat_progression_npcs(entities: list[WorldEntity]) -> list[dict]:
+        reduced_npcs = []
+        for entity in entities:
+            if (entity.entity_type or "").upper() != "NPC":
+                continue
+            reduced_npcs.append(
+                {
+                    "id": entity.id,
+                    "name": entity.name,
+                    "position": entity.spatial_position,
+                }
+            )
+            if len(reduced_npcs) >= GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS:
+                break
+        return reduced_npcs
+
+    def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict]) -> str:
+        notes = self._get_gm_notes()
+        if len(notes) > GM_NOTES_PROMPT_MAX_ITEMS:
+            notes = notes[-GM_NOTES_PROMPT_MAX_ITEMS:]
+        return prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT.format(
+            quests_json=self._compact_json(quests),
+            awards_json=self._compact_json(awards),
+            npcs_json=self._compact_json(npcs),
+            notes_json=self._compact_json(notes),
+        )
 
     def _get_gm_notes(self) -> List[str]:
         exit_states = self.state.exit_states or {}
@@ -1944,14 +2008,18 @@ class GameTurnManager:
                 yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
                 return
 
-            progression_prompt = (
-                mechanics_system_prompt
-                + "\n\n"
-                + prompts.GM_CHAT_TOOL_INTENT_SUFFIX.format(
-                    quests_json=self._compact_json(self.state.quests or []),
-                    awards_json=self._compact_json(mechanics_awards),
-                )
+            reduced_quests = self._build_chat_progression_quests()
+            reduced_awards = self._build_chat_progression_awards(mechanics_awards)
+            reduced_npcs = self._build_chat_progression_npcs(entities)
+
+            progression_prompt = self._build_chat_rule_pass_prompt(
+                quests=reduced_quests,
+                awards=reduced_awards,
+                npcs=reduced_npcs,
             )
+
+            if language:
+                progression_prompt += f"\n\nLANGUAGE CONTEXT: Current player language is {language}."
 
             progression_start = time.perf_counter()
             try:
@@ -1977,6 +2045,11 @@ class GameTurnManager:
                 duration_ms=round((time.perf_counter() - progression_start) * 1000, 2),
                 model=small_model,
                 provider=small_model_provider,
+                reduced_payload_chars=len(progression_prompt),
+                quest_count=len(reduced_quests),
+                award_count=len(reduced_awards),
+                npc_count=len(reduced_npcs),
+                notes_count=min(len(self._get_gm_notes()), GM_NOTES_PROMPT_MAX_ITEMS),
             )
 
             game_event = self._build_progression_event(progression_intent)

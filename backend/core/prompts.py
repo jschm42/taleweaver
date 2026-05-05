@@ -326,3 +326,19 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "AVAILABLE UNEARNED AWARDS:\n"
     "{awards_json}\n"
 )
+
+GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
+    "You are running a FAST RULE PASS in Chat Mode. "
+    "Use ONLY the reduced technical data below to decide lightweight progression intent fields for this turn. "
+    "Do not request mechanics, rolls, attacks, inventory/stat mutations, scene transitions, or detailed world updates. "
+    "If uncertain, leave fields empty/false.\n\n"
+    "Return only these intent fields when justified: `completed_quest_ids`, `earned_award_keys`, `remember_notes`, `forget_notes`, `clear_notes`, `game_completed`, `game_over`, `status_note`, `instant_narrative`.\n\n"
+    "OPEN QUESTS (REDUCED):\n"
+    "{quests_json}\n"
+    "AVAILABLE UNEARNED AWARDS (REDUCED):\n"
+    "{awards_json}\n"
+    "SCENE NPCS (REDUCED):\n"
+    "{npcs_json}\n"
+    "SESSION NOTES (REDUCED):\n"
+    "{notes_json}\n"
+)

@@ -766,12 +766,14 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
         mock_llm_instance = MagicMock()
 
         async def mock_progression(system_prompt, _user_prompt, **_kwargs):
-            assert "OPEN QUESTS:" in system_prompt
-            assert "AVAILABLE UNEARNED AWARDS:" in system_prompt
+            assert "OPEN QUESTS (REDUCED):" in system_prompt
+            assert "AVAILABLE UNEARNED AWARDS (REDUCED):" in system_prompt
             assert '"id":"q-1"' in system_prompt
             assert '"key":"heroic-heart"' in system_prompt
-            assert "NPCS:" in system_prompt
+            assert "SCENE NPCS" in system_prompt
             assert "Gate Guardian" in system_prompt
+            assert "CHARACTER SHEET JSON" not in system_prompt
+            assert "CURRENT LOCATION" not in system_prompt
             return AdventureGeneratorToolIntent(
                 completed_quest_ids=["q-1"],
                 earned_award_keys=["heroic-heart"],
@@ -822,13 +824,13 @@ async def test_chat_mode_progression_persists_and_reuses_notes(setup_test_db, mo
         async def mock_progression(system_prompt, _user_prompt, **_kwargs):
             seen_progression_prompts.append(system_prompt)
             if len(seen_progression_prompts) == 1:
-                assert "SESSION NOTES:" in system_prompt
-                assert "- none" in system_prompt
+                assert "SESSION NOTES (REDUCED):" in system_prompt
+                assert "[]" in system_prompt
                 return AdventureGeneratorToolIntent(
                     remember_notes=["Innkeeper owes the player a favor"],
                 )
 
-            assert "SESSION NOTES:" in system_prompt
+            assert "SESSION NOTES (REDUCED):" in system_prompt
             assert "Innkeeper owes the player a favor" in system_prompt
             return AdventureGeneratorToolIntent()
 

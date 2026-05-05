@@ -39,7 +39,13 @@ export interface UseGameSocket {
   revealIllustration: (name: string, url: string) => void
 }
 
+let gameSocketSingleton: UseGameSocket | null = null
+
 export function useGameSocket(): UseGameSocket {
+  if (gameSocketSingleton) {
+    return gameSocketSingleton
+  }
+
   const BASE = '/api'
   const { addNotification } = useNotifications()
   const messages = ref<ChatMessage[]>([])
@@ -152,7 +158,7 @@ export function useGameSocket(): UseGameSocket {
       }
 
       const snapshot = await fetchSessionSnapshot(currentGameId)
-      if (currentGameId && status.value !== 'disconnected') {
+      if (currentGameId) {
         applySessionSnapshot(snapshot, false)
       }
     }, 5000)
@@ -321,7 +327,7 @@ export function useGameSocket(): UseGameSocket {
     }
   }
 
-  return {
+  gameSocketSingleton = {
     messages,
     sheet,
     mermaidData,
@@ -350,5 +356,7 @@ export function useGameSocket(): UseGameSocket {
       _pushMessage('system', `**Illustration Revealed:** ${name}\n\n![${name}](${url})`)
     }
   }
+
+  return gameSocketSingleton
 }
 
