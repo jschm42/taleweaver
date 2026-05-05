@@ -533,7 +533,7 @@ async def test_rate_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch)
 
 
 async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkeypatch):
-    """A retry phrase should continue generation from the stored last request if the LLM omits tool fields."""
+    """A retry phrase should recover the last request and proceed after confirmation."""
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -580,11 +580,19 @@ async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkey
         async for chunk in manager.process_turn("bitte nochmal erstellen"):
             chunks.append(chunk)
 
+        # Mandatory image-mode confirmation should be requested first.
+        assert any("please confirm image mode" in c.lower() for c in chunks)
+        assert generate_adventure_mock.await_count == 0
+
+        confirm_chunks = []
+        async for chunk in manager.process_turn("yes without images"):
+            confirm_chunks.append(chunk)
+
         assert generate_adventure_mock.await_count == 1
         req_arg = generate_adventure_mock.await_args.args[2]
         assert req_arg.title == "Bundy Boulevard"
         assert req_arg.generate_scene_images is False
-        assert any("Generation finished successfully" in c for c in chunks)
+        assert any("Generation finished successfully" in c for c in confirm_chunks)
 
 async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
     """Verifies that slash commands (like /inventory) are handled directly without LLM calls."""

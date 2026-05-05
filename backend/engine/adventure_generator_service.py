@@ -46,6 +46,10 @@ class AdventureGeneratorService:
                 return val.get("id") or val.get("name") or str(val)
             return str(val)
 
+        # Image confirmation sets this switch for the whole generation pipeline.
+        # "without images" must disable all AI image-generation branches.
+        images_enabled = bool(request.generate_scene_images)
+
         # 1. Create a new AdventureTemplate entry
 
         new_id = str(uuid.uuid4())
@@ -56,7 +60,7 @@ class AdventureGeneratorService:
             original_prompt=request.prompt,
             min_scenes=request.min_scenes,
             max_scenes=request.max_scenes,
-            generate_scene_images=request.generate_scene_images,
+            generate_scene_images=images_enabled,
             selected_image_styles=request.selected_image_styles,
             selected_tone=clean_tone(request.selected_tone),
 
@@ -86,9 +90,9 @@ class AdventureGeneratorService:
                 template_id=new_id,
                 title=request.title,
                 original_prompt=request.prompt,
-                generate_scene_images=request.generate_scene_images,
-                generate_npc_images=True, 
-                generate_item_images=True, 
+                generate_scene_images=images_enabled,
+                generate_npc_images=images_enabled,
+                generate_item_images=images_enabled,
                 min_scenes=request.min_scenes,
                 max_scenes=request.max_scenes,
                 award_generation_enabled=request.award_generation_enabled,

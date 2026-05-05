@@ -412,7 +412,7 @@ class WorldGenerator:
             gen_npc=generate_npc_images,
             gen_items=generate_item_images,
             gen_scenes=generate_scene_images,
-            gen_protagonist_image=True, # Always generate protagonist image
+            gen_protagonist_image=generate_scene_images,
             selected_image_styles=selected_image_styles,
             status_callback=status_callback,
         )
@@ -558,7 +558,8 @@ class WorldGenerator:
                 state.time_config = adventure.time_config
             
             # Generate Adventure Cover if missing
-            if not adventure.image_url and user:
+            any_image_generation_enabled = bool(gen_scenes or gen_npc or gen_items or gen_protagonist_image)
+            if not adventure.image_url and user and any_image_generation_enabled:
                 await _publish_generation_status_with_callback(
                     db,
                     adventure,
