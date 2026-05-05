@@ -114,14 +114,17 @@ class AdventureTemplateImporter:
                 # Create new template ID
                 new_template_id = generate_adventure_id(adv_data["title"])
                 
+                enforcement_mode = adv_data.get("rule_enforcement_mode", "rpg")
+                is_strict = adv_data.get("strict_rules") if "strict_rules" in adv_data else (enforcement_mode != "chat")
+                
                 # Create AdventureTemplate record
                 new_template = AdventureTemplate(
                     id=new_template_id,
                     owner_id=owner_id,
                     title=adv_data["title"],
                     original_prompt=adv_data.get("original_prompt") or adv_data.get("context"),
-                    strict_rules=adv_data.get("strict_rules", True),
-                    rule_enforcement_mode=adv_data.get("rule_enforcement_mode", "rpg"),
+                    strict_rules=is_strict,
+                    rule_enforcement_mode=enforcement_mode,
                     time_per_turn=adv_data.get("time_per_turn", 5),
                     pacing_minutes=adv_data.get("pacing_minutes", 5),
                     clock_enabled=adv_data.get("clock_enabled", False),
@@ -143,12 +146,12 @@ class AdventureTemplateImporter:
                     completed_condition=adv_data.get("completed_condition") or manifest_data.get("completed_condition"),
                     gameover_condition=adv_data.get("gameover_condition") or manifest_data.get("gameover_condition"),
                     starting_timestamp=adv_data.get("starting_timestamp") or manifest_data.get("starting_timestamp", 0),
+                    is_adventure_generator=adv_data.get("is_adventure_generator", False) or manifest_data.get("is_adventure_generator", False),
                     is_ready=True,
                     creation_status="Ready",
                     original_manifest=manifest_data,
                     language=adv_data.get("language") or manifest_data.get("language"),
-                    origin_id=origin_id,
-                    is_adventure_generator=adv_data.get("is_adventure_generator", False)
+                    origin_id=origin_id
                 )
 
                 db.add(new_template)
@@ -383,6 +386,9 @@ class AdventureTemplateImporter:
                 manifest = payload.get("original_manifest") or payload.get("manifest") or payload
                 adv_meta = payload.get("adventure") or payload
                 
+                enforcement_mode = adv_meta.get("rule_enforcement_mode") or manifest.get("rule_enforcement_mode") or "rpg"
+                is_strict = adv_meta.get("strict_rules") if "strict_rules" in adv_meta else (manifest.get("strict_rules") if "strict_rules" in manifest else (enforcement_mode != "chat"))
+                
                 new_template = AdventureTemplate(
                     id=generate_adventure_id(adv_meta.get("title") or manifest.get("title") or "Imported Blueprint"),
                     owner_id=owner_id,
@@ -390,8 +396,8 @@ class AdventureTemplateImporter:
                     teaser=adv_meta.get("teaser") or manifest.get("teaser"),
                     original_prompt=adv_meta.get("original_prompt") or adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
                     image_url=adv_meta.get("image_url") or manifest.get("image_url"),
-                    strict_rules=adv_meta.get("strict_rules", True),
-                    rule_enforcement_mode=adv_meta.get("rule_enforcement_mode") or manifest.get("rule_enforcement_mode") or "rpg",
+                    strict_rules=is_strict,
+                    rule_enforcement_mode=enforcement_mode,
                     time_per_turn=adv_meta.get("time_per_turn", 5),
                     pacing_minutes=adv_meta.get("pacing_minutes", 5),
                     clock_enabled=adv_meta.get("clock_enabled", False),

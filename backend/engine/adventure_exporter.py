@@ -55,7 +55,6 @@ class AdventureExporter:
                 "language": adv.language,
                 "original_prompt": adv.original_prompt,
                 "image_url": adv.image_url,
-                "strict_rules": adv.strict_rules,
                 "rule_enforcement_mode": adv.rule_enforcement_mode,
                 "time_per_turn": adv.time_per_turn,
                 "pacing_minutes": adv.pacing_minutes,

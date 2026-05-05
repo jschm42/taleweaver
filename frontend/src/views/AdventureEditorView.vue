@@ -276,16 +276,19 @@ async function fetchAdventure() {
     form.value.selected_style_id = Array.isArray(data.selected_image_styles) && data.selected_image_styles.length > 0 
       ? (typeof data.selected_image_styles[0] === 'string' ? data.selected_image_styles[0] : data.selected_image_styles[0].id)
       : ''
-    let rawTone = data.selected_tone || ''
-    if (typeof rawTone === 'string' && rawTone.startsWith('{')) {
+    let rawTone = data.selected_tone
+    if (rawTone && typeof rawTone === 'object') {
+      form.value.selected_tone_id = rawTone.id || rawTone.name || ''
+    } else if (typeof rawTone === 'string' && rawTone.startsWith('{')) {
       try {
         const obj = JSON.parse(rawTone)
-        rawTone = obj.id || obj.name || rawTone
+        form.value.selected_tone_id = obj.id || obj.name || rawTone
       } catch (e) {
-        // Not valid JSON or parsing error, keep raw
+        form.value.selected_tone_id = rawTone
       }
+    } else {
+      form.value.selected_tone_id = rawTone || ''
     }
-    form.value.selected_tone_id = rawTone
 
     form.value.is_adventure_generator = !!data.is_adventure_generator
 

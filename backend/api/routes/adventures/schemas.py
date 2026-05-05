@@ -11,7 +11,6 @@ class CreateAdventureTemplatePayload(BaseModel):
     image_url: Optional[str] = None
     language: Optional[str] = None
     original_prompt: Optional[str] = None
-    strict_rules: bool = True
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     generate_scene_images: bool = False
     generate_npc_images: bool = False
@@ -46,7 +45,6 @@ class AdventureTemplateResponse(BaseModel):
     language: Optional[str] = None
     origin_id: Optional[str] = None
 
-    strict_rules: bool
     rule_enforcement_mode: str
     time_per_turn: int
     pacing_minutes: int

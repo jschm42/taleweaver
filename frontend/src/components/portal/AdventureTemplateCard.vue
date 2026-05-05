@@ -64,24 +64,25 @@ const toneLabel = computed(() => {
 </script>
 
 <template>
-  <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col overflow-hidden relative group">
+  <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col relative group">
     <!-- Top Cover Area -->
-    <div class="aspect-[3/2] relative overflow-hidden bg-black/30 border-b border-white/5">
-      <img
-        v-if="props.template.image_url"
-        :src="props.template.image_url"
-        class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
-        alt="Adventure cover"
-      />
-      <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold uppercase tracking-widest">
-        No Cover
+    <div class="aspect-[3/2] relative bg-black/30 border-b border-white/5">
+      <div class="absolute inset-0 overflow-hidden rounded-t-xl">
+        <img
+          v-if="props.template.image_url"
+          :src="props.template.image_url"
+          class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
+          alt="Adventure cover"
+        />
+        <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold uppercase tracking-widest">
+          No Cover
+        </div>
       </div>
 
       <!-- Tone Badge -->
       <div v-if="props.template.selected_tone" class="absolute top-3 left-3">
         <span class="px-2.5 py-1 rounded-full bg-aether-primary/20 text-aether-primary text-xs uppercase tracking-widest font-black border border-aether-primary/20">
           {{ toneLabel }}
-
         </span>
       </div>
 

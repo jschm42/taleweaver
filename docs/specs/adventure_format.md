@@ -42,8 +42,7 @@ General configuration and world-building constraints.
 | `teaser` | `string` | A short, atmospheric summary (max 300 chars). |
 | `context` | `string` | The foundational world-building background for the AI. |
 | `image_url` | `string` | Path/URL to the cover image. |
-| `strict_rules` | `boolean` | If true, enables the two-pass mechanics engine. |
-| `rule_enforcement_mode` | `string` | `"rpg"` (strict), `"story"` (loose), or `"chat"` (no mechanics). |
+| `rule_enforcement_mode` | `string` | `"rpg"` (strict mechanics), `"story"` (loose mechanics), or `"chat"` (narrative only). |
 | `time_per_turn` | `number` | In-game minutes passed per action. |
 | `pacing_minutes` | `number` | Frequency of world heartbeat events. |
 | `clock_enabled` | `boolean` | Whether to display and track a real-time calendar. |

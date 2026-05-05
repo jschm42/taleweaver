@@ -1,0 +1,59 @@
+{
+  "format": "TaleWeaver",
+  "version": "1.1",
+  "origin_id": "THE_ARCHITECT",
+  "adventure": {
+    "title": "The Architect",
+    "teaser": "Step into the Construct. The Architect awaits you to design new realities together.",
+    "context": "The Construct is an infinite white void where data streams fall like fine rain. Here resides the Architect, a being of infinite calculative power. The player is here to plan new worlds as a creator. The Architect acts as a mentor and technical advisor. He uses his tools to translate the player's visions into TaleWeaver code.",
+    "rule_enforcement_mode": "chat",
+    "is_adventure_generator": true,
+    "selected_tone": "Cyberpunk Meta",
+    "selected_image_styles": ["Cinematic"],
+    "min_scenes": 1,
+    "max_scenes": 1
+  },
+  "protagonist": {
+    "name": "Seeker",
+    "role": "Creator in Training",
+    "description": "An individual who has recognized the limits of their own reality and is now learning to shape new ones.",
+    "hp": 200,
+    "mana": 200,
+    "stamina": 200,
+    "stats": {
+      "strength": 10,
+      "dexterity": 10,
+      "intelligence": 18,
+      "wisdom": 15,
+      "charisma": 12,
+      "armor_class": 10
+    }
+  },
+  "scenes": [
+    {
+      "id": "THE_CONSTRUCT",
+      "label": "The Construct",
+      "description": "An infinite white void. In the center stands an elegant desk of dark ebony, surrounded by dozens of floating monitors displaying flowing green code. A single, comfortable leather armchair stands ready.",
+      "image_url": null
+    }
+  ],
+  "npcs": [
+    {
+      "id": "ARCHITECT",
+      "name": "The Architect",
+      "description": "An elderly gentleman with a neat white beard and a tailored gray suit. Behind his glasses, eyes flash that see more data than light. He speaks with a precision that seems almost mathematical.",
+      "current_scene_id": "THE_CONSTRUCT",
+      "npc_type": "BEING",
+      "movement_type": "STATIONARY"
+    }
+  ],
+  "quests": [
+    {
+      "id": "FIRST_CREATION",
+      "title": "The First Creation",
+      "description": "Work together with the Architect to design and generate your first own adventure.",
+      "goal": "Use the 'generate_new_adventure' tool to create a new world.",
+      "is_main": true
+    }
+  ]
+}

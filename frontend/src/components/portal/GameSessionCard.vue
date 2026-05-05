@@ -51,24 +51,26 @@ function runAction(action: 'resume' | 'delete'): void {
 </script>
 
 <template>
-  <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col overflow-hidden relative group">
+  <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col relative group">
     <!-- Top Cover Area -->
-    <div class="aspect-[3/2] relative overflow-hidden bg-black/30 border-b border-white/5">
-      <!-- Ribbon for Game Over / Completed -->
-      <div v-if="props.session.status === 'game_over'" class="absolute -right-12 top-6 bg-red-600 text-white text-xs font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
-        Game Over
-      </div>
-      <div v-if="props.session.status === 'completed'" class="absolute -right-12 top-6 bg-emerald-500 text-white text-xs font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
-        Completed
-      </div>
-      <img
-        v-if="props.session.image_url"
-        :src="props.session.image_url"
-        class="w-full h-full object-cover object-top opacity-60 group-hover:opacity-80 transition-opacity"
-        alt="Adventure cover"
-      />
-      <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold uppercase tracking-widest">
-        No Cover
+    <div class="aspect-[3/2] relative bg-black/30 border-b border-white/5">
+      <div class="absolute inset-0 overflow-hidden rounded-t-xl">
+        <!-- Ribbon for Game Over / Completed -->
+        <div v-if="props.session.status === 'game_over'" class="absolute -right-12 top-6 bg-red-600 text-white text-xs font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
+          Game Over
+        </div>
+        <div v-if="props.session.status === 'completed'" class="absolute -right-12 top-6 bg-emerald-500 text-white text-xs font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
+          Completed
+        </div>
+        <img
+          v-if="props.session.image_url"
+          :src="props.session.image_url"
+          class="w-full h-full object-cover object-top opacity-60 group-hover:opacity-80 transition-opacity"
+          alt="Adventure cover"
+        />
+        <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold uppercase tracking-widest">
+          No Cover
+        </div>
       </div>
       
       <!-- Status Badge -->
