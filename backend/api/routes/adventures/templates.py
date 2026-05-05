@@ -105,7 +105,9 @@ async def create_adventure(
     # Backward compatibility for pacing configs
     pacing_minutes = payload.pacing_minutes or payload.time_per_turn
     if payload.pacing and isinstance(payload.pacing, dict):
-         pacing_minutes = payload.pacing.get("minutes_per_turn", pacing_minutes)
+        pacing_minutes = payload.pacing.get("minutes_per_turn", pacing_minutes)
+
+    chat_mode = (payload.rule_enforcement_mode or "rpg") == "chat"
 
     adv = AdventureTemplate(
         id=new_id,
@@ -124,7 +126,7 @@ async def create_adventure(
         selected_tone=payload.selected_tone,
         min_scenes=payload.min_scenes,
         max_scenes=payload.max_scenes,
-        award_generation_enabled=payload.award_generation_enabled,
+        award_generation_enabled=False if chat_mode else payload.award_generation_enabled,
         min_awards=payload.min_awards,
         max_awards=payload.max_awards,
         is_ready=False,
@@ -180,7 +182,8 @@ async def create_adventure(
                     generate_item_images=payload.generate_item_images,
                     min_scenes=payload.min_scenes,
                     max_scenes=payload.max_scenes,
-                    award_generation_enabled=payload.award_generation_enabled,
+                    quest_generation_enabled=not chat_mode,
+                    award_generation_enabled=False if chat_mode else payload.award_generation_enabled,
                     min_awards=payload.min_awards,
                     max_awards=payload.max_awards,
                     selected_image_styles=adv.selected_image_styles,

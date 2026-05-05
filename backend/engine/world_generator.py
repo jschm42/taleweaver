@@ -271,6 +271,7 @@ class WorldGenerator:
         generate_item_images: bool = False,
         min_scenes: int = 1,
         max_scenes: int = 5,
+        quest_generation_enabled: bool = True,
         award_generation_enabled: bool = True,
         min_awards: int = 3,
         max_awards: int = 5,
@@ -320,6 +321,15 @@ class WorldGenerator:
         system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
         if language:
             system_prompt += f"\n\nCRITICAL: You MUST generate all content (names, descriptions, teaser, plot, intro_text, walkthrough, quests) in {language}. Do not use any other language."
+
+        if not quest_generation_enabled:
+            system_prompt += "\n\nQUEST GENERATION OVERRIDE: Do not generate any quests for this adventure."
+
+        quest_requirement = ""
+        if quest_generation_enabled:
+            quest_requirement = "\n- Generate 1-2 Main Quests and 2-3 Side Quests that fit the narrative context."
+        else:
+            quest_requirement = "\n- Do not generate any quests for this adventure."
         
         award_requirement = ""
         if award_generation_enabled:
@@ -333,6 +343,7 @@ class WorldGenerator:
             selected_tone=selected_tone or "Standard RPG",
             min_scenes=min_scenes, 
             max_scenes=max_scenes,
+            quest_requirement=quest_requirement,
             award_requirement=award_requirement
         )
 
@@ -503,6 +514,12 @@ class WorldGenerator:
         # 0. Sync Quests and Narrative Meta
         if adventure:
             quests = manifest_dict.get("quests") or []
+            awards = manifest_dict.get("awards") or []
+
+            if adventure.rule_enforcement_mode == "chat":
+                quests = []
+                awards = []
+
             for q in quests:
                 if "status" not in q:
                     q["status"] = "open"
@@ -536,7 +553,6 @@ class WorldGenerator:
                 except:
                     pass
             
-            awards = manifest_dict.get("awards") or []
             for a in awards:
                 if "is_earned" not in a:
                     a["is_earned"] = False

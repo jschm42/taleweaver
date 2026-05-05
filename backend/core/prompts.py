@@ -75,7 +75,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
 
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
-    "- Generate 1-2 Main Quests and 2-3 Side Quests that fit the narrative context."
+    "{quest_requirement}"
     "{award_requirement}"
 )
 """
@@ -300,4 +300,18 @@ GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX = (
     "If the player asks to retry/regenerate after a prior failure, prefer returning `requested_adventure_generation` using the most recent known parameters (with reasonable defaults) instead of asking repeated clarification questions. "
     "If no tool action is needed, leave all tool fields unset/false. "
     "You may provide a short `instant_narrative` for simple acknowledgements."
+)
+
+GM_CHAT_TOOL_INTENT_SUFFIX = (
+    "You are in Chat Mode and should extract ONLY lightweight progression intent fields for this turn. "
+    "Do not request mechanics, dice rolls, attacks, or inventory/stat mutations here. "
+    "If a quest was clearly fulfilled, return its ID in `completed_quest_ids`. "
+    "If an award was clearly earned, return its key in `earned_award_keys`. "
+    "Use `game_completed` and optional `status_note` only when all main objectives are clearly complete. "
+    "Use `game_over` and optional `status_note` only for explicit terminal failure outcomes. "
+    "Leave fields empty/false when uncertain.\n\n"
+    "OPEN QUESTS:\n"
+    "{quests_json}\n"
+    "AVAILABLE UNEARNED AWARDS:\n"
+    "{awards_json}\n"
 )

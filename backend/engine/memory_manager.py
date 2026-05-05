@@ -10,7 +10,7 @@ class MemoryManager:
     Implements a sliding window memory algorithm to limit tokens.
     """
     
-    MAX_HISTORY_LENGTH = 20 # Can be adjusted based on token limits
+    MAX_HISTORY_LENGTH = 12 # Reduced for lower turn latency while keeping short-term context
 
     @staticmethod
     def format_game_time(minutes: int, time_system: str = "calendar", time_config: Optional[dict] = None) -> str:

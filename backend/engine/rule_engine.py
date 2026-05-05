@@ -132,6 +132,14 @@ class AdventureGeneratorToolIntent(BaseModel):
     request_available_image_styles: bool = False
     request_available_tones: bool = False
     requested_adventure_generation: Optional[AdventureGenerationRequest] = None
+
+    # Chat-mode progression intent (lightweight technical signals)
+    completed_quest_ids: Optional[List[str]] = None
+    earned_award_keys: Optional[List[str]] = None
+    game_over: bool = False
+    game_completed: bool = False
+    status_note: Optional[str] = None
+
     tool_results: Optional[ToolResults] = None
     instant_narrative: Optional[str] = None
     narrative_description: str = ""

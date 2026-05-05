@@ -30,6 +30,7 @@ from backend.engine.skill_check import roll_skill_check, roll_attack
 from backend.engine.stat_aggregator import calculate_total_stats
 from backend.engine.debug_engine import DebugEngine
 from backend.core.llm_router import GameMasterLLM
+from backend.core.llm_logger import log_structured_event
 from backend.core import prompts
 from backend.core.config import settings
 from backend.api.routes.adventures.logic import AdventureLogic
@@ -266,6 +267,17 @@ class GameTurnManager:
             yield chunk
             
         turn_end = time.perf_counter()
+        log_structured_event(
+            "gm.turn.pipeline.total",
+            adventure_id=self.adventure.id,
+            game_id=self.game_id,
+            operation="chat_turn",
+            phase="total",
+            duration_ms=round((turn_end - turn_start) * 1000, 2),
+            strict_rules=bool(self.adventure.strict_rules),
+            is_adventure_generator=bool(self.adventure.is_adventure_generator),
+            user_input_chars=len(actual_user_input or ""),
+        )
         logger.debug(f"[Turn {self.game_id}] Total turn processing took {turn_end - turn_start:.4f}s")
 
     async def _handle_debug(self, user_msg: str) -> AsyncGenerator[str, None]:
@@ -1359,6 +1371,7 @@ class GameTurnManager:
 
     async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: Optional[str] = None) -> AsyncGenerator[str, None]:
         _ = auto_visualize
+        cycle_start = time.perf_counter()
         # Load Context and LLM Settings
         db_start = time.perf_counter()
         hist_res = await self.db.execute(select(ChatMessage).where(ChatMessage.session_id == self.state.session_id).order_by(ChatMessage.created_at.asc()))
@@ -1413,6 +1426,22 @@ class GameTurnManager:
             time_config=self.state.time_config or self.adventure.time_config,
             is_adventure_generator=self.adventure.is_adventure_generator
         )[0]["content"]
+
+        log_structured_event(
+            "gm.turn.pipeline.context",
+            adventure_id=self.adventure.id,
+            game_id=self.game_id,
+            operation="chat_turn",
+            phase="context",
+            db_prep_ms=round(db_duration * 1000, 2),
+            history_count=len(history),
+            history_chars=sum(len((m.get("content") or "")) for m in history),
+            system_prompt_chars=len(system_prompt or ""),
+            entities_count=len(entities),
+            exits_count=len(exits),
+            strict_rules=bool(self.adventure.strict_rules),
+            is_adventure_generator=bool(self.adventure.is_adventure_generator),
+        )
 
 
         # Bable Fish / Translation logic
@@ -1550,6 +1579,16 @@ class GameTurnManager:
                     return
                 raise
             pass1_duration = time.perf_counter() - pass1_start
+            log_structured_event(
+                "gm.turn.pipeline.pass",
+                adventure_id=self.adventure.id,
+                game_id=self.game_id,
+                operation="chat_turn",
+                phase="mechanics",
+                duration_ms=round(pass1_duration * 1000, 2),
+                model=small_model,
+                provider=small_model_provider,
+            )
             logger.debug(f"[Turn {self.game_id}] [Pass 1] Mechanics analysis took {pass1_duration:.4f}s")
 
             # Auto-trigger turn-based combat dialog when mechanics detect combat start.
@@ -1715,11 +1754,22 @@ class GameTurnManager:
                 + tool_context_block
             )
             try:
+                generator_intent_start = time.perf_counter()
                 game_event = await llm.aexecute_complex_task(
                     tool_intent_prompt,
                     user_msg,
                     response_model=AdventureGeneratorToolIntent,
                     model=small_model,
+                )
+                log_structured_event(
+                    "gm.turn.pipeline.pass",
+                    adventure_id=self.adventure.id,
+                    game_id=self.game_id,
+                    operation="chat_turn",
+                    phase="generator_tool_intent",
+                    duration_ms=round((time.perf_counter() - generator_intent_start) * 1000, 2),
+                    model=small_model,
+                    provider=small_model_provider,
                 )
             except Exception as e:
                 user_safe_error = _friendly_llm_error_message(e)
@@ -1806,7 +1856,26 @@ class GameTurnManager:
                 raise
             
             pass2_duration = time.perf_counter() - pass2_start
+            log_structured_event(
+                "gm.turn.pipeline.pass",
+                adventure_id=self.adventure.id,
+                game_id=self.game_id,
+                operation="chat_turn",
+                phase="narration",
+                duration_ms=round(pass2_duration * 1000, 2),
+                model=complex_model,
+                provider=complex_model_provider,
+            )
             logger.debug(f"[Turn {self.game_id}] [Pass 2] Narration took {pass2_duration:.4f}s")
+
+        log_structured_event(
+            "gm.turn.pipeline.cycle_total",
+            adventure_id=self.adventure.id,
+            game_id=self.game_id,
+            operation="chat_turn",
+            phase="cycle_total",
+            duration_ms=round((time.perf_counter() - cycle_start) * 1000, 2),
+        )
 
         if run_generator_tool_intent_pass and not (response_text or "").strip():
             fallback = "The Architect inclines his head, the Construct awaiting your next directive."

@@ -13,8 +13,8 @@ T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 class GameMasterLLM:
-    DEFAULT_SMALL_MAX_TOKENS = 12288
-    DEFAULT_COMPLEX_MAX_TOKENS = 24576
+    DEFAULT_SMALL_MAX_TOKENS = 4096
+    DEFAULT_COMPLEX_MAX_TOKENS = 8192
 
 
     @staticmethod

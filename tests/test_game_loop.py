@@ -594,6 +594,44 @@ async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkey
         assert req_arg.generate_scene_images is False
         assert any("Generation finished successfully" in c for c in confirm_chunks)
 
+
+async def test_chat_mode_narration_only_skips_first_pass_and_keeps_progress_unchanged(setup_test_db, monkeypatch):
+    """Normal chat mode should skip first-pass tool/mechanics extraction and only stream narration."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = False
+        adv.awards = [{"key": "heroic-heart", "title": "Heroic Heart", "tier": "silver"}]
+        state.quests = [{"id": "q-1", "title": "Open the Gate", "status": "open", "is_main": True}]
+        user.earned_awards = []
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock()
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="A quiet wind passes through the gate."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("I wait and listen"):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+        await db.refresh(user)
+
+        assert mock_llm_instance.aexecute_complex_task.await_count == 0
+        assert mock_llm_instance.stream_simple_task.await_count == 1
+        assert any("quiet wind" in c for c in chunks)
+        assert (state.quests or [])[0].get("status") == "open"
+        assert user.earned_awards == []
+
 async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
     """Verifies that slash commands (like /inventory) are handled directly without LLM calls."""
     from tests.conftest import TestSessionLocal
