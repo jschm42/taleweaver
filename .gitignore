@@ -213,4 +213,4 @@ node_modules/
 *.db-wal
 data/
 logs/
-nginx/
+nginx/ssl/
