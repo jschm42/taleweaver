@@ -9,7 +9,7 @@ services:
     expose:
       - "8000"
     volumes:
-      - taleweaver-data:/app/data
+      - ${DOCKER_DATA_DIR:-./data-docker}:/app/data
     env_file:
       - .env
     restart: unless-stopped
@@ -37,6 +37,3 @@ services:
 networks:
   taleweaver-net:
     driver: bridge
-
-volumes:
-  taleweaver-data:

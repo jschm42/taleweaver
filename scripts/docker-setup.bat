@@ -11,15 +11,22 @@ IF NOT EXIST .env (
     echo [i] Please edit the .env file and set your ENCRYPTION_KEY and API keys.
 )
 
-REM Read FRONTEND_PORT from .env
+REM Read FRONTEND_PORT and DOCKER_DATA_DIR from .env
 for /f "tokens=1,2 delims==" %%a in (.env) do (
     if "%%a"=="FRONTEND_PORT" set FRONTEND_PORT=%%b
+    if "%%a"=="DOCKER_DATA_DIR" set DOCKER_DATA_DIR=%%b
 )
 IF "%FRONTEND_PORT%"=="" set FRONTEND_PORT=443
+IF "%DOCKER_DATA_DIR%"=="" set DOCKER_DATA_DIR=./data-docker
 
-IF NOT EXIST data (
-    echo [*] Creating data directory...
-    mkdir data
+IF NOT EXIST "%DOCKER_DATA_DIR%" (
+    echo [*] Creating isolated data directory at %DOCKER_DATA_DIR%...
+    mkdir "%DOCKER_DATA_DIR%"
+)
+
+IF EXIST nginx\nginx.conf\ (
+    echo [!] nginx\nginx.conf is a directory. Removing it...
+    rmdir /s /q nginx\nginx.conf
 )
 
 IF NOT EXIST nginx\ssl\nginx.crt (
