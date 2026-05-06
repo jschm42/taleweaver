@@ -15,9 +15,12 @@ import { authState } from '@/store/auth'
 
 interface SettingsResponse {
   app_version?: string
-  keys: Record<string, string>
+  keys: Record<string, { masked: string; is_env: boolean }>
   llm_settings: Record<string, unknown>
   t2i_settings: Record<string, unknown>
+  game_settings: Record<string, unknown>
+  is_llm_configured: boolean
+  is_t2i_configured: boolean
   image_styles_catalog: CatalogTile[]
   tone_catalog: CatalogTile[]
 }

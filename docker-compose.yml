@@ -5,13 +5,38 @@ services:
     build: .
     container_name: taleweaver
     image: taleweaver:latest
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+    # Internal port only, Nginx will proxy to it
+    expose:
+      - "8000"
     volumes:
-      - ./data:/app/data
+      - taleweaver-data:/app/data
     env_file:
       - .env
     restart: unless-stopped
     # Enable communication with Ollama running on the host
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - taleweaver-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: taleweaver-nginx
+    ports:
+      - "80:80"
+      - "${FRONTEND_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - taleweaver
+    restart: always
+    networks:
+      - taleweaver-net
+
+networks:
+  taleweaver-net:
+    driver: bridge
+
+volumes:
+  taleweaver-data:

@@ -117,7 +117,6 @@ async function loadCatalogs() {
   }
 }
 
-import { configState, refreshConfig } from '@/store/config'
 import { authState } from '@/store/auth'
 
 function initializeLanguage() {

@@ -28,7 +28,6 @@ COPY backend/ ./backend/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 COPY version.json .
-COPY openrouter_models.json .
 
 # Copy adventures (for automatic import)
 COPY adventures/ ./adventures/
