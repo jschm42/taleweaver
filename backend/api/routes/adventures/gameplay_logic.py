@@ -2489,6 +2489,7 @@ class GameTurnManager:
             self._apply_gm_notes_update(event.remember_notes, event.forget_notes, bool(event.clear_notes))
 
         # Quest Updates
+        newly_completed_quests: list[str] = []
         if event.completed_quest_ids:
             new_quests = deepcopy(self.state.quests or [])
             modified = False
@@ -2496,6 +2497,7 @@ class GameTurnManager:
                 for q in new_quests:
                     if q.get("id") == qid and q.get("status") != "completed":
                         q["status"] = "completed"
+                        newly_completed_quests.append(q.get("title") or qid)
                         modified = True
             
             if modified:
@@ -2551,11 +2553,23 @@ class GameTurnManager:
                 for q in new_quests:
                     if q.get("id") == qid and q.get("status") != "completed":
                         q["status"] = "completed"
-                        logger.info(f"[Turn {self.game_id}] Deterministic Quest Completion: {qid}")
+                        newly_completed_quests.append(q.get("title") or qid)
+                        logger.info("[Turn %s] Deterministic Quest Completion: %s", self.game_id, qid)
                         modified = True
             if modified:
                 self.state.quests = new_quests
                 state_dirty = True
+
+        if newly_completed_quests:
+            # Emit one system entry per newly completed quest so players get explicit feedback.
+            for quest_title in dict.fromkeys(newly_completed_quests):
+                self.db.add(
+                    ChatMessage(
+                        session_id=self.state.session_id,
+                        role="system",
+                        content=f"Quest completed: {quest_title}",
+                    )
+                )
 
         # RPG Completion Logic: Check if all main quests are finished
         if state_dirty:

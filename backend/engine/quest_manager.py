@@ -1,6 +1,5 @@
-import re
 import logging
-from typing import List, Dict, Any
+from typing import List
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 
@@ -16,14 +15,19 @@ class QuestManager:
     @staticmethod
     def evaluate_quests(avatar: Avatar, state: SessionState) -> List[str]:
         """
-        Evaluates current 'open' quests against the current game state.
+        Evaluates current unresolved quests against the current game state.
         Returns a list of quest IDs that have just been completed.
         """
         if not state.quests:
             return []
 
         completed_ids = []
-        open_quests = [q for q in state.quests if q.get("status") == "open"]
+        terminal_statuses = {"completed", "failed", "cancelled", "abandoned"}
+        open_quests = [
+            q
+            for q in state.quests
+            if str(q.get("status") or "").lower() not in terminal_statuses
+        ]
         
         for quest in open_quests:
             qid = quest.get("id")
@@ -92,7 +96,7 @@ class QuestManager:
         return False
 
     @staticmethod
-    def _check_location_goal(state: SessionState, text: str) -> bool:
+    def _check_location_goal(_state: SessionState, _text: str) -> bool:
         """
         Checks if the current scene matches a target mentioned in the text.
         """

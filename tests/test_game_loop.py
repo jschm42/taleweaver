@@ -807,6 +807,66 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
         )
 
 
+async def test_deterministic_quest_completion_marks_inactive_quest_and_emits_system_message(setup_test_db, monkeypatch):
+    """Unresolved quests must complete even when not currently active and emit system feedback."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        state.quests = [
+            {
+                "id": "q-equip-head",
+                "title": "Suit Up",
+                "status": "inactive",
+                "goal": "Equip a head item",
+                "description": "Put any helmet in your head slot.",
+                "is_main": False,
+            }
+        ]
+        avatar.equipment = {"head": {"name": "Iron Helm"}}
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(
+            return_value=GameEvent(
+                narrative_description="You tighten the helmet strap.",
+                hp_change=0,
+                stamina_change=0,
+                mana_change=0,
+                new_status_effects=[],
+                new_inventory_items=[],
+                completed_quest_ids=[],
+            )
+        )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You are ready for battle."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        async for _ in manager.process_turn("I put on my helmet"):
+            pass
+
+        await db.refresh(state)
+        assert (state.quests or [])[0].get("status") == "completed"
+
+        sys_msgs = (
+            (
+                await db.execute(
+                    select(ChatMessage).where(
+                        ChatMessage.session_id == "session-1",
+                        ChatMessage.role == "system",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert any((m.content or "").strip() == "Quest completed: Suit Up" for m in sys_msgs)
+
+
 async def test_chat_mode_progression_persists_and_reuses_notes(setup_test_db, monkeypatch):
     """Chat progression notes should be persisted and included in subsequent prompts."""
     from tests.conftest import TestSessionLocal
