@@ -473,8 +473,19 @@ async def update_api_key(
         )
 
     user = await _resolve_global_settings_owner(db, current_user)
-    
-    encrypted_key = encryption_util.encrypt_key(payload.api_key)
+
+    normalized_api_key = (payload.api_key or "").strip()
+    if (
+        len(normalized_api_key) >= 2
+        and normalized_api_key[0] == normalized_api_key[-1]
+        and normalized_api_key[0] in {'"', "'"}
+    ):
+        normalized_api_key = normalized_api_key[1:-1].strip()
+
+    if not normalized_api_key:
+        raise HTTPException(status_code=400, detail="API key cannot be empty.")
+
+    encrypted_key = encryption_util.encrypt_key(normalized_api_key)
     
     current_keys = user.encrypted_api_keys or {}
     new_keys = dict(current_keys)

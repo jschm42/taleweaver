@@ -247,6 +247,12 @@ class GameMasterLLM:
                 return normalized.split("/", 1)[1].strip()
             return normalized
 
+        if self.provider == "anthropic":
+            # Ensure Anthropic requests cannot be misrouted through OpenAI-compatible defaults.
+            if normalized.startswith("anthropic/"):
+                return normalized
+            return f"anthropic/{normalized}"
+
         if "/" in normalized:
             return normalized.split("/", 1)[1].strip()
 
@@ -339,6 +345,9 @@ class GameMasterLLM:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "anthropic":
+                kwargs["custom_llm_provider"] = "anthropic"
+                kwargs["api_base"] = "https://api.anthropic.com"
         
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
@@ -413,6 +422,9 @@ class GameMasterLLM:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "anthropic":
+                kwargs["custom_llm_provider"] = "anthropic"
+                kwargs["api_base"] = "https://api.anthropic.com"
         
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -487,6 +499,9 @@ class GameMasterLLM:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "anthropic":
+                kwargs["custom_llm_provider"] = "anthropic"
+                kwargs["api_base"] = "https://api.anthropic.com"
         
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -556,6 +571,9 @@ class GameMasterLLM:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "anthropic":
+                kwargs["custom_llm_provider"] = "anthropic"
+                kwargs["api_base"] = "https://api.anthropic.com"
 
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -677,6 +695,9 @@ class GameMasterLLM:
                 # Route through OpenAI-compatible chat endpoint to avoid provider-specific
                 # request fields that some local dependency combos reject (e.g. usage).
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "anthropic":
+                kwargs["custom_llm_provider"] = "anthropic"
+                kwargs["api_base"] = "https://api.anthropic.com"
 
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
