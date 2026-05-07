@@ -173,7 +173,12 @@ class MediaEngine:
                     logger.error("BFL polling response missing result.sample: %s", poll_body)
                     return None
                 return await MediaEngine._save_remote_image(sample_url, target_dir, filename)
-            if status in {"error", "failed", "expired", "tasknotfound"}:
+            
+            if "moderated" in status:
+                logger.warning("BFL generation moderated: %s", poll_body)
+                raise ValueError(f"BFL Image Generation blocked by safety filter: {status}")
+
+            if status in {"error", "failed", "expired", "task not found", "tasknotfound"}:
                 logger.error("BFL generation failed, expired or not found: %s", poll_body)
                 return None
 
@@ -454,7 +459,8 @@ class MediaEngine:
                     f"Ollama image generation failed for model '{model}'. "
                     f"Original error: {error_str}"
                 )
-            if "Content Moderated" in error_str or "Safety Filter" in error_str:
+            err_lower = error_str.lower()
+            if "content moderated" in err_lower or "safety filter" in err_lower or "moderated" in err_lower:
                 logger.warning(f"Image generation was moderated (Safety Filter) for prompt: '{prompt}'. Error: {error_str}")
                 raise ValueError("Image generation was blocked by the AI provider's safety filter. Please adjust the description to avoid sensitive content.")
             logger.error(f"Image generation failed for prompt: '{prompt}'. Error: {error_str}")

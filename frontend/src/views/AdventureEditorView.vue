@@ -109,6 +109,23 @@ function addNotification(message: string, type: 'error' | 'success' | 'info' = '
   }, 5000)
 }
 
+async function clearCreationError() {
+  if (!adventure.value) return
+  try {
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}`, {
+      method: 'PATCH',
+      headers: authHeaders(true),
+      body: JSON.stringify({ creation_error: null })
+    })
+    if (res.ok) {
+      adventure.value.creation_error = null
+      addNotification('Generation notice dismissed.', 'success')
+    }
+  } catch (error) {
+    console.error('Failed to clear creation error:', error)
+  }
+}
+
 function handleHover(entity: any, event: MouseEvent) {
   if (activeMenuId.value) return
   hoveredEntity.value = entity
@@ -772,8 +789,24 @@ const goBack = () => {
       </div>
       
       <div v-else class="space-y-10">
+        <!-- Creation Error/Warning Banner (Visible across all tabs) -->
+        <div v-if="adventure?.creation_error" class="bg-amber-500/10 border border-amber-500/20 rounded-3xl p-6 flex items-start gap-5 backdrop-blur-md shadow-lg shadow-amber-500/5 animate-page-in">
+          <div class="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-500 shrink-0 shadow-lg shadow-amber-500/10">
+            <AlertTriangle class="w-6 h-6" />
+          </div>
+          <div class="flex-1 space-y-1">
+            <h3 class="text-amber-500 font-black uppercase tracking-[0.2em] text-sm">Generation Notice</h3>
+            <p class="text-slate-400 text-xs leading-relaxed font-bold">{{ adventure.creation_error }}</p>
+            <button @click="clearCreationError" class="text-[10px] text-slate-500 hover:text-white uppercase tracking-widest mt-2 transition-colors flex items-center gap-2">
+              <X class="w-3 h-3" />
+              Dismiss this notice
+            </button>
+          </div>
+        </div>
+
         <!-- Physical Tab (World Assets) -->
         <div v-if="activeTab === 'physical'" class="space-y-10 animate-page-in">
+
           <!-- Quick Settings Row -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
            <div class="space-y-2">

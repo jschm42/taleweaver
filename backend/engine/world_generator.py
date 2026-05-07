@@ -467,6 +467,7 @@ class WorldGenerator:
 
         image_attempts = 0
         image_successes = 0
+        moderation_count = 0
 
         # Resolve Style Instructions
         if selected_image_styles is None and adventure:
@@ -737,6 +738,8 @@ class WorldGenerator:
                             timeout=_image_generation_timeout_seconds(),
                         )
                     except Exception as exc:
+                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                            moderation_count += 1
                         logger.warning("Protagonist image generation failed for %s: %s", template_id, exc)
                         image_url = None
                     if image_url:
@@ -793,6 +796,8 @@ class WorldGenerator:
                         logger.warning("Scene image generation timed out for %s/%s: %s", template_id, s['id'], exc)
                         image_url = None
                     except Exception as exc:
+                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                            moderation_count += 1
                         logger.warning("Scene image generation failed for %s/%s: %s", template_id, s['id'], exc)
                         image_url = None
                     if image_url:
@@ -866,6 +871,8 @@ class WorldGenerator:
                         logger.warning("NPC image generation timed out for %s/%s: %s", template_id, n['id'], exc)
                         image_url = None
                     except Exception as exc:
+                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                            moderation_count += 1
                         logger.warning("NPC image generation failed for %s/%s: %s", template_id, n['id'], exc)
                         image_url = None
                     if image_url:
@@ -1033,6 +1040,8 @@ class WorldGenerator:
                             timeout=float(settings.VISUAL_TIMEOUT),
                         )
                     except Exception as exc:
+                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                            moderation_count += 1
                         logger.warning("Object image generation failed for %s/%s: %s", template_id, o['id'], exc)
                         image_url = None
                     if image_url:
@@ -1172,8 +1181,12 @@ class WorldGenerator:
         )
 
         requested_image_generation = bool(user and (gen_scenes or gen_npc or gen_items or gen_protagonist_image))
-        if requested_image_generation and image_attempts > 0 and image_successes == 0:
+        if requested_image_generation and image_attempts > 0 and image_successes == 0 and moderation_count == 0:
             raise RuntimeError(
                 "Image generation was enabled, but no images were produced. "
                 "Check provider/model configuration, API keys, and provider availability."
             )
+            
+        if moderation_count > 0:
+            adventure.creation_error = f"Notice: {moderation_count} images were blocked by safety filters and replaced with placeholders. You can try to regenerate them in the editor with different descriptions."
+            await db.commit()
