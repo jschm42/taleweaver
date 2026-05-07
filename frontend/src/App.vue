@@ -16,14 +16,25 @@ async function checkAuth() {
     bootstrap = await api.getBootstrapStatus()
   } catch (e) {
     console.error('Failed to get bootstrap status:', e)
+    // If we can't get bootstrap status, it's likely a connectivity issue
+    if (!configState.isBackendReachable) {
+      router.push('/error')
+      authState.isInitialized = true
+      return
+    }
   }
 
   if (!authState.token) {
     if (!bootstrap.has_admin) {
-      router.push('/setup')
+      // ONLY redirect to setup if the backend actually told us there's no admin
+      if (configState.isBackendReachable) {
+        router.push('/setup')
+      } else {
+        router.push('/error')
+      }
     } else {
       // Only redirect to login if we are not already on a public page
-      if (route.name !== 'setup' && route.name !== 'login') {
+      if (route.name !== 'setup' && route.name !== 'login' && route.name !== 'error') {
         router.push('/login')
       }
     }

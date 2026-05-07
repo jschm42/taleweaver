@@ -6,7 +6,9 @@ export const configState = reactive({
   appVersion: '0.0.0-loading',
   isLoaded: false,
   hasLlmConfig: false,
-  hasT2iConfig: false
+  hasT2iConfig: false,
+  isBackendReachable: true,
+  lastErrorMessage: '' as string
 })
 
 export async function refreshConfig() {
