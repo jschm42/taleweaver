@@ -214,9 +214,6 @@ GM_MECHANICS_SUFFIX = (
     "GAME OVER & COMPLETION:\n"
     "- If the situation is hopeless or the player has violated core rules, set `game_over: true` and provide a `status_note` explanation.\n"
     "- If the story has reached its logical conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
-    "SHORT-CIRCUIT (LATENCY OPTIMIZATION):\n"
-    "- For simple or standard actions (e.g., examining a generic object, a basic greeting, a failed simple check), you can provide a complete, well-formatted narration directly in `instant_narrative`.\n"
-    "- If `instant_narrative` is provided, the system will skip the expensive second narration pass. Use this for 1-2 sentence responses to keep the game snappy.\n"
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """
@@ -243,8 +240,6 @@ GM_STORY_MECHANICS_SUFFIX = (
     "GAME OVER & COMPLETION:\n"
     "- If the story has reached a logical turning point or conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
     "- If the player is in an inescapable situation (e.g. HP <= 0), set `game_over: true` and provide a `status_note` explanation.\n"
-    "SHORT-CIRCUIT (LATENCY OPTIMIZATION):\n"
-    "- For simple narrative actions, provide a complete response in `instant_narrative` to bypass the secondary narration pass.\n"
     "Your 'narrative_description' will be used as a draft/log; keep it short."
 )
 """
@@ -321,8 +316,7 @@ GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX = (
     "Use `request_available_image_styles` or `request_available_tones` when asked. "
     "Use `requested_adventure_generation` only when all generation inputs are present. "
     "If the player asks to retry/regenerate after a prior failure, prefer returning `requested_adventure_generation` using the most recent known parameters (with reasonable defaults) instead of asking repeated clarification questions. "
-    "If no tool action is needed, leave all tool fields unset/false. "
-    "You may provide a short `instant_narrative` for simple acknowledgements."
+    "If no tool action is needed, leave all tool fields unset/false."
 )
 
 GM_CHAT_TOOL_INTENT_SUFFIX = (
@@ -353,7 +347,7 @@ GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "if the player asks for help, give only subtle hints and broad approaches. "
     "Do not request complex dice rolls, attacks, or detailed world updates. "
     "If uncertain, leave fields empty/false.\n\n"
-    "Return only these intent fields when justified: `new_inventory_items`, `removed_inventory_item_ids`, `updated_inventory_items`, `spawned_items`, `hp_change`, `stamina_change`, `mana_change`, `completed_quest_ids`, `earned_award_keys`, `remember_notes`, `forget_notes`, `clear_notes`, `game_completed`, `game_over`, `status_note`, `instant_narrative`.\n\n"
+    "Return only these intent fields when justified: `new_inventory_items`, `removed_inventory_item_ids`, `updated_inventory_items`, `spawned_items`, `hp_change`, `stamina_change`, `mana_change`, `completed_quest_ids`, `earned_award_keys`, `remember_notes`, `forget_notes`, `clear_notes`, `game_completed`, `game_over`, `status_note`.\n\n"
     "OPEN QUESTS (REDUCED):\n"
     "{quests_json}\n"
     "AVAILABLE UNEARNED AWARDS (REDUCED):\n"

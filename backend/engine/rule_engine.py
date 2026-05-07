@@ -151,7 +151,6 @@ class AdventureGeneratorToolIntent(BaseModel):
     status_note: Optional[str] = None
 
     tool_results: Optional[ToolResults] = None
-    instant_narrative: Optional[str] = None
     narrative_description: str = ""
 
 
@@ -213,8 +212,6 @@ class GameEvent(BaseModel):
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
-    instant_narrative: Optional[str] = None # If provided, skip the narration pass.
-
     # Adventure Generator Tools
     request_available_image_styles: bool = False
     request_available_tones: bool = False
