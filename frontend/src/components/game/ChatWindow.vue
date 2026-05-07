@@ -366,6 +366,24 @@ function displayMessageContent(msg: ChatMessage): string {
   }
   return fixNewlines(content)
 }
+
+const lastUserMessage = computed(() => {
+  const userMsgs = props.messages.filter(m => m.role === 'user')
+  return userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].content : null
+})
+
+function isRetryableError(content: string): boolean {
+  const c = content.toLowerCase()
+  return c.includes('temporarily unavailable') || 
+         c.includes('busy right now') || 
+         c.includes('took too long')
+}
+
+function handleRetry() {
+  if (lastUserMessage.value) {
+    emit('send', lastUserMessage.value)
+  }
+}
 </script>
 
 <template>
@@ -475,6 +493,17 @@ function displayMessageContent(msg: ChatMessage): string {
             </div>
             <pre v-else-if="part.type === 'code'" class="my-3 p-4 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-cyan-400 overflow-x-auto whitespace-pre custom-scrollbar shadow-inner">{{ part.value }}</pre>
           </template>
+
+          <!-- Retry Button for Errors -->
+          <div v-if="msg.role === 'system' && isRetryableError(msg.content) && lastUserMessage" class="mt-4 flex justify-start">
+            <button 
+              @click="handleRetry"
+              class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl flex items-center gap-2.5 transition-all active:scale-95 shadow-lg shadow-emerald-500/20 border border-emerald-400/30 group"
+            >
+              <i class="ra ra-reload group-hover:rotate-180 transition-transform duration-500"></i>
+              Retry Last Action
+            </button>
+          </div>
         </div>
 
         <!-- Discovery Cards (Items revealed this turn) -->

@@ -186,6 +186,7 @@ GM_MECHANICS_SUFFIX = (
     "INVENTORY & EXCHANGES:\n"
     "{dynamic_items_instruction}"
     "- To remove an item from the player, use `removed_inventory_item_ids`.\n"
+    "- To modify an existing item in the player's inventory (e.g., changing 'Broken Lantern' to 'Functional Lantern'), use `updated_inventory_items` with the item's ID.\n"
     "- NPCs also have inventories. If the player gives an item to an NPC or receives one, update BOTH `removed_inventory_item_ids`/`new_inventory_items` and the NPC's `inventory` field via `updated_entities`.\n"
     "- For CONSUMABLE items, you can define direct effects using `hp_change`, `mana_change`, or `stamina_change` directly in the item object.\n"
     "ACTIVE QUESTS:\n"
@@ -311,10 +312,13 @@ GM_ADVENTURE_GENERATOR_TOOL_INTENT_SUFFIX = (
 )
 
 GM_CHAT_TOOL_INTENT_SUFFIX = (
-    "You are in Chat Mode and should extract ONLY lightweight progression intent fields for this turn. "
-    "Do not request mechanics, dice rolls, attacks, or inventory/stat mutations here. "
+    "You are in Chat Mode and should extract lightweight progression intent fields for this turn. "
     "If a quest was clearly fulfilled, return its ID in `completed_quest_ids`. "
     "If an award was clearly earned, return its key in `earned_award_keys`. "
+    "If the player gains or loses items, use `new_inventory_items` and `removed_inventory_item_ids`. "
+    "If an existing item is modified (e.g. repaired, filled, renamed), use `updated_inventory_items`. "
+    "To create a new result from a combination, you can use `spawned_items`. "
+    "If resources are consumed or regained, use `hp_change`, `stamina_change`, or `mana_change`. "
     "If a detail should be remembered, add short facts to `remember_notes`. "
     "If a remembered detail is obsolete, list it in `forget_notes`. "
     "Use `clear_notes` only for explicit full memory reset requests. "
@@ -329,10 +333,10 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
 
 GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "You are running a FAST RULE PASS in Chat Mode. "
-    "Use ONLY the reduced technical data below to decide lightweight progression intent fields for this turn. "
-    "Do not request mechanics, rolls, attacks, inventory/stat mutations, scene transitions, or detailed world updates. "
+    "Use the reduced technical data below to decide lightweight progression intent fields for this turn. "
+    "Do not request complex dice rolls, attacks, or detailed world updates. "
     "If uncertain, leave fields empty/false.\n\n"
-    "Return only these intent fields when justified: `completed_quest_ids`, `earned_award_keys`, `remember_notes`, `forget_notes`, `clear_notes`, `game_completed`, `game_over`, `status_note`, `instant_narrative`.\n\n"
+    "Return only these intent fields when justified: `new_inventory_items`, `removed_inventory_item_ids`, `updated_inventory_items`, `spawned_items`, `hp_change`, `stamina_change`, `mana_change`, `completed_quest_ids`, `earned_award_keys`, `remember_notes`, `forget_notes`, `clear_notes`, `game_completed`, `game_over`, `status_note`, `instant_narrative`.\n\n"
     "OPEN QUESTS (REDUCED):\n"
     "{quests_json}\n"
     "AVAILABLE UNEARNED AWARDS (REDUCED):\n"

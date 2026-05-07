@@ -134,6 +134,13 @@ class AdventureGeneratorToolIntent(BaseModel):
     requested_adventure_generation: Optional[AdventureGenerationRequest] = None
 
     # Chat-mode progression intent (lightweight technical signals)
+    hp_change: int = 0
+    stamina_change: int = 0
+    mana_change: int = 0
+    new_inventory_items: List[InventoryItem] = []
+    removed_inventory_item_ids: Optional[List[str]] = None
+    updated_inventory_items: List[InventoryItem] = []
+    spawned_items: Optional[List[InventoryItem]] = None
     completed_quest_ids: Optional[List[str]] = None
     earned_award_keys: Optional[List[str]] = None
     remember_notes: Optional[List[str]] = None
@@ -162,6 +169,7 @@ class GameEvent(BaseModel):
     new_status_effects: List[str] = []
     new_inventory_items: List[InventoryItem] = []
     removed_inventory_item_ids: Optional[List[str]] = Field(None, validation_alias=AliasChoices("removed_inventory_item_ids", "removed_item_ids", "removed_items"))
+    updated_inventory_items: List[InventoryItem] = []
     spawned_items: Optional[List[InventoryItem]] = None
     
     # Mapping & Navigation
@@ -285,21 +293,62 @@ class RuleEngine:
             current_effects.update(event.new_status_effects)
             avatar.status_effects = list(current_effects)
             
-        if event.new_inventory_items:
-            # Reassign for SQLAlchemy state tracking; serialize Pydantic models to dicts
+        if event.updated_inventory_items:
             new_inv = list(avatar.inventory)
-            current_ids = {item.get("id") for item in new_inv if item.get("id")}
-            for item in event.new_inventory_items:
-                if item.id and item.id in current_ids:
-                    continue # Skip duplicates
-                item_dict = item.model_dump(exclude_none=True)
-                new_inv.append(item_dict)
-                if item.id:
-                    current_ids.add(item.id)
-            avatar.inventory = new_inv
-            
+            modified = False
+            for update in event.updated_inventory_items:
+                if not update.id: continue
+                for i, item in enumerate(new_inv):
+                    if item.get("id") == update.id:
+                        # Update fields
+                        update_dict = update.model_dump(exclude_none=True)
+                        new_inv[i] = {**item, **update_dict}
+                        modified = True
+                        break
+            if modified:
+                avatar.inventory = new_inv
+
         if event.removed_inventory_item_ids:
             new_inv = [item for item in list(avatar.inventory) if item.get("id") not in event.removed_inventory_item_ids]
             avatar.inventory = new_inv
+
+        if event.new_inventory_items:
+            # Reassign for SQLAlchemy state tracking; serialize Pydantic models to dicts
+            new_inv = list(avatar.inventory)
+            for item in event.new_inventory_items:
+                item_dict = item.model_dump(exclude_none=True)
+                
+                # Check for existing ID to perform replacement/update
+                found = False
+                if item.id:
+                    for i, existing in enumerate(new_inv):
+                        if existing.get("id") == item.id:
+                            new_inv[i] = item_dict
+                            found = True
+                            break
+                
+                if not found:
+                    new_inv.append(item_dict)
             
+            avatar.inventory = new_inv
+
+        if event.spawned_items:
+            new_inv = list(avatar.inventory)
+            for item in event.spawned_items:
+                item_dict = item.model_dump(exclude_none=True)
+                
+                # Check for existing ID to perform replacement/update
+                found = False
+                if item.id:
+                    for i, existing in enumerate(new_inv):
+                        if existing.get("id") == item.id:
+                            new_inv[i] = item_dict
+                            found = True
+                            break
+                
+                if not found:
+                    new_inv.append(item_dict)
+            
+            avatar.inventory = new_inv
+
         return event.narrative_description

@@ -271,11 +271,14 @@ class GameTurnManager:
     def _build_progression_event(intent: AdventureGeneratorToolIntent) -> GameEvent:
         return GameEvent(
             narrative_description=intent.narrative_description or "",
-            hp_change=0,
-            stamina_change=0,
-            mana_change=0,
+            hp_change=intent.hp_change,
+            stamina_change=intent.stamina_change,
+            mana_change=intent.mana_change,
             new_status_effects=[],
-            new_inventory_items=[],
+            new_inventory_items=intent.new_inventory_items or [],
+            removed_inventory_item_ids=intent.removed_inventory_item_ids,
+            updated_inventory_items=intent.updated_inventory_items or [],
+            spawned_items=intent.spawned_items,
             completed_quest_ids=intent.completed_quest_ids,
             earned_award_keys=intent.earned_award_keys,
             remember_notes=intent.remember_notes,
@@ -2219,10 +2222,32 @@ class GameTurnManager:
             # 3. Items
             if game_event.new_inventory_items:
                 for item in game_event.new_inventory_items:
-                    # Only announce if it's a new item (not already in pre-inventory)
-                    if item.id and item.id in pre_inventory_ids:
+                    # Only skip if it's a duplicate AND not being removed in the same turn
+                    is_replacement = game_event.removed_inventory_item_ids and item.id in game_event.removed_inventory_item_ids
+                    if item.id and item.id in pre_inventory_ids and not is_replacement:
                         continue
                         
+                    msg_text = f"Added {item.name} to your inventory."
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
+
+            if game_event.updated_inventory_items:
+                for update in game_event.updated_inventory_items:
+                    # Find old name for the message
+                    old_name = update.name
+                    match = next((i for i in (self.avatar.inventory or []) if i.get("id") == update.id), None)
+                    if match:
+                        old_name = match.get("name", update.name)
+                    
+                    msg_text = f"Updated {old_name} in your inventory."
+                    if update.name and update.name != old_name:
+                        msg_text = f"Your {old_name} is now a {update.name}."
+                        
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
+
+            if game_event.spawned_items:
+                for item in game_event.spawned_items:
                     msg_text = f"Added {item.name} to your inventory."
                     self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
@@ -2263,17 +2288,38 @@ class GameTurnManager:
     async def _apply_game_event(self, event: GameEvent):
         """Applies technical mutations from a GameEvent to the database and session state."""
         existing_item_ids = await self._collect_existing_item_ids()
+        
+        # If we are removing items in this event, they don't count as "existing" for duplicate checks
+        # if the LLM wants to replace them with an updated version using the same ID.
+        if event.removed_inventory_item_ids:
+            logger.info("[Turn %s] Removing from duplicate check: %s", self.game_id, event.removed_inventory_item_ids)
+            existing_item_ids -= set(event.removed_inventory_item_ids)
+
+        logger.info("[Turn %s] Existing inventory IDs after removals: %s", self.game_id, list(existing_item_ids))
 
         if event.new_inventory_items:
             filtered_inventory_items = []
             for item in event.new_inventory_items:
                 if item.id and item.id in existing_item_ids:
-                    logger.info(
-                        "[Turn %s] Skipping duplicate generated inventory item id: %s",
-                        self.game_id,
-                        item.id,
-                    )
-                    continue
+                    # Check if it's a true duplicate (same name)
+                    match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None)
+                    if match and match.get("name") == item.name:
+                        logger.info(
+                            "[Turn %s] Skipping true duplicate inventory item id: %s",
+                            self.game_id,
+                            item.id,
+                        )
+                        continue
+                    else:
+                        logger.info(
+                            "[Turn %s] Permitting implied update for item id %s (Name: %s -> %s)",
+                            self.game_id,
+                            item.id,
+                            match.get("name") if match else "unknown",
+                            item.name
+                        )
+                        # We allow it to pass to RuleEngine which will handle the replacement
+                
                 filtered_inventory_items.append(item)
                 if item.id:
                     existing_item_ids.add(item.id)
@@ -2282,13 +2328,19 @@ class GameTurnManager:
         if event.spawned_items:
             filtered_spawned_items = []
             for item in event.spawned_items:
-                if item.id and item.id in existing_item_ids:
-                    logger.info(
-                        "[Turn %s] Skipping duplicate generated spawned item id: %s",
-                        self.game_id,
-                        item.id,
-                    )
-                    continue
+                # Allow if it's a replacement for an item being removed
+                is_replacement = event.removed_inventory_item_ids and item.id in event.removed_inventory_item_ids
+                if item.id and item.id in existing_item_ids and not is_replacement:
+                     # Check if it's a true duplicate (same name)
+                    match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None)
+                    if match and match.get("name") == item.name:
+                        logger.info(
+                            "[Turn %s] Skipping true duplicate spawned item id: %s",
+                            self.game_id,
+                            item.id,
+                        )
+                        continue
+                
                 filtered_spawned_items.append(item)
                 if item.id:
                     existing_item_ids.add(item.id)
