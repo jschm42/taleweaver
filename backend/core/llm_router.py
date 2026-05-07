@@ -499,11 +499,14 @@ class GameMasterLLM:
         ]
         
         normalized_model = self._normalize_model(model)
+        # Gemini often fails with complex Pydantic schemas in strict mode (DFA state limit error)
+        # Fallback to standard JSON mode for Gemini models to ensure stability
+        is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
 
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "response_format": response_model,
+            "response_format": {"type": "json_object"} if is_gemini else response_model,
             "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)

@@ -1,5 +1,5 @@
-from pydantic import BaseModel, ConfigDict
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field, AliasChoices
+from typing import List, Optional, Literal
 
 from backend.models.avatar import Avatar
 
@@ -12,7 +12,7 @@ class InventoryItem(BaseModel):
     """
     A typed item acquired during gameplay.
     """
-    id: Optional[str] = None # WorldEntity ID (if linked)
+    id: Optional[str] = Field(None, validation_alias=AliasChoices("id", "item_id", "entity_id")) # WorldEntity ID (if linked)
     name: str
     description: Optional[str] = None
     item_type: Optional[str] = None
@@ -34,7 +34,7 @@ class InventoryItem(BaseModel):
     spatial_position: Optional[str] = None
 
 class EntityMovement(BaseModel):
-    entity_id: str
+    entity_id: str = Field(..., validation_alias=AliasChoices("entity_id", "id"))
     to_scene_id: Optional[str] = None
     to_spatial_position: Optional[str] = None
 
@@ -45,7 +45,7 @@ class ExitUpdate(BaseModel):
 
 class WorldEntityUpdate(BaseModel):
     """Used for changing an entity's name, description or visibility at runtime."""
-    entity_id: str
+    entity_id: str = Field(..., validation_alias=AliasChoices("entity_id", "id"))
     name: Optional[str] = None
     description: Optional[str] = None
     spatial_position: Optional[str] = None
@@ -155,17 +155,17 @@ class GameEvent(BaseModel):
     Structured Output Schema for the LLM when in `strict_rules` mode.
     The LLM responds utilizing this strict schema.
     """
-    narrative_description: str
-    hp_change: int
-    stamina_change: int
-    mana_change: int
-    new_status_effects: List[str]
-    new_inventory_items: List[InventoryItem]
-    removed_inventory_item_ids: Optional[List[str]] = None
+    narrative_description: str = ""
+    hp_change: int = 0
+    stamina_change: int = 0
+    mana_change: int = 0
+    new_status_effects: List[str] = []
+    new_inventory_items: List[InventoryItem] = []
+    removed_inventory_item_ids: Optional[List[str]] = Field(None, validation_alias=AliasChoices("removed_inventory_item_ids", "removed_item_ids", "removed_items"))
     spawned_items: Optional[List[InventoryItem]] = None
     
     # Mapping & Navigation
-    new_scene_id: Optional[str] = None # Unique ID for the new location (e.g. "FOREST_CLIFF")
+    new_scene_id: Optional[str] = Field(None, validation_alias=AliasChoices("new_scene_id", "scene_id")) # Unique ID for the new location (e.g. "FOREST_CLIFF")
     scene_label: Optional[str] = None  # Human readable name (e.g. "The Whispering Woods")
     exit_label: Optional[str] = None   # How the player got here (e.g. "ventured north")
     

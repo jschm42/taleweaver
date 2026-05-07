@@ -97,7 +97,7 @@ Global negative instruction appended to all image prompts to prevent AI-generate
 ADVENTURE_COVER_PROMPT_TEMPLATE = (
     "Epic cinematic illustration depicting: {original_prompt}. "
     "Atmosphere: {title}. "
-    "Landscape format, 3:2 aspect ratio. ABSOLUTELY NO TEXT, NO LETTERS, NO LOGOS. "
+    "Landscape format, 3:2 aspect ratio. "
     "Cinematic lighting, immersive atmosphere, highly detailed digital painting."
 )
 """
@@ -106,7 +106,7 @@ Variables: title, context.
 """
 
 PROTAGONIST_IMAGE_PROMPT_TEMPLATE = (
-    "Portrait of character {name}, {role}. {description}. Game attribute art style. No text."
+    "Portrait of character {name}, {role}. {description}. Game attribute art style."
 )
 """
 Template for generating the player character's portrait.
@@ -114,7 +114,7 @@ Variables: name, role, description.
 """
 
 SCENE_IMAGE_PROMPT_TEMPLATE = (
-    "Background scene: {name}. {description}. 3:2 aspect ratio. No text."
+    "Background scene: {name}. {description}. 3:2 aspect ratio."
 )
 """
 Template for generating background images for scenes.
@@ -122,7 +122,7 @@ Variables: name, description.
 """
 
 NPC_IMAGE_PROMPT_TEMPLATE = (
-    "Character portrait: {name}. {description}. No text."
+    "Character portrait: {name}. {description}."
 )
 """
 Template for generating NPC portraits.
@@ -130,7 +130,7 @@ Variables: name, description.
 """
 
 OBJECT_IMAGE_PROMPT_TEMPLATE = (
-    "Item asset: {name}. {description}. Centered, isolated on simple background. No text."
+    "Item asset: {name}. {description}. Centered, isolated on simple background."
 )
 ITEM_IMAGE_PROMPT_TEMPLATE = OBJECT_IMAGE_PROMPT_TEMPLATE
 """

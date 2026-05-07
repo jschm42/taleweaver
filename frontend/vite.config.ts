@@ -21,23 +21,23 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Proxy REST API calls to the FastAPI backend
         '/api': {
-          target: `http://localhost:${backendPort}`,
+          target: `http://127.0.0.1:${backendPort}`,
           changeOrigin: true,
         },
         // Proxy WebSocket connections
         '/ws': {
-          target: `ws://localhost:${backendPort}`,
+          target: `ws://127.0.0.1:${backendPort}`,
           ws: true,
           changeOrigin: true,
         },
         // Proxy media assets from backend data directory
         '/data': {
-          target: `http://localhost:${backendPort}`,
+          target: `http://127.0.0.1:${backendPort}`,
           changeOrigin: true,
         },
         // Proxy static assets (catalog images, etc.) from backend
         '/assets': {
-          target: `http://localhost:${backendPort}`,
+          target: `http://127.0.0.1:${backendPort}`,
           changeOrigin: true,
         },
       },

@@ -593,10 +593,10 @@ async function regenerateAll(kind: VisualKind) {
   if (kind === 'npc') items = editorNpcs.value
   if (kind === 'object') items = editorObjects.value
 
-  // Run all in parallel for maximum performance
-  // We use skipFetch=true to avoid redundant refreshes, then refresh once at the end
-  const promises = items.map(item => quickRegenerateVisual(kind, item.id || props.adventureId, true))
-  await Promise.all(promises)
+  // Sequential execution to prevent SQLite locking issues and allow for cleaner tracking
+  for (const item of items) {
+    await quickRegenerateVisual(kind, item.id || props.adventureId, true)
+  }
   
   await fetchDebugInfo()
   isBatchGenerating.value[kind] = false
@@ -1427,7 +1427,7 @@ const goBack = () => {
                     <i class="ra ra-crystal-ball text-2xl text-cyan-500/50"></i>
                     <div class="space-y-1">
                       <h4 class="text-xs font-black text-slate-500 uppercase">Current description</h4>
-                      <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-3">"{{ selectedVisual.description }}"</p>
+                      <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-3 whitespace-pre-wrap">"{{ fixNewlines(selectedVisual.description) }}"</p>
                     </div>
                   </div>
                 </div>

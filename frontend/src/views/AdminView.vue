@@ -99,6 +99,11 @@ const goBack = () => {
   router.push({ name: 'portal' })
 }
 
+function fixNewlines(text: string | null | undefined): string {
+  if (!text) return ''
+  return text.replace(/\\n/g, '\n')
+}
+
 const fetchSettings = async () => {
   try {
     isHydratingSettings.value = true
@@ -1061,7 +1066,7 @@ watch(
                     </div>
                   </div>
                 </div>
-                <p class="text-slate-400 text-xs mt-2 line-clamp-2 min-h-[2.5em]">{{ style.description || 'No description provided.' }}</p>
+                <p class="text-slate-400 text-xs mt-2 line-clamp-2 min-h-[2.5em] whitespace-pre-wrap">{{ fixNewlines(style.description) || 'No description provided.' }}</p>
               </div>
             </div>
             
@@ -1148,7 +1153,7 @@ watch(
                     </div>
                   </div>
                 </div>
-                <p class="text-slate-400 text-xs mt-2 line-clamp-2 min-h-[2.5em]">{{ tone.description || 'No description provided.' }}</p>
+                <p class="text-slate-400 text-xs mt-2 line-clamp-2 min-h-[2.5em] whitespace-pre-wrap">{{ fixNewlines(tone.description) || 'No description provided.' }}</p>
               </div>
             </div>
 

@@ -4,11 +4,11 @@ Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imag
 """
 import logging
 import os
-import uuid
-import asyncio
 import time
+import uuid
 import requests
 import io
+import asyncio
 from typing import Optional, Any
 from PIL import Image
 from backend.core.security import encryption_util
@@ -129,7 +129,8 @@ class MediaEngine:
             if value is not None:
                 payload[field] = value
 
-        response = requests.post(
+        response = await asyncio.to_thread(
+            requests.post,
             endpoint,
             headers={"Content-Type": "application/json", "x-key": api_key},
             json=payload,
@@ -147,7 +148,8 @@ class MediaEngine:
 
         poll_deadline = time.monotonic() + 600.0
         while time.monotonic() < poll_deadline:
-            poll_response = requests.get(
+            poll_response = await asyncio.to_thread(
+                requests.get,
                 polling_url,
                 headers={"accept": "application/json", "x-key": api_key},
                 timeout=max(30, settings.VISUAL_TIMEOUT),
@@ -392,8 +394,9 @@ class MediaEngine:
 
             logger.info(f"Final image generation kwargs: {kwargs}")
 
-            # Call LiteLLM first
-            response = MediaEngine._get_litellm().image_generation(
+            # Call LiteLLM first - wrap in to_thread because LiteLLM image_generation is synchronous
+            response = await asyncio.to_thread(
+                MediaEngine._get_litellm().image_generation,
                 **kwargs, 
                 request_timeout=settings.VISUAL_TIMEOUT
             )
@@ -531,7 +534,7 @@ class MediaEngine:
             if options:
                 payload["options"] = options
 
-            response = requests.post(endpoint, json=payload, timeout=120)
+            response = await asyncio.to_thread(requests.post, endpoint, json=payload, timeout=120)
             if response.status_code != 200:
                 logger.error(
                     "Ollama direct image generation failed. status=%s body=%s",
@@ -591,7 +594,8 @@ class MediaEngine:
                 img = Image.open(io.BytesIO(image_bytes))
                 if img.mode in ("RGBA", "P"):
                     img = img.convert("RGB")
-                img.save(filepath, "JPEG", quality=quality, optimize=True)
+                # Image.save is CPU bound, wrap in to_thread
+                await asyncio.to_thread(img.save, filepath, "JPEG", quality=quality, optimize=True)
             else:
                 with open(filepath, "wb") as f:
                     f.write(image_bytes)
@@ -606,7 +610,7 @@ class MediaEngine:
     async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Downloads a remote image and persists it in the specified directory."""
         try:
-            response = requests.get(url, timeout=30)
+            response = await asyncio.to_thread(requests.get, url, timeout=30)
             if response.status_code == 200:
                 os.makedirs(target_dir, exist_ok=True)
                 ext = "jpg" if image_format.lower() == "jpeg" else "png"
@@ -621,7 +625,8 @@ class MediaEngine:
                     img = Image.open(io.BytesIO(response.content))
                     if img.mode in ("RGBA", "P"):
                         img = img.convert("RGB")
-                    img.save(filepath, "JPEG", quality=quality, optimize=True)
+                    # Image.save is CPU bound, wrap in to_thread
+                    await asyncio.to_thread(img.save, filepath, "JPEG", quality=quality, optimize=True)
                 else:
                     with open(filepath, "wb") as f:
                         f.write(response.content)

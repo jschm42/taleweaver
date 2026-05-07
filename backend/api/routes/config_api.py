@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
@@ -39,16 +39,20 @@ async def _resolve_global_settings_owner(db: AsyncSession, fallback_user: User) 
 
 
 async def _broadcast_global_settings(db: AsyncSession, source_user: User) -> None:
-    """Copy global settings from source user to all users."""
-    users_res = await db.execute(select(User))
-    users = users_res.scalars().all()
-    for user in users:
-        user.encrypted_api_keys = dict(source_user.encrypted_api_keys or {})
-        user.llm_settings = dict(source_user.llm_settings or {})
-        user.t2i_settings = dict(source_user.t2i_settings or {})
-        user.image_styles_catalog = list(source_user.image_styles_catalog or [])
-        user.tone_catalog = list(source_user.tone_catalog or [])
-        user.game_settings = dict(source_user.game_settings or {})
+    """Copy global settings from source user to all users efficiently."""
+    # Using a bulk update is much better for SQLite to avoid lock contention
+    # and memory overhead of fetching all user objects.
+    await db.execute(
+        update(User).values(
+            encrypted_api_keys=dict(source_user.encrypted_api_keys or {}),
+            llm_settings=dict(source_user.llm_settings or {}),
+            t2i_settings=dict(source_user.t2i_settings or {}),
+            image_styles_catalog=list(source_user.image_styles_catalog or []),
+            tone_catalog=list(source_user.tone_catalog or []),
+            game_settings=dict(source_user.game_settings or {})
+        )
+    )
+    # No need to loop and modify objects manually
 
 
 def _slugify(value: str) -> str:

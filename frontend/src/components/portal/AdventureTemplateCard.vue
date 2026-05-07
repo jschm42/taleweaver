@@ -61,6 +61,11 @@ const toneLabel = computed(() => {
   return tone.name || tone.id || ''
 })
 
+function fixNewlines(text: string | null | undefined): string {
+  if (!text) return ''
+  return text.replace(/\\n/g, '\n')
+}
+
 </script>
 
 <template>
@@ -142,8 +147,8 @@ const toneLabel = computed(() => {
     <div class="p-6 flex flex-col gap-4 flex-1">
       <div class="space-y-2 flex-1">
         <h3 class="text-2xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
-        <p v-if="props.template.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-3 leading-relaxed">
-          {{ props.template.teaser }}
+        <p v-if="props.template.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-3 leading-relaxed whitespace-pre-wrap">
+          {{ fixNewlines(props.template.teaser) }}
         </p>
       </div>
 

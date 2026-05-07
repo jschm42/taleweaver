@@ -576,6 +576,13 @@ class WorldGenerator:
                 state.time_system = adventure.time_system
                 state.time_config = adventure.time_config
             
+            # Commit metadata and structural changes first to release locks before starting long generations
+            await db.commit()
+            # Re-fetch adventure and user to ensure they are in the current session after commit
+            adventure = await db.get(AdventureTemplate, template_id)
+            if user:
+                user = await db.get(User, user.id)
+            
             # Generate Adventure Cover if missing
             any_image_generation_enabled = bool(gen_scenes or gen_npc or gen_items or gen_protagonist_image)
             if not adventure.image_url and user and any_image_generation_enabled:
@@ -596,6 +603,8 @@ class WorldGenerator:
                     )
                     if cover_url:
                         adventure.image_url = cover_url
+                        await db.commit() # Save cover immediately
+                        adventure = await db.get(AdventureTemplate, template_id)
                 except Exception as e:
                     logger.warning(f"Failed to generate adventure cover for {template_id}: {e}")
 
@@ -735,6 +744,8 @@ class WorldGenerator:
                         image_url = avatar.profile_image
             
             avatar.profile_image = image_url
+            await db.commit() # Save avatar
+            adventure = await db.get(AdventureTemplate, template_id)
             
         # Persist Scenes
         scenes = manifest_dict.get("scenes", [])
@@ -758,12 +769,11 @@ class WorldGenerator:
                     )
                     image_attempts += 1
                     try:
+                        # FIX: Use generate_scene_image for SCENES (Advanced Model)
                         image_url = await asyncio.wait_for(
-                            MediaEngine.generate_entity_image(
+                            MediaEngine.generate_scene_image(
                                 prompt,
                                 template_id,
-                                s['id'],
-                                "SCENE",
                                 {"t2i_settings": user.t2i_settings},
                                 user.encrypted_api_keys,
                                 style_instruction=style_instruction,
@@ -804,6 +814,9 @@ class WorldGenerator:
                 is_locked=e["is_locked"],
                 lock_description=e.get("lock_description")
             ))
+        
+        await db.commit() # Save scenes and exits
+        adventure = await db.get(AdventureTemplate, template_id)
             
         # Persist NPCs
         npcs = manifest_dict.get("npcs", [])
@@ -875,6 +888,9 @@ class WorldGenerator:
                 max_stamina=n.get("stamina"),
                 is_hidden=n.get("is_hidden", False),
             ))
+            
+        await db.commit() # Save NPCs
+        adventure = await db.get(AdventureTemplate, template_id)
             
         # Persist Objects & Collect for NPC Inventories
         objects = manifest_dict.get("objects", [])
@@ -1100,20 +1116,27 @@ class WorldGenerator:
             )
 
         # Final Pass: Update NPC Inventories with resolved item data
-        # We need to find the WorldEntity objects we just added to the session
+        # Fetch all NPCs for this template to update their inventories
+        npc_objs_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == template_id,
+                WorldEntity.entity_type == "NPC"
+            )
+        )
+        all_npcs = {n.id: n for n in npc_objs_res.scalars().all()}
+
         for npc_id, item_ids in npc_inventories.items():
-            if not item_ids:
+            if not item_ids or npc_id not in all_npcs:
                 continue
             
-            # Find the NPC in the session's new objects
-            for obj in db.new:
-                if isinstance(obj, WorldEntity) and obj.id == npc_id and obj.entity_type == "NPC":
-                    npc_inv = []
-                    for iid in item_ids:
-                        if iid in resolved_items:
-                            npc_inv.append(resolved_items[iid])
-                    obj.inventory = npc_inv
-                    break
+            npc_obj = all_npcs[npc_id]
+            npc_inv = []
+            for iid in item_ids:
+                if iid in resolved_items:
+                    npc_inv.append(resolved_items[iid])
+            npc_obj.inventory = npc_inv
+
+        await db.commit() # Save everything finally
 
         log_structured_event(
             "adventure.generation.apply_manifest.complete",
