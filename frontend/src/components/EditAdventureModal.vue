@@ -256,17 +256,26 @@ function openRegenerateDialog(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 
   showPromptDialog.value = true
 }
 
+function getCoverNarrativeContext() {
+  if (!debugData.value) {
+    return ''
+  }
+  return debugData.value.adventure?.plot || debugData.value.adventure?.original_prompt || ''
+}
+
 function getVisualDescription(kind: 'cover' | 'protagonist' | 'scene' | 'npc' | 'object', id: string) {
   if (!debugData.value) {
     return ''
   }
 
   if (kind === 'cover') {
-    return debugData.value.adventure?.original_prompt || ''
+    return getCoverNarrativeContext()
   }
 
   if (kind === 'protagonist') {
-    return debugData.value.protagonist?.description || ''
+    const base = debugData.value.protagonist?.description || ''
+    const plot = debugData.value.adventure?.plot || ''
+    return plot ? `${base}\n\nNarrative context: ${plot}` : base
   }
 
   if (kind === 'scene') {
@@ -839,7 +848,7 @@ watch(
                           Custom
                         </button>
                         <button
-                          @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt)"
+                          @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, getCoverNarrativeContext())"
                           class="px-2 py-1 rounded-md bg-blue-600/90 text-xxs font-bold uppercase tracking-widest text-white border border-blue-500/50 hover:bg-blue-500 transition-colors flex items-center gap-1"
                         >
                           <i class="ra ra-quill-ink"></i>

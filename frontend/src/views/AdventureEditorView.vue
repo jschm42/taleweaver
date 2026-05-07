@@ -439,10 +439,19 @@ function openRegenerateDialog(kind: VisualKind, id: string, label: string) {
   showPromptDialog.value = true
 }
 
+function getCoverNarrativeContext() {
+  if (!debugData.value) return ''
+  return debugData.value.adventure?.plot || debugData.value.adventure?.original_prompt || ''
+}
+
 function getVisualDescription(kind: VisualKind, id: string) {
   if (!debugData.value) return ''
-  if (kind === 'cover') return debugData.value.adventure?.original_prompt || ''
-  if (kind === 'protagonist') return debugData.value.protagonist?.description || ''
+  if (kind === 'cover') return getCoverNarrativeContext()
+  if (kind === 'protagonist') {
+    const base = debugData.value.protagonist?.description || ''
+    const plot = debugData.value.adventure?.plot || ''
+    return plot ? `${base}\n\nNarrative context: ${plot}` : base
+  }
   if (kind === 'scene') return (debugData.value.scenes || []).find((s: any) => s.id === id)?.description || ''
   if (kind === 'npc') return (debugData.value.npcs || []).find((n: any) => n.id === id)?.description || ''
   return (debugData.value.objects || []).find((o: any) => o.id === id)?.description || ''
@@ -808,17 +817,17 @@ const goBack = () => {
                       <div class="flex items-center gap-3">
                         <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
                         <p v-else class="text-xs font-bold text-slate-500/40 uppercase tracking-widest italic">No teaser set...</p>
-                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt, debugData.adventure.teaser)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-emerald-400 transition-all" title="Edit Teaser & Metadata">
+                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, getCoverNarrativeContext(), debugData.adventure.teaser)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-emerald-400 transition-all" title="Edit Teaser & Metadata">
                           <i class="ra ra-quill-ink text-xs"></i>
                         </button>
                       </div>
-                      <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ debugData.adventure.original_prompt }}</p>
+                      <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ getCoverNarrativeContext() }}</p>
                     </div>
                     <div class="flex gap-3 shrink-0">
                        <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all">Fast Gen</button>
                        <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
                         <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
-                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, debugData.adventure.original_prompt, debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
+                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, getCoverNarrativeContext(), debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
                     </div>
                   </div>
                 </div>

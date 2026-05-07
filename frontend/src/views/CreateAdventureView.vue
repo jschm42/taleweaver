@@ -150,7 +150,10 @@ async function handleCreate() {
     await api.createAdventure(payload)
     router.push({ name: 'portal', query: { new_id: payload.id, new_title: payload.title, section: 'templates' } })
   } catch (error: any) {
-    errorMsg.value = error?.message || 'Failed to create adventure.'
+    const rawMessage = error?.message || 'Failed to create adventure.'
+    errorMsg.value = rawMessage.startsWith('API 409:')
+      ? rawMessage.replace(/^API 409:\s*/, '')
+      : rawMessage
     isGenerating.value = false
   }
 }

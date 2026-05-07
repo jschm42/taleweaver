@@ -20,6 +20,7 @@ const actions: Action[] = [
 const props = defineProps<{
   activeActionId?: string | null
   mode?: string
+  disabled?: boolean
 }>()
 
 const filteredActions = computed(() => {
@@ -34,6 +35,7 @@ const emit = defineEmits<{
 }>()
 
 function toggleAction(id: string) {
+  if (props.disabled) return
   if (props.activeActionId === id) {
     emit('selectAction', null)
   } else {
@@ -52,9 +54,12 @@ function toggleAction(id: string) {
       <button
         v-for="action in filteredActions"
         :key="action.id"
+        :disabled="props.disabled"
         class="group relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 active:scale-95 border"
         :class="[
-          activeActionId === action.id 
+          props.disabled
+            ? 'bg-slate-800/40 border-slate-700/50 opacity-40 cursor-not-allowed'
+            : activeActionId === action.id 
             ? 'bg-white/10 border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.1)]' 
             : 'bg-transparent border-transparent hover:bg-white/5 hover:border-white/10'
         ]"
@@ -72,7 +77,7 @@ function toggleAction(id: string) {
     </div>
 
     <!-- Selection Instructions -->
-    <div v-if="activeActionId" class="ml-auto flex items-center gap-3 px-4 animate-fade-in">
+    <div v-if="activeActionId && !props.disabled" class="ml-auto flex items-center gap-3 px-4 animate-fade-in">
       <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
         <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div>
         <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Select Target...</span>

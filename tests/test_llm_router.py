@@ -269,4 +269,46 @@ async def test_aexecute_simple_task(monkeypatch):
 
     assert out == "hello world"
     assert captured["model"] == "gpt-4o"
+    assert captured["custom_llm_provider"] == "openai"
     assert "stream" not in captured or captured["stream"] is False
+
+
+@pytest.mark.asyncio
+async def test_stream_simple_task_openai_non_prefixed_model_sets_provider(monkeypatch):
+    user = _make_user(
+        encrypted_api_keys={"openai": "encrypted-placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    router = GameMasterLLM(user, provider="openai")
+
+    captured = {}
+
+    class _Msg:
+        content = "hello stream"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.stream_simple_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        model="gpt-5.3",
+    )
+
+    assert out is not None
+    assert captured["model"] == "gpt-5.3"
+    assert captured["custom_llm_provider"] == "openai"
+    assert captured["stream"] is True

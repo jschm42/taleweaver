@@ -13,8 +13,8 @@
 
       <div class="action-buttons">
         <button class="continue-btn" @click="$emit('continue')">
-          <span class="btn-text">Continue Anyway</span>
-          <span class="btn-subtext">Fate is not set in stone</span>
+          <span class="btn-text">View Final Report</span>
+          <span class="btn-subtext">Stay in read-only mode</span>
         </button>
         <button class="menu-btn" @click="$emit('close')">Back to Menu</button>
       </div>

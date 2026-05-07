@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, or_
 
 from backend.core.database import get_db, AsyncSessionLocal
 from backend.core.auth import get_current_user
@@ -99,6 +99,26 @@ async def create_adventure(
     Creates a new adventure template, initializes the protagonist avatar and first game session,
     and starts the background world generation task.
     """
+    # Allow only one active portal generation per user at a time.
+    active_generation_query = await db.execute(
+        select(AdventureTemplate.id)
+        .where(AdventureTemplate.owner_id == current_user.id)
+        .where(AdventureTemplate.is_ready.is_(False))
+        .where(
+            or_(
+                AdventureTemplate.creation_status.is_(None),
+                AdventureTemplate.creation_status.notin_(["Failed", "Cancelled"]),
+            )
+        )
+        .limit(1)
+    )
+    active_generation_id = active_generation_query.scalar_one_or_none()
+    if active_generation_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Adventure generation already running for this user. Please wait until it finishes or cancel it.",
+        )
+
     # 1. Create the template record
     new_id = payload.id or generate_adventure_id(payload.title)
     

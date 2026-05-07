@@ -21,7 +21,8 @@
       </div>
 
       <div class="action-buttons">
-        <button class="primary-btn" @click="$emit('close')">Back to Menu</button>
+        <button class="primary-btn" @click="$emit('continue')">Continue in World</button>
+        <button class="secondary-btn" @click="$emit('close')">Back to Menu</button>
       </div>
     </div>
   </div>
@@ -35,7 +36,7 @@ export default {
     totalExp: Number,
     note: String
   },
-  emits: ["close"]
+  emits: ["close", "continue"]
 };
 </script>
 
@@ -171,6 +172,24 @@ h1 {
   background: #6d28d9;
   transform: translateY(-2px);
   box-shadow: 0 15px 30px rgba(124, 58, 237, 0.5);
+}
+
+.secondary-btn {
+  margin-top: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 /* Particles */

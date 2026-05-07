@@ -29,6 +29,8 @@ export interface UseGameSocket {
   isCompleted: Ref<boolean>
   language: Ref<string>
   statusText: Ref<string>
+  inputLocked: Ref<boolean>
+  pendingTerminalEpilogue: Ref<boolean>
   debugLogs: Ref<{ timestamp: string, content: string }[]>
   inventoryGlow: Ref<boolean>
   mapGlow: Ref<boolean>
@@ -36,6 +38,7 @@ export interface UseGameSocket {
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
+  createTerminalEpilogue: () => Promise<void>
   revealIllustration: (name: string, url: string) => void
 }
 
@@ -65,6 +68,8 @@ export function useGameSocket(): UseGameSocket {
   const isCompleted = ref(false)
   const language = ref<string>(localStorage.getItem('tw_bable_fish_lang') || '')
   const statusText = ref('')
+  const inputLocked = ref(false)
+  const pendingTerminalEpilogue = ref(false)
   const debugLogs = ref<{ timestamp: string, content: string }[]>([])
   const inventoryGlow = ref(false)
   const mapGlow = ref(false)
@@ -142,8 +147,26 @@ export function useGameSocket(): UseGameSocket {
     if (data.is_completed !== undefined) {
       isCompleted.value = !!data.is_completed
     }
+    if (data.input_locked !== undefined) {
+      inputLocked.value = !!data.input_locked
+    }
+    if (data.pending_terminal_epilogue !== undefined) {
+      pendingTerminalEpilogue.value = !!data.pending_terminal_epilogue
+    }
     if (data.awards !== undefined) {
       awards.value = data.awards || []
+    }
+
+    if (data.status_note !== undefined) {
+      gameOverReason.value = data.status_note || ''
+    }
+
+    if (data.game_over) {
+      status.value = 'game_over'
+    } else if (data.game_completed) {
+      status.value = inputLocked.value ? 'completed' : 'connected'
+    } else if (status.value !== 'connecting' && status.value !== 'loading') {
+      status.value = 'connected'
     }
   }
 
@@ -185,8 +208,9 @@ export function useGameSocket(): UseGameSocket {
       const data = await fetchSessionSnapshot(gameId)
       if (data) {
         applySessionSnapshot(data)
-        status.value = 'connected'
-        startSyncTimer()
+        if (status.value !== 'game_over' || !inputLocked.value) {
+          startSyncTimer()
+        }
 
         // Trigger prologue for fresh sessions that only contain system notes (e.g. intro_text).
         const hasUserOrAssistantTurn = messages.value.some(
@@ -220,7 +244,7 @@ export function useGameSocket(): UseGameSocket {
     if (content && !isSilent) _pushMessage('user', content)
     
     const wasGameOver = status.value === 'game_over'
-    if (wasGameOver) return
+    if (wasGameOver || inputLocked.value) return
 
     status.value = 'connecting' 
     statusText.value = 'Considering...'
@@ -302,12 +326,11 @@ export function useGameSocket(): UseGameSocket {
             applySessionSnapshot(data, false)
             if (data.game_over) {
               status.value = 'game_over'
-              gameOverReason.value = data.game_over_reason
+              gameOverReason.value = data.game_over_reason || data.status_note || ''
               stopSyncTimer()
             } else if (data.game_completed) {
-              status.value = 'completed'
-              gameOverReason.value = data.status_note
-              stopSyncTimer()
+              gameOverReason.value = data.status_note || ''
+              status.value = data.input_locked ? 'completed' : 'connected'
             } else {
               status.value = 'connected'
               statusText.value = ''
@@ -324,6 +347,31 @@ export function useGameSocket(): UseGameSocket {
     } catch (err) {
       console.error('[Session] Chat error:', err)
       status.value = 'error'
+    }
+  }
+
+  async function createTerminalEpilogue(): Promise<void> {
+    if (!currentGameId) return
+    try {
+      const res = await fetch(`${BASE}/adventures/${currentGameId}/terminal-epilogue`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ language: language.value || undefined })
+      })
+
+      if (res.status === 401 && authState.isAuthenticated) {
+        window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+        return
+      }
+      if (!res.ok) return
+
+      const data = await res.json()
+      if (data.content) {
+        _pushMessage('assistant', data.content)
+      }
+      applySessionSnapshot(data, false)
+    } catch (err) {
+      console.error('[Session] Terminal epilogue error:', err)
     }
   }
 
@@ -345,6 +393,8 @@ export function useGameSocket(): UseGameSocket {
     isCompleted,
     language,
     statusText,
+    inputLocked,
+    pendingTerminalEpilogue,
     debugLogs,
     inventoryGlow,
     mapGlow,
@@ -352,6 +402,7 @@ export function useGameSocket(): UseGameSocket {
     connect,
     disconnect,
     sendMessage,
+    createTerminalEpilogue,
     revealIllustration: (name: string, url: string) => {
       _pushMessage('system', `**Illustration Revealed:** ${name}\n\n![${name}](${url})`)
     }

@@ -346,6 +346,8 @@ class GameMasterLLM:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "openai":
+                kwargs["custom_llm_provider"] = "openai"
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
@@ -426,6 +428,8 @@ class GameMasterLLM:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "openai":
+                kwargs["custom_llm_provider"] = "openai"
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
@@ -506,6 +510,8 @@ class GameMasterLLM:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "openai":
+                kwargs["custom_llm_provider"] = "openai"
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
@@ -581,6 +587,8 @@ class GameMasterLLM:
             kwargs["api_key"] = self.api_key
             if self.provider == "openrouter":
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "openai":
+                kwargs["custom_llm_provider"] = "openai"
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
@@ -708,6 +716,8 @@ class GameMasterLLM:
                 # Route through OpenAI-compatible chat endpoint to avoid provider-specific
                 # request fields that some local dependency combos reject (e.g. usage).
                 kwargs["custom_llm_provider"] = "openrouter"
+            elif self.provider == "openai":
+                kwargs["custom_llm_provider"] = "openai"
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"

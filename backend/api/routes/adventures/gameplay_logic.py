@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, AsyncGenerator, Callable, Awaitable, List
 
 from fastapi.encoders import jsonable_encoder
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
@@ -47,6 +48,7 @@ GM_NOTES_STATE_KEY = "__gm_notes__"
 GM_NOTES_MAX_ITEMS = 20
 GM_NOTES_PROMPT_MAX_ITEMS = 12
 GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS = 10
+TERMINAL_EPILOGUE_STATE_KEY = "__terminal_epilogue__"
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -223,6 +225,59 @@ class GameTurnManager:
             return []
         return [str(n).strip() for n in notes if str(n).strip()]
 
+    def _get_terminal_epilogue_state(self) -> Dict[str, bool]:
+        exit_states = self.state.exit_states or {}
+        epilogue_state = exit_states.get(TERMINAL_EPILOGUE_STATE_KEY) or {}
+        if not isinstance(epilogue_state, dict):
+            epilogue_state = {}
+        return {
+            "completed_sent": bool(epilogue_state.get("completed_sent")),
+            "game_over_sent": bool(epilogue_state.get("game_over_sent")),
+        }
+
+    def _terminal_status_flags(self) -> tuple[bool, bool]:
+        if not self.state or not self.state.session:
+            return False, False
+        status = self.state.session.status
+        epilogue_state = self._get_terminal_epilogue_state()
+        pending = (status == "completed" and not epilogue_state["completed_sent"]) or (
+            status == "game_over" and not epilogue_state["game_over_sent"]
+        )
+        input_locked = status == "game_over" and epilogue_state["game_over_sent"]
+        return pending, input_locked
+
+    def _is_terminal_epilogue_pending(self) -> bool:
+        pending, _ = self._terminal_status_flags()
+        return pending
+
+    def _is_input_locked(self) -> bool:
+        _, locked = self._terminal_status_flags()
+        return locked
+
+    def _set_terminal_epilogue_sent(self, status: str, sent: bool = True) -> None:
+        if not self.state:
+            return
+        epilogue_state = self._get_terminal_epilogue_state()
+        if status == "completed":
+            epilogue_state["completed_sent"] = sent
+        elif status == "game_over":
+            epilogue_state["game_over_sent"] = sent
+
+        exit_states = dict(self.state.exit_states or {})
+        exit_states[TERMINAL_EPILOGUE_STATE_KEY] = epilogue_state
+        self.state.exit_states = exit_states
+        flag_modified(self.state, "exit_states")
+
+    def _build_terminal_flags_payload(self) -> Dict[str, Any]:
+        pending, input_locked = self._terminal_status_flags()
+        return {
+            "game_over": (self.state.session.status == "game_over") if self.state and self.state.session else False,
+            "game_completed": (self.state.session.status == "completed") if self.state and self.state.session else False,
+            "status_note": self.state.session.status_note if self.state and self.state.session else None,
+            "input_locked": input_locked,
+            "pending_terminal_epilogue": pending,
+        }
+
     def _apply_gm_notes_update(
         self,
         remember_notes: Optional[List[str]],
@@ -345,6 +400,22 @@ class GameTurnManager:
         user_msg = message.strip()
         actual_user_input = user_msg
         if not user_msg: user_msg = "[LOOK AROUND]"
+
+        if self._is_input_locked():
+            lock_message = (
+                "This story has reached its final ending. You can still review the map, character sheet, "
+                "quests, awards, walkthrough, and chat history, but no further actions can be taken."
+            )
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': lock_message})}\n\n"
+            final_data = jsonable_encoder({
+                'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+                'entities': await AdventureLogic.build_session_entities(self.db, self.state),
+                'combat': AdventureLogic.get_combat_snapshot(self.state),
+                **self._build_terminal_flags_payload(),
+                'status': 'success',
+            })
+            yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+            return
 
         # Unified logic for /debug and / (slash) commands
         if user_msg.startswith("/debug"):
@@ -508,10 +579,8 @@ class GameTurnManager:
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'awards': self.adventure.awards,
-            'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
-            'game_completed': (self.state.session.status == 'completed') if self.state.session else False,
             'game_over_reason': self.state.session.status_note if self.state.session else None,
-            'status_note': self.state.session.status_note if self.state.session else None,
+            **self._build_terminal_flags_payload(),
             'status': 'success'
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
@@ -521,7 +590,11 @@ class GameTurnManager:
         if user_msg.lower() == "/map":
             map_res = await self.db.execute(select(WorldMap).where(WorldMap.template_id == self.state.template_id))
             world_map = map_res.scalars().first()
-            final_data = jsonable_encoder({'mermaid': MapEngine.to_mermaid(world_map) if world_map else None, 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db)})
+            final_data = jsonable_encoder({
+                'mermaid': MapEngine.to_mermaid(world_map) if world_map else None,
+                'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+                **self._build_terminal_flags_payload(),
+            })
             yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
             return
             
@@ -583,7 +656,12 @@ class GameTurnManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
 
         await self.db.commit()
-        final_data = jsonable_encoder({'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 'entities': await AdventureLogic.build_session_entities(self.db, self.state), 'combat': AdventureLogic.get_combat_snapshot(self.state)})
+        final_data = jsonable_encoder({
+            'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+            'entities': await AdventureLogic.build_session_entities(self.db, self.state),
+            'combat': AdventureLogic.get_combat_snapshot(self.state),
+            **self._build_terminal_flags_payload(),
+        })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
         self.stop_requested = True # Stop after direct slash response
 
@@ -683,8 +761,7 @@ class GameTurnManager:
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
-            'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
-            'game_completed': (self.state.session.status == 'completed') if self.state.session else False,
+            **self._build_terminal_flags_payload(),
             'status_note': status_note or (self.state.session.status_note if self.state.session else None),
             'status': 'success'
         })
@@ -2278,9 +2355,7 @@ class GameTurnManager:
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
-            'game_over': (self.state.session.status == 'game_over') if self.state.session else False,
-            'game_completed': (self.state.session.status == 'completed') if self.state.session else False,
-            'status_note': self.state.session.status_note if self.state.session else None,
+            **self._build_terminal_flags_payload(),
             'status': 'success'
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
@@ -2736,11 +2811,133 @@ class GameTurnManager:
                     msg = f"SYSTEM ERROR: Adventure generation failed: {e}"
                 await self._emit_system_message(msg, stream_callback=stream_callback)
 
+    async def _generate_terminal_epilogue_text(self, language: Optional[str] = None) -> str:
+        status = self.state.session.status if self.state and self.state.session else None
+        status_note = self.state.session.status_note if self.state and self.state.session else None
+
+        quests = list(self.state.quests or []) if self.state else []
+        main_quests = [q for q in quests if q.get("is_main")]
+        completed_main = [q for q in main_quests if q.get("status") == "completed"]
+        side_quests = [q for q in quests if not q.get("is_main")]
+        completed_side = [q for q in side_quests if q.get("status") == "completed"]
+
+        adventure_awards = list(self.adventure.awards or []) if self.adventure else []
+        earned_awards = list(self.user.earned_awards or []) if self.user else []
+        earned_for_adventure = [
+            ea
+            for ea in earned_awards
+            if (ea.get("template_id") == self.adventure.id or ea.get("adventure_id") == self.adventure.id)
+        ] if self.adventure else []
+
+        report_payload = {
+            "session_id": self.game_id,
+            "adventure_title": self.adventure.title if self.adventure else "Adventure",
+            "status": status,
+            "status_note": status_note,
+            "quests": {
+                "main_completed": len(completed_main),
+                "main_total": len(main_quests),
+                "side_completed": len(completed_side),
+                "side_total": len(side_quests),
+            },
+            "awards": {
+                "earned": len(earned_for_adventure),
+                "total": len(adventure_awards),
+            },
+            "exp": self.avatar.exp if self.avatar else 0,
+            "in_game_time_minutes": self.state.in_game_time if self.state else 0,
+        }
+
+        llm_settings = self.user.llm_settings or {}
+        model_provider = (
+            llm_settings.get("complex_model_provider")
+            or llm_settings.get("small_model_provider")
+            or llm_settings.get("preferred_provider")
+            or "openai"
+        )
+        model_name = llm_settings.get("complex_model") or llm_settings.get("small_model") or "gpt-4o"
+
+        if status == "completed":
+            system_prompt = (
+                "You are the Game Master. Write a warm in-world closing message and final report after main quest completion. "
+                "Congratulate the player, summarize their journey in 4-7 sentences, mention quest and award progress, "
+                "and explicitly state they can keep playing to complete side quests and earn remaining awards. "
+                "No bullet points, no markdown headings, no command lists."
+            )
+            fallback = (
+                "The Game Master smiles with quiet pride. Your main quest is complete, and your name now carries weight in this tale. "
+                "Final report: your core objectives are fulfilled, but there are still side stories to uncover and awards left to claim. "
+                "You may leave this chronicle now, or remain in the world to perfect your legacy."
+            )
+        else:
+            system_prompt = (
+                "You are the Game Master. Write a compassionate in-world closing message and final report after a game over. "
+                "Use 4-7 sentences, acknowledge the loss respectfully, summarize quest and award progress, "
+                "and clearly communicate that the chronicle is now read-only. "
+                "No bullet points, no markdown headings, no command lists."
+            )
+            fallback = (
+                "The Game Master lowers their voice with sympathy. This chapter ends here, and your hero can go no further. "
+                "Final report: the journey is recorded exactly as it stands, including your completed quests and earned awards. "
+                "You can still review the world, but no further actions can alter this fate."
+            )
+
+        if language:
+            system_prompt += f" Respond only in {language.upper()}."
+
+        user_prompt = "Create the final narrative from this session report JSON:\n" + json.dumps(report_payload)
+
+        try:
+            llm = GameMasterLLM(self.user, provider=model_provider, model_category="complex")
+            stream = await llm.stream_simple_task(system_prompt, user_prompt, model_name)
+            content = ""
+            async for chunk in stream:
+                content += chunk.choices[0].delta.content or ""
+            content = content.strip()
+            return content or fallback
+        except Exception:
+            return fallback
+
+    async def create_terminal_epilogue(self, language: Optional[str] = None) -> Dict[str, Any]:
+        if not await self.initialize():
+            raise HTTPException(status_code=404, detail="Game session not found.")
+
+        if not self.state or not self.state.session:
+            raise HTTPException(status_code=404, detail="Session state not found.")
+
+        if self.state.session.status not in {"completed", "game_over"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Terminal epilogue is only available for completed or game-over sessions.",
+            )
+
+        if not self._is_terminal_epilogue_pending():
+            return {
+                "content": None,
+                **self._build_terminal_flags_payload(),
+            }
+
+        epilogue_text = await self._generate_terminal_epilogue_text(language=language)
+        if epilogue_text:
+            self.db.add(ChatMessage(session_id=self.state.session_id, role="assistant", content=epilogue_text))
+
+        self._set_terminal_epilogue_sent(self.state.session.status, sent=True)
+        await self.db.commit()
+
+        return {
+            "content": epilogue_text,
+            **self._build_terminal_flags_payload(),
+        }
+
     async def _finalize_session(self, status: str, note: Optional[str] = None):
         """Updates the session status and records the outcome in the user's game log."""
+        previous_status = self.state.session.status if self.state and self.state.session else None
         if self.state.session:
             self.state.session.status = status
             self.state.session.status_note = note
+
+        if status in {"completed", "game_over"} and previous_status != status:
+            self._set_terminal_epilogue_sent(status, sent=False)
         
         if status == "completed":
             self.state.is_completed = True

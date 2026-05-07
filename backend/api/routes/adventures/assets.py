@@ -240,9 +240,14 @@ async def regenerate_visual(
             av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
             avatar = av_res.scalars().first()
             if not avatar: raise HTTPException(status_code=404, detail="Protagonist avatar not found")
-            
-            prompt = payload.prompt or prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
+
+            generated_plot = (adv.plot or "").strip()
+            base_prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
                 name=avatar.name, role=avatar.role, description=avatar.description
+            )
+            # Prefer generated plot context over original prompt for profile image regeneration.
+            prompt = payload.prompt or (
+                f"{base_prompt} Narrative context: {generated_plot[:1200]}" if generated_plot else base_prompt
             )
             image_url = await MediaEngine.generate_entity_image(
                 prompt=prompt, adventure_id=template_id, entity_id="PROTAGONIST",

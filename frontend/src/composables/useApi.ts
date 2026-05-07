@@ -48,7 +48,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
   })
   if (!res.ok) {
-    const detail = await res.text()
+    const bodyText = await res.text()
+    let detail = bodyText
+    try {
+      const parsed = JSON.parse(bodyText)
+      if (parsed && typeof parsed.detail === 'string') {
+        detail = parsed.detail
+      }
+    } catch {
+      // Keep plain-text fallback when response is not JSON.
+    }
     if (res.status === 401 && authState.isAuthenticated) {
        // Token might have expired
        window.dispatchEvent(new CustomEvent('auth-unauthorized'))
@@ -72,7 +81,16 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
     headers,
   })
   if (!res.ok) {
-    const detail = await res.text()
+    const bodyText = await res.text()
+    let detail = bodyText
+    try {
+      const parsed = JSON.parse(bodyText)
+      if (parsed && typeof parsed.detail === 'string') {
+        detail = parsed.detail
+      }
+    } catch {
+      // Keep plain-text fallback when response is not JSON.
+    }
     if (res.status === 401 && authState.isAuthenticated) {
        window.dispatchEvent(new CustomEvent('auth-unauthorized'))
     }

@@ -1039,6 +1039,29 @@ async def test_game_loop_slash_command_inventory(setup_test_db, monkeypatch):
         assert any("Rusty Dagger" in c for c in chunks)
         assert any("event: system" in c for c in chunks)
 
+
+async def test_process_turn_rejects_input_when_terminal_lock_active(setup_test_db, monkeypatch):
+    """Locked terminal sessions should return read-only feedback and skip LLM processing."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, _state = await _seed_game_context(db)
+
+        manager = GameTurnManager(db, "session-1", user)
+        monkeypatch.setattr(manager, "_is_input_locked", lambda: True)
+
+        llm_ctor = AsyncMock()
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", llm_ctor)
+
+        chunks = []
+        async for chunk in manager.process_turn("I attack"):
+            chunks.append(chunk)
+
+        response = "".join(chunks)
+        assert "final ending" in response.lower()
+        assert "event: final" in response
+        assert llm_ctor.call_count == 0
+
 async def test_rule_engine_apply_ticks():
     """Verifies that status effect ticks correctly update avatar resources."""
     avatar = Avatar(hp=100, stamina=100, mana=100, status_effects=["Poisoned", "Resting"])

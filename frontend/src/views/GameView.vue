@@ -67,6 +67,8 @@ const {
   awards,
   combat,
   isCompleted,
+  inputLocked,
+  pendingTerminalEpilogue,
   statusText,
   debugLogs,
   inventoryGlow,
@@ -74,7 +76,8 @@ const {
   questGlow,
   connect,
   disconnect,
-  sendMessage
+  sendMessage,
+  createTerminalEpilogue
 } = useGameSocket()
 
 const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQuestId.value))
@@ -95,6 +98,7 @@ const contextMenu = ref<{
 const activeActionId = ref<string | null>(null)
 
 const handleEntityClick = async (entity: any) => {
+  if (inputLocked.value) return
   if (activeActionId.value) {
     const action = activeActionId.value
     const targetName = entity.name || entity.id
@@ -470,24 +474,47 @@ watch(quests, (newQuests) => {
 }, { immediate: true })
 
 watch(isCompleted, (val) => {
-  if (val) {
+  if (val && pendingTerminalEpilogue.value) {
     showSuccess.value = true
   }
 })
 
 watch(status, async (val) => {
-  if (val === 'game_over') {
+  if (val === 'game_over' && pendingTerminalEpilogue.value) {
     showGameOver.value = true
     await refreshUser()
-  } else if (val === 'completed') {
+  } else if (isCompleted.value && pendingTerminalEpilogue.value) {
     showSuccess.value = true
     await refreshUser()
   }
 })
 
-const continueGame = async () => {
-  await sendMessage('/debug game_over_reset')
+watch(pendingTerminalEpilogue, async (pending) => {
+  if (!pending) {
+    showSuccess.value = false
+    showGameOver.value = false
+    return
+  }
+
+  if (status.value === 'game_over') {
+    showGameOver.value = true
+  } else if (isCompleted.value) {
+    showSuccess.value = true
+  }
+
+  await refreshUser()
+})
+
+const continueCompletedGame = async () => {
+  showSuccess.value = false
+  await createTerminalEpilogue()
+  await refreshUser()
+}
+
+const continueGameOverReadOnly = async () => {
   showGameOver.value = false
+  await createTerminalEpilogue()
+  await refreshUser()
 }
 
 const handleTrackQuest = (questId: string | null) => {
@@ -588,6 +615,10 @@ const buyHint = async () => {
 }
 
 const handlePlayerInput = async (content: string) => {
+  if (inputLocked.value) {
+    return
+  }
+
   if (isCombatActive.value) {
     const msg = content.trim().toLowerCase()
     const allowed = msg === 'attack' || msg === '/attack' || msg === 'run' || msg === '/run' || msg.startsWith('/consume ')
@@ -911,6 +942,7 @@ onBeforeUnmount(() => {
         ref="dialogPanel"
         :messages="messages"
         :status="status"
+        :input-locked="inputLocked"
         :npc-metadata="npcMetadata"
         :entities="entities"
         :inventory-items="inventoryItems"
@@ -980,12 +1012,13 @@ onBeforeUnmount(() => {
       :show="showSuccess" 
       :total-exp="sheet?.exp || 0" 
       :note="gameOverReason"
+      @continue="continueCompletedGame"
       @close="goBack" 
     />
     <GameOverScreen 
       :show="showGameOver" 
       :reason="gameOverReason" 
-      @continue="continueGame"
+      @continue="continueGameOverReadOnly"
       @close="goBack" 
     />
     <DebugModal 

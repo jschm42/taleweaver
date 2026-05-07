@@ -18,6 +18,7 @@ from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
 from backend.models.game_state import GameState
+from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity
 from backend.models.world_entity import WorldScene
 from backend.models.user import User
@@ -383,6 +384,111 @@ async def test_get_chat_history_accepts_adventure_id_alias(client: AsyncClient):
 
     assert "messages" in payload
     assert "sheet" in payload
+
+
+async def test_terminal_epilogue_completed_updates_chat_flags(client: AsyncClient, monkeypatch):
+    """Completed sessions should emit one epilogue and stay unlocked afterwards."""
+    ids = await _create_adventure(client, "Completed Epilogue Quest")
+
+    async with TestSessionLocal() as session:
+        game_session = await session.get(GameSession, ids["game_id"])
+        state_res = await session.execute(select(SessionState).where(SessionState.session_id == ids["game_id"]))
+        state = state_res.scalars().first()
+        assert game_session is not None
+        if state is None:
+            state = SessionState(
+                session_id=ids["game_id"],
+                template_id=ids["adventure_id"],
+                avatar_id=ids["avatar_id"],
+                user_id=game_session.user_id,
+                current_scene_id="START",
+            )
+            session.add(state)
+        game_session.status = "completed"
+        game_session.status_note = "All main quests completed."
+        state.exit_states = {}
+        await session.commit()
+
+    async def fake_epilogue(_self, language=None):
+        _ = language
+        return "The Game Master congratulates you and reads the final report."
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.gameplay_logic.GameTurnManager._generate_terminal_epilogue_text",
+        fake_epilogue,
+    )
+
+    epilogue_resp = await client.post(
+        f"/api/adventures/{ids['game_id']}/terminal-epilogue",
+        json={},
+    )
+    assert epilogue_resp.status_code == 200, epilogue_resp.text
+    payload = epilogue_resp.json()
+    assert payload["content"].startswith("The Game Master congratulates")
+    assert payload["game_completed"] is True
+    assert payload["pending_terminal_epilogue"] is False
+    assert payload["input_locked"] is False
+
+    chat_resp = await client.get(f"/api/adventures/{ids['game_id']}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
+    chat_payload = chat_resp.json()
+    assert chat_payload["game_completed"] is True
+    assert chat_payload["pending_terminal_epilogue"] is False
+    assert chat_payload["input_locked"] is False
+    assert any(
+        msg.get("role") == "assistant" and "final report" in (msg.get("content") or "").lower()
+        for msg in chat_payload.get("messages", [])
+    )
+
+
+async def test_terminal_epilogue_game_over_locks_input(client: AsyncClient, monkeypatch):
+    """Game-over sessions should lock input after epilogue is generated."""
+    ids = await _create_adventure(client, "Game Over Epilogue Quest")
+
+    async with TestSessionLocal() as session:
+        game_session = await session.get(GameSession, ids["game_id"])
+        state_res = await session.execute(select(SessionState).where(SessionState.session_id == ids["game_id"]))
+        state = state_res.scalars().first()
+        assert game_session is not None
+        if state is None:
+            state = SessionState(
+                session_id=ids["game_id"],
+                template_id=ids["adventure_id"],
+                avatar_id=ids["avatar_id"],
+                user_id=game_session.user_id,
+                current_scene_id="START",
+            )
+            session.add(state)
+        game_session.status = "game_over"
+        game_session.status_note = "The hero has fallen."
+        state.exit_states = {}
+        await session.commit()
+
+    async def fake_epilogue(_self, language=None):
+        _ = language
+        return "The Game Master shares a compassionate closing report."
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.gameplay_logic.GameTurnManager._generate_terminal_epilogue_text",
+        fake_epilogue,
+    )
+
+    epilogue_resp = await client.post(
+        f"/api/adventures/{ids['game_id']}/terminal-epilogue",
+        json={},
+    )
+    assert epilogue_resp.status_code == 200, epilogue_resp.text
+    payload = epilogue_resp.json()
+    assert payload["game_over"] is True
+    assert payload["pending_terminal_epilogue"] is False
+    assert payload["input_locked"] is True
+
+    chat_resp = await client.get(f"/api/adventures/{ids['game_id']}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
+    chat_payload = chat_resp.json()
+    assert chat_payload["game_over"] is True
+    assert chat_payload["pending_terminal_epilogue"] is False
+    assert chat_payload["input_locked"] is True
 
 
 async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, monkeypatch):

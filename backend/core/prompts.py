@@ -165,6 +165,10 @@ GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
     "NPCs with `movement_type: MOVABLE` can change their `current_scene_id` or `spatial_position` if it makes sense in the narrative. "
     "You can also update NPC stats (HP, Mana, Stamina) if events warrant it.\n"
     "If an exit is LOCKED, the player cannot pass unless they find a way to unlock it.\n"
+    "WALKTHROUGH CONFIDENTIALITY (CRITICAL): The SECRET GM WALKTHROUGH is internal guidance only. "
+    "Never reveal it verbatim and never provide exact step-by-step solutions, hidden triggers, passwords, or full routes. "
+    "If the player asks for help, provide subtle hints and broad strategy only (nudge, don't solve). "
+    "You may describe likely approaches, but do not disclose complete final answers.\n"
     "TIME ADVANCEMENT: Some complex actions take extra time. You can specify `extra_time_minutes` in your response. "
     "For massive jumps (e.g. sleeping for 8 hours, traveling for days), you can use `time_override_minutes` (absolute minutes since start) "
     "or `start_datetime_override` (ISO string to shift the entire calendar).\n\n"
@@ -183,6 +187,8 @@ Variables: world_context, time_str, location_context, sheet_json.
 
 GM_MECHANICS_SUFFIX = (
     "CRITICAL: Focus on logical consistency and mechanics. "
+    "Never reveal the secret walkthrough verbatim and never provide exact step-by-step solution paths; "
+    "if the player asks for help, give only subtle hints and broad approaches. "
     "If the action is uncertain (e.g. climbing, sneaking), request a roll using `requested_skill_checks`. "
     "If the action is a COMBAT ATTACK, use `requested_attacks`. "
     "Provide the `hit_stat` (usually dexterity or strength), a `damage_dice` (e.g. '1d8', '2d4+2'), and a `reason`. "
@@ -219,6 +225,8 @@ Appended to the system prompt when the GM is running in 'Mechanics' mode (Pass 1
 
 GM_STORY_MECHANICS_SUFFIX = (
     "\nAs you are in STORY MODE, do not use complex dice rolls for every action. "
+    "Never reveal the secret walkthrough verbatim and never provide exact step-by-step solution paths; "
+    "if the player asks for help, give only subtle hints and broad approaches. "
     "Instead, focus on the narrative flow. However, you can still manage resources: "
     "deduct 'hp' for injuries, 'stamina' for exhausting physical or technical tasks, or 'mana' for magical efforts. "
     "Return a structured 'GameEvent' if the narrative logic dictates a state change (e.g. player is hurt, loses energy, or gains an item).\n"
@@ -245,7 +253,8 @@ Appended to the system prompt when the GM is running in 'Mechanics' mode but for
 
 GM_CHAT_NARRATION_SUFFIX = (
     "CRITICAL: You are in Chat Mode. Focus heavily on dialogue, character interaction, and atmosphere. "
-    "Keep responses conversational, like a Sitcom or pure Roleplay."
+    "Keep responses conversational, like a Sitcom or pure Roleplay. "
+    "Never reveal the internal walkthrough directly; when asked for help, give only hints and rough guidance."
 )
 """
 Appended to the system prompt when the GM is running in 'Chat Mode' (loose rules/no mechanics).
@@ -329,6 +338,7 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "Use `clear_notes` only for explicit full memory reset requests. "
     "Use `game_completed` and optional `status_note` only when all main objectives are clearly complete. "
     "Use `game_over` and optional `status_note` only for explicit terminal failure outcomes. "
+    "Never output or expose the secret walkthrough verbatim; prefer hint-level guidance only. "
     "Leave fields empty/false when uncertain.\n\n"
     "OPEN QUESTS:\n"
     "{quests_json}\n"
@@ -339,6 +349,8 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
 GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "You are running a FAST RULE PASS in Chat Mode. "
     "Use the reduced technical data below to decide lightweight progression intent fields for this turn. "
+    "Never reveal the secret walkthrough verbatim and never provide exact step-by-step solution paths; "
+    "if the player asks for help, give only subtle hints and broad approaches. "
     "Do not request complex dice rolls, attacks, or detailed world updates. "
     "If uncertain, leave fields empty/false.\n\n"
     "Return only these intent fields when justified: `new_inventory_items`, `removed_inventory_item_ids`, `updated_inventory_items`, `spawned_items`, `hp_change`, `stamina_change`, `mana_change`, `completed_quest_ids`, `earned_award_keys`, `remember_notes`, `forget_notes`, `clear_notes`, `game_completed`, `game_over`, `status_note`, `instant_narrative`.\n\n"

@@ -1,4 +1,5 @@
 import logging
+from typing import Any, cast
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,12 +16,36 @@ from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldScene, WorldEntity
 from backend.models.world_map import WorldMap
 from backend.engine.map_engine import MapEngine
-from backend.api.routes.adventures.schemas import ChatRequest, ChatResponse
+from backend.api.routes.adventures.schemas import (
+    ChatRequest,
+    ChatResponse,
+    TerminalEpilogueRequest,
+    TerminalEpilogueResponse,
+)
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
 
 router = APIRouter(tags=["Gameplay"])
 logger = logging.getLogger(__name__)
+
+TERMINAL_EPILOGUE_STATE_KEY = "__terminal_epilogue__"
+
+
+def _terminal_flags_from_state(state: SessionState) -> tuple[bool, bool]:
+    """Returns (pending_terminal_epilogue, input_locked) for the current session state."""
+    status = state.session.status if state.session else None
+    epilogue_state = (state.exit_states or {}).get(TERMINAL_EPILOGUE_STATE_KEY) or {}
+    if not isinstance(epilogue_state, dict):
+        epilogue_state = {}
+
+    completed_sent = bool(epilogue_state.get("completed_sent"))
+    game_over_sent = bool(epilogue_state.get("game_over_sent"))
+
+    pending_terminal_epilogue = (status == "completed" and not completed_sent) or (
+        status == "game_over" and not game_over_sent
+    )
+    input_locked = status == "game_over" and game_over_sent
+    return pending_terminal_epilogue, input_locked
 
 async def _get_npc_metadata(template_id: str, db: AsyncSession) -> dict:
     npc_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type.in_(["NPC", "npc"])))
@@ -71,6 +96,8 @@ async def get_chat_history(
         scene = scene_res.scalars().first()
         scene_image = scene.image_url if scene else None
 
+    pending_terminal_epilogue, input_locked = _terminal_flags_from_state(state)
+
     return ChatResponse(
         messages=history,
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
@@ -87,6 +114,8 @@ async def get_chat_history(
         game_over=state.session.status == "game_over" if state.session else False,
         game_completed=state.session.status == "completed" if state.session else False,
         status_note=state.session.status_note if state.session else None,
+        input_locked=input_locked,
+        pending_terminal_epilogue=pending_terminal_epilogue,
     )
 
 @router.post("/{game_id}/chat")
@@ -102,6 +131,18 @@ async def post_chat_message(
         manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
         media_type="text/event-stream"
     )
+
+
+@router.post("/{game_id}/terminal-epilogue", response_model=TerminalEpilogueResponse)
+async def create_terminal_epilogue(
+    game_id: str,
+    payload: TerminalEpilogueRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Creates the one-time terminal epilogue for completed or game-over sessions."""
+    manager = GameTurnManager(db, game_id, current_user)
+    return await cast(Any, manager).create_terminal_epilogue(language=payload.language)
 
 @router.get("/{game_id}/walkthrough")
 async def get_walkthrough(

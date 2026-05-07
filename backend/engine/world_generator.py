@@ -718,6 +718,9 @@ class WorldGenerator:
                         role=avatar.role,
                         description=avatar.description
                     )
+                    generated_plot = (manifest_dict.get("plot") or "").strip()
+                    if generated_plot:
+                        prompt = f"{prompt} Narrative context: {generated_plot[:1200]}"
                     image_attempts += 1
                     try:
                         image_url = await asyncio.wait_for(

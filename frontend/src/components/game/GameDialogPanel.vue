@@ -15,6 +15,7 @@ const props = defineProps<{
   showDebugLog: boolean
   debugLogs: { timestamp: string, content: string }[]
   gameOverReason?: string | null
+  inputLocked?: boolean
   exp: number
   mode?: 'rpg' | 'story' | 'chat'
   inventoryGlow?: boolean
@@ -76,6 +77,7 @@ defineExpose({ appendText })
       :quest-glow="props.questGlow"
       :active-action-id="props.activeActionId"
       :mode="props.mode"
+      :input-locked="props.inputLocked"
       @send="emit('send', $event)"
       @open-sheet="emit('openSheet')"
       @open-map="emit('openMap')"

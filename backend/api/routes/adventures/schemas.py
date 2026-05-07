@@ -168,6 +168,19 @@ class ChatRequest(BaseModel):
     auto_visualize: bool = False
     language: Optional[str] = None
 
+
+class TerminalEpilogueRequest(BaseModel):
+    language: Optional[str] = None
+
+
+class TerminalEpilogueResponse(BaseModel):
+    content: Optional[str] = None
+    game_over: bool = False
+    game_completed: bool = False
+    status_note: Optional[str] = None
+    input_locked: bool = False
+    pending_terminal_epilogue: bool = False
+
 class ChatResponse(BaseModel):
     messages: List[Dict[str, Any]]
     sheet: Dict[str, Any]
@@ -184,6 +197,8 @@ class ChatResponse(BaseModel):
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
+    input_locked: bool = False
+    pending_terminal_epilogue: bool = False
     full_world: Optional[AdventureTemplateDebugResponse] = None
 
 class AdventureTemplateImportPayload(BaseModel):

@@ -22,6 +22,7 @@ const props = defineProps<{
   questGlow?: boolean
   activeActionId?: string | null
   mode?: string
+  inputLocked?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -158,7 +159,7 @@ watch(
   { deep: true }
 )
 
-const isConnected = computed(() => props.status === 'connected')
+const canSendInput = computed(() => (props.status === 'connected' || props.status === 'completed') && !props.inputLocked)
 const messageTypographyClass = computed(() => {
   if (fontSize.value === 'small') return 'text-xs'
   if (fontSize.value === 'large') return 'text-lg md:text-xl'
@@ -195,6 +196,7 @@ function formatTime(date: Date): string {
 }
 
 function handleSend(): void {
+  if (!canSendInput.value) return
   const text = inputText.value.trim()
   if (!text) return
 
@@ -555,7 +557,7 @@ function handleRetry() {
       </div>
 
       <!-- Connecting/empty state -->
-      <div v-if="isConnected && messages.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+      <div v-if="canSendInput && messages.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
         <div class="flex flex-col items-center gap-3">
           <div class="w-8 h-8 rounded-full border-t-2 border-emerald-500 animate-spin"></div>
           <p>Awaiting game start...</p>
@@ -583,6 +585,7 @@ function handleRetry() {
     <GameActionBar 
       :active-action-id="props.activeActionId" 
       :mode="props.mode"
+      :disabled="!!props.inputLocked"
       @select-action="emit('selectAction', $event)" 
     />
 
@@ -599,7 +602,7 @@ function handleRetry() {
           <input
             v-model="inputText"
             type="text"
-            :disabled="!isConnected"
+            :disabled="!canSendInput"
             placeholder="What do you do next?"
             class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
             @keydown="handleKeydown"
@@ -618,7 +621,7 @@ function handleRetry() {
 
         <!-- Send Button (Primary Action) -->
         <button
-          :disabled="!isConnected || !inputText.trim()"
+          :disabled="!canSendInput || !inputText.trim()"
           class="w-12 h-12 shrink-0 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white disabled:bg-slate-800 disabled:text-slate-600 transition-colors shadow-lg active:scale-95 flex items-center justify-center mr-4"
           title="Send Command"
           @click="handleSend"
