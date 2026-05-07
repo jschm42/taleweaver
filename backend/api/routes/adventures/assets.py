@@ -196,6 +196,7 @@ class RegenerateVisualRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
     target_id: str
     prompt: Optional[str] = None
+    use_advanced_model: bool = False
 
 @router.post("/{template_id}/visuals/regenerate")
 async def regenerate_visual(
@@ -252,7 +253,8 @@ async def regenerate_visual(
             image_url = await MediaEngine.generate_entity_image(
                 prompt=prompt, adventure_id=template_id, entity_id="PROTAGONIST",
                 entity_type="NPC", user_config=user_config, api_keys=api_keys,
-                style_instruction=style_instruction
+                style_instruction=style_instruction,
+                use_advanced_model=payload.use_advanced_model
             )
             if image_url: avatar.profile_image = image_url
 
@@ -267,7 +269,8 @@ async def regenerate_visual(
             )
             image_url = await MediaEngine.generate_scene_image(
                 prompt=prompt, adventure_id=template_id, user_config=user_config, api_keys=api_keys,
-                style_instruction=style_instruction
+                style_instruction=style_instruction,
+                use_advanced_model=payload.use_advanced_model
             )
             if image_url: scene.image_url = image_url
 
@@ -289,7 +292,8 @@ async def regenerate_visual(
             image_url = await MediaEngine.generate_entity_image(
                 prompt=prompt, adventure_id=template_id, entity_id=entity.id,
                 entity_type=entity.entity_type, user_config=user_config, api_keys=api_keys,
-                style_instruction=style_instruction
+                style_instruction=style_instruction,
+                use_advanced_model=payload.use_advanced_model
             )
             if image_url: entity.image_url = image_url
 

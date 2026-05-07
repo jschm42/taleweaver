@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def _image_generation_timeout_seconds() -> float:
-    raw_timeout = getattr(settings, "IMAGE_GENERATION_TIMEOUT_SECONDS", 120)
+    raw_timeout = getattr(settings, "IMAGE_GENERATION_TIMEOUT_SECONDS", 600)
     try:
         timeout = float(raw_timeout)
     except (TypeError, ValueError):
@@ -897,6 +897,12 @@ class WorldGenerator:
                 is_hidden=n.get("is_hidden", False),
             ))
             
+            # Commit after each NPC to save progress and release locks during long generations
+            await db.commit()
+            adventure = await db.get(AdventureTemplate, template_id)
+            if user:
+                user = await db.get(User, user.id)
+            
         await db.commit() # Save NPCs
         adventure = await db.get(AdventureTemplate, template_id)
             
@@ -1122,6 +1128,12 @@ class WorldGenerator:
                     metadata_json=metadata_json,
                 )
             )
+            
+            # Commit after each Object to save progress and release locks
+            await db.commit()
+            adventure = await db.get(AdventureTemplate, template_id)
+            if user:
+                user = await db.get(User, user.id)
 
         # Final Pass: Update NPC Inventories with resolved item data
         # Fetch all NPCs for this template to update their inventories

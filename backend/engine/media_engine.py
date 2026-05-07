@@ -109,7 +109,8 @@ class MediaEngine:
         model_slug = MediaEngine._normalize_black_forest_labs_model(model)
         endpoint = f"{BFL_API_BASE}/{model_slug}"
 
-        payload: dict[str, Any] = {"prompt": prompt}
+        payload: dict[str, Any] = {"prompt": prompt[:1500]}
+        logger.info("BFL Submission payload (truncated prompt): %s", payload["prompt"])
         optional_fields = (
             "input_image",
             "input_image_2",
@@ -164,6 +165,7 @@ class MediaEngine:
 
             poll_body = poll_response.json()
             status = str(poll_body.get("status") or "").lower()
+            logger.info("BFL polling status for %s: %s", polling_url, status)
             if status == "ready":
                 result = poll_body.get("result") or {}
                 sample_url = result.get("sample")
@@ -171,8 +173,8 @@ class MediaEngine:
                     logger.error("BFL polling response missing result.sample: %s", poll_body)
                     return None
                 return await MediaEngine._save_remote_image(sample_url, target_dir, filename)
-            if status in {"error", "failed"}:
-                logger.error("BFL generation failed: %s", poll_body)
+            if status in {"error", "failed", "expired", "tasknotfound"}:
+                logger.error("BFL generation failed, expired or not found: %s", poll_body)
                 return None
 
             await asyncio.sleep(2.0)
@@ -641,15 +643,19 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
-        """High-level wrapper for gameplay scene generation (uses Advanced Model)."""
+    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = True) -> Optional[str]:
+        """High-level wrapper for gameplay scene generation (uses Advanced Model by default)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
             logger.warning("No T2I settings found in user_config")
             return None
         
-        provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
-        model = t2i.get("advanced_model")
+        if use_advanced_model:
+            provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
+            model = t2i.get("advanced_model")
+        else:
+            provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
+            model = t2i.get("simple_model")
         
         logger.info(f"Resolving scene generation: provider={provider}, model={model}")
         
@@ -681,15 +687,19 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
-        """High-level wrapper for NPC/Object generation (uses Simple Model)."""
+    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = False) -> Optional[str]:
+        """High-level wrapper for NPC/Object generation (uses Simple Model by default)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
             logger.warning("No T2I settings found in user_config")
             return None
         
-        provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
-        model = t2i.get("simple_model")
+        if use_advanced_model:
+            provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
+            model = t2i.get("advanced_model")
+        else:
+            provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
+            model = t2i.get("simple_model")
         
         logger.info(f"Resolving entity generation: provider={provider}, model={model}")
         

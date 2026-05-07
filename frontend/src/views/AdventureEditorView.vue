@@ -57,11 +57,41 @@ const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string }
 const visualPrompt = ref('')
 const showPromptDialog = ref(false)
 const isRegenerating = ref(false)
+const useAdvancedModel = ref(false)
 const isUploading = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
 const visualsCacheVersion = ref(0)
 const hoveredEntity = ref<any>(null)
 const mousePos = ref({ x: 0, y: 0 })
+const activeMenuId = ref<string | null>(null)
+const tooltipAlignTop = ref(false)
+const windowHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 1000)
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1000)
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', () => {
+    windowHeight.value = window.innerHeight
+    windowWidth.value = window.innerWidth
+  })
+}
+
+function toggleMenu(id: string, event: MouseEvent) {
+  event.stopPropagation()
+  if (activeMenuId.value === id) {
+    activeMenuId.value = null
+  } else {
+    activeMenuId.value = id
+    // Hide tooltip when opening menu
+    hoveredEntity.value = null
+  }
+}
+
+// Close menus on outside click
+if (typeof window !== 'undefined') {
+  window.addEventListener('click', () => {
+    activeMenuId.value = null
+  })
+}
 
 const imageStylesCatalog = ref<any[]>([])
 const toneCatalog = ref<any[]>([])
@@ -79,8 +109,21 @@ function addNotification(message: string, type: 'error' | 'success' | 'info' = '
 }
 
 function handleHover(entity: any, event: MouseEvent) {
+  if (activeMenuId.value) return
   hoveredEntity.value = entity
-  mousePos.value = { x: event.clientX, y: event.clientY }
+  
+  // Decide alignment based on mouse position relative to viewport
+  tooltipAlignTop.value = event.clientY > windowHeight.value * 0.6
+  
+  let x = event.clientX + 20
+  const tooltipWidth = 280
+  
+  // Flip horizontally if near right edge
+  if (x + tooltipWidth > windowWidth.value) {
+    x = event.clientX - tooltipWidth - 20
+  }
+  
+  mousePos.value = { x, y: event.clientY }
 }
 
 function clearHover() {
@@ -435,6 +478,7 @@ function openRegenerateDialog(kind: VisualKind, id: string, label: string) {
   const hint = VISUAL_UPLOAD_LIMITS[kind].hint
   selectedVisual.value = { kind, id, label, description, hint }
   visualPrompt.value = ''
+  useAdvancedModel.value = kind === 'scene' || kind === 'cover'
   promptError.value = ''
   showPromptDialog.value = true
 }
@@ -622,6 +666,7 @@ async function regenerateVisual() {
         target_type: selectedVisual.value.kind,
         target_id: selectedVisual.value.id,
         prompt: visualPrompt.value.trim() || null,
+        use_advanced_model: useAdvancedModel.value
       }),
     })
     if (!res.ok) throw new Error('Failed to regenerate.')
@@ -823,11 +868,21 @@ const goBack = () => {
                       </div>
                       <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ getCoverNarrativeContext() }}</p>
                     </div>
-                    <div class="flex gap-3 shrink-0">
-                       <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all">Fast Gen</button>
-                       <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-cyan-400 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all">Gen</button>
-                        <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" :disabled="isUploading" :title="getUploadHint('cover')" class="px-4 py-2 bg-white/10 backdrop-blur-md text-amber-300 text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50">Upload</button>
-                        <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, getCoverNarrativeContext(), debugData.adventure.teaser)" class="px-4 py-2 bg-white/10 backdrop-blur-md text-white text-xs font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-blue-500 transition-all">Edit</button>
+                    <div class="relative shrink-0">
+                       <button @click="toggleMenu(debugData.adventure.id, $event)" class="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                            <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                            <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        
+                        <div v-if="activeMenuId === debugData.adventure.id" class="absolute right-0 bottom-full mb-3 w-56 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-2 z-50 animate-fade-in ring-1 ring-white/10">
+                           <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-emerald-600 hover:text-white transition-all uppercase tracking-widest">Quick Regenerate</button>
+                           <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-cyan-600 hover:text-white transition-all uppercase tracking-widest">Regenerate (Prompt)</button>
+                           <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-amber-600 hover:text-white transition-all uppercase tracking-widest">Upload Custom Cover</button>
+                           <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, getCoverNarrativeContext(), debugData.adventure.teaser)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-blue-600 hover:text-white transition-all uppercase tracking-widest">Edit Essence Details</button>
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -846,15 +901,26 @@ const goBack = () => {
                         <div v-if="isQuickGenerating['protagonist_' + debugData.protagonist.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
                            <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
                         </div>
-                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
                         <div class="absolute inset-x-0 bottom-0 p-3">
                           <div class="font-black text-sm text-white tracking-tight truncate">{{ debugData.protagonist.name }}</div>
                         </div>
-                        <div class="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all scale-75 origin-top-right">
-                          <button @click="quickRegenerateVisual('protagonist', debugData.protagonist.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
-                          <button @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
-                          <button @click="openUploadPicker('protagonist', debugData.protagonist.id, debugData.protagonist.name)" :disabled="isUploading" :title="getUploadHint('protagonist')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-player"></i></button>
-                          <button @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description, '', debugData.protagonist.hp, debugData.protagonist.stamina, debugData.protagonist.mana)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
+                        
+                        <!-- Context Menu -->
+                        <div class="absolute top-2 right-2 z-40">
+                          <button @click="toggleMenu(debugData.protagonist.id, $event)" class="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
+                            <div class="flex flex-col gap-0.5">
+                              <div class="w-1 h-1 bg-white rounded-full"></div>
+                              <div class="w-1 h-1 bg-white rounded-full"></div>
+                              <div class="w-1 h-1 bg-white rounded-full"></div>
+                            </div>
+                          </button>
+                          
+                          <div v-if="activeMenuId === debugData.protagonist.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                             <button @click="quickRegenerateVisual('protagonist', debugData.protagonist.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
+                             <button @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
+                             <button @click="openUploadPicker('protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Portrait</button>
+                             <button @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description, '', debugData.protagonist.hp, debugData.protagonist.stamina, debugData.protagonist.mana)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Character</button>
+                          </div>
                         </div>
                       </div>
                  </div>
@@ -868,21 +934,35 @@ const goBack = () => {
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Regenerate All
                    </button>
                  </div>
-                  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    <div v-for="scene in editorScenes" :key="'scene_' + scene.id" @mouseenter="handleHover({ name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-xl">
-                      <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                      <div v-if="isQuickGenerating['scene_' + scene.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
-                         <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
+                   <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    <div v-for="scene in editorScenes" :key="'scene_' + scene.id" @mouseenter="handleHover({ id: scene.id, name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl shadow-xl transition-all overflow-visible">
+                      <div class="absolute inset-0 rounded-2xl overflow-hidden">
+                        <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                        <div v-if="isQuickGenerating['scene_' + scene.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
+                           <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
+                        </div>
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80"></div>
+                        <div class="absolute inset-x-0 bottom-0 p-4">
+                          <div class="font-black text-sm text-white tracking-wide uppercase truncate drop-shadow-md">{{ scene.label || scene.name }}</div>
+                        </div>
                       </div>
-                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
-                      <div class="absolute inset-x-0 bottom-0 p-4">
-                        <div class="font-black text-sm text-white tracking-wide uppercase truncate">{{ scene.label || scene.name }}</div>
-                      </div>
-                      <div class="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0">
-                        <button @click="quickRegenerateVisual('scene', scene.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
-                        <button @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
-                        <button @click="openUploadPicker('scene', scene.id, scene.label || scene.name)" :disabled="isUploading" :title="getUploadHint('scene')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-layer-group"></i></button>
-                        <button @click="openTextEdit('scene', scene.id, scene.label || scene.name, scene.description)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
+                      
+                      <!-- Context Menu -->
+                      <div class="absolute top-3 right-3 z-40">
+                        <button @click="toggleMenu(scene.id, $event)" class="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-1 h-1 bg-white rounded-full"></div>
+                            <div class="w-1 h-1 bg-white rounded-full"></div>
+                            <div class="w-1 h-1 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        
+                        <div v-if="activeMenuId === scene.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                           <button @click="quickRegenerateVisual('scene', scene.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
+                           <button @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
+                           <button @click="openUploadPicker('scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Illustration</button>
+                           <button @click="openTextEdit('scene', scene.id, scene.label || scene.name, scene.description)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Description</button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -896,35 +976,42 @@ const goBack = () => {
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
                    </button>
                  </div>
-                  <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                    <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="handleHover({ name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg">
-                      <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                      <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
-                         <i class="ra ra-cycle animate-spin text-xl text-emerald-500"></i>
-                      </div>
-                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
-                      <div class="absolute inset-x-0 bottom-0 p-3">
-                        <div class="font-bold text-sm text-white truncate">{{ npc.name }}</div>
-                        <!-- NPC Stats Row -->
-                        <div v-if="form.rule_enforcement_mode !== 'chat' && npc.stats" class="flex gap-1.5 mt-1">
-                          <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-xs font-black text-red-400">
-                            <i class="ra ra-heart text-[6px]"></i> {{ npc.stats.hp || 10 }}
+                   <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                    <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="handleHover({ id: npc.id, name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl shadow-lg transition-all overflow-visible">
+                      <div class="absolute inset-0 rounded-2xl overflow-hidden">
+                        <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                        <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
+                          <i class="ra ra-cycle animate-spin text-xl text-emerald-500"></i>
+                        </div>
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
+                        <div class="absolute bottom-0 left-0 right-0 p-3">
+                          <div class="text-xs font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ npc.name }}</div>
+                          <div v-if="npc.role" class="text-[9px] text-slate-300 font-bold uppercase tracking-tighter truncate opacity-70">{{ npc.role }}</div>
+                          
+                          <div v-if="form.rule_enforcement_mode !== 'chat' && npc.stats" class="flex gap-1.5 mt-1.5">
+                            <template v-if="npc.stats.hp !== undefined">
+                              <div class="flex items-center gap-1 text-[8px] font-black text-red-500 bg-red-500/10 px-1 py-0.5 rounded border border-red-500/20"><i class="ra ra-heart"></i> {{ npc.stats.hp }}</div>
+                            </template>
                           </div>
-                          <template v-if="form.rule_enforcement_mode === 'rpg' || form.rule_enforcement_mode === 'story'">
-                            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-xs font-black text-emerald-400">
-                              <i class="ra ra-muscle-up text-[6px]"></i> {{ npc.stats.stamina || 10 }}
-                            </div>
-                            <div v-if="form.rule_enforcement_mode === 'rpg'" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-xs font-black text-blue-400">
-                              <i class="ra ra-crystal-ball text-[6px]"></i> {{ npc.stats.mana || 0 }}
-                            </div>
-                          </template>
                         </div>
                       </div>
-                      <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all translate-y-1 group-hover:translate-y-0 scale-75 origin-top-right">
-                        <button @click="quickRegenerateVisual('npc', npc.id)" class="p-2 bg-black/60 backdrop-blur-md text-emerald-400 rounded-lg border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle"></i></button>
-                        <button @click="openRegenerateDialog('npc', npc.id, npc.name)" class="p-2 bg-black/60 backdrop-blur-md text-cyan-400 rounded-lg border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield"></i></button>
-                        <button @click="openUploadPicker('npc', npc.id, npc.name)" :disabled="isUploading" :title="getUploadHint('npc')" class="p-2 bg-black/60 backdrop-blur-md text-amber-300 rounded-lg border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-player"></i></button>
-                        <button @click="openTextEdit('npc', npc.id, npc.name, npc.description, '', npc.stats?.hp, npc.stats?.stamina, npc.stats?.mana)" class="p-2 bg-black/60 backdrop-blur-md text-blue-400 rounded-lg border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink"></i></button>
+
+                      <!-- Context Menu -->
+                      <div class="absolute top-2 right-2 z-40">
+                        <button @click="toggleMenu(npc.id, $event)" class="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-1 h-1 bg-white rounded-full group-hover/dots:bg-white"></div>
+                            <div class="w-1 h-1 bg-white rounded-full group-hover/dots:bg-white"></div>
+                            <div class="w-1 h-1 bg-white rounded-full group-hover/dots:bg-white"></div>
+                          </div>
+                        </button>
+                        
+                        <div v-if="activeMenuId === npc.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                           <button @click="quickRegenerateVisual('npc', npc.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
+                           <button @click="openRegenerateDialog('npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
+                           <button @click="openUploadPicker('npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                           <button @click="openTextEdit('npc', npc.id, npc.name, npc.description, '', npc.stats?.hp, npc.stats?.stamina, npc.stats?.mana)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -938,27 +1025,39 @@ const goBack = () => {
                      <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['object'] }"></i> Regenerate All
                    </button>
                  </div>
-                  <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-                    <div v-for="obj in editorObjects" :key="'obj_' + obj.id" @mouseenter="handleHover({ name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl overflow-hidden shadow-lg">
-                      <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                      <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
-                         <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
-                      </div>
-                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
-                      <div class="absolute inset-x-0 bottom-0 p-2">
-                        <div class="font-bold text-xs text-white truncate text-center">{{ obj.name }}</div>
-                        <!-- Item Stats Row -->
-                        <div v-if="form.rule_enforcement_mode !== 'chat' && nonZeroStatEntries(obj.stats).length > 0" class="flex justify-center gap-1 mt-1">
-                          <div v-for="([stat, val]) in nonZeroStatEntries(obj.stats)" :key="stat" class="flex items-center gap-0.5 px-1 py-0.5 rounded bg-slate-800/80 border border-white/10 text-[6px] font-black text-slate-300">
-                            {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+                   <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+                    <div v-for="obj in editorObjects" :key="'obj_' + obj.id" @mouseenter="handleHover({ id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)" @mouseleave="clearHover" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl shadow-lg transition-all overflow-visible">
+                      <div class="absolute inset-0 rounded-xl overflow-hidden">
+                        <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                        <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
+                          <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
+                        </div>
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
+                        <div class="absolute bottom-0 left-0 right-0 p-2">
+                          <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
+                          
+                          <div v-if="form.rule_enforcement_mode !== 'chat' && obj.stats && Object.keys(obj.stats).length > 0" class="flex gap-1 mt-1">
+                            <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
                           </div>
                         </div>
                       </div>
-                      <div class="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all scale-75 origin-top-right">
-                        <button @click="quickRegenerateVisual('object', obj.id)" class="p-1.5 bg-black/60 backdrop-blur-md text-emerald-400 rounded border border-white/10 hover:bg-emerald-500 hover:text-white transition-all"><i class="ra ra-cycle text-xs"></i></button>
-                        <button @click="openRegenerateDialog('object', obj.id, obj.name)" class="p-1.5 bg-black/60 backdrop-blur-md text-cyan-400 rounded border border-white/10 hover:bg-cyan-500 hover:text-white transition-all"><i class="ra ra-eye-shield text-xs"></i></button>
-                        <button @click="openUploadPicker('object', obj.id, obj.name)" :disabled="isUploading" :title="getUploadHint('object')" class="p-1.5 bg-black/60 backdrop-blur-md text-amber-300 rounded border border-white/10 hover:bg-amber-500 hover:text-white transition-all disabled:opacity-50"><i class="ra ra-chest text-xs"></i></button>
-                        <button @click="openTextEdit('object', obj.id, obj.name, obj.description)" class="p-1.5 bg-black/60 backdrop-blur-md text-blue-400 rounded border border-white/10 hover:bg-blue-500 hover:text-white transition-all"><i class="ra ra-quill-ink text-xs"></i></button>
+
+                      <!-- Context Menu -->
+                      <div class="absolute top-1.5 right-1.5 z-40">
+                        <button @click="toggleMenu(obj.id, $event)" class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        
+                        <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-40 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+                           <button @click="quickRegenerateVisual('object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                           <button @click="openRegenerateDialog('object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                           <button @click="openUploadPicker('object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                           <button @click="openTextEdit('object', obj.id, obj.name, obj.description)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1363,23 +1462,30 @@ const goBack = () => {
     <Teleport to="body">
       <Transition name="tooltip">
         <div 
-          v-if="hoveredEntity" 
-          class="fixed z-[100] pointer-events-none transition-all duration-75"
-          :style="{ left: (mousePos.x + 20) + 'px', top: (mousePos.y + 20) + 'px' }"
+          v-if="hoveredEntity && !activeMenuId" 
+          class="fixed z-[100] pointer-events-none transition-all duration-75 flex flex-col"
+          :style="{ 
+            left: mousePos.x + 'px', 
+            top: tooltipAlignTop ? 'auto' : (mousePos.y + 15) + 'px',
+            bottom: tooltipAlignTop ? (windowHeight - mousePos.y + 15) + 'px' : 'auto'
+          }"
         >
-          <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
+          <div class="w-64 max-h-[85vh] bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-y-auto flex flex-col animate-tooltip-in scrollbar-hide">
             <!-- Image Area -->
             <div v-if="hoveredEntity.image_url" class="h-32 w-full relative">
-              <img :src="buildVisualImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover" />
+              <img :src="buildVisualImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" />
               <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
             </div>
 
             <!-- Content -->
             <div class="p-4 bg-slate-900 space-y-3">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
+              <div class="flex items-start justify-between mb-1">
+                <div class="flex flex-col">
+                  <span class="text-sm font-bold text-white uppercase tracking-wider leading-tight">{{ hoveredEntity.name }}</span>
+                  <span class="text-[10px] text-slate-500 font-mono uppercase tracking-tighter">{{ hoveredEntity.id }}</span>
+                </div>
                 <span 
-                  class="text-xs px-1.5 py-0.5 rounded border font-mono uppercase border-emerald-500/50 text-emerald-400"
+                  class="text-[9px] px-1.5 py-0.5 rounded border font-mono uppercase border-emerald-500/50 text-emerald-400 bg-emerald-500/5 shrink-0"
                 >
                   {{ hoveredEntity.type }}
                 </span>
@@ -1450,6 +1556,19 @@ const goBack = () => {
                     placeholder="Describe exactly what you want to see. This will ignore the current asset description..." 
                     class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-white placeholder:text-slate-600 focus:border-cyan-500 outline-none transition-all leading-relaxed shadow-inner"
                   ></textarea>
+                </div>
+
+                <div class="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl">
+                  <div class="space-y-1">
+                    <span class="text-xs font-black uppercase tracking-widest text-slate-200">High-Quality Weaver</span>
+                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Use Advanced Model for superior detail</p>
+                  </div>
+                  <button 
+                    @click="useAdvancedModel = !useAdvancedModel"
+                    :class="['w-12 h-6 rounded-full transition-all relative flex items-center px-1', useAdvancedModel ? 'bg-cyan-600' : 'bg-slate-800']"
+                  >
+                    <div :class="['w-4 h-4 bg-white rounded-full shadow-lg transition-transform duration-300', useAdvancedModel ? 'translate-x-6' : 'translate-x-0']"></div>
+                  </button>
                 </div>
               </div>
 

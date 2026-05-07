@@ -323,6 +323,25 @@ function openCreateModal() {
   router.push({ name: 'adventure-create' })
 }
 
+async function handleImportSamplesClick() {
+  try {
+    const checkRes = await api.checkExamples()
+    const conflicts = checkRes.available_imports.filter(i => i.already_exists)
+    
+    if (conflicts.length > 0) {
+      importConflicts.value = checkRes.available_imports
+      importWarningType.value = 'samples'
+      showImportWarning.value = true
+    } else {
+      showImportConfirm.value = true
+    }
+  } catch (error) {
+    console.error('Error checking for example conflicts:', error)
+    // Fallback if check fails
+    showImportConfirm.value = true
+  }
+}
+
 async function executeImportExamples() {
   showImportConfirm.value = false
   
@@ -620,8 +639,8 @@ onUnmounted(() => {
             <PortalCreateAdventureCard @click="openCreateModal" />
             
             <ImportExamplesCard 
-              v-if="templates.length === 0 && !isSeeding" 
-              @import="showImportConfirm = true" 
+              v-if="!isSeeding" 
+              @import="handleImportSamplesClick" 
             />
 
             <!-- Loading indicator for seeding -->

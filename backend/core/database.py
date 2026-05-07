@@ -379,6 +379,18 @@ async def apply_sqlite_compat_migrations() -> None:
                 )
                 logger.info("SQLite migration: added adventure_templates.intro_text")
 
+            if "is_adventure_generator" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN is_adventure_generator BOOLEAN NOT NULL DEFAULT 0"
+                )
+                logger.info("SQLite migration: added adventure_templates.is_adventure_generator")
+
+            if "starting_timestamp" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN starting_timestamp INTEGER NOT NULL DEFAULT 0"
+                )
+                logger.info("SQLite migration: added adventure_templates.starting_timestamp")
+
         # Avatar link for cleanup
         avatar_cols_result = await conn.exec_driver_sql("PRAGMA table_info(avatars)")
         avatar_cols = {row[1] for row in avatar_cols_result.fetchall()}
