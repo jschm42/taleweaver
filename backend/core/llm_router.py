@@ -295,6 +295,7 @@ class GameMasterLLM:
             "openai/",
             "openrouter/",
             "anthropic/",
+            "deepseek/",
             "google/",
             "gemini/",
             "bedrock/",
@@ -348,6 +349,9 @@ class GameMasterLLM:
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
+            elif self.provider == "deepseek":
+                kwargs["custom_llm_provider"] = "deepseek"
+                kwargs["api_base"] = "https://api.deepseek.com"
         
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
@@ -425,6 +429,9 @@ class GameMasterLLM:
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
+            elif self.provider == "deepseek":
+                kwargs["custom_llm_provider"] = "deepseek"
+                kwargs["api_base"] = "https://api.deepseek.com"
         
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -502,6 +509,9 @@ class GameMasterLLM:
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
+            elif self.provider == "deepseek":
+                kwargs["custom_llm_provider"] = "deepseek"
+                kwargs["api_base"] = "https://api.deepseek.com"
         
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -574,6 +584,9 @@ class GameMasterLLM:
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
+            elif self.provider == "deepseek":
+                kwargs["custom_llm_provider"] = "deepseek"
+                kwargs["api_base"] = "https://api.deepseek.com"
 
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -698,6 +711,9 @@ class GameMasterLLM:
             elif self.provider == "anthropic":
                 kwargs["custom_llm_provider"] = "anthropic"
                 kwargs["api_base"] = "https://api.anthropic.com"
+            elif self.provider == "deepseek":
+                kwargs["custom_llm_provider"] = "deepseek"
+                kwargs["api_base"] = "https://api.deepseek.com"
 
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):

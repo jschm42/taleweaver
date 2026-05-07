@@ -444,6 +444,13 @@ const isModelCustom = (model: string, provider: string, type: 'llm' | 'image') =
   return !predefined.includes(model)
 }
 
+const getModelOptionLabel = (provider: string, model: string) => {
+  if (provider === 'ollama') {
+    return `${model} (EXPERIMENTAL)`
+  }
+  return model
+}
+
 const resolveModelOnProviderChange = (
   currentModel: string,
   newProvider: string,
@@ -633,9 +640,10 @@ watch(
                   <option value="openai">OpenAI</option>
                   <option value="google">Google Gemini</option>
                   <option value="openrouter">OpenRouter</option>
+                  <option value="deepseek">DeepSeek</option>
                   <option value="black_forest_labs">Black Forest Labs</option>
                   <option value="anthropic">Anthropic</option>
-                  <option value="ollama">Ollama (Local)</option>
+                  <option value="ollama">Ollama (Local, EXPERIMENTAL)</option>
                 </select>
               </div>
               <div class="space-y-2">
@@ -712,7 +720,7 @@ watch(
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
                   >
                     <option value="" disabled>-- Please Select --</option>
-                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.small_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.small_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(llmForm.small_model_provider, m) }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>
                 </div>
@@ -786,7 +794,7 @@ watch(
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
                   >
                     <option value="" disabled>-- Please Select --</option>
-                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.complex_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.complex_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(llmForm.complex_model_provider, m) }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>
                 </div>
@@ -861,7 +869,7 @@ watch(
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
                   >
                     <option value="" disabled>-- Please Select --</option>
-                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.generator_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.generator_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(llmForm.generator_model_provider, m) }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>
                 </div>
@@ -964,7 +972,7 @@ watch(
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono"
                   >
                     <option value="" disabled>-- Please Select --</option>
-                    <option v-for="m in availableConstants.predefined_image_models[t2iForm.simple_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option v-for="m in availableConstants.predefined_image_models[t2iForm.simple_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(t2iForm.simple_model_provider, m) }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>
                 </div>
@@ -1021,7 +1029,7 @@ watch(
                     class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono"
                   >
                     <option value="" disabled>-- Please Select --</option>
-                    <option v-for="m in availableConstants.predefined_image_models[t2iForm.advanced_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option v-for="m in availableConstants.predefined_image_models[t2iForm.advanced_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(t2iForm.advanced_model_provider, m) }}</option>
                     <option value="custom">-- Custom Model String --</option>
                   </select>
                 </div>

@@ -5,9 +5,10 @@ Centralized model and provider configurations for TaleWeaver.
 LLM_PROVIDERS = [
     {"id": "openai", "name": "OpenAI"},
     {"id": "google", "name": "Google Gemini"},
+    {"id": "deepseek", "name": "DeepSeek"},
     {"id": "openrouter", "name": "OpenRouter"},
     {"id": "anthropic", "name": "Anthropic"},
-    {"id": "ollama", "name": "Ollama (Local)"},
+    {"id": "ollama", "name": "Ollama (Local, EXPERIMENTAL)"},
 ]
 
 IMAGE_PROVIDERS = [
@@ -15,12 +16,13 @@ IMAGE_PROVIDERS = [
     {"id": "openrouter", "name": "OpenRouter (Various)"},
     {"id": "black_forest_labs", "name": "Black Forest Labs (FLUX)"},
     {"id": "google", "name": "Google Gemini (Imagen)"},
-    {"id": "ollama", "name": "Ollama (Local)"},
+    {"id": "ollama", "name": "Ollama (Local, EXPERIMENTAL)"},
 ]
 
 PREDEFINED_LLM_MODELS = {
     "openai": ["gpt-5.4-mini", "gpt-5.3", "gpt-5.4", "gpt-5.5"],
     "google": ["gemini-3.1-pro-preview", "gemini-2.5-flash"],
+    "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro"],
     "openrouter": ["openai/gpt-5-mini", "openai/gpt-5-chat"],
     "anthropic": ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"],
     "ollama": ["llama3.2", "qwen2.5", "mistral", "phi3"],
