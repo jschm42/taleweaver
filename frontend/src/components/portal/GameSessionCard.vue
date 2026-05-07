@@ -36,12 +36,6 @@ function formatDate(dateStr?: string): string {
 
 function runAction(action: 'resume' | 'delete'): void {
   if (action === 'resume') {
-    if (props.session.status === 'game_over' || props.session.status === 'completed') {
-      const msg = props.session.status === 'game_over' 
-        ? "This adventure has already ended in defeat. Do you want to continue anyway?"
-        : "This adventure has already been completed. Do you want to continue anyway?"
-      if (!window.confirm(msg)) return
-    }
     emit('resume', props.session.game_id)
   } else {
     emit('delete', props.session.game_id, props.session.adventure_title)

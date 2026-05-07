@@ -1979,7 +1979,10 @@ class GameTurnManager:
             # 3. Apply Changes
             pre_inventory_ids = {item.get("id") for item in (self.avatar.inventory or []) if item.get("id")}
             try:
-                await self._apply_game_event(game_event)
+                system_msgs = await self._apply_game_event(game_event)
+                for sm in system_msgs:
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
             except GameOverException as goe:
@@ -2131,7 +2134,10 @@ class GameTurnManager:
             game_event = self._build_progression_event(progression_intent)
 
             try:
-                await self._apply_game_event(game_event)
+                system_msgs = await self._apply_game_event(game_event)
+                for sm in system_msgs:
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
                 elif game_event.game_over:
@@ -2345,8 +2351,9 @@ class GameTurnManager:
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
-    async def _apply_game_event(self, event: GameEvent):
-        """Applies technical mutations from a GameEvent to the database and session state."""
+    async def _apply_game_event(self, event: GameEvent) -> List[str]:
+        """Applies technical mutations from a GameEvent to the database and session state. Returns messages for the UI."""
+        system_messages: List[str] = []
         existing_item_ids = await self._collect_existing_item_ids()
         
         # If we are removing items in this event, they don't count as "existing" for duplicate checks
@@ -2405,6 +2412,12 @@ class GameTurnManager:
                 if item.id:
                     existing_item_ids.add(item.id)
             event.spawned_items = filtered_spawned_items
+
+        if event.new_status_effects:
+            for effect in event.new_status_effects:
+                msg = f"✨ You are now: {effect}"
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                system_messages.append(msg)
 
         RuleEngine.apply_event(self.avatar, event)
         
@@ -2509,7 +2522,11 @@ class GameTurnManager:
                 if already_earned:
                     continue
 
-                aw = award_defs.get(key, {})
+                aw = award_defs.get(key)
+                if not aw:
+                    logger.warning("[Turn %s] GM tried to grant non-existent award: %s", self.game_id, key)
+                    continue
+
                 user_awards.append(
                     {
                         "key": key,
@@ -2523,6 +2540,10 @@ class GameTurnManager:
                         "earned_at": now,
                     }
                 )
+                award_title = aw.get("title") or key
+                msg = f"🏆 Award Achievement: {award_title}"
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                system_messages.append(msg)
                 modified = True
 
             if modified:
@@ -2548,13 +2569,15 @@ class GameTurnManager:
         if newly_completed_quests:
             # Emit one system entry per newly completed quest so players get explicit feedback.
             for quest_title in dict.fromkeys(newly_completed_quests):
+                msg = f"Quest completed: {quest_title}"
                 self.db.add(
                     ChatMessage(
                         session_id=self.state.session_id,
                         role="system",
-                        content=f"Quest completed: {quest_title}",
+                        content=msg,
                     )
                 )
+                system_messages.append(msg)
 
         # RPG Completion Logic: Check if all main quests are finished
         if state_dirty:
@@ -2591,8 +2614,8 @@ class GameTurnManager:
             flag_modified(self.state, "entity_states")
             
         await self._apply_adventure_generator_tools(event)
-
         await self.db.flush()
+        return system_messages
 
     async def _emit_system_message(
         self,
