@@ -152,6 +152,7 @@ class WorldEntitySchema(BaseModel):
     hp: Optional[int] = Field(None, description="Optional hitpoints")
     mana: Optional[int] = Field(None, description="Optional mana")
     stamina: Optional[int] = Field(None, description="Optional stamina")
+    is_attackable: bool = Field(True, description="If False, the player cannot start a fight with this NPC.")
 
     # Stat Modifiers (for OBJECTS)
     stat_modifier_strength: Optional[int] = None
@@ -895,6 +896,7 @@ class WorldGenerator:
                 stamina=n.get("stamina"),
                 max_stamina=n.get("stamina"),
                 is_hidden=n.get("is_hidden", False),
+                is_attackable=n.get("is_attackable", True),
             ))
             
             # Commit after each NPC to save progress and release locks during long generations

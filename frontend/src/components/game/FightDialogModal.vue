@@ -80,10 +80,12 @@ let motionMediaQuery: MediaQueryList | null = null
 
 const visibleLogs = computed(() => parsedLogs.value.slice(0, visibleLogCount.value))
 
+const isRendered = computed(() => !!(props.open && props.combat))
+
 const combatIdentity = computed(() => {
-  const combat = props.combat
-  if (!combat) return ''
-  return `${combat.player.name}::${combat.enemy.id}`
+  const c = props.combat
+  if (!c || !c.player || !c.enemy) return ''
+  return `${c.player.name}::${c.enemy.id}`
 })
 
 function clearTimeoutList(timeoutIds: number[]): void {
@@ -391,7 +393,11 @@ function emitLeave(): void {
 <template>
   <Teleport to="body">
     <Transition name="fight-fade">
-      <div v-if="open && combat" class="fixed inset-0 z-[110] bg-slate-950/70 backdrop-blur-sm p-3 sm:p-6 md:p-8 flex items-center justify-center">
+      <div 
+        v-if="isRendered" 
+        class="fixed inset-0 z-[110] bg-slate-950/70 backdrop-blur-sm p-3 sm:p-6 md:p-8 flex items-center justify-center"
+        style="pointer-events: auto;"
+      >
         <div class="w-full max-w-6xl h-[80vh] border border-amber-700/40 bg-gradient-to-b from-slate-900/95 via-slate-900 to-slate-950 rounded-2xl shadow-[0_0_60px_rgba(251,191,36,0.15)] overflow-hidden flex flex-col">
           <header class="shrink-0 px-4 py-3 border-b border-amber-500/20 bg-slate-950/60 flex items-center justify-between">
             <h2 class="text-sm sm:text-base uppercase tracking-[0.22em] text-amber-300 font-black">Turn-Based Combat</h2>
@@ -412,11 +418,11 @@ function emitLeave(): void {
               <div class="text-[10px] uppercase tracking-[0.2em] text-emerald-300/80 mb-2">Protagonist</div>
               <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-emerald-400/40 bg-slate-950">
                 <!-- Defeated Ribbon -->
-                <div v-if="combat.player.hp <= 0" class="absolute -right-10 top-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.15em] py-1 w-32 text-center rotate-45 shadow-lg z-10">
+                <div v-if="combat.player?.hp <= 0" class="absolute -right-10 top-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.15em] py-1 w-32 text-center rotate-45 shadow-lg z-10">
                   Defeated
                 </div>
-                <img v-if="hasRenderableImagePath(combat.player.image_url) && !playerImageFailed" :src="getImageUrl(combat.player.image_url)" class="w-full h-full object-cover object-top transition-all" :class="{ 'grayscale opacity-50': combat.player.hp <= 0 }" alt="protagonist" @error="onPlayerImageError">
-                <div v-else class="w-full h-full flex items-center justify-center text-emerald-300 ra ra-player text-3xl" :class="{ 'grayscale opacity-40': combat.player.hp <= 0 }"></div>
+                <img v-if="hasRenderableImagePath(combat.player?.image_url) && !playerImageFailed" :src="getImageUrl(combat.player?.image_url)" class="w-full h-full object-cover object-top transition-all" :class="{ 'grayscale opacity-50': combat.player?.hp <= 0 }" alt="protagonist" @error="onPlayerImageError">
+                <div v-else class="w-full h-full flex items-center justify-center text-emerald-300 ra ra-player text-3xl" :class="{ 'grayscale opacity-40': combat.player?.hp <= 0 }"></div>
                 <div class="absolute inset-0 pointer-events-none">
                   <span
                     v-for="fx in playerImpactFx"
@@ -435,9 +441,9 @@ function emitLeave(): void {
                   </span>
                 </div>
               </div>
-              <div class="mt-3 text-xs text-white font-bold text-center">{{ combat.player.name }}</div>
+              <div class="mt-3 text-xs text-white font-bold text-center">{{ combat.player?.name }}</div>
               <div class="mt-2 w-full">
-                <StatBar label="HP" :value="asInt(combat.player.hp)" :max="asInt(combat.player.max_hp)" color="crimson" size="sm" />
+                <StatBar label="HP" :value="asInt(combat.player?.hp)" :max="asInt(combat.player?.max_hp)" color="crimson" size="sm" />
                 <StatBar label="Stamina" :value="asInt(playerSheet?.stamina)" :max="asInt(playerSheet?.max_stamina)" color="emerald" size="sm" />
                 <StatBar label="Mana" :value="asInt(playerSheet?.mana)" :max="asInt(playerSheet?.max_mana)" color="sapphire" size="sm" />
               </div>
@@ -524,11 +530,11 @@ function emitLeave(): void {
               <div class="text-[10px] uppercase tracking-[0.2em] text-rose-300/80 mb-2">Enemy</div>
               <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border border-rose-400/40 bg-slate-950">
                 <!-- Defeated Ribbon -->
-                <div v-if="combat.enemy.hp <= 0" class="absolute -right-10 top-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.15em] py-1 w-32 text-center rotate-45 shadow-lg z-10">
+                <div v-if="combat.enemy?.hp <= 0" class="absolute -right-10 top-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.15em] py-1 w-32 text-center rotate-45 shadow-lg z-10">
                   Defeated
                 </div>
-                <img v-if="hasRenderableImagePath(combat.enemy.image_url) && !enemyImageFailed" :src="getImageUrl(combat.enemy.image_url)" class="w-full h-full object-cover object-top transition-all" :class="{ 'grayscale opacity-50': combat.enemy.hp <= 0 }" alt="enemy" @error="onEnemyImageError">
-                <div v-else class="w-full h-full flex items-center justify-center text-rose-300 ra ra-monster-skull text-3xl" :class="{ 'grayscale opacity-40': combat.enemy.hp <= 0 }"></div>
+                <img v-if="hasRenderableImagePath(combat.enemy?.image_url) && !enemyImageFailed" :src="getImageUrl(combat.enemy?.image_url)" class="w-full h-full object-cover object-top transition-all" :class="{ 'grayscale opacity-50': combat.enemy?.hp <= 0 }" alt="enemy" @error="onEnemyImageError">
+                <div v-else class="w-full h-full flex items-center justify-center text-rose-300 ra ra-monster-skull text-3xl" :class="{ 'grayscale opacity-40': combat.enemy?.hp <= 0 }"></div>
                 <div class="absolute inset-0 pointer-events-none">
                   <span
                     v-for="fx in enemyImpactFx"
@@ -548,11 +554,11 @@ function emitLeave(): void {
                 </div>
               </div>
               <div class="mt-3 text-xs text-white font-bold text-center">
-                {{ combat.enemy.name }}
-                <div v-if="isDebug" class="text-[9px] font-mono text-rose-300 opacity-60">ID: {{ combat.enemy.id }}</div>
+                {{ combat.enemy?.name }}
+                <div v-if="isDebug" class="text-[9px] font-mono text-rose-300 opacity-60">ID: {{ combat.enemy?.id }}</div>
               </div>
               <div class="mt-2 w-full">
-                <StatBar label="HP" :value="asInt(combat.enemy.hp)" :max="asInt(combat.enemy.max_hp)" color="crimson" size="sm" />
+                <StatBar label="HP" :value="asInt(combat.enemy?.hp)" :max="asInt(combat.enemy?.max_hp)" color="crimson" size="sm" />
                 <StatBar label="Stamina" :value="asInt(enemyTooltipEntity?.stamina)" :max="asInt(enemyTooltipEntity?.max_stamina)" color="emerald" size="sm" />
                 <StatBar label="Mana" :value="asInt(enemyTooltipEntity?.mana)" :max="asInt(enemyTooltipEntity?.max_mana)" color="sapphire" size="sm" />
               </div>
@@ -580,14 +586,14 @@ function emitLeave(): void {
             <div class="flex items-center gap-2">
               <button
                 class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-[0.1em] disabled:opacity-40"
-                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked || combat.enemy.hp <= 0"
+                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked || combat.enemy?.hp <= 0"
                 @click="emit('attack')"
               >
                 Attack
               </button>
               <button
                 class="px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-black uppercase tracking-[0.1em] disabled:opacity-40"
-                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked || combat.enemy.hp <= 0"
+                :disabled="isLootPhase || activeTurn !== 'player' || isInteractionLocked || combat.enemy?.hp <= 0"
                 @click="emit('run')"
               >
                 Run

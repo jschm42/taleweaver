@@ -756,10 +756,15 @@ class GameTurnManager:
 
     async def _emit_combat_final(self, status_note: Optional[str] = None) -> AsyncGenerator[str, None]:
         await self.db.commit()
+        combat_snap = AdventureLogic.get_combat_snapshot(self.state)
+        # Ensure we don't send a zombie combat object that has no active phase
+        if combat_snap and not combat_snap.get("active") and not combat_snap.get("loot_pending") and not combat_snap.get("outcome"):
+            combat_snap = None
+
         final_data = jsonable_encoder({
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
-            'combat': AdventureLogic.get_combat_snapshot(self.state),
+            'combat': combat_snap,
             **self._build_terminal_flags_payload(),
             'status_note': status_note or (self.state.session.status_note if self.state.session else None),
             'status': 'success'
@@ -815,8 +820,11 @@ class GameTurnManager:
         response_text = response_text.strip()
         if response_text:
             self.db.add(ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text))
-            self._append_combat_log(combat, response_text, "aftermath")
-            self._set_combat_state(combat)
+            # Only append to combat log if combat is still present in the state
+            # Otherwise we'd accidentally resurrect a cleared combat state
+            if self._read_combat_state():
+                self._append_combat_log(combat, response_text, "aftermath")
+                self._set_combat_state(combat)
 
     async def _handle_fight_start(self, user_msg: str) -> AsyncGenerator[str, None]:
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
@@ -840,6 +848,19 @@ class GameTurnManager:
         target = await self._find_fight_target(target_hint)
         if not target:
             msg = "No enemy is available in this scene."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
+
+        # Check if NPC is attackable
+        states = self.state.entity_states or {}
+        is_attackable = (states.get(target.id, {}) or {}).get("is_attackable")
+        if is_attackable is None:
+            is_attackable = target.is_attackable
+            
+        if is_attackable is False:
+            msg = f"You cannot attack {target.name}."
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             async for chunk in self._emit_combat_final(msg):
                 yield chunk
@@ -1420,20 +1441,19 @@ class GameTurnManager:
             combat["loot_pending"] = False
             combat.pop("outcome", None)
             combat["status_note"] = "Combat resolved."
+            self._append_combat_log(combat, combat["status_note"], "loot")
             
             # If nothing is left to do, clear the combat state entirely from all sources
             if not combat.get("active") and not combat.get("loot_pending") and not combat.get("outcome"):
                 self.state.combat_json = None
-                states = dict(self.state.entity_states or {})
-                states.pop("__combat__", None)
-                self.state.entity_states = states
+                # Aggressively clear combat state by creating a new filtered dict
+                self.state.entity_states = {k: v for k, v in (self.state.entity_states or {}).items() if k != "__combat__"}
                 flag_modified(self.state, "entity_states")
                 # Force commit to ensure state is persisted before final event
                 await self.db.commit()
             else:
                 self._set_combat_state(combat)
                 
-            self._append_combat_log(combat, combat["status_note"], "loot")
             return "Combat finished."
 
         return "Loot commands: /loot take <item>, /loot leave <item>, /loot done"
@@ -2468,6 +2488,7 @@ class GameTurnManager:
                 if update.hp is not None: states[eid]["hp"] = update.hp
                 if update.mana is not None: states[eid]["mana"] = update.mana
                 if update.stamina is not None: states[eid]["stamina"] = update.stamina
+                if update.is_attackable is not None: states[eid]["is_attackable"] = update.is_attackable
                 if update.inventory is not None: 
                     states[eid]["inventory"] = [i.model_dump(exclude_none=True) for i in update.inventory]
                 state_dirty = True
