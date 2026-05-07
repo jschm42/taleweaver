@@ -656,8 +656,9 @@ async function regenerateAll(kind: VisualKind) {
 }
 
 async function regenerateVisual() {
-  if (!selectedVisual.value) return
+  if (!selectedVisual.value || isRegenerating.value) return
   isRegenerating.value = true
+  promptError.value = ''
   try {
     const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/regenerate`, {
       method: 'POST',
@@ -672,11 +673,20 @@ async function regenerateVisual() {
     if (!res.ok) throw new Error('Failed to regenerate.')
     showPromptDialog.value = false
     await fetchDebugInfo()
+    addNotification(`Visual for ${selectedVisual.value.label} re-woven.`, 'success')
   } catch (error: any) {
     promptError.value = error.message
+    addNotification(error.message, 'error')
   } finally {
     isRegenerating.value = false
   }
+}
+
+function cancelRegeneration() {
+  // Just close the UI state. The backend task will run to completion but we stop tracking.
+  isRegenerating.value = false
+  showPromptDialog.value = false
+  addNotification('Generation request abandoned. You can continue working.', 'info')
 }
 
 watch(
@@ -1573,7 +1583,9 @@ const goBack = () => {
               </div>
 
               <div class="flex justify-end gap-6 pt-4">
-                <button @click="showPromptDialog = false" class="px-8 py-3 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
+                <button @click="isRegenerating ? cancelRegeneration() : (showPromptDialog = false)" class="px-8 py-3 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">
+                  {{ isRegenerating ? 'Abort' : 'Discard' }}
+                </button>
                 <button @click="regenerateVisual" :disabled="isRegenerating" class="px-10 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-cyan-900/20 disabled:opacity-50 flex items-center gap-3">
                   <i v-if="isRegenerating" class="ra ra-cycle animate-spin"></i>
                   <span>{{ isRegenerating ? 'Weaving...' : 'Generate Vision' }}</span>
