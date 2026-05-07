@@ -39,13 +39,15 @@ class Settings(BaseSettings):
     # Storage configuration
     DATA_DIR: str = "data"
     
+    VISUAL_TIMEOUT: int = 120
+    INTELLIGENCE_TIMEOUT: int = 60
+    
     @model_validator(mode="after")
     def assemble_db_url(self) -> "Settings":
         if not self.DATABASE_URL:
             # Construct default path in data dir
             self.DATABASE_URL = f"sqlite+aiosqlite:///./{self.DATA_DIR}/taleweaver.db"
         return self
-    IMAGE_GENERATION_TIMEOUT_SECONDS: int = 120
     
     # Use existing key from environment or generate a temporary one
     ENCRYPTION_KEY: str = Field(default_factory=generate_temp_key)

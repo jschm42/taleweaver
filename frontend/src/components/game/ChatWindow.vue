@@ -352,13 +352,19 @@ function normalizeLineBreaks(text: string): string {
   return text.replace(/\n{3,}/g, '\n\n')
 }
 
+function fixNewlines(text: string | null | undefined): string {
+  if (!text) return ''
+  return text.replace(/\\n/g, '\n')
+}
+
 function displayMessageContent(msg: ChatMessage): string {
+  let content = msg.content
   if (msg.role === 'system') {
-    return msg.content
+    content = content
       .replace(/^\s*\[system\]\s*/i, '')
       .replace(/^\s*SYSTEM:\s*/i, '')
   }
-  return msg.content
+  return fixNewlines(content)
 }
 </script>
 

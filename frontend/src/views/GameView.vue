@@ -189,6 +189,11 @@ function hasNonZero(value: unknown): boolean {
   return parsed !== null && parsed !== 0
 }
 
+function fixNewlines(text: string | null | undefined): string {
+  if (!text) return ''
+  return text.replace(/\\n/g, '\n')
+}
+
 function normalizeHoverEntity(entity: any): any {
   if (!entity || typeof entity !== 'object') return entity
 
@@ -1055,7 +1060,7 @@ onBeforeUnmount(() => {
                   {{ hoveredEntity.entity_type || 'OBJECT' }}
                 </span>
               </div>
-              <p class="text-xs text-slate-400 leading-relaxed italic mb-3">{{ hoveredEntity.description }}</p>
+              <p class="text-xs text-slate-400 leading-relaxed italic mb-3 whitespace-pre-wrap">{{ fixNewlines(hoveredEntity.description) }}</p>
 
               <!-- NPC Stats -->
               <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && sheet?.rule_enforcement_mode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">

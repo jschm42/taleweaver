@@ -51,8 +51,9 @@ class GameMasterLLM:
 
     def _completion_with_openrouter_fallback(self, kwargs: dict):
         """Call LiteLLM completion and retry once for OpenRouter provider-order mismatches."""
+        from backend.core.config import settings
         try:
-            return self._get_litellm().completion(**kwargs)
+            return self._get_litellm().completion(**kwargs, request_timeout=settings.INTELLIGENCE_TIMEOUT)
         except Exception as exc:
             if self.provider != "openrouter":
                 raise
@@ -67,15 +68,16 @@ class GameMasterLLM:
                 ",".join(available_providers),
             )
             retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
-            return self._get_litellm().completion(**retry_kwargs)
+            return self._get_litellm().completion(**retry_kwargs, request_timeout=settings.INTELLIGENCE_TIMEOUT)
 
     async def _acompletion_with_openrouter_fallback(self, kwargs: dict):
         """Async variant of completion retry for OpenRouter provider-order mismatches."""
+        from backend.core.config import settings
         try:
             logger.info(
                 "GameMasterLLM calling LLM for user %s with model %s", self.user.id, kwargs.get("model")
             )
-            return await self._get_litellm().acompletion(**kwargs)
+            return await self._get_litellm().acompletion(**kwargs, request_timeout=settings.INTELLIGENCE_TIMEOUT)
         except Exception as exc:
             if self.provider != "openrouter":
                 raise
@@ -94,7 +96,7 @@ class GameMasterLLM:
             logger.info(
                 "GameMasterLLM calling LLM (Fallback) for user %s with model %s", self.user.id, kwargs.get("model")
             )
-            return await self._get_litellm().acompletion(**retry_kwargs)
+            return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=settings.INTELLIGENCE_TIMEOUT)
 
     @staticmethod
     def _is_supported_bool_value(value: Any) -> bool:

@@ -463,6 +463,9 @@ class WorldGenerator:
         image_successes = 0
 
         # Resolve Style Instructions
+        if selected_image_styles is None and adventure:
+            selected_image_styles = adventure.selected_image_styles
+
         style_instruction = resolve_style_instruction(
             selected_image_styles,
             (user.image_styles_catalog if user else None),

@@ -64,11 +64,16 @@ class MediaEngine:
     @staticmethod
     def _apply_no_text_instruction(prompt: str) -> str:
         """Append a global no-text instruction to image prompts when missing."""
-        normalized = MediaEngine._sanitize_prompt(prompt.strip())
-        if NO_TEXT_IMAGE_PROMPT_SUFFIX.lower() in normalized.lower():
+        prompt = prompt.strip()
+        # Remove trailing dots to avoid double dots when appending suffix
+        while prompt.endswith("."):
+            prompt = prompt[:-1].strip()
+
+        normalized = MediaEngine._sanitize_prompt(prompt)
+        if prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX.lower() in normalized.lower():
             return normalized
         # Combine instructions for better enforcement
-        return f"{normalized}. {NO_TEXT_IMAGE_PROMPT_SUFFIX}"
+        return f"{normalized}. {prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX}"
 
     @staticmethod
     def _normalize_black_forest_labs_model(model: str) -> str:
@@ -128,7 +133,7 @@ class MediaEngine:
             endpoint,
             headers={"Content-Type": "application/json", "x-key": api_key},
             json=payload,
-            timeout=120,
+            timeout=settings.VISUAL_TIMEOUT,
         )
         if response.status_code != 200:
             logger.error("BFL image generation submit failed. status=%s body=%s", response.status_code, response.text)
@@ -145,7 +150,7 @@ class MediaEngine:
             poll_response = requests.get(
                 polling_url,
                 headers={"accept": "application/json", "x-key": api_key},
-                timeout=30,
+                timeout=max(30, settings.VISUAL_TIMEOUT),
             )
             if poll_response.status_code != 200:
                 logger.error(
@@ -210,9 +215,18 @@ class MediaEngine:
         if not prompt or not model:
             raise ValueError("Missing prompt or model for image generation.")
         
-        # Apply style instruction if provided
+        # Inject style instruction if provided
         if style_instruction:
-            prompt = f"{prompt}. Style: {style_instruction}."
+            # Ensure we don't have multiple dots
+            prompt = prompt.strip()
+            while prompt.endswith("."):
+                prompt = prompt[:-1].strip()
+            prompt += f". Style: {style_instruction}."
+            logger.info(f"Style instruction injected: {style_instruction}")
+
+        prompt = MediaEngine._apply_no_text_instruction(prompt)
+        logger.info(f"Final prompt for image generation: {prompt}")
+
         if provider_key != "ollama" and not api_key:
             # Try to resolve from ENV if not passed
             api_key = settings.get_env_api_key(provider_key)
@@ -220,6 +234,7 @@ class MediaEngine:
                 raise ValueError(f"Missing API key for image generation provider '{provider_key}'.")
 
         if provider_key == "ollama":
+            logger.info(f"Generating image with local Ollama: {prompt}")
             remote_prefixes = (
                 "openai/",
                 "openrouter/",
@@ -236,8 +251,6 @@ class MediaEngine:
                     "Configure a local Ollama image model (for example: x/flux2-klein)."
                 )
 
-        prompt = MediaEngine._apply_no_text_instruction(prompt)
-            
         # Default target dir if not provided
         if target_dir is None:
             if adventure_id:
@@ -380,7 +393,10 @@ class MediaEngine:
             logger.info(f"Final image generation kwargs: {kwargs}")
 
             # Call LiteLLM first
-            response = MediaEngine._get_litellm().image_generation(**kwargs)
+            response = MediaEngine._get_litellm().image_generation(
+                **kwargs, 
+                request_timeout=settings.VISUAL_TIMEOUT
+            )
             image_url, b64_json = MediaEngine._extract_image_payload(response)
             
             image_format = provider_options.get("image_format", "jpeg")

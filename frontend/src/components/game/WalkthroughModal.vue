@@ -105,6 +105,10 @@ const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
 
   return parts.length ? parts : [{ type: 'text', text: content }]
 }
+function fixNewlines(text: string | null | undefined): string {
+  if (!text) return ''
+  return text.replace(/\\n/g, '\n')
+}
 </script>
 
 <template>
@@ -126,7 +130,7 @@ const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
                 <p class="text-xs uppercase tracking-widest text-slate-400 font-black">XP</p>
                 <p class="text-lg font-black text-amber-300 tabular-nums">{{ data?.current_xp ?? 0 }}</p>
               </div>
-              <p class="mt-3 text-sm text-slate-300 leading-relaxed">{{ data?.preview || data?.message || 'No walkthrough available.' }}</p>
+              <p class="mt-3 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(data?.preview || data?.message || 'No walkthrough available.') }}</p>
             </div>
 
             <div v-if="!data?.available" class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-slate-400 text-sm">
@@ -158,9 +162,9 @@ const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
                 <li v-for="(step, index) in data?.steps || []" :key="index" class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                   <p class="text-xxs uppercase tracking-widest text-slate-500 font-black">Step {{ index + 1 }}</p>
                   <p class="text-sm text-slate-100 font-bold mt-1">{{ step.title }}</p>
-                  <p class="text-sm text-slate-300 mt-1 leading-relaxed">
+                  <p class="text-sm text-slate-300 mt-1 leading-relaxed whitespace-pre-wrap">
                     <template v-for="(part, partIndex) in parseWalkthroughContent(step.content || '')" :key="`${index}-${partIndex}`">
-                      <span v-if="part.type === 'text'">{{ part.text }}</span>
+                      <span v-if="part.type === 'text'">{{ fixNewlines(part.text) }}</span>
                       <span
                         v-else
                         class="font-semibold text-amber-300/90 underline decoration-dotted underline-offset-4 cursor-help hover:text-amber-200"
@@ -178,7 +182,7 @@ const parseWalkthroughContent = (content: string): WalkthroughPart[] => {
 
             <div v-if="data?.latest_hint" class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
               <p class="text-xxs uppercase tracking-widest text-amber-300 font-black">Latest Hint</p>
-              <p class="text-sm text-amber-100 mt-1">{{ data.latest_hint }}</p>
+              <p class="text-sm text-amber-100 mt-1 whitespace-pre-wrap">{{ fixNewlines(data.latest_hint) }}</p>
             </div>
           </div>
         </div>
