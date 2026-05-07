@@ -286,25 +286,30 @@ class WorldGenerator:
         Persists the result to the WorldScene, WorldExit, and WorldEntity tables.
         """
         # If no provider is given, use the one from user settings
+        llm_settings = user.llm_settings or {}
         if not provider:
-            llm_settings = user.llm_settings or {}
             provider = (
-                llm_settings.get("complex_model_provider")
+                llm_settings.get("generator_model_provider")
+                or llm_settings.get("complex_model_provider")
                 or llm_settings.get("small_model_provider")
                 or llm_settings.get("preferred_provider")
             )
         
         if not model:
-            llm_settings = user.llm_settings or {}
-            model = llm_settings.get("complex_model") or llm_settings.get("small_model") or "gpt-4o"
+            model = (
+                llm_settings.get("generator_model") 
+                or llm_settings.get("complex_model") 
+                or llm_settings.get("small_model") 
+                or "gpt-4o"
+            )
 
         if not provider:
             raise ValueError(
-                "No complex LLM provider configured for this user. "
-                "Open Settings -> LLM and set Complex Model Provider."
+                "No adventure generator LLM provider configured for this user. "
+                "Open Settings -> Intelligence and set Generator Model Provider."
             )
 
-        llm = GameMasterLLM(user, provider=provider, model_category="complex")
+        llm = GameMasterLLM(user, provider=provider, model_category="generator")
 
         log_structured_event(
             "adventure.generation.start",

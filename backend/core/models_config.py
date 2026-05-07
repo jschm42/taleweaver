@@ -19,12 +19,10 @@ IMAGE_PROVIDERS = [
 ]
 
 PREDEFINED_LLM_MODELS = {
-    "openai": ["gpt-4o-mini", "gpt-4o", "o1-mini", "o3-mini"],
-    "google": ["gemini-3-flash-preview", "gemini-3.1-pro-preview", 
-               "gemini-flash-latest", "gemini-2.5-flash"],
-    "openrouter": ["openai/gpt-5-nano","openai/gpt-5-mini", "openai/gpt-5-chat",
-                   "openai/gpt-4o"],
-    "anthropic": ["claude-3-5-sonnvvet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"],
+    "openai": ["gpt-5.4-mini", "gpt-5.3", "gpt-5.4", "gpt-5.5"],
+    "google": ["gemini-3.1-pro-preview", "gemini-2.5-flash"],
+    "openrouter": ["openai/gpt-5-mini", "openai/gpt-5-chat"],
+    "anthropic": ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"],
     "ollama": ["llama3.2", "qwen2.5", "mistral", "phi3"],
 }
 

@@ -2,7 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
-import { configState } from '@/store/config'
+import { configState, refreshConfig } from '@/store/config'
+import { authState } from '@/store/auth'
 import type { CatalogTile } from '@/types'
 import { 
   Sparkles, Palette, Flame, Check, Image, 
@@ -116,8 +117,6 @@ async function loadCatalogs() {
     isLoadingCatalogs.value = false
   }
 }
-
-import { authState } from '@/store/auth'
 
 function initializeLanguage() {
   if (authState.user?.default_language) {

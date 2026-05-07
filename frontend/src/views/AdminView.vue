@@ -31,6 +31,12 @@ const llmForm = ref({
   complex_enable_thinking: false,
   complex_max_thinking_tokens: 1024,
   
+  generator_model: '',
+  generator_model_provider: 'openai',
+  generator_max_tokens: 32768,
+  generator_enable_thinking: false,
+  generator_max_thinking_tokens: 1024,
+  
   preferred_provider: 'openai',
   ollama_url: 'http://localhost:11434',
 })
@@ -374,6 +380,20 @@ const saveLlmSettings = async () => {
   }
 }
 
+const saveGameSettings = async () => {
+  isSubmitting.value = true
+  statusMessage.value = null
+  try {
+    await api.saveGameSettings(gameForm.value)
+    statusMessage.value = { type: 'success', text: 'Game preferences updated.' }
+    await refreshConfig()
+  } catch (error) {
+    statusMessage.value = { type: 'error', text: 'Failed to save game preferences.' }
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
 const saveT2iSettings = async () => {
   isSubmitting.value = true
   statusMessage.value = null
@@ -500,6 +520,19 @@ watch(
     if (isHydratingSettings.value) return
     llmForm.value.complex_model = resolveModelOnProviderChange(
       llmForm.value.complex_model,
+      provider,
+      oldProvider,
+      'llm',
+    )
+  }
+)
+
+watch(
+  () => llmForm.value.generator_model_provider,
+  (provider, oldProvider) => {
+    if (isHydratingSettings.value) return
+    llmForm.value.generator_model = resolveModelOnProviderChange(
+      llmForm.value.generator_model,
       provider,
       oldProvider,
       'llm',
@@ -795,12 +828,87 @@ watch(
               </div>
             </div>
 
+            <!-- GENERATOR MODEL -->
+            <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10 shadow-inner">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
+                  <i class="ra ra-world"></i> Adventure Generator Model
+                </h3>
+                <button 
+                  @click="testLlm('generator', llmForm.generator_model, llmForm.generator_model_provider)"
+                  class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+                >
+                  <i class="ra ra-gear-hammer"></i> Test Connection
+                </button>
+              </div>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
+                  <select v-model="llmForm.generator_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+                    <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
+                  <select 
+                    :value="isModelCustom(llmForm.generator_model, llmForm.generator_model_provider, 'llm') ? 'custom' : llmForm.generator_model"
+                    @change="(e) => { 
+                      const val = (e.target as HTMLSelectElement).value; 
+                      if(val !== 'custom') llmForm.generator_model = val;
+                      else if(!isModelCustom(llmForm.generator_model, llmForm.generator_model_provider, 'llm')) llmForm.generator_model = '';
+                    }"
+                    class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
+                  >
+                    <option value="" disabled>-- Please Select --</option>
+                    <option v-for="m in availableConstants.predefined_llm_models[llmForm.generator_model_provider]" :key="m" :value="m">{{ m }}</option>
+                    <option value="custom">-- Custom Model String --</option>
+                  </select>
+                </div>
+              </div>
+
+              <div v-if="isModelCustom(llmForm.generator_model, llmForm.generator_model_provider, 'llm') || llmForm.generator_model === ''" class="space-y-2 animate-fade-in">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
+                <input v-model="llmForm.generator_model" type="text" maxlength="100" placeholder="e.g. gpt-4o" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+              </div>
+              <p class="text-xxs text-slate-500">Highest reasoning models for creating complete adventures, logic blueprints and complex manifests (World Generation).</p>
+
+              <!-- Test Result Feedback -->
+              <div v-if="testResults.generator" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.generator.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.generator.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+                 <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <div v-if="testResults.generator.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                      <i v-else :class="testResults.generator.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+                      {{ testResults.generator.message }}
+                    </div>
+                 </div>
+              </div>
+
+              <!-- PER-MODEL SETTINGS -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+                  <input v-model.number="llmForm.generator_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+                </div>
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
+                    <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
+                      <input type="checkbox" v-model="llmForm.generator_enable_thinking" class="sr-only peer">
+                      <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
+                    </label>
+                  </div>
+                  <input v-if="llmForm.generator_enable_thinking" v-model.number="llmForm.generator_max_thinking_tokens" type="number" step="1024" min="0" placeholder="Thinking tokens" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
+                </div>
+              </div>
+            </div>
+
             <!-- GLOBAL LLM SETTINGS -->
             <div class="pt-6 border-t border-slate-800 space-y-6">
               <h4 class="text-xs font-black uppercase tracking-[0.2em] text-purple-400">Global Infrastructure</h4>
               
               <div class="space-y-4">
-                <div v-if="llmForm.small_model_provider === 'ollama' || llmForm.complex_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
+                <div v-if="llmForm.small_model_provider === 'ollama' || llmForm.complex_model_provider === 'ollama' || llmForm.generator_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
                   <label class="block text-sm font-semibold text-slate-300">Ollama API Base URL</label>
                   <input v-model="llmForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
                   <p class="text-xxs text-slate-500">Local endpoint used for local model execution.</p>

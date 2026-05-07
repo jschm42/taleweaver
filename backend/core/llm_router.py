@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 class GameMasterLLM:
     DEFAULT_SMALL_MAX_TOKENS = 4096
     DEFAULT_COMPLEX_MAX_TOKENS = 8192
+    DEFAULT_GENERATOR_MAX_TOKENS = 16384
 
 
     @staticmethod
@@ -51,9 +52,8 @@ class GameMasterLLM:
 
     def _completion_with_openrouter_fallback(self, kwargs: dict):
         """Call LiteLLM completion and retry once for OpenRouter provider-order mismatches."""
-        from backend.core.config import settings
         try:
-            return self._get_litellm().completion(**kwargs, request_timeout=settings.INTELLIGENCE_TIMEOUT)
+            return self._get_litellm().completion(**kwargs, request_timeout=self.request_timeout)
         except Exception as exc:
             if self.provider != "openrouter":
                 raise
@@ -68,16 +68,15 @@ class GameMasterLLM:
                 ",".join(available_providers),
             )
             retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
-            return self._get_litellm().completion(**retry_kwargs, request_timeout=settings.INTELLIGENCE_TIMEOUT)
+            return self._get_litellm().completion(**retry_kwargs, request_timeout=self.request_timeout)
 
     async def _acompletion_with_openrouter_fallback(self, kwargs: dict):
         """Async variant of completion retry for OpenRouter provider-order mismatches."""
-        from backend.core.config import settings
         try:
             logger.info(
                 "GameMasterLLM calling LLM for user %s with model %s", self.user.id, kwargs.get("model")
             )
-            return await self._get_litellm().acompletion(**kwargs, request_timeout=settings.INTELLIGENCE_TIMEOUT)
+            return await self._get_litellm().acompletion(**kwargs, request_timeout=self.request_timeout)
         except Exception as exc:
             if self.provider != "openrouter":
                 raise
@@ -96,7 +95,7 @@ class GameMasterLLM:
             logger.info(
                 "GameMasterLLM calling LLM (Fallback) for user %s with model %s", self.user.id, kwargs.get("model")
             )
-            return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=settings.INTELLIGENCE_TIMEOUT)
+            return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
 
     @staticmethod
     def _is_supported_bool_value(value: Any) -> bool:
@@ -154,7 +153,25 @@ class GameMasterLLM:
         self.api_base = None
         
         llm_settings = self.user.llm_settings or {}
-        prefix = "small_" if model_category == "small" else "complex_"
+        
+        if model_category == "generator":
+            prefix = "generator_"
+        elif model_category == "complex":
+            prefix = "complex_"
+        else:
+            prefix = "small_"
+
+        from backend.core.config import settings
+        if model_category == "generator":
+            self.request_timeout = self._coerce_int(
+                getattr(settings, "WORLDBUILDING_TIMEOUT", settings.INTELLIGENCE_TIMEOUT),
+                default=settings.INTELLIGENCE_TIMEOUT,
+            )
+        else:
+            self.request_timeout = self._coerce_int(
+                settings.INTELLIGENCE_TIMEOUT,
+                default=settings.INTELLIGENCE_TIMEOUT,
+            )
         
         # Pull granular settings with fallbacks to global/legacy names.
         # Thinking must stay disabled unless explicitly configured truthy.
@@ -183,11 +200,14 @@ class GameMasterLLM:
         raw_max_tokens = llm_settings.get(f"{prefix}max_tokens")
         if raw_max_tokens is None:
             raw_max_tokens = llm_settings.get("max_tokens")
-        default_max_tokens = (
-            self.DEFAULT_SMALL_MAX_TOKENS
-            if model_category == "small"
-            else self.DEFAULT_COMPLEX_MAX_TOKENS
-        )
+        
+        if model_category == "generator":
+            default_max_tokens = self.DEFAULT_GENERATOR_MAX_TOKENS
+        elif model_category == "complex":
+            default_max_tokens = self.DEFAULT_COMPLEX_MAX_TOKENS
+        else:
+            default_max_tokens = self.DEFAULT_SMALL_MAX_TOKENS
+            
         self.max_tokens = self._coerce_int(raw_max_tokens, default=default_max_tokens)
 
         if self.provider == "ollama":
@@ -196,7 +216,14 @@ class GameMasterLLM:
             self.api_key = self._get_decrypted_key(self.provider)
             
         self.model_category = model_category
-        logger.info(f"Router initialized: category={model_category}, provider={self.provider}, thinking={self.enable_thinking}, max_tokens={self.max_tokens}")
+        logger.info(
+            "Router initialized: category=%s, provider=%s, thinking=%s, max_tokens=%s, timeout=%ss",
+            model_category,
+            self.provider,
+            self.enable_thinking,
+            self.max_tokens,
+            self.request_timeout,
+        )
 
     def _normalize_model(self, model: str) -> str:
         """Return a LiteLLM-friendly model slug for the configured provider."""
@@ -503,6 +530,16 @@ class GameMasterLLM:
         # Fallback to standard JSON mode for Gemini models to ensure stability
         is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
 
+        if is_gemini:
+            # Inject schema into prompt since we are bypassing strict enforcement
+            schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+            system_prompt += (
+                f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
+                f"DO NOT wrap the response in a list (no square brackets at the top level).\n"
+                f"DO NOT include any markdown formatting or text outside the JSON.\n"
+                f"SCHEMA:\n{schema_json}"
+            )
+
         kwargs = {
             "model": normalized_model,
             "messages": messages,
@@ -567,6 +604,13 @@ class GameMasterLLM:
             
         try:
             data = json.loads(content)
+            if isinstance(data, list) and len(data) > 0:
+                logger.warning(f"LLM returned a list for {response_model.__name__}. Taking first element.")
+                data = data[0]
+            
+            if not isinstance(data, dict):
+                raise ValueError(f"LLM returned {type(data).__name__} but a mapping was expected for {response_model.__name__}.")
+                
             return response_model(**data)
         except json.JSONDecodeError as exc:
             if finish_reason == "length":
@@ -603,11 +647,22 @@ class GameMasterLLM:
         # litellm will translate the Pydantic model into a JSON schema 
         # for providers that support structured outputs (e.g. OpenAI).
         normalized_model = self._normalize_model(model)
+        is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
+
+        if is_gemini:
+            # Inject schema into prompt since we are bypassing strict enforcement
+            schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+            system_prompt += (
+                f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
+                f"DO NOT wrap the response in a list (no square brackets at the top level).\n"
+                f"DO NOT include any markdown formatting or text outside the JSON.\n"
+                f"SCHEMA:\n{schema_json}"
+            )
 
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "response_format": response_model,
+            "response_format": {"type": "json_object"} if is_gemini else response_model,
             "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)

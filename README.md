@@ -35,6 +35,22 @@ To get started with your first adventure, follow these simple steps:
 > [!TIP]
 > You can find several pre-made test adventures in the `/adventures` directory of this repository. Use the **Import** button in the **Library** to load them and start playing immediately!
 
+## 🧠 LLM Recommendations
+
+For the best experience, we recommend using high-tier models, especially for **World Generation** and **Strict Mechanics**.
+
+| Task | Recommended Models | Notes |
+| :--- | :--- | :--- |
+| **World Generation** | **GPT-5**, **Claude 4.5 Opus**, **Gemini 3 Pro** | Requires strong reasoning to generate complex, valid JSON manifests. |
+| **Mechanics (Pass 1)** | **GPT-5-mini**, **Claude 4.5 Sonnet** | Best for following strict RPG rules and state modifications. |
+| **Narrative (Pass 2)** | **Claude 4.5 Sonnet**, **GPT-5** | These models provide the most immersive and atmospheric prose.
+
+[!WARNING]
+Use providers with a good latency for the world generation to avoid long wait times. 
+
+> [!WARNING]
+> **Small / Preview Models:** Models like `Gemini 1.5 Flash` or `GPT-4o-mini` are excellent for quick chat responses but may occasionally struggle with the complex, deep JSON schemas required for generating entire worlds. If world generation fails repeatedly, try a more powerful "Pro" or "Sonnet" class model.
+
 ## 1. The Vision
 
 Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background. The frontend is presented in an immersive, stylish pixel-art look.

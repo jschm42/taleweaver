@@ -29,6 +29,7 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 
 DEFAULT_SMALL_MAX_TOKENS = 12288
 DEFAULT_COMPLEX_MAX_TOKENS = 24576
+DEFAULT_GENERATOR_MAX_TOKENS = 32768
 
 
 async def _resolve_global_settings_owner(db: AsyncSession, fallback_user: User) -> User:
@@ -171,6 +172,11 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
         "complex_max_tokens": DEFAULT_COMPLEX_MAX_TOKENS,
         "complex_enable_thinking": False,
         "complex_max_thinking_tokens": 2048,
+        "generator_model": "",
+        "generator_model_provider": "openai",
+        "generator_max_tokens": DEFAULT_GENERATOR_MAX_TOKENS,
+        "generator_enable_thinking": False,
+        "generator_max_thinking_tokens": 2048,
         "preferred_provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
     }
@@ -184,12 +190,16 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
         normalized["small_model_provider"] = normalized.get("preferred_provider") or "openai"
     if "complex_model_provider" not in normalized:
         normalized["complex_model_provider"] = normalized.get("preferred_provider") or "openai"
+    if "generator_model_provider" not in normalized:
+        normalized["generator_model_provider"] = normalized.get("complex_model_provider") or "openai"
 
     # Per-model Max Tokens
     if "small_max_tokens" not in normalized:
         normalized["small_max_tokens"] = normalized.get("max_tokens") or DEFAULT_SMALL_MAX_TOKENS
     if "complex_max_tokens" not in normalized:
         normalized["complex_max_tokens"] = normalized.get("max_tokens") or DEFAULT_COMPLEX_MAX_TOKENS
+    if "generator_max_tokens" not in normalized:
+        normalized["generator_max_tokens"] = normalized.get("max_tokens") or DEFAULT_GENERATOR_MAX_TOKENS
 
     # Per-model Thinking Mode
     if "small_enable_thinking" not in normalized:
@@ -201,6 +211,11 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
         normalized["complex_enable_thinking"] = normalized.get("enable_thinking") or False
     if "complex_max_thinking_tokens" not in normalized:
         normalized["complex_max_thinking_tokens"] = normalized.get("max_thinking_tokens") or 1024
+
+    if "generator_enable_thinking" not in normalized:
+        normalized["generator_enable_thinking"] = normalized.get("enable_thinking") or False
+    if "generator_max_thinking_tokens" not in normalized:
+        normalized["generator_max_thinking_tokens"] = normalized.get("max_thinking_tokens") or 1024
 
     # Fallback between small and complex if one is missing
     s_model = normalized.get("small_model")
@@ -217,13 +232,23 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
         normalized["small_model_provider"] = normalized.get("complex_model_provider")
         normalized["small_max_tokens"] = normalized.get("complex_max_tokens")
         normalized["small_enable_thinking"] = normalized.get("complex_enable_thinking")
-        normalized["small_max_thinking_tokens"] = normalized.get("complex_max_thinking_tokens")
+        normalized["small_max_thinking_tokens"] = normalized.get("small_max_thinking_tokens")
+
+    # If generator is missing, fallback to complex
+    if not normalized.get("generator_model") and normalized.get("complex_model"):
+        normalized["generator_model"] = normalized.get("complex_model")
+        normalized["generator_model_provider"] = normalized.get("complex_model_provider")
+        normalized["generator_max_tokens"] = normalized.get("complex_max_tokens")
+        normalized["generator_enable_thinking"] = normalized.get("complex_enable_thinking")
+        normalized["generator_max_thinking_tokens"] = normalized.get("complex_max_thinking_tokens")
 
     # OpenRouter normalization
     if normalized.get("small_model_provider") == "openrouter":
         normalized["small_model"] = _normalize_openrouter_model(normalized.get("small_model"))
     if normalized.get("complex_model_provider") == "openrouter":
         normalized["complex_model"] = _normalize_openrouter_model(normalized.get("complex_model"))
+    if normalized.get("generator_model_provider") == "openrouter":
+        normalized["generator_model"] = _normalize_openrouter_model(normalized.get("generator_model"))
 
     return normalized
 
@@ -311,6 +336,12 @@ class SettingsPayload(BaseModel):
     complex_max_tokens: int = DEFAULT_COMPLEX_MAX_TOKENS
     complex_enable_thinking: bool = False
     complex_max_thinking_tokens: int = 1024
+    
+    generator_model: str
+    generator_model_provider: str
+    generator_max_tokens: int = DEFAULT_GENERATOR_MAX_TOKENS
+    generator_enable_thinking: bool = False
+    generator_max_thinking_tokens: int = 1024
     
     preferred_provider: str # Legacy
     ollama_url: Optional[str] = None
