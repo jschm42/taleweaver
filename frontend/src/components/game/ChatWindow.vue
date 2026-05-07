@@ -160,6 +160,7 @@ watch(
 )
 
 const canSendInput = computed(() => (props.status === 'connected' || props.status === 'completed') && !props.inputLocked)
+const isPassRunning = computed(() => props.status === 'connecting' || props.status === 'loading')
 const messageTypographyClass = computed(() => {
   if (fontSize.value === 'small') return 'text-xs'
   if (fontSize.value === 'large') return 'text-lg md:text-xl'
@@ -582,10 +583,18 @@ function handleRetry() {
     </div>
 
     <!-- ACTION BAR -->
+    <div
+      v-if="isPassRunning"
+      class="mx-4 mb-2 px-4 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-semibold tracking-wide flex items-center gap-2"
+    >
+      <div class="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin shrink-0"></div>
+      <span>Game pass running. Actions are temporarily disabled. Allowed: Quests, Map, Character Sheet.</span>
+    </div>
+
     <GameActionBar 
       :active-action-id="props.activeActionId" 
       :mode="props.mode"
-      :disabled="!!props.inputLocked"
+      :disabled="!!props.inputLocked || isPassRunning"
       @select-action="emit('selectAction', $event)" 
     />
 

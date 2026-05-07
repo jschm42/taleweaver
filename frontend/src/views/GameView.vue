@@ -96,9 +96,15 @@ const contextMenu = ref<{
 } | null>(null)
 
 const activeActionId = ref<string | null>(null)
+const isPassRunning = computed(() => status.value === 'connecting' || status.value === 'loading')
+const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value)
+
+function isReadOnlyUiCommand(normalized: string): boolean {
+  return normalized === '/map' || normalized === '/sheet' || normalized === '/inventory' || normalized === '/quests'
+}
 
 const handleEntityClick = async (entity: any) => {
-  if (inputLocked.value) return
+  if (isActionInputBlocked.value) return
   if (activeActionId.value) {
     const action = activeActionId.value
     const targetName = entity.name || entity.id
@@ -125,6 +131,8 @@ const handleEntityClick = async (entity: any) => {
 }
 
 const openContextMenu = (entity: any, event: MouseEvent) => {
+  if (isActionInputBlocked.value) return
+
   const items: any[] = []
   let title = entity.name || 'Action'
   
@@ -165,6 +173,7 @@ const openContextMenu = (entity: any, event: MouseEvent) => {
 }
 
 const handleMenuSelect = async (item: any) => {
+  if (isActionInputBlocked.value) return
   const action = item.action
   contextMenu.value = null
   await handlePlayerInput(action)
@@ -368,6 +377,7 @@ watch(() => quests.value, (newQuests, oldQuests) => {
 }, { deep: true })
 
 const handleTakeDirect = async (entity: any) => {
+  if (isActionInputBlocked.value) return
   await sendMessage(`/take_direct ${entity.id || entity.name}`)
 }
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
@@ -615,7 +625,24 @@ const buyHint = async () => {
 }
 
 const handlePlayerInput = async (content: string) => {
-  if (inputLocked.value) {
+  const normalized = content.trim().toLowerCase()
+
+  if (isReadOnlyUiCommand(normalized)) {
+    if (normalized === '/map') {
+      showMap.value = true
+      return
+    }
+
+    if (normalized === '/sheet' || normalized === '/inventory') {
+      showSheet.value = true
+      return
+    }
+
+    showQuests.value = true
+    return
+  }
+
+  if (isActionInputBlocked.value) {
     return
   }
 
@@ -627,7 +654,6 @@ const handlePlayerInput = async (content: string) => {
     }
   }
 
-  const normalized = content.trim().toLowerCase()
   if (normalized === '/walkthrough') {
     await openWalkthroughPanel()
     return
@@ -662,22 +688,28 @@ const handlePlayerInput = async (content: string) => {
     return
   }
 
-  if (normalized === '/map') {
-    showMap.value = true
-    return
-  }
-
-  if (normalized === '/sheet' || normalized === '/inventory') {
-    showSheet.value = true
-    return
-  }
-
-  if (normalized === '/quests') {
-    showQuests.value = true
-    return
-  }
-
   await sendMessage(content)
+}
+
+const handleEquipFromSheet = async (name: string) => {
+  if (isActionInputBlocked.value) return
+  await sendMessage(`/equip ${name}`)
+}
+
+const handleUnequipFromSheet = async (slot: string) => {
+  if (isActionInputBlocked.value) return
+  await sendMessage(`/unequip ${slot}`)
+}
+
+const handleConsumeFromSheet = async (name: string) => {
+  if (isActionInputBlocked.value) return
+  await sendMessage(`/consume ${name}`)
+}
+
+const handleSheetChanged = async () => {
+  if (isActionInputBlocked.value) return
+  if (sheet.value?.rule_enforcement_mode === 'chat') return
+  await sendMessage('/rule-pass')
 }
 
 const handleCombatAttack = async () => {
@@ -982,10 +1014,10 @@ onBeforeUnmount(() => {
       :sheet="sheet" 
       :is-debug="!!sheet?.debug_mode"
       @close="showSheet = false" 
-      @equip="(name) => sendMessage(`/equip ${name}`)"
-      @unequip="(slot) => sendMessage(`/unequip ${slot}`)"
-      @consume="(name) => sendMessage(`/consume ${name}`)"
-      @changed="sheet?.rule_enforcement_mode !== 'chat' && sendMessage('/rule-pass')"
+      @equip="handleEquipFromSheet"
+      @unequip="handleUnequipFromSheet"
+      @consume="handleConsumeFromSheet"
+      @changed="handleSheetChanged"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
     />

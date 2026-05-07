@@ -165,7 +165,7 @@ export function useGameSocket(): UseGameSocket {
       status.value = 'game_over'
     } else if (data.game_completed) {
       status.value = inputLocked.value ? 'completed' : 'connected'
-    } else if (status.value !== 'connecting' && status.value !== 'loading') {
+    } else if (status.value !== 'connecting') {
       status.value = 'connected'
     }
   }
@@ -238,21 +238,26 @@ export function useGameSocket(): UseGameSocket {
    * Posts a player message and processes the GM response.
    */
   async function sendMessage(content: string): Promise<void> {
+    const isBusy = status.value === 'connecting' || status.value === 'loading'
+    const wasGameOver = status.value === 'game_over'
+    if (wasGameOver || inputLocked.value || isBusy || !currentGameId) return
+
     const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume']
     const isSilent = silentCommands.some(cmd => content.toLowerCase().startsWith(cmd))
-    
+
     if (content && !isSilent) _pushMessage('user', content)
-    
-    const wasGameOver = status.value === 'game_over'
-    if (wasGameOver || inputLocked.value) return
 
     status.value = 'connecting' 
     statusText.value = 'Considering...'
+    let receivedFinalEvent = false
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
 
     try {
       const res = await fetch(`${BASE}/adventures/${currentGameId}/chat`, {
         method: 'POST',
         headers: authHeaders(true),
+        signal: controller.signal,
         body: JSON.stringify({ 
           content,
           auto_visualize: autoVisualize.value,
@@ -323,6 +328,7 @@ export function useGameSocket(): UseGameSocket {
             }
             lastMsg.content += data.content
           } else if (event === 'final') {
+            receivedFinalEvent = true
             applySessionSnapshot(data, false)
             if (data.game_over) {
               status.value = 'game_over'
@@ -344,9 +350,27 @@ export function useGameSocket(): UseGameSocket {
           }
         }
       }
+
+      // Fallback for truncated streams without explicit final/error event.
+      if (!receivedFinalEvent && status.value === 'connecting') {
+        const snapshot = await fetchSessionSnapshot(currentGameId)
+        if (snapshot) {
+          applySessionSnapshot(snapshot, false)
+          if (status.value === 'connecting') {
+            status.value = 'connected'
+          }
+        } else {
+          status.value = 'connected'
+        }
+        statusText.value = ''
+      }
     } catch (err) {
       console.error('[Session] Chat error:', err)
-      status.value = 'error'
+      _pushMessage('system', 'The Game Master did not respond in time. Please try again.')
+      status.value = 'connected'
+      statusText.value = ''
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 
