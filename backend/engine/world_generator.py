@@ -1028,7 +1028,7 @@ class WorldGenerator:
                                 user.encrypted_api_keys,
                                 style_instruction=style_instruction,
                             ),
-                            timeout=180.0,
+                            timeout=float(settings.VISUAL_TIMEOUT),
                         )
                     except Exception as exc:
                         logger.warning("Object image generation failed for %s/%s: %s", template_id, o['id'], exc)

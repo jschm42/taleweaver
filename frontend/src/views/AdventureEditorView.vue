@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authState } from '@/store/auth'
 import { ArrowLeft, Save, Trash2, Wand2, Sparkles, Image as ImageIcon, Plus, X, AlertTriangle } from 'lucide-vue-next'
+import { getItemIcon } from '@/utils/game_icons'
 import bronzeTrophy from '@/assets/svg/bronze-award-trophy.svg'
 import silverTrophy from '@/assets/svg/silver-award-trophy.svg'
 import goldTrophy from '@/assets/svg/gold-award-trophy.svg'
@@ -987,7 +988,7 @@ const goBack = () => {
                    </button>
                  </div>
                    <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                    <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="handleHover({ id: npc.id, name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl shadow-lg transition-all overflow-visible">
+                    <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="handleHover({ id: npc.id, name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats, inventory: npc.inventory }, $event)" @mouseleave="clearHover" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl shadow-lg transition-all overflow-visible">
                       <div class="absolute inset-0 rounded-2xl overflow-hidden">
                         <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                         <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
@@ -1002,6 +1003,17 @@ const goBack = () => {
                             <template v-if="npc.stats.hp !== undefined">
                               <div class="flex items-center gap-1 text-[8px] font-black text-red-500 bg-red-500/10 px-1 py-0.5 rounded border border-red-500/20"><i class="ra ra-heart"></i> {{ npc.stats.hp }}</div>
                             </template>
+                          </div>
+
+                          <!-- NPC Inventory Icons -->
+                          <div v-if="npc.inventory && npc.inventory.length > 0" class="flex flex-wrap gap-1 mt-2">
+                            <div v-for="item in npc.inventory.slice(0, 4)" :key="item.id" class="w-4 h-4 rounded-sm overflow-hidden border border-white/10 bg-black/40">
+                              <img v-if="item.image_url" :src="buildVisualImageUrl(item.image_url)" class="w-full h-full object-cover" />
+                              <div v-else class="w-full h-full flex items-center justify-center">
+                                <i :class="['ra text-[8px]', getItemIcon(item.item_type), 'text-slate-500']"></i>
+                              </div>
+                            </div>
+                            <div v-if="npc.inventory.length > 4" class="text-[8px] text-slate-500 font-bold self-center ml-0.5">+{{ npc.inventory.length - 4 }}</div>
                           </div>
                         </div>
                       </div>
@@ -1473,7 +1485,7 @@ const goBack = () => {
       <Transition name="tooltip">
         <div 
           v-if="hoveredEntity && !activeMenuId" 
-          class="fixed z-[100] pointer-events-none transition-all duration-75 flex flex-col"
+          class="fixed z-[100] pointer-events-none transition-opacity duration-75 flex flex-col"
           :style="{ 
             left: mousePos.x + 'px', 
             top: tooltipAlignTop ? 'auto' : (mousePos.y + 15) + 'px',
@@ -1524,6 +1536,25 @@ const goBack = () => {
               </div>
 
               <p class="text-xs text-slate-400 leading-relaxed italic whitespace-pre-wrap">{{ fixNewlines(hoveredEntity.description) }}</p>
+
+              <!-- NPC Inventory in Tooltip -->
+              <div v-if="hoveredEntity.type === 'NPC' && hoveredEntity.inventory && hoveredEntity.inventory.length > 0" class="space-y-2 pt-2 border-t border-white/5">
+                <div class="flex items-center gap-1.5">
+                  <i class="ra ra-treasure-chest text-[10px] text-slate-500"></i>
+                  <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Possessions</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <div v-for="item in hoveredEntity.inventory" :key="item.id" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/40 border border-white/5">
+                    <div class="w-4 h-4 rounded-sm overflow-hidden shrink-0 border border-white/10">
+                      <img v-if="item.image_url" :src="buildVisualImageUrl(item.image_url)" class="w-full h-full object-cover" />
+                      <div v-else class="w-full h-full flex items-center justify-center bg-slate-800">
+                        <i :class="['ra text-[8px]', getItemIcon(item.item_type), 'text-slate-500']"></i>
+                      </div>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-300 uppercase tracking-tight">{{ item.name }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

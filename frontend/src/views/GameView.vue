@@ -1146,7 +1146,10 @@ onBeforeUnmount(() => {
                     :key="item?.id || iidx"
                     class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-xxs text-slate-300 flex items-center gap-1.5"
                   >
-                    <i v-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
+                    <div v-if="typeof item === 'object' && item?.image_url" class="w-4 h-4 rounded overflow-hidden shrink-0 border border-slate-700">
+                      <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
+                    </div>
+                    <i v-else-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
                     <i v-else class="ra ra-emerald text-[12px] text-amber-500/60"></i>
                     {{ typeof item === 'object' ? item?.name : item }}
                   </div>

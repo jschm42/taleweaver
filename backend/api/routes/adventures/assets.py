@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 import uuid
 import json
 from typing import Optional, Dict, Any, Literal, List
@@ -229,10 +230,13 @@ async def regenerate_visual(
             prompt = payload.prompt or prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
                 title=adv.title, original_prompt=adv.teaser or adv.original_prompt
             )
-            image_url = await MediaEngine.generate_adventure_cover(
-                title=adv.title, original_prompt=adv.teaser or adv.original_prompt,
-                adventure_id=template_id, user_config=user_config, api_keys=api_keys,
-                style_instruction=style_instruction
+            image_url = await asyncio.wait_for(
+                MediaEngine.generate_adventure_cover(
+                    title=adv.title, original_prompt=adv.teaser or adv.original_prompt,
+                    adventure_id=template_id, user_config=user_config, api_keys=api_keys,
+                    style_instruction=style_instruction
+                ),
+                timeout=float(settings.VISUAL_TIMEOUT)
             )
             if image_url: adv.image_url = image_url
 
@@ -250,11 +254,14 @@ async def regenerate_visual(
             prompt = payload.prompt or (
                 f"{base_prompt} Narrative context: {generated_plot[:1200]}" if generated_plot else base_prompt
             )
-            image_url = await MediaEngine.generate_entity_image(
-                prompt=prompt, adventure_id=template_id, entity_id="PROTAGONIST",
-                entity_type="NPC", user_config=user_config, api_keys=api_keys,
-                style_instruction=style_instruction,
-                use_advanced_model=payload.use_advanced_model
+            image_url = await asyncio.wait_for(
+                MediaEngine.generate_entity_image(
+                    prompt=prompt, adventure_id=template_id, entity_id="PROTAGONIST",
+                    entity_type="NPC", user_config=user_config, api_keys=api_keys,
+                    style_instruction=style_instruction,
+                    use_advanced_model=payload.use_advanced_model
+                ),
+                timeout=float(settings.VISUAL_TIMEOUT)
             )
             if image_url: avatar.profile_image = image_url
 
@@ -267,10 +274,13 @@ async def regenerate_visual(
             prompt = payload.prompt or prompts.SCENE_IMAGE_PROMPT_TEMPLATE.format(
                 name=scene.label, description=scene.description
             )
-            image_url = await MediaEngine.generate_scene_image(
-                prompt=prompt, adventure_id=template_id, user_config=user_config, api_keys=api_keys,
-                style_instruction=style_instruction,
-                use_advanced_model=payload.use_advanced_model
+            image_url = await asyncio.wait_for(
+                MediaEngine.generate_scene_image(
+                    prompt=prompt, adventure_id=template_id, user_config=user_config, api_keys=api_keys,
+                    style_instruction=style_instruction,
+                    use_advanced_model=payload.use_advanced_model
+                ),
+                timeout=float(settings.VISUAL_TIMEOUT)
             )
             if image_url: scene.image_url = image_url
 
@@ -289,11 +299,14 @@ async def regenerate_visual(
                     name=entity.name, description=entity.description
                 )
 
-            image_url = await MediaEngine.generate_entity_image(
-                prompt=prompt, adventure_id=template_id, entity_id=entity.id,
-                entity_type=entity.entity_type, user_config=user_config, api_keys=api_keys,
-                style_instruction=style_instruction,
-                use_advanced_model=payload.use_advanced_model
+            image_url = await asyncio.wait_for(
+                MediaEngine.generate_entity_image(
+                    prompt=prompt, adventure_id=template_id, entity_id=entity.id,
+                    entity_type=entity.entity_type, user_config=user_config, api_keys=api_keys,
+                    style_instruction=style_instruction,
+                    use_advanced_model=payload.use_advanced_model
+                ),
+                timeout=float(settings.VISUAL_TIMEOUT)
             )
             if image_url: entity.image_url = image_url
 
