@@ -267,7 +267,8 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
             "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
         ],
         "selected_voice": "Puck",
-        "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling."
+        "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling.",
+        "speech_rate": 1.0
     }
     if not settings:
         return fallback
@@ -292,6 +293,8 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
         normalized["selected_voice"] = fallback["selected_voice"]
     if "sample_context" not in normalized:
         normalized["sample_context"] = fallback["sample_context"]
+    if "speech_rate" not in normalized:
+        normalized["speech_rate"] = fallback["speech_rate"]
     return normalized
 
 
@@ -413,6 +416,7 @@ class TTSSettingsPayload(BaseModel):
     voice_list: list[str]
     selected_voice: str
     sample_context: str
+    speech_rate: float = 1.0
 
 
 class CatalogTilePayload(BaseModel):

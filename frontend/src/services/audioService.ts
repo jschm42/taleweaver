@@ -7,6 +7,7 @@ class AudioService {
   public isGenerating = ref(false)
   public currentText = ref<string | null>(null)
   public autoSpeechEnabled = ref(sessionStorage.getItem('autoSpeechEnabled') === 'true')
+  public speechRate = ref<number>(parseFloat(localStorage.getItem('tts_speech_rate') ?? '1'))
 
   private normalizeText(value: unknown): string {
     if (typeof value === 'string') return value.trim()
@@ -29,6 +30,10 @@ class AudioService {
   constructor() {
     watch(this.autoSpeechEnabled, (val) => {
       sessionStorage.setItem('autoSpeechEnabled', val ? 'true' : 'false')
+    })
+
+    watch(this.speechRate, (val) => {
+      localStorage.setItem('tts_speech_rate', String(val))
     })
 
     // Global listener for SPACE key to stop audio
@@ -68,6 +73,7 @@ class AudioService {
       
       this.isPlaying.value = true
       this.currentAudio = new Audio(audio_url)
+      this.currentAudio.playbackRate = this.speechRate.value
       
       this.currentAudio.onended = () => {
         this.isPlaying.value = false

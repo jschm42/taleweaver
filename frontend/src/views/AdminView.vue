@@ -2,6 +2,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { configState, refreshConfig } from '@/store/config'
+import { audioService } from '@/services/audioService'
 import type { CatalogTile } from '@/types'
 
 const router = useRouter()
@@ -73,6 +74,7 @@ const ttsForm = ref({
   ],
   selected_voice: 'Puck',
   sample_context: '',
+  speech_rate: 1.0,
 })
 
 
@@ -134,7 +136,10 @@ const fetchSettings = async () => {
     if (data.llm_settings) llmForm.value = { ...data.llm_settings as any }
     if (data.t2i_settings) t2iForm.value = { ...data.t2i_settings as any }
     if (data.game_settings) gameForm.value = { ...data.game_settings as any }
-    if (data.tts_settings) ttsForm.value = { ...data.tts_settings as any }
+    if (data.tts_settings) {
+      ttsForm.value = { ...data.tts_settings as any }
+      audioService.speechRate.value = (data.tts_settings as any).speech_rate ?? 1.0
+    }
     if ((data as any).available_constants) availableConstants.value = (data as any).available_constants
     imageStylesCatalog.value = data.image_styles_catalog || []
     toneCatalog.value = data.tone_catalog || []
@@ -430,6 +435,7 @@ const saveTTSSettings = async () => {
   statusMessage.value = null
   try {
     await api.saveTTSSettings(ttsForm.value)
+    audioService.speechRate.value = ttsForm.value.speech_rate
     statusMessage.value = { type: 'success', text: 'TTS settings updated.' }
     await refreshConfig()
   } catch (error) {
@@ -1213,6 +1219,27 @@ const voiceLabels: Record<string, string> = {
                     <option v-for="voice in ttsForm.voice_list" :key="voice" :value="voice">{{ voiceLabels[voice] || voice }}</option>
                   </select>
                 </div>
+              </div>
+
+              <!-- Speech rate slider -->
+              <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Sprechgeschwindigkeit
+                  <span class="ml-2 text-blue-400 font-mono normal-case">{{ ttsForm.speech_rate.toFixed(2) }}×</span>
+                </label>
+                <div class="flex items-center gap-3">
+                  <span class="text-xs text-slate-500 w-10 text-right">0.5×</span>
+                  <input
+                    type="range"
+                    v-model.number="ttsForm.speech_rate"
+                    min="0.5"
+                    max="2.0"
+                    step="0.05"
+                    class="flex-1 h-2 rounded-lg appearance-none cursor-pointer bg-slate-800 accent-blue-500"
+                  />
+                  <span class="text-xs text-slate-500 w-10">2.0×</span>
+                </div>
+                <p class="text-xxs text-slate-500 italic">Steuert die Abspielgeschwindigkeit der generierten Sprachausgabe. Standard: 1.00×</p>
               </div>
 
               <div class="space-y-2">
