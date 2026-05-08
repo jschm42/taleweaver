@@ -14,8 +14,34 @@ from backend.models.adventure_template import AdventureTemplate, GenerationCance
 from backend.core.config import settings
 from backend.core import prompts
 from backend.core.style_catalog import resolve_style_instruction
+from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_NAMES
 
 logger = logging.getLogger(__name__)
+
+
+def _build_voice_assignment_requirement(
+    enabled: bool,
+    available_voice_list: Optional[List[str]] = None,
+) -> str:
+    if not enabled:
+        return ""
+
+    allowed_names = set(available_voice_list or GOOGLE_TTS_VOICE_NAMES)
+    catalog_entries = [entry for entry in GOOGLE_TTS_VOICE_CATALOG if entry["name"] in allowed_names]
+    if not catalog_entries:
+        return ""
+
+    catalog_lines = "\n".join(
+        f"  - {entry['name']} ({entry['gender']})" for entry in catalog_entries
+    )
+    return (
+        "\nNPC VOICE ASSIGNMENT (ENABLED):\n"
+        "- Assign each NPC an optional `voice` from this list.\n"
+        "- Use the character personality/role and implied gender presentation to choose a fitting voice when possible.\n"
+        "- If no fitting choice exists, set `voice` to null.\n"
+        "- Do NOT invent voice names outside this list.\n"
+        f"{catalog_lines}\n"
+    )
 
 
 def _image_generation_timeout_seconds() -> float:
@@ -151,6 +177,7 @@ class WorldEntitySchema(BaseModel):
     movement_type: Optional[str] = Field(None, description="One of: STATIONARY, MOVABLE")
     hp: Optional[int] = Field(None, description="Optional hitpoints")
     mana: Optional[int] = Field(None, description="Optional mana")
+    voice: Optional[str] = Field(None, description="Optional Google TTS voice name for spoken dialogue.")
     stamina: Optional[int] = Field(None, description="Optional stamina")
     is_attackable: bool = Field(True, description="If False, the player cannot start a fight with this NPC.")
 
@@ -270,6 +297,7 @@ class WorldGenerator:
         generate_scene_images: bool = False,
         generate_npc_images: bool = False,
         generate_item_images: bool = False,
+        automatic_npc_voice_assignment: bool = True,
         min_scenes: int = 1,
         max_scenes: int = 5,
         quest_generation_enabled: bool = True,
@@ -303,6 +331,9 @@ class WorldGenerator:
                 or llm_settings.get("small_model") 
                 or "gpt-4o"
             )
+
+        tts_settings = user.tts_settings or {}
+        available_voice_list = tts_settings.get("voice_list") if isinstance(tts_settings, dict) else None
 
         if not provider:
             raise ValueError(
@@ -349,6 +380,10 @@ class WorldGenerator:
             selected_tone=selected_tone or "Standard RPG",
             min_scenes=min_scenes, 
             max_scenes=max_scenes,
+            voice_assignment_requirement=_build_voice_assignment_requirement(
+                automatic_npc_voice_assignment,
+                available_voice_list,
+            ),
             quest_requirement=quest_requirement,
             award_requirement=award_requirement
         )
@@ -383,6 +418,7 @@ class WorldGenerator:
                 "generate_scene_images": generate_scene_images,
                 "generate_npc_images": generate_npc_images,
                 "generate_item_images": generate_item_images,
+                "automatic_npc_voice_assignment": automatic_npc_voice_assignment,
             },
         )
 
@@ -902,6 +938,7 @@ class WorldGenerator:
                 max_mana=n.get("mana"),
                 stamina=n.get("stamina"),
                 max_stamina=n.get("stamina"),
+                voice=n.get("voice") if n.get("voice") in GOOGLE_TTS_VOICE_NAMES else None,
                 is_hidden=n.get("is_hidden", False),
                 is_attackable=n.get("is_attackable", True),
             ))

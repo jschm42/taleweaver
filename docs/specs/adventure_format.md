@@ -20,7 +20,7 @@ The manifest is a JSON object containing the complete blueprint of a generated w
 ```json
 {
   "format": "TaleWeaver",
-  "version": "1.1",
+  "version": "1.2",
   "adventure": { ... },
   "protagonist": { ... },
   "scenes": [ ... ],
@@ -103,6 +103,7 @@ Non-Player Characters inhabiting the world.
 | `spatial_position` | `string` | Precise location (e.g., `"leaning against the fountain"`). |
 | `npc_type` | `string` | `"HUMANOID"`, `"ANIMAL"`, `"MONSTER"`, or `"BEING"`. |
 | `movement_type` | `string` | `"STATIONARY"` or `"MOVABLE"`. |
+| `voice` | `string \| null` | Optional Google TTS voice assigned to this NPC for spoken dialogue. |
 | `hp` / `mana` / `stamina` | `number` | NPC resources for combat/interactions. |
 | `is_hidden` | `boolean` | If true, the NPC is not immediately visible. |
 

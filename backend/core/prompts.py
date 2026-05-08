@@ -81,6 +81,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
 
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
+    "{voice_assignment_requirement}"
     "{quest_requirement}"
     "{award_requirement}"
 )

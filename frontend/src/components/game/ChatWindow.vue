@@ -526,7 +526,8 @@ function handleRetry() {
               adventureId: props.sheet?.template_id,
               title: props.sheet?.adventure_title,
               sceneName: props.sheet?.current_scene,
-              tone: props.sheet?.adventure_tone
+              tone: props.sheet?.adventure_tone,
+              npcMetadata: props.npcMetadata,
             })"
             class="ml-auto p-1.5 px-3 text-[10px] font-black uppercase tracking-widest bg-slate-800/80 border border-slate-700/50 rounded-xl text-slate-400 hover:bg-amber-500/20 hover:text-amber-400 transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
             title="Listen to this narration"

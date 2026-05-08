@@ -47,7 +47,7 @@ class AdventureExporter:
         # Build standard manifest structure according to docs/specs/adventure_format.md
         manifest = {
             "format": "TaleWeaver",
-            "version": "1.1",
+            "version": "1.2",
             
             "adventure": {
                 "title": adv.title,

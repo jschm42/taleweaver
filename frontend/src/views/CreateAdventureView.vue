@@ -20,6 +20,7 @@ const form = ref({
   generate_npc_images: true,
   generate_item_images: true,
   generate_scene_images: true,
+  automatic_npc_voice_assignment: true,
   automatic_cover_generation: true,
   clock_enabled: true,
   pacing_minutes: 5,
@@ -37,7 +38,7 @@ const form = ref({
 const automatedAssetsEnabled = ref(true)
 
 const assetOptions: Array<{
-  key: 'automatic_cover_generation' | 'generate_npc_images' | 'generate_item_images' | 'generate_scene_images'
+  key: 'automatic_cover_generation' | 'generate_npc_images' | 'generate_item_images' | 'generate_scene_images' | 'automatic_npc_voice_assignment'
   label: string
   icon: any
 }> = [
@@ -45,6 +46,7 @@ const assetOptions: Array<{
   { key: 'generate_npc_images', label: 'NPC Portraits', icon: Users },
   { key: 'generate_item_images', label: 'Item Icons', icon: Sword },
   { key: 'generate_scene_images', label: 'Scene Visuals', icon: MapPin },
+  { key: 'automatic_npc_voice_assignment', label: 'NPC Voices', icon: Sparkles },
 ]
 
 const imageStyles = ref<CatalogTile[]>([])
@@ -84,15 +86,17 @@ function toggleAllAssets() {
     form.value.generate_item_images = true
     form.value.generate_scene_images = true
     form.value.automatic_cover_generation = true
+    form.value.automatic_npc_voice_assignment = true
   } else {
     form.value.generate_npc_images = false
     form.value.generate_item_images = false
     form.value.generate_scene_images = false
     form.value.automatic_cover_generation = false
+    form.value.automatic_npc_voice_assignment = false
   }
 }
 
-function toggleAsset(key: 'automatic_cover_generation' | 'generate_npc_images' | 'generate_item_images' | 'generate_scene_images') {
+function toggleAsset(key: 'automatic_cover_generation' | 'generate_npc_images' | 'generate_item_images' | 'generate_scene_images' | 'automatic_npc_voice_assignment') {
   if (automatedAssetsEnabled.value) return
   form.value[key] = !form.value[key]
 }

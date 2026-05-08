@@ -32,6 +32,7 @@ class EntityUpdateRequest(BaseModel):
     hp: Optional[int] = None
     mana: Optional[int] = None
     stamina: Optional[int] = None
+    voice: Optional[str] = None
 
 class AIEditRequest(BaseModel):
     prompt: str
@@ -152,6 +153,8 @@ async def update_editor_entity(
         if ent:
             if payload.name is not None: ent.name = payload.name
             if payload.description is not None: ent.description = payload.description
+            if payload.voice is not None and ent.entity_type == "NPC":
+                ent.voice = payload.voice or None
             if payload.hp is not None: 
                 ent.hp = payload.hp
                 ent.max_hp = payload.hp

@@ -79,6 +79,7 @@ class WorldEntity(Base, TimestampMixin):
     max_mana = Column(Integer, nullable=True)
     stamina = Column(Integer, nullable=True)
     max_stamina = Column(Integer, nullable=True)
+    voice = Column(String(50), nullable=True) # Optional Google TTS voice for this NPC
 
     # Stat Modifiers
     stat_modifier_strength = Column(Integer, nullable=True)

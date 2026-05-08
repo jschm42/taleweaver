@@ -51,7 +51,13 @@ async def _get_npc_metadata(template_id: str, db: AsyncSession) -> dict:
     npc_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type.in_(["NPC", "npc"])))
     metadata = {}
     for npc in npc_res.scalars().all():
-        data = {"name": npc.name, "description": npc.description, "image_url": npc.image_url, "entity_type": "NPC"}
+        data = {
+            "name": npc.name,
+            "description": npc.description,
+            "image_url": npc.image_url,
+            "voice": npc.voice,
+            "entity_type": "NPC",
+        }
         metadata[npc.id] = data
         metadata[npc.name] = data
     return metadata

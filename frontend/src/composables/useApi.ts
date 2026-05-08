@@ -319,7 +319,7 @@ export const api = {
     return request('/settings/tts', { method: 'POST', body: JSON.stringify(payload) })
   },
 
-  generateTTS(payload: { text: string; scene_description?: string; adventure_id?: string; title?: string; scene_name?: string; tone?: string }): Promise<{ audio_url: string }> {
+  generateTTS(payload: { text: string; scene_description?: string; adventure_id?: string; title?: string; scene_name?: string; tone?: string; voice_override?: string }): Promise<{ audio_url: string }> {
     return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload) })
   },
 

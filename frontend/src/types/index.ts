@@ -150,6 +150,7 @@ export interface CreateAdventurePayload {
   generate_npc_images?: boolean
   generate_item_images?: boolean
   generate_scene_images?: boolean
+  automatic_npc_voice_assignment?: boolean
   selected_image_styles?: CatalogTile[]
   selected_tone?: CatalogTile | string | null
   min_scenes?: number

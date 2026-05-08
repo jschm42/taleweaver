@@ -203,6 +203,7 @@ async def create_adventure(
                     generate_scene_images=payload.generate_scene_images,
                     generate_npc_images=payload.generate_npc_images,
                     generate_item_images=payload.generate_item_images,
+                    automatic_npc_voice_assignment=payload.automatic_npc_voice_assignment,
                     min_scenes=payload.min_scenes,
                     max_scenes=payload.max_scenes,
                     quest_generation_enabled=not chat_mode,

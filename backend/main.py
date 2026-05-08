@@ -143,5 +143,12 @@ async def health_check() -> dict:
 
 if __name__ == "__main__":
     import uvicorn
-    # Use the port from settings
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=settings.BACKEND_PORT, reload=True)
+    # On Windows, reload mode spawns a watchdog process and can produce noisy
+    # KeyboardInterrupt traces on shutdown. Keep reload opt-in for local dev.
+    reload_enabled = os.getenv("TALEWEAVER_RELOAD", "0").lower() in {"1", "true", "yes", "on"}
+    uvicorn.run(
+        "backend.main:app",
+        host="0.0.0.0",
+        port=settings.BACKEND_PORT,
+        reload=reload_enabled,
+    )

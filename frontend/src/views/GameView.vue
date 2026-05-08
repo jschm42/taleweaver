@@ -420,7 +420,8 @@ watch(() => inputLocked.value, (isLocked) => {
         adventureId: props.id,
         title: sheet.value?.adventure_title || undefined,
         sceneName: sheet.value?.current_scene || undefined,
-        tone: sheet.value?.adventure_tone || undefined
+        tone: sheet.value?.adventure_tone || undefined,
+        npcMetadata: npcMetadata.value,
       })
     }
   }
@@ -435,7 +436,8 @@ watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
         adventureId: props.id,
         title: sheet.value?.adventure_title || undefined,
         sceneName: sheet.value?.current_scene || undefined,
-        tone: sheet.value?.adventure_tone || undefined
+        tone: sheet.value?.adventure_tone || undefined,
+        npcMetadata: npcMetadata.value,
       })
     }
   } else if (!enabled) {

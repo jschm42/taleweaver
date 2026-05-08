@@ -40,7 +40,7 @@ const isAIEditing = ref(false)
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
-const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0 })
+const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, voice: '' })
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -97,6 +97,7 @@ if (typeof window !== 'undefined') {
 
 const imageStylesCatalog = ref<any[]>([])
 const toneCatalog = ref<any[]>([])
+const availableVoices = ref<string[]>([])
 
 // Notifications state
 const notifications = ref<{ id: number; message: string; type: 'error' | 'success' | 'info' }[]>([])
@@ -249,6 +250,7 @@ async function fetchCatalogs() {
       const data = await res.json()
       imageStylesCatalog.value = data.image_styles_catalog || []
       toneCatalog.value = data.tone_catalog || []
+      availableVoices.value = Array.isArray(data.tts_settings?.voice_list) ? data.tts_settings.voice_list : []
     }
   } catch (error) {
     console.error('Failed to fetch catalogs:', error)
@@ -392,7 +394,7 @@ async function fetchDebugInfo() {
   }
 }
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number) {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, voice?: string) {
   editEntityContext.value = { type, id }
   editForm.value = { 
     name: currentName || '', 
@@ -400,7 +402,8 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     teaser: fixNewlines(currentTeaser || ''),
     hp: hp || 0,
     stamina: stamina || 0,
-    mana: mana || 0
+    mana: mana || 0,
+    voice: voice || ''
   }
   showEditModal.value = true
 }
@@ -418,6 +421,7 @@ async function saveEntityText(type: string, id: string) {
         name: editForm.value.name,
         teaser: type === 'cover' ? editForm.value.teaser : undefined,
         description: editForm.value.description,
+        voice: type === 'npc' ? editForm.value.voice || '' : undefined,
         hp: editForm.value.hp || undefined,
         stamina: editForm.value.stamina || undefined,
         mana: editForm.value.mana || undefined
@@ -1126,7 +1130,7 @@ const goBack = () => {
                            <button @click="quickRegenerateVisual('npc', npc.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
                            <button @click="openRegenerateDialog('npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
                            <button @click="openUploadPicker('npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                           <button @click="openTextEdit('npc', npc.id, npc.name, npc.description, '', npc.stats?.hp, npc.stats?.stamina, npc.stats?.mana)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
+                           <button @click="openTextEdit('npc', npc.id, npc.name, npc.description, '', npc.stats?.hp, npc.stats?.stamina, npc.stats?.mana, npc.voice)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
                         </div>
                       </div>
                     </div>
@@ -1779,6 +1783,15 @@ const goBack = () => {
                     </span>
                   </div>
                   <textarea v-model="editForm.teaser" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="A short, catchy teaser for your adventure..."></textarea>
+                </div>
+
+                <div v-if="editEntityContext.type === 'npc'" class="space-y-3">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Voice</label>
+                  <select v-model="editForm.voice" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-3 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all shadow-inner">
+                    <option value="">Default narrator voice</option>
+                    <option v-for="voice in availableVoices" :key="voice" :value="voice">{{ voice }}</option>
+                  </select>
+                  <p class="text-xs text-slate-500">Used for this NPC's direct dialogue in TTS. Empty keeps the global default voice.</p>
                 </div>
 
                 <div class="space-y-3">
