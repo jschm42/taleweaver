@@ -410,10 +410,12 @@ const handleTakeDirect = async (entity: any) => {
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
 
 const lastAutoSpokenSignature = ref<string | null>(null)
+const lastAutoSpeakAt = ref(0)
+const AUTO_SPEAK_DEBOUNCE_MS = 350
 
 function getMessageSignature(message: { timestamp?: Date; content: string }, index: number): string {
   const ts = message.timestamp instanceof Date ? message.timestamp.toISOString() : ''
-  return `${index}|${ts}|${message.content}`
+  return `${index}|${ts}`
 }
 
 function speakLatestAssistantMessage(options: { force?: boolean } = {}): void {
@@ -421,15 +423,20 @@ function speakLatestAssistantMessage(options: { force?: boolean } = {}): void {
   if (!audioService.autoSpeechEnabled.value) return
   if (inputLocked.value || isCombatActive.value) return
 
+  const now = Date.now()
+  if (!force && now - lastAutoSpeakAt.value < AUTO_SPEAK_DEBOUNCE_MS) return
+
   const index = messages.value.length - 1
   if (index < 0) return
 
   const lastMsg = messages.value[index]
   if (!lastMsg || lastMsg.role !== 'assistant') return
+  if (!String(lastMsg.content || '').trim()) return
 
   const signature = getMessageSignature(lastMsg, index)
   if (!force && signature === lastAutoSpokenSignature.value) return
 
+  lastAutoSpeakAt.value = now
   lastAutoSpokenSignature.value = signature
   audioService.speak(lastMsg.content, {
     sceneDescription: currentSceneDescription.value,
@@ -451,11 +458,30 @@ watch(() => messages.value.length, (newLength, oldLength) => {
   speakLatestAssistantMessage()
 })
 
+watch(
+  () => {
+    const index = messages.value.length - 1
+    if (index < 0) return ''
+    const lastMsg = messages.value[index]
+    if (!lastMsg || lastMsg.role !== 'assistant') return ''
+    return `${index}|${String(lastMsg.content || '').trim()}`
+  },
+  (snapshot, previous) => {
+    if (!snapshot || snapshot === previous) return
+    speakLatestAssistantMessage()
+  }
+)
+
 watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
   if (enabled) {
-    speakLatestAssistantMessage({ force: true })
+    // Delay forced auto-speak slightly to collapse rapid toggle bursts.
+    setTimeout(() => {
+      if (!audioService.autoSpeechEnabled.value) return
+      speakLatestAssistantMessage({ force: true })
+    }, AUTO_SPEAK_DEBOUNCE_MS)
   } else if (!enabled) {
     lastAutoSpokenSignature.value = null
+    lastAutoSpeakAt.value = 0
     audioService.stop()
   }
 })
