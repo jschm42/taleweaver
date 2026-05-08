@@ -9,6 +9,7 @@ export interface ChatMessage {
 export interface CharacterSheet {
   name: string
   adventure_title?: string | null
+  adventure_version?: string | null
   adventure_id?: string | null
   role?: string | null
   description?: string | null
@@ -97,6 +98,7 @@ export interface GameSession {
   avatar_id: string
   profile_image?: string | null
   adventure_title: string
+  adventure_version?: string | null
   image_url: string | null
   scene_id: string
   current_scene_name?: string | null
@@ -119,6 +121,7 @@ export interface AdventureTemplateSummary {
   template_id: string
   title: string
   teaser?: string | null
+  version?: string | null
   image_url: string | null
   is_ready: boolean
   creation_status?: string | null
@@ -139,6 +142,7 @@ export interface CreateAdventurePayload {
   id?: string
   title: string
   context?: string
+  version?: string
   image_url?: string | null
   strict_rules?: boolean
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'

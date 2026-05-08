@@ -101,6 +101,7 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 const form = ref({
   title: '',
   teaser: '',
+  version: '',
   original_prompt: '',
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
@@ -265,6 +266,7 @@ async function fetchAdventure() {
     adventure.value = data
     form.value.title = data.title
     form.value.teaser = data.teaser || ''
+    form.value.version = data.version || ''
     form.value.original_prompt = data.original_prompt || ''
     form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
@@ -720,7 +722,7 @@ const goBack = () => {
         <div v-if="activeTab === 'physical'" class="space-y-10 animate-page-in">
           <!-- Quick Settings Row -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
-           <div class="space-y-2">
+            <div class="space-y-2">
               <div class="flex justify-between items-center">
                 <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
                 <div v-if="form.title !== adventure?.title" class="flex gap-2 animate-fade-in">
@@ -729,6 +731,16 @@ const goBack = () => {
                 </div>
               </div>
               <input v-model="form.title" type="text" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all" />
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Version</label>
+                <div v-if="form.version !== adventure?.version" class="flex gap-2 animate-fade-in">
+                  <button @click="form.version = adventure.version" class="text-xs font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+                  <button @click="saveChanges" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
+                </div>
+              </div>
+              <input v-model="form.version" type="text" maxlength="15" placeholder="e.g. 1.0.0" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all placeholder:text-slate-700" />
             </div>
             <div class="space-y-2">
               <div class="flex justify-between items-center">

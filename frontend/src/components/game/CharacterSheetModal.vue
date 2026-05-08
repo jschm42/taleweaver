@@ -160,7 +160,10 @@ const onClose = () => {
                   </div>
                   <div class="identity-header -mt-1.5">
                     <h3 class="text-xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">{{ sheet.name || 'Unnamed' }}</h3>
-                    <div class="text-xs font-black text-amber-500 uppercase tracking-[0.4em] mt-2">{{ sheet.role || 'Adventurer' }}</div>
+                    <div class="flex items-center gap-3 mt-2">
+                      <div class="text-xs font-black text-amber-500 uppercase tracking-[0.4em]">{{ sheet.role || 'Adventurer' }}</div>
+                      <div v-if="sheet.adventure_version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 uppercase tracking-widest pt-0.5">v{{ sheet.adventure_version }}</div>
+                    </div>
                   </div>
 
                   <!-- Bio Block -->

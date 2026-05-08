@@ -13,6 +13,7 @@ class AdventureTemplate(Base, TimestampMixin):
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     title = Column(String(50), nullable=False)
     teaser = Column(String(300), nullable=True)
+    version = Column(String(15), nullable=True)
     language = Column(String(20), nullable=True)
     origin_id = Column(String(50), nullable=True) # Stable ID for default/sample templates
 

@@ -904,9 +904,14 @@ onBeforeUnmount(() => {
           <i class="ra ra-back-arrow text-sm text-slate-100 group-hover:text-emerald-400 transition-colors"></i>
           <span class="text-xxs font-black uppercase tracking-[0.2em] text-slate-100 group-hover:text-white transition-colors">Back</span>
         </button>
-        <h1 class="text-xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide whitespace-nowrap truncate" style="font-family: 'Acme', sans-serif;">
-          {{ sheet?.adventure_title || 'Chronicle' }}
-        </h1>
+        <div class="flex flex-col min-w-0">
+          <h1 class="text-xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide whitespace-nowrap truncate" style="font-family: 'Acme', sans-serif;">
+            {{ sheet?.adventure_title || 'Chronicle' }}
+          </h1>
+          <div v-if="sheet?.adventure_version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 uppercase tracking-widest mt-1">
+            v{{ sheet.adventure_version }}
+          </div>
+        </div>
       </div>
 
       <!-- Center: Active Quest Tracker (Matches Chat Width) -->

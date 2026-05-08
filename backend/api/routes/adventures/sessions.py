@@ -119,6 +119,7 @@ async def list_sessions(
             game_id=g.id, template_id=g.template_id, adventure_id=g.template_id, avatar_id=g.avatar_id,
             profile_image=AdventureLogic.resolve_session_asset(s, "protagonist", avatar_profile_image),
             adventure_title=a.title if a else (g.adventure_title or "Unknown"),
+            adventure_version=a.version if a else None,
             image_url=AdventureLogic.resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
             scene_id=s.current_scene_id, current_scene_name=scene_label or "Exploring...",
             in_game_time=s.in_game_time,

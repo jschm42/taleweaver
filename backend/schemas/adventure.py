@@ -23,6 +23,7 @@ class AdventureTemplateBase(BaseModel):
     title: str = Field(..., max_length=50)
     image_url: Optional[str] = None
     teaser: Optional[str] = Field(None, max_length=300)
+    version: Optional[str] = Field(None, max_length=15)
     original_prompt: Optional[str] = Field(None, max_length=5000)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     time_per_turn: Optional[int] = 5
@@ -69,6 +70,7 @@ class AdventureTemplateCreate(AdventureTemplateBase):
 class AdventureTemplateUpdate(BaseModel):
     title: Optional[str] = None
     teaser: Optional[str] = Field(None, max_length=300)
+    version: Optional[str] = Field(None, max_length=15)
     original_prompt: Optional[str] = Field(None, max_length=5000)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat", "strict"]] = None
     time_per_turn: Optional[int] = None

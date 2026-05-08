@@ -121,7 +121,10 @@ function runAction(action: 'resume' | 'delete'): void {
     <!-- Content Area -->
     <div class="p-6 flex flex-col gap-6">
       <div class="min-w-0">
-        <h3 class="text-2xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.session.adventure_title }}</h3>
+        <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight">
+          {{ props.session.adventure_title }}
+          <span v-if="props.session.adventure_version" class="ml-2 text-[10px] font-mono font-bold text-slate-500 opacity-60">v{{ props.session.adventure_version }}</span>
+        </h3>
         <div class="flex flex-col gap-1.5 mt-3">
           <p class="text-sm text-slate-400 flex items-center gap-2 font-bold uppercase tracking-[0.15em]">
             <span class="w-2 h-2 rounded-full bg-emerald-500/60"></span>
@@ -153,8 +156,8 @@ function runAction(action: 'resume' | 'delete'): void {
         <!-- Awards -->
         <div v-if="props.session.award_count" class="flex-1 flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase tracking-widest text-slate-500">Awards</span>
-            <span class="text-xs font-bold text-slate-300">{{ props.session.earned_award_count }}/{{ props.session.award_count }}</span>
+            <span class="text-xxs font-black uppercase tracking-widest text-slate-500">Awards</span>
+            <span class="text-xxs font-bold text-slate-300">{{ props.session.earned_award_count }}/{{ props.session.award_count }}</span>
           </div>
           <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div 

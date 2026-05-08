@@ -53,6 +53,7 @@ async def list_templates(
         game_session, state, scene_label = (latest if latest else (None, None, None))
         response.append(AdventureTemplateSummaryResponse(
             template_id=template.id, title=template.title, teaser=template.teaser,
+            version=template.version,
             image_url=template.image_url, is_ready=template.is_ready,
             creation_status=template.creation_status, creation_error=template.creation_error,
             selected_tone=template.selected_tone,
@@ -152,6 +153,8 @@ async def create_adventure(
         is_ready=False,
         creation_status="Initializing...",
         original_manifest=payload.original_manifest,
+        teaser=payload.teaser,
+        version=payload.version,
         language=payload.language,
         intro_text=payload.intro_text,
         is_adventure_generator=payload.is_adventure_generator

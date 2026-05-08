@@ -9,6 +9,8 @@ class CreateAdventureTemplatePayload(BaseModel):
     title: str
     avatar_name: Optional[str] = None
     image_url: Optional[str] = None
+    teaser: Optional[str] = None
+    version: Optional[str] = None
     language: Optional[str] = None
     original_prompt: Optional[str] = None
     intro_text: Optional[str] = None
@@ -44,6 +46,7 @@ class AdventureTemplateResponse(BaseModel):
     id: str
     title: str
     teaser: Optional[str] = None
+    version: Optional[str] = None
     language: Optional[str] = None
     origin_id: Optional[str] = None
 
@@ -102,6 +105,7 @@ class GameSessionResponse(BaseModel):
     avatar_id: str
     profile_image: Optional[str] = None
     adventure_title: str
+    adventure_version: Optional[str] = None
     image_url: Optional[str] = None
     scene_id: str
     current_scene_name: Optional[str] = None
@@ -131,6 +135,7 @@ class AdventureTemplateSummaryResponse(BaseModel):
     template_id: str
     title: str
     teaser: Optional[str] = None
+    version: Optional[str] = None
     language: Optional[str] = None
     image_url: Optional[str] = None
     is_ready: bool = True

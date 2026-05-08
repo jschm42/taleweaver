@@ -146,7 +146,10 @@ function fixNewlines(text: string | null | undefined): string {
     <!-- Content Area -->
     <div class="p-6 flex flex-col gap-4 flex-1">
       <div class="space-y-2 flex-1">
-        <h3 class="text-2xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
+        <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
+        <div v-if="props.template.version" class="flex items-center gap-1.5 opacity-60">
+          <span class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-tighter">v{{ props.template.version }}</span>
+        </div>
         <p v-if="props.template.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-3 leading-relaxed whitespace-pre-wrap">
           {{ fixNewlines(props.template.teaser) }}
         </p>

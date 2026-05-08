@@ -298,6 +298,7 @@ class AdventureLogic:
             "current_scene": current_scene.label if current_scene else state.current_scene_id,
             "scene_id": state.current_scene_id,
             "adventure_title": adventure.title if adventure else "Unknown",
+            "adventure_version": adventure.version if adventure else None,
             "template_id": state.template_id, 
             "exp": avatar.exp,
             "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg",
