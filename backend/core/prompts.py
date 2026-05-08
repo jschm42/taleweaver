@@ -4,6 +4,8 @@ This module contains all LLM prompts used across the system, centralized for
 better maintainability and documentation.
 """
 
+from backend.core.voice_tags import build_voice_tag_catalog_prompt_block
+
 # --- World Generation Prompts ---
 
 WORLD_GENERATION_SYSTEM_PROMPT = (
@@ -294,9 +296,10 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "Use the format: **Character Name:** \"Dialogue\". "
     "Separate narrative prose from speech with a blank line.\n\n"
     "VOICE DIRECTION: Actively use tone and pace tags to give your narration life and atmosphere. "
-    "Open a paragraph with a tag such as [excited], [whispers], [shouting], [very fast], [very slow], "
-    "[tense], [solemn], [mocking], [dramatic pause], or a combined cue like "
-    "[sarcastically, one painfully slow word at a time]. "
+    "Tags MUST come from the fixed catalog below and MUST always be in English. "
+    + build_voice_tag_catalog_prompt_block() +
+    "Open a paragraph with one catalog tag (for example [excited], [whispers], [shouting], [very fast], [very slow], "
+    "[tense], [solemn], [mocking], [dramatic pause], or [sarcastically, one painfully slow word at a time]). "
     "Use them whenever the mood calls for it — combat tension, hushed secrets, desperate warnings, "
     "triumphant moments. Aim to use at least one voice tag per response where the scene warrants it. "
     "A tag applies to the entire paragraph it opens — start a new paragraph when switching to a different tag. "

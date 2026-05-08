@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     VISUAL_TIMEOUT: int = 120
     INTELLIGENCE_TIMEOUT: int = 60
     WORLDBUILDING_TIMEOUT: int = 180
+    TTS_TIMEOUT_SECONDS: int = 120
+    TTS_TIMEOUT_PER_1K_CHARS: int = 20
+    TTS_TIMEOUT_MAX_SECONDS: int = 300
     
     @model_validator(mode="after")
     def assemble_db_url(self) -> "Settings":

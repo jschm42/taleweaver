@@ -114,43 +114,60 @@ class AudioService {
     })
   }
 
-  async speak(text: unknown, options: { sceneDescription?: string, adventureId?: string, title?: string, sceneName?: string, tone?: string, npcMetadata?: Record<string, any> } = {}) {
+  async speak(text: unknown, options: { sceneDescription?: string, adventureId?: string, title?: string, sceneName?: string, tone?: string, npcMetadata?: Record<string, any>, segmentedVoices?: boolean } = {}) {
     const normalizedText = this.normalizeText(text)
     if (!normalizedText) return
 
     // Stop any current playback
     this.stop()
     const token = this.playbackToken
-    const { sceneDescription, adventureId, title, sceneName, tone, npcMetadata } = options
+    const { sceneDescription, adventureId, title, sceneName, tone, npcMetadata, segmentedVoices } = options
     const normalizedSceneDescription = this.normalizeOptionalText(sceneDescription)
     const normalizedAdventureId = this.normalizeOptionalText(adventureId)
     const normalizedTitle = this.normalizeOptionalText(title)
     const normalizedSceneName = this.normalizeOptionalText(sceneName)
     const normalizedTone = this.normalizeOptionalText(tone)
-    const segments = this.splitIntoSpeechSegments(normalizedText)
+    const segments = segmentedVoices ? this.splitIntoSpeechSegments(normalizedText) : []
 
     try {
       this.currentText.value = normalizedText
       this.isPlaying.value = true
 
-      for (const segment of (segments.length ? segments : [{ text: normalizedText }])) {
-        if (token !== this.playbackToken) return
-
+      if (!segments.length) {
+        // Fast path: generate one audio file for the complete narration block.
         this.isGenerating.value = true
-        const voiceOverride = this.resolveNpcVoice(segment.speaker, npcMetadata)
         const { audio_url } = await api.generateTTS({
-          text: segment.text,
+          text: normalizedText,
           scene_description: normalizedSceneDescription,
           adventure_id: normalizedAdventureId,
           title: normalizedTitle,
           scene_name: normalizedSceneName,
           tone: normalizedTone,
-          voice_override: voiceOverride,
         })
         this.isGenerating.value = false
 
         if (token !== this.playbackToken) return
         await this.playAudio(audio_url)
+      } else {
+        for (const segment of segments) {
+          if (token !== this.playbackToken) return
+
+          this.isGenerating.value = true
+          const voiceOverride = this.resolveNpcVoice(segment.speaker, npcMetadata)
+          const { audio_url } = await api.generateTTS({
+            text: segment.text,
+            scene_description: normalizedSceneDescription,
+            adventure_id: normalizedAdventureId,
+            title: normalizedTitle,
+            scene_name: normalizedSceneName,
+            tone: normalizedTone,
+            voice_override: voiceOverride,
+          })
+          this.isGenerating.value = false
+
+          if (token !== this.playbackToken) return
+          await this.playAudio(audio_url)
+        }
       }
     } catch (err) {
       console.error('TTS Playback failed', err)

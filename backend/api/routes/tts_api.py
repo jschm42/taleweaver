@@ -5,7 +5,7 @@ import logging
 
 from backend.core.auth import get_current_user
 from backend.models.user import User
-from backend.engine.tts_engine import TTSEngine
+from backend.engine.tts_engine import TTSEngine, TTSTimeoutError
 from backend.core.security import encryption_util
 from backend.core.config import settings
 
@@ -90,17 +90,23 @@ async def generate_tts(
     model = tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview")
 
     # 3. Generate Speech
-    audio_url = await TTSEngine.generate_speech(
-        text=payload.text,
-        voice=voice,
-        api_key=api_key,
-        scene_description=payload.scene_description,
-        style_description=style,
-        model_name=model,
-        title=payload.title,
-        scene_name=payload.scene_name,
-        tone=payload.tone
-    )
+    try:
+        audio_url = await TTSEngine.generate_speech(
+            text=payload.text,
+            voice=voice,
+            api_key=api_key,
+            scene_description=payload.scene_description,
+            style_description=style,
+            model_name=model,
+            title=payload.title,
+            scene_name=payload.scene_name,
+            tone=payload.tone
+        )
+    except TTSTimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="TTS generation timed out. Try a shorter narration block or retry.",
+        ) from exc
 
     if not audio_url:
         raise HTTPException(status_code=500, detail="Failed to generate speech.")

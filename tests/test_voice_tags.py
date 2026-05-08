@@ -22,6 +22,7 @@ def test_gm_narration_formatting_contains_voice_tag_guidance():
     assert "[excited]" in GM_NARRATION_MANDATORY_FORMATTING
     assert "[whispers]" in GM_NARRATION_MANDATORY_FORMATTING
     assert "[shouting]" in GM_NARRATION_MANDATORY_FORMATTING
+    assert "ENGLISH" in GM_NARRATION_MANDATORY_FORMATTING
     assert "new paragraph" in GM_NARRATION_MANDATORY_FORMATTING.lower()
     assert "Do not nest tags" in GM_NARRATION_MANDATORY_FORMATTING
 
@@ -172,14 +173,9 @@ def test_multiple_consecutive_tags_get_breaks():
 
 def test_known_tags_detected():
     """All documented tags should be detectable by the voice-tag pattern."""
-    known_tags = [
-        "[bored]", "[reluctantly]", "[amazed]", "[crying]", "[curious]",
-        "[excited]", "[sighs]", "[gasp]", "[giggles]", "[laughs]",
-        "[mischievously]", "[panicked]", "[sarcastic]", "[serious]",
-        "[shouting]", "[tired]", "[trembling]", "[whispers]",
-        "[very fast]", "[very slow]",
-        "[sarcastically, one painfully slow word at a time]",
-    ]
+    from backend.core.voice_tags import VOICE_TAG_CATALOG
+
+    known_tags = [f"[{tag}]" for tag in VOICE_TAG_CATALOG]
     for tag in known_tags:
         assert VOICE_TAG_PATTERN.match(tag), f"Tag not recognised: {tag}"
 

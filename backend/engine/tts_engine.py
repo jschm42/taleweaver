@@ -3,11 +3,31 @@ import uuid
 import base64
 import logging
 import struct
+import math
 import httpx
 from typing import Optional
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class TTSTimeoutError(RuntimeError):
+    """Raised when the upstream TTS request times out."""
+
+
+def _tts_timeout_seconds(text: str) -> float:
+    """Compute timeout for TTS requests based on text length.
+
+    Longer single-block narrations need more upstream synthesis time.
+    """
+    base_timeout = float(getattr(settings, "TTS_TIMEOUT_SECONDS", 120))
+    max_timeout = float(getattr(settings, "TTS_TIMEOUT_MAX_SECONDS", 300))
+    per_1k_chars = float(getattr(settings, "TTS_TIMEOUT_PER_1K_CHARS", 20))
+
+    text_length = len(text or "")
+    chunks = math.ceil(text_length / 1000) if text_length > 0 else 0
+    timeout = base_timeout + (chunks * per_1k_chars)
+    return max(30.0, min(timeout, max_timeout))
 
 def _add_wav_header(pcm_data: bytes, sample_rate: int = 24000) -> bytes:
     """Adds a WAV header to raw PCM data (Linear 16-bit)."""
@@ -143,21 +163,23 @@ class TTSEngine:
         }
 
         try:
+            timeout_seconds = _tts_timeout_seconds(text)
+            timeout = httpx.Timeout(timeout_seconds, connect=20.0)
             async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=payload, timeout=60.0)
+                response = await client.post(url, json=payload, timeout=timeout)
                 if response.status_code != 200:
-                    logger.error(f"Gemini TTS Error {response.status_code}: {response.text}")
+                    logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)
                 response.raise_for_status()
                 data = response.json()
 
             candidates = data.get("candidates", [])
             if not candidates:
-                logger.error(f"No candidates returned from Gemini TTS: {data}")
+                logger.error("No candidates returned from Gemini TTS: %s", data)
                 return None
 
             audio_part = next((p for p in candidates[0]["content"]["parts"] if "inlineData" in p), None)
             if not audio_part:
-                logger.error(f"No audio data found in Gemini response: {data}")
+                logger.error("No audio data found in Gemini response: %s", data)
                 return None
 
             mime_type = audio_part["inlineData"]["mimeType"]
@@ -187,6 +209,14 @@ class TTSEngine:
 
             return f"/data/audio/{filename}"
 
-        except Exception as e:
+        except httpx.ReadTimeout as exc:
+            logger.warning(
+                "Gemini TTS timed out after %.1fs for %d chars using model '%s'.",
+                _tts_timeout_seconds(text),
+                len(text or ""),
+                model_name,
+            )
+            raise TTSTimeoutError("Timed out while generating speech.") from exc
+        except Exception:
             logger.exception("Failed to generate speech with Gemini")
             return None
