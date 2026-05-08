@@ -435,6 +435,9 @@ function speakLatestAssistantMessage(options: { force?: boolean } = {}): void {
   if (!audioService.autoSpeechEnabled.value) return
   if (!audioService.isUnlocked.value) return  // browser requires a prior user gesture
   if (isCombatActive.value) return
+  // During active turn streaming, assistant content is still changing.
+  // Wait until the session returns to a stable state to speak the final block.
+  if (!force && (status.value === 'connecting' || status.value === 'loading')) return
 
   const now = Date.now()
   if (!force && now - lastAutoSpeakAt.value < AUTO_SPEAK_DEBOUNCE_MS) return
@@ -466,6 +469,11 @@ watch(() => inputLocked.value, (isLocked) => {
 
 watch(() => messages.value.length, (newLength, oldLength) => {
   if (newLength <= oldLength) return
+  const appended = messages.value[newLength - 1] as any
+  if (!appended) return
+  if (appended.role !== 'assistant') return
+  if (appended.is_debug) return
+  if (!String(appended.content || '').trim()) return
   speakLatestAssistantMessage()
 })
 
