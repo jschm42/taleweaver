@@ -21,7 +21,7 @@ async def upload_image(
     """
     Uploads an image, resizes/crops it based on type, and returns the URL.
     - characters: saved to data/characters, max 256x256
-    - adventures: saved to data/adventures/{adventure_id}, max 512x512
+    - adventures: saved to data/adventures/library/{adventure_id}, max 512x512
     """
     if type not in {"character", "adventure"}:
         raise HTTPException(status_code=400, detail="Invalid upload type")
@@ -35,7 +35,7 @@ async def upload_image(
         subfolder = "characters"
         target_dir = os.path.join(settings.DATA_DIR, subfolder)
     else:
-        subfolder = f"adventures/{adventure_id}" if adventure_id else "adventures"
+        subfolder = f"adventures/library/{adventure_id}" if adventure_id else "adventures/library"
         target_dir = os.path.join(settings.DATA_DIR, subfolder)
     
     os.makedirs(target_dir, exist_ok=True)

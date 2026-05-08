@@ -54,8 +54,12 @@ async def lifespan(app: FastAPI):
             
         # We no longer auto-import adventures here. 
         # Default adventures are imported per-user on their first login.
-        # Manual drops in data/imports/adventures are still processed for convenience.
-        await AdventureTemplateImporter.import_from_directory(db, "data/imports/adventures", delete_after=True)
+        # Manual drops in DATA_DIR/imports/adventures are still processed for convenience.
+        await AdventureTemplateImporter.import_from_directory(
+            db,
+            os.path.join(settings.DATA_DIR, "imports", "adventures"),
+            delete_after=True,
+        )
 
     yield
 
@@ -94,11 +98,13 @@ app.include_router(tts_api.router, prefix="/api")
 # Ensure storage directories exist
 os.makedirs(os.path.join(settings.DATA_DIR, "characters"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "adventures"), exist_ok=True)
+os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "library"), exist_ok=True)
+os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "logs"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "users"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "audio"), exist_ok=True)
-os.makedirs("data/imports/adventures", exist_ok=True)
-os.makedirs("data/presets/adventures", exist_ok=True)
+os.makedirs(os.path.join(settings.DATA_DIR, "imports", "adventures"), exist_ok=True)
+os.makedirs(os.path.join(settings.DATA_DIR, "presets", "adventures"), exist_ok=True)
 os.makedirs("adventures", exist_ok=True)
 
 # Static data and assets

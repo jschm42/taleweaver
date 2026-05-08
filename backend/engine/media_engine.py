@@ -37,7 +37,7 @@ class MediaEngine:
     @staticmethod
     async def cleanup_adventure_assets(adventure_id: str):
         """Removes all generated assets for an adventure from disk."""
-        target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
+        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id)
         if os.path.exists(target_dir):
             try:
                 # Use a thread pool executor for blocking I/O if needed, 
@@ -263,9 +263,9 @@ class MediaEngine:
         # Default target dir if not provided
         if target_dir is None:
             if adventure_id:
-                target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
+                target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id)
             else:
-                target_dir = os.path.join(settings.DATA_DIR, "adventures")
+                target_dir = os.path.join(settings.DATA_DIR, "adventures", "library")
 
         logger.info(f"Generating image with model {model} (provider: {provider_key}). Prompt: {prompt}")
         
@@ -673,7 +673,7 @@ class MediaEngine:
             logger.error(f"API key resolution failed for provider: {provider} (Advanced Model/Scenes). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
             raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model). Please check your Visual Preferences in Admin settings.")
         
-        target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "scenes")
+        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id, "scenes")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
         
         # Use adventure_id as prefix for clarity
@@ -717,7 +717,7 @@ class MediaEngine:
             logger.error(f"API key resolution failed for provider: {provider} (Simple Model/Entities). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
             raise ValueError(f"Missing image configuration or API key for {provider} (Simple Model). Please check your Visual Preferences in Admin settings.")
         
-        target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id, "entities")
+        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id, "entities")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
         
         # Use adventure_id and entity_id as prefix for clarity
@@ -758,7 +758,7 @@ class MediaEngine:
             logger.error(f"API key resolution failed for provider: {provider} (Advanced Model/Cover). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
             raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model/Cover). Please check your Visual Preferences in Admin settings.")
         
-        target_dir = os.path.join(settings.DATA_DIR, "adventures", adventure_id)
+        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id)
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
         
         # Use adventure_id as prefix for clarity

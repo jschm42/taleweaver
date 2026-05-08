@@ -23,6 +23,7 @@ const props = defineProps<{
   questGlow?: boolean
   activeActionId?: string | null
   sheet?: any
+  gameId?: string
   currentSceneDescription?: string
 }>()
 
@@ -81,6 +82,7 @@ defineExpose({ appendText })
       :mode="props.mode"
       :input-locked="props.inputLocked"
       :sheet="props.sheet"
+      :game-id="props.gameId"
       :current-scene-description="props.currentSceneDescription"
       @send="emit('send', $event)"
       @open-sheet="emit('openSheet')"

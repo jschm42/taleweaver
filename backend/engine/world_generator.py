@@ -790,7 +790,7 @@ class WorldGenerator:
                     # Fallback to high-quality placeholder
                     if not avatar.profile_image or not avatar.profile_image.startswith("/data/"):
                         image_url = await MediaEngine.generate_placeholder(
-                            template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", template_id),
+                            template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", "library", template_id),
                             category="AVATAR"
                         )
                     else:
@@ -847,7 +847,7 @@ class WorldGenerator:
                 if not image_url:
                     # Fallback to high-quality placeholder
                     image_url = await MediaEngine.generate_placeholder(
-                        template_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "scenes"),
+                        template_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "scenes"),
                         category="SCENE"
                     )
  
@@ -922,7 +922,7 @@ class WorldGenerator:
                 if not image_url:
                     # Fallback to high-quality placeholder for NPCs
                     image_url = await MediaEngine.generate_placeholder(
-                        template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities"),
+                        template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
                         category="NPC"
                     )
 
@@ -1092,7 +1092,7 @@ class WorldGenerator:
                 if not image_url:
                     # Fallback to high-quality placeholder for Items
                     image_url = await MediaEngine.generate_placeholder(
-                        template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", template_id, "entities"),
+                        template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
                         category="ITEM"
                     )
 

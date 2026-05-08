@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     TTS_TIMEOUT_SECONDS: int = 120
     TTS_TIMEOUT_PER_1K_CHARS: int = 20
     TTS_TIMEOUT_MAX_SECONDS: int = 300
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_data_dir(cls, values):
+        if isinstance(values, dict):
+            data_dir = values.get("DATA_DIR")
+            if not isinstance(data_dir, str) or not data_dir.strip():
+                values["DATA_DIR"] = "data"
+        return values
     
     @model_validator(mode="after")
     def assemble_db_url(self) -> "Settings":

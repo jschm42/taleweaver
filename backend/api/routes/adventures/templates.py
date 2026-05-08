@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
@@ -21,7 +22,7 @@ from backend.api.routes.adventures.schemas import (
     CreateAdventureTemplatePayload, AdventureTemplateUpdate
 )
 from backend.api.routes.adventures.logic import AdventureLogic
-from backend.utils.text_utils import generate_adventure_id
+from backend.utils.text_utils import generate_adventure_id, generate_session_id
 
 router = APIRouter(tags=["Adventures"])
 logger = logging.getLogger(__name__)
@@ -176,6 +177,7 @@ async def create_adventure(
     
     # 3. Create the first GameSession
     session = GameSession(
+        id=generate_session_id(payload.title),
         user_id=current_user.id,
         avatar_id=avatar.id,
         template_id=new_id,
@@ -183,6 +185,11 @@ async def create_adventure(
         status="active"
     )
     db.add(session)
+    await db.flush()
+
+    # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
+    os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", session.id), exist_ok=True)
+
     await db.commit()
     
     # 4. Trigger background generation

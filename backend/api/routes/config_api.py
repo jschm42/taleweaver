@@ -3,14 +3,22 @@ import os
 import uuid
 import logging
 from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_TTS_MODELS = {"gemini-3.1-flash-tts-preview"}
+SUPPORTED_TTS_MODELS = {
+    "gemini-3.1-flash-tts-preview",
+    "gemini-2.5-flash-preview-tts",
+}
+
+TTS_MODEL_ALIASES = {
+    "gemini-2.5-flash-tts-preview": "gemini-2.5-flash-preview-tts",
+    "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
+}
 
 from backend.core.database import get_db
 from backend.core.auth import get_current_user, get_current_admin
@@ -274,6 +282,22 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
         return fallback
 
     normalized = dict(settings)
+
+    # Accept historical/alternate keys to avoid silently resetting model selection.
+    if "selected_model" not in normalized:
+        selected_model_legacy = (
+            normalized.get("model")
+            or normalized.get("tts_model")
+            or normalized.get("single_voice_model")
+            or normalized.get("single_voice_tts_model")
+        )
+        if selected_model_legacy:
+            normalized["selected_model"] = selected_model_legacy
+
+    selected_model = str(normalized.get("selected_model") or "").strip()
+    if selected_model in TTS_MODEL_ALIASES:
+        normalized["selected_model"] = TTS_MODEL_ALIASES[selected_model]
+
     if "enabled" not in normalized:
         normalized["enabled"] = fallback["enabled"]
     if "selected_model" not in normalized:
@@ -409,10 +433,10 @@ class GameSettingsPayload(BaseModel):
 class TTSSettingsPayload(BaseModel):
     enabled: bool = True
     selected_model: str = "gemini-3.1-flash-tts-preview"
-    voice_list: list[str]
+    voice_list: list[str] = Field(default_factory=list)
     voice_catalog: Optional[list[dict[str, str]]] = None
-    selected_voice: str
-    sample_context: str
+    selected_voice: str = "Puck"
+    sample_context: str = ""
     speech_rate: float = 1.0
 
 
@@ -585,8 +609,24 @@ async def update_tts_settings(
 ):
     """Updates the TTS settings."""
     user = await _resolve_global_settings_owner(db, current_user)
-        
-    user.tts_settings = _normalize_tts_settings(payload.model_dump())
+
+    existing_settings = dict(user.tts_settings or {})
+    incoming_settings = payload.model_dump(exclude_unset=True)
+
+    # Fallback for older clients that post alternate model keys.
+    if "selected_model" not in incoming_settings:
+        selected_model_legacy = (
+            incoming_settings.get("model")
+            or incoming_settings.get("tts_model")
+            or incoming_settings.get("single_voice_model")
+            or incoming_settings.get("single_voice_tts_model")
+        )
+        if selected_model_legacy:
+            incoming_settings["selected_model"] = selected_model_legacy
+
+    merged_settings = {**existing_settings, **incoming_settings}
+
+    user.tts_settings = _normalize_tts_settings(merged_settings)
     await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "TTS settings updated."}

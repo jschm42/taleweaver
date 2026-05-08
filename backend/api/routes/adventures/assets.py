@@ -220,14 +220,14 @@ async def upload_visual(
         file_ext = file.filename.split(".")[-1] if "." in file.filename else "png"
         
         filename = f"{target_type}_{target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
-        storage_path = os.path.join(settings.DATA_DIR, "adventures", template_id, "visuals")
+        storage_path = os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "visuals")
         os.makedirs(storage_path, exist_ok=True)
         
         full_path = os.path.join(storage_path, filename)
         with open(full_path, "wb") as f:
             f.write(content)
             
-        relative_url = f"/data/adventures/{template_id}/visuals/{filename}"
+        relative_url = f"/data/adventures/library/{template_id}/visuals/{filename}"
         
         if target_type == "cover":
             adv.image_url = relative_url

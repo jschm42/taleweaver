@@ -1,9 +1,11 @@
 import logging
+import os
 from typing import Any, Dict, List, Optional
 from copy import deepcopy
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.auth import get_current_user
 from backend.models.user import User
@@ -15,6 +17,7 @@ from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.api.routes.adventures.schemas import GameSessionResponse
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.utils.text_utils import generate_session_id
 
 router = APIRouter(tags=["Sessions"])
 logger = logging.getLogger(__name__)
@@ -237,6 +240,7 @@ async def start_session_for_template(
     first_scene_id = scene_res.scalar_one_or_none() or "START"
 
     new_session = GameSession(
+        id=generate_session_id(adventure.title or template_id),
         user_id=current_user.id,
         avatar_id=avatar.id,
         template_id=template_id,
@@ -246,6 +250,9 @@ async def start_session_for_template(
     )
     db.add(new_session)
     await db.flush()
+
+    # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
+    os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", new_session.id), exist_ok=True)
 
     # Create SessionState with narrative snapshot
     new_state = SessionState(

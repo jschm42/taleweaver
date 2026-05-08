@@ -48,7 +48,7 @@ const fullWorldDebug = ref<any | null>(null)
 const walkthroughData = ref<any | null>(null)
 const trackedQuestId = ref<string | null>(null)
 const clockTick = ref(false)
-const { notifications, removeNotification } = useNotifications()
+const { notifications, removeNotification, addNotification } = useNotifications()
 const gameSettings = ref<{ clock_24h: boolean; date_format?: 'DD.MM.YY' | 'MM/DD/YY' | 'YY-MM-DD' }>({
   clock_24h: false,
 })
@@ -103,6 +103,8 @@ onBeforeUnmount(() => {
 const activeActionId = ref<string | null>(null)
 const isPassRunning = computed(() => status.value === 'connecting' || status.value === 'loading')
 const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || audioService.isPlaying.value || audioService.isGenerating.value)
+const showVoiceUnlockHint = computed(() => audioService.autoSpeechEnabled.value && !audioService.isUnlocked.value)
+const lastAudioErrorMessage = ref<string | null>(null)
 
 function isReadOnlyUiCommand(normalized: string): boolean {
   return normalized === '/map' || normalized === '/sheet' || normalized === '/inventory' || normalized === '/quests'
@@ -121,9 +123,7 @@ const handleEntityClick = async (entity: any) => {
       case 'take': command = `/take ${targetName}`; break
       case 'attack': 
         if (entity.is_attackable === false) {
-          if (typeof notifications?.addNotification === 'function') {
-            notifications.addNotification('You cannot attack this target.', 'warning')
-          }
+          addNotification('You cannot attack this target.', 'error')
           activeActionId.value = null
           return
         }
@@ -418,29 +418,40 @@ function getMessageSignature(message: { timestamp?: Date; content: string }, ind
   return `${index}|${ts}`
 }
 
+function findLatestSpeakableAssistantMessage(): { index: number; message: { timestamp?: Date; content: string } } | null {
+  for (let index = messages.value.length - 1; index >= 0; index -= 1) {
+    const candidate = messages.value[index] as any
+    if (!candidate) continue
+    if (candidate.role !== 'assistant') continue
+    if (candidate.is_debug) continue
+    if (!String(candidate.content || '').trim()) continue
+    return { index, message: candidate }
+  }
+  return null
+}
+
 function speakLatestAssistantMessage(options: { force?: boolean } = {}): void {
   const { force = false } = options
   if (!audioService.autoSpeechEnabled.value) return
-  if (inputLocked.value || isCombatActive.value) return
+  if (!audioService.isUnlocked.value) return  // browser requires a prior user gesture
+  if (isCombatActive.value) return
 
   const now = Date.now()
   if (!force && now - lastAutoSpeakAt.value < AUTO_SPEAK_DEBOUNCE_MS) return
 
-  const index = messages.value.length - 1
-  if (index < 0) return
-
-  const lastMsg = messages.value[index]
-  if (!lastMsg || lastMsg.role !== 'assistant') return
-  if (!String(lastMsg.content || '').trim()) return
+  const latest = findLatestSpeakableAssistantMessage()
+  if (!latest) return
+  const { index, message: lastMsg } = latest
 
   const signature = getMessageSignature(lastMsg, index)
   if (!force && signature === lastAutoSpokenSignature.value) return
 
   lastAutoSpeakAt.value = now
   lastAutoSpokenSignature.value = signature
-  audioService.speak(lastMsg.content, {
+  void audioService.enqueueSpeak(lastMsg.content, {
     sceneDescription: currentSceneDescription.value,
-    adventureId: props.id,
+    adventureId: sheet.value?.adventure_id || undefined,
+    sessionId: props.id,
     title: sheet.value?.adventure_title || undefined,
     sceneName: sheet.value?.current_scene || undefined,
     tone: sheet.value?.adventure_tone || undefined,
@@ -449,7 +460,7 @@ function speakLatestAssistantMessage(options: { force?: boolean } = {}): void {
 }
 
 watch(() => inputLocked.value, (isLocked) => {
-  if (isLocked) return
+  if (isLocked || status.value === 'connecting' || status.value === 'loading') return
   speakLatestAssistantMessage()
 })
 
@@ -460,14 +471,22 @@ watch(() => messages.value.length, (newLength, oldLength) => {
 
 watch(
   () => {
-    const index = messages.value.length - 1
-    if (index < 0) return ''
-    const lastMsg = messages.value[index]
-    if (!lastMsg || lastMsg.role !== 'assistant') return ''
-    return `${index}|${String(lastMsg.content || '').trim()}`
+    const latest = findLatestSpeakableAssistantMessage()
+    if (!latest) return ''
+    return `${latest.index}|${String(latest.message.content || '').trim()}`
   },
   (snapshot, previous) => {
     if (!snapshot || snapshot === previous) return
+    speakLatestAssistantMessage()
+  }
+)
+
+watch(
+  () => status.value,
+  (newStatus, oldStatus) => {
+    const wasBusy = oldStatus === 'connecting' || oldStatus === 'loading'
+    const isReady = newStatus === 'connected' || newStatus === 'completed'
+    if (!wasBusy || !isReady) return
     speakLatestAssistantMessage()
   }
 )
@@ -733,6 +752,8 @@ const buyHint = async () => {
 }
 
 const handlePlayerInput = async (content: string) => {
+  // Unlock the AudioContext on every user send so async TTS play() is allowed.
+  audioService.unlock()
   const normalized = content.trim().toLowerCase()
 
   if (isReadOnlyUiCommand(normalized)) {
@@ -798,6 +819,17 @@ const handlePlayerInput = async (content: string) => {
 
   await sendMessage(content)
 }
+
+const handleUnlockVoice = () => {
+  audioService.unlock()
+  speakLatestAssistantMessage({ force: true })
+}
+
+watch(() => audioService.lastError.value, (message) => {
+  if (!message || message === lastAudioErrorMessage.value) return
+  addNotification(message, 'error')
+  lastAudioErrorMessage.value = message
+})
 
 const handleEquipFromSheet = async (name: string) => {
   if (isActionInputBlocked.value) return
@@ -1040,6 +1072,23 @@ onBeforeUnmount(() => {
 
 
     <div class="flex-grow min-h-0 flex overflow-hidden relative">
+      <div
+        v-if="showVoiceUnlockHint"
+        class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-xl border border-amber-400/40 bg-amber-300/10 backdrop-blur-md shadow-lg max-w-[92%]"
+      >
+        <div class="flex items-center gap-3 text-xs text-amber-100">
+          <i class="ra ra-sound-on text-amber-300"></i>
+          <span>Auto-Speak is enabled, but browser policy blocks audio until your first interaction.</span>
+          <button
+            type="button"
+            class="px-2.5 py-1 rounded-md bg-amber-400/20 hover:bg-amber-400/35 border border-amber-300/40 text-amber-50 font-semibold transition-colors"
+            @click="handleUnlockVoice"
+          >
+            Enable voice
+          </button>
+        </div>
+      </div>
+
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
       <aside v-if="entities.length > 0 || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar relative z-10 m-6 shadow-2xl">
         <GameScenePanel
@@ -1105,6 +1154,7 @@ onBeforeUnmount(() => {
         :quest-glow="questGlow"
         :active-action-id="activeActionId"
         :sheet="sheet"
+        :game-id="props.id"
         :current-scene-description="currentSceneDescription"
         @send="handlePlayerInput"
         @open-sheet="showSheet = true"

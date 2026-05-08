@@ -5,6 +5,8 @@ Voice-tags like [shouting] or [very fast] are runtime markup produced by the GM.
 They are stored unchanged in ChatMessage.content and passed through to TTS.
 """
 import re
+import os
+import base64
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
@@ -135,6 +137,141 @@ async def test_tts_engine_passes_voice_tags_in_transcript():
     prompt_text = captured_payload["contents"][0]["parts"][0]["text"]
     assert "[very fast]" in prompt_text
     assert "[whispers]" in prompt_text
+
+
+@pytest.mark.asyncio
+async def test_tts_engine_converts_uppercase_l16_mime_to_valid_wav(tmp_path, monkeypatch):
+    """Gemini 2.5 may return audio/L16;rate=24000 and must be wrapped as WAV."""
+    from backend.engine.tts_engine import TTSEngine
+    from backend.core.config import settings
+
+    # 16-bit PCM sample pair (very short test payload)
+    raw_pcm = b"\x00\x00\x10\x00"
+    encoded = base64.b64encode(raw_pcm).decode("ascii")
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "inlineData": {
+                                        "mimeType": "audio/L16;rate=24000",
+                                        "data": encoded,
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+
+    async def fake_post(_url, json, timeout=None):
+        _ = json
+        _ = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        instance = MagicMock()
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.post = fake_post
+        mock_client_cls.return_value = instance
+
+        audio_url = await TTSEngine.generate_speech(
+            text="Test line",
+            voice="Aoede",
+            api_key="fake-key",
+            model_name="gemini-2.5-flash-preview-tts",
+        )
+
+    assert audio_url and audio_url.endswith(".wav")
+
+    relative_path = audio_url.replace("/data/", "", 1)
+    written_file = os.path.join(str(tmp_path), relative_path.replace("/", os.sep))
+    with open(written_file, "rb") as f:
+        payload = f.read(12)
+
+    assert payload[:4] == b"RIFF"
+    assert payload[8:12] == b"WAVE"
+
+
+@pytest.mark.asyncio
+async def test_tts_engine_skips_empty_inline_data_and_uses_non_empty_chunk(tmp_path, monkeypatch):
+    """Responses with an empty first inlineData part must still produce audio."""
+    from backend.engine.tts_engine import TTSEngine
+    from backend.core.config import settings
+
+    non_empty_pcm = b"\x01\x00\x02\x00\x03\x00\x04\x00"
+    encoded_non_empty = base64.b64encode(non_empty_pcm).decode("ascii")
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "inlineData": {
+                                        "mimeType": "audio/L16;rate=24000",
+                                        "data": "",
+                                    }
+                                },
+                                {
+                                    "inlineData": {
+                                        "mimeType": "audio/L16;rate=24000",
+                                        "data": encoded_non_empty,
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+
+    async def fake_post(_url, json, timeout=None):
+        _ = json
+        _ = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        instance = MagicMock()
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.post = fake_post
+        mock_client_cls.return_value = instance
+
+        audio_url = await TTSEngine.generate_speech(
+            text="Chunked output test",
+            voice="Aoede",
+            api_key="fake-key",
+            model_name="gemini-2.5-flash-preview-tts",
+        )
+
+    assert audio_url and audio_url.endswith(".wav")
+
+    rel = audio_url.replace("/data/", "", 1)
+    written_file = os.path.join(str(tmp_path), rel.replace("/", os.sep))
+    assert os.path.exists(written_file)
+    # WAV header (44 bytes) + non-empty PCM payload
+    assert os.path.getsize(written_file) > 44
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import base64
 import logging
 import struct
 import math
+import asyncio
 import httpx
 from typing import Optional
 from backend.core.config import settings
@@ -13,6 +14,27 @@ logger = logging.getLogger(__name__)
 
 class TTSTimeoutError(RuntimeError):
     """Raised when the upstream TTS request times out."""
+
+
+class TTSRateLimitError(RuntimeError):
+    """Raised when upstream TTS provider rate-limits requests (HTTP 429)."""
+
+    def __init__(self, message: str, retry_after_seconds: Optional[float] = None):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+def _parse_retry_after_seconds(response: httpx.Response) -> Optional[float]:
+    header = response.headers.get("Retry-After")
+    if not header:
+        return None
+    try:
+        value = float(header.strip())
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    return min(value, 30.0)
 
 
 def _tts_timeout_seconds(text: str) -> float:
@@ -55,20 +77,43 @@ def _add_wav_header(pcm_data: bytes, sample_rate: int = 24000) -> bytes:
     return header + pcm_data
 
 
-def _resolve_audio_output_dir(adventure_id: Optional[str]) -> str:
+def _parse_l16_sample_rate(mime_type: str) -> int:
+    """Extract sample rate from L16 MIME type, defaulting to 24000 Hz.
+
+    Example input: "audio/L16;rate=24000".
+    """
+    default_rate = 24000
+    if not mime_type:
+        return default_rate
+
+    for raw_part in mime_type.split(";"):
+        part = raw_part.strip().lower()
+        if not part.startswith("rate="):
+            continue
+        try:
+            value = int(part.split("=", 1)[1])
+        except (TypeError, ValueError, IndexError):
+            return default_rate
+        return value if value > 0 else default_rate
+
+    return default_rate
+
+
+def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[str] = None) -> str:
     """Return target directory for generated audio.
 
-    If an adventure_id is known, store clips inside that adventure's session area.
+    If adventure_id + session_id are known, store clips under that concrete session.
+    Otherwise, keep legacy global fallback for compatibility.
     """
-    if adventure_id:
-        return os.path.join(settings.DATA_DIR, "adventures", adventure_id, "sessions", "tts")
+    if session_id:
+        return os.path.join(settings.DATA_DIR, "adventures", "sessions", session_id, "tts")
     return os.path.join(settings.DATA_DIR, "audio")
 
 
-def _resolve_audio_public_url(adventure_id: Optional[str], filename: str) -> str:
+def _resolve_audio_public_url(adventure_id: Optional[str], filename: str, session_id: Optional[str] = None) -> str:
     """Return static URL for generated audio based on storage location."""
-    if adventure_id:
-        return f"/data/adventures/{adventure_id}/sessions/tts/{filename}"
+    if session_id:
+        return f"/data/adventures/sessions/{session_id}/tts/{filename}"
     return f"/data/audio/{filename}"
 
 
@@ -91,6 +136,7 @@ class TTSEngine:
         speaker_voices: Optional[dict[str, str]] = None,
         api_key: Optional[str] = None,
         adventure_id: Optional[str] = None,
+        session_id: Optional[str] = None,
         scene_description: Optional[str] = None,
         style_description: Optional[str] = None,
         model_name: str = "gemini-3.1-flash-tts-preview",
@@ -121,12 +167,36 @@ class TTSEngine:
                 list(valid_speaker_voices.keys()),
             )
 
-        # Keep the TTS prompt compact and avoid extra context sections.
-        prompt_parts = []
-        if include_style_context and style_description:
-            prompt_parts.append(f"Voice style context: {style_description}")
+        # Use a structured prompt format (similar to Gemini SDK examples) so
+        # voice/style instructions are applied more reliably.
+        prompt_parts = [
+            "Read the following transcript based on the audio profile and director's note.",
+            "",
+            "# Audio Profile",
+            "A helpful and professional personal assistant.",
+            "",
+            "# Director's note",
+        ]
+
+        director_notes: list[str] = []
         if tone:
-            prompt_parts.append(f"Tone: {tone}")
+            director_notes.append(f"Style: {tone}.")
+        if include_style_context and style_description:
+            director_notes.append(f"Sample Context: {style_description}")
+        if not director_notes:
+            director_notes.append("Style: Natural and clear.")
+        prompt_parts.append(" ".join(director_notes))
+
+        if title or scene_name:
+            location = " / ".join([part for part in [title, scene_name] if part])
+            if location:
+                prompt_parts.extend(["", "## Scene:", location])
+        elif scene_description:
+            prompt_parts.extend(["", "## Scene:", scene_description])
+
+        if include_style_context and style_description:
+            prompt_parts.extend(["", "## Sample Context:", style_description])
+
         if len(valid_speaker_voices) >= 2:
             speakers = ", ".join(valid_speaker_voices.keys())
             prompt_parts.append(
@@ -138,7 +208,8 @@ class TTSEngine:
             "e.g. [shouting], [whispers], [very fast], [very slow], [excited], [sarcastically, one painfully slow word at a time]. "
             "Honour these as acting cues until the next paragraph."
         )
-        prompt_parts.append("Transcript:")
+        prompt_parts.append("")
+        prompt_parts.append("## Transcript:")
         prompt_parts.append(text)
         user_content = "\n".join(prompt_parts)
 
@@ -171,11 +242,19 @@ class TTSEngine:
                 }
             }
 
+        selected_voice_for_log = None
+        if len(valid_speaker_voices) == 0:
+            selected_voice_for_log = voice
+        elif len(valid_speaker_voices) == 1:
+            selected_voice_for_log = next(iter(valid_speaker_voices.values()))
+
         logger.info(
-            "TTS request model=%s multi_speaker=%s speakers=%s",
+            "TTS request model=%s multi_speaker=%s voice=%s speakers=%s include_style=%s",
             model_name,
             len(valid_speaker_voices) >= 2,
+            selected_voice_for_log,
             list(valid_speaker_voices.keys()),
+            include_style_context,
         )
 
         payload = {
@@ -198,40 +277,102 @@ class TTSEngine:
         try:
             timeout_seconds = _tts_timeout_seconds(text)
             timeout = httpx.Timeout(timeout_seconds, connect=20.0)
+            max_attempts = 3
+            data: Optional[dict] = None
+
             async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=payload, timeout=timeout)
-                if response.status_code != 200:
-                    logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)
-                response.raise_for_status()
-                data = response.json()
+                for attempt in range(1, max_attempts + 1):
+                    response = await client.post(url, json=payload, timeout=timeout)
+
+                    if response.status_code == 429:
+                        retry_after = _parse_retry_after_seconds(response)
+                        delay = retry_after if retry_after is not None else min(2 ** attempt, 8)
+                        logger.warning(
+                            "Gemini TTS rate-limited (429), attempt %d/%d, retrying in %.1fs.",
+                            attempt,
+                            max_attempts,
+                            delay,
+                        )
+
+                        if attempt < max_attempts:
+                            await asyncio.sleep(delay)
+                            continue
+
+                        raise TTSRateLimitError(
+                            "Gemini TTS rate limit reached.",
+                            retry_after_seconds=delay,
+                        )
+
+                    if response.status_code != 200:
+                        logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)
+                    response.raise_for_status()
+                    data = response.json()
+                    break
+
+            if data is None:
+                raise TTSRateLimitError("Gemini TTS rate limit reached.")
 
             candidates = data.get("candidates", [])
             if not candidates:
                 logger.error("No candidates returned from Gemini TTS: %s", data)
                 return None
 
-            audio_part = next((p for p in candidates[0]["content"]["parts"] if "inlineData" in p), None)
-            if not audio_part:
-                logger.error("No audio data found in Gemini response: %s", data)
+            content = candidates[0].get("content") or {}
+            parts = content.get("parts") or []
+
+            # Some TTS responses include multiple inlineData parts where the first
+            # part may have empty data. Aggregate all non-empty audio chunks.
+            audio_chunks: list[bytes] = []
+            mime_type: Optional[str] = None
+
+            for part in parts:
+                inline_data = part.get("inlineData") or {}
+                if not inline_data:
+                    continue
+
+                candidate_mime = str(inline_data.get("mimeType") or "").strip()
+                candidate_b64 = inline_data.get("data")
+                if not isinstance(candidate_b64, str) or not candidate_b64.strip():
+                    continue
+
+                if mime_type is None:
+                    mime_type = candidate_mime
+
+                try:
+                    audio_chunks.append(base64.b64decode(candidate_b64))
+                except Exception:
+                    logger.warning("Failed to decode inline audio chunk (mime=%s).", candidate_mime)
+
+            if not audio_chunks:
+                logger.error("No non-empty audio chunk found in Gemini response: %s", data)
                 return None
 
-            mime_type = audio_part["inlineData"]["mimeType"]
-            audio_base64 = audio_part["inlineData"]["data"]
-            audio_bytes = base64.b64decode(audio_base64)
+            if not mime_type:
+                mime_type = "audio/l16;rate=24000"
+
+            audio_bytes = b"".join(audio_chunks)
+
+            if not audio_bytes:
+                logger.error("Gemini TTS returned zero audio bytes after chunk decode.")
+                return None
+
+            normalized_mime_type = str(mime_type or "").strip().lower()
 
             # Determine file extension and process raw PCM if needed
             ext = "wav"
-            if "audio/l16" in mime_type:
-                # Gemini returns raw PCM for audio/l16, browsers need a WAV header
-                audio_bytes = _add_wav_header(audio_bytes)
+            if "audio/l16" in normalized_mime_type:
+                # Gemini returns raw PCM (little-endian in practice) for audio/l16.
+                # Wrap with a WAV header directly — no byte-swap needed.
+                sample_rate = _parse_l16_sample_rate(mime_type)
+                audio_bytes = _add_wav_header(audio_bytes, sample_rate=sample_rate)
                 ext = "wav"
-            elif "mp3" in mime_type: 
+            elif "mp3" in normalized_mime_type:
                 ext = "mp3"
-            elif "ogg" in mime_type: 
+            elif "ogg" in normalized_mime_type:
                 ext = "ogg"
 
-            # Save to adventure session directory when adventure_id is known.
-            audio_dir = _resolve_audio_output_dir(adventure_id)
+            # Save to concrete session directory when session_id is available.
+            audio_dir = _resolve_audio_output_dir(adventure_id, session_id=session_id)
             os.makedirs(audio_dir, exist_ok=True)
 
             filename = f"{uuid.uuid4()}.{ext}"
@@ -250,6 +391,8 @@ class TTSEngine:
                 model_name,
             )
             raise TTSTimeoutError("Timed out while generating speech.") from exc
+        except TTSRateLimitError:
+            raise
         except Exception:
             logger.exception("Failed to generate speech with Gemini")
             return None

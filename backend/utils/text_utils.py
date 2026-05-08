@@ -33,3 +33,13 @@ def generate_adventure_id(title: str) -> str:
     slug = slugify(title)
     short_id = generate_short_id(8)
     return f"{slug}-{short_id}"
+
+
+def generate_session_id(title: str) -> str:
+    """Generate human-readable session ID with adventure prefix and hex suffix.
+
+    Example: "The Lost Cave" -> "the-lost-cave-a1b2c3d4"
+    """
+    slug = slugify(title)
+    hex_id = uuid.uuid4().hex[:8]
+    return f"{slug}-{hex_id}"

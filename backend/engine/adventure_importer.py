@@ -20,7 +20,7 @@ from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
 from backend.engine.world_generator import WorldGenerator
 from backend.core.auth import get_password_hash
 from backend.core.adventure_format import validate_manifest_version
-from backend.utils.text_utils import generate_adventure_id
+from backend.utils.text_utils import generate_adventure_id, generate_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ class AdventureTemplateImporter:
 
                 db.add(new_template)
                 
-                target_base_dir = os.path.join(settings.DATA_DIR, "adventures", new_template_id)
+                target_base_dir = os.path.join(settings.DATA_DIR, "adventures", "library", new_template_id)
                 os.makedirs(target_base_dir, exist_ok=True)
                 
                 existing_images_mapping = {} # zip_path -> local_url
@@ -241,7 +241,7 @@ class AdventureTemplateImporter:
                 else:
                     from backend.engine.media_engine import MediaEngine
                     new_template.image_url = await MediaEngine.generate_placeholder(
-                        new_template_id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template_id),
+                        new_template_id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", "library", new_template_id),
                         category="COVER"
                     )
                 
@@ -366,6 +366,7 @@ class AdventureTemplateImporter:
                     await db.flush()
                     
                     new_sess = GameSession(
+                        id=generate_session_id(new_template.title or old_adv.get('title') or 'session'),
                         user_id=user.id,
                         avatar_id=new_avatar.id,
                         template_id=new_template.id,
@@ -433,7 +434,7 @@ class AdventureTemplateImporter:
                 if not new_template.image_url:
                     from backend.engine.media_engine import MediaEngine
                     new_template.image_url = await MediaEngine.generate_placeholder(
-                        new_template.id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", new_template.id),
+                        new_template.id, new_template.title, os.path.join(settings.DATA_DIR, "adventures", "library", new_template.id),
                         category="COVER"
                     )
                     await db.flush()

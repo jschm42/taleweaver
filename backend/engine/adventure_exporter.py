@@ -116,7 +116,10 @@ class AdventureExporter:
         manifest = await AdventureExporter.build_full_manifest(db, template_id)
         
         # Gather local assets
-        adventure_dir = os.path.join(settings.DATA_DIR, "adventures", template_id)
+        adventure_dir = os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
+        if not os.path.exists(adventure_dir):
+            # Legacy fallback for pre-migration adventures.
+            adventure_dir = os.path.join(settings.DATA_DIR, "adventures", template_id)
         asset_mapping = {} # local_path -> zip_path
         
         # Update manifest to point to relative paths in the zip

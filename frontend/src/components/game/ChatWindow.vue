@@ -25,6 +25,7 @@ const props = defineProps<{
   mode?: string
   inputLocked?: boolean
   sheet?: any
+  gameId?: string
   currentSceneDescription?: string
 }>()
 
@@ -453,6 +454,17 @@ function handleRetry() {
     emit('send', lastUserMessage.value)
   }
 }
+
+function isLatestAssistantMessage(index: number): boolean {
+  for (let i = props.messages.length - 1; i >= 0; i -= 1) {
+    const candidate = props.messages[i] as any
+    if (!candidate) continue
+    if (candidate.role !== 'assistant') continue
+    if (candidate.is_debug) continue
+    return i === index
+  }
+  return false
+}
 </script>
 
 <template>
@@ -543,7 +555,7 @@ function handleRetry() {
             {{ formatTime(msg.timestamp) }}
           </span>
           <span
-            v-if="msg.role === 'assistant' && audioService.isGenerating.value && audioService.currentText.value === msg.content"
+            v-if="msg.role === 'assistant' && audioService.isGenerating.value && isLatestAssistantMessage(idx)"
             class="inline-flex items-center gap-2 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30"
             title="Voice generation in progress"
           >
@@ -554,9 +566,10 @@ function handleRetry() {
           <!-- Manual Speak Button -->
           <button 
             v-if="msg.role === 'assistant'"
-            @click="audioService.speak(msg.content, {
+            @click="audioService.unlock(); audioService.speak(msg.content, {
               sceneDescription: props.currentSceneDescription,
               adventureId: props.sheet?.template_id,
+              sessionId: props.gameId,
               title: props.sheet?.adventure_title,
               sceneName: props.sheet?.current_scene,
               tone: props.sheet?.adventure_tone,
