@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { audioService } from '@/services/audioService'
 
 interface Action {
   id: string
@@ -45,12 +46,12 @@ function toggleAction(id: string) {
 </script>
 
 <template>
-  <div class="flex items-center gap-1 p-2 bg-slate-900/80 border-t border-slate-800 backdrop-blur-md overflow-x-auto no-scrollbar shrink-0">
+  <div class="flex items-center w-full p-2 bg-slate-900/80 border-t border-slate-800 backdrop-blur-md no-scrollbar shrink-0">
     <div class="flex items-center gap-2 px-3 mr-2 border-r border-slate-800">
       <i class="ra ra-gear text-slate-500 text-xs"></i>
       <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 whitespace-nowrap">Actions</span>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar flex-grow">
       <button
         v-for="action in filteredActions"
         :key="action.id"
@@ -76,19 +77,61 @@ function toggleAction(id: string) {
       </button>
     </div>
 
-    <!-- Selection Instructions -->
-    <div v-if="activeActionId && !props.disabled" class="ml-auto flex items-center gap-3 px-4 animate-fade-in">
-      <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-        <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div>
-        <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Select Target...</span>
+    <!-- Right Aligned Area -->
+    <div class="ml-auto flex items-center gap-6 px-4 h-full">
+      <!-- Selection Instructions -->
+      <div v-if="activeActionId && !props.disabled" class="flex items-center gap-3 animate-fade-in border-r border-slate-800 pr-6 mr-2">
+        <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+          <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div>
+          <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest whitespace-nowrap">Select Target...</span>
+        </div>
+        <button 
+          @click="emit('selectAction', null)"
+          class="text-slate-500 hover:text-white transition-colors"
+          title="Cancel Action"
+        >
+          <i class="ra ra-cancel text-xs"></i>
+        </button>
       </div>
-      <button 
-        @click="emit('selectAction', null)"
-        class="text-slate-500 hover:text-white transition-colors"
-        title="Cancel Action"
-      >
-        <i class="ra ra-cancel text-xs"></i>
-      </button>
+
+      <!-- TTS Controls -->
+      <div class="flex items-center gap-4">
+        <div v-show="audioService.isPlaying.value" class="flex flex-col items-center gap-0.5 animate-fade-in shrink-0">
+          <button 
+            @click="audioService.stop()"
+            class="w-14 h-8 rounded-full bg-red-500/20 border border-red-500/50 text-red-400 flex items-center justify-center hover:bg-red-500/30 transition-all shadow-lg animate-pulse"
+            title="Stop Speech (SPACE)"
+          >
+            <i class="ra ra-stop text-lg"></i>
+          </button>
+          <span class="text-[9px] font-black uppercase tracking-widest text-red-500/80">Stop</span>
+        </div>
+
+        <div class="flex flex-col items-center gap-0.5 shrink-0">
+          <button 
+            @click="audioService.toggleAutoSpeech()"
+            :class="[
+              'w-14 h-8 rounded-full relative transition-all duration-300 shadow-lg border',
+              audioService.autoSpeechEnabled.value 
+                ? 'bg-blue-600/30 border-blue-500/50 shadow-blue-500/20' 
+                : 'bg-slate-800/60 border-slate-700/50'
+            ]"
+            title="Toggle Automatic Speech"
+          >
+            <div 
+              :class="[
+                'absolute top-1 w-5 h-5 rounded-full transition-all duration-300 flex items-center justify-center shadow-md',
+                audioService.autoSpeechEnabled.value 
+                  ? 'right-1 bg-blue-400 text-blue-900' 
+                  : 'left-1 bg-slate-600 text-slate-400'
+              ]"
+            >
+              <i :class="['ra text-[10px]', audioService.autoSpeechEnabled.value ? 'ra-microphone' : 'ra-microphone-mute']"></i>
+            </div>
+          </button>
+          <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Auto Speak</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>

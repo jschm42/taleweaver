@@ -50,7 +50,8 @@ async def _broadcast_global_settings(db: AsyncSession, source_user: User) -> Non
             t2i_settings=dict(source_user.t2i_settings or {}),
             image_styles_catalog=list(source_user.image_styles_catalog or []),
             tone_catalog=list(source_user.tone_catalog or []),
-            game_settings=dict(source_user.game_settings or {})
+            game_settings=dict(source_user.game_settings or {}),
+            tts_settings=dict(source_user.tts_settings or {})
         )
     )
     # No need to loop and modify objects manually
@@ -253,6 +254,47 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
     return normalized
 
 
+def _normalize_tts_settings(settings: Optional[dict]) -> dict:
+    """Return TTS settings with voice list, selected voice and style context."""
+    fallback = {
+        "enabled": True,
+        "selected_model": "gemini-3.1-flash-tts-preview",
+        "voice_list": [
+            "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", 
+            "Orus", "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", 
+            "Umbriel", "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", 
+            "Laomedeia", "Achernar", "Alnilam", "Schedar", "Gacrux", "Pulcherrima", 
+            "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
+        ],
+        "selected_voice": "Puck",
+        "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling."
+    }
+    if not settings:
+        return fallback
+
+    normalized = dict(settings)
+    full_voice_list = [
+        "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", 
+        "Orus", "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", 
+        "Umbriel", "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", 
+        "Laomedeia", "Achernar", "Alnilam", "Schedar", "Gacrux", "Pulcherrima", 
+        "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
+    ]
+    if "enabled" not in normalized:
+        normalized["enabled"] = fallback["enabled"]
+    if "selected_model" not in normalized:
+        normalized["selected_model"] = fallback["selected_model"]
+    
+    # Always ensure the full list is available
+    normalized["voice_list"] = full_voice_list
+    
+    if "selected_voice" not in normalized:
+        normalized["selected_voice"] = fallback["selected_voice"]
+    if "sample_context" not in normalized:
+        normalized["sample_context"] = fallback["sample_context"]
+    return normalized
+
+
 def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
     """Return T2I settings with separate providers."""
     fallback = {
@@ -365,6 +407,14 @@ class GameSettingsPayload(BaseModel):
     date_format: str = "DD.MM.YY"
 
 
+class TTSSettingsPayload(BaseModel):
+    enabled: bool = True
+    selected_model: str = "gemini-3.1-flash-tts-preview"
+    voice_list: list[str]
+    selected_voice: str
+    sample_context: str
+
+
 class CatalogTilePayload(BaseModel):
     id: Optional[str] = None
     name: str
@@ -448,6 +498,7 @@ async def get_settings(
             "clock_24h": False,
             "date_format": "DD.MM.YY"
         },
+        "tts_settings": _normalize_tts_settings(user.tts_settings),
         "available_constants": {
             "llm_providers": LLM_PROVIDERS,
             "image_providers": IMAGE_PROVIDERS,
@@ -523,6 +574,21 @@ async def update_t2i_settings(
     await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "Image generation settings updated."}
+
+
+@router.post("/tts")
+async def update_tts_settings(
+    payload: TTSSettingsPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    """Updates the TTS settings."""
+    user = await _resolve_global_settings_owner(db, current_user)
+        
+    user.tts_settings = _normalize_tts_settings(payload.model_dump())
+    await _broadcast_global_settings(db, user)
+    await db.commit()
+    return {"status": "success", "message": "TTS settings updated."}
 
 
 class TestLLMPayload(BaseModel):

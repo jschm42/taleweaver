@@ -24,6 +24,7 @@ interface SettingsResponse {
   is_t2i_configured: boolean
   image_styles_catalog: CatalogTile[]
   tone_catalog: CatalogTile[]
+  tts_settings: Record<string, unknown>
 }
 
 // Use absolute backend URL during local development to avoid proxy/cache timing
@@ -312,6 +313,14 @@ export const api = {
 
   saveGameSettings(payload: any): Promise<any> {
     return request('/settings/game', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  saveTTSSettings(payload: any): Promise<any> {
+    return request('/settings/tts', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  generateTTS(payload: { text: string; scene_description?: string; adventure_id?: string }): Promise<{ audio_url: string }> {
+    return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload) })
   },
 
   /** Testing */

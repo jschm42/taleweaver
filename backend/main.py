@@ -27,7 +27,7 @@ import backend.models.session_state
 import backend.models.chat
 import backend.models.world_map
 
-from backend.api.routes import config_api, adventures, avatars, data, characters, map_api, auth_api, users_api
+from backend.api.routes import config_api, adventures, avatars, data, characters, map_api, auth_api, users_api, tts_api
 
 
 @asynccontextmanager
@@ -87,6 +87,7 @@ app.include_router(data.router, prefix="/api")
 app.include_router(map_api.router, prefix="/api")
 app.include_router(auth_api.router, prefix="/api")
 app.include_router(users_api.router, prefix="/api")
+app.include_router(tts_api.router, prefix="/api")
 
 
 
@@ -95,6 +96,7 @@ os.makedirs(os.path.join(settings.DATA_DIR, "characters"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "adventures"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "logs"), exist_ok=True)
 os.makedirs(os.path.join(settings.DATA_DIR, "users"), exist_ok=True)
+os.makedirs(os.path.join(settings.DATA_DIR, "audio"), exist_ok=True)
 os.makedirs("data/imports/adventures", exist_ok=True)
 os.makedirs("data/presets/adventures", exist_ok=True)
 os.makedirs("adventures", exist_ok=True)

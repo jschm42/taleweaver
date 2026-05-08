@@ -1,0 +1,139 @@
+import os
+import uuid
+import base64
+import logging
+import struct
+import httpx
+from typing import Optional
+from backend.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+def _add_wav_header(pcm_data: bytes, sample_rate: int = 24000) -> bytes:
+    """Adds a WAV header to raw PCM data (Linear 16-bit)."""
+    num_channels = 1
+    bits_per_sample = 16
+    byte_rate = sample_rate * num_channels * bits_per_sample // 8
+    block_align = num_channels * bits_per_sample // 8
+    data_length = len(pcm_data)
+    
+    header = struct.pack('<4sI4s4sIHHIIHH4sI',
+        b'RIFF',
+        36 + data_length,
+        b'WAVE',
+        b'fmt ',
+        16, # Subchunk1Size
+        1,  # AudioFormat (PCM)
+        num_channels,
+        sample_rate,
+        byte_rate,
+        block_align,
+        bits_per_sample,
+        b'data',
+        data_length
+    )
+    return header + pcm_data
+
+class TTSEngine:
+    """
+    Handles speech generation using Google Gemini 1.5 Flash (Preview) TTS API.
+    """
+
+    @staticmethod
+    async def generate_speech(
+        text: str,
+        voice: str = "Puck",
+        api_key: Optional[str] = None,
+        scene_description: Optional[str] = None,
+        style_description: Optional[str] = None,
+        model_name: str = "gemini-3.1-flash-tts-preview",
+    ) -> Optional[str]:
+        """
+        Generates speech and returns the relative URL to the audio file.
+        """
+        if not api_key:
+            logger.error("No Google API key provided for TTS.")
+            return None
+
+        # Prepare prompts
+        user_content = text
+        if scene_description:
+            user_content = f"Context: {scene_description}\n\nText to speak: {text}"
+
+        # Force log to console for the user
+        print(f"DEBUG: TTS Prompt for model '{model_name}': {user_content}")
+
+        # Note: Using generateContent with responseModalities: ["AUDIO"]
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "text": user_content
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {
+                            "voiceName": voice
+                        }
+                    }
+                }
+            }
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=payload, timeout=60.0)
+                if response.status_code != 200:
+                    logger.error(f"Gemini TTS Error {response.status_code}: {response.text}")
+                response.raise_for_status()
+                data = response.json()
+
+            candidates = data.get("candidates", [])
+            if not candidates:
+                logger.error(f"No candidates returned from Gemini TTS: {data}")
+                return None
+
+            audio_part = next((p for p in candidates[0]["content"]["parts"] if "inlineData" in p), None)
+            if not audio_part:
+                logger.error(f"No audio data found in Gemini response: {data}")
+                return None
+
+            mime_type = audio_part["inlineData"]["mimeType"]
+            audio_base64 = audio_part["inlineData"]["data"]
+            audio_bytes = base64.b64decode(audio_base64)
+
+            # Determine file extension and process raw PCM if needed
+            ext = "wav"
+            if "audio/l16" in mime_type:
+                # Gemini returns raw PCM for audio/l16, browsers need a WAV header
+                audio_bytes = _add_wav_header(audio_bytes)
+                ext = "wav"
+            elif "mp3" in mime_type: 
+                ext = "mp3"
+            elif "ogg" in mime_type: 
+                ext = "ogg"
+
+            # Save to data directory
+            audio_dir = os.path.join(settings.DATA_DIR, "audio")
+            os.makedirs(audio_dir, exist_ok=True)
+
+            filename = f"{uuid.uuid4()}.{ext}"
+            filepath = os.path.join(audio_dir, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(audio_bytes)
+
+            return f"/data/audio/{filename}"
+
+        except Exception as e:
+            logger.exception("Failed to generate speech with Gemini")
+            return None

@@ -7,7 +7,7 @@ import type { CatalogTile } from '@/types'
 const router = useRouter()
 
 // NAVIGATION
-type Section = 'keys' | 'llm' | 't2i' | 'styles' | 'tones' | 'game' | 'users'
+type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'styles' | 'tones' | 'game' | 'users'
 const activeSection = ref<Section>('keys')
 
 import { api } from '@/composables/useApi'
@@ -60,6 +60,14 @@ const t2iForm = ref({
 const gameForm = ref({
   clock_24h: false,
   date_format: 'DD.MM.YY',
+})
+
+const ttsForm = ref({
+  enabled: true,
+  selected_model: 'gemini-3.1-flash-tts-preview',
+  voice_list: ['Puck', 'Charon', 'Kore', 'Fenrir'],
+  selected_voice: 'Puck',
+  sample_context: '',
 })
 
 // CONSTANTS FROM BACKEND
@@ -118,6 +126,7 @@ const fetchSettings = async () => {
     if (data.llm_settings) llmForm.value = { ...data.llm_settings as any }
     if (data.t2i_settings) t2iForm.value = { ...data.t2i_settings as any }
     if (data.game_settings) gameForm.value = { ...data.game_settings as any }
+    if (data.tts_settings) ttsForm.value = { ...data.tts_settings as any }
     if ((data as any).available_constants) availableConstants.value = (data as any).available_constants
     imageStylesCatalog.value = data.image_styles_catalog || []
     toneCatalog.value = data.tone_catalog || []
@@ -408,6 +417,20 @@ const saveT2iSettings = async () => {
   }
 }
 
+const saveTTSSettings = async () => {
+  isSubmitting.value = true
+  statusMessage.value = null
+  try {
+    await api.saveTTSSettings(ttsForm.value)
+    statusMessage.value = { type: 'success', text: 'TTS settings updated.' }
+    await refreshConfig()
+  } catch (error) {
+    statusMessage.value = { type: 'error', text: 'Failed to update TTS settings.' }
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
 const testLlm = async (key: string, model: string, provider: string) => {
   testResults.value[key] = { status: 'loading', message: 'Testing connection...' }
   try {
@@ -546,6 +569,38 @@ watch(
     )
   }
 )
+const voiceLabels: Record<string, string> = {
+  "Zephyr": "Zephyr – Bright",
+  "Puck": "Puck – Upbeat",
+  "Charon": "Charon – Informative",
+  "Kore": "Kore – Firm",
+  "Fenrir": "Fenrir – Excited",
+  "Leda": "Leda – Youthful",
+  "Orus": "Orus – Professional",
+  "Aoede": "Aoede – Breezy",
+  "Callirrhoe": "Callirrhoe – Calm",
+  "Autonoe": "Autonoe – Bright",
+  "Enceladus": "Enceladus – Breathy",
+  "Iapetus": "Iapetus – Clear",
+  "Umbriel": "Umbriel – Calm",
+  "Algieba": "Algieba – Smooth",
+  "Despina": "Despina – Smooth",
+  "Erinome": "Erinome – Serene",
+  "Algenib": "Algenib – Gritty",
+  "Rasalgethi": "Rasalgethi – Informative",
+  "Laomedeia": "Laomedeia – Upbeat",
+  "Achernar": "Achernar – Soft",
+  "Alnilam": "Alnilam – Firm",
+  "Schedar": "Schedar – Straight",
+  "Gacrux": "Gacrux – Adult",
+  "Pulcherrima": "Pulcherrima – Forward",
+  "Achird": "Achird – Friendly",
+  "Zubenelgenubi": "Zubenelgenubi – Casual",
+  "Vindemiatrix": "Vindemiatrix – Gentle",
+  "Sadachbia": "Sadachbia – Lively",
+  "Sadaltager": "Sadaltager – Knowledgeable",
+  "Sulafat": "Sulafat – Warm"
+}
 </script>
 
 <template>
@@ -583,6 +638,13 @@ watch(
         >
           <i class="ra ra-camera"></i>
           <span class="font-bold text-md font-mono uppercase tracking-widest">Visuals</span>
+        </button>
+        <button 
+          @click="activeSection = 'tts'"
+          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'tts' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
+        >
+          <i class="ra ra-microphone"></i>
+          <span class="font-bold text-md font-mono uppercase tracking-widest">Speech (TTS)</span>
         </button>
         <button
           @click="activeSection = 'styles'"
@@ -1100,6 +1162,65 @@ watch(
 
             <button @click="saveT2iSettings" :disabled="isSubmitting" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
                {{ isSubmitting ? 'Painting...' : 'Update Visual Artists' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- SECTION: TTS -->
+        <div v-if="activeSection === 'tts'" class="space-y-8 animate-fade-in">
+          <div>
+            <h1 class="text-4xl font-extrabold text-white mb-2">Speech Generation (TTS)</h1>
+            <p class="text-slate-400">Configure high-quality narration using Gemini models.</p>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
+            <!-- ENABLED TOGGLE -->
+            <div class="flex items-center justify-between p-6 bg-slate-950/50 rounded-2xl border border-blue-500/10">
+              <div>
+                <h3 class="text-lg font-bold text-blue-400">Enable Text-to-Speech</h3>
+                <p class="text-xs text-slate-500">Allow AI-generated narration during gameplay.</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer scale-125">
+                <input type="checkbox" v-model="ttsForm.enabled" class="sr-only peer">
+                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-checked:after:bg-white"></div>
+              </label>
+            </div>
+
+            <div v-if="ttsForm.enabled" class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-blue-500/10 animate-fade-in">
+              <h3 class="text-lg font-bold text-blue-400 flex items-center gap-2">
+                <i class="ra ra-microphone"></i> Narration Style & Model
+              </h3>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model</label>
+                  <select v-model="ttsForm.selected_model" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
+                    <option value="gemini-3.1-flash-tts-preview">Gemini 3.1 Flash TTS (Preview)</option>
+                    <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS (Preview)</option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Voice</label>
+                  <select v-model="ttsForm.selected_voice" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
+                    <option v-for="voice in ttsForm.voice_list" :key="voice" :value="voice">{{ voiceLabels[voice] || voice }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Sample Context (Style Description)</label>
+                <textarea 
+                  v-model="ttsForm.sample_context" 
+                  rows="4" 
+                  placeholder="Describe the voice style and tone..."
+                  class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-sans"
+                ></textarea>
+                <p class="text-xxs text-slate-500 italic">Example: "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise..."</p>
+              </div>
+            </div>
+
+            <button @click="saveTTSSettings" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
+               {{ isSubmitting ? 'Tuning...' : 'Update Speech Settings' }}
             </button>
           </div>
         </div>

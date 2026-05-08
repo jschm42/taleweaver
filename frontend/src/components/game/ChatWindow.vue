@@ -6,6 +6,7 @@ import CommandPopup from '@/components/game/CommandPopup.vue'
 import GameActionBar from '@/components/game/GameActionBar.vue'
 import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
+import { audioService } from '@/services/audioService'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -477,12 +478,23 @@ function handleRetry() {
           <span class="text-xs text-slate-600 font-mono opacity-0 group-hover:opacity-100 transition-opacity">
             {{ formatTime(msg.timestamp) }}
           </span>
+
+          <!-- Manual Speak Button -->
+          <button 
+            v-if="msg.role === 'assistant'"
+            @click="audioService.speak(msg.content)"
+            class="ml-auto p-1.5 px-3 text-[10px] font-black uppercase tracking-widest bg-slate-800/80 border border-slate-700/50 rounded-xl text-slate-400 hover:bg-amber-500/20 hover:text-amber-400 transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
+            title="Listen to this narration"
+          >
+            <i class="ra ra-microphone text-xs"></i>
+            <span>Speak</span>
+          </button>
         </div>
 
         <!-- Content -->
         <div
           :class="[
-            'leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2 transition-all',
+            'leading-relaxed whitespace-pre-wrap break-words pl-4 border-l-2 transition-all relative',
             messageTypographyClass,
             msg.role === 'user' ? 'text-slate-300 border-cyan-500/50' :
             msg.role === 'assistant' ? 'text-amber-50/90 border-amber-500/50' :
@@ -497,6 +509,19 @@ function handleRetry() {
             </div>
             <pre v-else-if="part.type === 'code'" class="my-3 p-4 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-cyan-400 overflow-x-auto whitespace-pre custom-scrollbar shadow-inner">{{ part.value }}</pre>
           </template>
+
+          <!-- Waiting Indicator for TTS Overlay -->
+          <div 
+            v-show="audioService.isGenerating.value && audioService.currentText.value === msg.content" 
+            class="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] rounded-r-lg flex flex-col items-center justify-center gap-3 animate-fade-in z-20 border border-amber-500/20"
+          >
+            <div class="flex gap-2">
+              <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+              <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+              <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce"></span>
+            </div>
+            <span class="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500 drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]">Narrating Chronicle...</span>
+          </div>
 
           <!-- Retry Button for Errors -->
           <div v-if="msg.role === 'system' && isRetryableError(msg.content) && lastUserMessage" class="mt-4 flex justify-start">
@@ -678,6 +703,7 @@ function handleRetry() {
             <i class="ra ra-cog text-3xl text-slate-400 group-hover:text-emerald-400 group-hover:drop-shadow-[0_0_15px_rgba(16,185,129,0.8)] transition-all"></i>
           </div>
         </button>
+
       </div>
       
     </div>

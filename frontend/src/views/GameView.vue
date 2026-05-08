@@ -5,7 +5,7 @@
  * Connects to the given game session and displays the chat,
  * intercepting commands and showing the character sheet + world map.
  */
-import { onBeforeUnmount, onMounted, ref, watch, computed } from 'vue'
+import { ref, onMounted, watch, nextTick, computed, onUnmounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
@@ -28,6 +28,7 @@ import { useNotifications } from '@/composables/useNotifications'
 import { api } from '@/composables/useApi'
 import { authState, refreshUser } from '@/store/auth'
 import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
+import { audioService } from '@/services/audioService'
 
 const props = defineProps<{
   id: string
@@ -95,9 +96,13 @@ const contextMenu = ref<{
   title: string
 } | null>(null)
 
+onBeforeUnmount(() => {
+  audioService.stop()
+})
+
 const activeActionId = ref<string | null>(null)
 const isPassRunning = computed(() => status.value === 'connecting' || status.value === 'loading')
-const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value)
+const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || audioService.isPlaying.value || audioService.isGenerating.value)
 
 function isReadOnlyUiCommand(normalized: string): boolean {
   return normalized === '/map' || normalized === '/sheet' || normalized === '/inventory' || normalized === '/quests'
@@ -403,6 +408,28 @@ const handleTakeDirect = async (entity: any) => {
   await sendMessage(`/take_direct ${entity.id || entity.name}`)
 }
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
+
+watch(() => inputLocked.value, (isLocked) => {
+  if (!isLocked && audioService.autoSpeechEnabled.value) {
+    // Game just finished generating a response
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg && lastMsg.role === 'assistant') {
+      // Exclude combat active state per requirement
+      if (isCombatActive.value) return
+
+      audioService.speak(lastMsg.content, currentSceneDescription.value, props.id)
+    }
+  }
+})
+
+watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
+  if (enabled && !inputLocked.value && !isCombatActive.value) {
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg && lastMsg.role === 'assistant') {
+      audioService.speak(lastMsg.content, currentSceneDescription.value, props.id)
+    }
+  }
+})
 
 /**
  * Formats the session clock as a full datetime derived from the adventure start.
@@ -927,6 +954,7 @@ onBeforeUnmount(() => {
           <i class="ra ra-back-arrow text-sm text-slate-100 group-hover:text-emerald-400 transition-colors"></i>
           <span class="text-xxs font-black uppercase tracking-[0.2em] text-slate-100 group-hover:text-white transition-colors">Back</span>
         </button>
+
         <div class="flex flex-col min-w-0">
           <h1 class="text-xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide whitespace-nowrap truncate" style="font-family: 'Acme', sans-serif;">
             {{ sheet?.adventure_title || 'Chronicle' }}
@@ -1002,7 +1030,7 @@ onBeforeUnmount(() => {
         ref="dialogPanel"
         :messages="messages"
         :status="status"
-        :input-locked="inputLocked"
+        :input-locked="isActionInputBlocked"
         :npc-metadata="npcMetadata"
         :entities="entities"
         :inventory-items="inventoryItems"
