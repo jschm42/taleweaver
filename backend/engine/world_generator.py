@@ -18,6 +18,24 @@ from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_N
 
 logger = logging.getLogger(__name__)
 
+IMAGE_MODERATION_MARKERS = (
+    "safety filter",
+    "content moderated",
+    "moderated",
+    "content policy",
+    "policy violation",
+    "blocked by safety",
+    "responsible ai",
+    "prompt blocked",
+)
+
+
+def is_image_moderation_error(error: Exception | str | None) -> bool:
+    if error is None:
+        return False
+    message = str(error).lower()
+    return any(marker in message for marker in IMAGE_MODERATION_MARKERS)
+
 
 def _build_voice_assignment_requirement(
     enabled: bool,
@@ -641,6 +659,7 @@ class WorldGenerator:
                     status_callback=status_callback,
                 )
                 try:
+                    image_attempts += 1
                     cover_url = await MediaEngine.generate_adventure_cover(
                         title=adventure.title,
                         original_prompt=adventure.teaser or adventure.original_prompt,
@@ -650,10 +669,13 @@ class WorldGenerator:
                         style_instruction=style_instruction
                     )
                     if cover_url:
+                        image_successes += 1
                         adventure.image_url = cover_url
                         await db.commit() # Save cover immediately
                         adventure = await db.get(AdventureTemplate, template_id)
                 except Exception as e:
+                    if is_image_moderation_error(e):
+                        moderation_count += 1
                     logger.warning(f"Failed to generate adventure cover for {template_id}: {e}")
 
             await db.flush()
@@ -779,7 +801,7 @@ class WorldGenerator:
                             timeout=_image_generation_timeout_seconds(),
                         )
                     except Exception as exc:
-                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                        if is_image_moderation_error(exc):
                             moderation_count += 1
                         logger.warning("Protagonist image generation failed for %s: %s", template_id, exc)
                         image_url = None
@@ -837,7 +859,7 @@ class WorldGenerator:
                         logger.warning("Scene image generation timed out for %s/%s: %s", template_id, s['id'], exc)
                         image_url = None
                     except Exception as exc:
-                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                        if is_image_moderation_error(exc):
                             moderation_count += 1
                         logger.warning("Scene image generation failed for %s/%s: %s", template_id, s['id'], exc)
                         image_url = None
@@ -912,7 +934,7 @@ class WorldGenerator:
                         logger.warning("NPC image generation timed out for %s/%s: %s", template_id, n['id'], exc)
                         image_url = None
                     except Exception as exc:
-                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                        if is_image_moderation_error(exc):
                             moderation_count += 1
                         logger.warning("NPC image generation failed for %s/%s: %s", template_id, n['id'], exc)
                         image_url = None
@@ -1082,7 +1104,7 @@ class WorldGenerator:
                             timeout=float(settings.VISUAL_TIMEOUT),
                         )
                     except Exception as exc:
-                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                        if is_image_moderation_error(exc):
                             moderation_count += 1
                         logger.warning("Object image generation failed for %s/%s: %s", template_id, o['id'], exc)
                         image_url = None
@@ -1223,12 +1245,20 @@ class WorldGenerator:
         )
 
         requested_image_generation = bool(user and (gen_scenes or gen_npc or gen_items or gen_protagonist_image))
-        if requested_image_generation and image_attempts > 0 and image_successes == 0 and moderation_count == 0:
-            raise RuntimeError(
-                "Image generation was enabled, but no images were produced. "
-                "Check provider/model configuration, API keys, and provider availability."
-            )
-            
+        warning_messages: list[str] = []
+
         if moderation_count > 0:
-            adventure.creation_error = f"Notice: {moderation_count} images were blocked by safety filters and replaced with placeholders. You can try to regenerate them in the editor with different descriptions."
+            warning_messages.append(
+                f"Notice: {moderation_count} images were blocked by safety filters and replaced with placeholders. "
+                "You can regenerate them in the editor with adjusted descriptions."
+            )
+
+        if requested_image_generation and image_attempts > 0 and image_successes == 0 and moderation_count == 0:
+            warning_messages.append(
+                "Notice: Image generation did not return usable images, so placeholders were used. "
+                "You can regenerate visuals later in the editor."
+            )
+
+        if warning_messages and adventure:
+            adventure.creation_error = " ".join(warning_messages)
             await db.commit()

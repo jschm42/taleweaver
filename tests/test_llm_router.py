@@ -1,5 +1,6 @@
 """Tests for strict provider routing behavior in GameMasterLLM."""
 import pytest
+from pydantic import BaseModel
 
 from backend.core.llm_router import GameMasterLLM
 from backend.models.user import User
@@ -312,3 +313,82 @@ async def test_stream_simple_task_openai_non_prefixed_model_sets_provider(monkey
     assert captured["model"] == "gpt-5.3"
     assert captured["custom_llm_provider"] == "openai"
     assert captured["stream"] is True
+
+
+@pytest.mark.asyncio
+async def test_aexecute_complex_task_gemini_injects_schema_into_sent_system_prompt(monkeypatch):
+    class _MiniSchema(BaseModel):
+        required: str
+
+    user = _make_user(encrypted_api_keys={"openai": "encrypted-placeholder"})
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    router = GameMasterLLM(user, provider="openai")
+
+    captured = {}
+
+    class _Msg:
+        content = '{"required":"ok"}'
+
+    class _Choice:
+        message = _Msg()
+        finish_reason = "stop"
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.aexecute_complex_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        response_model=_MiniSchema,
+        model="gemini-2.5-flash",
+    )
+
+    assert out.required == "ok"
+    assert "SCHEMA:" in captured["messages"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_aexecute_complex_task_surfaces_schema_validation_failure(monkeypatch):
+    class _MiniSchema(BaseModel):
+        required: str
+
+    user = _make_user(encrypted_api_keys={"openai": "encrypted-placeholder"})
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    router = GameMasterLLM(user, provider="openai")
+
+    class _Msg:
+        content = "{}"
+
+    class _Choice:
+        message = _Msg()
+        finish_reason = "stop"
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    with pytest.raises(ValueError, match="does not match expected schema"):
+        await router.aexecute_complex_task(
+            system_prompt="sys",
+            user_prompt="prompt",
+            response_model=_MiniSchema,
+            model="gemini-2.5-flash",
+        )

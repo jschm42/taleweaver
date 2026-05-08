@@ -102,8 +102,10 @@ class AudioService {
       if (match) {
         const speaker = (match[1] || match[2] || '').trim()
         const spokenText = (match[3] || '').trim()
-        if (spokenText) {
+        if (spokenText && this.looksLikeSpeakerLabel(speaker)) {
           segments.push({ speaker, text: spokenText })
+        } else {
+          segments.push({ text: paragraph })
         }
       } else {
         segments.push({ text: paragraph })
@@ -111,6 +113,19 @@ class AudioService {
     }
 
     return segments
+  }
+
+  private looksLikeSpeakerLabel(value: string): boolean {
+    const normalized = String(value || '').trim()
+    if (!normalized) return false
+    if (normalized.length > 40) return false
+
+    const words = normalized.split(/\s+/).filter(Boolean)
+    if (words.length > 4) return false
+
+    // Allow human-readable labels such as "Narrator", "Guard Captain",
+    // "Mum", "Der Wirt", but reject sentence-like fragments.
+    return /^[\p{L}\p{N}][\p{L}\p{N} '\-]*$/u.test(normalized)
   }
 
   private chunkSegmentText(text: string, maxChars = 1200): string[] {
@@ -154,6 +169,11 @@ class AudioService {
       .replace(/\[[^\]\n]{1,120}\]/g, ' ')
       // Drop standalone portrait marker lines that should never be spoken.
       .replace(/^\s*[^\n]*-portrait\s*$/gim, '')
+        // Avoid provider-side speaker parsing on narrative sentence colons.
+        // Preserve time-like numeric patterns such as 08:30.
+        .replace(/(\d{1,2}):(\d{2})/g, '$1__TW_TIME_COLON__$2')
+        .replace(/:\s+/g, ', ')
+        .replace(/__TW_TIME_COLON__/g, ':')
       // Normalize excessive whitespace after removals.
       .replace(/\s{2,}/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
@@ -172,6 +192,10 @@ class AudioService {
     return String(text || '')
       // Drop inline direction tags for retry if provider blocks the original.
       .replace(/\[[^\]\n]{1,120}\]/g, ' ')
+      // Keep retry payload compatible with provider speaker parsing quirks.
+      .replace(/(\d{1,2}):(\d{2})/g, '$1__TW_TIME_COLON__$2')
+      .replace(/:\s+/g, ', ')
+      .replace(/__TW_TIME_COLON__/g, ':')
       // Remove repeated punctuation noise that may be flagged.
       .replace(/[!?.]{4,}/g, '...')
       .replace(/\s{2,}/g, ' ')

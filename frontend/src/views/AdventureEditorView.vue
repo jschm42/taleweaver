@@ -512,6 +512,44 @@ function buildVisualImageUrl(imagePath?: string | null) {
   return `${ASSET_BASE}${imagePath}?v=${visualsCacheVersion.value}`
 }
 
+function makeSafeFilename(label: string, ext: string) {
+  const safe = (label || 'asset').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_')
+  return `${safe || 'asset'}.${ext}`
+}
+
+function getImageExtension(imagePath?: string | null) {
+  if (!imagePath) {
+    return 'png'
+  }
+
+  const cleanPath = imagePath.split('?')[0]
+  const parts = cleanPath.split('.')
+  const ext = parts[parts.length - 1]?.toLowerCase()
+
+  if (!ext || !/^[a-z0-9]+$/.test(ext)) {
+    return 'png'
+  }
+
+  return ext
+}
+
+function downloadVisualAsset(imagePath: string | null | undefined, filenameLabel: string) {
+  if (!imagePath) {
+    addNotification('No image available for download.', 'error')
+    activeMenuId.value = null
+    return
+  }
+
+  const url = buildVisualImageUrl(imagePath)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = makeSafeFilename(filenameLabel, getImageExtension(imagePath))
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  activeMenuId.value = null
+}
+
 function openRegenerateDialog(kind: VisualKind, id: string, label: string) {
   const description = getVisualDescription(kind, id)
   const hint = VISUAL_UPLOAD_LIMITS[kind].hint
@@ -1004,6 +1042,7 @@ const goBack = () => {
                            <button @click="quickRegenerateVisual('cover', debugData.adventure.id)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-emerald-600 hover:text-white transition-all uppercase tracking-widest">Quick Regenerate</button>
                            <button @click="openRegenerateDialog('cover', debugData.adventure.id, debugData.adventure.title)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-cyan-600 hover:text-white transition-all uppercase tracking-widest">Regenerate (Prompt)</button>
                            <button @click="openUploadPicker('cover', debugData.adventure.id, debugData.adventure.title)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-amber-600 hover:text-white transition-all uppercase tracking-widest">Upload Custom Cover</button>
+                          <button v-if="debugData.adventure.image_url" @click="downloadVisualAsset(debugData.adventure.image_url, `${debugData.adventure.title || 'adventure'}_cover`)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-violet-600 hover:text-white transition-all uppercase tracking-widest">Download Cover</button>
                            <button @click="openTextEdit('cover', debugData.adventure.id, debugData.adventure.title, getCoverNarrativeContext(), debugData.adventure.teaser)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-blue-600 hover:text-white transition-all uppercase tracking-widest">Edit Essence Details</button>
                         </div>
                     </div>
@@ -1042,6 +1081,7 @@ const goBack = () => {
                              <button @click="quickRegenerateVisual('protagonist', debugData.protagonist.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
                              <button @click="openRegenerateDialog('protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
                              <button @click="openUploadPicker('protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Portrait</button>
+                              <button v-if="debugData.protagonist.profile_image" @click="downloadVisualAsset(debugData.protagonist.profile_image, `${debugData.protagonist.name || 'protagonist'}_portrait`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Portrait</button>
                              <button @click="openTextEdit('protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description, '', debugData.protagonist.hp, debugData.protagonist.stamina, debugData.protagonist.mana)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Character</button>
                           </div>
                         </div>
@@ -1084,6 +1124,7 @@ const goBack = () => {
                            <button @click="quickRegenerateVisual('scene', scene.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
                            <button @click="openRegenerateDialog('scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
                            <button @click="openUploadPicker('scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Illustration</button>
+                          <button v-if="scene.image_url" @click="downloadVisualAsset(scene.image_url, `${scene.label || scene.name || 'scene'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                            <button @click="openTextEdit('scene', scene.id, scene.label || scene.name, scene.description)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Description</button>
                         </div>
                       </div>
@@ -1144,6 +1185,7 @@ const goBack = () => {
                            <button @click="quickRegenerateVisual('npc', npc.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
                            <button @click="openRegenerateDialog('npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
                            <button @click="openUploadPicker('npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="npc.image_url" @click="downloadVisualAsset(npc.image_url, `${npc.name || 'npc'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                            <button @click="openTextEdit('npc', npc.id, npc.name, npc.description, '', npc.stats?.hp, npc.stats?.stamina, npc.stats?.mana, npc.voice)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
                         </div>
                       </div>
@@ -1186,10 +1228,11 @@ const goBack = () => {
                           </div>
                         </button>
                         
-                        <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-40 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+                        <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
                            <button @click="quickRegenerateVisual('object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
                            <button @click="openRegenerateDialog('object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
                            <button @click="openUploadPicker('object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'object'}_image`)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                            <button @click="openTextEdit('object', obj.id, obj.name, obj.description)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
                         </div>
                       </div>

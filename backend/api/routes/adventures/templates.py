@@ -15,8 +15,8 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.avatar import Avatar
-from backend.models.world_entity import WorldScene
-from backend.engine.world_generator import WorldGenerator
+from backend.models.world_entity import WorldScene, WorldEntity
+from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
 from backend.api.routes.adventures.schemas import (
     AdventureTemplateSummaryResponse, AdventureTemplateResponse,
     CreateAdventureTemplatePayload, AdventureTemplateUpdate
@@ -234,6 +234,24 @@ async def create_adventure(
                 adv_res = await bg_db.execute(select(AdventureTemplate).where(AdventureTemplate.id == new_id))
                 bg_adv = adv_res.scalars().first()
                 if bg_adv:
+                    scene_count_res = await bg_db.execute(
+                        select(WorldScene.id).where(WorldScene.template_id == new_id).limit(1)
+                    )
+                    entity_count_res = await bg_db.execute(
+                        select(WorldEntity.id).where(WorldEntity.template_id == new_id).limit(1)
+                    )
+                    has_world_data = bool(scene_count_res.scalar_one_or_none() or entity_count_res.scalar_one_or_none())
+
+                    if has_world_data and is_image_moderation_error(e):
+                        bg_adv.is_ready = True
+                        bg_adv.creation_status = "Ready"
+                        bg_adv.creation_error = (
+                            "Notice: One or more images were blocked by safety filters and replaced with placeholders. "
+                            "You can regenerate them later in the editor."
+                        )
+                        await bg_db.commit()
+                        return
+
                     bg_adv.creation_status = "Failed"
                     bg_adv.creation_error = str(e)
                     await bg_db.commit()

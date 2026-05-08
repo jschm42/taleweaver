@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.engine.rule_engine import AdventureGenerationRequest
-from backend.engine.world_generator import WorldGenerator
+from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
 from backend.core.style_catalog import default_image_styles_catalog
 
 logger = logging.getLogger(__name__)
@@ -118,6 +118,20 @@ class AdventureGeneratorService:
             
         except Exception as e:
             logger.exception(f"Adventure generation failed for {new_id}: {e}")
+
+            if is_image_moderation_error(e):
+                await db.refresh(new_template)
+                new_template.is_ready = True
+                new_template.creation_status = "Ready"
+                new_template.creation_error = (
+                    "Notice: One or more images were blocked by safety filters and replaced with placeholders. "
+                    "You can regenerate them later in the editor."
+                )
+                await db.flush()
+                if progress_callback:
+                    await progress_callback("Adventure generation complete with image warnings.")
+                return new_id
+
             if progress_callback:
                 await progress_callback(f"Adventure generation failed: {e}")
             # Ensure we update the template status so the user doesn't see it hanging

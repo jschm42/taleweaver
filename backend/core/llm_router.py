@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import TypeVar, Type, Any, Optional
 import litellm
 
@@ -570,6 +570,7 @@ class GameMasterLLM:
                 f"DO NOT include any markdown formatting or text outside the JSON.\n"
                 f"SCHEMA:\n{schema_json}"
             )
+            messages[0]["content"] = system_prompt
 
         kwargs = {
             "model": normalized_model,
@@ -659,6 +660,12 @@ class GameMasterLLM:
                 ) from exc
             preview = content[:280].replace("\n", " ").strip()
             raise ValueError(f"Failed to parse LLM response as JSON. Preview: {preview}") from exc
+        except ValidationError as exc:
+            preview = content[:280].replace("\n", " ").strip()
+            raise ValueError(
+                f"LLM returned JSON that does not match expected schema {response_model.__name__}. "
+                f"Preview: {preview}. Validation: {exc}"
+            ) from exc
 
     def execute_complex_task(
         self,
@@ -697,6 +704,7 @@ class GameMasterLLM:
                 f"DO NOT include any markdown formatting or text outside the JSON.\n"
                 f"SCHEMA:\n{schema_json}"
             )
+            messages[0]["content"] = system_prompt
 
         kwargs = {
             "model": normalized_model,
@@ -782,3 +790,9 @@ class GameMasterLLM:
                 ) from exc
             preview = content[:280].replace("\n", " ").strip()
             raise ValueError(f"Failed to parse LLM response as JSON. Preview: {preview}") from exc
+        except ValidationError as exc:
+            preview = content[:280].replace("\n", " ").strip()
+            raise ValueError(
+                f"LLM returned JSON that does not match expected schema {response_model.__name__}. "
+                f"Preview: {preview}. Validation: {exc}"
+            ) from exc
