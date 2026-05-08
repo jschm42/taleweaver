@@ -302,6 +302,7 @@ class AdventureLogic:
             "template_id": state.template_id, 
             "exp": avatar.exp,
             "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg",
+            "adventure_tone": adventure.selected_tone if adventure else None,
             "time_system": state.time_system or (adventure.time_system if adventure else "calendar"),
             "time_config": state.time_config or (adventure.time_config if adventure else None),
             "is_debug_enabled": bool(state.is_debug_enabled),

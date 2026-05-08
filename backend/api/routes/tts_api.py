@@ -1,9 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
-from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Body
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Any
 
-from backend.core.database import get_db
 from backend.core.auth import get_current_user
 from backend.models.user import User
 from backend.engine.tts_engine import TTSEngine
@@ -13,19 +11,54 @@ from backend.core.config import settings
 router = APIRouter(prefix="/tts", tags=["TTS"])
 
 class TTSGeneratePayload(BaseModel):
-    text: str
-    scene_description: Optional[str] = None
-    adventure_id: Optional[str] = None
+    text: str = Field(default="")
+    scene_description: Optional[str] = Field(default=None)
+    adventure_id: Optional[str] = Field(default=None)
+    title: Optional[str] = Field(default=None)
+    scene_name: Optional[str] = Field(default=None)
+    tone: Optional[str] = Field(default=None)
+
+    @staticmethod
+    def _coerce_required_text(value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if value is None:
+            return ""
+        if isinstance(value, (int, float, bool)):
+            return str(value)
+        return ""
+
+    @staticmethod
+    def _coerce_optional_text(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (int, float, bool)):
+            return str(value)
+        return None
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _validate_text(cls, value: Any) -> str:
+        return cls._coerce_required_text(value)
+
+    @field_validator("scene_description", "adventure_id", "title", "scene_name", "tone", mode="before")
+    @classmethod
+    def _validate_optional_text(cls, value: Any) -> Optional[str]:
+        return cls._coerce_optional_text(value)
 
 @router.post("/generate")
 async def generate_tts(
-    payload: TTSGeneratePayload,
-    db: AsyncSession = Depends(get_db),
+    payload: TTSGeneratePayload = Body(...),
     current_user: User = Depends(get_current_user)
 ):
     """
     Manually generate speech for a given text.
     """
+    if not payload.text.strip():
+        raise HTTPException(status_code=400, detail="Text is required for TTS generation.")
+
     # 1. Resolve API Key
     # Prefer env key, then user key
     api_key = settings.get_env_api_key("google")
@@ -54,7 +87,10 @@ async def generate_tts(
         api_key=api_key,
         scene_description=payload.scene_description,
         style_description=style,
-        model_name=model
+        model_name=model,
+        title=payload.title,
+        scene_name=payload.scene_name,
+        tone=payload.tone
     )
 
     if not audio_url:

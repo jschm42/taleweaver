@@ -8,6 +8,24 @@ class AudioService {
   public currentText = ref<string | null>(null)
   public autoSpeechEnabled = ref(sessionStorage.getItem('autoSpeechEnabled') === 'true')
 
+  private normalizeText(value: unknown): string {
+    if (typeof value === 'string') return value.trim()
+    if (value === null || value === undefined) return ''
+    return String(value).trim()
+  }
+
+  private normalizeOptionalText(value: unknown): string | undefined {
+    if (value === null || value === undefined) return undefined
+    if (typeof value === 'string') {
+      const normalized = value.trim()
+      return normalized || undefined
+    }
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+      return String(value)
+    }
+    return undefined
+  }
+
   constructor() {
     watch(this.autoSpeechEnabled, (val) => {
       sessionStorage.setItem('autoSpeechEnabled', val ? 'true' : 'false')
@@ -22,16 +40,30 @@ class AudioService {
     })
   }
 
-  async speak(text: string, sceneDescription?: string, adventureId?: string) {
-    if (!text) return
+  async speak(text: unknown, options: { sceneDescription?: string, adventureId?: string, title?: string, sceneName?: string, tone?: string } = {}) {
+    const normalizedText = this.normalizeText(text)
+    if (!normalizedText) return
     
     // Stop any current playback
     this.stop()
+    const { sceneDescription, adventureId, title, sceneName, tone } = options
+    const normalizedSceneDescription = this.normalizeOptionalText(sceneDescription)
+    const normalizedAdventureId = this.normalizeOptionalText(adventureId)
+    const normalizedTitle = this.normalizeOptionalText(title)
+    const normalizedSceneName = this.normalizeOptionalText(sceneName)
+    const normalizedTone = this.normalizeOptionalText(tone)
 
     try {
       this.isGenerating.value = true
-      this.currentText.value = text
-      const { audio_url } = await api.generateTTS({ text, scene_description: sceneDescription, adventure_id: adventureId })
+      this.currentText.value = normalizedText
+      const { audio_url } = await api.generateTTS({ 
+        text: normalizedText,
+        scene_description: normalizedSceneDescription,
+        adventure_id: normalizedAdventureId,
+        title: normalizedTitle,
+        scene_name: normalizedSceneName,
+        tone: normalizedTone
+      })
       this.isGenerating.value = false
       
       this.isPlaying.value = true

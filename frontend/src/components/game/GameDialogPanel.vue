@@ -22,6 +22,8 @@ const props = defineProps<{
   mapGlow?: boolean
   questGlow?: boolean
   activeActionId?: string | null
+  sheet?: any
+  currentSceneDescription?: string
 }>()
 
 const emit = defineEmits<{
@@ -78,6 +80,8 @@ defineExpose({ appendText })
       :active-action-id="props.activeActionId"
       :mode="props.mode"
       :input-locked="props.inputLocked"
+      :sheet="props.sheet"
+      :current-scene-description="props.currentSceneDescription"
       @send="emit('send', $event)"
       @open-sheet="emit('openSheet')"
       @open-map="emit('openMap')"

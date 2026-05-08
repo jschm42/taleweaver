@@ -95,42 +95,34 @@ function toggleAction(id: string) {
       </div>
 
       <!-- TTS Controls -->
-      <div class="flex items-center gap-4">
-        <div v-show="audioService.isPlaying.value" class="flex flex-col items-center gap-0.5 animate-fade-in shrink-0">
-          <button 
-            @click="audioService.stop()"
-            class="w-14 h-8 rounded-full bg-red-500/20 border border-red-500/50 text-red-400 flex items-center justify-center hover:bg-red-500/30 transition-all shadow-lg animate-pulse"
-            title="Stop Speech (SPACE)"
-          >
-            <i class="ra ra-stop text-lg"></i>
-          </button>
-          <span class="text-[9px] font-black uppercase tracking-widest text-red-500/80">Stop</span>
-        </div>
+      <div class="flex items-center gap-2">
+        <button 
+          v-show="audioService.isPlaying.value"
+          @click="audioService.stop()"
+          class="group relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 active:scale-95 border bg-transparent border-transparent hover:bg-white/5 hover:border-white/10 animate-fade-in shrink-0"
+          title="Stop Speech (SPACE)"
+        >
+          <i class="ra ra-stop text-red-400 text-base group-hover:scale-110 transition-transform animate-pulse"></i>
+          <span class="text-xs font-bold text-slate-300 group-hover:text-white uppercase tracking-tight">Stop</span>
+        </button>
 
-        <div class="flex flex-col items-center gap-0.5 shrink-0">
-          <button 
-            @click="audioService.toggleAutoSpeech()"
-            :class="[
-              'w-14 h-8 rounded-full relative transition-all duration-300 shadow-lg border',
-              audioService.autoSpeechEnabled.value 
-                ? 'bg-blue-600/30 border-blue-500/50 shadow-blue-500/20' 
-                : 'bg-slate-800/60 border-slate-700/50'
-            ]"
-            title="Toggle Automatic Speech"
-          >
-            <div 
-              :class="[
-                'absolute top-1 w-5 h-5 rounded-full transition-all duration-300 flex items-center justify-center shadow-md',
-                audioService.autoSpeechEnabled.value 
-                  ? 'right-1 bg-blue-400 text-blue-900' 
-                  : 'left-1 bg-slate-600 text-slate-400'
-              ]"
-            >
-              <i :class="['ra text-[10px]', audioService.autoSpeechEnabled.value ? 'ra-microphone' : 'ra-microphone-mute']"></i>
-            </div>
-          </button>
-          <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">Auto Speak</span>
-        </div>
+        <button 
+          @click="audioService.toggleAutoSpeech()"
+          class="group relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 active:scale-95 border shrink-0"
+          :class="[
+            audioService.autoSpeechEnabled.value 
+              ? 'bg-white/10 border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.1)]' 
+              : 'bg-transparent border-transparent hover:bg-white/5 hover:border-white/10'
+          ]"
+          title="Toggle Automatic Speech"
+        >
+          <i :class="['ra text-base group-hover:scale-110 transition-transform', audioService.autoSpeechEnabled.value ? 'ra-microphone text-blue-400' : 'ra-microphone-mute text-slate-500']"></i>
+          <span class="text-xs font-bold text-slate-300 group-hover:text-white uppercase tracking-tight">Auto Speak</span>
+          <div 
+            v-if="audioService.autoSpeechEnabled.value" 
+            class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"
+          ></div>
+        </button>
       </div>
     </div>
   </div>

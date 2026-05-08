@@ -47,6 +47,9 @@ class TTSEngine:
         scene_description: Optional[str] = None,
         style_description: Optional[str] = None,
         model_name: str = "gemini-3.1-flash-tts-preview",
+        title: Optional[str] = None,
+        scene_name: Optional[str] = None,
+        tone: Optional[str] = None
     ) -> Optional[str]:
         """
         Generates speech and returns the relative URL to the audio file.
@@ -55,13 +58,58 @@ class TTSEngine:
             logger.error("No Google API key provided for TTS.")
             return None
 
-        # Prepare prompts
-        user_content = text
+        # Prepare complex prompt as requested by user
+        prompt_parts = ["# AUDIO PROFILE: Gamemaster"]
+        if title:
+            prompt_parts.append(f"## {title}")
+        
+        prompt_parts.append("")
+        
+        if scene_name:
+            prompt_parts.append(f"## THE SCENE: {scene_name}")
         if scene_description:
-            user_content = f"Context: {scene_description}\n\nText to speak: {text}"
+            prompt_parts.append(scene_description)
+            
+        prompt_parts.append("")
+        prompt_parts.append("### DIRECTOR'S NOTES")
+        prompt_parts.append("Style:")
+        if tone:
+            prompt_parts.append(tone)
+            
+        prompt_parts.append("")
+        prompt_parts.append("### SAMPLE CONTEXT")
+        if style_description:
+            prompt_parts.append(style_description)
+            
+        prompt_parts.append("#### TRANSCRIPT")
+        prompt_parts.append(text)
+        
+        user_content = "\n\n".join([p for p in prompt_parts if p.strip() or p == ""])
+        # Actually, let's just be precise with joins
+        user_content = "# AUDIO PROFILE: Gamemaster\n"
+        if title:
+            user_content += f"## {title}\n\n"
+        else:
+            user_content += "\n"
+            
+        if scene_name:
+            user_content += f"## THE SCENE: {scene_name}\n"
+        if scene_description:
+            user_content += f"{scene_description}\n"
+            
+        user_content += "\n### DIRECTOR'S NOTES\nStyle:\n"
+        if tone:
+            user_content += f"{tone}\n"
+            
+        user_content += "\n### SAMPLE CONTEXT\n"
+        if style_description:
+            user_content += f"{style_description}\n"
+            
+        user_content += "#### TRANSCRIPT\n"
+        user_content += text
 
         # Force log to console for the user
-        print(f"DEBUG: TTS Prompt for model '{model_name}': {user_content}")
+        print(f"DEBUG: TTS Prompt for model '{model_name}':\n{user_content}")
 
         # Note: Using generateContent with responseModalities: ["AUDIO"]
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"

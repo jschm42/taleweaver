@@ -411,13 +411,17 @@ const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id
 
 watch(() => inputLocked.value, (isLocked) => {
   if (!isLocked && audioService.autoSpeechEnabled.value) {
-    // Game just finished generating a response
     const lastMsg = messages.value[messages.value.length - 1]
     if (lastMsg && lastMsg.role === 'assistant') {
-      // Exclude combat active state per requirement
       if (isCombatActive.value) return
 
-      audioService.speak(lastMsg.content, currentSceneDescription.value, props.id)
+      audioService.speak(lastMsg.content, {
+        sceneDescription: currentSceneDescription.value,
+        adventureId: props.id,
+        title: sheet.value?.adventure_title || undefined,
+        sceneName: sheet.value?.current_scene || undefined,
+        tone: sheet.value?.adventure_tone || undefined
+      })
     }
   }
 })
@@ -426,9 +430,21 @@ watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
   if (enabled && !inputLocked.value && !isCombatActive.value) {
     const lastMsg = messages.value[messages.value.length - 1]
     if (lastMsg && lastMsg.role === 'assistant') {
-      audioService.speak(lastMsg.content, currentSceneDescription.value, props.id)
+      audioService.speak(lastMsg.content, {
+        sceneDescription: currentSceneDescription.value,
+        adventureId: props.id,
+        title: sheet.value?.adventure_title || undefined,
+        sceneName: sheet.value?.current_scene || undefined,
+        tone: sheet.value?.adventure_tone || undefined
+      })
     }
+  } else if (!enabled) {
+    audioService.stop()
   }
+})
+
+onBeforeUnmount(() => {
+  audioService.stop()
 })
 
 /**
@@ -1045,6 +1061,8 @@ onBeforeUnmount(() => {
         :map-glow="mapGlow"
         :quest-glow="questGlow"
         :active-action-id="activeActionId"
+        :sheet="sheet"
+        :current-scene-description="currentSceneDescription"
         @send="handlePlayerInput"
         @open-sheet="showSheet = true"
         @open-map="showMap = true"

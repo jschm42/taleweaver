@@ -64,11 +64,19 @@ const gameForm = ref({
 
 const ttsForm = ref({
   enabled: true,
-  selected_model: 'gemini-3.1-flash-tts-preview',
-  voice_list: ['Puck', 'Charon', 'Kore', 'Fenrir'],
+  selected_model: 'gemini-2.5-flash-preview-tts',
+  voice_list: [
+    'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
+    'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome',
+    'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux',
+    'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager'
+  ],
   selected_voice: 'Puck',
   sample_context: '',
 })
+
+
+
 
 // CONSTANTS FROM BACKEND
 const availableConstants = ref({

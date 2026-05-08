@@ -24,6 +24,8 @@ const props = defineProps<{
   activeActionId?: string | null
   mode?: string
   inputLocked?: boolean
+  sheet?: any
+  currentSceneDescription?: string
 }>()
 
 const emit = defineEmits<{
@@ -482,7 +484,13 @@ function handleRetry() {
           <!-- Manual Speak Button -->
           <button 
             v-if="msg.role === 'assistant'"
-            @click="audioService.speak(msg.content)"
+            @click="audioService.speak(msg.content, {
+              sceneDescription: props.currentSceneDescription,
+              adventureId: props.sheet?.template_id,
+              title: props.sheet?.adventure_title,
+              sceneName: props.sheet?.current_scene,
+              tone: props.sheet?.adventure_tone
+            })"
             class="ml-auto p-1.5 px-3 text-[10px] font-black uppercase tracking-widest bg-slate-800/80 border border-slate-700/50 rounded-xl text-slate-400 hover:bg-amber-500/20 hover:text-amber-400 transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
             title="Listen to this narration"
           >
@@ -513,14 +521,14 @@ function handleRetry() {
           <!-- Waiting Indicator for TTS Overlay -->
           <div 
             v-show="audioService.isGenerating.value && audioService.currentText.value === msg.content" 
-            class="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] rounded-r-lg flex flex-col items-center justify-center gap-3 animate-fade-in z-20 border border-amber-500/20"
+            class="absolute inset-0 bg-slate-950/70 backdrop-blur-[4px] rounded-r-lg flex flex-col items-center justify-center gap-4 animate-fade-in z-20 border border-amber-500/30 shadow-[inset_0_0_50px_rgba(245,158,11,0.1)]"
           >
-            <div class="flex gap-2">
-              <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-              <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-              <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-bounce"></span>
+            <div class="flex gap-3">
+              <span class="w-4 h-4 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.3s] shadow-[0_0_15px_rgba(245,158,11,0.6)]"></span>
+              <span class="w-4 h-4 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.15s] shadow-[0_0_15px_rgba(245,158,11,0.6)]"></span>
+              <span class="w-4 h-4 bg-amber-500 rounded-full animate-bounce shadow-[0_0_15px_rgba(245,158,11,0.6)]"></span>
             </div>
-            <span class="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500 drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]">Narrating Chronicle...</span>
+            <span class="text-sm font-black uppercase tracking-[0.4em] text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.8)]">Weaving Voice...</span>
           </div>
 
           <!-- Retry Button for Errors -->
@@ -637,7 +645,7 @@ function handleRetry() {
           <input
             v-model="inputText"
             type="text"
-            :disabled="!canSendInput"
+            :disabled="!canSendInput || audioService.isGenerating.value"
             placeholder="What do you do next?"
             class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
             @keydown="handleKeydown"
