@@ -409,38 +409,53 @@ const handleTakeDirect = async (entity: any) => {
 }
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
 
-watch(() => inputLocked.value, (isLocked) => {
-  if (!isLocked && audioService.autoSpeechEnabled.value) {
-    const lastMsg = messages.value[messages.value.length - 1]
-    if (lastMsg && lastMsg.role === 'assistant') {
-      if (isCombatActive.value) return
+const lastAutoSpokenSignature = ref<string | null>(null)
 
-      audioService.speak(lastMsg.content, {
-        sceneDescription: currentSceneDescription.value,
-        adventureId: props.id,
-        title: sheet.value?.adventure_title || undefined,
-        sceneName: sheet.value?.current_scene || undefined,
-        tone: sheet.value?.adventure_tone || undefined,
-        npcMetadata: npcMetadata.value,
-      })
-    }
-  }
+function getMessageSignature(message: { timestamp?: Date; content: string }, index: number): string {
+  const ts = message.timestamp instanceof Date ? message.timestamp.toISOString() : ''
+  return `${index}|${ts}|${message.content}`
+}
+
+function speakLatestAssistantMessage(options: { force?: boolean } = {}): void {
+  const { force = false } = options
+  if (!audioService.autoSpeechEnabled.value) return
+  if (inputLocked.value || isCombatActive.value) return
+
+  const index = messages.value.length - 1
+  if (index < 0) return
+
+  const lastMsg = messages.value[index]
+  if (!lastMsg || lastMsg.role !== 'assistant') return
+
+  const signature = getMessageSignature(lastMsg, index)
+  if (!force && signature === lastAutoSpokenSignature.value) return
+
+  lastAutoSpokenSignature.value = signature
+  audioService.speak(lastMsg.content, {
+    sceneDescription: currentSceneDescription.value,
+    adventureId: props.id,
+    title: sheet.value?.adventure_title || undefined,
+    sceneName: sheet.value?.current_scene || undefined,
+    tone: sheet.value?.adventure_tone || undefined,
+    npcMetadata: npcMetadata.value,
+  })
+}
+
+watch(() => inputLocked.value, (isLocked) => {
+  if (isLocked) return
+  speakLatestAssistantMessage()
+})
+
+watch(() => messages.value.length, (newLength, oldLength) => {
+  if (newLength <= oldLength) return
+  speakLatestAssistantMessage()
 })
 
 watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
-  if (enabled && !inputLocked.value && !isCombatActive.value) {
-    const lastMsg = messages.value[messages.value.length - 1]
-    if (lastMsg && lastMsg.role === 'assistant') {
-      audioService.speak(lastMsg.content, {
-        sceneDescription: currentSceneDescription.value,
-        adventureId: props.id,
-        title: sheet.value?.adventure_title || undefined,
-        sceneName: sheet.value?.current_scene || undefined,
-        tone: sheet.value?.adventure_tone || undefined,
-        npcMetadata: npcMetadata.value,
-      })
-    }
+  if (enabled) {
+    speakLatestAssistantMessage({ force: true })
   } else if (!enabled) {
+    lastAutoSpokenSignature.value = null
     audioService.stop()
   }
 })
