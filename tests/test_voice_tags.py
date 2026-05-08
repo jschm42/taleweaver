@@ -8,8 +8,6 @@ import re
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-pytestmark = pytest.mark.asyncio
-
 
 # ---------------------------------------------------------------------------
 # Prompt guidance
@@ -31,6 +29,7 @@ def test_gm_narration_formatting_contains_voice_tag_guidance():
 # TTS engine: voice-tag acting cues in prompt
 # ---------------------------------------------------------------------------
 
+@pytest.mark.asyncio
 async def test_tts_engine_includes_voice_direction_cue_in_prompt():
     """TTSEngine must embed acting-cue instructions so the model honours tags."""
     from backend.engine.tts_engine import TTSEngine
@@ -61,7 +60,8 @@ async def test_tts_engine_includes_voice_direction_cue_in_prompt():
                 ]
             }
 
-    async def fake_post(url, json, timeout):
+    async def fake_post(_url, json, timeout=None):
+        _ = timeout
         captured_payload.update(json)
         return FakeResponse()
 
@@ -83,6 +83,7 @@ async def test_tts_engine_includes_voice_direction_cue_in_prompt():
     assert "voice-direction" in prompt_text or "acting cues" in prompt_text.lower() or "[shouting]" in prompt_text
 
 
+@pytest.mark.asyncio
 async def test_tts_engine_passes_voice_tags_in_transcript():
     """Voice tags in the input text must appear verbatim in the TTS transcript."""
     from backend.engine.tts_engine import TTSEngine
@@ -113,7 +114,8 @@ async def test_tts_engine_passes_voice_tags_in_transcript():
                 ]
             }
 
-    async def fake_post(url, json, timeout):
+    async def fake_post(_url, json, timeout=None):
+        _ = timeout
         captured_payload.update(json)
         return FakeResponse()
 

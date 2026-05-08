@@ -542,6 +542,14 @@ function handleRetry() {
           <span class="text-xs text-slate-600 font-mono opacity-0 group-hover:opacity-100 transition-opacity">
             {{ formatTime(msg.timestamp) }}
           </span>
+          <span
+            v-if="msg.role === 'assistant' && audioService.isGenerating.value && audioService.currentText.value === msg.content"
+            class="inline-flex items-center gap-2 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30"
+            title="Voice generation in progress"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            Generating
+          </span>
 
           <!-- Manual Speak Button -->
           <button 
@@ -580,19 +588,6 @@ function handleRetry() {
             </div>
             <pre v-else-if="part.type === 'code'" class="my-3 p-4 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-cyan-400 overflow-x-auto whitespace-pre custom-scrollbar shadow-inner">{{ part.value }}</pre>
           </template>
-
-          <!-- Waiting Indicator for TTS Overlay -->
-          <div 
-            v-show="audioService.isGenerating.value && audioService.currentText.value === msg.content" 
-            class="absolute inset-0 bg-slate-950/70 backdrop-blur-[4px] rounded-r-lg flex flex-col items-center justify-center gap-4 animate-fade-in z-20 border border-amber-500/30 shadow-[inset_0_0_50px_rgba(245,158,11,0.1)]"
-          >
-            <div class="flex gap-3">
-              <span class="w-4 h-4 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.3s] shadow-[0_0_15px_rgba(245,158,11,0.6)]"></span>
-              <span class="w-4 h-4 bg-amber-500 rounded-full animate-bounce [animation-delay:-0.15s] shadow-[0_0_15px_rgba(245,158,11,0.6)]"></span>
-              <span class="w-4 h-4 bg-amber-500 rounded-full animate-bounce shadow-[0_0_15px_rgba(245,158,11,0.6)]"></span>
-            </div>
-            <span class="text-sm font-black uppercase tracking-[0.4em] text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.8)]">Weaving Voice...</span>
-          </div>
 
           <!-- Retry Button for Errors -->
           <div v-if="msg.role === 'system' && isRetryableError(msg.content) && lastUserMessage" class="mt-4 flex justify-start">

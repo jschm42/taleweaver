@@ -126,7 +126,8 @@ async def generate_tts(
             model_name=model,
             title=payload.title,
             scene_name=payload.scene_name,
-            tone=payload.tone
+            tone=payload.tone,
+            include_style_context=(payload.voice_override is None and not speaker_voices),
         )
     except TTSTimeoutError as exc:
         raise HTTPException(

@@ -2,6 +2,7 @@ import { ref, watch } from 'vue'
 import { api } from '@/composables/useApi'
 
 class AudioService {
+  private static readonly TTS_DEBUG_STORAGE_KEY = 'tts_debug_logs'
   private currentAudio: HTMLAudioElement | null = null
   private currentObjectUrl: string | null = null
   private playbackToken = 0
@@ -10,6 +11,7 @@ class AudioService {
   public currentText = ref<string | null>(null)
   public autoSpeechEnabled = ref(sessionStorage.getItem('autoSpeechEnabled') === 'true')
   public speechRate = ref<number>(parseFloat(localStorage.getItem('tts_speech_rate') ?? '1'))
+  public ttsDebugEnabled = ref(localStorage.getItem(AudioService.TTS_DEBUG_STORAGE_KEY) === 'true')
 
   private normalizeDialoguePrefixes(text: string): string {
     // Convert markdown-style speaker labels to plain labels for more reliable
@@ -104,10 +106,42 @@ class AudioService {
     return fallback
   }
 
-  private isRetryableTtsError(err: unknown): boolean {
-    const msg = err instanceof Error ? err.message : String(err)
-    const lowered = msg.toLowerCase()
-    return lowered.includes('api 504') || lowered.includes('timed out') || lowered.includes('timeout')
+  private buildSegmentRequests(
+    segments: Array<{ speaker?: string, text: string }>,
+    npcMetadata: Record<string, any> | undefined,
+    maxMergedChars = 1800,
+  ): Array<{ requestText: string, voiceOverride?: string, speaker?: string }> {
+    const requests: Array<{ requestText: string, voiceOverride?: string, speaker?: string }> = []
+
+    for (const segment of segments) {
+      const speaker = segment.speaker?.trim() || undefined
+      // Single-voice generation: keep only spoken content to avoid reading
+      // speaker names out loud.
+      const requestText = segment.text
+      const voiceOverride = this.resolveNpcVoice(speaker, npcMetadata)
+
+      const previous = requests[requests.length - 1]
+      const sameVoice = previous && previous.voiceOverride === voiceOverride
+      const mergedLength = sameVoice ? previous.requestText.length + 2 + requestText.length : 0
+
+      if (sameVoice && mergedLength <= maxMergedChars) {
+        previous.requestText = `${previous.requestText}\n\n${requestText}`
+        continue
+      }
+
+      requests.push({ requestText, voiceOverride, speaker })
+    }
+
+    return requests
+  }
+
+  private logDebug(message: string, payload?: unknown): void {
+    if (!this.ttsDebugEnabled.value) return
+    if (payload === undefined) {
+      console.info(message)
+      return
+    }
+    console.info(message, payload)
   }
 
   private resolveNpcVoice(speaker: string | undefined, npcMetadata: Record<string, any> | undefined): string | undefined {
@@ -214,6 +248,10 @@ class AudioService {
       localStorage.setItem('tts_speech_rate', String(val))
     })
 
+    watch(this.ttsDebugEnabled, (val) => {
+      localStorage.setItem(AudioService.TTS_DEBUG_STORAGE_KEY, val ? 'true' : 'false')
+    })
+
     // Global listener for SPACE key to stop audio
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space' && this.isPlaying.value) {
@@ -238,10 +276,12 @@ class AudioService {
     const normalizedSceneName = this.normalizeOptionalText(sceneName)
     const normalizedTone = this.normalizeOptionalText(tone)
     const segments = this.buildFallbackSegments(ttsText)
+    const requests = this.buildSegmentRequests(segments, npcMetadata)
 
-    console.info('TTS plan', {
+    this.logDebug('TTS plan', {
       totalLength: ttsText.length,
       segments: segments.length,
+      requests: requests.length,
       strategy: 'single-voice-segmented',
     })
 
@@ -254,27 +294,23 @@ class AudioService {
           throw new Error('TTS playback cancelled before generation.')
         }
 
-        const segment = segments[index]
-        const requestText = segment.speaker
-          ? `${segment.speaker}: ${segment.text}`
-          : segment.text
-        const voiceOverride = this.resolveNpcVoice(segment.speaker, npcMetadata)
+        const request = requests[index]
 
-        console.info('TTS segment request', {
+        this.logDebug('TTS segment request', {
           index,
-          mode: voiceOverride ? 'single-speaker-override' : 'single-speaker-default',
-          speaker: segment.speaker || null,
-          textLength: segment.text.length,
+          mode: request.voiceOverride ? 'single-speaker-override' : 'single-speaker-default',
+          speaker: request.speaker || null,
+          textLength: request.requestText.length,
         })
 
         const { audio_url } = await api.generateTTS({
-          text: requestText,
+          text: request.requestText,
           scene_description: normalizedSceneDescription,
           adventure_id: normalizedAdventureId,
           title: normalizedTitle,
           scene_name: normalizedSceneName,
           tone: normalizedTone,
-          voice_override: voiceOverride,
+          voice_override: request.voiceOverride,
         })
 
         return this.fetchAudioBlob(audio_url)
@@ -284,13 +320,13 @@ class AudioService {
       this.isGenerating.value = true
       let nextAudioPromise: Promise<Blob> | null = prepareSegmentAudio(0)
 
-      for (let index = 0; index < segments.length; index++) {
+      for (let index = 0; index < requests.length; index++) {
         if (token !== this.playbackToken) return
         if (!nextAudioPromise) break
 
         const currentAudioBlob = await nextAudioPromise
 
-        const hasNext = index + 1 < segments.length
+        const hasNext = index + 1 < requests.length
         if (hasNext) {
           nextAudioPromise = prepareSegmentAudio(index + 1)
         } else {

@@ -97,6 +97,7 @@ class TTSEngine:
         title: Optional[str] = None,
         scene_name: Optional[str] = None,
         tone: Optional[str] = None,
+        include_style_context: bool = True,
         **_unused_kwargs: object,
     ) -> Optional[str]:
         """
@@ -122,7 +123,7 @@ class TTSEngine:
 
         # Keep the TTS prompt compact and avoid extra context sections.
         prompt_parts = []
-        if style_description:
+        if include_style_context and style_description:
             prompt_parts.append(f"Voice style context: {style_description}")
         if tone:
             prompt_parts.append(f"Tone: {tone}")
