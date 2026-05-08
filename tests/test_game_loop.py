@@ -307,7 +307,7 @@ async def test_rule_pass_payload_is_compact_and_scene_split(setup_test_db, monke
         assert "SCENE SUMMARY: A very long description." in mechanics_prompt
         assert "..." in mechanics_prompt
 
-        assert 'ACTIVE QUESTS:\n[{"id":"quest-1"' in mechanics_prompt
+        assert 'UNRESOLVED QUESTS:\n[{"id":"quest-1"' in mechanics_prompt
         assert '"key":"fresh-award"' in mechanics_prompt
         assert '"key":"earned-award"' not in mechanics_prompt
         assert '"metadata_json"' not in mechanics_prompt
@@ -368,7 +368,7 @@ async def test_adventure_generator_chat_mode_uses_tool_intent_pass(setup_test_db
             captured["system_prompt"] = system_prompt
             return AdventureGeneratorToolIntent(
                 request_available_tones=True,
-                instant_narrative="I can offer tones for your new world."
+                narrative_description="I can offer tones for your new world."
             )
 
         mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=_mock_intent)
@@ -414,7 +414,7 @@ async def test_adventure_generator_chat_mode_emits_fallback_narrative_when_empty
         mock_llm_instance = MagicMock()
         mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=AdventureGeneratorToolIntent(
             request_available_tones=True,
-            instant_narrative=None,
+            narrative_description="Requesting tones...",
         ))
 
         async def empty_stream():

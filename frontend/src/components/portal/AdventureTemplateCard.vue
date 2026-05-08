@@ -91,6 +91,24 @@ function fixNewlines(text: string | null | undefined): string {
         </span>
       </div>
 
+      <!-- Moderation Warning Badge -->
+      <div v-if="props.template.creation_error" class="absolute top-3 left-3 mt-10">
+        <div class="group/warn relative">
+          <div class="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-500 text-xs uppercase tracking-widest font-black border border-amber-500/20 flex items-center gap-2 backdrop-blur-md shadow-lg shadow-amber-500/10 cursor-help">
+            <i class="ra ra-warning text-sm"></i>
+            <span>Visual Issues</span>
+          </div>
+          <!-- Tooltip-style detail -->
+          <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-amber-500/30 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/warn:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
+            <div class="text-amber-500 uppercase tracking-[0.2em] mb-1.5 flex items-center gap-2">
+              <i class="ra ra-scroll-unfurled"></i>
+              Generation Note
+            </div>
+            {{ props.template.creation_error }}
+          </div>
+        </div>
+      </div>
+
       <!-- Action Dots -->
       <div class="absolute top-3 right-3" ref="menuRef">
         <button

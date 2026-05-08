@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def _image_generation_timeout_seconds() -> float:
-    raw_timeout = getattr(settings, "IMAGE_GENERATION_TIMEOUT_SECONDS", 120)
+    raw_timeout = getattr(settings, "IMAGE_GENERATION_TIMEOUT_SECONDS", 600)
     try:
         timeout = float(raw_timeout)
     except (TypeError, ValueError):
@@ -152,6 +152,7 @@ class WorldEntitySchema(BaseModel):
     hp: Optional[int] = Field(None, description="Optional hitpoints")
     mana: Optional[int] = Field(None, description="Optional mana")
     stamina: Optional[int] = Field(None, description="Optional stamina")
+    is_attackable: bool = Field(True, description="If False, the player cannot start a fight with this NPC.")
 
     # Stat Modifiers (for OBJECTS)
     stat_modifier_strength: Optional[int] = None
@@ -466,6 +467,7 @@ class WorldGenerator:
 
         image_attempts = 0
         image_successes = 0
+        moderation_count = 0
 
         # Resolve Style Instructions
         if selected_image_styles is None and adventure:
@@ -736,6 +738,8 @@ class WorldGenerator:
                             timeout=_image_generation_timeout_seconds(),
                         )
                     except Exception as exc:
+                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                            moderation_count += 1
                         logger.warning("Protagonist image generation failed for %s: %s", template_id, exc)
                         image_url = None
                     if image_url:
@@ -792,6 +796,8 @@ class WorldGenerator:
                         logger.warning("Scene image generation timed out for %s/%s: %s", template_id, s['id'], exc)
                         image_url = None
                     except Exception as exc:
+                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                            moderation_count += 1
                         logger.warning("Scene image generation failed for %s/%s: %s", template_id, s['id'], exc)
                         image_url = None
                     if image_url:
@@ -865,6 +871,8 @@ class WorldGenerator:
                         logger.warning("NPC image generation timed out for %s/%s: %s", template_id, n['id'], exc)
                         image_url = None
                     except Exception as exc:
+                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                            moderation_count += 1
                         logger.warning("NPC image generation failed for %s/%s: %s", template_id, n['id'], exc)
                         image_url = None
                     if image_url:
@@ -895,7 +903,14 @@ class WorldGenerator:
                 stamina=n.get("stamina"),
                 max_stamina=n.get("stamina"),
                 is_hidden=n.get("is_hidden", False),
+                is_attackable=n.get("is_attackable", True),
             ))
+            
+            # Commit after each NPC to save progress and release locks during long generations
+            await db.commit()
+            adventure = await db.get(AdventureTemplate, template_id)
+            if user:
+                user = await db.get(User, user.id)
             
         await db.commit() # Save NPCs
         adventure = await db.get(AdventureTemplate, template_id)
@@ -1022,9 +1037,11 @@ class WorldGenerator:
                                 user.encrypted_api_keys,
                                 style_instruction=style_instruction,
                             ),
-                            timeout=_image_generation_timeout_seconds(),
+                            timeout=float(settings.VISUAL_TIMEOUT),
                         )
                     except Exception as exc:
+                        if "safety filter" in str(exc).lower() or "moderated" in str(exc).lower():
+                            moderation_count += 1
                         logger.warning("Object image generation failed for %s/%s: %s", template_id, o['id'], exc)
                         image_url = None
                     if image_url:
@@ -1122,6 +1139,12 @@ class WorldGenerator:
                     metadata_json=metadata_json,
                 )
             )
+            
+            # Commit after each Object to save progress and release locks
+            await db.commit()
+            adventure = await db.get(AdventureTemplate, template_id)
+            if user:
+                user = await db.get(User, user.id)
 
         # Final Pass: Update NPC Inventories with resolved item data
         # Fetch all NPCs for this template to update their inventories
@@ -1158,8 +1181,12 @@ class WorldGenerator:
         )
 
         requested_image_generation = bool(user and (gen_scenes or gen_npc or gen_items or gen_protagonist_image))
-        if requested_image_generation and image_attempts > 0 and image_successes == 0:
+        if requested_image_generation and image_attempts > 0 and image_successes == 0 and moderation_count == 0:
             raise RuntimeError(
                 "Image generation was enabled, but no images were produced. "
                 "Check provider/model configuration, API keys, and provider availability."
             )
+            
+        if moderation_count > 0:
+            adventure.creation_error = f"Notice: {moderation_count} images were blocked by safety filters and replaced with placeholders. You can try to regenerate them in the editor with different descriptions."
+            await db.commit()

@@ -67,6 +67,7 @@ const commands = [
   { id: '/debug walkthrough', label: '/debug walkthrough' },
   { id: '/debug log on', label: '/debug log on' },
   { id: '/debug log off', label: '/debug log off' },
+  { id: '/rule-pass', label: '/rule-pass (Force Rule Check)' },
 ]
 
 // Command History
@@ -666,6 +667,16 @@ function handleRetry() {
           @click="emit('openMap')"
         >
           <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-14 w-14 brightness-110 group-hover:brightness-125 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.8)] transition-all" />
+        </button>
+
+        <button
+          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+          title="Evaluate Rules & Quests"
+          @click="emit('send', '/rule-pass')"
+        >
+          <div class="h-14 w-14 rounded-full bg-slate-800/40 border border-slate-700/50 flex items-center justify-center group-hover:border-emerald-500/50 transition-all shadow-xl backdrop-blur-md">
+            <i class="ra ra-cog text-3xl text-slate-400 group-hover:text-emerald-400 group-hover:drop-shadow-[0_0_15px_rgba(16,185,129,0.8)] transition-all"></i>
+          </div>
         </button>
       </div>
       

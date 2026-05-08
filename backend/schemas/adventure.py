@@ -97,6 +97,9 @@ class AdventureTemplateUpdate(BaseModel):
     # GM Capabilities
     allow_dynamic_items: Optional[bool] = None
     
+    # Status and Warnings
+    creation_error: Optional[str] = None
+    
     # Extra fields for frontend convenience
     selected_style_id: Optional[str] = None
     selected_tone_id: Optional[str] = None

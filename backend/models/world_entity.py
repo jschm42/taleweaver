@@ -87,6 +87,7 @@ class WorldEntity(Base, TimestampMixin):
     stat_modifier_wisdom = Column(Integer, nullable=True)
     stat_modifier_charisma = Column(Integer, nullable=True)
     stat_modifier_armor_class = Column(Integer, nullable=True)
+    is_attackable = Column(Boolean, default=True, nullable=False)
 
     # Optional state, e.g. NPC inventory: [{"name": "Key", "id": "BRONZE_KEY"}]
     inventory = Column(JSON, default=list, nullable=False)

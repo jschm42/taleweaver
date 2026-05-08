@@ -12,6 +12,7 @@ import type {
   AdventureTemplateSummary,
 } from '@/types'
 import { authState } from '@/store/auth'
+import { configState } from '@/store/config'
 
 interface SettingsResponse {
   app_version?: string
@@ -43,30 +44,51 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Authorization', `Bearer ${authState.token}`)
   }
 
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers,
-  })
-  if (!res.ok) {
-    const bodyText = await res.text()
-    let detail = bodyText
-    try {
-      const parsed = JSON.parse(bodyText)
-      if (parsed && typeof parsed.detail === 'string') {
-        detail = parsed.detail
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers,
+    })
+    
+    // If we get here, the server at least responded
+    configState.isBackendReachable = true
+    configState.lastErrorMessage = ''
+
+    if (!res.ok) {
+      const bodyText = await res.text()
+      let detail = bodyText
+      try {
+        const parsed = JSON.parse(bodyText)
+        if (parsed && typeof parsed.detail === 'string') {
+          detail = parsed.detail
+        }
+      } catch {
+        // Keep plain-text fallback when response is not JSON.
       }
-    } catch {
-      // Keep plain-text fallback when response is not JSON.
+      if (res.status === 401 && authState.isAuthenticated) {
+         // Token might have expired
+         window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+      }
+      
+      // If it's a 500 error, we might want to flag it as a backend issue too
+      if (res.status >= 500) {
+        configState.isBackendReachable = false
+        configState.lastErrorMessage = `Server Error (${res.status}): ${detail}`
+      }
+
+      throw new Error(`API ${res.status}: ${detail}`)
     }
-    if (res.status === 401 && authState.isAuthenticated) {
-       // Token might have expired
-       window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+    // 204 No Content has no body
+    if (res.status === 204) return undefined as T
+    return res.json() as Promise<T>
+  } catch (err: any) {
+    // If it's not already an API error (thrown above), it's likely a network error
+    if (!(err.message.startsWith('API '))) {
+      configState.isBackendReachable = false
+      configState.lastErrorMessage = err.message || 'Network Error'
     }
-    throw new Error(`API ${res.status}: ${detail}`)
+    throw err
   }
-  // 204 No Content has no body
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
 }
 
 async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
@@ -76,27 +98,45 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
     headers.set('Authorization', `Bearer ${authState.token}`)
   }
 
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers,
-  })
-  if (!res.ok) {
-    const bodyText = await res.text()
-    let detail = bodyText
-    try {
-      const parsed = JSON.parse(bodyText)
-      if (parsed && typeof parsed.detail === 'string') {
-        detail = parsed.detail
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers,
+    })
+    
+    configState.isBackendReachable = true
+    configState.lastErrorMessage = ''
+
+    if (!res.ok) {
+      const bodyText = await res.text()
+      let detail = bodyText
+      try {
+        const parsed = JSON.parse(bodyText)
+        if (parsed && typeof parsed.detail === 'string') {
+          detail = parsed.detail
+        }
+      } catch {
+        // Keep plain-text fallback when response is not JSON.
       }
-    } catch {
-      // Keep plain-text fallback when response is not JSON.
+      if (res.status === 401 && authState.isAuthenticated) {
+         window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+      }
+      
+      if (res.status >= 500) {
+        configState.isBackendReachable = false
+        configState.lastErrorMessage = `Server Error (${res.status}): ${detail}`
+      }
+
+      throw new Error(`API ${res.status}: ${detail}`)
     }
-    if (res.status === 401 && authState.isAuthenticated) {
-       window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+    return res.blob()
+  } catch (err: any) {
+    if (!(err.message.startsWith('API '))) {
+      configState.isBackendReachable = false
+      configState.lastErrorMessage = err.message || 'Network Error'
     }
-    throw new Error(`API ${res.status}: ${detail}`)
+    throw err
   }
-  return res.blob()
 }
 
 export const api = {

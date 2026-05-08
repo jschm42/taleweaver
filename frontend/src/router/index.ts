@@ -7,6 +7,7 @@ import GameView from '@/views/GameView.vue'
 import CreateAdventureView from '@/views/CreateAdventureView.vue'
 import LoginView from '@/views/LoginView.vue'
 import SetupView from '@/views/SetupView.vue'
+import ErrorView from '@/views/ErrorView.vue'
 import { authState } from '@/store/auth'
 
 const router = createRouter({
@@ -66,6 +67,11 @@ const router = createRouter({
       name: 'setup',
       component: SetupView,
     },
+    {
+      path: '/error',
+      name: 'error',
+      component: ErrorView,
+    },
   ],
 })
 
@@ -74,14 +80,14 @@ router.beforeEach(async (to, from, next) => {
   // We allow the navigation to proceed, and App.vue will handle the final redirection
   // once the bootstrap status is known.
   if (!authState.isInitialized) {
-    if (to.name === 'login' || to.name === 'setup') {
+    if (to.name === 'login' || to.name === 'setup' || to.name === 'error') {
       return next()
     }
     // Continue navigation; App.vue will redirect if necessary after init.
     return next()
   }
 
-  if (to.name === 'login' || to.name === 'setup') {
+  if (to.name === 'login' || to.name === 'setup' || to.name === 'error') {
     return next()
   }
 

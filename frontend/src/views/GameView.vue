@@ -114,7 +114,16 @@ const handleEntityClick = async (entity: any) => {
       case 'talk': command = `/talk ${targetName}`; break
       case 'inspect': command = `/inspect ${targetName}`; break
       case 'take': command = `/take ${targetName}`; break
-      case 'attack': command = `/attack ${targetName}`; break
+      case 'attack': 
+        if (entity.is_attackable === false) {
+          if (typeof notifications?.addNotification === 'function') {
+            notifications.addNotification('You cannot attack this target.', 'warning')
+          }
+          activeActionId.value = null
+          return
+        }
+        command = `/attack ${targetName}`; 
+        break
       case 'push': command = `Push ${targetName}`; break
       case 'pull': command = `Pull ${targetName}`; break
       default: command = `${action} ${targetName}`; break
@@ -145,7 +154,10 @@ const openContextMenu = (entity: any, event: MouseEvent) => {
   } else if (entity.entity_type === 'NPC') {
     items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
     if (sheet.value?.rule_enforcement_mode === 'rpg') {
-      items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
+      const isAttackable = entity.is_attackable !== false
+      if (isAttackable) {
+        items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
+      }
     }
     items.push({ label: 'Chat', action: `/talk ${entity.name}`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
   } else if (entity.entity_type === 'SCENE') {
@@ -341,12 +353,22 @@ const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJEC
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
 const isCombatActive = computed(() => !!combat.value?.active)
-const showCombatDialog = computed(() => !!combat.value && (!!combat.value.active || !!combat.value.loot_pending || !!combat.value.outcome))
+const showCombatDialog = computed(() => {
+  if (isClosingCombat.value) return false
+  return !!combat.value && (!!combat.value.active || !!combat.value.loot_pending || !!combat.value.outcome)
+})
 const combatActionInFlight = ref(false)
+const isClosingCombat = ref(false)
 const isCombatEvaluating = computed(() => combatActionInFlight.value)
 const showsMechanics = computed(() => {
   const mode = (sheet.value as any)?.rule_enforcement_mode as string | undefined
   return mode === 'rpg' || mode === 'story' || mode === 'strict'
+})
+
+watch(combat, (newCombat) => {
+  if (!newCombat) {
+    isClosingCombat.value = false
+  }
 })
 
 // --- WATCHERS FOR UI FEEDBACK (GLOW) ---
@@ -777,14 +799,15 @@ const handleLootLeave = async (item: any) => {
 const handleLootDone = async () => {
   if (combatActionInFlight.value) return
   combatActionInFlight.value = true
+  isClosingCombat.value = true
   try {
     await sendMessage('/loot done')
-    // Local safety: If no loot is left, we can assume closure is imminent
-    if (combat.value && !combat.value.loot_pending) {
-      combat.value = null
-    }
   } finally {
     combatActionInFlight.value = false
+    // Ensure the guard resets eventually once the combat state is truly gone
+    if (!combat.value) {
+      isClosingCombat.value = false
+    }
   }
 }
 
@@ -1151,7 +1174,10 @@ onBeforeUnmount(() => {
                     :key="item?.id || iidx"
                     class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-xxs text-slate-300 flex items-center gap-1.5"
                   >
-                    <i v-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
+                    <div v-if="typeof item === 'object' && item?.image_url" class="w-4 h-4 rounded overflow-hidden shrink-0 border border-slate-700">
+                      <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
+                    </div>
+                    <i v-else-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
                     <i v-else class="ra ra-emerald text-[12px] text-amber-500/60"></i>
                     {{ typeof item === 'object' ? item?.name : item }}
                   </div>

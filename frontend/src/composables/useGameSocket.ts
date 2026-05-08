@@ -176,7 +176,7 @@ export function useGameSocket(): UseGameSocket {
     }
 
     syncTimer = window.setInterval(async () => {
-      if (!currentGameId || status.value === 'disconnected') {
+      if (!currentGameId || status.value === 'disconnected' || status.value === 'connecting' || status.value === 'loading') {
         return
       }
 
@@ -371,6 +371,10 @@ export function useGameSocket(): UseGameSocket {
       statusText.value = ''
     } finally {
       clearTimeout(timeoutId)
+      if (status.value === 'connecting' || status.value === 'loading') {
+        status.value = 'connected'
+        statusText.value = ''
+      }
     }
   }
 

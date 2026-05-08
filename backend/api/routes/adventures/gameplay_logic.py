@@ -342,7 +342,6 @@ class GameTurnManager:
             game_over=bool(intent.game_over),
             game_completed=bool(intent.game_completed),
             status_note=intent.status_note,
-            instant_narrative=intent.instant_narrative,
         )
 
     async def initialize(self) -> bool:
@@ -757,10 +756,15 @@ class GameTurnManager:
 
     async def _emit_combat_final(self, status_note: Optional[str] = None) -> AsyncGenerator[str, None]:
         await self.db.commit()
+        combat_snap = AdventureLogic.get_combat_snapshot(self.state)
+        # Ensure we don't send a zombie combat object that has no active phase
+        if combat_snap and not combat_snap.get("active") and not combat_snap.get("loot_pending") and not combat_snap.get("outcome"):
+            combat_snap = None
+
         final_data = jsonable_encoder({
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
-            'combat': AdventureLogic.get_combat_snapshot(self.state),
+            'combat': combat_snap,
             **self._build_terminal_flags_payload(),
             'status_note': status_note or (self.state.session.status_note if self.state.session else None),
             'status': 'success'
@@ -816,8 +820,11 @@ class GameTurnManager:
         response_text = response_text.strip()
         if response_text:
             self.db.add(ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text))
-            self._append_combat_log(combat, response_text, "aftermath")
-            self._set_combat_state(combat)
+            # Only append to combat log if combat is still present in the state
+            # Otherwise we'd accidentally resurrect a cleared combat state
+            if self._read_combat_state():
+                self._append_combat_log(combat, response_text, "aftermath")
+                self._set_combat_state(combat)
 
     async def _handle_fight_start(self, user_msg: str) -> AsyncGenerator[str, None]:
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
@@ -841,6 +848,19 @@ class GameTurnManager:
         target = await self._find_fight_target(target_hint)
         if not target:
             msg = "No enemy is available in this scene."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
+
+        # Check if NPC is attackable
+        states = self.state.entity_states or {}
+        is_attackable = (states.get(target.id, {}) or {}).get("is_attackable")
+        if is_attackable is None:
+            is_attackable = target.is_attackable
+            
+        if is_attackable is False:
+            msg = f"You cannot attack {target.name}."
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             async for chunk in self._emit_combat_final(msg):
                 yield chunk
@@ -1421,20 +1441,19 @@ class GameTurnManager:
             combat["loot_pending"] = False
             combat.pop("outcome", None)
             combat["status_note"] = "Combat resolved."
+            self._append_combat_log(combat, combat["status_note"], "loot")
             
             # If nothing is left to do, clear the combat state entirely from all sources
             if not combat.get("active") and not combat.get("loot_pending") and not combat.get("outcome"):
                 self.state.combat_json = None
-                states = dict(self.state.entity_states or {})
-                states.pop("__combat__", None)
-                self.state.entity_states = states
+                # Aggressively clear combat state by creating a new filtered dict
+                self.state.entity_states = {k: v for k, v in (self.state.entity_states or {}).items() if k != "__combat__"}
                 flag_modified(self.state, "entity_states")
                 # Force commit to ensure state is persisted before final event
                 await self.db.commit()
             else:
                 self._set_combat_state(combat)
                 
-            self._append_combat_log(combat, combat["status_note"], "loot")
             return "Combat finished."
 
         return "Loot commands: /loot take <item>, /loot leave <item>, /loot done"
@@ -1442,11 +1461,15 @@ class GameTurnManager:
     async def _handle_combat_turn(self, user_msg: str) -> AsyncGenerator[str, None]:
         combat = self._read_combat_state()
         if not combat.get("active") and (combat.get("loot_pending") or combat.get("outcome")):
+            pre_resolve_outcome = combat.get("outcome")
             loot_msg = await self._resolve_loot_command(user_msg, combat)
             if loot_msg:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': loot_msg})}\n\n"
                 if user_msg.lower().strip().startswith("/loot done"):
                     combat_after_loot = self._read_combat_state()
+                    # Re-inject outcome for narration if it was just popped
+                    if not combat_after_loot.get("outcome") and pre_resolve_outcome:
+                        combat_after_loot["outcome"] = pre_resolve_outcome
                     async for chunk in self._emit_combat_aftermath_narration(combat_after_loot):
                         yield chunk
                 async for chunk in self._emit_combat_final(loot_msg):
@@ -1778,7 +1801,7 @@ class GameTurnManager:
 
                 if decision == "unknown":
                     game_event = AdventureGeneratorToolIntent(
-                        instant_narrative=(
+                        narrative_description=(
                             "Before I start generation, confirm image mode: "
                             "reply with 'yes with images', 'yes without images', or 'cancel'."
                         )
@@ -1786,7 +1809,7 @@ class GameTurnManager:
                 elif decision == "cancel":
                     self._clear_pending_ag_image_confirmation()
                     game_event = AdventureGeneratorToolIntent(
-                        instant_narrative="Understood. Adventure generation was cancelled."
+                        narrative_description="Understood. Adventure generation was cancelled."
                     )
                 else:
                     self._clear_pending_ag_image_confirmation()
@@ -1800,7 +1823,7 @@ class GameTurnManager:
 
                     game_event = AdventureGeneratorToolIntent(
                         requested_adventure_generation=pending_request,
-                        instant_narrative=(
+                        narrative_description=(
                             "The Architect inclines his head and begins weaving your requested world."
                             if decision == "with_images"
                             else "The Architect inclines his head and begins weaving your world without auto-generated images."
@@ -1863,14 +1886,7 @@ class GameTurnManager:
             logger.debug(f"[Turn {self.game_id}] [Pass 1] Mechanics analysis took {pass1_duration:.4f}s")
 
             # Auto-trigger turn-based combat dialog when mechanics detect combat start.
-            auto_combat_started = await self._auto_trigger_combat_from_gm(game_event)
-            if auto_combat_started:
-                msg = "Combat was detected by the Game Master. Turn-based combat has started."
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-                async for chunk in self._emit_combat_final(msg):
-                    yield chunk
-                return
+            await self._auto_trigger_combat_from_gm(game_event)
             
             # 2. Resolve Skill Checks
             if game_event.requested_skill_checks:
@@ -1983,7 +1999,10 @@ class GameTurnManager:
             # 3. Apply Changes
             pre_inventory_ids = {item.get("id") for item in (self.avatar.inventory or []) if item.get("id")}
             try:
-                await self._apply_game_event(game_event)
+                system_msgs = await self._apply_game_event(game_event)
+                for sm in system_msgs:
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
             except GameOverException as goe:
@@ -2058,8 +2077,8 @@ class GameTurnManager:
                     if self._get_last_ag_generation_error() == "token_limit":
                         last_request.generate_scene_images = False
                     game_event.requested_adventure_generation = last_request
-                    if not game_event.instant_narrative:
-                        game_event.instant_narrative = "Understood. I will retry the last adventure generation now."
+                    if not game_event.narrative_description:
+                        game_event.narrative_description = "Understood. I will retry the last adventure generation now."
 
             if game_event.requested_adventure_generation:
                 self._set_pending_ag_image_confirmation(game_event.requested_adventure_generation)
@@ -2070,7 +2089,7 @@ class GameTurnManager:
                 self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=confirmation_msg))
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': confirmation_msg})}\n\n"
                 game_event.requested_adventure_generation = None
-                game_event.instant_narrative = "The Architect pauses at the threshold, awaiting your confirmation."
+                game_event.narrative_description = "The Architect pauses at the threshold, awaiting your confirmation."
 
             if (
                 game_event.request_available_image_styles
@@ -2135,7 +2154,10 @@ class GameTurnManager:
             game_event = self._build_progression_event(progression_intent)
 
             try:
-                await self._apply_game_event(game_event)
+                system_msgs = await self._apply_game_event(game_event)
+                for sm in system_msgs:
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
+
                 if game_event.game_completed:
                     await self._finalize_session("completed", game_event.status_note)
                 elif game_event.game_over:
@@ -2146,66 +2168,55 @@ class GameTurnManager:
                 game_event.status_note = str(goe)
 
         # Pass 2: Narration
-        if game_event and game_event.instant_narrative:
-            logger.info(f"[Turn {self.game_id}] Short-circuit active: Using instant_narrative from Pass 1.")
-            response_text = game_event.instant_narrative
-            # Stream the instant narrative back as chunks to maintain UI consistency
-            words = response_text.split(" ")
-            for i, word in enumerate(words):
-                chunk_str = word + (" " if i < len(words)-1 else "")
-                yield f"event: chunk\ndata: {json.dumps({'content': chunk_str})}\n\n"
-                # Small delay to simulate "typing" but much faster than an actual LLM pass
-                await asyncio.sleep(0.02)
-        else:
-            yield f"event: status\ndata: {json.dumps({'content': 'Generating narrative...'})}\n\n"
-            try:
-                llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
-            except ValueError as e:
-                yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+        yield f"event: status\ndata: {json.dumps({'content': 'Generating narrative...'})}\n\n"
+        try:
+            llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
+        except ValueError as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+            return
+        narration_prompt = (
+            narration_system_prompt + "\n\n" + 
+            prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
+                outcome_json=game_event.model_dump_json() if game_event else "{}"
+            ) + "\n\n" +
+            prompts.GM_NARRATION_MANDATORY_FORMATTING
+        )
+
+        if run_chat_progression_pass:
+            narration_prompt += "\n\n" + prompts.GM_CHAT_NARRATION_SUFFIX
+            
+        if language:
+            narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
+            
+        pass2_start = time.perf_counter()
+        logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
+        try:
+            stream = await llm.stream_simple_task(narration_prompt, user_msg, complex_model)
+
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content or ""
+                if delta:
+                    response_text += delta
+                    yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
+        except Exception as e:
+            user_safe_error = _friendly_llm_error_message(e)
+            if user_safe_error:
+                yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
                 return
-            narration_prompt = (
-                narration_system_prompt + "\n\n" + 
-                prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
-                    outcome_json=game_event.model_dump_json() if game_event else "{}"
-                ) + "\n\n" +
-                prompts.GM_NARRATION_MANDATORY_FORMATTING
-            )
-
-            if run_chat_progression_pass:
-                narration_prompt += "\n\n" + prompts.GM_CHAT_NARRATION_SUFFIX
-            
-            if language:
-                narration_prompt += f"\n\nREMINDER: Respond in {language.upper()} only."
-            
-            pass2_start = time.perf_counter()
-            logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
-            try:
-                stream = await llm.stream_simple_task(narration_prompt, user_msg, complex_model)
-
-                async for chunk in stream:
-                    delta = chunk.choices[0].delta.content or ""
-                    if delta:
-                        response_text += delta
-                        yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
-            except Exception as e:
-                user_safe_error = _friendly_llm_error_message(e)
-                if user_safe_error:
-                    yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
-                    return
-                raise
-            
-            pass2_duration = time.perf_counter() - pass2_start
-            log_structured_event(
-                "gm.turn.pipeline.pass",
-                adventure_id=self.adventure.id,
-                game_id=self.game_id,
-                operation="chat_turn",
-                phase="narration",
-                duration_ms=round(pass2_duration * 1000, 2),
-                model=complex_model,
-                provider=complex_model_provider,
-            )
-            logger.debug(f"[Turn {self.game_id}] [Pass 2] Narration took {pass2_duration:.4f}s")
+            raise
+        
+        pass2_duration = time.perf_counter() - pass2_start
+        log_structured_event(
+            "gm.turn.pipeline.pass",
+            adventure_id=self.adventure.id,
+            game_id=self.game_id,
+            operation="chat_turn",
+            phase="narration",
+            duration_ms=round(pass2_duration * 1000, 2),
+            model=complex_model,
+            provider=complex_model_provider,
+        )
+        logger.debug(f"[Turn {self.game_id}] [Pass 2] Narration took {pass2_duration:.4f}s")
 
         log_structured_event(
             "gm.turn.pipeline.cycle_total",
@@ -2360,8 +2371,9 @@ class GameTurnManager:
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
-    async def _apply_game_event(self, event: GameEvent):
-        """Applies technical mutations from a GameEvent to the database and session state."""
+    async def _apply_game_event(self, event: GameEvent) -> List[str]:
+        """Applies technical mutations from a GameEvent to the database and session state. Returns messages for the UI."""
+        system_messages: List[str] = []
         existing_item_ids = await self._collect_existing_item_ids()
         
         # If we are removing items in this event, they don't count as "existing" for duplicate checks
@@ -2421,6 +2433,12 @@ class GameTurnManager:
                     existing_item_ids.add(item.id)
             event.spawned_items = filtered_spawned_items
 
+        if event.new_status_effects:
+            for effect in event.new_status_effects:
+                msg = f"✨ You are now: {effect}"
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                system_messages.append(msg)
+
         RuleEngine.apply_event(self.avatar, event)
         
         state_dirty = False
@@ -2470,6 +2488,7 @@ class GameTurnManager:
                 if update.hp is not None: states[eid]["hp"] = update.hp
                 if update.mana is not None: states[eid]["mana"] = update.mana
                 if update.stamina is not None: states[eid]["stamina"] = update.stamina
+                if update.is_attackable is not None: states[eid]["is_attackable"] = update.is_attackable
                 if update.inventory is not None: 
                     states[eid]["inventory"] = [i.model_dump(exclude_none=True) for i in update.inventory]
                 state_dirty = True
@@ -2524,7 +2543,11 @@ class GameTurnManager:
                 if already_earned:
                     continue
 
-                aw = award_defs.get(key, {})
+                aw = award_defs.get(key)
+                if not aw:
+                    logger.warning("[Turn %s] GM tried to grant non-existent award: %s", self.game_id, key)
+                    continue
+
                 user_awards.append(
                     {
                         "key": key,
@@ -2538,6 +2561,10 @@ class GameTurnManager:
                         "earned_at": now,
                     }
                 )
+                award_title = aw.get("title") or key
+                msg = f"🏆 Award Achievement: {award_title}"
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                system_messages.append(msg)
                 modified = True
 
             if modified:
@@ -2563,13 +2590,15 @@ class GameTurnManager:
         if newly_completed_quests:
             # Emit one system entry per newly completed quest so players get explicit feedback.
             for quest_title in dict.fromkeys(newly_completed_quests):
+                msg = f"Quest completed: {quest_title}"
                 self.db.add(
                     ChatMessage(
                         session_id=self.state.session_id,
                         role="system",
-                        content=f"Quest completed: {quest_title}",
+                        content=msg,
                     )
                 )
+                system_messages.append(msg)
 
         # RPG Completion Logic: Check if all main quests are finished
         if state_dirty:
@@ -2606,8 +2635,8 @@ class GameTurnManager:
             flag_modified(self.state, "entity_states")
             
         await self._apply_adventure_generator_tools(event)
-
         await self.db.flush()
+        return system_messages
 
     async def _emit_system_message(
         self,
