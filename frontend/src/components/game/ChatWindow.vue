@@ -297,19 +297,44 @@ function parseContent(content: string) {
 }
 
 function formatBolds(text: string) {
+  const resolveNpcMetadata = (rawName: string): { key: string; data: any } | null => {
+    const normalized = String(rawName || '').trim().replace(/^\*\*|\*\*$/g, '')
+    if (!normalized) return null
+
+    const exact = props.npcMetadata[normalized]
+    if (exact) return { key: normalized, data: exact }
+
+    const lowered = normalized.toLowerCase()
+    for (const [key, value] of Object.entries(props.npcMetadata || {})) {
+      if (String(key).toLowerCase() === lowered) {
+        return { key, data: value }
+      }
+    }
+
+    return null
+  }
+
+  const renderNpcLabel = (rawName: string): string => {
+    const displayName = String(rawName || '').trim().replace(/^\*\*|\*\*$/g, '')
+    if (!displayName) return ''
+
+    const resolved = resolveNpcMetadata(displayName)
+    if (!resolved) {
+      return `<strong class="text-amber-400 font-bold">${displayName}:</strong>`
+    }
+
+    const iconOrImg = resolved.data.image_url
+      ? `<img src="${getImageUrl(resolved.data.image_url)}" class="npc-avatar" alt="${displayName}-portrait">`
+      : `<div class="npc-avatar ra ra-player flex items-center justify-center bg-slate-800 text-amber-500/80 text-xl border-amber-500/30 font-normal"></div>`
+
+    return `<span class="npc-portrait-trigger" data-npc-name="${resolved.key}">${iconOrImg}<strong class="npc-name">${displayName}:</strong></span>`
+  }
+
   // Pattern: **Name:**
   return text
-    .replace(/\*\*(.*?):\*\*/g, (_match, name) => {
-      const data = props.npcMetadata[name]
-      if (data) {
-        const iconOrImg = data.image_url 
-          ? `<img src="${getImageUrl(data.image_url)}" class="npc-avatar" alt="${name}-portrait">`
-          : `<div class="npc-avatar ra ra-player flex items-center justify-center bg-slate-800 text-amber-500/80 text-xl border-amber-500/30 font-normal"></div>`;
-        
-        return `<span class="npc-portrait-trigger" data-npc-name="${name}">${iconOrImg}<strong class="npc-name">${name}:</strong></span>`
-      }
-      return `<strong class="text-amber-400 font-bold">${name}:</strong>`
-    })
+    .replace(/\*\*([^*:\n][^:\n]*?):\*\*/g, (_match, name) => renderNpcLabel(name))
+    // Support plain dialogue labels after switching output format to Name: "..."
+    .replace(/(^|\n)([^\n:<][^\n:]{0,120}):(?=\s|"|$)/g, (_match, prefix, name) => `${prefix}${renderNpcLabel(name)}`)
     .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
 }
 

@@ -14,7 +14,13 @@ class AudioService {
   private normalizeDialoguePrefixes(text: string): string {
     // Convert markdown-style speaker labels to plain labels for more reliable
     // downstream TTS interpretation.
-    return text.replace(/^\*\*([^*:\n]+)\*\*:\s*/gm, '$1: ')
+    const normalizedPrefixes = text.replace(/^\*\*([^*:\n]+)\*\*:\s*/gm, '$1: ')
+
+    // Remove markdown bold markers from the whole prompt so raw "**" never
+    // reaches the TTS model.
+    return normalizedPrefixes
+      .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+      .replace(/\*\*/g, '')
   }
 
   private getSafeSpeechRate(): number {
@@ -96,6 +102,76 @@ class AudioService {
     }
 
     return fallback
+  }
+
+  private buildTwoSpeakerChunks(
+    segments: Array<{ speaker?: string, text: string }>,
+    npcMetadata: Record<string, any> | undefined,
+  ): Array<{ text: string, speakerVoices?: Record<string, string>, voiceOverride?: string }> {
+    const chunks: Array<{ text: string, speakerVoices?: Record<string, string>, voiceOverride?: string }> = []
+    let namedRun: Array<{ speaker: string, text: string, voice: string }> = []
+
+    const flushNamedRun = () => {
+      if (!namedRun.length) return
+
+      let bucket: Array<{ speaker: string, text: string, voice: string }> = []
+      let bucketVoices: Record<string, string> = {}
+
+      const flushBucket = () => {
+        if (!bucket.length) return
+        const speakers = Object.keys(bucketVoices)
+        if (speakers.length >= 2) {
+          chunks.push({
+            text: bucket.map(item => `${item.speaker}: ${item.text}`).join('\n\n'),
+            speakerVoices: { ...bucketVoices },
+          })
+        } else {
+          const onlySpeaker = speakers[0]
+          chunks.push({
+            text: bucket.map(item => `${item.speaker}: ${item.text}`).join('\n\n'),
+            voiceOverride: onlySpeaker ? bucketVoices[onlySpeaker] : undefined,
+          })
+        }
+      }
+
+      for (const item of namedRun) {
+        if (!(item.speaker in bucketVoices) && Object.keys(bucketVoices).length >= 2) {
+          flushBucket()
+          bucket = []
+          bucketVoices = {}
+        }
+        bucket.push(item)
+        bucketVoices[item.speaker] = item.voice
+      }
+
+      flushBucket()
+      namedRun = []
+    }
+
+    for (const segment of segments) {
+      const speaker = segment.speaker?.trim()
+      if (!speaker) {
+        flushNamedRun()
+        if (segment.text.trim()) {
+          chunks.push({ text: segment.text })
+        }
+        continue
+      }
+
+      const voice = this.resolveNpcVoice(speaker, npcMetadata)
+      if (!voice) {
+        flushNamedRun()
+        if (segment.text.trim()) {
+          chunks.push({ text: `${speaker}: ${segment.text}` })
+        }
+        continue
+      }
+
+      namedRun.push({ speaker, text: segment.text, voice })
+    }
+
+    flushNamedRun()
+    return chunks
   }
 
   private buildSpeakerVoiceMap(text: string, npcMetadata: Record<string, any> | undefined): Record<string, string> | undefined {
@@ -252,7 +328,28 @@ class AudioService {
     const normalizedTitle = this.normalizeOptionalText(title)
     const normalizedSceneName = this.normalizeOptionalText(sceneName)
     const normalizedTone = this.normalizeOptionalText(tone)
-    const segments = segmentedVoices ? this.splitIntoSpeechSegments(ttsText) : []
+    const parsedSegments = this.splitIntoSpeechSegments(ttsText)
+    const hasNamedSegments = parsedSegments.some(segment => !!segment.speaker)
+    const hasUnnamedSegments = parsedSegments.some(segment => !segment.speaker)
+    const namedSpeakerCount = new Set(
+      parsedSegments
+        .map(segment => segment.speaker?.trim())
+        .filter((speaker): speaker is string => !!speaker)
+    ).size
+    // If narration mixes unlabeled and labeled paragraphs, force segmented mode so
+    // unlabeled parts are synthesized with the default voice.
+    const shouldSegment = !!segmentedVoices || (hasNamedSegments && hasUnnamedSegments) || namedSpeakerCount > 2
+    const segments = shouldSegment ? parsedSegments : []
+
+    console.info('TTS plan', {
+      totalLength: ttsText.length,
+      parsedSegments: parsedSegments.length,
+      namedSpeakerCount,
+      hasNamedSegments,
+      hasUnnamedSegments,
+      shouldSegment,
+      segmentedVoices: !!segmentedVoices,
+    })
 
     try {
       this.currentText.value = ttsText
@@ -280,15 +377,21 @@ class AudioService {
           this.isGenerating.value = false
           if (!this.isRetryableTtsError(err)) throw err
 
-          // Fallback: recover from timeout by generating smaller chunks.
+          // Fallback: recover from timeout by generating smaller chunks first,
+          // then play them consecutively to avoid generation pauses mid-playback.
           const fallbackSegments = this.buildFallbackSegments(ttsText)
+          const fallbackAudioUrls: string[] = []
+
+          this.isGenerating.value = true
           for (const segment of fallbackSegments) {
             if (token !== this.playbackToken) return
 
-            this.isGenerating.value = true
             const voiceOverride = this.resolveNpcVoice(segment.speaker, npcMetadata)
+            const requestText = segment.speaker
+              ? `${segment.speaker}: ${segment.text}`
+              : segment.text
             const { audio_url } = await api.generateTTS({
-              text: segment.text,
+              text: requestText,
               scene_description: normalizedSceneDescription,
               adventure_id: normalizedAdventureId,
               title: normalizedTitle,
@@ -296,31 +399,52 @@ class AudioService {
               tone: normalizedTone,
               voice_override: voiceOverride,
             })
-            this.isGenerating.value = false
+            fallbackAudioUrls.push(audio_url)
+          }
+          this.isGenerating.value = false
 
+          for (const audioUrl of fallbackAudioUrls) {
             if (token !== this.playbackToken) return
-            await this.playAudio(audio_url)
+            await this.playAudio(audioUrl)
           }
         }
       } else {
-        for (const segment of segments) {
+        const chunks = this.buildTwoSpeakerChunks(segments, npcMetadata)
+        console.info('TTS segmented chunk count', chunks.length)
+        const chunkAudioUrls: string[] = []
+
+        this.isGenerating.value = true
+        for (const chunk of chunks) {
           if (token !== this.playbackToken) return
 
-          this.isGenerating.value = true
-          const voiceOverride = this.resolveNpcVoice(segment.speaker, npcMetadata)
+          const speakerNames = chunk.speakerVoices ? Object.keys(chunk.speakerVoices) : []
+          console.info('TTS chunk request', {
+            mode: chunk.speakerVoices
+              ? 'multi-speaker'
+              : chunk.voiceOverride
+                ? 'single-speaker-override'
+                : 'single-speaker-default',
+            speakers: speakerNames,
+            textLength: chunk.text.length,
+          })
+
           const { audio_url } = await api.generateTTS({
-            text: segment.text,
+            text: chunk.text,
             scene_description: normalizedSceneDescription,
             adventure_id: normalizedAdventureId,
             title: normalizedTitle,
             scene_name: normalizedSceneName,
             tone: normalizedTone,
-            voice_override: voiceOverride,
+            voice_override: chunk.voiceOverride,
+            speaker_voices: chunk.speakerVoices,
           })
-          this.isGenerating.value = false
+          chunkAudioUrls.push(audio_url)
+        }
+        this.isGenerating.value = false
 
+        for (const audioUrl of chunkAudioUrls) {
           if (token !== this.playbackToken) return
-          await this.playAudio(audio_url)
+          await this.playAudio(audioUrl)
         }
       }
     } catch (err) {
