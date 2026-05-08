@@ -71,7 +71,7 @@ const gameForm = ref({
 
 const ttsForm = ref({
   enabled: true,
-  selected_model: 'gemini-2.5-flash-preview-tts',
+  selected_model: 'gemini-3.1-flash-tts-preview',
   voice_list: [
     'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
     'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome',
@@ -1201,7 +1201,6 @@ function formatVoiceLabel(voiceName: string): string {
                   <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model</label>
                   <select v-model="ttsForm.selected_model" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
                     <option value="gemini-3.1-flash-tts-preview">Gemini 3.1 Flash TTS (Preview)</option>
-                    <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS (Preview)</option>
                   </select>
                 </div>
                 <div class="space-y-2">

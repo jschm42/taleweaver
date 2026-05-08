@@ -177,7 +177,7 @@ GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
     "For massive jumps (e.g. sleeping for 8 hours, traveling for days), you can use `time_override_minutes` (absolute minutes since start) "
     "or `start_datetime_override` (ISO string to shift the entire calendar).\n\n"
     "FORMATTING RULES:\n"
-    "1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: **Character Name:** \"...\"\n"
+    "1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: Character Name: \"...\" (no markdown bold)\n"
     "2. LINE BREAKS: Use double line breaks between narrative prose and dialogue or major shifts in focus.\n"
     "3. READABILITY: Avoid walls of text. Keep paragraphs focused.\n"
     "4. NO SUMMARIES: Do NOT append lists like 'AVAILABLE INTERACTIONS', 'Suggestions', or 'What do you do?'.\n"
@@ -293,7 +293,7 @@ Default instruction for standard interactions to keep the game moving.
 GM_NARRATION_MANDATORY_FORMATTING = (
     "Do not mention numbers, IDs, or system terms. 1-3 paragraphs based on the context above.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
-    "Use the format: **Character Name:** \"Dialogue\". "
+    "Use the format: Character Name: \"Dialogue\" (no markdown bold). "
     "Separate narrative prose from speech with a blank line.\n\n"
     "VOICE DIRECTION: Actively use tone and pace tags to give your narration life and atmosphere. "
     "Tags MUST come from the fixed catalog below and MUST always be in English. "

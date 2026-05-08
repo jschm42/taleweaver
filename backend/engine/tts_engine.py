@@ -54,6 +54,31 @@ def _add_wav_header(pcm_data: bytes, sample_rate: int = 24000) -> bytes:
     )
     return header + pcm_data
 
+
+def _resolve_audio_output_dir(adventure_id: Optional[str]) -> str:
+    """Return target directory for generated audio.
+
+    If an adventure_id is known, store clips inside that adventure's session area.
+    """
+    if adventure_id:
+        return os.path.join(settings.DATA_DIR, "adventures", adventure_id, "sessions", "tts")
+    return os.path.join(settings.DATA_DIR, "audio")
+
+
+def _resolve_audio_public_url(adventure_id: Optional[str], filename: str) -> str:
+    """Return static URL for generated audio based on storage location."""
+    if adventure_id:
+        return f"/data/adventures/{adventure_id}/sessions/tts/{filename}"
+    return f"/data/audio/{filename}"
+
+
+def _public_url_from_filepath(filepath: str) -> str:
+    """Build a stable /data URL from the actual file path on disk."""
+    data_root = os.path.abspath(settings.DATA_DIR)
+    abs_path = os.path.abspath(filepath)
+    rel_path = os.path.relpath(abs_path, data_root)
+    return f"/data/{rel_path.replace(os.sep, '/')}"
+
 class TTSEngine:
     """
     Handles speech generation using Google Gemini 1.5 Flash (Preview) TTS API.
@@ -63,13 +88,16 @@ class TTSEngine:
     async def generate_speech(
         text: str,
         voice: str = "Puck",
+        speaker_voices: Optional[dict[str, str]] = None,
         api_key: Optional[str] = None,
+        adventure_id: Optional[str] = None,
         scene_description: Optional[str] = None,
         style_description: Optional[str] = None,
         model_name: str = "gemini-3.1-flash-tts-preview",
         title: Optional[str] = None,
         scene_name: Optional[str] = None,
-        tone: Optional[str] = None
+        tone: Optional[str] = None,
+        **_unused_kwargs: object,
     ) -> Optional[str]:
         """
         Generates speech and returns the relative URL to the audio file.
@@ -78,66 +106,76 @@ class TTSEngine:
             logger.error("No Google API key provided for TTS.")
             return None
 
-        # Prepare complex prompt as requested by user
-        prompt_parts = ["# AUDIO PROFILE: Gamemaster"]
-        if title:
-            prompt_parts.append(f"## {title}")
-        
-        prompt_parts.append("")
-        
-        if scene_name:
-            prompt_parts.append(f"## THE SCENE: {scene_name}")
-        if scene_description:
-            prompt_parts.append(scene_description)
-            
-        prompt_parts.append("")
-        prompt_parts.append("### DIRECTOR'S NOTES")
-        prompt_parts.append("Style:")
-        if tone:
-            prompt_parts.append(tone)
-            
-        prompt_parts.append("")
-        prompt_parts.append("### SAMPLE CONTEXT")
+        valid_speaker_voices = {
+            str(speaker).strip(): str(voice_name).strip()
+            for speaker, voice_name in (speaker_voices or {}).items()
+            if str(speaker).strip() and str(voice_name).strip()
+        }
+        if len(valid_speaker_voices) > 2:
+            # Gemini multi-speaker supports at most two speakers.
+            limited_items = list(valid_speaker_voices.items())[:2]
+            valid_speaker_voices = dict(limited_items)
+            logger.info(
+                "Limiting multi-speaker TTS to first two speakers: %s",
+                list(valid_speaker_voices.keys()),
+            )
+
+        # Keep the TTS prompt compact and avoid extra context sections.
+        prompt_parts = []
         if style_description:
-            prompt_parts.append(style_description)
-            
-        prompt_parts.append("#### TRANSCRIPT")
-        prompt_parts.append(text)
-        
-        user_content = "\n\n".join([p for p in prompt_parts if p.strip() or p == ""])
-        # Actually, let's just be precise with joins
-        user_content = "# AUDIO PROFILE: Gamemaster\n"
-        if title:
-            user_content += f"## {title}\n\n"
-        else:
-            user_content += "\n"
-            
-        if scene_name:
-            user_content += f"## THE SCENE: {scene_name}\n"
-        if scene_description:
-            user_content += f"{scene_description}\n"
-            
-        user_content += "\n### DIRECTOR'S NOTES\nStyle:\n"
+            prompt_parts.append(f"Voice style context: {style_description}")
         if tone:
-            user_content += f"{tone}\n"
-        user_content += (
+            prompt_parts.append(f"Tone: {tone}")
+        if len(valid_speaker_voices) >= 2:
+            speakers = ", ".join(valid_speaker_voices.keys())
+            prompt_parts.append(
+                f"Use multi-speaker synthesis. Match speaker labels exactly as written: {speakers}."
+            )
+
+        prompt_parts.append(
             "The transcript may contain inline voice-direction tags in square brackets, "
             "e.g. [shouting], [whispers], [very fast], [very slow], [excited], [sarcastically, one painfully slow word at a time]. "
-            "Honour these as acting cues — they describe the tone, emotion, or pace of the text that follows until the next paragraph.\n"
+            "Honour these as acting cues until the next paragraph."
         )
-
-        user_content += "\n### SAMPLE CONTEXT\n"
-        if style_description:
-            user_content += f"{style_description}\n"
-            
-        user_content += "#### TRANSCRIPT\n"
-        user_content += text
+        prompt_parts.append("Transcript:")
+        prompt_parts.append(text)
+        user_content = "\n".join(prompt_parts)
 
         # Force log to console for the user
         print(f"DEBUG: TTS Prompt for model '{model_name}':\n{user_content}")
 
         # Note: Using generateContent with responseModalities: ["AUDIO"]
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+
+        speech_config: dict = {}
+        if len(valid_speaker_voices) >= 2:
+            speech_config["multiSpeakerVoiceConfig"] = {
+                "speakerVoiceConfigs": [
+                    {
+                        "speaker": speaker,
+                        "voiceConfig": {
+                            "prebuiltVoiceConfig": {"voiceName": voice_name}
+                        },
+                    }
+                    for speaker, voice_name in valid_speaker_voices.items()
+                ]
+            }
+        else:
+            selected_voice = voice
+            if len(valid_speaker_voices) == 1:
+                selected_voice = next(iter(valid_speaker_voices.values()))
+            speech_config["voiceConfig"] = {
+                "prebuiltVoiceConfig": {
+                    "voiceName": selected_voice
+                }
+            }
+
+        logger.info(
+            "TTS request model=%s multi_speaker=%s speakers=%s",
+            model_name,
+            len(valid_speaker_voices) >= 2,
+            list(valid_speaker_voices.keys()),
+        )
 
         payload = {
             "contents": [
@@ -152,13 +190,7 @@ class TTSEngine:
             ],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
-                "speechConfig": {
-                    "voiceConfig": {
-                        "prebuiltVoiceConfig": {
-                            "voiceName": voice
-                        }
-                    }
-                }
+                "speechConfig": speech_config,
             }
         }
 
@@ -197,8 +229,8 @@ class TTSEngine:
             elif "ogg" in mime_type: 
                 ext = "ogg"
 
-            # Save to data directory
-            audio_dir = os.path.join(settings.DATA_DIR, "audio")
+            # Save to adventure session directory when adventure_id is known.
+            audio_dir = _resolve_audio_output_dir(adventure_id)
             os.makedirs(audio_dir, exist_ok=True)
 
             filename = f"{uuid.uuid4()}.{ext}"
@@ -207,7 +239,7 @@ class TTSEngine:
             with open(filepath, "wb") as f:
                 f.write(audio_bytes)
 
-            return f"/data/audio/{filename}"
+            return _public_url_from_filepath(filepath)
 
         except httpx.ReadTimeout as exc:
             logger.warning(

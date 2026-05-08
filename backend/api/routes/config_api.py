@@ -10,6 +10,8 @@ from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
+SUPPORTED_TTS_MODELS = {"gemini-3.1-flash-tts-preview"}
+
 from backend.core.database import get_db
 from backend.core.auth import get_current_user, get_current_admin
 from backend.models.user import User
@@ -275,6 +277,8 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     if "enabled" not in normalized:
         normalized["enabled"] = fallback["enabled"]
     if "selected_model" not in normalized:
+        normalized["selected_model"] = fallback["selected_model"]
+    elif normalized.get("selected_model") not in SUPPORTED_TTS_MODELS:
         normalized["selected_model"] = fallback["selected_model"]
     
     # Always ensure the full list is available

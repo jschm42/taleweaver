@@ -11,6 +11,7 @@ from backend.core.config import settings
 
 router = APIRouter(prefix="/tts", tags=["TTS"])
 logger = logging.getLogger(__name__)
+SUPPORTED_TTS_MODELS = {"gemini-3.1-flash-tts-preview"}
 
 class TTSGeneratePayload(BaseModel):
     text: str = Field(default="")
@@ -20,6 +21,7 @@ class TTSGeneratePayload(BaseModel):
     scene_name: Optional[str] = Field(default=None)
     tone: Optional[str] = Field(default=None)
     voice_override: Optional[str] = Field(default=None)
+    speaker_voices: Optional[dict[str, str]] = Field(default=None)
 
     @staticmethod
     def _coerce_required_text(value: Any) -> str:
@@ -88,13 +90,37 @@ async def generate_tts(
             logger.warning("Ignoring invalid voice override '%s'. Falling back to default voice.", payload.voice_override)
     style = tts_settings.get("sample_context")
     model = tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview")
+    if model not in SUPPORTED_TTS_MODELS:
+        logger.warning("Unsupported TTS model '%s' configured; falling back to gemini-3.1-flash-tts-preview.", model)
+        model = "gemini-3.1-flash-tts-preview"
+
+    speaker_voices: Optional[dict[str, str]] = None
+    if payload.speaker_voices:
+        normalized: dict[str, str] = {}
+        for raw_speaker, raw_voice in payload.speaker_voices.items():
+            speaker = str(raw_speaker or "").strip()
+            requested_voice = str(raw_voice or "").strip()
+            if not speaker or not requested_voice:
+                continue
+            if requested_voice in allowed_voices:
+                normalized[speaker] = requested_voice
+            else:
+                logger.warning(
+                    "Ignoring invalid speaker voice mapping '%s' -> '%s'.",
+                    speaker,
+                    requested_voice,
+                )
+        if normalized:
+            speaker_voices = normalized
 
     # 3. Generate Speech
     try:
         audio_url = await TTSEngine.generate_speech(
             text=payload.text,
             voice=voice,
+            speaker_voices=speaker_voices,
             api_key=api_key,
+            adventure_id=payload.adventure_id,
             scene_description=payload.scene_description,
             style_description=style,
             model_name=model,
