@@ -127,6 +127,11 @@ class AudioService {
   }
 
   private async playAudio(audioUrl: string): Promise<void> {
+    const blob = await this.fetchAudioBlob(audioUrl)
+    await this.playAudioBlob(blob)
+  }
+
+  private async fetchAudioBlob(audioUrl: string): Promise<Blob> {
     if (!audioUrl || !audioUrl.trim()) {
       throw new Error('Audio URL is empty')
     }
@@ -138,6 +143,14 @@ class AudioService {
     }
 
     const blob = await response.blob()
+    if (!blob.size) {
+      throw new Error('Audio payload is empty')
+    }
+
+    return blob
+  }
+
+  private async playAudioBlob(blob: Blob): Promise<void> {
     if (!blob.size) {
       throw new Error('Audio payload is empty')
     }
@@ -236,18 +249,19 @@ class AudioService {
       this.currentText.value = ttsText
       this.isPlaying.value = true
 
-      const audioUrls: string[] = []
+      const prepareSegmentAudio = async (index: number): Promise<Blob> => {
+        if (token !== this.playbackToken) {
+          throw new Error('TTS playback cancelled before generation.')
+        }
 
-      this.isGenerating.value = true
-      for (const segment of segments) {
-        if (token !== this.playbackToken) return
-
+        const segment = segments[index]
         const requestText = segment.speaker
           ? `${segment.speaker}: ${segment.text}`
           : segment.text
         const voiceOverride = this.resolveNpcVoice(segment.speaker, npcMetadata)
 
         console.info('TTS segment request', {
+          index,
           mode: voiceOverride ? 'single-speaker-override' : 'single-speaker-default',
           speaker: segment.speaker || null,
           textLength: segment.text.length,
@@ -262,14 +276,33 @@ class AudioService {
           tone: normalizedTone,
           voice_override: voiceOverride,
         })
-        audioUrls.push(audio_url)
-      }
-      this.isGenerating.value = false
 
-      for (const audioUrl of audioUrls) {
-        if (token !== this.playbackToken) return
-        await this.playAudio(audioUrl)
+        return this.fetchAudioBlob(audio_url)
       }
+
+      // Pipeline mode: while one segment is playing, generate and prefetch the next.
+      this.isGenerating.value = true
+      let nextAudioPromise: Promise<Blob> | null = prepareSegmentAudio(0)
+
+      for (let index = 0; index < segments.length; index++) {
+        if (token !== this.playbackToken) return
+        if (!nextAudioPromise) break
+
+        const currentAudioBlob = await nextAudioPromise
+
+        const hasNext = index + 1 < segments.length
+        if (hasNext) {
+          nextAudioPromise = prepareSegmentAudio(index + 1)
+        } else {
+          nextAudioPromise = null
+          this.isGenerating.value = false
+        }
+
+        if (token !== this.playbackToken) return
+        await this.playAudioBlob(currentAudioBlob)
+      }
+
+      this.isGenerating.value = false
     } catch (err) {
       console.error('TTS Playback failed', err)
     } finally {
