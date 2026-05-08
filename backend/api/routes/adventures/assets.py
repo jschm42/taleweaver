@@ -4,10 +4,11 @@ import asyncio
 import uuid
 import json
 from typing import Optional, Dict, Any, Literal, List
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, UploadFile, Form
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
+
 from backend.core.database import get_db
 from backend.core.auth import get_current_user
 from backend.core.config import settings
@@ -16,182 +17,12 @@ from backend.models.user import User
 from backend.models.adventure_template import AdventureTemplate
 from backend.engine.world_generator import WorldGenerator
 from backend.engine.media_engine import MediaEngine
-from backend.engine.adventure_importer import AdventureTemplateImporter
 from backend.core.style_catalog import resolve_style_instruction
-from backend.api.routes.adventures.schemas import ImportCheckResponse, ImportCheckItem
-import zipfile
-import io
+from backend.api.routes.adventures.schemas import SuggestPromptRequest, SuggestPromptResponse
+from backend.core.llm_router import GameMasterLLM
 
-router = APIRouter(tags=["Assets"])
+router = APIRouter(prefix="/{template_id}/visuals", tags=["Assets"])
 logger = logging.getLogger(__name__)
-
-async def _get_import_check_items(db: AsyncSession, user_id: str, directories: List[str]) -> List[ImportCheckItem]:
-    """Scans directories for adventures and checks if they already exist in the user's library."""
-    check_items = []
-    
-    for directory in directories:
-        if not os.path.exists(directory):
-            continue
-            
-        files = [f for f in os.listdir(directory) if f.endswith(".adv") or f.endswith(".adz")]
-        for filename in files:
-            file_path = os.path.join(directory, filename)
-            title = None
-            origin_id = None
-            
-            try:
-                if filename.endswith(".adz"):
-                    with open(file_path, "rb") as f:
-                        with zipfile.ZipFile(io.BytesIO(f.read()), "r") as zip_file:
-                            manifest = json.loads(zip_file.read("adventure.adv").decode("utf-8"))
-                            adv_data = manifest.get("adventure") or {}
-                            title = adv_data.get("title")
-                            origin_id = adv_data.get("origin_id") or manifest.get("origin_id")
-                else:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        payload = json.load(f)
-                        is_session = payload.get("type") == "SESSION_BUNDLE"
-                        title = payload.get("adventure", {}).get("title") if is_session else payload.get("title")
-                        origin_id = payload.get("adventure", {}).get("origin_id") if is_session else payload.get("origin_id")
-                
-                if title:
-                    query = select(AdventureTemplate).where(AdventureTemplate.owner_id == user_id)
-                    if origin_id:
-                        query = query.where(or_(AdventureTemplate.title == title, AdventureTemplate.origin_id == origin_id))
-                    else:
-                        query = query.where(AdventureTemplate.title == title)
-                    
-                    res = await db.execute(query)
-                    existing = res.scalars().first()
-                    
-                    check_items.append(ImportCheckItem(
-                        title=title,
-                        origin_id=origin_id,
-                        already_exists=existing is not None,
-                        existing_template_id=existing.id if existing else None
-                    ))
-            except Exception as e:
-                logger.error(f"Error checking import file {file_path}: {e}")
-                
-    return check_items
-
-@router.get("/check-defaults", response_model=ImportCheckResponse)
-async def check_defaults(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Returns a list of default adventures and their existence status."""
-    defaults_dir = os.path.join("adventures", "default")
-    items = await _get_import_check_items(db, current_user.id, [defaults_dir])
-    return ImportCheckResponse(available_imports=items)
-
-@router.get("/check-examples", response_model=ImportCheckResponse)
-async def check_examples(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Returns a list of example/sample adventures and their existence status."""
-    samples_dir = os.path.join("adventures", "samples")
-    presets_dir = os.path.join(settings.DATA_DIR, "presets", "adventures")
-    items = await _get_import_check_items(db, current_user.id, [samples_dir, presets_dir])
-    return ImportCheckResponse(available_imports=items)
-
-@router.post("/import-examples")
-async def import_examples(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Manually triggers import of example adventures from the 'adventures/samples' and presets folder."""
-    user_id = current_user.id
-    # Import from the 'samples' subfolder
-    samples_dir = os.path.join("adventures", "samples")
-    await AdventureTemplateImporter.import_from_directory(db, samples_dir, owner_id=user_id, delete_after=False)
-    
-    presets_dir = os.path.join(settings.DATA_DIR, "presets", "adventures")
-    if os.path.exists(presets_dir):
-        await AdventureTemplateImporter.import_from_directory(db, presets_dir, owner_id=user_id, delete_after=False)
-    return {"status": "success", "message": "Example adventures imported successfully."}
-
-@router.post("/import-defaults")
-async def import_defaults(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Triggers import of default adventures from 'adventures/default' if not already done."""
-    if current_user.has_imported_defaults:
-        return {"status": "skipped", "message": "Defaults already imported."}
-    
-    defaults_dir = os.path.join("adventures", "default")
-    await AdventureTemplateImporter.import_from_directory(db, defaults_dir, owner_id=current_user.id, delete_after=False)
-    
-    current_user.has_imported_defaults = True
-    await db.commit()
-    return {"status": "success", "message": "Default adventures imported successfully."}
-
-@router.post("/reimport-defaults")
-async def reimport_defaults(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Manually re-triggers import of default adventures (restoration)."""
-    defaults_dir = os.path.join("adventures", "default")
-    await AdventureTemplateImporter.import_from_directory(db, defaults_dir, owner_id=current_user.id, delete_after=False)
-    return {"status": "success", "message": "Default adventures re-imported successfully."}
-
-@router.post("/import")
-async def import_adventure(
-    payload: Dict[str, Any],
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Import an adventure from a manifest URL or local path."""
-    source_url = payload.get("url")
-    if not source_url:
-        raise HTTPException(status_code=400, detail="Import URL is required.")
-    
-    # ... logic for importing from URL ...
-    return {"status": "success", "message": f"Imported from {source_url}"}
-
-@router.post("/import/adz")
-async def import_adventure_adz(
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Import an adventure as a portable .adz (ZIP) bundle."""
-    try:
-        content = await file.read()
-        success = await AdventureTemplateImporter.import_adz(db, content, owner_id=current_user.id)
-        if not success:
-            raise HTTPException(status_code=400, detail="Failed to import ADZ. Ensure the file is a valid TaleWeaver bundle.")
-        
-        return {"status": "success", "message": "Adventure imported successfully."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("ADZ Import failed")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/import/adv")
-async def import_adventure_adv(
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Import an adventure as a pure .adv (JSON) manifest."""
-    try:
-        content = await file.read()
-        payload = json.loads(content.decode("utf-8"))
-        success = await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=current_user.id)
-        if not success:
-            raise HTTPException(status_code=400, detail="Failed to import ADV. Ensure the file is a valid TaleWeaver manifest.")
-        
-        return {"status": "success", "message": "Adventure imported successfully."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("ADV Import failed")
-        raise HTTPException(status_code=500, detail=str(e))
 
 class RegenerateVisualRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
@@ -199,7 +30,7 @@ class RegenerateVisualRequest(BaseModel):
     prompt: Optional[str] = None
     use_advanced_model: bool = False
 
-@router.post("/{template_id}/visuals/regenerate")
+@router.post("/regenerate")
 async def regenerate_visual(
     template_id: str,
     payload: RegenerateVisualRequest,
@@ -226,13 +57,9 @@ async def regenerate_visual(
 
     try:
         if payload.target_type == "cover":
-            # 1. Adventure Cover
-            prompt = payload.prompt or prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
-                title=adv.title, original_prompt=adv.teaser or adv.original_prompt
-            )
             image_url = await asyncio.wait_for(
                 MediaEngine.generate_adventure_cover(
-                    title=adv.title, original_prompt=adv.teaser or adv.original_prompt,
+                    title=adv.title, original_prompt=payload.prompt or adv.original_prompt or "",
                     adventure_id=template_id, user_config=user_config, api_keys=api_keys,
                     style_instruction=style_instruction
                 ),
@@ -241,70 +68,47 @@ async def regenerate_visual(
             if image_url: adv.image_url = image_url
 
         elif payload.target_type == "protagonist":
-            # 2. Protagonist
             av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
             avatar = av_res.scalars().first()
-            if not avatar: raise HTTPException(status_code=404, detail="Protagonist avatar not found")
-
-            generated_plot = (adv.plot or "").strip()
-            base_prompt = prompts.PROTAGONIST_IMAGE_PROMPT_TEMPLATE.format(
-                name=avatar.name, role=avatar.role, description=avatar.description
-            )
-            # Prefer generated plot context over original prompt for profile image regeneration.
-            prompt = payload.prompt or (
-                f"{base_prompt} Narrative context: {generated_plot[:1200]}" if generated_plot else base_prompt
-            )
+            if not avatar: raise HTTPException(status_code=404, detail="Protagonist not found")
+            
             image_url = await asyncio.wait_for(
                 MediaEngine.generate_entity_image(
-                    prompt=prompt, adventure_id=template_id, entity_id="PROTAGONIST",
-                    entity_type="NPC", user_config=user_config, api_keys=api_keys,
-                    style_instruction=style_instruction,
-                    use_advanced_model=payload.use_advanced_model
+                    prompt=payload.prompt or avatar.description or "",
+                    adventure_id=template_id, entity_id="protagonist", entity_type="NPC",
+                    user_config=user_config, api_keys=api_keys,
+                    style_instruction=style_instruction
                 ),
                 timeout=float(settings.VISUAL_TIMEOUT)
             )
             if image_url: avatar.profile_image = image_url
 
         elif payload.target_type == "scene":
-            # 3. Scene
-            sc_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.id == payload.target_id))
-            scene = sc_res.scalars().first()
+            res = await db.execute(select(WorldScene).where(WorldScene.id == payload.target_id, WorldScene.template_id == template_id))
+            scene = res.scalars().first()
             if not scene: raise HTTPException(status_code=404, detail="Scene not found")
             
-            prompt = payload.prompt or prompts.SCENE_IMAGE_PROMPT_TEMPLATE.format(
-                name=scene.label, description=scene.description
-            )
             image_url = await asyncio.wait_for(
                 MediaEngine.generate_scene_image(
-                    prompt=prompt, adventure_id=template_id, user_config=user_config, api_keys=api_keys,
-                    style_instruction=style_instruction,
-                    use_advanced_model=payload.use_advanced_model
+                    prompt=payload.prompt or scene.description or "",
+                    adventure_id=template_id, user_config=user_config, api_keys=api_keys,
+                    style_instruction=style_instruction
                 ),
                 timeout=float(settings.VISUAL_TIMEOUT)
             )
             if image_url: scene.image_url = image_url
 
         elif payload.target_type in ["npc", "object"]:
-            # 4. NPC or Object
-            en_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.id == payload.target_id))
-            entity = en_res.scalars().first()
+            res = await db.execute(select(WorldEntity).where(WorldEntity.id == payload.target_id, WorldEntity.template_id == template_id))
+            entity = res.scalars().first()
             if not entity: raise HTTPException(status_code=404, detail="Entity not found")
             
-            if payload.target_type == "npc":
-                prompt = payload.prompt or prompts.NPC_IMAGE_PROMPT_TEMPLATE.format(
-                    name=entity.name, description=entity.description
-                )
-            else:
-                prompt = payload.prompt or prompts.OBJECT_IMAGE_PROMPT_TEMPLATE.format(
-                    name=entity.name, description=entity.description
-                )
-
             image_url = await asyncio.wait_for(
                 MediaEngine.generate_entity_image(
-                    prompt=prompt, adventure_id=template_id, entity_id=entity.id,
-                    entity_type=entity.entity_type, user_config=user_config, api_keys=api_keys,
-                    style_instruction=style_instruction,
-                    use_advanced_model=payload.use_advanced_model
+                    prompt=payload.prompt or entity.description or "",
+                    adventure_id=template_id, entity_id=entity.id, entity_type=payload.target_type.upper(),
+                    user_config=user_config, api_keys=api_keys,
+                    style_instruction=style_instruction
                 ),
                 timeout=float(settings.VISUAL_TIMEOUT)
             )
@@ -312,7 +116,134 @@ async def regenerate_visual(
 
         await db.commit()
         return {"status": "success", "image_url": image_url}
-
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Visual generation timed out.")
+    except ValueError as e:
+        logger.warning(f"Visual regeneration blocked/invalid: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to regenerate {payload.target_type} for {template_id}: {e}")
+        logger.exception("Visual regeneration failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/suggest-prompt", response_model=SuggestPromptResponse)
+async def suggest_prompt(
+    template_id: str,
+    payload: SuggestPromptRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate an AI prompt suggestion based on the asset's description."""
+    from backend.models.avatar import Avatar
+    from backend.models.world_entity import WorldScene, WorldEntity
+    
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Adventure template not found")
+
+    name = ""
+    description = ""
+
+    logger.info(f"Suggesting prompt for {payload.target_type} ({payload.target_id}) in adventure {template_id}")
+
+    if payload.target_type == "cover":
+        name = adv.title
+        description = adv.teaser or adv.original_prompt or ""
+    elif payload.target_type == "protagonist":
+        av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+        avatar = av_res.scalars().first()
+        if avatar:
+            name = avatar.name
+            description = avatar.description
+    elif payload.target_type == "scene":
+        res = await db.execute(select(WorldScene).where(WorldScene.id == payload.target_id, WorldScene.template_id == template_id))
+        scene = res.scalars().first()
+        if scene:
+            name = scene.label
+            description = scene.description
+    elif payload.target_type in ["npc", "object"]:
+        res = await db.execute(select(WorldEntity).where(WorldEntity.id == payload.target_id, WorldEntity.template_id == template_id))
+        entity = res.scalars().first()
+        if entity:
+            name = entity.name
+            description = entity.description
+
+    logger.info(f"Resolved name: '{name}', description length: {len(description) if description else 0}")
+
+    if not description:
+        logger.warning(f"No description found for {payload.target_type} {payload.target_id}")
+        return SuggestPromptResponse(suggested_prompt="")
+
+    # Enforce small model for prompt optimization
+    llm_settings = current_user.llm_settings or {}
+    provider = (
+        llm_settings.get("small_model_provider")
+        or llm_settings.get("complex_model_provider")
+        or llm_settings.get("preferred_provider")
+        or "openai"
+    )
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+    
+    llm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+    
+    user_prompt = prompts.IMAGE_PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE.format(
+        target_type=payload.target_type.upper(),
+        name=name,
+        description=description
+    )
+    
+    suggested = await llm.aexecute_simple_task(
+        system_prompt=prompts.IMAGE_PROMPT_SUGGESTION_SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        model=model
+    )
+    return SuggestPromptResponse(suggested_prompt=suggested.strip())
+
+@router.post("/upload")
+async def upload_visual(
+    template_id: str,
+    target_type: Literal["cover", "scene", "npc", "object", "protagonist"] = Form(...),
+    target_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually upload a visual asset."""
+    from backend.models.avatar import Avatar
+    from backend.models.world_entity import WorldScene, WorldEntity
+    
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Adventure template not found")
+
+    try:
+        content = await file.read()
+        file_ext = file.filename.split(".")[-1] if "." in file.filename else "png"
+        
+        filename = f"{target_type}_{target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
+        storage_path = os.path.join(settings.DATA_DIR, "adventures", template_id, "visuals")
+        os.makedirs(storage_path, exist_ok=True)
+        
+        full_path = os.path.join(storage_path, filename)
+        with open(full_path, "wb") as f:
+            f.write(content)
+            
+        relative_url = f"/data/adventures/{template_id}/visuals/{filename}"
+        
+        if target_type == "cover":
+            adv.image_url = relative_url
+        elif target_type == "protagonist":
+            av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+            avatar = av_res.scalars().first()
+            if avatar: avatar.profile_image = relative_url
+        elif target_type == "scene":
+            scene = await db.get(WorldScene, target_id)
+            if scene: scene.image_url = relative_url
+        elif target_type in ["npc", "object"]:
+            entity = await db.get(WorldEntity, target_id)
+            if entity: entity.image_url = relative_url
+            
+        await db.commit()
+        return {"status": "success", "image_url": relative_url}
+    except Exception as e:
+        logger.error(f"Failed to upload visual for {template_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

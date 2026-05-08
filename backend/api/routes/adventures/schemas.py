@@ -211,3 +211,10 @@ class AdventureTemplateImportPayload(BaseModel):
     file_path: Optional[str] = None
     content: Optional[Dict[str, Any]] = None
     rule_enforcement_mode: Optional[str] = None
+
+class SuggestPromptRequest(BaseModel):
+    target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
+    target_id: str
+
+class SuggestPromptResponse(BaseModel):
+    suggested_prompt: str

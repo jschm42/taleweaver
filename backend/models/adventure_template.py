@@ -55,11 +55,11 @@ class AdventureTemplate(Base, TimestampMixin):
     # New Concept Fields
     plot = Column(String(5000), nullable=True)
     rules = Column(String(5000), nullable=True)
-    intro_text = Column(String(5000), nullable=True)
-    walkthrough = Column(String(10000), nullable=True)
-    completed_condition = Column(String(1000), nullable=True)
-    gameover_condition = Column(String(1000), nullable=True)
-    original_prompt = Column(String(5000), nullable=True)
+    intro_text = Column(String(20000), nullable=True)
+    walkthrough = Column(String(20000), nullable=True)
+    completed_condition = Column(String(2000), nullable=True)
+    gameover_condition = Column(String(2000), nullable=True)
+    original_prompt = Column(String(20000), nullable=True)
     starting_timestamp = Column(Integer, default=0, nullable=False) # Minutes from Day 1, 00:00
     allow_dynamic_items = Column(Boolean, default=True, nullable=False)
 

@@ -359,3 +359,21 @@ GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "SESSION NOTES (REDUCED):\n"
     "{notes_json}\n"
 )
+# --- Prompt Suggestion ---
+
+IMAGE_PROMPT_SUGGESTION_SYSTEM_PROMPT = (
+    "You are an expert AI prompt engineer for image generation models. "
+    "Your goal is to transform a description into a HIGHLY COMPACT, evocative image prompt."
+    "\n\nCRITICAL GUIDELINES:\n"
+    "- SAFETY: Prompt MUST be safe and compliant with standard AI filters. No gore, sexual content, or offensive themes.\n"
+    "- COMPACTNESS: Keep the output strictly under 40 words. Focus only on essential visual atmosphere and key details.\n"
+    "- STYLE: Focus on lighting, mood, and composition. No technical flags or quality buzzwords.\n"
+    "- TEXT: Do NOT generate text, watermarks, or signatures inside the image."
+)
+
+IMAGE_PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE = (
+    "Asset Type: {target_type}\n"
+    "Asset Name: {name}\n"
+    "Asset Description: {description}\n\n"
+    "Please generate a detailed, safe, and atmospheric image generation prompt for this asset."
+)

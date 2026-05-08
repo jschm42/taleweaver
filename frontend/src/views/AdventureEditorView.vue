@@ -58,6 +58,7 @@ const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string }
 const visualPrompt = ref('')
 const showPromptDialog = ref(false)
 const isRegenerating = ref(false)
+const isSuggestingPrompt = ref(false)
 const useAdvancedModel = ref(false)
 const isUploading = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
@@ -699,6 +700,39 @@ async function regenerateVisual() {
     addNotification(error.message, 'error')
   } finally {
     isRegenerating.value = false
+  }
+}
+
+async function suggestPrompt() {
+  if (!selectedVisual.value || isSuggestingPrompt.value) return
+  isSuggestingPrompt.value = true
+  promptError.value = ''
+  try {
+    const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/suggest-prompt`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        target_type: selectedVisual.value.kind,
+        target_id: selectedVisual.value.id
+      })
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to suggest prompt')
+    }
+    const data = await res.json()
+    console.log('Suggested prompt received:', data)
+    if (data && data.suggested_prompt) {
+      visualPrompt.value = data.suggested_prompt
+      addNotification('AI suggested a prompt based on the description.', 'success')
+    } else {
+      addNotification('AI returned an empty suggestion. Please check the asset description.', 'warn')
+    }
+  } catch (error: any) {
+    promptError.value = error.message
+    addNotification(error.message, 'error')
+  } finally {
+    isSuggestingPrompt.value = false
   }
 }
 
@@ -1649,13 +1683,24 @@ const goBack = () => {
                 </div>
 
                 <div class="space-y-3">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Override Prompt</label>
+                  <div class="flex justify-between items-center">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Override Prompt</label>
+                    <button 
+                      @click="suggestPrompt" 
+                      :disabled="isSuggestingPrompt || isRegenerating"
+                      class="flex items-center gap-2 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                    >
+                      <i :class="['ra ra-crystal-wand', isSuggestingPrompt ? 'animate-spin' : '']"></i>
+                      <span>{{ isSuggestingPrompt ? 'Suggesting...' : 'Suggest Prompt' }}</span>
+                    </button>
+                  </div>
                   <p class="text-xs text-amber-300/80 leading-relaxed">Upload hint: {{ selectedVisual.hint }} Max file size: {{ formatBytes(VISUAL_UPLOAD_LIMITS[selectedVisual.kind].maxBytes) }}.</p>
                   <textarea 
                     v-model="visualPrompt" 
                     rows="5" 
+                    :disabled="isRegenerating || isSuggestingPrompt"
                     placeholder="Describe exactly what you want to see. This will ignore the current asset description..." 
-                    class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-white placeholder:text-slate-600 focus:border-cyan-500 outline-none transition-all leading-relaxed shadow-inner"
+                    class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-white placeholder:text-slate-600 focus:border-cyan-500 outline-none transition-all leading-relaxed shadow-inner disabled:opacity-50"
                   ></textarea>
                 </div>
 
@@ -1665,8 +1710,9 @@ const goBack = () => {
                     <p class="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Use Advanced Model for superior detail</p>
                   </div>
                   <button 
-                    @click="useAdvancedModel = !useAdvancedModel"
-                    :class="['w-12 h-6 rounded-full transition-all relative flex items-center px-1', useAdvancedModel ? 'bg-cyan-600' : 'bg-slate-800']"
+                    @click="!isRegenerating && !isSuggestingPrompt && (useAdvancedModel = !useAdvancedModel)"
+                    :disabled="isRegenerating || isSuggestingPrompt"
+                    :class="['w-12 h-6 rounded-full transition-all relative flex items-center px-1 disabled:opacity-50', useAdvancedModel ? 'bg-cyan-600' : 'bg-slate-800']"
                   >
                     <div :class="['w-4 h-4 bg-white rounded-full shadow-lg transition-transform duration-300', useAdvancedModel ? 'translate-x-6' : 'translate-x-0']"></div>
                   </button>

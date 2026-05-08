@@ -23,7 +23,7 @@ from backend.api.routes.adventures.schemas import (
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.utils.text_utils import generate_adventure_id
 
-router = APIRouter(tags=["Adventures"], redirect_slashes=False)
+router = APIRouter(tags=["Adventures"])
 logger = logging.getLogger(__name__)
 
 @router.get("/templates", response_model=List[AdventureTemplateSummaryResponse])
