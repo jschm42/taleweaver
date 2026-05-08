@@ -13,6 +13,12 @@ const activeSection = ref<Section>('keys')
 
 import { api } from '@/composables/useApi'
 
+type VoiceCatalogEntry = {
+  name: string
+  gender?: string
+  description?: string
+}
+
 // FORMS
 const keyForm = ref({
   provider: 'openai',
@@ -72,6 +78,7 @@ const ttsForm = ref({
     'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux',
     'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Vindemiatrix', 'Sadachbia', 'Sadaltager'
   ],
+  voice_catalog: [] as VoiceCatalogEntry[],
   selected_voice: 'Puck',
   sample_context: '',
   speech_rate: 1.0,
@@ -137,7 +144,16 @@ const fetchSettings = async () => {
     if (data.t2i_settings) t2iForm.value = { ...data.t2i_settings as any }
     if (data.game_settings) gameForm.value = { ...data.game_settings as any }
     if (data.tts_settings) {
-      ttsForm.value = { ...data.tts_settings as any }
+      const ttsSettings = data.tts_settings as any
+      const voiceList = Array.isArray(ttsSettings.voice_list) ? ttsSettings.voice_list : []
+      const voiceCatalog = Array.isArray(ttsSettings.voice_catalog)
+        ? ttsSettings.voice_catalog
+        : voiceList.map((name: string) => ({ name }))
+      ttsForm.value = {
+        ...ttsSettings,
+        voice_list: voiceList,
+        voice_catalog: voiceCatalog,
+      }
       audioService.speechRate.value = (data.tts_settings as any).speech_rate ?? 1.0
     }
     if ((data as any).available_constants) availableConstants.value = (data as any).available_constants
@@ -583,37 +599,12 @@ watch(
     )
   }
 )
-const voiceLabels: Record<string, string> = {
-  "Zephyr": "Zephyr – Bright",
-  "Puck": "Puck – Upbeat",
-  "Charon": "Charon – Informative",
-  "Kore": "Kore – Firm",
-  "Fenrir": "Fenrir – Excited",
-  "Leda": "Leda – Youthful",
-  "Orus": "Orus – Professional",
-  "Aoede": "Aoede – Breezy",
-  "Callirrhoe": "Callirrhoe – Calm",
-  "Autonoe": "Autonoe – Bright",
-  "Enceladus": "Enceladus – Breathy",
-  "Iapetus": "Iapetus – Clear",
-  "Umbriel": "Umbriel – Calm",
-  "Algieba": "Algieba – Smooth",
-  "Despina": "Despina – Smooth",
-  "Erinome": "Erinome – Serene",
-  "Algenib": "Algenib – Gritty",
-  "Rasalgethi": "Rasalgethi – Informative",
-  "Laomedeia": "Laomedeia – Upbeat",
-  "Achernar": "Achernar – Soft",
-  "Alnilam": "Alnilam – Firm",
-  "Schedar": "Schedar – Straight",
-  "Gacrux": "Gacrux – Adult",
-  "Pulcherrima": "Pulcherrima – Forward",
-  "Achird": "Achird – Friendly",
-  "Zubenelgenubi": "Zubenelgenubi – Casual",
-  "Vindemiatrix": "Vindemiatrix – Gentle",
-  "Sadachbia": "Sadachbia – Lively",
-  "Sadaltager": "Sadaltager – Knowledgeable",
-  "Sulafat": "Sulafat – Warm"
+function formatVoiceLabel(voiceName: string): string {
+  const entry = ttsForm.value.voice_catalog.find((voice) => voice.name === voiceName)
+  if (!entry) return voiceName
+  const detailParts = [entry.gender, entry.description].filter(Boolean)
+  if (detailParts.length === 0) return voiceName
+  return `${voiceName} (${detailParts.join(', ')})`
 }
 </script>
 
@@ -1216,7 +1207,7 @@ const voiceLabels: Record<string, string> = {
                 <div class="space-y-2">
                   <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Voice</label>
                   <select v-model="ttsForm.selected_voice" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
-                    <option v-for="voice in ttsForm.voice_list" :key="voice" :value="voice">{{ voiceLabels[voice] || voice }}</option>
+                    <option v-for="voice in ttsForm.voice_list" :key="voice" :value="voice">{{ formatVoiceLabel(voice) }}</option>
                   </select>
                 </div>
               </div>

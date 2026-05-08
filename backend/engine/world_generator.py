@@ -32,12 +32,17 @@ def _build_voice_assignment_requirement(
         return ""
 
     catalog_lines = "\n".join(
-        f"  - {entry['name']} ({entry['gender']})" for entry in catalog_entries
+        "  - "
+        + entry["name"]
+        + " ("
+        + ", ".join(part for part in [entry.get("gender"), entry.get("description")] if part)
+        + ")"
+        for entry in catalog_entries
     )
     return (
         "\nNPC VOICE ASSIGNMENT (ENABLED):\n"
         "- Assign each NPC an optional `voice` from this list.\n"
-        "- Use the character personality/role and implied gender presentation to choose a fitting voice when possible.\n"
+        "- Use the character personality/role, implied gender presentation, and voice description to choose a fitting voice when possible.\n"
         "- If no fitting choice exists, set `voice` to null.\n"
         "- Do NOT invent voice names outside this list.\n"
         f"{catalog_lines}\n"

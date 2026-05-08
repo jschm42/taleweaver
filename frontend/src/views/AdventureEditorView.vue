@@ -97,7 +97,7 @@ if (typeof window !== 'undefined') {
 
 const imageStylesCatalog = ref<any[]>([])
 const toneCatalog = ref<any[]>([])
-const availableVoices = ref<string[]>([])
+const availableVoices = ref<Array<{ name: string; gender?: string; description?: string }>>([])
 
 // Notifications state
 const notifications = ref<{ id: number; message: string; type: 'error' | 'success' | 'info' }[]>([])
@@ -250,11 +250,25 @@ async function fetchCatalogs() {
       const data = await res.json()
       imageStylesCatalog.value = data.image_styles_catalog || []
       toneCatalog.value = data.tone_catalog || []
-      availableVoices.value = Array.isArray(data.tts_settings?.voice_list) ? data.tts_settings.voice_list : []
+      const voiceCatalog = Array.isArray(data.tts_settings?.voice_catalog)
+        ? data.tts_settings.voice_catalog
+        : []
+      const voiceList = Array.isArray(data.tts_settings?.voice_list)
+        ? data.tts_settings.voice_list
+        : []
+      availableVoices.value = voiceCatalog.length > 0
+        ? voiceCatalog
+        : voiceList.map((name: string) => ({ name }))
     }
   } catch (error) {
     console.error('Failed to fetch catalogs:', error)
   }
+}
+
+function formatVoiceOption(voice: { name: string; gender?: string; description?: string }): string {
+  const detailParts = [voice.gender, voice.description].filter(Boolean)
+  if (detailParts.length === 0) return voice.name
+  return `${voice.name} (${detailParts.join(', ')})`
 }
 
 function normalizeDebugPayload(raw: any): any {
@@ -1789,7 +1803,7 @@ const goBack = () => {
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Voice</label>
                   <select v-model="editForm.voice" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-3 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all shadow-inner">
                     <option value="">Default narrator voice</option>
-                    <option v-for="voice in availableVoices" :key="voice" :value="voice">{{ voice }}</option>
+                    <option v-for="voice in availableVoices" :key="voice.name" :value="voice.name">{{ formatVoiceOption(voice) }}</option>
                   </select>
                   <p class="text-xs text-slate-500">Used for this NPC's direct dialogue in TTS. Empty keeps the global default voice.</p>
                 </div>

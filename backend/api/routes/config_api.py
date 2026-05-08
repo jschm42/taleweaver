@@ -24,7 +24,7 @@ from backend.core.llm_router import GameMasterLLM
 from backend.engine.media_engine import MediaEngine
 from backend.core.config import settings
 from backend.core.style_catalog import default_image_styles_catalog
-from backend.core.tts_voices import GOOGLE_TTS_VOICE_LIST
+from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_LIST
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -257,10 +257,13 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
 
 def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     """Return TTS settings with voice list, selected voice and style context."""
+    full_voice_list = list(GOOGLE_TTS_VOICE_LIST)
+    full_voice_catalog = [dict(entry) for entry in GOOGLE_TTS_VOICE_CATALOG]
     fallback = {
         "enabled": True,
         "selected_model": "gemini-3.1-flash-tts-preview",
-        "voice_list": list(GOOGLE_TTS_VOICE_LIST),
+        "voice_list": full_voice_list,
+        "voice_catalog": full_voice_catalog,
         "selected_voice": "Puck",
         "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling.",
         "speech_rate": 1.0
@@ -269,7 +272,6 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
         return fallback
 
     normalized = dict(settings)
-    full_voice_list = list(GOOGLE_TTS_VOICE_LIST)
     if "enabled" not in normalized:
         normalized["enabled"] = fallback["enabled"]
     if "selected_model" not in normalized:
@@ -277,6 +279,7 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     
     # Always ensure the full list is available
     normalized["voice_list"] = full_voice_list
+    normalized["voice_catalog"] = full_voice_catalog
     
     if "selected_voice" not in normalized:
         normalized["selected_voice"] = fallback["selected_voice"]
@@ -403,6 +406,7 @@ class TTSSettingsPayload(BaseModel):
     enabled: bool = True
     selected_model: str = "gemini-3.1-flash-tts-preview"
     voice_list: list[str]
+    voice_catalog: Optional[list[dict[str, str]]] = None
     selected_voice: str
     sample_context: str
     speech_rate: float = 1.0
