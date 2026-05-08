@@ -812,24 +812,39 @@ const goBack = () => {
           <!-- Quick Settings Row -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
             <div class="space-y-2">
-              <div class="flex justify-between items-center">
-                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
-                <div v-if="form.title !== adventure?.title" class="flex gap-2 animate-fade-in">
-                  <button @click="form.title = adventure.title" class="text-xs font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
-                  <button @click="saveChanges" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
-                </div>
+              <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
+              <div v-if="editingField === 'title'" class="flex gap-2 animate-fade-in">
+                <input v-model="tempValue" @keyup.enter="saveField" @keyup.esc="cancelEditing" type="text" class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all" />
+                <button @click="saveField" :disabled="isSaving" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg">
+                  <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+                  <Save v-else class="w-4 h-4" />
+                </button>
+                <button @click="cancelEditing" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all">
+                  <X class="w-4 h-4" />
+                </button>
               </div>
-              <input v-model="form.title" type="text" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all" />
+              <div v-else @click="startEditing('title', form.title)" class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center">
+                <span class="text-sm font-bold text-white">{{ form.title }}</span>
+                <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+              </div>
             </div>
             <div class="space-y-2">
-              <div class="flex justify-between items-center">
-                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Version</label>
-                <div v-if="form.version !== adventure?.version" class="flex gap-2 animate-fade-in">
-                  <button @click="form.version = adventure.version" class="text-xs font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
-                  <button @click="saveChanges" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
-                </div>
+              <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Version</label>
+              <div v-if="editingField === 'version'" class="flex gap-2 animate-fade-in">
+                <input v-model="tempValue" @keyup.enter="saveField" @keyup.esc="cancelEditing" type="text" maxlength="15" placeholder="e.g. 1.0.0" class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all" />
+                <button @click="saveField" :disabled="isSaving" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg">
+                  <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+                  <Save v-else class="w-4 h-4" />
+                </button>
+                <button @click="cancelEditing" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all">
+                  <X class="w-4 h-4" />
+                </button>
               </div>
-              <input v-model="form.version" type="text" maxlength="15" placeholder="e.g. 1.0.0" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:border-emerald-500/50 outline-none transition-all placeholder:text-slate-700" />
+              <div v-else @click="startEditing('version', form.version)" class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center">
+                <span v-if="form.version" class="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-widest">v{{ form.version }}</span>
+                <span v-else class="text-xs italic text-slate-600 uppercase tracking-widest">No version set</span>
+                <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+              </div>
             </div>
             <div class="space-y-2">
               <div class="flex justify-between items-center">
