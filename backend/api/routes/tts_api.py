@@ -180,9 +180,11 @@ async def generate_tts(
     except TTSRateLimitError as exc:
         retry_after = exc.retry_after_seconds
         detail = "TTS rate limit reached. Please retry in a moment."
+        headers = None
         if retry_after:
             detail = f"TTS rate limit reached. Retry in about {int(round(retry_after))}s."
-        raise HTTPException(status_code=429, detail=detail) from exc
+            headers = {"Retry-After": str(max(1, int(round(retry_after))))}
+        raise HTTPException(status_code=429, detail=detail, headers=headers) from exc
 
     if not audio_url:
         raise HTTPException(status_code=500, detail="Failed to generate speech.")

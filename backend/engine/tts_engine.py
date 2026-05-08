@@ -5,11 +5,15 @@ import logging
 import struct
 import math
 import asyncio
+import random
 import httpx
 from typing import Optional
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+_TTS_REQUEST_LOCK = asyncio.Lock()
+_TTS_PACING_STATE = {"last_request_at": 0.0}
 
 
 class TTSTimeoutError(RuntimeError):
@@ -34,7 +38,76 @@ def _parse_retry_after_seconds(response: httpx.Response) -> Optional[float]:
         return None
     if value <= 0:
         return None
-    return min(value, 30.0)
+    return min(value, 60.0)
+
+
+def _parse_google_retry_delay_seconds(response: httpx.Response) -> Optional[float]:
+    """Extract retry delay from Google error details when available.
+
+    Expected shape includes retry info entries like:
+    {"error": {"details": [{"retryDelay": "12s"}]}}
+    """
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+
+    details = (payload.get("error") or {}).get("details") or []
+    if not isinstance(details, list):
+        return None
+
+    for detail in details:
+        if not isinstance(detail, dict):
+            continue
+        retry_delay = detail.get("retryDelay")
+        if not isinstance(retry_delay, str):
+            continue
+        delay_text = retry_delay.strip().lower()
+        if delay_text.endswith("s"):
+            delay_text = delay_text[:-1]
+        try:
+            delay = float(delay_text)
+        except (TypeError, ValueError):
+            continue
+        if delay > 0:
+            return min(delay, 60.0)
+
+    return None
+
+
+def _compute_429_retry_delay_seconds(response: httpx.Response, attempt: int) -> float:
+    explicit_delay = _parse_retry_after_seconds(response)
+    if explicit_delay is None:
+        explicit_delay = _parse_google_retry_delay_seconds(response)
+
+    base_delay = float(getattr(settings, "TTS_RATE_LIMIT_BASE_DELAY_SECONDS", 2.0))
+    max_delay = float(getattr(settings, "TTS_RATE_LIMIT_MAX_DELAY_SECONDS", 30.0))
+    fallback_delay = min(base_delay * (2 ** max(0, attempt - 1)), max_delay)
+    delay = explicit_delay if explicit_delay is not None else fallback_delay
+
+    jitter_low = float(getattr(settings, "TTS_RATE_LIMIT_JITTER_MIN", 0.9))
+    jitter_high = float(getattr(settings, "TTS_RATE_LIMIT_JITTER_MAX", 1.15))
+    if jitter_low > jitter_high:
+        jitter_low, jitter_high = jitter_high, jitter_low
+    jitter = random.uniform(max(0.1, jitter_low), max(jitter_low, jitter_high))
+    return max(0.2, min(delay * jitter, max_delay))
+
+
+async def _wait_for_tts_request_slot() -> None:
+    """Smooth bursty frontend segment requests before hitting provider limits."""
+    min_interval_ms = float(getattr(settings, "TTS_REQUEST_MIN_INTERVAL_MS", 650))
+    min_interval = max(0.0, min_interval_ms / 1000.0)
+    if min_interval == 0:
+        return
+
+    loop = asyncio.get_running_loop()
+    async with _TTS_REQUEST_LOCK:
+        now = loop.time()
+        wait_seconds = (_TTS_PACING_STATE["last_request_at"] + min_interval) - now
+        if wait_seconds > 0:
+            await asyncio.sleep(wait_seconds)
+            now = loop.time()
+        _TTS_PACING_STATE["last_request_at"] = now
 
 
 def _tts_timeout_seconds(text: str) -> float:
@@ -277,21 +350,24 @@ class TTSEngine:
         try:
             timeout_seconds = _tts_timeout_seconds(text)
             timeout = httpx.Timeout(timeout_seconds, connect=20.0)
-            max_attempts = 3
+            max_attempts = int(getattr(settings, "TTS_RATE_LIMIT_MAX_RETRIES", 5))
+            max_attempts = max(1, min(max_attempts, 10))
             data: Optional[dict] = None
 
             async with httpx.AsyncClient() as client:
                 for attempt in range(1, max_attempts + 1):
+                    await _wait_for_tts_request_slot()
                     response = await client.post(url, json=payload, timeout=timeout)
 
                     if response.status_code == 429:
-                        retry_after = _parse_retry_after_seconds(response)
-                        delay = retry_after if retry_after is not None else min(2 ** attempt, 8)
+                        delay = _compute_429_retry_delay_seconds(response, attempt)
                         logger.warning(
-                            "Gemini TTS rate-limited (429), attempt %d/%d, retrying in %.1fs.",
+                            "Gemini TTS rate-limited (429), attempt %d/%d, retrying in %.1fs (model=%s, chars=%d).",
                             attempt,
                             max_attempts,
                             delay,
+                            model_name,
+                            len(text or ""),
                         )
 
                         if attempt < max_attempts:

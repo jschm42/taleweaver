@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     TTS_TIMEOUT_SECONDS: int = 120
     TTS_TIMEOUT_PER_1K_CHARS: int = 20
     TTS_TIMEOUT_MAX_SECONDS: int = 300
+    TTS_REQUEST_MIN_INTERVAL_MS: int = 650
+    TTS_RATE_LIMIT_MAX_RETRIES: int = 5
+    TTS_RATE_LIMIT_BASE_DELAY_SECONDS: float = 2.0
+    TTS_RATE_LIMIT_MAX_DELAY_SECONDS: float = 30.0
+    TTS_RATE_LIMIT_JITTER_MIN: float = 0.9
+    TTS_RATE_LIMIT_JITTER_MAX: float = 1.15
 
     @model_validator(mode="before")
     @classmethod
