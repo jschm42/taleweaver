@@ -100,7 +100,12 @@ class TTSEngine:
         user_content += "\n### DIRECTOR'S NOTES\nStyle:\n"
         if tone:
             user_content += f"{tone}\n"
-            
+        user_content += (
+            "The transcript may contain inline voice-direction tags in square brackets, "
+            "e.g. [shouting], [whispers], [very fast], [very slow], [excited], [sarcastically, one painfully slow word at a time]. "
+            "Honour these as acting cues — they describe the tone, emotion, or pace of the text that follows until the next paragraph.\n"
+        )
+
         user_content += "\n### SAMPLE CONTEXT\n"
         if style_description:
             user_content += f"{style_description}\n"

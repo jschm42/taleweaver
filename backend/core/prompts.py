@@ -291,7 +291,15 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "Do not mention numbers, IDs, or system terms. 1-3 paragraphs based on the context above.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     "Use the format: **Character Name:** \"Dialogue\". "
-    "Separate narrative prose from speech with a blank line."
+    "Separate narrative prose from speech with a blank line.\n\n"
+    "VOICE DIRECTION: Actively use tone and pace tags to give your narration life and atmosphere. "
+    "Open a paragraph with a tag such as [excited], [whispers], [shouting], [very fast], [very slow], "
+    "[tense], [solemn], [mocking], [dramatic pause], or a combined cue like "
+    "[sarcastically, one painfully slow word at a time]. "
+    "Use them whenever the mood calls for it — combat tension, hushed secrets, desperate warnings, "
+    "triumphant moments. Aim to use at least one voice tag per response where the scene warrants it. "
+    "A tag applies to the entire paragraph it opens — start a new paragraph when switching to a different tag. "
+    "Do not nest tags."
 )
 
 ADVENTURE_GENERATOR_INSTRUCTIONS = (

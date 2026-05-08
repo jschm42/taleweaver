@@ -359,6 +359,43 @@ function normalizeLineBreaks(text: string): string {
   return text.replace(/\n{3,}/g, '\n\n')
 }
 
+/** Escapes HTML special characters to prevent XSS in v-html interpolation. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/**
+ * Transforms GM voice-direction tags like [shouting] or [very fast] into
+ * styled inline labels. Each tag's scope ends at the next paragraph break.
+ * If a new [tag] begins on its own line without a preceding blank line,
+ * a paragraph break is forced before it.
+ */
+function formatVoiceTags(text: string): string {
+  // Force a paragraph break before any [tag] that starts a new line
+  // but is not already preceded by a blank line.
+  const withBreaks = text.replace(/(?<!\n)\n(?!\n)(\[[^\]\n]+\])/g, '\n\n$1')
+
+  // Split on paragraph boundaries, keeping the separators to reassemble.
+  const segments = withBreaks.split(/(\n\n+)/)
+
+  return segments.map(segment => {
+    if (!segment || /^\n+$/.test(segment)) return segment
+
+    // Match a voice tag at the very start of the segment.
+    const match = segment.match(/^\[([^\]\n]+)\]([ \t]*)/)
+    if (!match) return segment
+
+    const label = escapeHtml(match[1].trim())
+    const body = segment.slice(match[0].length)
+
+    return `<span class="voice-tag-label">${label}</span>${match[2] ? ' ' : ''}${body}`
+  }).join('')
+}
+
 function fixNewlines(text: string | null | undefined): string {
   if (!text) return ''
   return text.replace(/\\n/g, '\n')
@@ -510,7 +547,7 @@ function handleRetry() {
           ]"
         >
           <template v-for="(part, pIdx) in parseContent(displayMessageContent(msg))" :key="pIdx">
-            <span v-if="part.type === 'text'" v-html="formatBolds(normalizeLineBreaks(part.value))"></span>
+            <span v-if="part.type === 'text'" v-html="formatBolds(formatVoiceTags(normalizeLineBreaks(part.value)))"></span>
             <div v-else-if="part.type === 'image'" class="my-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
               <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />
               <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-xxs text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>
@@ -720,6 +757,16 @@ function handleRetry() {
 
 <style scoped>
 /* Target elements inside v-html */
+:deep(.voice-tag-label) {
+  font-style: italic;
+  font-weight: 700;
+  color: rgba(251, 191, 36, 0.65);
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-right: 0.15em;
+}
+
 :deep(.npc-portrait-trigger) {
   display: inline-flex;
   align-items: center;
