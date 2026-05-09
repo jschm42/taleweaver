@@ -405,21 +405,19 @@ function formatVoiceTags(text: string): string {
   // but is not already preceded by a blank line.
   const withBreaks = text.replace(/(?<!\n)\n(?!\n)(\[[^\]\n]+\])/g, '\n\n$1')
 
-  // Split on paragraph boundaries, keeping the separators to reassemble.
-  const segments = withBreaks.split(/(\n\n+)/)
-
-  return segments.map(segment => {
-    if (!segment || /^\n+$/.test(segment)) return segment
-
-    // Match a voice tag at the very start of the segment.
-    const match = segment.match(/^\[([^\]\n]+)\]([ \t]*)/)
-    if (!match) return segment
-
-    const label = escapeHtml(match[1].trim())
-    const body = segment.slice(match[0].length)
-
-    return `<span class="voice-tag-label">${label}</span>${match[2] ? ' ' : ''}${body}`
-  }).join('')
+  // Style any [tag] that is at the start of a line, segment, or follows a quote/colon
+  // This allows tags inside dialogue like Architect: "[matter-of-fact] ..."
+  return withBreaks.replace(/(\[[^\]\n]+\])/g, (match, tag, offset, fullText) => {
+    const prevChar = offset > 0 ? fullText[offset - 1] : ''
+    
+    // Check if tag is "leading" in its context (start of string, whitespace, quotes, or colon)
+    if (!prevChar || /[\s"':]/.test(prevChar)) {
+      const label = escapeHtml(tag.slice(1, -1).trim())
+      return `<span class="voice-tag-label">${label}</span>`
+    }
+    
+    return match
+  })
 }
 
 function fixNewlines(text: string | null | undefined): string {

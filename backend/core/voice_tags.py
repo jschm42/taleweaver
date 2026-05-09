@@ -98,7 +98,7 @@ ELEVENLABS_VOICE_TAG_CATALOG: Final[tuple[str, ...]] = (
     "Italian accent"
 )
 
-VOICE_TAG_SET: Final[set[str]] = set(VOICE_TAG_CATALOG)
+VOICE_TAG_SET: Final[set[str]] = set(VOICE_TAG_CATALOG) | set(ELEVENLABS_VOICE_TAG_CATALOG)
 
 
 def build_voice_tag_catalog_prompt_block(provider: str = "google") -> str:
