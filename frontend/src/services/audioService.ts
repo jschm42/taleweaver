@@ -46,6 +46,7 @@ class AudioService {
   public isUnlocked = ref(false)
   public isPlaying = ref(false)
   public isGenerating = ref(false)
+  public currentlyGeneratingContent = ref<string | null>(null)
   public lastError = ref<string | null>(null)
   public currentText = ref<string | null>(null)
   public autoSpeechEnabled = ref(false)
@@ -475,6 +476,7 @@ class AudioService {
     })
 
     try {
+      this.currentlyGeneratingContent.value = normalizedText
       this.currentText.value = ttsText
       this.isPlaying.value = true
 
@@ -585,6 +587,7 @@ class AudioService {
       }
 
       this.isGenerating.value = false
+      this.currentlyGeneratingContent.value = null
     } catch (err) {
       console.error('TTS Playback failed', err)
       this.setPlaybackError(err)
@@ -592,6 +595,7 @@ class AudioService {
       if (token === this.playbackToken) {
         this.isPlaying.value = false
         this.isGenerating.value = false
+        this.currentlyGeneratingContent.value = null
         this.currentText.value = null
       }
     }
@@ -614,6 +618,7 @@ class AudioService {
     }
     this.isPlaying.value = false
     this.isGenerating.value = false
+    this.currentlyGeneratingContent.value = null
     this.currentText.value = null
     this.lastError.value = null
   }

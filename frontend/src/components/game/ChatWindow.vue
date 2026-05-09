@@ -594,7 +594,7 @@ onUnmounted(() => {
             {{ formatTime(msg.timestamp) }}
           </span>
           <span
-            v-if="msg.role === 'assistant' && audioService.isGenerating.value && isLatestAssistantMessage(idx)"
+            v-if="msg.role === 'assistant' && audioService.isGenerating.value && audioService.currentlyGeneratingContent.value === msg.content"
             class="inline-flex items-center gap-2 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30"
             title="Voice generation in progress"
           >
