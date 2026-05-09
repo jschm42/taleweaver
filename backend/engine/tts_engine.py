@@ -362,37 +362,40 @@ class TTSEngine:
         # However, we keep the signature for internal use in _synthesize_google.
         valid_speaker_voices: dict[str, str] = {}
         
-        context_notes: list[str] = []
-        if tone:
-            context_notes.append(f"Tone: {tone}")
+        # Build structured prompt sections
+        prompt_sections = []
 
-        if include_style_context and style_description:
-            cleaned_style = str(style_description).strip()
-            if cleaned_style:
-                context_notes.append(f"Style context: {cleaned_style[:220]}")
-
-        if title or scene_name:
-            location = " / ".join([part for part in [title, scene_name] if part])
-            if location:
-                context_notes.append(f"Scene: {location}")
-        elif scene_description:
+        # 1. THE SCENE section
+        scene_parts = []
+        location = " / ".join([part for part in [title, scene_name] if part])
+        if location:
+            scene_parts.append(f"## THE SCENE: {location}")
+        else:
+            scene_parts.append("## THE SCENE")
+        
+        if scene_description:
             cleaned_scene = str(scene_description).strip()
             if cleaned_scene:
-                context_notes.append(f"Scene: {cleaned_scene[:180]}")
+                scene_parts.append(cleaned_scene)
+        
+        if scene_parts:
+            prompt_sections.append("\n".join(scene_parts))
 
-        prompt_parts = [
-            "Speak the transcript naturally and clearly.",
-            "Do not read metadata labels or markdown markers aloud.",
-        ]
-        if use_vocal_tags:
-            prompt_parts.append("Interpret tags in brackets like [Laughs], [Sighs], or (whispers) as emotional cues and vocal expressions. Do not speak these tags as literal text; instead, perform them vocally.")
-        else:
-            prompt_parts.append("Read the text strictly as written, ignoring any emotional markers in brackets.")
-        if context_notes:
-            prompt_parts.append("Context: " + " | ".join(context_notes))
-        prompt_parts.append("Transcript:")
-        prompt_parts.append(text)
-        user_content = "\n".join(prompt_parts)
+        # 3. SAMPLE CONTEXT section (Tone + Style context)
+        context_parts = ["### SAMPLE CONTEXT"]
+        if include_style_context:
+            if style_description:
+                context_parts.append(str(style_description).strip())
+            if tone:
+                context_parts.append(f"Tone: {tone}")
+        
+        if len(context_parts) > 1: # Only add if we have actual content beyond the label
+            prompt_sections.append("\n".join(context_parts))
+
+        # 4. TRANSCRIPT section
+        prompt_sections.append(f"#### TRANSCRIPT\n{text}")
+
+        user_content = "\n\n".join(prompt_sections)
 
         # Note: Using generateContent with responseModalities: ["AUDIO"]
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
