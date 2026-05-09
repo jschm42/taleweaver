@@ -143,11 +143,6 @@ class AudioService {
       .replace(/!\[([^\]]*)\]\([^\)]*\)/g, '$1')
       // Drop standalone portrait marker lines that should never be spoken.
       .replace(/^\s*[^\n]*-portrait\s*$/gim, '')
-        // Avoid provider-side speaker parsing on narrative sentence colons.
-        // Preserve time-like numeric patterns such as 08:30.
-        .replace(/(\d{1,2}):(\d{2})/g, '$1__TW_TIME_COLON__$2')
-        .replace(/:\s+/g, ', ')
-        .replace(/__TW_TIME_COLON__/g, ':')
       // Normalize excessive whitespace after removals.
       .replace(/\s{2,}/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
