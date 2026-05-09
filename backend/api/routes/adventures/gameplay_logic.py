@@ -2174,6 +2174,9 @@ class GameTurnManager:
         except ValueError as e:
             yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
             return
+        tts_settings = self.user.tts_settings or {}
+        use_vocal_tags = tts_settings.get("use_vocal_tags", True)
+        
         narration_prompt = (
             narration_system_prompt + "\n\n" + 
             prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
@@ -2181,6 +2184,12 @@ class GameTurnManager:
             ) + "\n\n" +
             prompts.GM_NARRATION_MANDATORY_FORMATTING
         )
+        
+        if use_vocal_tags:
+            narration_prompt += "\n\n" + prompts.GM_NARRATION_VOICE_DIRECTION
+            # Add a strong reminder at the end if enabled to ensure the LLM doesn't ignore it
+            narration_prompt += "\n\nREMINDER: Use emotional vocal tags like [Laughs] or [Sighs] where appropriate to give your narration life."
+
 
         if run_chat_progression_pass:
             narration_prompt += "\n\n" + prompts.GM_CHAT_NARRATION_SUFFIX

@@ -87,57 +87,43 @@ async def generate_tts(
 
     # Use global settings owner (admin) for consistent runtime behavior.
     settings_user = await _resolve_tts_settings_source_user(db, current_user)
+    logger.info("[TTS] Resolving settings from user: %s (ID: %s, Role: %s)", settings_user.username, settings_user.id, settings_user.role)
 
-    # 1. Resolve API Key
-    # Prefer env key, then user key
-    api_key = settings.get_env_api_key("google")
+    # 1. Resolve Provider and API Key
+    tts_settings = settings_user.tts_settings or {}
+    if not tts_settings.get("enabled", True):
+        raise HTTPException(status_code=400, detail="TTS is globally disabled in settings.")
+
+    provider = tts_settings.get("provider", "google").lower()
+    api_key = settings.get_env_api_key(provider)
     if not api_key and settings_user.encrypted_api_keys:
-        enc_key = settings_user.encrypted_api_keys.get("google")
+        enc_key = settings_user.encrypted_api_keys.get(provider)
         if enc_key:
             api_key = encryption_util.decrypt_key(enc_key)
 
     if not api_key:
-        raise HTTPException(status_code=400, detail="Google API Key not configured for TTS.")
+        raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
 
     # 2. Get TTS Settings
-    tts_settings = settings_user.tts_settings or {}
-    
-    if not tts_settings.get("enabled", True):
-        raise HTTPException(status_code=400, detail="TTS is globally disabled in settings.")
-
     voice = tts_settings.get("selected_voice", "Puck")
-    allowed_voices = set(tts_settings.get("voice_list") or [])
-    if payload.voice_override:
-        if payload.voice_override in allowed_voices:
-            voice = payload.voice_override
-        else:
-            logger.warning("Ignoring invalid voice override '%s'. Falling back to default voice.", payload.voice_override)
+    elevenlabs_voice_id = tts_settings.get("elevenlabs_voice_id", "")
+    
+    # Coerce to boolean in case it's stored as 0/1 or string "true"/"false" in DB
+    raw_vocal_tags = tts_settings.get("use_vocal_tags", True)
+    use_vocal_tags = str(raw_vocal_tags).lower() in ("true", "1", "yes", "on") if not isinstance(raw_vocal_tags, bool) else raw_vocal_tags
+    
+    logger.info("[TTS] Vocal tags enabled: %s (raw value: %s)", use_vocal_tags, raw_vocal_tags)
+    
     style = tts_settings.get("sample_context")
     model = str(tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview") or "").strip()
     model = TTS_MODEL_ALIASES.get(model, model)
-    if model not in SUPPORTED_TTS_MODELS:
-        logger.warning("Unsupported TTS model '%s' configured; falling back to gemini-3.1-flash-tts-preview.", model)
+    if provider == "google" and model not in SUPPORTED_TTS_MODELS:
+        logger.warning("Unsupported Google TTS model '%s' configured; falling back to gemini-3.1-flash-tts-preview.", model)
         model = "gemini-3.1-flash-tts-preview"
-    logger.info("TTS selected model for request: %s", model)
-
-    speaker_voices: Optional[dict[str, str]] = None
-    if payload.speaker_voices:
-        normalized: dict[str, str] = {}
-        for raw_speaker, raw_voice in payload.speaker_voices.items():
-            speaker = str(raw_speaker or "").strip()
-            requested_voice = str(raw_voice or "").strip()
-            if not speaker or not requested_voice:
-                continue
-            if requested_voice in allowed_voices:
-                normalized[speaker] = requested_voice
-            else:
-                logger.warning(
-                    "Ignoring invalid speaker voice mapping '%s' -> '%s'.",
-                    speaker,
-                    requested_voice,
-                )
-        if normalized:
-            speaker_voices = normalized
+    
+    # Log provider and model
+    logger.info("TTS provider: %s, model: %s", provider, model)
+    logger.info("[API] TTS Request: provider=%s, model=%s, text='%s...'", provider, model, payload.text[:50])
 
     normalized_adventure_id = payload.adventure_id
     normalized_session_id = payload.session_id
@@ -159,8 +145,10 @@ async def generate_tts(
     try:
         audio_url = await TTSEngine.generate_speech(
             text=payload.text,
+            provider=provider,
             voice=voice,
-            speaker_voices=speaker_voices,
+            elevenlabs_voice_id=elevenlabs_voice_id,
+            use_vocal_tags=use_vocal_tags,
             api_key=api_key,
             adventure_id=normalized_adventure_id,
             session_id=normalized_session_id,
@@ -170,7 +158,7 @@ async def generate_tts(
             title=payload.title,
             scene_name=payload.scene_name,
             tone=payload.tone,
-            include_style_context=(payload.voice_override is None and not speaker_voices),
+            include_style_context=(payload.voice_override is None and not payload.speaker_voices),
         )
     except TTSTimeoutError as exc:
         raise HTTPException(
@@ -190,3 +178,46 @@ async def generate_tts(
         raise HTTPException(status_code=500, detail="Failed to generate speech.")
 
     return {"audio_url": audio_url}
+
+
+@router.post("/test-connection")
+async def test_tts_connection_v2(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates a short test sentence to verify TTS configuration."""
+    from backend.api.routes.config_api import _resolve_global_settings_owner
+    user = await _resolve_global_settings_owner(db, current_user)
+    tts_settings = user.tts_settings or {}
+    
+    provider = tts_settings.get("provider", "google").lower()
+    api_key = settings.get_env_api_key(provider)
+    if not api_key and user.encrypted_api_keys:
+        enc_key = user.encrypted_api_keys.get(provider)
+        if enc_key:
+            api_key = encryption_util.decrypt_key(enc_key)
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
+
+    use_vocal_tags = tts_settings.get("use_vocal_tags", True)
+    test_text = "Tale Weaver connection test successful!"
+    if use_vocal_tags:
+        test_text = "[excited] Tale Weaver connection test successful!"
+
+    
+    try:
+        audio_url = await TTSEngine.generate_speech(
+            text=test_text,
+            provider=provider,
+            voice=tts_settings.get("selected_voice", "Puck"),
+            elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
+            use_vocal_tags=tts_settings.get("use_vocal_tags", True),
+            api_key=api_key,
+            model_name=tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview"),
+        )
+        if not audio_url:
+            return {"status": "error", "message": "Failed to generate test audio."}
+        return {"status": "success", "audio_url": audio_url}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

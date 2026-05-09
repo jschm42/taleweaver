@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from typing import Optional, Any
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +28,20 @@ from backend.core.security import encryption_util
 from backend.core.models_config import (
     LLM_PROVIDERS,
     IMAGE_PROVIDERS,
+    TTS_PROVIDERS,
     PREDEFINED_LLM_MODELS,
-    PREDEFINED_IMAGE_MODELS
+    PREDEFINED_IMAGE_MODELS,
+    PREDEFINED_TTS_MODELS
 )
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.media_engine import MediaEngine
 from backend.core.config import settings
 from backend.core.style_catalog import default_image_styles_catalog
 from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_LIST
+from backend.engine.tts_engine import TTSEngine
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
+print(f"DEBUG: Loading config_api module, router prefix: {router.prefix}")
 
 DEFAULT_SMALL_MAX_TOKENS = 12288
 DEFAULT_COMPLEX_MAX_TOKENS = 24576
@@ -271,10 +276,13 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     full_voice_catalog = [dict(entry) for entry in GOOGLE_TTS_VOICE_CATALOG]
     fallback = {
         "enabled": True,
+        "provider": "google",
         "selected_model": "gemini-3.1-flash-tts-preview",
         "voice_list": full_voice_list,
         "voice_catalog": full_voice_catalog,
         "selected_voice": "Puck",
+        "elevenlabs_voice_id": "",
+        "use_vocal_tags": True,
         "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling.",
         "speech_rate": 1.0
     }
@@ -298,11 +306,19 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     if selected_model in TTS_MODEL_ALIASES:
         normalized["selected_model"] = TTS_MODEL_ALIASES[selected_model]
 
+    # Ensure new fields exist
+    if "provider" not in normalized:
+        normalized["provider"] = "google"
+    if "elevenlabs_voice_id" not in normalized:
+        normalized["elevenlabs_voice_id"] = ""
+    if "use_vocal_tags" not in normalized:
+        normalized["use_vocal_tags"] = True
+
     if "enabled" not in normalized:
         normalized["enabled"] = fallback["enabled"]
     if "selected_model" not in normalized:
         normalized["selected_model"] = fallback["selected_model"]
-    elif normalized.get("selected_model") not in SUPPORTED_TTS_MODELS:
+    elif normalized.get("provider") == "google" and normalized.get("selected_model") not in SUPPORTED_TTS_MODELS:
         normalized["selected_model"] = fallback["selected_model"]
     
     # Always ensure the full list is available
@@ -432,10 +448,13 @@ class GameSettingsPayload(BaseModel):
 
 class TTSSettingsPayload(BaseModel):
     enabled: bool = True
+    provider: str = "google"
     selected_model: str = "gemini-3.1-flash-tts-preview"
+    selected_voice: str = "Puck"
+    elevenlabs_voice_id: str = ""
+    use_vocal_tags: bool = True
     voice_list: list[str] = Field(default_factory=list)
     voice_catalog: Optional[list[dict[str, str]]] = None
-    selected_voice: str = "Puck"
     sample_context: str = ""
     speech_rate: float = 1.0
 
@@ -473,7 +492,7 @@ async def get_settings(
     
     def get_keys_status(db_keys):
         status = {}
-        all_providers = {p["id"] for p in LLM_PROVIDERS} | {p["id"] for p in IMAGE_PROVIDERS}
+        all_providers = {p["id"] for p in LLM_PROVIDERS} | {p["id"] for p in IMAGE_PROVIDERS} | {p["id"] for p in TTS_PROVIDERS}
         for p in all_providers:
             # Check environment first
             if settings.get_env_api_key(p):
@@ -499,6 +518,7 @@ async def get_settings(
             "available_constants": {
                 "llm_providers": LLM_PROVIDERS,
                 "image_providers": IMAGE_PROVIDERS,
+                "tts_providers": TTS_PROVIDERS,
                 "predefined_llm_models": PREDEFINED_LLM_MODELS,
                 "predefined_image_models": PREDEFINED_IMAGE_MODELS,
             }
@@ -527,6 +547,7 @@ async def get_settings(
         "available_constants": {
             "llm_providers": LLM_PROVIDERS,
             "image_providers": IMAGE_PROVIDERS,
+            "tts_providers": TTS_PROVIDERS,
             "predefined_llm_models": PREDEFINED_LLM_MODELS,
             "predefined_image_models": PREDEFINED_IMAGE_MODELS,
         }
@@ -610,23 +631,9 @@ async def update_tts_settings(
     """Updates the TTS settings."""
     user = await _resolve_global_settings_owner(db, current_user)
 
-    existing_settings = dict(user.tts_settings or {})
-    incoming_settings = payload.model_dump(exclude_unset=True)
-
-    # Fallback for older clients that post alternate model keys.
-    if "selected_model" not in incoming_settings:
-        selected_model_legacy = (
-            incoming_settings.get("model")
-            or incoming_settings.get("tts_model")
-            or incoming_settings.get("single_voice_model")
-            or incoming_settings.get("single_voice_tts_model")
-        )
-        if selected_model_legacy:
-            incoming_settings["selected_model"] = selected_model_legacy
-
-    merged_settings = {**existing_settings, **incoming_settings}
-
-    user.tts_settings = _normalize_tts_settings(merged_settings)
+    # Use full model dump to capture all fields from the UI, then normalize.
+    user.tts_settings = _normalize_tts_settings(payload.model_dump())
+    
     await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "TTS settings updated."}
@@ -677,38 +684,70 @@ async def test_vision_connection(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Tests the connection to an Image provider by generating a wizard."""
+    """Tests the connection to an image provider by generating a wizard portrait."""
     user = await _resolve_global_settings_owner(db, current_user)
-
     provider_key = payload.provider.lower()
     
-    # Resolve API Key (check ENV first)
     api_key = settings.get_env_api_key(provider_key)
-    if not api_key and provider_key != "ollama":
+    if not api_key:
         if not user.encrypted_api_keys or provider_key not in user.encrypted_api_keys:
             return {"status": "error", "message": f"No API key for {payload.provider}"}
         api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider_key])
 
     try:
-        # Use a scratch directory for test images
         test_dir = os.path.join(settings.DATA_DIR, "scratch", "test_connection")
         os.makedirs(test_dir, exist_ok=True)
-        
         provider_options = {"ollama_url": payload.ollama_url} if payload.ollama_url else {}
         
         img_url = await MediaEngine.generate_image(
-            prompt="A Wizard",
+            prompt="A Wizard portrait",
             model=payload.model,
             api_key=api_key,
             provider=payload.provider,
             target_dir=test_dir,
             provider_options=provider_options
         )
-        
         if img_url:
             return {"status": "success", "message": "Image generation successful!", "image_url": img_url}
         else:
-            return {"status": "error", "message": "Image generation failed (returned no URL)."}
+            return {"status": "error", "message": "Image generation failed."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@router.post("/test-tts")
+async def test_tts_connection(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates a short test sentence to verify TTS configuration."""
+    user = await _resolve_global_settings_owner(db, current_user)
+    tts_settings = user.tts_settings or {}
+    
+    provider = tts_settings.get("provider", "google").lower()
+    api_key = settings.get_env_api_key(provider)
+    if not api_key and user.encrypted_api_keys:
+        enc_key = user.encrypted_api_keys.get(provider)
+        if enc_key:
+            api_key = encryption_util.decrypt_key(enc_key)
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
+
+    test_text = "Tale Weaver connection test successful! The journey begins now."
+    
+    try:
+        audio_url = await TTSEngine.generate_speech(
+            text=test_text,
+            provider=provider,
+            voice=tts_settings.get("selected_voice", "Puck"),
+            elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
+            use_vocal_tags=tts_settings.get("use_vocal_tags", True),
+            api_key=api_key,
+            model_name=tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview"),
+        )
+        if not audio_url:
+            return {"status": "error", "message": "Failed to generate test audio."}
+        return {"status": "success", "audio_url": audio_url}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -847,3 +886,10 @@ async def update_game_settings(
     await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": "Game settings updated."}
+
+@router.get("/tts/elevenlabs-models")
+async def get_elevenlabs_models():
+    """Returns a list of available ElevenLabs models from central config."""
+    models = PREDEFINED_TTS_MODELS.get("elevenlabs", [])
+    # Return in the format expected by frontend: {model_id, name}
+    return [{"model_id": m["id"], "name": m["name"]} for m in models]

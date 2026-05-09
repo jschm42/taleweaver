@@ -146,6 +146,10 @@ async def health_check() -> dict:
     """Returns a simple liveness signal for load-balancer health checks."""
     return {"status": "ok"}
 
+@app.post("/api/ping")
+async def ping():
+    return {"message": "pong"}
+
 
 if __name__ == "__main__":
     import uvicorn

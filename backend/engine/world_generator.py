@@ -41,30 +41,7 @@ def _build_voice_assignment_requirement(
     enabled: bool,
     available_voice_list: Optional[List[str]] = None,
 ) -> str:
-    if not enabled:
-        return ""
-
-    allowed_names = set(available_voice_list or GOOGLE_TTS_VOICE_NAMES)
-    catalog_entries = [entry for entry in GOOGLE_TTS_VOICE_CATALOG if entry["name"] in allowed_names]
-    if not catalog_entries:
-        return ""
-
-    catalog_lines = "\n".join(
-        "  - "
-        + entry["name"]
-        + " ("
-        + ", ".join(part for part in [entry.get("gender"), entry.get("description")] if part)
-        + ")"
-        for entry in catalog_entries
-    )
-    return (
-        "\nNPC VOICE ASSIGNMENT (ENABLED):\n"
-        "- Assign each NPC an optional `voice` from this list.\n"
-        "- Use the character personality/role, implied gender presentation, and voice description to choose a fitting voice when possible.\n"
-        "- If no fitting choice exists, set `voice` to null.\n"
-        "- Do NOT invent voice names outside this list.\n"
-        f"{catalog_lines}\n"
-    )
+    return ""
 
 
 def _image_generation_timeout_seconds() -> float:
@@ -200,7 +177,6 @@ class WorldEntitySchema(BaseModel):
     movement_type: Optional[str] = Field(None, description="One of: STATIONARY, MOVABLE")
     hp: Optional[int] = Field(None, description="Optional hitpoints")
     mana: Optional[int] = Field(None, description="Optional mana")
-    voice: Optional[str] = Field(None, description="Optional Google TTS voice name for spoken dialogue.")
     stamina: Optional[int] = Field(None, description="Optional stamina")
     is_attackable: bool = Field(True, description="If False, the player cannot start a fight with this NPC.")
 

@@ -205,8 +205,10 @@ class TTSEngine:
     @staticmethod
     async def generate_speech(
         text: str,
+        provider: str = "google",
         voice: str = "Puck",
-        speaker_voices: Optional[dict[str, str]] = None,
+        elevenlabs_voice_id: str = "",
+        use_vocal_tags: bool = True,
         api_key: Optional[str] = None,
         adventure_id: Optional[str] = None,
         session_id: Optional[str] = None,
@@ -220,113 +222,196 @@ class TTSEngine:
         **_unused_kwargs: object,
     ) -> Optional[str]:
         """
+        Generates speech using the specified provider and returns the relative URL to the audio file.
+        """
+        logger.info("[TTS] generate_speech called for provider: %s, text length: %d", provider, len(text or ''))
+        if not api_key:
+            logger.error(f"No API key provided for {provider} TTS.")
+            return None
+
+        # Handle vocal tags toggle
+        if not use_vocal_tags:
+            logger.info("[TTS] Vocal tags are DISABLED. Stripping tags from input text.")
+            # Simple regex to remove common vocal tags like [Laughs], (Sighs), etc. if they are in brackets
+            import re
+            original_len = len(text or "")
+            text = re.sub(r'\[.*?\]', '', text)
+            text = re.sub(r'\(.*?\)', '', text)
+            text = text.strip()
+            logger.info("[TTS] Text stripped: %d -> %d characters", original_len, len(text))
+        else:
+            logger.info("[TTS] Vocal tags are ENABLED. Keeping tags in input text.")
+
+        if provider == "elevenlabs":
+            # Sanitize model_id: ElevenLabs models usually use underscores, but some might be sent with dots
+            sanitized_model = model_name.replace(".", "_") if model_name else "eleven_multilingual_v2"
+            return await TTSEngine._synthesize_elevenlabs(
+                text=text,
+                voice_id=elevenlabs_voice_id,
+                api_key=api_key,
+                adventure_id=adventure_id,
+                session_id=session_id,
+                model_id=sanitized_model
+            )
+        else:
+            return await TTSEngine._synthesize_google(
+                text=text,
+                voice=voice,
+                api_key=api_key,
+                adventure_id=adventure_id,
+                session_id=session_id,
+                include_style_context=include_style_context,
+                scene_description=scene_description,
+                style_description=style_description,
+                model_name=model_name,
+                tone=tone,
+                use_vocal_tags=use_vocal_tags,
+                title=title,
+                scene_name=scene_name
+            )
+
+    @staticmethod
+    async def _synthesize_elevenlabs(
+        text: str,
+        voice_id: str,
+        api_key: str,
+        adventure_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        model_id: str = "eleven_multilingual_v2",
+    ) -> Optional[str]:
+        """
+        Generates speech using ElevenLabs Streaming API.
+        """
+        if not voice_id:
+            logger.error("No ElevenLabs Voice ID provided.")
+            return None
+
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+        logger.info("[TTS DEBUG] ElevenLabs URL: %s", url)
+        logger.info("[TTS DEBUG] ElevenLabs Input (Model: %s, Voice ID: %s): %s", model_id, voice_id, text)
+        
+        headers = {
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": api_key,
+        }
+        data = {
+            "text": text,
+            "model_id": model_id or "eleven_multilingual_v2",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+            }
+        }
+
+        try:
+            timeout = httpx.Timeout(60.0, connect=10.0)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=data, headers=headers, timeout=timeout)
+                
+                if response.status_code != 200:
+                    logger.error(f"ElevenLabs TTS Error {response.status_code}: {response.text}")
+                    return None
+                
+                audio_bytes = response.content
+
+            if not audio_bytes:
+                logger.error("ElevenLabs TTS returned zero audio bytes.")
+                return None
+
+            audio_dir = _resolve_audio_output_dir(adventure_id, session_id=session_id)
+            os.makedirs(audio_dir, exist_ok=True)
+
+            filename = f"{uuid.uuid4()}.mp3"
+            filepath = os.path.join(audio_dir, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(audio_bytes)
+
+            return _public_url_from_filepath(filepath)
+
+        except Exception:
+            logger.exception("Failed to generate speech with ElevenLabs")
+            return None
+
+    @staticmethod
+    async def _synthesize_google(
+        text: str,
+        voice: str,
+        api_key: str,
+        adventure_id: Optional[str],
+        session_id: Optional[str] = None,
+        include_style_context: bool = True,
+        scene_description: Optional[str] = None,
+        style_description: Optional[str] = None,
+        model_name: str = "gemini-3.1-flash-tts-preview",
+        tone: Optional[str] = None,
+        use_vocal_tags: bool = True,
+        title: Optional[str] = None,
+        scene_name: Optional[str] = None,
+        **_kwargs: object,
+    ) -> Optional[str]:
+        """
         Generates speech and returns the relative URL to the audio file.
         """
         if not api_key:
             logger.error("No Google API key provided for TTS.")
             return None
 
-        valid_speaker_voices = {
-            str(speaker).strip(): str(voice_name).strip()
-            for speaker, voice_name in (speaker_voices or {}).items()
-            if str(speaker).strip() and str(voice_name).strip()
-        }
-        if len(valid_speaker_voices) > 2:
-            # Gemini multi-speaker supports at most two speakers.
-            limited_items = list(valid_speaker_voices.items())[:2]
-            valid_speaker_voices = dict(limited_items)
-            logger.info(
-                "Limiting multi-speaker TTS to first two speakers: %s",
-                list(valid_speaker_voices.keys()),
-            )
-
-        # Use a structured prompt format (similar to Gemini SDK examples) so
-        # voice/style instructions are applied more reliably.
-        prompt_parts = [
-            "Read the following transcript based on the audio profile and director's note.",
-            "",
-            "# Audio Profile",
-            "A helpful and professional personal assistant.",
-            "",
-            "# Director's note",
-        ]
-
-        director_notes: list[str] = []
+        # Removed multi-speaker support as we transition to single speaker model.
+        # However, we keep the signature for internal use in _synthesize_google.
+        valid_speaker_voices: dict[str, str] = {}
+        
+        context_notes: list[str] = []
         if tone:
-            director_notes.append(f"Style: {tone}.")
+            context_notes.append(f"Tone: {tone}")
+
         if include_style_context and style_description:
-            director_notes.append(f"Sample Context: {style_description}")
-        if not director_notes:
-            director_notes.append("Style: Natural and clear.")
-        prompt_parts.append(" ".join(director_notes))
+            cleaned_style = str(style_description).strip()
+            if cleaned_style:
+                context_notes.append(f"Style context: {cleaned_style[:220]}")
 
         if title or scene_name:
             location = " / ".join([part for part in [title, scene_name] if part])
             if location:
-                prompt_parts.extend(["", "## Scene:", location])
+                context_notes.append(f"Scene: {location}")
         elif scene_description:
-            prompt_parts.extend(["", "## Scene:", scene_description])
+            cleaned_scene = str(scene_description).strip()
+            if cleaned_scene:
+                context_notes.append(f"Scene: {cleaned_scene[:180]}")
 
-        if include_style_context and style_description:
-            prompt_parts.extend(["", "## Sample Context:", style_description])
-
-        if len(valid_speaker_voices) >= 2:
-            speakers = ", ".join(valid_speaker_voices.keys())
-            prompt_parts.append(
-                f"Use multi-speaker synthesis. Match speaker labels exactly as written: {speakers}."
-            )
-
-        prompt_parts.append(
-            "The transcript may contain inline voice-direction tags in square brackets, "
-            "e.g. [shouting], [whispers], [very fast], [very slow], [excited], [sarcastically, one painfully slow word at a time]. "
-            "Honour these as acting cues until the next paragraph."
-        )
-        prompt_parts.append("")
-        prompt_parts.append("## Transcript:")
+        prompt_parts = [
+            "Speak the transcript naturally and clearly.",
+            "Do not read metadata labels or markdown markers aloud.",
+        ]
+        if use_vocal_tags:
+            prompt_parts.append("Interpret tags in brackets like [Laughs], [Sighs], or (whispers) as emotional cues and vocal expressions. Do not speak these tags as literal text; instead, perform them vocally.")
+        else:
+            prompt_parts.append("Read the text strictly as written, ignoring any emotional markers in brackets.")
+        if context_notes:
+            prompt_parts.append("Context: " + " | ".join(context_notes))
+        prompt_parts.append("Transcript:")
         prompt_parts.append(text)
         user_content = "\n".join(prompt_parts)
-
-        # Force log to console for the user
-        print(f"DEBUG: TTS Prompt for model '{model_name}':\n{user_content}")
 
         # Note: Using generateContent with responseModalities: ["AUDIO"]
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
 
-        speech_config: dict = {}
-        if len(valid_speaker_voices) >= 2:
-            speech_config["multiSpeakerVoiceConfig"] = {
-                "speakerVoiceConfigs": [
-                    {
-                        "speaker": speaker,
-                        "voiceConfig": {
-                            "prebuiltVoiceConfig": {"voiceName": voice_name}
-                        },
-                    }
-                    for speaker, voice_name in valid_speaker_voices.items()
-                ]
-            }
-        else:
-            selected_voice = voice
-            if len(valid_speaker_voices) == 1:
-                selected_voice = next(iter(valid_speaker_voices.values()))
-            speech_config["voiceConfig"] = {
+        speech_config: dict = {
+            "voiceConfig": {
                 "prebuiltVoiceConfig": {
-                    "voiceName": selected_voice
+                    "voiceName": voice
                 }
             }
+        }
 
-        selected_voice_for_log = None
-        if len(valid_speaker_voices) == 0:
-            selected_voice_for_log = voice
-        elif len(valid_speaker_voices) == 1:
-            selected_voice_for_log = next(iter(valid_speaker_voices.values()))
+        # Log the prompt for debugging
+        logger.info("[TTS DEBUG] Final Prompt sent to %s:\n%s", model_name, user_content)
 
         logger.info(
-            "TTS request model=%s multi_speaker=%s voice=%s speakers=%s include_style=%s",
+            "TTS request model=%s voice=%s include_style=%s",
             model_name,
-            len(valid_speaker_voices) >= 2,
-            selected_voice_for_log,
-            list(valid_speaker_voices.keys()),
+            voice,
             include_style_context,
         )
 

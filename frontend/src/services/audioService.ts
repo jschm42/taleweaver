@@ -164,9 +164,6 @@ class AudioService {
     return String(text || '')
       // Keep image alt text but drop URLs from markdown images.
       .replace(/!\[([^\]]*)\]\([^\)]*\)/g, '$1')
-      // Remove inline voice-direction tags from spoken transcript to reduce
-      // provider safety/moderation false-positives.
-      .replace(/\[[^\]\n]{1,120}\]/g, ' ')
       // Drop standalone portrait marker lines that should never be spoken.
       .replace(/^\s*[^\n]*-portrait\s*$/gim, '')
         // Avoid provider-side speaker parsing on narrative sentence colons.

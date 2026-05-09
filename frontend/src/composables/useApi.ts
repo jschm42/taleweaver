@@ -323,6 +323,14 @@ export const api = {
     return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload) })
   },
 
+  testTTS(): Promise<{ status: string; audio_url?: string; message?: string }> {
+    return request('/tts/test-connection', { method: 'POST' })
+  },
+
+  getElevenLabsModels(): Promise<Array<{ model_id: string, name: string }>> {
+    return request('/settings/tts/elevenlabs-models', { method: 'GET' })
+  },
+
   /** Testing */
   testLlm(payload: any): Promise<any> {
     return request('/settings/test-llm', { method: 'POST', body: JSON.stringify(payload) })

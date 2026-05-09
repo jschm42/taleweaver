@@ -19,6 +19,11 @@ IMAGE_PROVIDERS = [
     {"id": "ollama", "name": "Ollama (Local, EXPERIMENTAL)"},
 ]
 
+TTS_PROVIDERS = [
+    {"id": "google", "name": "Google Cloud TTS"},
+    {"id": "elevenlabs", "name": "ElevenLabs"},
+]
+
 PREDEFINED_LLM_MODELS = {
     "openai": ["gpt-5.4-mini", "gpt-5.3", "gpt-5.4", "gpt-5.5"],
     "google": ["gemini-3.1-pro-preview", "gemini-2.5-flash"],
@@ -35,4 +40,17 @@ PREDEFINED_IMAGE_MODELS = {
     "black_forest_labs": ["flux-2-klein-4b", "flux-2-klein-9b", "flux-dev", "flux-pro", "flux-pro-1.1", "flux-2-flex", "flux-2-pro", "flux-2-max"],
     "google": ["gemini-3.1-flash-image-preview", "gemini-2.5-flash-image", "imagen-4.0-fast-generate-001", "imagen-4.0-generate-001"],
     "ollama": ["x/flux2-klein", "stable-diffusion-v1-5"],
+}
+
+PREDEFINED_TTS_MODELS = {
+    "google": [
+        {"id": "gemini-3.1-flash-tts-preview", "name": "Gemini 3.1 Flash TTS (Preview)"},
+        {"id": "gemini-2.5-flash-preview-tts", "name": "Gemini 2.5 Flash TTS (Preview)"},
+    ],
+    "elevenlabs": [
+        {"id": "eleven_v3", "name": "Eleven v3 (Preview)"},
+        {"id": "eleven_multilingual_v2", "name": "Multilingual v2"},
+        {"id": "eleven_flash_v2_5", "name": "Flash v2.5 (Fastest)"},
+        {"id": "eleven_turbo_v2", "name": "Turbo v2"},
+    ]
 }

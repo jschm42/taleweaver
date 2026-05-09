@@ -294,7 +294,10 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "Do not mention numbers, IDs, or system terms. 1-3 paragraphs based on the context above.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     "Use the format: Character Name: \"Dialogue\" (no markdown bold). "
-    "Separate narrative prose from speech with a blank line.\n\n"
+    "Separate narrative prose from speech with a blank line."
+)
+
+GM_NARRATION_VOICE_DIRECTION = (
     "VOICE DIRECTION: Actively use tone and pace tags to give your narration life and atmosphere. "
     "Tags MUST come from the fixed catalog below and MUST always be in English. "
     + build_voice_tag_catalog_prompt_block() +
@@ -305,6 +308,7 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "A tag applies to the entire paragraph it opens — start a new paragraph when switching to a different tag. "
     "Do not nest tags."
 )
+
 
 ADVENTURE_GENERATOR_INSTRUCTIONS = (
 

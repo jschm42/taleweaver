@@ -2,8 +2,8 @@ import base64
 import logging
 import os
 import json
-from typing import Optional
-from pydantic import Field, model_validator
+from typing import Optional, List
+from pydantic import Field, model_validator, BaseModel
 from pydantic_settings import BaseSettings
 
 def get_app_version() -> str:
@@ -27,6 +27,23 @@ def generate_temp_key() -> str:
         "Please generate a persistent key using 'python scripts/generate_fernet_key.py' and add it to your .env file."
     )
     return base64.urlsafe_b64encode(os.urandom(32)).decode()
+
+class TTSSettings(BaseModel):
+    enabled: bool = True
+    provider: str = "google"  # google, elevenlabs
+    selected_model: str = "gemini-3.1-flash-tts-preview"
+    selected_voice: str = "Puck"
+    elevenlabs_voice_id: str = ""
+    use_vocal_tags: bool = True
+    voice_list: List[str] = [
+        "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe",
+        "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome",
+        "Algenib", "Rasalgethi", "Laomedeia", "Achernar", "Alnilam", "Schedar", "Gacrux",
+        "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager"
+    ]
+    voice_catalog: List[dict] = []
+    sample_context: str = ""
+    speech_rate: float = 1.0
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "TaleWeaver"

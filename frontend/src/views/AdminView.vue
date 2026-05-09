@@ -71,7 +71,10 @@ const gameForm = ref({
 
 const ttsForm = ref({
   enabled: true,
+  provider: 'google',
   selected_model: 'gemini-3.1-flash-tts-preview',
+  elevenlabs_voice_id: '',
+  use_vocal_tags: true,
   voice_list: [
     'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
     'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome',
@@ -82,6 +85,35 @@ const ttsForm = ref({
   selected_voice: 'Puck',
   sample_context: '',
   speech_rate: 1.0,
+})
+
+const elevenLabsModelsList = ref<Array<{ model_id: string, name: string }>>([])
+
+async function fetchElevenLabsModels() {
+  try {
+    const models = await api.getElevenLabsModels()
+    if (models && models.length > 0) {
+      elevenLabsModelsList.value = models
+    }
+  } catch (err) {
+    console.error('Failed to fetch ElevenLabs models:', err)
+  }
+}
+
+const GEMINI_TTS_MODELS = [
+  { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash TTS (Preview)' },
+  { id: 'gemini-2.5-flash-preview-tts', name: 'Gemini 2.5 Flash TTS (Preview)' },
+]
+
+watch(() => ttsForm.value.provider, (newProvider) => {
+  if (newProvider === 'elevenlabs') {
+    fetchElevenLabsModels()
+    if (!ttsForm.value.selected_model.startsWith('eleven_')) {
+      ttsForm.value.selected_model = 'eleven_multilingual_v2'
+    }
+  } else if (newProvider === 'google' && !ttsForm.value.selected_model.startsWith('gemini-')) {
+    ttsForm.value.selected_model = 'gemini-3.1-flash-tts-preview'
+  }
 })
 
 
@@ -159,11 +191,17 @@ const fetchSettings = async () => {
       )
       ttsForm.value = {
         ...ttsSettings,
+        provider: ttsSettings.provider || 'google',
         selected_model: selectedModel,
         voice_list: voiceList,
         voice_catalog: voiceCatalog,
+        elevenlabs_voice_id: ttsSettings.elevenlabs_voice_id || '',
+        use_vocal_tags: ttsSettings.use_vocal_tags !== false,
       }
-      audioService.speechRate.value = (data.tts_settings as any).speech_rate ?? 1.0
+      if (ttsForm.value.provider === 'elevenlabs') {
+        fetchElevenLabsModels()
+      }
+      audioService.speechRate.value = ttsForm.value.speech_rate ?? 1.0
     }
     if ((data as any).available_constants) availableConstants.value = (data as any).available_constants
     imageStylesCatalog.value = data.image_styles_catalog || []
@@ -460,7 +498,6 @@ const saveTTSSettings = async () => {
   statusMessage.value = null
   try {
     await api.saveTTSSettings(ttsForm.value)
-    await fetchSettings()
     audioService.speechRate.value = ttsForm.value.speech_rate
     statusMessage.value = { type: 'success', text: 'TTS settings updated.' }
     await refreshConfig()
@@ -468,6 +505,22 @@ const saveTTSSettings = async () => {
     statusMessage.value = { type: 'error', text: 'Failed to update TTS settings.' }
   } finally {
     isSubmitting.value = false
+  }
+}
+
+const testTTS = async () => {
+  testResults.value['tts'] = { status: 'loading', message: 'Testing Speech...' }
+  try {
+    const data = await api.testTTS()
+    if (data.status === 'success' && data.audio_url) {
+      const audio = new Audio(data.audio_url)
+      await audio.play()
+      testResults.value['tts'] = { status: 'success', message: 'Speech generated!' }
+    } else {
+      testResults.value['tts'] = { status: 'error', message: data.message || 'No audio generated.' }
+    }
+  } catch (err: any) {
+    testResults.value['tts'] = { status: 'error', message: err.message || 'Test failed.' }
   }
 }
 
@@ -716,6 +769,7 @@ function formatVoiceLabel(voiceName: string): string {
                 <select v-model="keyForm.provider" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none">
                   <option value="openai">OpenAI</option>
                   <option value="google">Google Gemini</option>
+                  <option value="elevenlabs">ElevenLabs</option>
                   <option value="openrouter">OpenRouter</option>
                   <option value="deepseek">DeepSeek</option>
                   <option value="black_forest_labs">Black Forest Labs</option>
@@ -1001,7 +1055,7 @@ function formatVoiceLabel(voiceName: string): string {
               </div>
             </div>
 
-            <button @click="saveLlmSettings" :disabled="isSubmitting" class="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
+            <button type="button" @click="saveLlmSettings" :disabled="isSubmitting" class="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
                {{ isSubmitting ? 'Optimizing...' : 'Update Intelligence Paths' }}
             </button>
           </div>
@@ -1175,7 +1229,7 @@ function formatVoiceLabel(voiceName: string): string {
               </div>
             </div>
 
-            <button @click="saveT2iSettings" :disabled="isSubmitting" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
+            <button type="button" @click="saveT2iSettings" :disabled="isSubmitting" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
                {{ isSubmitting ? 'Painting...' : 'Update Visual Artists' }}
             </button>
           </div>
@@ -1195,38 +1249,95 @@ function formatVoiceLabel(voiceName: string): string {
                 <h3 class="text-lg font-bold text-blue-400">Enable Text-to-Speech</h3>
                 <p class="text-xs text-slate-500">Allow AI-generated narration during gameplay.</p>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer scale-125">
-                <input type="checkbox" v-model="ttsForm.enabled" class="sr-only peer">
-                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-checked:after:bg-white"></div>
-              </label>
+              <div class="flex items-center gap-6">
+                <button 
+                  v-if="ttsForm.enabled"
+                  @click="testTTS"
+                  :disabled="testResults['tts']?.status === 'loading'"
+                  class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 text-xs font-bold rounded-lg border border-blue-600/30 transition-all flex items-center gap-2"
+                >
+                  <i class="ra ra-microphone" :class="{'animate-pulse': testResults['tts']?.status === 'loading'}"></i>
+                  Test Speech
+                </button>
+                <label class="relative inline-flex items-center cursor-pointer scale-125">
+                  <input type="checkbox" v-model="ttsForm.enabled" class="sr-only peer">
+                  <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-checked:after:bg-white"></div>
+                </label>
+              </div>
+            </div>
+
+            <div v-if="testResults['tts']" :class="['mx-6 p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults['tts'].status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults['tts'].status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+              <div class="flex items-center gap-2">
+                <div v-if="testResults['tts'].status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                <i v-else :class="testResults['tts'].status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+                {{ testResults['tts'].message }}
+              </div>
             </div>
 
             <div v-if="ttsForm.enabled" class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-blue-500/10 animate-fade-in">
               <h3 class="text-lg font-bold text-blue-400 flex items-center gap-2">
-                <i class="ra ra-microphone"></i> Narration Style & Model
+                <i class="ra ra-microphone"></i> Narration Style & Provider
               </h3>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="space-y-2">
-                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model</label>
-                  <select v-model="ttsForm.selected_model" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
-                    <option value="gemini-3.1-flash-tts-preview">Gemini 3.1 Flash TTS (Preview)</option>
-                    <option value="gemini-2.5-flash-preview-tts">Gemini 2.5 Flash TTS (Preview)</option>
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
+                  <select v-model="ttsForm.provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
+                    <option value="google">Google Cloud TTS</option>
+                    <option value="elevenlabs">ElevenLabs</option>
                   </select>
                 </div>
+                
+                <!-- GOOGLE SETTINGS -->
+                <template v-if="ttsForm.provider === 'google'">
+                  <div class="space-y-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Voice</label>
+                    <select v-model="ttsForm.selected_voice" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
+                      <option v-for="voice in ttsForm.voice_list" :key="voice" :value="voice">{{ formatVoiceLabel(voice) }}</option>
+                    </select>
+                  </div>
+                </template>
+
+                <!-- ELEVENLABS SETTINGS -->
+                <template v-if="ttsForm.provider === 'elevenlabs'">
+                  <div class="space-y-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">ElevenLabs Voice ID</label>
+                    <input v-model="ttsForm.elevenlabs_voice_id" type="text" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50 font-mono" />
+                  </div>
+                </template>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="space-y-2">
-                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Voice</label>
-                  <select v-model="ttsForm.selected_voice" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
-                    <option v-for="voice in ttsForm.voice_list" :key="voice" :value="voice">{{ formatVoiceLabel(voice) }}</option>
-                  </select>
+                   <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                     {{ ttsForm.provider === 'google' ? 'Gemini Model' : 'ElevenLabs Model' }}
+                   </label>
+                   <select v-model="ttsForm.selected_model" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50">
+                     <template v-if="ttsForm.provider === 'google'">
+                       <option v-for="model in GEMINI_TTS_MODELS" :key="model.id" :value="model.id">{{ model.name }}</option>
+                     </template>
+                     <template v-else>
+                       <option v-for="model in elevenLabsModelsList" :key="model.model_id" :value="model.model_id">{{ model.name }}</option>
+                     </template>
+                   </select>
+                </div>
+                <div class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5">
+                  <div>
+                    <div class="text-xs font-bold text-white uppercase tracking-wider">Vocal Tags</div>
+                    <div class="text-[10px] text-slate-500">Enable emotional markers like [shouting] or (whispering).</div>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="ttsForm.use_vocal_tags" class="sr-only peer">
+                    <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
                 </div>
               </div>
 
               <!-- Speech rate slider -->
               <div class="space-y-2">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Sprechgeschwindigkeit
-                  <span class="ml-2 text-blue-400 font-mono normal-case">{{ ttsForm.speech_rate.toFixed(2) }}×</span>
+                  Playback Speed
+                  <span class="ml-2 text-blue-400 font-mono normal-case">{{ ttsForm.speech_rate?.toFixed(2) }}×</span>
                 </label>
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-slate-500 w-10 text-right">0.5×</span>
@@ -1240,22 +1351,21 @@ function formatVoiceLabel(voiceName: string): string {
                   />
                   <span class="text-xs text-slate-500 w-10">2.0×</span>
                 </div>
-                <p class="text-xxs text-slate-500 italic">Steuert die Abspielgeschwindigkeit der generierten Sprachausgabe. Standard: 1.00×</p>
               </div>
 
               <div class="space-y-2">
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Sample Context (Style Description)</label>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Narration Context (Style Description)</label>
                 <textarea 
                   v-model="ttsForm.sample_context" 
-                  rows="4" 
+                  rows="3" 
                   placeholder="Describe the voice style and tone..."
-                  class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-sans"
+                  class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-sans text-sm"
                 ></textarea>
-                <p class="text-xxs text-slate-500 italic">Example: "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise..."</p>
+                <p class="text-[10px] text-slate-500 italic">Example: "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise..."</p>
               </div>
             </div>
 
-            <button @click="saveTTSSettings" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
+            <button type="button" @click="saveTTSSettings" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50">
                {{ isSubmitting ? 'Tuning...' : 'Update Speech Settings' }}
             </button>
           </div>
@@ -1474,8 +1584,8 @@ function formatVoiceLabel(voiceName: string): string {
               </div>
             </div>
 
-            <button @click="saveGameSettings" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg shadow-blue-500/20">
-              {{ isSubmitting ? 'Saving...' : 'Apply Game Settings' }}
+            <button type="button" @click="saveGameSettings" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg shadow-blue-500/20">
+              {{ isSubmitting ? 'Saving...' : 'Update Configuration' }}
             </button>
           </div>
         </div>
