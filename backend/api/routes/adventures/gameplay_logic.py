@@ -2186,7 +2186,8 @@ class GameTurnManager:
         )
         
         if use_vocal_tags:
-            narration_prompt += "\n\n" + prompts.GM_NARRATION_VOICE_DIRECTION
+            tts_provider = tts_settings.get("provider", "google")
+            narration_prompt += "\n\n" + prompts.get_vocal_direction_prompt(tts_provider)
             # Add a strong reminder at the end if enabled to ensure the LLM doesn't ignore it
             narration_prompt += "\n\nREMINDER: Use emotional vocal tags like [Laughs] or [Sighs] where appropriate to give your narration life."
 

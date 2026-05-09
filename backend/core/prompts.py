@@ -297,17 +297,18 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "Separate narrative prose from speech with a blank line."
 )
 
-GM_NARRATION_VOICE_DIRECTION = (
-    "VOICE DIRECTION: Actively use tone and pace tags to give your narration life and atmosphere. "
-    "Tags MUST come from the fixed catalog below and MUST always be in English. "
-    + build_voice_tag_catalog_prompt_block() +
-    "Open a paragraph with one catalog tag (for example [excited], [whispers], [shouting], [very fast], [very slow], "
-    "[tense], [solemn], [mocking], [dramatic pause], or [sarcastically, one painfully slow word at a time]). "
-    "Use them whenever the mood calls for it — combat tension, hushed secrets, desperate warnings, "
-    "triumphant moments. Aim to use at least one voice tag per response where the scene warrants it. "
-    "A tag applies to the entire paragraph it opens — start a new paragraph when switching to a different tag. "
-    "Do not nest tags."
-)
+def get_vocal_direction_prompt(provider: str = "google") -> str:
+    return (
+        "VOICE DIRECTION: Actively use tone and pace tags to give your narration life and atmosphere. "
+        "Tags MUST come from the fixed catalog below and MUST always be in English. "
+        + build_voice_tag_catalog_prompt_block(provider) +
+        "Open a paragraph with one catalog tag (for example [excited], [whispers], [shouting], [very fast], [very slow], "
+        "[tense], [solemn], [mocking], [dramatic pause], or [sarcastically, one painfully slow word at a time]). "
+        "Use them whenever the mood calls for it — combat tension, hushed secrets, desperate warnings, "
+        "triumphant moments. Aim to use at least one voice tag per response where the scene warrants it. "
+        "A tag applies to the entire paragraph it opens — start a new paragraph when switching to a different tag. "
+        "Do not nest tags."
+    )
 
 
 ADVENTURE_GENERATOR_INSTRUCTIONS = (

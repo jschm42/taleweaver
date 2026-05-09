@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { configState, refreshConfig } from '@/store/config'
 import { audioService } from '@/services/audioService'
@@ -99,6 +99,12 @@ async function fetchElevenLabsModels() {
     console.error('Failed to fetch ElevenLabs models:', err)
   }
 }
+
+const vocalTagsSupported = computed(() => {
+  if (ttsForm.value.provider === 'google') return true
+  if (ttsForm.value.provider === 'elevenlabs' && ttsForm.value.selected_model === 'eleven_v3') return true
+  return false
+})
 
 const GEMINI_TTS_MODELS = [
   { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash TTS (Preview)' },
@@ -1321,13 +1327,16 @@ function formatVoiceLabel(voiceName: string): string {
                      </template>
                    </select>
                 </div>
-                <div class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5">
+                <div class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5" :class="{'opacity-50': !vocalTagsSupported}">
                   <div>
                     <div class="text-xs font-bold text-white uppercase tracking-wider">Vocal Tags</div>
-                    <div class="text-[10px] text-slate-500">Enable emotional markers like [shouting] or (whispering).</div>
+                    <div class="text-[10px] text-slate-500">
+                      <template v-if="vocalTagsSupported">Enable emotional markers like [shouting] or (whispering).</template>
+                      <template v-else><span class="text-amber-500/80">Not supported by this model.</span></template>
+                    </div>
                   </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" v-model="ttsForm.use_vocal_tags" class="sr-only peer">
+                  <label class="relative inline-flex items-center" :class="vocalTagsSupported ? 'cursor-pointer' : 'cursor-not-allowed'">
+                    <input type="checkbox" v-model="ttsForm.use_vocal_tags" :disabled="!vocalTagsSupported" class="sr-only peer">
                     <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                   </label>
                 </div>
@@ -1353,7 +1362,7 @@ function formatVoiceLabel(voiceName: string): string {
                 </div>
               </div>
 
-              <div class="space-y-2">
+              <div v-if="ttsForm.provider === 'google'" class="space-y-2">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Narration Context (Style Description)</label>
                 <textarea 
                   v-model="ttsForm.sample_context" 

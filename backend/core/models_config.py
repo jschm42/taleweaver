@@ -48,9 +48,9 @@ PREDEFINED_TTS_MODELS = {
         {"id": "gemini-2.5-flash-preview-tts", "name": "Gemini 2.5 Flash TTS (Preview)"},
     ],
     "elevenlabs": [
-        {"id": "eleven_v3", "name": "Eleven v3 (Preview)"},
+        {"id": "eleven_v3", "name": "Eleven v3"},
         {"id": "eleven_multilingual_v2", "name": "Multilingual v2"},
-        {"id": "eleven_flash_v2_5", "name": "Flash v2.5 (Fastest)"},
-        {"id": "eleven_turbo_v2", "name": "Turbo v2"},
+        {"id": "eleven_flash_v2_5", "name": "Flash v2.5"},
+        {"id": "eleven_flash_v2", "name": "Flash v2"},
     ]
 }

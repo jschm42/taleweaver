@@ -115,6 +115,7 @@ async def generate_tts(
     logger.info("[TTS] Vocal tags enabled: %s (raw value: %s)", use_vocal_tags, raw_vocal_tags)
     
     style = tts_settings.get("sample_context")
+    speed = float(tts_settings.get("speech_rate", 1.0))
     model = str(tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview") or "").strip()
     model = TTS_MODEL_ALIASES.get(model, model)
     if provider == "google" and model not in SUPPORTED_TTS_MODELS:
@@ -159,6 +160,7 @@ async def generate_tts(
             scene_name=payload.scene_name,
             tone=payload.tone,
             include_style_context=(payload.voice_override is None and not payload.speaker_voices),
+            speed=speed,
         )
     except TTSTimeoutError as exc:
         raise HTTPException(
@@ -215,6 +217,7 @@ async def test_tts_connection_v2(
             use_vocal_tags=tts_settings.get("use_vocal_tags", True),
             api_key=api_key,
             model_name=tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview"),
+            speed=float(tts_settings.get("speech_rate", 1.0)),
         )
         if not audio_url:
             return {"status": "error", "message": "Failed to generate test audio."}
