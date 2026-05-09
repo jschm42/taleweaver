@@ -48,7 +48,7 @@ class AudioService {
   public isGenerating = ref(false)
   public lastError = ref<string | null>(null)
   public currentText = ref<string | null>(null)
-  public autoSpeechEnabled = ref(sessionStorage.getItem('autoSpeechEnabled') === 'true')
+  public autoSpeechEnabled = ref(false)
   public speechRate = ref<number>(parseFloat(localStorage.getItem('tts_speech_rate') ?? '1'))
   public ttsDebugEnabled = ref(localStorage.getItem(AudioService.TTS_DEBUG_STORAGE_KEY) === 'true')
 
@@ -412,9 +412,6 @@ class AudioService {
   }
 
   constructor() {
-    watch(this.autoSpeechEnabled, (val) => {
-      sessionStorage.setItem('autoSpeechEnabled', val ? 'true' : 'false')
-    })
 
     watch(this.speechRate, (val) => {
       localStorage.setItem('tts_speech_rate', String(val))
@@ -424,19 +421,6 @@ class AudioService {
       localStorage.setItem(AudioService.TTS_DEBUG_STORAGE_KEY, val ? 'true' : 'false')
     })
 
-    // Global listener for SPACE key to stop audio
-    window.addEventListener('keydown', (e) => {
-      if (!this.isPlaying.value) return
-      if (e.code !== 'Space') return
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
-      // Never hijack SPACE while typing in chat or other form fields.
-      if (this.isTypingTarget(e.target)) return
-
-      if (e.code === 'Space' && this.isPlaying.value) {
-        this.stop()
-        e.preventDefault()
-      }
-    })
   }
 
   public enqueueSpeak(text: unknown, options: SpeakOptions = {}): Promise<void> {

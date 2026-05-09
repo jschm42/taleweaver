@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { audioService } from '@/services/audioService'
+import { configState } from '@/store/config'
 
 interface Action {
   id: string
@@ -95,7 +96,7 @@ function toggleAction(id: string) {
       </div>
 
       <!-- TTS Controls -->
-      <div class="flex items-center gap-2">
+      <div v-if="configState.isTtsEnabled" class="flex items-center gap-2">
         <button 
           v-show="audioService.isPlaying.value"
           @click="audioService.stop()"

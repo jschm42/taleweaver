@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { configState } from '@/store/config'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
 import CommandPopup from '@/components/game/CommandPopup.vue'
@@ -463,6 +464,46 @@ function isLatestAssistantMessage(index: number): boolean {
   }
   return false
 }
+
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if (e.code !== 'Space' || !configState.isTtsEnabled) return
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+  
+  // Don't hijack space while typing
+  const target = e.target as HTMLElement
+  const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+  if (isTyping) return
+
+  e.preventDefault()
+  
+  if (audioService.isPlaying.value) {
+    audioService.stop()
+  } else {
+    // Find last assistant message to speak
+    const assistantMsgs = props.messages.filter(m => m.role === 'assistant' && !(m as any).is_debug)
+    if (assistantMsgs.length > 0) {
+      const lastMsg = assistantMsgs[assistantMsgs.length - 1]
+      audioService.unlock()
+      audioService.speak(lastMsg.content, {
+        sceneDescription: props.currentSceneDescription,
+        adventureId: props.sheet?.template_id,
+        sessionId: props.gameId,
+        title: props.sheet?.adventure_title,
+        sceneName: props.sheet?.current_scene,
+        tone: props.sheet?.adventure_tone,
+        npcMetadata: props.npcMetadata,
+      })
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+})
 </script>
 
 <template>
@@ -563,7 +604,7 @@ function isLatestAssistantMessage(index: number): boolean {
 
           <!-- Manual Speak Button -->
           <button 
-            v-if="msg.role === 'assistant'"
+            v-if="msg.role === 'assistant' && configState.isTtsEnabled"
             @click="audioService.unlock(); audioService.speak(msg.content, {
               sceneDescription: props.currentSceneDescription,
               adventureId: props.sheet?.template_id,
@@ -574,7 +615,7 @@ function isLatestAssistantMessage(index: number): boolean {
               npcMetadata: props.npcMetadata,
             })"
             class="ml-auto p-1.5 px-3 text-[10px] font-black uppercase tracking-widest bg-slate-800/80 border border-slate-700/50 rounded-xl text-slate-400 hover:bg-amber-500/20 hover:text-amber-400 transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
-            title="Listen to this narration"
+            title="Listen to this narration (SPACE)"
           >
             <i class="ra ra-microphone text-xs"></i>
             <span>Speak</span>

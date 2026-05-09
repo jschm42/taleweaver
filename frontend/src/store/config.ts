@@ -8,6 +8,7 @@ export const configState = reactive({
   hasLlmConfig: false,
   hasT2iConfig: false,
   isBackendReachable: true,
+  isTtsEnabled: false,
   lastErrorMessage: '' as string
 })
 
@@ -25,6 +26,7 @@ export async function refreshConfig() {
     
     configState.hasLlmConfig = !!data.is_llm_configured
     configState.hasT2iConfig = !!data.is_t2i_configured
+    configState.isTtsEnabled = !!(data.tts_settings as any)?.enabled
     configState.isLoaded = true
   } catch (error) {
     console.error('Failed to refresh config:', error)
