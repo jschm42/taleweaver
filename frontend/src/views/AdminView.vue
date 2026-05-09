@@ -75,6 +75,7 @@ const ttsForm = ref({
   selected_model: 'gemini-3.1-flash-tts-preview',
   elevenlabs_voice_id: '',
   use_vocal_tags: true,
+  use_text_chunking: true,
   voice_list: [
     'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
     'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome',
@@ -196,18 +197,19 @@ const fetchSettings = async () => {
         || 'gemini-3.1-flash-tts-preview'
       )
       ttsForm.value = {
+        ...ttsForm.value,
         ...ttsSettings,
-        provider: ttsSettings.provider || 'google',
-        selected_model: selectedModel,
-        voice_list: voiceList,
-        voice_catalog: voiceCatalog,
-        elevenlabs_voice_id: ttsSettings.elevenlabs_voice_id || '',
         use_vocal_tags: ttsSettings.use_vocal_tags !== false,
+        use_text_chunking: String(ttsSettings.use_text_chunking).toLowerCase() !== 'false' && ttsSettings.use_text_chunking !== null,
       }
+      
       if (ttsForm.value.provider === 'elevenlabs') {
         fetchElevenLabsModels()
       }
+      
       audioService.speechRate.value = ttsForm.value.speech_rate ?? 1.0
+      console.info('[Admin] Settings hydrated. use_text_chunking:', ttsForm.value.use_text_chunking)
+      audioService.useTextChunking.value = ttsForm.value.use_text_chunking
     }
     if ((data as any).available_constants) availableConstants.value = (data as any).available_constants
     imageStylesCatalog.value = data.image_styles_catalog || []
@@ -503,8 +505,10 @@ const saveTTSSettings = async () => {
   isSubmitting.value = true
   statusMessage.value = null
   try {
+    console.info('[Admin] Saving TTS Settings:', ttsForm.value)
     await api.saveTTSSettings(ttsForm.value)
     audioService.speechRate.value = ttsForm.value.speech_rate
+    audioService.useTextChunking.value = ttsForm.value.use_text_chunking
     statusMessage.value = { type: 'success', text: 'TTS settings updated.' }
     await refreshConfig()
   } catch (error) {
@@ -1337,6 +1341,21 @@ function formatVoiceLabel(voiceName: string): string {
                   </div>
                   <label class="relative inline-flex items-center" :class="vocalTagsSupported ? 'cursor-pointer' : 'cursor-not-allowed'">
                     <input type="checkbox" v-model="ttsForm.use_vocal_tags" :disabled="!vocalTagsSupported" class="sr-only peer">
+                    <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+
+                <div class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5 col-span-1 md:col-span-2">
+                  <div class="flex-1">
+                    <div class="text-xs font-bold text-white uppercase tracking-wider">Text Chunking</div>
+                    <div class="text-[10px] text-slate-400 mt-1 pr-8">
+                      <strong>Enabled (Recommended):</strong> Breaks text into segments for faster start times and reliability.
+                      <br/>
+                      <strong>Disabled:</strong> Sends full text at once for best prosody, but has higher initial delay and may hit length limits.
+                    </div>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="ttsForm.use_text_chunking" class="sr-only peer">
                     <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                   </label>
                 </div>

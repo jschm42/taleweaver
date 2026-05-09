@@ -50,6 +50,7 @@ class AudioService {
   public lastError = ref<string | null>(null)
   public currentText = ref<string | null>(null)
   public autoSpeechEnabled = ref(false)
+  public useTextChunking = ref(localStorage.getItem('tts_use_chunking') !== 'false')
   public speechRate = ref<number>(parseFloat(localStorage.getItem('tts_speech_rate') ?? '1'))
   public ttsDebugEnabled = ref(localStorage.getItem(AudioService.TTS_DEBUG_STORAGE_KEY) === 'true')
 
@@ -86,47 +87,22 @@ class AudioService {
     return Math.min(2, Math.max(0.5, rate))
   }
 
-  private splitIntoSpeechSegments(text: string): Array<{ speaker?: string, text: string }> {
+  private splitIntoSpeechSegments(text: string, useChunking = true): Array<{ speaker?: string, text: string }> {
     const normalized = text.replace(/\r\n?/g, '\n').trim()
     if (!normalized) return []
 
+    if (!useChunking) {
+      this.logDebug('splitIntoSpeechSegments (No Chunking)', { textLength: normalized.length })
+      return [{ text: normalized }]
+    }
+
+    // Default chunked behavior (split by paragraphs)
     const paragraphs = normalized
       .split(/\n\s*\n/)
       .map(p => p.trim())
       .filter(Boolean)
 
-    const speakerPattern = /^(?:\*\*([^*:\n]+)\*\*|([^:\n]+)):\s*([\s\S]*)$/
-    const segments: Array<{ speaker?: string, text: string }> = []
-
-    for (const paragraph of paragraphs) {
-      const match = paragraph.match(speakerPattern)
-      if (match) {
-        const speaker = (match[1] || match[2] || '').trim()
-        const spokenText = (match[3] || '').trim()
-        if (spokenText && this.looksLikeSpeakerLabel(speaker)) {
-          segments.push({ speaker, text: spokenText })
-        } else {
-          segments.push({ text: paragraph })
-        }
-      } else {
-        segments.push({ text: paragraph })
-      }
-    }
-
-    return segments
-  }
-
-  private looksLikeSpeakerLabel(value: string): boolean {
-    const normalized = String(value || '').trim()
-    if (!normalized) return false
-    if (normalized.length > 40) return false
-
-    const words = normalized.split(/\s+/).filter(Boolean)
-    if (words.length > 4) return false
-
-    // Allow human-readable labels such as "Narrator", "Guard Captain",
-    // "Mum", "Der Wirt", but reject sentence-like fragments.
-    return /^[\p{L}\p{N}][\p{L}\p{N} '\-]*$/u.test(normalized)
+    return paragraphs.map(p => ({ text: p }))
   }
 
   private chunkSegmentText(text: string, maxChars = 1200): string[] {
@@ -200,19 +176,24 @@ class AudioService {
       .trim()
   }
 
-  private buildFallbackSegments(text: string): Array<{ speaker?: string, text: string }> {
-    const baseSegments = this.splitIntoSpeechSegments(text)
-    const seed = baseSegments.length > 0 ? baseSegments : [{ text }]
-    const fallback: Array<{ speaker?: string, text: string }> = []
-
-    for (const segment of seed) {
-      const chunks = this.chunkSegmentText(segment.text)
-      for (const chunk of chunks) {
-        fallback.push({ speaker: segment.speaker, text: chunk })
-      }
+  private buildFallbackSegments(text: string, useChunking = true): Array<{ speaker?: string, text: string }> {
+    const baseSegments = this.splitIntoSpeechSegments(text, useChunking)
+    
+    if (!useChunking) {
+      console.info('[AudioService] Chunking DISABLED. Final segments count:', baseSegments.length)
+      this.logDebug('Final segments for TTS (No Chunking)', { count: baseSegments.length, baseSegments })
+      return baseSegments
     }
 
-    return fallback
+    const segments: Array<{ speaker?: string, text: string }> = []
+    for (const seg of baseSegments) {
+      const chunks = this.chunkSegmentText(seg.text)
+      for (const chunk of chunks) {
+        segments.push({ speaker: seg.speaker, text: chunk })
+      }
+    }
+    this.logDebug('Final segments for TTS (Chunked)', { count: segments.length, segments })
+    return segments
   }
 
   private buildSegmentRequests(
@@ -422,6 +403,11 @@ class AudioService {
       localStorage.setItem(AudioService.TTS_DEBUG_STORAGE_KEY, val ? 'true' : 'false')
     })
 
+    watch(this.useTextChunking, (val) => {
+      console.info('[AudioService] useTextChunking state updated:', val)
+      localStorage.setItem('tts_use_chunking', val ? 'true' : 'false')
+    })
+
   }
 
   public enqueueSpeak(text: unknown, options: SpeakOptions = {}): Promise<void> {
@@ -465,7 +451,8 @@ class AudioService {
     const normalizedTitle = this.normalizeOptionalText(title)
     const normalizedSceneName = this.normalizeOptionalText(sceneName)
     const normalizedTone = this.normalizeOptionalText(tone)
-    const segments = this.buildFallbackSegments(ttsText)
+    this.logDebug('Starting speak sequence', { textLength: ttsText.length, useChunking: this.useTextChunking.value })
+    const segments = this.buildFallbackSegments(ttsText, this.useTextChunking.value)
     const requests = this.buildSegmentRequests(segments, npcMetadata)
 
     this.logDebug('TTS plan', {

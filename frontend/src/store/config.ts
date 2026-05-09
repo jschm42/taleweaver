@@ -26,7 +26,23 @@ export async function refreshConfig() {
     
     configState.hasLlmConfig = !!data.is_llm_configured
     configState.hasT2iConfig = !!data.is_t2i_configured
-    configState.isTtsEnabled = !!(data.tts_settings as any)?.enabled
+    const tts = data.tts_settings as any
+    configState.isTtsEnabled = !!tts?.enabled
+    
+    // Synchronize audio service state with the latest user preferences from DB
+    const { audioService } = await import('@/services/audioService')
+    if (tts) {
+      if (typeof tts.use_text_chunking === 'boolean') {
+        console.info('[Config] Synchronizing useTextChunking from backend:', tts.use_text_chunking)
+        audioService.useTextChunking.value = tts.use_text_chunking
+      } else {
+        console.warn('[Config] use_text_chunking is missing or not a boolean in backend response:', tts.use_text_chunking)
+      }
+      if (typeof tts.speech_rate === 'number') {
+        audioService.speechRate.value = tts.speech_rate
+      }
+    }
+    
     configState.isLoaded = true
   } catch (error) {
     console.error('Failed to refresh config:', error)

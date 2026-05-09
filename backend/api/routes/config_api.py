@@ -283,6 +283,7 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
         "selected_voice": "Puck",
         "elevenlabs_voice_id": "",
         "use_vocal_tags": True,
+        "use_text_chunking": True,
         "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling.",
         "speech_rate": 1.0
     }
@@ -307,12 +308,15 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
         normalized["selected_model"] = TTS_MODEL_ALIASES[selected_model]
 
     # Ensure new fields exist
-    if "provider" not in normalized:
-        normalized["provider"] = "google"
-    if "elevenlabs_voice_id" not in normalized:
-        normalized["elevenlabs_voice_id"] = ""
+    # Ensure new fields exist with safe defaults
+    normalized["provider"] = normalized.get("provider") or "google"
+    normalized["elevenlabs_voice_id"] = normalized.get("elevenlabs_voice_id", "")
+    
+    # Handle booleans carefully: only set to True if the key is missing entirely
     if "use_vocal_tags" not in normalized:
         normalized["use_vocal_tags"] = True
+    if "use_text_chunking" not in normalized:
+        normalized["use_text_chunking"] = True
 
     if "enabled" not in normalized:
         normalized["enabled"] = fallback["enabled"]
@@ -453,6 +457,7 @@ class TTSSettingsPayload(BaseModel):
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
     use_vocal_tags: bool = True
+    use_text_chunking: bool = True
     voice_list: list[str] = Field(default_factory=list)
     voice_catalog: Optional[list[dict[str, str]]] = None
     sample_context: str = ""
