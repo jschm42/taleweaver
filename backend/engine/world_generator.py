@@ -267,7 +267,7 @@ class WorldManifesto(BaseModel):
     walkthrough: str = Field(..., description="A secret GM walkthrough/solution for the adventure.")
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
-    tts_director_notes: Optional[str] = Field(None, description="Style instructions for the Text-to-Speech engine.")
+    tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
     scenes: List[WorldSceneSchema]
     exits: List[WorldExitSchema]
     npcs: List[WorldEntitySchema]
