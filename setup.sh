@@ -12,6 +12,16 @@ if [ ! -f .env ]; then
     cp .env.example .env
 fi
 
+if ! grep -q "PROJECT_NAME=" .env; then
+    sed -i '1i PROJECT_NAME="TaleWeaver"' .env
+else
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' 's/PROJECT_NAME=.*/PROJECT_NAME="TaleWeaver"/' .env
+    else
+        sed -i 's/PROJECT_NAME=.*/PROJECT_NAME="TaleWeaver"/' .env
+    fi
+fi
+
 # 2. Python Virtual Environment
 if [ ! -d "venv" ]; then
     echo "[*] Creating virtual environment (venv)..."

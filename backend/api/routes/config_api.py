@@ -78,62 +78,15 @@ def _slugify(value: str) -> str:
     return slug.strip("-") or "item"
 
 
+from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES, DEFAULT_TONES
+
+
 def _default_image_styles_catalog() -> list[dict[str, Any]]:
-    return default_image_styles_catalog()
+    return [dict(item) for item in DEFAULT_IMAGE_STYLES]
 
 
 def _default_tone_catalog() -> list[dict[str, Any]]:
-    return [
-        {
-            "id": "horror",
-            "name": "Horror",
-            "description": "Dread, uncertainty, and escalating psychological pressure.",
-            "instruction": "Maintain unsettling tension, sparse comfort, and consequences that feel dangerous.",
-            "image_url": "/assets/catalog/tones/horror.jpg",
-        },
-        {
-            "id": "sci-fi",
-            "name": "Sci-Fi",
-            "description": "Futuristic systems, unknown tech, and speculative mystery.",
-            "instruction": "Use futuristic world logic, technical flavor, and discovery-driven narrative beats.",
-            "image_url": "/assets/catalog/tones/sci-fi.jpg",
-        },
-        {
-            "id": "sitcom",
-            "name": "Sitcom",
-            "description": "Comedic misunderstandings, playful pacing, and memorable banter.",
-            "instruction": "Favor witty dialogue, comic timing, and low-stakes chaos with charming setbacks.",
-            "image_url": "/assets/catalog/tones/sitcom.jpg",
-        },
-        {
-            "id": "classic-rpg",
-            "name": "Classic RPG",
-            "description": "Heroic quest tone with balanced drama and wonder.",
-            "instruction": "Keep a classic heroic arc, meaningful choices, and clear quest momentum.",
-            "image_url": "/assets/catalog/tones/classic-rpg.jpg",
-        },
-        {
-            "id": "heroic-epic",
-            "name": "Heroic & Epic",
-            "description": "Grand scale, legendary deeds, and inspiring bravery.",
-            "instruction": "The tone is heroic and epic. Focus on grand scale, legendary atmosphere, and inspiring narratives.",
-            "image_url": "/assets/catalog/tones/heroic-epic.jpg",
-        },
-        {
-            "id": "melancholic-somber",
-            "name": "Melancholic & Somber",
-            "description": "Reflective, sad, and focused on loss or faded glory.",
-            "instruction": "The tone is melancholic and somber. Use reflective language, focus on themes of loss and beauty in sadness.",
-            "image_url": "/assets/catalog/tones/melancholic-somber.jpg",
-        },
-        {
-            "id": "grimdark-gritty",
-            "name": "Grimdark & Gritty",
-            "description": "Brutal, uncompromising, and focused on survival against all odds.",
-            "instruction": "The tone is grimdark and gritty. Highlight the harshness of the world, moral ambiguity, and the weight of consequences.",
-            "image_url": "/assets/catalog/tones/grimdark-gritty.jpg",
-        },
-    ]
+    return [dict(item) for item in DEFAULT_TONES]
 
 
 def _normalize_catalog(catalog: Optional[list[dict[str, Any]]], *, fallback: list[dict[str, Any]]) -> list[dict[str, Any]]:

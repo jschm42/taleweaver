@@ -10,6 +10,14 @@ if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
 }
 
+$envFile = Get-Content ".env" -Raw
+if ($envFile -notmatch "PROJECT_NAME=") {
+    $envFile = "PROJECT_NAME=`"TaleWeaver`"`r`n" + $envFile
+} else {
+    $envFile = $envFile -replace "PROJECT_NAME=.*", "PROJECT_NAME=`"TaleWeaver`""
+}
+Set-Content ".env" $envFile
+
 # 2. Python Virtual Environment
 if (-not (Test-Path "venv")) {
     Write-Host "[*] Creating virtual environment (venv)..." -ForegroundColor Yellow
