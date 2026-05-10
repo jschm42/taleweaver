@@ -147,6 +147,7 @@ class AdventureTemplateImporter:
                     walkthrough=adv_data.get("walkthrough") or manifest_data.get("walkthrough"),
                     completed_condition=adv_data.get("completed_condition") or manifest_data.get("completed_condition"),
                     gameover_condition=adv_data.get("gameover_condition") or manifest_data.get("gameover_condition"),
+                    tts_director_notes=adv_data.get("tts_director_notes") or manifest_data.get("tts_director_notes"),
                     starting_timestamp=adv_data.get("starting_timestamp") or manifest_data.get("starting_timestamp", 0),
                     is_adventure_generator=adv_data.get("is_adventure_generator", False) or manifest_data.get("is_adventure_generator", False),
                     is_ready=True,
@@ -205,6 +206,12 @@ class AdventureTemplateImporter:
                     "awards": manifest_data.get("awards") or adv_data.get("awards", []),
                     "teaser": manifest_data.get("teaser") or adv_data.get("teaser"),
                     "intro_text": manifest_data.get("intro_text") or adv_data.get("intro_text"),
+                    "plot": manifest_data.get("plot") or adv_data.get("plot"),
+                    "rules": manifest_data.get("rules") or adv_data.get("rules"),
+                    "walkthrough": manifest_data.get("walkthrough") or adv_data.get("walkthrough"),
+                    "completed_condition": manifest_data.get("completed_condition") or adv_data.get("completed_condition"),
+                    "gameover_condition": manifest_data.get("gameover_condition") or adv_data.get("gameover_condition"),
+                    "tts_director_notes": manifest_data.get("tts_director_notes") or adv_data.get("tts_director_notes"),
                 }
 
                 default_scene_id = manifest_data["scenes"][0]["id"] if manifest_data.get("scenes") else "START"
@@ -321,7 +328,7 @@ class AdventureTemplateImporter:
                     walkthrough=old_adv.get("walkthrough"),
                     completed_condition=old_adv.get("completed_condition"),
                     gameover_condition=old_adv.get("gameover_condition"),
-
+                    tts_director_notes=old_adv.get("tts_director_notes"),
                     starting_timestamp=old_adv.get("starting_timestamp", 0),
                     language=old_adv.get("language") or data.get("language"),
                     origin_id=origin_id,
@@ -419,7 +426,7 @@ class AdventureTemplateImporter:
                     walkthrough=adv_meta.get("walkthrough") or manifest.get("walkthrough"),
                     completed_condition=adv_meta.get("completed_condition") or manifest.get("completed_condition"),
                     gameover_condition=adv_meta.get("gameover_condition") or manifest.get("gameover_condition"),
-
+                    tts_director_notes=adv_meta.get("tts_director_notes") or manifest.get("tts_director_notes"),
                     starting_timestamp=adv_meta.get("starting_timestamp") or manifest.get("starting_timestamp", 0),
                     language=adv_meta.get("language") or manifest.get("language"),
                     origin_id=origin_id,

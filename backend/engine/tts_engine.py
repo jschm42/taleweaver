@@ -219,6 +219,8 @@ class TTSEngine:
         scene_name: Optional[str] = None,
         tone: Optional[str] = None,
         include_style_context: bool = True,
+        speed: float = 1.0,
+        director_notes: Optional[str] = None,
         **_unused_kwargs: object,
     ) -> Optional[str]:
         """
@@ -261,6 +263,8 @@ class TTSEngine:
                 adventure_id=adventure_id,
                 session_id=session_id,
                 include_style_context=include_style_context,
+                speed=speed,
+                director_notes=director_notes,
                 scene_description=scene_description,
                 style_description=style_description,
                 model_name=model_name,
@@ -342,6 +346,8 @@ class TTSEngine:
         adventure_id: Optional[str],
         session_id: Optional[str] = None,
         include_style_context: bool = True,
+        speed: float = 1.0,
+        director_notes: Optional[str] = None,
         scene_description: Optional[str] = None,
         style_description: Optional[str] = None,
         model_name: str = "gemini-3.1-flash-tts-preview",
@@ -391,6 +397,10 @@ class TTSEngine:
         
         if len(context_parts) > 1: # Only add if we have actual content beyond the label
             prompt_sections.append("\n".join(context_parts))
+
+        # 3.5 DIRECTOR'S NOTES section
+        if director_notes:
+            prompt_sections.append(f"### DIRECTOR'S NOTES\n{director_notes}")
 
         # 4. TRANSCRIPT section
         prompt_sections.append(f"#### TRANSCRIPT\n{text}")

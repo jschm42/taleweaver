@@ -288,7 +288,7 @@ async def update_adventure(
         adv.strict_rules = (update_data["rule_enforcement_mode"] != "chat")
 
     # Sync to active sessions if narrative fields changed
-    narrative_fields = {"plot", "rules", "walkthrough", "completed_condition", "gameover_condition"}
+    narrative_fields = {"plot", "rules", "walkthrough", "completed_condition", "gameover_condition", "tts_director_notes"}
     if any(f in update_data for f in narrative_fields):
         from backend.models.session_state import SessionState
         session_res = await db.execute(select(SessionState).where(SessionState.template_id == template_id))

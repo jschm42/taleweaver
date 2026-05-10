@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.auth import get_current_user
 from backend.models.user import User
 from backend.models.game_session import GameSession
+from backend.models.session_state import SessionState
+from backend.models.adventure_template import AdventureTemplate
 from backend.engine.tts_engine import TTSEngine, TTSTimeoutError, TTSRateLimitError
 from backend.core.security import encryption_util
 from backend.core.config import settings
@@ -42,6 +44,7 @@ class TTSGeneratePayload(BaseModel):
     tone: Optional[str] = Field(default=None)
     voice_override: Optional[str] = Field(default=None)
     speaker_voices: Optional[dict[str, str]] = Field(default=None)
+    director_notes: Optional[str] = Field(default=None)
 
     @staticmethod
     def _coerce_required_text(value: Any) -> str:
@@ -68,7 +71,7 @@ class TTSGeneratePayload(BaseModel):
     def _validate_text(cls, value: Any) -> str:
         return cls._coerce_required_text(value)
 
-    @field_validator("scene_description", "adventure_id", "session_id", "title", "scene_name", "tone", "voice_override", mode="before")
+    @field_validator("scene_description", "adventure_id", "session_id", "title", "scene_name", "tone", "voice_override", "director_notes", mode="before")
     @classmethod
     def _validate_optional_text(cls, value: Any) -> Optional[str]:
         return cls._coerce_optional_text(value)
@@ -142,7 +145,23 @@ async def generate_tts(
             normalized_session_id = session.id
             normalized_adventure_id = session.template_id or normalized_adventure_id
 
-    # 3. Generate Speech
+    # 3. Resolve Director Notes if not provided in payload
+    final_director_notes = payload.director_notes
+    if not final_director_notes:
+        if normalized_session_id:
+            state_res = await db.execute(select(SessionState).where(SessionState.session_id == normalized_session_id))
+            state = state_res.scalars().first()
+            if state and state.tts_director_notes:
+                final_director_notes = state.tts_director_notes
+        
+        if not final_director_notes and normalized_adventure_id:
+            # Check if it's a UUID-like adventure_id or a template ID
+            template_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == normalized_adventure_id))
+            template = template_res.scalars().first()
+            if template:
+                final_director_notes = template.tts_director_notes
+
+    # 4. Generate Speech
     try:
         audio_url = await TTSEngine.generate_speech(
             text=payload.text,
@@ -161,6 +180,7 @@ async def generate_tts(
             tone=payload.tone,
             include_style_context=(payload.voice_override is None and not payload.speaker_voices),
             speed=speed,
+            director_notes=final_director_notes,
         )
     except TTSTimeoutError as exc:
         raise HTTPException(

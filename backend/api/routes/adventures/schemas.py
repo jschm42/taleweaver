@@ -25,6 +25,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     game_over_rules: Optional[Dict[str, Any]] = None
     selected_image_styles: Optional[List[Dict[str, Any]]] = None
     selected_tone: Optional[Dict[str, Any]] = None
+    tts_director_notes: Optional[str] = None
     # Advanced/import fields
     original_manifest: Optional[Dict[str, Any]] = None
     automatic_cover_generation: Optional[bool] = False
@@ -95,6 +96,7 @@ class AdventureTemplateResponse(BaseModel):
     walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
+    tts_director_notes: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

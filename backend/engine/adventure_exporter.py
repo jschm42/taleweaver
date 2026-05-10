@@ -76,6 +76,7 @@ class AdventureExporter:
                 "walkthrough": adv.walkthrough,
                 "completed_condition": adv.completed_condition,
                 "gameover_condition": adv.gameover_condition,
+                "tts_director_notes": adv.tts_director_notes,
                 "original_prompt": adv.original_prompt,
                 "starting_timestamp": adv.starting_timestamp,
                 "is_adventure_generator": adv.is_adventure_generator,

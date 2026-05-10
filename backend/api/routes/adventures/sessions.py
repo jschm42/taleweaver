@@ -263,7 +263,8 @@ async def start_session_for_template(
         rules=adventure.rules,
         walkthrough=adventure.walkthrough,
         completed_condition=adventure.completed_condition,
-        gameover_condition=adventure.gameover_condition
+        gameover_condition=adventure.gameover_condition,
+        tts_director_notes=adventure.tts_director_notes
     )
     db.add(new_state)
 

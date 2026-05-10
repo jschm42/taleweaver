@@ -180,6 +180,7 @@ const form = ref({
   walkthrough: '',
   completed_condition: '',
   gameover_condition: '',
+  tts_director_notes: '',
   
   // Visual & Tone
   selected_style_id: '',
@@ -360,6 +361,7 @@ async function fetchAdventure() {
     form.value.walkthrough = data.walkthrough || ''
     form.value.completed_condition = data.completed_condition || ''
     form.value.gameover_condition = data.gameover_condition || ''
+    form.value.tts_director_notes = data.tts_director_notes || ''
 
     form.value.selected_style_id = Array.isArray(data.selected_image_styles) && data.selected_image_styles.length > 0 
       ? (typeof data.selected_image_styles[0] === 'string' ? data.selected_image_styles[0] : data.selected_image_styles[0].id)
@@ -1449,7 +1451,30 @@ const goBack = () => {
                     <i class="ra ra-quill-pen"></i> Edit Walkthrough
                   </div>
                   <p v-if="form.walkthrough" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.walkthrough) }}</p>
-                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No solution path recorded. Click to document the intended flow.</p>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No walkthrough set. Click to define the path.</p>
+                </div>
+              </div>
+
+              <!-- Director's TTS Notes Section -->
+              <div class="space-y-4">
+                <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Director's Text-to-Speech Notes (Gemini TTS only)</label>
+                <div v-if="editingField === 'tts_director_notes'" class="space-y-4 animate-fade-in">
+                  <textarea v-model="tempValue" rows="8" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]" placeholder="Specific instructions for voice style, dynamics, and tone..."></textarea>
+                  <p class="text-[10px] text-slate-500 uppercase tracking-widest italic px-2">Note: These instructions only apply when using Gemini-based TTS models.</p>
+                  <div class="flex gap-4">
+                    <button @click="saveField" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+                      <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+                      <span>Save TTS Notes</span>
+                    </button>
+                    <button @click="cancelEditing" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                  </div>
+                </div>
+                <div v-else @click="startEditing('tts_director_notes', form.tts_director_notes)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
+                  <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
+                    <i class="ra ra-quill-pen"></i> Edit TTS Notes
+                  </div>
+                  <p v-if="form.tts_director_notes" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.tts_director_notes) }}</p>
+                  <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No TTS notes set. Click to customize voice delivery.</p>
                 </div>
               </div>
 

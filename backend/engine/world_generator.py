@@ -267,6 +267,7 @@ class WorldManifesto(BaseModel):
     walkthrough: str = Field(..., description="A secret GM walkthrough/solution for the adventure.")
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
+    tts_director_notes: Optional[str] = Field(None, description="Style instructions for the Text-to-Speech engine.")
     scenes: List[WorldSceneSchema]
     exits: List[WorldExitSchema]
     npcs: List[WorldEntitySchema]
@@ -581,6 +582,7 @@ class WorldGenerator:
             adventure.walkthrough = manifest_dict.get("walkthrough") or adventure.walkthrough
             adventure.completed_condition = manifest_dict.get("completed_condition") or adventure.completed_condition
             adventure.gameover_condition = manifest_dict.get("gameover_condition") or adventure.gameover_condition
+            adventure.tts_director_notes = manifest_dict.get("tts_director_notes") or adventure.tts_director_notes
             
             # Flexible Time System
             if manifest_dict.get("time_system"):
@@ -615,6 +617,7 @@ class WorldGenerator:
                 state.walkthrough = adventure.walkthrough
                 state.completed_condition = adventure.completed_condition
                 state.gameover_condition = adventure.gameover_condition
+                state.tts_director_notes = adventure.tts_director_notes
                 state.time_system = adventure.time_system
                 state.time_config = adventure.time_config
             

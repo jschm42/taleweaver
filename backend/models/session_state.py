@@ -34,6 +34,7 @@ class SessionState(Base, TimestampMixin):
     walkthrough = Column(String(10000), nullable=True)
     completed_condition = Column(String(1000), nullable=True)
     gameover_condition = Column(String(1000), nullable=True)
+    tts_director_notes = Column(String(5000), nullable=True)
     selected_image_styles = Column(JSON, nullable=True)
     selected_tone = Column(JSON, nullable=True)
     

@@ -165,7 +165,8 @@ class AdventureLogic:
                 rules=adventure.rules if adventure else None,
                 walkthrough=adventure.walkthrough if adventure else None,
                 completed_condition=adventure.completed_condition if adventure else None,
-                gameover_condition=adventure.gameover_condition if adventure else None
+                gameover_condition=adventure.gameover_condition if adventure else None,
+                tts_director_notes=adventure.tts_director_notes if adventure else None
             )
             db.add(healed_state)
             await db.commit()

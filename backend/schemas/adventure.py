@@ -59,6 +59,7 @@ class AdventureTemplateBase(BaseModel):
     walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
+    tts_director_notes: Optional[str] = None
 
     # GM Capabilities
     allow_dynamic_items: Optional[bool] = True
@@ -93,6 +94,7 @@ class AdventureTemplateUpdate(BaseModel):
     walkthrough: Optional[str] = None
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
+    tts_director_notes: Optional[str] = None
 
     # GM Capabilities
     allow_dynamic_items: Optional[bool] = None
