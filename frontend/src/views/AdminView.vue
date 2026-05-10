@@ -70,7 +70,7 @@ const gameForm = ref({
 })
 
 const ttsForm = ref({
-  enabled: true,
+  enabled: false,
   provider: 'google',
   selected_model: 'gemini-3.1-flash-tts-preview',
   elevenlabs_voice_id: '',
@@ -459,6 +459,20 @@ const saveApiKey = async () => {
   }
 }
 
+const deleteApiKey = async (provider: string) => {
+  if (!confirm(`Are you sure you want to remove the API key for ${provider}? This will stop related AI services from functioning.`)) return
+  isSubmitting.value = true
+  try {
+    await api.deleteApiKey(provider)
+    statusMessage.value = { type: 'success', text: `${provider} key removed successfully.` }
+    fetchSettings()
+  } catch (err: any) {
+    statusMessage.value = { type: 'error', text: 'Delete failed: ' + err.message }
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
 const saveLlmSettings = async () => {
   isSubmitting.value = true
   statusMessage.value = null
@@ -679,6 +693,45 @@ function formatVoiceLabel(voiceName: string): string {
   if (detailParts.length === 0) return voiceName
   return `${voiceName} (${detailParts.join(', ')})`
 }
+
+const isTtsKeyMissing = computed(() => {
+  const provider = ttsForm.value.provider
+  return !configuredKeys.value[provider]
+})
+
+function getProviderName(id: string, type: 'llm' | 'image' | 'tts') {
+  const list = (availableConstants.value as any)[`${type === 'image' ? 'image' : type}_providers`]
+  return list?.find((p: any) => p.id === id)?.name || id
+}
+
+const missingLlmProviders = computed(() => {
+  const providers = new Set([
+    llmForm.value.small_model_provider,
+    llmForm.value.complex_model_provider,
+    llmForm.value.generator_model_provider,
+  ])
+  const missing: string[] = []
+  for (const p of providers) {
+    if (p && p !== 'ollama' && !configuredKeys.value[p]) {
+      missing.push(p)
+    }
+  }
+  return missing
+})
+
+const missingT2iProviders = computed(() => {
+  const providers = new Set([
+    t2iForm.value.simple_model_provider,
+    t2iForm.value.advanced_model_provider,
+  ])
+  const missing: string[] = []
+  for (const p of providers) {
+    if (p && p !== 'ollama' && !configuredKeys.value[p]) {
+      missing.push(p)
+    }
+  }
+  return missing
+})
 </script>
 
 <template>
@@ -824,15 +877,24 @@ function formatVoiceLabel(voiceName: string): string {
                    <span class="capitalize font-bold text-slate-300">{{ provider }}</span>
                    <span v-if="info.is_env" class="text-xxs text-amber-500/80 uppercase font-black tracking-tighter">Imported from ENV</span>
                  </div>
-                 <span :class="[info.is_env ? 'text-amber-500 bg-amber-500/10' : 'text-emerald-500 bg-emerald-500/10', 'text-xxs font-mono font-black tracking-widest px-2 py-1 rounded']">
-                   {{ info.is_env ? 'READ-ONLY' : 'SECURED' }}
-                 </span>
+                 <div class="flex items-center gap-3">
+                   <span :class="[info.is_env ? 'text-amber-500 bg-amber-500/10' : 'text-emerald-500 bg-emerald-500/10', 'text-xxs font-mono font-black tracking-widest px-2 py-1 rounded']">
+                     {{ info.is_env ? 'READ-ONLY' : 'SECURED' }}
+                   </span>
+                   <button 
+                     v-if="!info.is_env" 
+                     @click="deleteApiKey(provider)" 
+                     class="p-2 text-slate-600 hover:text-red-500 transition-colors"
+                     title="Remove this key"
+                   >
+                     <i class="ra ra-cancel text-xs"></i>
+                   </button>
+                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- SECTION: LLM -->
         <div v-if="activeSection === 'llm'" class="space-y-8 animate-fade-in">
           <div>
             <h1 class="text-4xl font-extrabold text-white mb-2">Intelligence Routing</h1>
@@ -840,6 +902,19 @@ function formatVoiceLabel(voiceName: string): string {
           </div>
 
           <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
+            <!-- API KEY WARNING -->
+            <div v-if="missingLlmProviders.length > 0" class="p-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-4">
+              <div class="p-3 bg-amber-500/20 rounded-xl text-amber-500">
+                <i class="ra ra-warning text-xl"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-amber-400 uppercase tracking-widest mb-1">API Keys Missing</h4>
+                <p class="text-xs text-amber-500/70 leading-relaxed">
+                  Missing keys for: <strong v-for="(p, i) in missingLlmProviders" :key="p">{{ getProviderName(p, 'llm') }}{{ i < missingLlmProviders.length - 1 ? ', ' : '' }}</strong>.
+                  Please add them in the <button @click="activeSection = 'keys'" class="text-amber-400 underline font-bold hover:text-amber-300">Provider Keys</button> section.
+                </p>
+              </div>
+            </div>
             
             <!-- SIMPLE MODEL -->
             <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10">
@@ -1084,7 +1159,6 @@ function formatVoiceLabel(voiceName: string): string {
           </div>
         </div>
 
-        <!-- SECTION: T2I -->
         <div v-if="activeSection === 't2i'" class="space-y-8 animate-fade-in">
           <div>
             <h1 class="text-4xl font-extrabold text-white mb-2">Visual Generation</h1>
@@ -1092,6 +1166,19 @@ function formatVoiceLabel(voiceName: string): string {
           </div>
 
           <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
+            <!-- API KEY WARNING -->
+            <div v-if="missingT2iProviders.length > 0" class="p-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-4">
+              <div class="p-3 bg-amber-500/20 rounded-xl text-amber-500">
+                <i class="ra ra-warning text-xl"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-amber-400 uppercase tracking-widest mb-1">API Keys Missing</h4>
+                <p class="text-xs text-amber-500/70 leading-relaxed">
+                  Missing keys for: <strong v-for="(p, i) in missingT2iProviders" :key="p">{{ getProviderName(p, 'image') }}{{ i < missingT2iProviders.length - 1 ? ', ' : '' }}</strong>.
+                  Please add them in the <button @click="activeSection = 'keys'" class="text-amber-400 underline font-bold hover:text-amber-300">Provider Keys</button> section.
+                </p>
+              </div>
+            </div>
             
             <!-- SIMPLE VISUALS -->
             <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-cyan-500/10">
@@ -1266,6 +1353,20 @@ function formatVoiceLabel(voiceName: string): string {
           </div>
 
           <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-8">
+            <!-- API KEY WARNING -->
+            <div v-if="isTtsKeyMissing" class="p-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-4">
+              <div class="p-3 bg-amber-500/20 rounded-xl text-amber-500">
+                <i class="ra ra-warning text-xl"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-amber-400 uppercase tracking-widest mb-1">API Key Missing</h4>
+                <p class="text-xs text-amber-500/70 leading-relaxed">
+                  No API key found for <strong>{{ ttsForm.provider === 'google' ? 'Google Gemini' : 'ElevenLabs' }}</strong>. 
+                  Please add your key in the <button @click="activeSection = 'keys'" class="text-amber-400 underline font-bold hover:text-amber-300">Provider Keys</button> section before enabling speech.
+                </p>
+              </div>
+            </div>
+
             <!-- ENABLED TOGGLE -->
             <div class="flex items-center justify-between p-6 bg-slate-950/50 rounded-2xl border border-blue-500/10">
               <div>

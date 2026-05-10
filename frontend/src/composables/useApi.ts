@@ -229,6 +229,11 @@ export const api = {
     })
   },
 
+  /** Deletes an encrypted API key for a provider. */
+  deleteApiKey(provider: string): Promise<{ status: string; message: string }> {
+    return request(`/settings/keys/${provider}`, { method: 'DELETE' })
+  },
+
   /** Retrieves full settings payload including generation catalogs. */
   getSettings(): Promise<SettingsResponse> {
     return request('/settings')

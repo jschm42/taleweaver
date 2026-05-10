@@ -94,7 +94,7 @@ async def generate_tts(
 
     # 1. Resolve Provider and API Key
     tts_settings = settings_user.tts_settings or {}
-    if not tts_settings.get("enabled", True):
+    if not tts_settings.get("enabled", False):
         raise HTTPException(status_code=400, detail="TTS is globally disabled in settings.")
 
     provider = tts_settings.get("provider", "google").lower()

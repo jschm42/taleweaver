@@ -228,7 +228,7 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     full_voice_list = list(GOOGLE_TTS_VOICE_LIST)
     full_voice_catalog = [dict(entry) for entry in GOOGLE_TTS_VOICE_CATALOG]
     fallback = {
-        "enabled": True,
+        "enabled": False,
         "provider": "google",
         "selected_model": "gemini-3.1-flash-tts-preview",
         "voice_list": full_voice_list,
@@ -404,7 +404,7 @@ class GameSettingsPayload(BaseModel):
 
 
 class TTSSettingsPayload(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     provider: str = "google"
     selected_model: str = "gemini-3.1-flash-tts-preview"
     selected_voice: str = "Puck"
@@ -550,6 +550,43 @@ async def update_api_key(
     await _broadcast_global_settings(db, user)
     await db.commit()
     return {"status": "success", "message": f"{payload.provider} key saved securely."}
+
+@router.delete("/keys/{provider}")
+async def delete_api_key(
+    provider: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    """Deletes an encrypted API key for the authenticated user."""
+    provider_lower = provider.lower()
+    logger.info(f"[Admin] Deleting API key for provider: {provider} (lower: {provider_lower})")
+    
+    # Block deletion for environment-configured keys
+    if settings.get_env_api_key(provider_lower):
+        logger.warning(f"[Admin] Blocked deletion of env key: {provider_lower}")
+        raise HTTPException(
+            status_code=403, 
+            detail=f"The API key for {provider} is managed via environment variables and cannot be deleted here."
+        )
+
+    user = await _resolve_global_settings_owner(db, current_user)
+    logger.info(f"[Admin] Settings owner for delete: {user.username}")
+    
+    current_keys = user.encrypted_api_keys or {}
+    logger.info(f"[Admin] Current keys in DB: {list(current_keys.keys())}")
+    
+    if provider_lower not in current_keys:
+        logger.error(f"[Admin] Key not found for provider: {provider_lower}")
+        raise HTTPException(status_code=404, detail=f"No key found for {provider}.")
+
+    new_keys = dict(current_keys)
+    del new_keys[provider_lower]
+    user.encrypted_api_keys = new_keys
+
+    await _broadcast_global_settings(db, user)
+    await db.commit()
+    logger.info(f"[Admin] Successfully removed key for {provider_lower}")
+    return {"status": "success", "message": f"{provider} key removed."}
 
 @router.post("/llm")
 async def update_llm_settings(
