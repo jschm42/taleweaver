@@ -11,8 +11,8 @@ Pillow
 python-multipart
 passlib[bcrypt]
 pyjwt
+httpx
 
 # Testing
 pytest
 pytest-asyncio
-httpx

@@ -7,12 +7,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'section', section: 'templates' | 'sessions' | 'profile'): void
   (e: 'admin'): void
+  (e: 'about'): void
 }>()
 </script>
 
 <template>
   <aside class="w-72 bg-aether-background/95 backdrop-blur-2xl border-r border-white/5 flex flex-col z-50 overflow-y-auto">
-    <div class="p-8 pb-4">
+    <div class="p-8 pb-4 flex-1">
       <nav class="space-y-1">
         <button
           @click="emit('section', 'sessions')"
@@ -43,6 +44,17 @@ const emit = defineEmits<{
           <span class="text-base font-bold tracking-wide text-xl text-emerald-500/80 uppercase">Administration</span>
         </button>
       </nav>
+    </div>
+
+    <!-- Sidebar Bottom: About -->
+    <div class="p-8 pt-4 border-t border-white/5">
+      <button 
+        @click="emit('about')"
+        class="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-slate-500 hover:bg-white/5 hover:text-white transition-all group"
+      >
+        <i class="ra ra-scroll-unfurled text-xl group-hover:text-aether-primary"></i>
+        <span class="text-xs font-black uppercase tracking-widest">About Archive</span>
+      </button>
     </div>
   </aside>
 </template>

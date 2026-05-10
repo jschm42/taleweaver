@@ -16,6 +16,7 @@ import ImportExamplesCard from '@/components/portal/ImportExamplesCard.vue'
 import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
 import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
+import AboutModal from '@/components/portal/AboutModal.vue'
 import { configState } from '@/store/config'
 
 const router = useRouter()
@@ -91,6 +92,7 @@ const isSeeding = ref(false)
 const isDeleting = ref(false)
 const isDeletingSession = ref(false)
 const showImportWarning = ref(false)
+const showAboutModal = ref(false)
 const importWarningType = ref<'defaults' | 'samples'>('defaults')
 const importConflicts = ref<Array<{ title: string; already_exists: boolean }>>([])
 
@@ -596,6 +598,7 @@ onUnmounted(() => {
       :active-section="activeSection"
       @section="router.push({ query: { ...route.query, section: $event } })"
       @admin="router.push('/admin')"
+      @about="showAboutModal = true"
     />
 
     <!-- Main Content Area -->
@@ -701,6 +704,13 @@ onUnmounted(() => {
             <UserProfileContent />
           </div>
         </div>
+
+        <!-- Footer -->
+        <footer class="mt-auto py-8 border-t border-white/5 text-center">
+          <p class="text-[10px] font-bold text-slate-700 uppercase tracking-widest">
+            © 2026 Jean Schmitz • Released under MIT License • TaleWeaver v{{ configState.appVersion }}
+          </p>
+        </footer>
       </div>
     </main>
 
@@ -744,6 +754,11 @@ onUnmounted(() => {
         :is-importing="isSeeding"
         @close="showImportWarning = false"
         @confirm="importWarningType === 'defaults' ? performRestoreDefaults() : performImportExamples()"
+      />
+
+      <AboutModal
+        :isOpen="showAboutModal"
+        @close="showAboutModal = false"
       />
     </Teleport>
 

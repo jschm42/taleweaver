@@ -95,8 +95,11 @@ async function handleLogin() {
         </button>
       </form>
 
-      <div class="mt-12 text-center">
-        <span class="text-xxs font-bold text-slate-600 uppercase tracking-widest">Powered by Advanced Agentic Intelligence</span>
+      <div class="mt-12 text-center space-y-2">
+        <p class="text-xxs font-bold text-slate-600 uppercase tracking-widest">Powered by Advanced Agentic Intelligence</p>
+        <p class="text-[10px] font-medium text-slate-700 tracking-wide">
+          © 2026 Jean Schmitz • Released under MIT License
+        </p>
       </div>
     </div>
   </div>
