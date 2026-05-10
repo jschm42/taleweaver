@@ -4,7 +4,7 @@ flowchart TD
     
     subgraph BackgroundTask [Background Generation]
         direction TB
-        Init[Initialize Status & Context] --> CallLLM[LLM: Generate World Manifesto]
+        Init[Init Status, Context & Catalog] --> CallLLM[LLM: Generate World Manifesto]
         CallLLM --> ValidateManifest{Manifest Valid?}
         ValidateManifest -- No --> Retry[Retry / Log Error]
         ValidateManifest -- Yes --> ApplyManifest[Apply Manifest to Database]

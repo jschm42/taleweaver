@@ -36,3 +36,10 @@ sequenceDiagram
 
     B->>DB: Save Chat Messages
     B-->>C: ChatResponse (Narration, Sheet, Map, Entities)
+
+    opt Narration Audio (TTS)
+        C->>B: POST /api/tts/generate (text)
+        B->>ME: Synthesize Speech (Gemini/ElevenLabs)
+        ME-->>B: audio_url
+        B-->>C: Audio Stream / URL
+    end

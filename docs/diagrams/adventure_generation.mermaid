@@ -1,6 +1,7 @@
 graph TD
     A[Client: POST /adventures] --> B[Backend: Create Placeholder Adventure & Avatar]
     B --> C[Backend: Start Background Generation Task]
+    CAT[(Style & Tone Catalog)] -.-> D
     C --> D[WorldGenerator: generate_world]
     D --> E[LLM: Analyze Story Idea]
     E --> F[Generate WorldManifesto<br/>(Scenes, Exits, NPCs, Objects, Protagonist)]

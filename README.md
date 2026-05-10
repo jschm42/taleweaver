@@ -6,6 +6,9 @@
 
 Welcome to the AI Text Adventure RPG project! This is a next-generation browser-based text adventure RPG that combines the nostalgic feel of classic point-and-click and text adventures with the dynamic creativity of modern Large Language Models (LLMs).
 
+> [!TIP]
+> **Roleplay for the best experience!** TaleWeaver works best when you fully immerse yourself in the role of the protagonist. Instead of just giving commands, try to describe your actions and thoughts in character. The AI Gamemaster will react much more dynamically and build a richer narrative if you "play along" with the story's themes and your character's traits.
+
 ## 📸 Gallery
 
 <p align="center">
@@ -62,6 +65,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **NPCs & Dialogues:** Creation and control of NPCs, including dynamic dialogues where the AI assumes the role of the NPC in the chat.
 * **Loot & Objects:** Placement of interactive objects and loot to improve character stats.
 * **Challenge Ratings:** Autonomous decision-making by the GM regarding the difficulty of a player's planned action by setting a dynamic "challenge rating" (Difficulty Class).
+* **Style & Tone Catalog:** Fully customizable world generation. Define your own visual styles and narrative tones in the Administration panel, complete with AI-generated previews.
 
 ### Persistent Game Progress & Memory
 * **Memory Feature:** The AI remembers all previous conversations and actions of the player within an adventure.
@@ -79,6 +83,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Multilingual Generation:** Generate entirely new adventures in your chosen language (German, Italian, French, etc.) from the start.
 * **In-Game Translation:** Switch languages dynamically during gameplay using the "Bable Fish" toggle to translate narration and NPC dialogue.
 * **User Preferences:** Set a global default language in your profile that follows you across all adventures and sessions.
+* **Voice & Narration (TTS):** Immersive audio experience powered by **Google Gemini 1.5 Flash (TTS)** and **ElevenLabs**. The AI Gamemaster narrates the story with cinematic quality, including support for vocal tags and director notes for dramatic pacing.
 
 ### Hybrid Interaction
 * **Natural Language Chat:** Free text input for dialogues and complex actions.
@@ -99,11 +104,6 @@ Although starting single-user, the database uses **UUIDv4** keys exclusively, pa
 ### LLM Abstraction & Secure Key Management
 * **Adapter Pattern:** Using a higher-level LLM router (e.g., `litellm`) to map providers to a standardized interface.
 * **Security:** API keys entered via the frontend are encrypted (AES) before being stored in the SQLite database.
-
-### Strict Rules vs. Hallucination Engine
-The `strict_rules` flag determines AI behavior:
-* **Strict Mode:** Forces state modifications (HP loss, debuffs) to return "Structured Outputs" (JSON) which the backend validates.
-* **Hallucination Mode:** Narrative freedom where the backend adapts to textual estimations.
 
 ## 4. Workflows & Internal Logic
 
@@ -302,8 +302,9 @@ The backend monitors three specific directories relative to the project root:
 ## 7. Credits & Assets
 
 * **AI & LLM:** Image generation is powered by **FLUX.1 [schnell]** and **FLUX.2 [klein]** by [Black Forest Labs](https://blackforestlabs.ai/). Multi-provider LLM abstraction is handled via [LiteLLM](https://github.com/BerriAI/litellm).
+* **Voice & TTS:** Cinematic narration provided by **Google Gemini 1.5 Flash (TTS)** and **ElevenLabs**.
 * **Mapping:** Dynamic world maps are rendered using [Mermaid.js](https://mermaid.js.org/).
-* **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets used throughout the interface.
+* **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets, and [DiceBear](https://www.dicebear.com/) for the procedural user avatars.
 * **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/) and system icons by [Lucide](https://lucide.dev/).
 * **Typography:** Retro pixel-art and fantasy aesthetics powered by the **Press Start 2P**, **Acme**, and **Orbitron** fonts from [Google Fonts](https://fonts.google.com/) (SIL Open Font License).
 

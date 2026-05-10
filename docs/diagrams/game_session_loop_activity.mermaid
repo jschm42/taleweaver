@@ -33,6 +33,10 @@ flowchart TD
     SaveImage --> Finalize
     
     Finalize[Build ChatResponse] --> End([Return Response to Client])
+    End --> TTSCheck{TTS Enabled?}
+    TTSCheck -- Yes --> GenAudio[TTSEngine: Synthesize Narration]
+    GenAudio --> PlayAudio([Play Audio in UI])
+    TTSCheck -- No --> Stop([End Turn])
     
     style StrictMode fill:#e1f5fe,stroke:#01579b
     style FreeformMode fill:#fff3e0,stroke:#e65100
