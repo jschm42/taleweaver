@@ -214,3 +214,4 @@ node_modules/
 data/
 logs/
 nginx/ssl/
+scratch/
