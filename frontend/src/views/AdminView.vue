@@ -721,7 +721,7 @@ function formatVoiceLabel(voiceName: string): string {
           @click="activeSection = 'tts'"
           :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === 'tts' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
         >
-          <div class="w-5"></div>
+          <i class="ra opacity-0"></i>
           <span class="font-bold text-md font-mono uppercase tracking-widest">Speech (TTS)</span>
         </button>
         <button
