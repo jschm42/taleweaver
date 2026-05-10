@@ -1042,9 +1042,9 @@ onBeforeUnmount(() => {
       <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
     </div>
 
-    <!-- Header Navigation -->    <header class="bg-transparent px-4 md:px-8 pt-8 pb-4 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-start gap-6 z-10 shrink-0 relative min-h-[110px]">
+    <!-- Header Navigation -->    <header class="bg-transparent px-4 md:px-8 pt-8 pb-4 flex flex-col lg:flex-row items-start gap-6 z-10 shrink-0 relative min-h-[110px]">
       <!-- Left: back + Adventure Title -->
-      <div class="flex items-center gap-4 z-10 min-w-0 lg:order-1">
+      <div class="flex items-center gap-4 z-10 min-w-0 xl:w-72 shrink-0">
         <button 
           @click="goBack" 
           class="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-all duration-300 backdrop-blur-md shadow-xl group shrink-0"
@@ -1065,12 +1065,12 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Center: Active Quest Tracker (Matches Chat Width) -->
-      <div class="w-full flex justify-center lg:order-2 min-w-0">
+      <div class="flex-grow w-full lg:w-auto min-w-0 flex justify-center">
         <GameQuestTracker :tracked-quest="trackedQuest" />
       </div>
 
-      <!-- Right: Clock -->
-      <div class="flex justify-end lg:order-3 lg:mt-0 mt-[-10px]">
+      <!-- Right Area (Clock is now absolute to save space and align quest better) -->
+      <div class="absolute top-8 right-4 md:right-8 lg:mt-0 z-20">
         <GameClockWidget :game-time="gameTime" :clock-tick="clockTick" />
       </div>
       <div v-if="sheet?.debug_mode" class="absolute top-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-1 bg-rose-600/80 backdrop-blur-md border border-rose-400/50 rounded-full text-[10px] font-black text-white uppercase tracking-[0.2em] animate-pulse shadow-lg">

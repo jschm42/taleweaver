@@ -12,17 +12,17 @@ Welcome to the AI Text Adventure RPG project! This is a next-generation browser-
 ## 📸 Gallery
 
 <p align="center">
-  <img src="docs/screenshots/portal.png" width="800" alt="Adventure Portal Placeholder">
+  <img src="docs/screenshots/library.jpg" width="600" alt="Adventure Library">
   <br><em><b>Adventure Portal</b> - Manage your stories and explore new worlds.</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/generator.png" width="800" alt="Game Builder Placeholder">
+  <img src="docs/screenshots/generator.jpg" width="600" alt="World Generator">
   <br><em><b>World Generator</b> - AI-driven world building and story generation.</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/gameplay.png" width="800" alt="In-Game Gameplay Placeholder">
+  <img src="docs/screenshots/gameplay.jpg" width="600" alt="Gamesession">
   <br><em><b>In-Game</b> - Immersive text adventure gameplay with dynamic AI interaction.</em>
 </p>
 
