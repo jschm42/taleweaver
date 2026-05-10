@@ -12,10 +12,10 @@ LLM_PROVIDERS = [
 ]
 
 IMAGE_PROVIDERS = [
-    {"id": "openai", "name": "OpenAI (DALL-E)"},
+    {"id": "openai", "name": "OpenA"},
     {"id": "openrouter", "name": "OpenRouter (Various)"},
-    {"id": "black_forest_labs", "name": "Black Forest Labs (FLUX)"},
-    {"id": "google", "name": "Google Gemini (Imagen)"},
+    {"id": "black_forest_labs", "name": "Black Forest Labs"},
+    {"id": "google", "name": "Google Gemini"},
     {"id": "ollama", "name": "Ollama (Local, EXPERIMENTAL)"},
 ]
 
