@@ -765,6 +765,19 @@ function formatVoiceLabel(voiceName: string): string {
     <main class="flex-grow p-12 overflow-y-auto max-h-screen custom-scrollbar relative">
       <div class="max-w-4xl mx-auto">
         
+        <!-- GLOBAL WARNING -->
+        <div v-if="Object.keys(configuredKeys).length === 0 && !isHydratingSettings" class="mb-10 bg-amber-500/10 border border-amber-500/20 rounded-3xl p-8 animate-pulse shadow-2xl">
+          <div class="flex items-start gap-6">
+            <div class="p-4 bg-amber-500/20 rounded-2xl text-amber-500">
+              <i class="ra ra-warning ra-2x"></i>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-amber-500 mb-2">AI Configuration Required</h3>
+              <p class="text-amber-500/70">TaleWeaver is currently offline. Please configure at least one <strong>Intelligence Provider</strong> (Provider Keys) and select a model to start generating adventures.</p>
+            </div>
+          </div>
+        </div>
+        
         <!-- SECTION: KEYS -->
         <div v-if="activeSection === 'keys'" class="space-y-8 animate-fade-in">
           <div>

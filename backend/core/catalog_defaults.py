@@ -152,20 +152,6 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "image_url": "/assets/catalog/tones/melancholic-somber_e5a53a82.jpg",
     },
     {
-        "id": "grimdark-gritty",
-        "name": "Grimdark & Gritty",
-        "description": "Brutal, uncompromising, and focused on survival against all odds.",
-        "instruction": "The tone is grimdark and gritty. Highlight the harshness of the world, moral ambiguity, and the weight of consequences.",
-        "image_url": "/assets/catalog/tones/grimdark-gritty.jpg",
-    },
-    {
-        "id": "pulp-adventure",
-        "name": "Pulp Adventure",
-        "description": "High-energy, daring escapes, and dramatic cliffhangers.",
-        "instruction": "Embrace a high-energy pulp adventure tone. Focus on daring actions, dramatic cliffhangers, over-the-top heroism, and fast-paced, exciting dialogue.",
-        "image_url": "/assets/catalog/tones/pulp-adventure.jpg",
-    },
-    {
         "id": "post-apocalyptic",
         "name": "Post-Apocalyptic Despair",
         "description": "Bleak survival and haunting memories of a lost world.",
