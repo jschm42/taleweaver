@@ -1,12 +1,13 @@
 """Shared Google TTS voice catalog used across settings and world generation."""
 
-from typing import NotRequired, TypedDict
+from typing import TypedDict, Optional
+from typing_extensions import NotRequired
 
 
 class VoiceCatalogEntry(TypedDict):
     name: str
-    gender: NotRequired[str]
-    description: NotRequired[str]
+    gender: NotRequired[Optional[str]]
+    description: NotRequired[Optional[str]]
 
 
 GOOGLE_TTS_VOICE_CATALOG: list[VoiceCatalogEntry] = [

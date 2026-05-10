@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import os
-from typing import List, Optional, Dict, Literal, Any, Callable, Awaitable
+from typing import List, Optional, Dict, Literal, Any, Callable, Awaitable, Union
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -30,7 +30,7 @@ IMAGE_MODERATION_MARKERS = (
 )
 
 
-def is_image_moderation_error(error: Exception | str | None) -> bool:
+def is_image_moderation_error(error: Union[Exception, str, None]) -> bool:
     if error is None:
         return False
     message = str(error).lower()

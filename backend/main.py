@@ -37,7 +37,9 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    await apply_sqlite_compat_migrations()
+    # Note: We now use Alembic for all schema migrations. 
+    # Manual apply_sqlite_compat_migrations() is deprecated and disabled to avoid conflicts.
+    # await apply_sqlite_compat_migrations()
 
     # Auto-import adventures
     from backend.core.database import AsyncSessionLocal
