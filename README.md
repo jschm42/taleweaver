@@ -56,7 +56,7 @@ Use providers with a good latency for the world generation to avoid long wait ti
 
 ## 1. The Vision
 
-Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background. The frontend is presented in an immersive, stylish pixel-art look.
+Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background.
 
 ## 2. Core Features
 
@@ -93,7 +93,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Generated Maps:** Directed graphs of scenes, visualized via Mermaid.js (using the `/map` command).
 
 ### Media & Immersion
-* Optional AI-generated images to enhance the retro pixel-art aesthetic.
+* Optional AI-generated images to enhance the aesthetic.
 * **Import/Export:** Adventures can be backed up or shared.
 
 ## 3. Architecture & Concepts
