@@ -24,13 +24,15 @@ echo "[*] Installing backend dependencies..."
 ./venv/bin/pip install -r requirements.txt
 
 # 4. Encryption Key
-if ! grep -q "ENCRYPTION_KEY=." .env; then
+mkdir -p data
+
+if ! grep -qE "ENCRYPTION_KEY=[a-zA-Z0-9\-_]{20,}" .env; then
     echo "[*] Generating ENCRYPTION_KEY..."
     KEY=$(./venv/bin/python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/ENCRYPTION_KEY=/ENCRYPTION_KEY=$KEY/" .env
+        sed -i '' "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$KEY/" .env
     else
-        sed -i "s/ENCRYPTION_KEY=/ENCRYPTION_KEY=$KEY/" .env
+        sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$KEY/" .env
     fi
     echo "[+] ENCRYPTION_KEY added to .env"
 else

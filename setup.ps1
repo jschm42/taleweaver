@@ -22,11 +22,16 @@ Write-Host "[*] Installing backend dependencies..." -ForegroundColor Yellow
 .\venv\Scripts\pip.exe install -r requirements.txt
 
 # 4. Encryption Key
+if (-not (Test-Path "data")) {
+    Write-Host "[*] Creating data directory..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Path "data" | Out-Null
+}
+
 $envFile = Get-Content ".env" -Raw
-if ($envFile -notmatch "ENCRYPTION_KEY=.+") {
+if ($envFile -notmatch "ENCRYPTION_KEY=[a-zA-Z0-9\-_]{20,}") {
     Write-Host "[*] Generating ENCRYPTION_KEY..." -ForegroundColor Yellow
     $key = .\venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-    $envFile = $envFile -replace "ENCRYPTION_KEY=", "ENCRYPTION_KEY=$key"
+    $envFile = $envFile -replace "ENCRYPTION_KEY=.*", "ENCRYPTION_KEY=$key"
     Set-Content ".env" $envFile
     Write-Host "[+] ENCRYPTION_KEY added to .env" -ForegroundColor Green
 } else {
