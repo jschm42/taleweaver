@@ -1,3 +1,4 @@
+from typing import Optional, Union
 import pytest
 from httpx import AsyncClient
 
@@ -8,7 +9,7 @@ from tests.conftest import TestSessionLocal
 pytestmark = pytest.mark.asyncio
 
 
-async def _create_user(*, username: str, role: str = "admin", bio: str | None = None) -> None:
+async def _create_user(*, username: str, role: str = "admin", bio: Optional[str] = None) -> None:
     async with TestSessionLocal() as session:
         session.add(
             User(
@@ -28,7 +29,7 @@ async def _create_user(*, username: str, role: str = "admin", bio: str | None = 
 async def test_generate_profile_image_uses_bio_prompt(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
     await _create_user(username="bio_user", bio="A battle mage with ember eyes")
 
-    captured: dict[str, str | None] = {}
+    captured: dict[str, Optional[str]] = {}
 
     async def fake_generate_image(*, prompt, model, api_key, provider, target_dir, filename, provider_options):
         captured["prompt"] = prompt
@@ -51,7 +52,7 @@ async def test_generate_profile_image_uses_bio_prompt(monkeypatch: pytest.Monkey
 async def test_generate_profile_image_falls_back_to_default_prompt(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
     await _create_user(username="no_bio_user", bio=None)
 
-    captured: dict[str, str | None] = {}
+    captured: dict[str, Optional[str]] = {}
 
     async def fake_generate_image(*, prompt, model, api_key, provider, target_dir, filename, provider_options):
         captured["prompt"] = prompt
@@ -74,7 +75,7 @@ async def test_generate_profile_image_falls_back_to_default_prompt(monkeypatch: 
 async def test_generate_profile_image_prefers_request_bio_prompt(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
     await _create_user(username="override_bio_user", bio=None)
 
-    captured: dict[str, str | None] = {}
+    captured: dict[str, Optional[str]] = {}
 
     async def fake_generate_image(*, prompt, model, api_key, provider, target_dir, filename, provider_options):
         captured["prompt"] = prompt
