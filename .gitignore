@@ -215,6 +215,7 @@ data/
 logs/
 nginx/ssl/
 scratch/
+backend/brain/
 
 # Editor
 .vscode/
