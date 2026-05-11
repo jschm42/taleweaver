@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { api } from '@/composables/useApi'
 import { audioService } from '@/services/audioService'
+import { catalogService } from '@/services/catalogService'
 import { refreshConfig } from '@/store/config'
 
 /**
@@ -107,6 +108,9 @@ class SettingsService {
       if (data.llm_settings) this.llmForm.value = { ...data.llm_settings as any }
       if (data.t2i_settings) this.t2iForm.value = { ...data.t2i_settings as any }
       if (data.game_settings) this.gameForm.value = { ...data.game_settings as any }
+
+      // Hydrate admin-managed catalogs used by the styles/tones sections.
+      catalogService.hydrateCatalogs(data)
 
       // Hydrate TTS with special boolean handling
       if (data.tts_settings) {

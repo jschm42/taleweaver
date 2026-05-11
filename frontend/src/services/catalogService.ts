@@ -20,6 +20,20 @@ class CatalogService {
   statusMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
   isGeneratingItem = ref<Record<string, boolean>>({})
 
+  // ============ HYDRATION ============
+
+  /**
+   * Hydrate both admin-managed catalogs from a settings payload.
+   * Falls back to empty arrays so admin views render predictably.
+   */
+  hydrateCatalogs(payload: {
+    image_styles_catalog?: CatalogTile[] | null
+    tone_catalog?: CatalogTile[] | null
+  }) {
+    this.imageStylesCatalog.value = payload.image_styles_catalog || []
+    this.toneCatalog.value = payload.tone_catalog || []
+  }
+
   // ============ UTILITIES ============
 
   /**
