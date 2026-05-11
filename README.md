@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="frontend/src/assets/svg/app-logo.svg" width="200" alt="TaleWeaver Logo">
+  <br><em><b>Adventure Portal</b> - Manage your stories and explore new worlds.</em>
+</p>
+
+
 # TaleWeaver - AI Text Adventure World Generator (v0.1.0-beta)
 
 > [!IMPORTANT]
