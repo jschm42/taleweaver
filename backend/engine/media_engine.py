@@ -168,6 +168,52 @@ class MediaEngine:
             except OSError as e:
                 logger.error("Failed to cleanup assets for adventure %s: %s", adventure_id, e)
 
+    @staticmethod
+    async def _generate_thumbnail(filepath: str, max_size: int = 480):
+        """Creates a thumbnail for the given image file if it doesn't exist."""
+        try:
+            base, ext = os.path.splitext(filepath)
+            thumb_path = f"{base}_thumb{ext}"
+            
+            # Avoid re-generating if it already exists
+            if os.path.exists(thumb_path):
+                return thumb_path
+
+            # Use to_thread for blocking PIL operations
+            def _resize():
+                with Image.open(filepath) as img:
+                    # Maintain aspect ratio
+                    img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                    # For JPEGs, ensure RGB mode
+                    if img.mode in ("RGBA", "P"):
+                        img = img.convert("RGB")
+                    img.save(thumb_path, optimize=True, quality=80)
+                return thumb_path
+
+            return await asyncio.to_thread(_resize)
+        except Exception as e:
+            logger.error("Failed to generate thumbnail for %s: %s", filepath, e)
+            return None
+
+    @staticmethod
+    async def ensure_thumbnails(adventure_id: str):
+        """Scans the library for an adventure and ensures all images have thumbnails."""
+        target_dir = _safe_data_path("adventures", "library", adventure_id)
+        if not os.path.exists(target_dir):
+            return
+
+        image_extensions = {".jpg", ".jpeg", ".png"}
+        tasks = []
+        for root, _, files in os.walk(target_dir):
+            for file in files:
+                base, ext = os.path.splitext(file)
+                if ext.lower() in image_extensions and not base.endswith("_thumb"):
+                    filepath = os.path.join(root, file)
+                    tasks.append(MediaEngine._generate_thumbnail(filepath))
+        
+        if tasks:
+            logger.info("Generating %d missing thumbnails for adventure %s", len(tasks), adventure_id)
+            await asyncio.gather(*tasks)
 
     @classmethod
     def _get_litellm(cls) -> Any:
@@ -728,6 +774,9 @@ class MediaEngine:
                 with open(filepath, "wb") as f:
                     f.write(image_bytes)
             
+            # Generate thumbnail
+            await MediaEngine._generate_thumbnail(filepath)
+
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"
         except (ValueError, OSError, TypeError):
@@ -754,6 +803,9 @@ class MediaEngine:
                     with open(filepath, "wb") as f:
                         f.write(response.content)
                 
+                # Generate thumbnail
+                await MediaEngine._generate_thumbnail(filepath)
+
                 rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
                 return f"/data/{rel_path}"
             else:

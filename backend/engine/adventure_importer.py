@@ -257,6 +257,9 @@ class AdventureTemplateImporter:
                 
 
                 await db.commit()
+                # Ensure thumbnails are generated for imported assets
+                from backend.engine.media_engine import MediaEngine
+                await MediaEngine.ensure_thumbnails(new_template_id)
                 return True
         except Exception:
             logger.exception("ADZ Import failed")
@@ -402,6 +405,9 @@ class AdventureTemplateImporter:
                     ))
                 
                 await db.commit()
+                # Ensure thumbnails are generated for imported assets
+                from backend.engine.media_engine import MediaEngine
+                await MediaEngine.ensure_thumbnails(new_template.id)
                 return True
             else:
                 manifest = payload.get("original_manifest") or payload.get("manifest") or payload
@@ -478,6 +484,9 @@ class AdventureTemplateImporter:
                 new_template.creation_status = "Ready"
                 new_template.creation_error = None
                 await db.commit()
+                # Ensure thumbnails are generated for imported assets
+                from backend.engine.media_engine import MediaEngine
+                await MediaEngine.ensure_thumbnails(new_template.id)
                 return True
         except Exception:
             logger.exception("ADV Import failed")

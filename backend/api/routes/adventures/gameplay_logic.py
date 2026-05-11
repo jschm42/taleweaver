@@ -230,7 +230,18 @@ class GameTurnManager:
             })
         return reduced_scenes
 
-    def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict], scenes: list[dict]) -> str:
+    @staticmethod
+    def _build_chat_progression_exits(exits: list[WorldExit]) -> list[dict]:
+        reduced_exits = []
+        for ex in exits:
+            reduced_exits.append({
+                "to_scene_id": ex.to_scene_id,
+                "label": ex.label,
+                "is_locked": ex.is_locked
+            })
+        return reduced_exits
+
+    def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict], scenes: list[dict], exits: list[dict]) -> str:
         notes = self._get_gm_notes()
         if len(notes) > GM_NOTES_PROMPT_MAX_ITEMS:
             notes = notes[-GM_NOTES_PROMPT_MAX_ITEMS:]
@@ -248,6 +259,7 @@ class GameTurnManager:
             awards_json=self._compact_json(awards),
             npcs_json=self._compact_json(npcs),
             scenes_json=self._compact_json(scenes),
+            exits_json=self._compact_json(exits),
             notes_json=self._compact_json(notes),
             current_scene_id=self.state.current_scene_id,
             current_scene_label=current_scene_label,
@@ -377,9 +389,12 @@ class GameTurnManager:
             game_over=bool(intent.game_over),
             game_completed=bool(intent.game_completed),
             status_note=intent.status_note,
+            new_scene_id=intent.new_scene_id,
+            exit_label=intent.exit_label,
             moved_entities=intent.moved_entities,
             updated_entities=intent.updated_entities,
             deleted_entities=intent.deleted_entities,
+            extra_time_minutes=intent.extra_time_minutes,
         )
 
     async def initialize(self) -> bool:
@@ -489,6 +504,9 @@ class GameTurnManager:
                 yield f"event: status\ndata: {json.dumps({'content': 'The Game Master evaluates your situation...'})}\n\n"
             elif response.startswith("[TRIGGER_TALK]"):
                 user_msg = f"Talk to {response[14:].strip()}"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_SAY]"):
+                user_msg = f'Say out loud: "{response[13:].strip()}"'
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_INSPECT]"):
                 user_msg = f"Inspect {response[17:].strip()}"
@@ -2167,12 +2185,14 @@ class GameTurnManager:
             reduced_awards = self._build_chat_progression_awards(mechanics_awards)
             reduced_npcs = self._build_chat_progression_npcs(entities)
             reduced_scenes = self._build_chat_progression_scenes(self.adventure)
+            reduced_exits = self._build_chat_progression_exits(exits)
 
             progression_prompt = self._build_chat_rule_pass_prompt(
                 quests=reduced_quests,
                 awards=reduced_awards,
                 npcs=reduced_npcs,
                 scenes=reduced_scenes,
+                exits=reduced_exits,
             )
 
             if language:

@@ -154,9 +154,13 @@ class AdventureGeneratorToolIntent(BaseModel):
     status_note: Optional[str] = None
     
     # World State Updates
+    new_scene_id: Optional[str] = None
+    exit_label: Optional[str] = None
     moved_entities: Optional[list[EntityMovement]] = None
     updated_entities: Optional[list[WorldEntityUpdate]] = None
     deleted_entities: Optional[list[str]] = None
+    
+    extra_time_minutes: int = 0
 
     tool_results: Optional[ToolResults] = None
     narrative_description: str = ""

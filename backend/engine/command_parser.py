@@ -30,6 +30,8 @@ class CommandParser:
             return f"[TRIGGER_TAKE_DIRECT] {args}"
         elif command == "/talk":
             return f"[TRIGGER_TALK] {args}"
+        elif command == "/say" or command == "/speak":
+            return f"[TRIGGER_SAY] {args}"
         elif command == "/inspect":
             return f"[TRIGGER_INSPECT] {args}"
         elif command == "/unequip":
@@ -50,6 +52,7 @@ class CommandParser:
             "- `/help`: Show this list.",
             "- `/map`: Toggle the world map.",
             "- `/talk <target>`: Talk to an NPC.",
+            "- `/say <text>`: Say something out loud (wörtliche Rede).",
             "- `/inspect <target>`: Inspect an NPC, object or the surroundings.",
             "- `/attack <target>`: Start a fight with a specific NPC (by name or ID).",
             "- `/equip <item>`: Equip an item from your inventory.",

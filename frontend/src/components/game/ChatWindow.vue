@@ -239,6 +239,15 @@ function handleKeydown(e: KeyboardEvent): void {
     return
   }
 
+  // Verbal Speech Shortcut (Tab)
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    if (!inputText.value.startsWith('/say ')) {
+      inputText.value = '/say ' + inputText.value
+    }
+    return
+  }
+
   if (showCommandPopup.value && filteredCommands.value.length > 0) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -826,6 +835,12 @@ onUnmounted(() => {
 
       </div>
       
+      <!-- Verbal Speech Hint -->
+      <div class="mt-1 pl-11 flex items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity pointer-events-none select-none">
+         <span class="text-[9px] uppercase tracking-widest text-slate-400 font-black">Shortcut</span>
+         <kbd class="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded text-[9px] text-emerald-400 font-mono shadow-2xl">TAB</kbd>
+         <span class="text-[9px] uppercase tracking-widest text-slate-400 font-black">to insert /say (Verbal Speech)</span>
+      </div>
     </div>
   </div>
 </template>

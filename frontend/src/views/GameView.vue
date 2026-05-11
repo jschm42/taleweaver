@@ -359,9 +359,16 @@ watch(showCombatDialog, (visible) => {
     <!-- Full-Width Adventure Background (Top Third) -->
     <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
       <img 
-        :src="getImageUrl(adventureImage)" 
+        :src="getImageUrl(adventureImage, { thumbnail: true })" 
         class="w-full h-full object-cover blur-sm brightness-[0.5]"
-        @error="adventureImage = null"
+        @error="(e) => {
+          const target = e.target as HTMLImageElement
+          if (target.src.includes('_thumb')) {
+            target.src = getImageUrl(adventureImage)
+          } else {
+            adventureImage = null
+          }
+        }"
       >
       <div class="absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/40 to-slate-950"></div>
       <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
