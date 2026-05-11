@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { authState } from '@/store/auth'
+import { adventureService } from '@/services/adventureService'
+import { visualService } from '@/services/visualService'
+import type { VisualKind } from '@/services/visualService'
+import { entityService } from '@/services/entityService'
+import { notificationService } from '@/services/notificationService'
 
 // Icons & Assets
 
@@ -27,7 +31,6 @@ import {
   formatBytes,
   makeSafeFilename,
   getImageExtension,
-  type VisualKind
 } from '@/utils/editor_utils'
 
 const props = defineProps<{
@@ -36,19 +39,7 @@ const props = defineProps<{
 
 const router = useRouter()
 const route = useRoute()
-const BASE = '/api'
 const ASSET_BASE = ''
-
-function authHeaders(includeJson = false): Record<string, string> {
-  const headers: Record<string, string> = {}
-  if (includeJson) {
-    headers['Content-Type'] = 'application/json'
-  }
-  if (authState.token) {
-    headers.Authorization = `Bearer ${authState.token}`
-  }
-  return headers
-}
 
 // Visuals state
 const isQuickGenerating = ref<Record<string, boolean>>({})
@@ -117,30 +108,19 @@ const imageStylesCatalog = ref<any[]>([])
 const toneCatalog = ref<any[]>([])
 const availableVoices = ref<Array<{ name: string; gender?: string; description?: string }>>([])
 
-// Notifications state
-const notifications = ref<{ id: number; message: string; type: 'error' | 'success' | 'info' }[]>([])
-let nextNotifId = 0
+// Use notification service
+const notifications = notificationService.all
 
 function addNotification(message: string, type: 'error' | 'success' | 'info' = 'info') {
-  const id = nextNotifId++
-  notifications.value.push({ id, message, type })
-  setTimeout(() => {
-    notifications.value = notifications.value.filter(n => n.id !== id)
-  }, 5000)
+  notificationService.add(message, type)
 }
 
 async function clearCreationError() {
   if (!adventure.value) return
   try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}`, {
-      method: 'PATCH',
-      headers: authHeaders(true),
-      body: JSON.stringify({ creation_error: null })
-    })
-    if (res.ok) {
-      adventure.value.creation_error = null
-      addNotification('Generation notice dismissed.', 'success')
-    }
+    await adventureService.clearCreationError(props.adventureId)
+    adventure.value.creation_error = null
+    addNotification('Generation notice dismissed.', 'success')
   } catch (error) {
     console.error('Failed to clear creation error:', error)
   }
@@ -162,16 +142,56 @@ function clearHover() {
   hoveredEntity.value = null
 }
 
-const VISUAL_UPLOAD_LIMITS = {
-  cover: { maxWidth: 2048, maxHeight: 1024, maxBytes: 4 * 1024 * 1024, hint: 'Optimal: cinematic landscape 2:1, max 2048x1024. PNG, JPEG, or WEBP.' },
-  protagonist: { maxWidth: 1024, maxHeight: 1280, maxBytes: 2 * 1024 * 1024, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
-  scene: { maxWidth: 1600, maxHeight: 900, maxBytes: 3 * 1024 * 1024, hint: 'Optimal: landscape 16:9, max 1600x900. PNG, JPEG, or WEBP.' },
-  npc: { maxWidth: 1024, maxHeight: 1280, maxBytes: 2 * 1024 * 1024, hint: 'Optimal: portrait 4:5, max 1024x1280. PNG, JPEG, or WEBP.' },
-  object: { maxWidth: 1024, maxHeight: 1024, maxBytes: 2 * 1024 * 1024, hint: 'Optimal: square 1:1, max 1024x1024. PNG, JPEG, or WEBP.' },
-} as const
+async function uploadSelectedVisual(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  const target = selectedUploadTarget.value
+  if (!file || !target) return
+  const spec = visualService.UPLOAD_LIMITS[target.kind]
 
-const ALLOWED_UPLOAD_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
-const ALLOWED_UPLOAD_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
+  // Validate file
+  const fileValidation = visualService.validateFile(file)
+  if (!fileValidation.valid) {
+    addNotification(fileValidation.error || 'Invalid file', 'error')
+    input.value = ''
+    return
+  }
+
+  // Validate file size
+  if (file.size > spec.maxBytes) {
+    addNotification(`File too large. Max is ${formatBytes(spec.maxBytes)}.`, 'error')
+    input.value = ''
+    return
+  }
+
+  // Validate dimensions
+  try {
+    const { width, height } = await visualService.getImageDimensions(file)
+    const dimValidation = visualService.validateDimensions(width, height, spec)
+    if (!dimValidation.valid) {
+      addNotification(dimValidation.error || 'Invalid dimensions', 'error')
+      input.value = ''
+      return
+    }
+  } catch (error: any) {
+    addNotification(error?.message || 'Unable to validate image dimensions.', 'error')
+    input.value = ''
+    return
+  }
+
+  isUploading.value = true
+  try {
+    await visualService.uploadVisual(props.adventureId, target.kind, target.id, file)
+    await fetchDebugInfo()
+    addNotification(`Image uploaded for ${target.label}.`, 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Upload failed.', 'error')
+  } finally {
+    isUploading.value = false
+    selectedUploadTarget.value = null
+    input.value = ''
+  }
+}
 
 const form = ref({
   title: '',
@@ -219,38 +239,21 @@ async function saveField() {
 
 async function fetchCatalogs() {
   try {
-    const res = await fetch(`${BASE}/settings`, {
-      headers: authHeaders(false)
-    })
-    if (res.ok) {
-      const data = await res.json()
-      imageStylesCatalog.value = data.image_styles_catalog || []
-      toneCatalog.value = data.tone_catalog || []
-      const voiceCatalog = Array.isArray(data.tts_settings?.voice_catalog)
-        ? data.tts_settings.voice_catalog
-        : []
-      const voiceList = Array.isArray(data.tts_settings?.voice_list)
-        ? data.tts_settings.voice_list
-        : []
-      availableVoices.value = voiceCatalog.length > 0
-        ? voiceCatalog
-        : voiceList.map((name: string) => ({ name }))
-    }
+    const data = await adventureService.fetchCatalogs()
+    imageStylesCatalog.value = data.image_styles_catalog || []
+    toneCatalog.value = data.tone_catalog || []
+    const voiceCatalog = Array.isArray(data.tts_settings?.voice_catalog)
+      ? data.tts_settings.voice_catalog
+      : []
+    const voiceList = Array.isArray(data.tts_settings?.voice_list)
+      ? data.tts_settings.voice_list
+      : []
+    availableVoices.value = voiceCatalog.length > 0
+      ? voiceCatalog
+      : voiceList.map((name: string) => ({ name }))
   } catch (error) {
     console.error('Failed to fetch catalogs:', error)
   }
-}
-
-function normalizeDebugPayload(raw: any): any {
-  if (!raw || typeof raw !== 'object') return raw
-  const payload = { ...raw }
-  const allEntities = Array.isArray(raw.entities_all) ? raw.entities_all : []
-  if (allEntities.length === 0) return payload
-  const inferredNpcs = allEntities.filter((entity: any) => isNpcEntity(entity))
-  const inferredObjects = allEntities.filter((entity: any) => isObjectEntity(entity))
-  payload.npcs = mergeUniqueById(Array.isArray(raw.npcs) ? raw.npcs : [], inferredNpcs)
-  payload.objects = mergeUniqueById(Array.isArray(raw.objects) ? raw.objects : [], inferredObjects)
-  return payload
 }
 
 const editorNpcs = computed<any[]>(() => {
@@ -277,11 +280,7 @@ async function fetchAdventure() {
   isLoading.value = true
   errorMsg.value = ''
   try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}`, {
-      headers: authHeaders(false),
-    })
-    if (!res.ok) throw new Error('Failed to load adventure configuration.')
-    const data = await res.json()
+    const data = await adventureService.fetchAdventure(props.adventureId)
     adventure.value = data
     form.value.title = data.title
     form.value.teaser = data.teaser || ''
@@ -328,21 +327,13 @@ async function fetchAdventure() {
 async function fetchDebugInfo() {
   if (!props.adventureId) return
   try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}/editor/assets`, {
-      headers: authHeaders(false),
-    })
-    if (res.ok) {
-      const payload = await res.json()
-      debugData.value = normalizeDebugPayload(payload)
-      visualsCacheVersion.value += 1
-    } else {
-      debugData.value = null
-      errorMsg.value = 'Failed to load world assets/debug data.'
-    }
+    const payload = await adventureService.fetchDebugInfo(props.adventureId)
+    debugData.value = adventureService.normalizeDebugPayload(payload)
+    visualsCacheVersion.value += 1
   } catch (error) {
     console.error('Failed to fetch debug info:', error)
     debugData.value = null
-    errorMsg.value = 'Network error while loading world assets/debug data.'
+    errorMsg.value = 'Failed to load world assets/debug data.'
   }
 }
 
@@ -365,25 +356,17 @@ async function saveEntityText(data: any) {
   isSavingText.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}/editor/entity`, {
-      method: 'PATCH',
-      headers: authHeaders(true),
-      body: JSON.stringify({
-        target_type: editEntityContext.value.type,
-        target_id: editEntityContext.value.id,
-        name: data.name,
-        teaser: editEntityContext.value.type === 'cover' ? data.teaser : undefined,
-        description: data.description,
-        voice: editEntityContext.value.type === 'npc' ? data.voice || '' : undefined,
-        hp: data.hp || undefined,
-        stamina: data.stamina || undefined,
-        mana: data.mana || undefined
-      })
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: editEntityContext.value.type,
+      target_id: editEntityContext.value.id,
+      name: data.name,
+      teaser: editEntityContext.value.type === 'cover' ? data.teaser : undefined,
+      description: data.description,
+      voice: editEntityContext.value.type === 'npc' ? data.voice || '' : undefined,
+      hp: data.hp || undefined,
+      stamina: data.stamina || undefined,
+      mana: data.mana || undefined,
     })
-    if (!res.ok) {
-      const respData = await res.json()
-      throw new Error(respData.detail || 'Failed to save entity text')
-    }
     showEditModal.value = false
     editEntityContext.value = null
     await Promise.all([fetchAdventure(), fetchDebugInfo()])
@@ -401,18 +384,7 @@ async function runAIEdit() {
   isAIEditing.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}/editor/ai-edit`, {
-      method: 'POST',
-      headers: authHeaders(true),
-      body: JSON.stringify({ 
-        prompt: aiEditPrompt.value,
-        auto_visualize: aiAutoVisualize.value 
-      })
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.detail || 'Failed to apply AI changes')
-    }
+    await entityService.runAIEdit(props.adventureId, aiEditPrompt.value, aiAutoVisualize.value)
     aiEditPrompt.value = ''
     await fetchDebugInfo()
     addNotification('AI weaver has reshaped reality.', 'success')
@@ -435,12 +407,7 @@ async function saveChanges() {
       selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
       selected_tone: form.value.selected_tone_id ? fullToneObj : null
     }
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}`, {
-      method: 'PATCH',
-      headers: authHeaders(true),
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) throw new Error('Failed to save changes.')
+    await adventureService.updateAdventure(props.adventureId, payload as any)
     await fetchAdventure()
     addNotification('Adventure configuration updated.', 'success')
   } catch (error: any) {
@@ -452,8 +419,7 @@ async function saveChanges() {
 }
 
 function buildVisualImageUrl(imagePath?: string | null) {
-  if (!imagePath) return ''
-  return `${ASSET_BASE}${imagePath}?v=${visualsCacheVersion.value}`
+  return visualService.buildImageUrl(imagePath, visualsCacheVersion.value)
 }
 
 function downloadVisualAsset(imagePath: string | null | undefined, filenameLabel: string) {
@@ -474,7 +440,7 @@ function downloadVisualAsset(imagePath: string | null | undefined, filenameLabel
 
 function openRegenerateDialog(kind: VisualKind, id: string, label: string) {
   const description = getVisualDescription(kind, id)
-  const hint = VISUAL_UPLOAD_LIMITS[kind].hint
+  const hint = visualService.UPLOAD_LIMITS[kind].hint
   selectedVisual.value = { kind, id, label, description, hint }
   visualPrompt.value = ''
   useAdvancedModel.value = kind === 'scene' || kind === 'cover'
@@ -495,84 +461,13 @@ function getVisualDescription(kind: VisualKind, id: string) {
   return (debugData.value.objects || []).find((o: any) => o.id === id)?.description || ''
 }
 
-async function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
-  const objectUrl = URL.createObjectURL(file)
-  try {
-    return await new Promise<{ width: number; height: number }>((resolve, reject) => {
-      const image = new Image()
-      image.onload = () => resolve({ width: image.width, height: image.height })
-      image.onerror = () => reject(new Error('Could not read image dimensions.'))
-      image.src = objectUrl
-    })
-  } finally {
-    URL.revokeObjectURL(objectUrl)
-  }
-}
-
 function openUploadPicker(kind: VisualKind, id: string, label: string) {
   selectedUploadTarget.value = { kind, id, label }
   promptError.value = ''
-  addNotification(`Upload ${label}: ${VISUAL_UPLOAD_LIMITS[kind].hint}`, 'info')
+  addNotification(`Upload ${label}: ${visualService.UPLOAD_LIMITS[kind].hint}`, 'info')
   if (uploadInput.value) {
     uploadInput.value.value = ''
     uploadInput.value.click()
-  }
-}
-
-async function uploadSelectedVisual(event: Event) {
-  const input = event.target as HTMLInputElement | null
-  const file = input?.files?.[0]
-  const target = selectedUploadTarget.value
-  if (!file || !target) return
-  const spec = VISUAL_UPLOAD_LIMITS[target.kind]
-  const ext = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() || '' : ''
-  if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type)) {
-    addNotification('Unsupported file type. Please use PNG, JPEG, or WEBP.', 'error')
-    input.value = ''
-    return
-  }
-  if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
-    addNotification('Unsupported file extension.', 'error')
-    input.value = ''
-    return
-  }
-  if (file.size > spec.maxBytes) {
-    addNotification(`File too large. Max is ${formatBytes(spec.maxBytes)}.`, 'error')
-    input.value = ''
-    return
-  }
-  try {
-    const { width, height } = await getImageDimensions(file)
-    if (width > spec.maxWidth || height > spec.maxHeight) {
-      addNotification(`Image too large: ${width}x${height}. Max is ${spec.maxWidth}x${spec.maxHeight}.`, 'error')
-      input.value = ''
-      return
-    }
-  } catch (error: any) {
-    addNotification(error?.message || 'Unable to validate image dimensions.', 'error')
-    input.value = ''
-    return
-  }
-  isUploading.value = true
-  try {
-    const payload = new FormData()
-    payload.append('target_type', target.kind)
-    payload.append('target_id', target.id)
-    payload.append('file', file)
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/upload`, {
-      method: 'POST',
-      headers: authHeaders(false),
-      body: payload,
-    })
-    if (!res.ok) throw new Error('Upload failed.')
-    await fetchDebugInfo()
-    addNotification(`Image uploaded for ${target.label}.`, 'success')
-  } catch (error: any) {
-    addNotification(error?.message || 'Upload failed.', 'error')
-  } finally {
-    isUploading.value = false
-    selectedUploadTarget.value = null
-    input.value = ''
   }
 }
 
@@ -580,15 +475,7 @@ async function quickRegenerateVisual(kind: VisualKind, id: string, skipFetch: bo
   const key = `${kind}_${id}`
   isQuickGenerating.value[key] = true
   try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/regenerate`, {
-      method: 'POST',
-      headers: authHeaders(true),
-      body: JSON.stringify({ target_type: kind, target_id: id, prompt: null }),
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.detail || 'Generation failed')
-    }
+     await visualService.quickRegenerateVisual(props.adventureId, kind, id)
     if (!skipFetch) await fetchDebugInfo()
   } catch (error: any) {
     console.error('Quick regen error:', error)
@@ -618,17 +505,13 @@ async function regenerateVisual() {
   isRegenerating.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/regenerate`, {
-      method: 'POST',
-      headers: authHeaders(true),
-      body: JSON.stringify({
-        target_type: selectedVisual.value.kind,
-        target_id: selectedVisual.value.id,
-        prompt: visualPrompt.value.trim() || null,
-        use_advanced_model: useAdvancedModel.value
-      }),
-    })
-    if (!res.ok) throw new Error('Failed to regenerate.')
+     await visualService.regenerateVisual(
+       props.adventureId,
+       selectedVisual.value.kind,
+       selectedVisual.value.id,
+       visualPrompt.value,
+       useAdvancedModel.value
+     )
     showPromptDialog.value = false
     await fetchDebugInfo()
     addNotification(`Visual for ${selectedVisual.value.label} re-woven.`, 'success')
@@ -645,25 +528,17 @@ async function suggestPrompt() {
   isSuggestingPrompt.value = true
   promptError.value = ''
   try {
-    const res = await fetch(`${BASE}/adventures/${props.adventureId}/visuals/suggest-prompt`, {
-      method: 'POST',
-      headers: authHeaders(true),
-      body: JSON.stringify({
-        target_type: selectedVisual.value.kind,
-        target_id: selectedVisual.value.id
-      })
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.detail || 'Failed to suggest prompt')
-    }
-    const data = await res.json()
-    if (data && data.suggested_prompt) {
-      visualPrompt.value = data.suggested_prompt
-      addNotification('AI suggested a prompt based on the description.', 'success')
-    } else {
-      addNotification('AI returned an empty suggestion.', 'info')
-    }
+     const suggested = await visualService.suggestPrompt(
+       props.adventureId,
+       selectedVisual.value.kind,
+       selectedVisual.value.id
+     )
+     if (suggested) {
+       visualPrompt.value = suggested
+       addNotification('AI suggested a prompt based on the description.', 'success')
+     } else {
+       addNotification('AI returned an empty suggestion.', 'info')
+     }
   } catch (error: any) {
     promptError.value = error.message
     addNotification(error.message, 'error')
@@ -817,7 +692,7 @@ const goBack = () => {
       v-model:use-advanced-model="useAdvancedModel"
       :is-suggesting-prompt="isSuggestingPrompt"
       :is-regenerating="isRegenerating"
-      :upload-limits="VISUAL_UPLOAD_LIMITS"
+      :upload-limits="visualService.UPLOAD_LIMITS"
       :format-bytes="formatBytes"
       :fix-newlines="fixNewlines"
       @close="showPromptDialog = false"
@@ -847,7 +722,7 @@ const goBack = () => {
 
     <NotificationToast 
       :notifications="notifications"
-      @close="notifications = notifications.filter(x => x.id !== $event)"
+      @close="notificationService.remove($event)"
     />
 
     <input
