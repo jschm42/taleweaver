@@ -5,7 +5,7 @@
  * Connects to the given game session and displays the chat,
  * intercepting commands and showing the character sheet + world map.
  */
-import { ref, onMounted, watch, nextTick, computed, onUnmounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
@@ -35,7 +35,6 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
-const dialogPanel = ref<any>(null)
 const showSheet = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
@@ -521,12 +520,12 @@ onBeforeUnmount(() => {
  * Formats the session clock as a full datetime derived from the adventure start.
  */
 const gameTime = computed(() => {
-  if (!sheet.value?.start_datetime && sheet.value?.time_system !== 'relative') return null
+  if (!(sheet.value as any)?.start_datetime && (sheet.value as any)?.time_system !== 'relative') return null
 
-  const timeSystem = sheet.value?.time_system || 'calendar'
-  const timeConfig = sheet.value?.time_config || {}
+  const timeSystem = (sheet.value as any)?.time_system || 'calendar'
+  const timeConfig = (sheet.value as any)?.time_config || {}
   const dayLabel = timeConfig.day_label || 'Day'
-  const elapsedMinutes = sheet.value?.in_game_time ?? 0
+  const elapsedMinutes = (sheet.value as any)?.in_game_time ?? 0
 
   if (timeSystem === 'relative') {
     const totalMinutes = elapsedMinutes
@@ -551,7 +550,7 @@ const gameTime = computed(() => {
   }
 
   // Calendar mode
-  const start = new Date(sheet.value.start_datetime)
+  const start = new Date((sheet.value as any).start_datetime || 0)
   if (Number.isNaN(start.getTime())) return null
 
   const current = new Date(start.getTime() + elapsedMinutes * 60_000)

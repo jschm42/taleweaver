@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Optional, Union
 """
 MapEngine — manages the scene graph and converts it to Mermaid.js notation.
 
@@ -6,7 +8,6 @@ Responsibilities:
   * register_exit   — Add a directed edge between two scenes (deduplicates).
   * to_mermaid      — Serialise the graph in Mermaid flowchart syntax O(V+E).
 """
-from __future__ import annotations
 
 import logging
 
@@ -28,9 +29,9 @@ class MapEngine:
     def register_visit(
         world_map,
         scene_id: str,
-        label: str | None = None,
-        description: str | None = None,
-        image_url: str | None = None,
+        label: Optional[str] = None,
+        description: Optional[str] = None,
+        image_url: Optional[str] = None,
     ) -> None:
         """
         Upsert a scene node. If the node already exists only missing fields

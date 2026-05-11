@@ -11,6 +11,7 @@ exclude = [
     "venv",
     "alembic",
     "backend/brain/*/scratch",
+    "D:/_pyrefly_virtual_",
 ]
 
 [tool.ruff.lint]
@@ -42,6 +43,7 @@ exclude = [
     "venv",
     "alembic",
     "backend/brain/.*/scratch",
+    "D:/_pyrefly_virtual_",
 ]
 warn_return_any = true
 warn_unused_configs = true

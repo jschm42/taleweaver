@@ -1,3 +1,4 @@
+from typing import Optional, Union
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
@@ -36,7 +37,7 @@ class AdventureGeneratorService:
         db: AsyncSession,
         user: User,
         request: AdventureGenerationRequest,
-        progress_callback: Callable[[str], Awaitable[None]] | None = None,
+        progress_callback: Callable[[str], Optional[Awaitable[None]]] = None,
     ) -> str:
         """
         Triggers the world generation and saves the new template to the user's library.
@@ -145,3 +146,4 @@ class AdventureGeneratorService:
             except:
                 pass
             raise e
+

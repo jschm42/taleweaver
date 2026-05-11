@@ -66,3 +66,4 @@ def calculate_total_stats(avatar: Avatar) -> dict:
                 total_stats[stat] = total_stats.get(stat, 0) + value
 
     return total_stats
+

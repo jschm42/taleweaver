@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import uuid
-from typing import Literal
+from typing import Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class RegenerateVisualRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
     target_id: str
-    prompt: str | None = None
+    prompt: Optional[str] = None
     use_advanced_model: bool = False
 
 @router.post("/regenerate")
@@ -246,3 +246,4 @@ async def upload_visual(
     except Exception as e:
         logger.error(f"Failed to upload visual for {template_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+

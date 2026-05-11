@@ -8,7 +8,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any
+from typing import Any, Optional, Union
 
 import litellm
 import requests
@@ -103,9 +103,9 @@ class MediaEngine:
         model: str,
         api_key: str,
         target_dir: str,
-        filename: str | None = None,
-        provider_options: dict[str, Any] | None = None,
-    ) -> str | None:
+        filename: Optional[str] = None,
+        provider_options: dict[str, Optional[Any]] = None,
+    ) -> Optional[str]:
         """Generate a BFL image by calling the REST API directly and polling for completion."""
         provider_options = provider_options or {}
         model_slug = MediaEngine._normalize_black_forest_labs_model(model)
@@ -190,7 +190,7 @@ class MediaEngine:
         return None
 
     @staticmethod
-    def _resolve_api_key(provider: str, api_keys_dict: dict) -> str | None:
+    def _resolve_api_key(provider: str, api_keys_dict: dict) -> Optional[str]:
         """Resolves API key by checking environment variables first, then the provided dictionary."""
         provider_key = (provider or "").lower()
         
@@ -213,14 +213,14 @@ class MediaEngine:
     async def generate_image(
         prompt: str, 
         model: str, 
-        api_key: str | None, 
+        api_key: Optional[str], 
         provider: str = "openai",
-        adventure_id: str | None = None,
-        target_dir: str | None = None,
-        filename: str | None = None,
-        provider_options: dict[str, Any] | None = None,
-        style_instruction: str | None = None,
-    ) -> str | None:
+        adventure_id: Optional[str] = None,
+        target_dir: Optional[str] = None,
+        filename: Optional[str] = None,
+        provider_options: dict[str, Optional[Any]] = None,
+        style_instruction: Optional[str] = None,
+    ) -> Optional[str]:
         """Generates an image and saves it locally."""
         provider_key = (provider or "openai").lower()
         if not prompt or not model:
@@ -469,7 +469,7 @@ class MediaEngine:
             raise
 
     @staticmethod
-    def _extract_image_payload(response: Any) -> tuple[str | None, str | None]:
+    def _extract_image_payload(response: Any) -> tuple[Optional[str], Optional[str]]:
         """Extract URL or base64 image payload from provider responses."""
         if not response:
             return None, None
@@ -510,13 +510,13 @@ class MediaEngine:
         model: str,
         ollama_url: str,
         target_dir: str,
-        filename: str | None = None,
-        width: int | None = None,
-        height: int | None = None,
-        steps: int | None = None,
-        seed: int | None = None,
-        negative_prompt: str | None = None,
-    ) -> str | None:
+        filename: Optional[str] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        steps: Optional[int] = None,
+        seed: Optional[int] = None,
+        negative_prompt: Optional[str] = None,
+    ) -> Optional[str]:
         """Generate an image through Ollama's local HTTP API."""
         try:
             base = ollama_url.rstrip("/")
@@ -571,7 +571,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_b64_image(b64_data: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
+    async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Decodes and saves a base64 image string."""
         import base64
         import re
@@ -617,7 +617,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_remote_image(url: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
+    async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Downloads a remote image and persists it in the specified directory."""
         try:
             response = await asyncio.to_thread(requests.get, url, timeout=30)
@@ -651,7 +651,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: str | None = None, use_advanced_model: bool = True) -> str | None:
+    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = True) -> Optional[str]:
         """High-level wrapper for gameplay scene generation (uses Advanced Model by default)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -695,7 +695,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: str | None = None, use_advanced_model: bool = False) -> str | None:
+    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = False) -> Optional[str]:
         """High-level wrapper for NPC/Object generation (uses Simple Model by default)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -740,7 +740,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: str | None = None) -> str | None:
+    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
         """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -788,9 +788,9 @@ class MediaEngine:
         adventure_id: str,
         entity_id: str,
         target_dir: str,
-        filename: str | None = None,
+        filename: Optional[str] = None,
         category: str = "",
-        theme: str | None = None
+        theme: Optional[str] = None
     ) -> str:
         """
         Generates a high-quality PIL-based placeholder image.
@@ -882,3 +882,4 @@ class MediaEngine:
         except Exception as e:
             logger.error(f"Failed to generate SVG placeholder: {e}")
             return ""
+

@@ -25,13 +25,6 @@ class AudioService {
   private speakQueueTail: Promise<void> = Promise.resolve()
   private speakQueueGeneration = 0
 
-  private isTypingTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) return false
-    const tag = target.tagName.toLowerCase()
-    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true
-    return target.isContentEditable
-  }
-
   /** Call this once from any direct user-gesture handler (e.g. send button).
    *  Resumes the AudioContext so that subsequent async play() calls are allowed. */
   public unlock(): void {
@@ -246,11 +239,6 @@ class AudioService {
     }
 
     return undefined
-  }
-
-  private async playAudio(audioUrl: string): Promise<void> {
-    const blob = await this.fetchAudioBlob(audioUrl)
-    await this.playAudioBlob(blob)
   }
 
   private async fetchAudioBlob(audioUrl: string): Promise<Blob> {

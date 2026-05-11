@@ -102,3 +102,4 @@ async def remove_status_effect(
     avatar.status_effects = current_effects
     await db.commit()
     logger.info("Removed status effect '%s' from avatar %s", effect_name, avatar_id)
+

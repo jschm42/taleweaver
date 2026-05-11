@@ -208,7 +208,7 @@ export function useGameSocket(): UseGameSocket {
       const data = await fetchSessionSnapshot(gameId)
       if (data) {
         applySessionSnapshot(data)
-        if (status.value !== 'game_over' || !inputLocked.value) {
+        if ((status.value as any) !== 'game_over' || !inputLocked.value) {
           startSyncTimer()
         }
 
@@ -372,7 +372,7 @@ export function useGameSocket(): UseGameSocket {
       statusText.value = ''
     } finally {
       clearTimeout(timeoutId)
-      if (status.value === 'connecting' || status.value === 'loading') {
+      if ((status.value as any) === 'connecting' || (status.value as any) === 'loading') {
         status.value = 'connected'
         statusText.value = ''
       }

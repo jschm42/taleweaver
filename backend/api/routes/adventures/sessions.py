@@ -1,7 +1,7 @@
 import logging
 import os
 from copy import deepcopy
-from typing import Any
+from typing import Any, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
@@ -98,7 +98,7 @@ def _iter_avatar_items(avatar: Avatar):
         if isinstance(item, dict):
             yield (f"equipment.{slot}", item)
 
-async def _resolve_session_asset(state: SessionState, key: str, fallback: str | None = None) -> str | None:
+async def _resolve_session_asset(state: SessionState, key: str, fallback: Optional[str] = None) -> Optional[str]:
     # Placeholder or import from logic if needed
     return AdventureLogic.resolve_session_asset(state, key, fallback)
 
@@ -416,3 +416,4 @@ async def check_session_item_integrity(
         "issue_count": len(issues),
         "issues": issues,
     }
+

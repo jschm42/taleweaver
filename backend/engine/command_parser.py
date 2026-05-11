@@ -200,3 +200,4 @@ class CommandParser:
         if not item_name:
             return "Usage: /consume <item name>"
         return f"[TRIGGER_CONSUME] {item_name}"
+

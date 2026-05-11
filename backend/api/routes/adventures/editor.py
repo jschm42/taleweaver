@@ -1,5 +1,5 @@
 import logging
-from typing import Literal
+from typing import Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 class EntityUpdateRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
     target_id: str
-    name: str | None = None
-    teaser: str | None = None
-    description: str | None = None
-    hp: int | None = None
-    mana: int | None = None
-    stamina: int | None = None
-    voice: str | None = None
+    name: Optional[str] = None
+    teaser: Optional[str] = None
+    description: Optional[str] = None
+    hp: Optional[int] = None
+    mana: Optional[int] = None
+    stamina: Optional[int] = None
+    voice: Optional[str] = None
 
 class AIEditRequest(BaseModel):
     prompt: str
@@ -161,3 +161,4 @@ async def update_editor_entity(
             
     await db.commit()
     return {"status": "success"}
+

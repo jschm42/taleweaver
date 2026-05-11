@@ -1,6 +1,6 @@
 from copy import deepcopy
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, Union
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,9 +20,9 @@ class DebugEngine:
         db: AsyncSession,
         state: SessionState,
         args: str,
-        user: User | None = None,
-        adventure: AdventureTemplate | None = None,
-        avatar: Any | None = None,
+        user: Optional[User] = None,
+        adventure: Optional[AdventureTemplate] = None,
+        avatar: Optional[Any] = None,
     ) -> str:
         """
         Processes /debug sub-commands and returns atmospheric yet technical info.
@@ -334,3 +334,4 @@ class DebugEngine:
             return f"[TRIGGER_GEN_ITEM] {parts[1]}"
 
         return "DEBUG USAGE: /debug [szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID | gen_item PROMPT]"
+

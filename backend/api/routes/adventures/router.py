@@ -27,3 +27,4 @@ router.include_router(templates_router)
 
 # 6. Gameplay (parameterized paths like /{game_id}/chat)
 router.include_router(gameplay_router)
+

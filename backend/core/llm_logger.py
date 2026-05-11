@@ -2,7 +2,7 @@ import datetime
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Optional
 
 from backend.core.config import settings
 
@@ -57,14 +57,14 @@ def log_llm_interaction(
     system_prompt: str,
     user_prompt: str,
     response_content: str,
-    raw_response: dict | None = None,
+    raw_response: Optional[dict] = None,
     *,
     event_type: str = "llm_interaction",
-    adventure_id: str | None = None,
-    game_id: str | None = None,
-    operation: str | None = None,
-    phase: str | None = None,
-    metadata: dict[str, Any] | None = None,
+    adventure_id: Optional[str] = None,
+    game_id: Optional[str] = None,
+    operation: Optional[str] = None,
+    phase: Optional[str] = None,
+    metadata: Optional[dict[str, Any]] = None,
 ):
     """
     Logs an LLM interaction to a local JSONL file for debugging.

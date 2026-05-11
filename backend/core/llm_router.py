@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import Any, TypeVar
+from typing import Any, Optional, TypeVar
 
 import litellm
 from pydantic import BaseModel, ValidationError
@@ -315,11 +315,11 @@ class GameMasterLLM:
         user_prompt: str,
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         Free narrative task (Hallucination Mode).
@@ -398,11 +398,11 @@ class GameMasterLLM:
         user_prompt: str,
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         Async version of execute_simple_task.
@@ -479,11 +479,11 @@ class GameMasterLLM:
         user_prompt: str,
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ):
         """
         Streams a free narrative task.
@@ -543,11 +543,11 @@ class GameMasterLLM:
         response_model: type[T],
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> T:
         """
         Async version of execute_complex_task.
@@ -675,11 +675,11 @@ class GameMasterLLM:
         response_model: type[T],
         model: str,
         *,
-        adventure_id: str | None = None,
-        game_id: str | None = None,
-        operation: str | None = None,
-        phase: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        adventure_id: Optional[str] = None,
+        game_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        phase: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> T:
         """
         Strict mechanics task (Strict Mode).

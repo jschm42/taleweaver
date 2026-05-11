@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, Union
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,7 @@ class AdventureLogic:
         return world_map
 
     @staticmethod
-    def calculate_quest_progress(quests: list[dict[str, Any]] | None) -> int:
+    def calculate_quest_progress(quests: list[dict[str, Optional[Any]]]) -> int:
         if not quests:
             return 0
         total = len(quests)
@@ -50,7 +50,7 @@ class AdventureLogic:
         return snap if isinstance(snap, dict) else {}
 
     @staticmethod
-    def get_combat_snapshot(state: SessionState) -> dict[str, Any] | None:
+    def get_combat_snapshot(state: SessionState) -> dict[str, Optional[Any]]:
         raw = state.entity_states or {}
         if not isinstance(raw, dict):
             return None
@@ -60,13 +60,13 @@ class AdventureLogic:
         return combat
 
     @staticmethod
-    def resolve_session_asset(state: SessionState, key: str, fallback: str | None = None) -> str | None:
+    def resolve_session_asset(state: SessionState, key: str, fallback: Optional[str] = None) -> Optional[str]:
         snapshot = AdventureLogic.extract_asset_snapshot(state)
         value = snapshot.get(key)
         return value if isinstance(value, str) and value else fallback
 
     @staticmethod
-    def resolve_start_datetime(manifest: dict[str, Any] | None, state: SessionState | None = None) -> str | None:
+    def resolve_start_datetime(manifest: dict[str, Optional[Any]], state: Optional[SessionState] = None) -> Optional[str]:
         """Returns a usable ISO datetime string. Prioritizes session-specific state over manifest."""
         if state and state.start_datetime:
             return state.start_datetime
@@ -103,7 +103,7 @@ class AdventureLogic:
             return None
 
     @staticmethod
-    async def resolve_session_state(db: AsyncSession, session_or_template_id: str, user_id: str | None = None) -> SessionState | None:
+    async def resolve_session_state(db: AsyncSession, session_or_template_id: str, user_id: Optional[str] = None) -> Optional[SessionState]:
         """Resolve a session state by session id first, then by template/adventure id."""
         from sqlalchemy.orm import selectinload
         direct_res = await db.execute(
@@ -350,3 +350,4 @@ class AdventureLogic:
 
         # 5. Cleanup Files
         await MediaEngine.cleanup_adventure_assets(template_id)
+

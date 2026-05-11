@@ -1,3 +1,4 @@
+from typing import Optional, Union
 """
 REST endpoints for the World Map.
 
@@ -27,15 +28,15 @@ logger = logging.getLogger(__name__)
 
 class VisitPayload(BaseModel):
     scene_id: str
-    label: str | None = None
-    description: str | None = None
-    image_url: str | None = None
+    label: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class ExitPayload(BaseModel):
     from_scene: str
     to_scene: str
-    exit_label: str | None = ""
+    exit_label: Optional[str] = ""
 
 
 # ── Route helpers ─────────────────────────────────────────────────────────────
@@ -117,3 +118,4 @@ async def post_exit(
     MapEngine.register_exit(world_map, payload.from_scene, payload.to_scene, payload.exit_label or "")
     await db.commit()
     return {"status": "ok"}
+

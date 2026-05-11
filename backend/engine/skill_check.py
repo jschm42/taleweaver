@@ -86,3 +86,4 @@ def roll_attack(avatar: Avatar, hit_stat: str, target_ac: int, damage_dice: str)
         "damage_bonus": damage_info["bonus"],
         "damage_dice_str": damage_info["dice_str"]
     }
+

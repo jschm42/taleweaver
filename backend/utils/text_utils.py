@@ -44,3 +44,4 @@ def generate_session_id(title: str) -> str:
     slug = slugify(title)
     hex_id = uuid.uuid4().hex[:8]
     return f"{slug}-{hex_id}"
+

@@ -184,18 +184,6 @@ const fetchSettings = async () => {
     if (data.game_settings) gameForm.value = { ...data.game_settings as any }
     if (data.tts_settings) {
       const ttsSettings = data.tts_settings as any
-      const voiceList = Array.isArray(ttsSettings.voice_list) ? ttsSettings.voice_list : []
-      const voiceCatalog = Array.isArray(ttsSettings.voice_catalog)
-        ? ttsSettings.voice_catalog
-        : voiceList.map((name: string) => ({ name }))
-      const selectedModel = (
-        ttsSettings.selected_model
-        || ttsSettings.model
-        || ttsSettings.tts_model
-        || ttsSettings.single_voice_model
-        || ttsSettings.single_voice_tts_model
-        || 'gemini-3.1-flash-tts-preview'
-      )
       ttsForm.value = {
         ...ttsForm.value,
         ...ttsSettings,

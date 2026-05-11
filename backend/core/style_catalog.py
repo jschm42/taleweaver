@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional, Union
 
 from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES
 
@@ -9,8 +9,8 @@ def default_image_styles_catalog() -> list[dict[str, Any]]:
 
 
 def resolve_style_instruction(
-    selected_image_styles: list[Any] | None,
-    user_catalog: list[dict[str, Any]] | None,
+    selected_image_styles: Optional[list[Any]],
+    user_catalog: list[dict[str, Optional[Any]]],
 ) -> str:
     """Resolve style instruction from selected style, then user catalog, then default catalog."""
     if not selected_image_styles:
@@ -36,3 +36,4 @@ def resolve_style_instruction(
                 return (entry.get("instruction") or "").strip()
 
     return ""
+

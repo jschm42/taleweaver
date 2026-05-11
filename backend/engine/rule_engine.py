@@ -1,3 +1,4 @@
+from typing import Optional, Union
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -13,31 +14,31 @@ class InventoryItem(BaseModel):
     """
     A typed item acquired during gameplay.
     """
-    id: str | None = Field(None, validation_alias=AliasChoices("id", "item_id", "entity_id")) # WorldEntity ID (if linked)
+    id: Optional[str] = Field(None, validation_alias=AliasChoices("id", "item_id", "entity_id")) # WorldEntity ID (if linked)
     name: str
-    description: str | None = None
-    item_type: str | None = None
-    wearable_slots: list[str] | None = None
-    image_url: str | None = None
-    stat_modifier_strength: int | None = None
-    stat_modifier_dexterity: int | None = None
-    stat_modifier_intelligence: int | None = None
-    stat_modifier_wisdom: int | None = None
-    stat_modifier_charisma: int | None = None
-    stat_modifier_armor_class: int | None = None
+    description: Optional[str] = None
+    item_type: Optional[str] = None
+    wearable_slots: Optional[list[str]] = None
+    image_url: Optional[str] = None
+    stat_modifier_strength: Optional[int] = None
+    stat_modifier_dexterity: Optional[int] = None
+    stat_modifier_intelligence: Optional[int] = None
+    stat_modifier_wisdom: Optional[int] = None
+    stat_modifier_charisma: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
 
     # Consumable Effects (on-the-fly definition)
-    hp_change: int | None = None
-    mana_change: int | None = None
-    stamina_change: int | None = None
+    hp_change: Optional[int] = None
+    mana_change: Optional[int] = None
+    stamina_change: Optional[int] = None
 
     # For spawned items
-    spatial_position: str | None = None
+    spatial_position: Optional[str] = None
 
 class EntityMovement(BaseModel):
     entity_id: str = Field(..., validation_alias=AliasChoices("entity_id", "id"))
-    to_scene_id: str | None = None
-    to_spatial_position: str | None = None
+    to_scene_id: Optional[str] = None
+    to_spatial_position: Optional[str] = None
 
 class ExitUpdate(BaseModel):
     from_scene_id: str
@@ -47,17 +48,17 @@ class ExitUpdate(BaseModel):
 class WorldEntityUpdate(BaseModel):
     """Used for changing an entity's name, description or visibility at runtime."""
     entity_id: str = Field(..., validation_alias=AliasChoices("entity_id", "id"))
-    name: str | None = None
-    description: str | None = None
-    spatial_position: str | None = None
-    is_hidden: bool | None = None
-    hp: int | None = None
-    max_hp: int | None = None
-    mana: int | None = None
-    stamina: int | None = None
-    stat_modifier_armor_class: int | None = None
-    is_attackable: bool | None = None
-    inventory: list[InventoryItem] | None = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    spatial_position: Optional[str] = None
+    is_hidden: Optional[bool] = None
+    hp: Optional[int] = None
+    max_hp: Optional[int] = None
+    mana: Optional[int] = None
+    stamina: Optional[int] = None
+    stat_modifier_armor_class: Optional[int] = None
+    is_attackable: Optional[bool] = None
+    inventory: Optional[list[InventoryItem]] = None
 
 class AttackRequest(BaseModel):
     """Requested by the GM to perform a combat action."""
@@ -109,8 +110,8 @@ class AdventureGenerationRequest(BaseModel):
     min_scenes: int = 1
     max_scenes: int = 5
     generate_scene_images: bool = False
-    selected_image_styles: list[str] | None = None
-    selected_tone: str | None = None
+    selected_image_styles: Optional[list[str]] = None
+    selected_tone: Optional[str] = None
     min_awards: int = 3
     max_awards: int = 8
     award_generation_enabled: bool = False
@@ -120,11 +121,11 @@ class ToolResults(BaseModel):
     """Structured backend-filled tool outputs for adventure-generator interactions."""
     model_config = ConfigDict(extra="forbid")
 
-    available_image_styles: list[str] | None = None
-    available_tones: list[str] | None = None
-    generation_success: bool | None = None
-    new_adventure_id: str | None = None
-    generation_error: str | None = None
+    available_image_styles: Optional[list[str]] = None
+    available_tones: Optional[list[str]] = None
+    generation_success: Optional[bool] = None
+    new_adventure_id: Optional[str] = None
+    generation_error: Optional[str] = None
 
 
 class AdventureGeneratorToolIntent(BaseModel):
@@ -133,26 +134,26 @@ class AdventureGeneratorToolIntent(BaseModel):
 
     request_available_image_styles: bool = False
     request_available_tones: bool = False
-    requested_adventure_generation: AdventureGenerationRequest | None = None
+    requested_adventure_generation: Optional[AdventureGenerationRequest] = None
 
     # Chat-mode progression intent (lightweight technical signals)
     hp_change: int = 0
     stamina_change: int = 0
     mana_change: int = 0
     new_inventory_items: list[InventoryItem] = []
-    removed_inventory_item_ids: list[str] | None = None
+    removed_inventory_item_ids: Optional[list[str]] = None
     updated_inventory_items: list[InventoryItem] = []
-    spawned_items: list[InventoryItem] | None = None
-    completed_quest_ids: list[str] | None = None
-    earned_award_keys: list[str] | None = None
-    remember_notes: list[str] | None = None
-    forget_notes: list[str] | None = None
+    spawned_items: Optional[list[InventoryItem]] = None
+    completed_quest_ids: Optional[list[str]] = None
+    earned_award_keys: Optional[list[str]] = None
+    remember_notes: Optional[list[str]] = None
+    forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
     game_over: bool = False
     game_completed: bool = False
-    status_note: str | None = None
+    status_note: Optional[str] = None
 
-    tool_results: ToolResults | None = None
+    tool_results: Optional[ToolResults] = None
     narrative_description: str = ""
 
 
@@ -169,56 +170,56 @@ class GameEvent(BaseModel):
     mana_change: int = 0
     new_status_effects: list[str] = []
     new_inventory_items: list[InventoryItem] = []
-    removed_inventory_item_ids: list[str] | None = Field(None, validation_alias=AliasChoices("removed_inventory_item_ids", "removed_item_ids", "removed_items"))
+    removed_inventory_item_ids: Optional[list[str]] = Field(None, validation_alias=AliasChoices("removed_inventory_item_ids", "removed_item_ids", "removed_items"))
     updated_inventory_items: list[InventoryItem] = []
-    spawned_items: list[InventoryItem] | None = None
+    spawned_items: Optional[list[InventoryItem]] = None
     
     # Mapping & Navigation
-    new_scene_id: str | None = Field(None, validation_alias=AliasChoices("new_scene_id", "scene_id")) # Unique ID for the new location (e.g. "FOREST_CLIFF")
-    scene_label: str | None = None  # Human readable name (e.g. "The Whispering Woods")
-    exit_label: str | None = None   # How the player got here (e.g. "ventured north")
+    new_scene_id: Optional[str] = Field(None, validation_alias=AliasChoices("new_scene_id", "scene_id")) # Unique ID for the new location (e.g. "FOREST_CLIFF")
+    scene_label: Optional[str] = None  # Human readable name (e.g. "The Whispering Woods")
+    exit_label: Optional[str] = None   # How the player got here (e.g. "ventured north")
     
     # Media
-    image_prompt: str | None = None # Short prompt for AI image generation of this scene
+    image_prompt: Optional[str] = None # Short prompt for AI image generation of this scene
     
     # World State Updates
-    moved_entities: list[EntityMovement] | None = None
-    updated_exits: list[ExitUpdate] | None = None
-    updated_entities: list[WorldEntityUpdate] | None = None
-    deleted_entities: list[str] | None = None # List of IDs to remove
+    moved_entities: Optional[list[EntityMovement]] = None
+    updated_exits: Optional[list[ExitUpdate]] = None
+    updated_entities: Optional[list[WorldEntityUpdate]] = None
+    deleted_entities: Optional[list[str]] = None # List of IDs to remove
     
     # Skill Checks & Combat
-    requested_skill_checks: list[SkillCheckRequest] | None = None
-    skill_check_results: list[SkillCheckResult] | None = None
+    requested_skill_checks: Optional[list[SkillCheckRequest]] = None
+    skill_check_results: Optional[list[SkillCheckResult]] = None
     
-    requested_attacks: list[AttackRequest] | None = None
-    attack_results: list[AttackResult] | None = None
+    requested_attacks: Optional[list[AttackRequest]] = None
+    attack_results: Optional[list[AttackResult]] = None
     
     # Time Management
     extra_time_minutes: int = 0 # Extra time this action takes (added to turn base)
-    time_override_minutes: int | None = None # Absolute override for in_game_time (minutes since start)
-    start_datetime_override: str | None = None # ISO string for start_datetime (shifts the entire calendar)
+    time_override_minutes: Optional[int] = None # Absolute override for in_game_time (minutes since start)
+    start_datetime_override: Optional[str] = None # ISO string for start_datetime (shifts the entire calendar)
     
     # Quest System
-    completed_quest_ids: list[str] | None = None
+    completed_quest_ids: Optional[list[str]] = None
     
     # Award System
-    earned_award_keys: list[str] | None = None
+    earned_award_keys: Optional[list[str]] = None
 
     # Notes Tool
-    remember_notes: list[str] | None = None
-    forget_notes: list[str] | None = None
+    remember_notes: Optional[list[str]] = None
+    forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
 
     # Status Updates
     game_over: bool = False
     game_completed: bool = False
-    status_note: str | None = None
+    status_note: Optional[str] = None
     # Adventure Generator Tools
     request_available_image_styles: bool = False
     request_available_tones: bool = False
-    requested_adventure_generation: AdventureGenerationRequest | None = None
-    tool_results: ToolResults | None = None
+    requested_adventure_generation: Optional[AdventureGenerationRequest] = None
+    tool_results: Optional[ToolResults] = None
 
 
 
@@ -351,3 +352,4 @@ class RuleEngine:
             avatar.inventory = new_inv
 
         return event.narrative_description
+

@@ -6,7 +6,7 @@ import { configState, refreshConfig } from '@/store/config'
 import { authState } from '@/store/auth'
 import type { CatalogTile } from '@/types'
 import { 
-  Sparkles, Palette, Flame, Check, Image, 
+  Sparkles, Palette, Flame, 
   ImageIcon, Users, Sword, MapPin, Trophy, AlertTriangle
 } from 'lucide-vue-next'
 
@@ -59,7 +59,6 @@ const config = ref<any>(null)
 const hasLlmConfig = computed(() => configState.hasLlmConfig)
 const hasT2iConfig = computed(() => configState.hasT2iConfig);
 
-const isImageLlmConfigured = computed(() => hasLlmConfig.value && hasT2iConfig.value);
 
 const ruleModeHelp = computed(() => {
   if (form.value.rule_enforcement_mode === 'rpg') {
@@ -436,7 +435,7 @@ onMounted(() => {
                 class="relative h-32 rounded-2xl overflow-hidden border-4 transition-all duration-300 group"
                 :class="form.selected_style_id === style.id ? 'border-blue-500 ring-8 ring-blue-500/10' : 'border-transparent hover:border-white/10'"
               >
-                <img :src="style.image_url" class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110" />
+                <img :src="style.image_url ?? ''" class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110" />
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
                 <div class="absolute bottom-4 left-4 right-4">
                   <p class="text-xxs font-black text-white uppercase tracking-widest">{{ style.name }}</p>
@@ -465,7 +464,7 @@ onMounted(() => {
                 class="relative h-32 rounded-2xl overflow-hidden border-4 transition-all duration-300 group"
                 :class="form.selected_tone_id === tone.id ? 'border-blue-500 ring-8 ring-blue-500/10' : 'border-transparent hover:border-white/10'"
               >
-                <img :src="tone.image_url" class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110" />
+                <img :src="tone.image_url ?? ''" class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110" />
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
                 <div class="absolute bottom-4 left-4 right-4">
                   <p class="text-xxs font-black text-white uppercase tracking-widest">{{ tone.name }}</p>

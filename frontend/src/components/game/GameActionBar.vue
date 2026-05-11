@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { audioService } from '@/services/audioService'
 import { configState } from '@/store/config'
 

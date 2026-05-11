@@ -1,3 +1,4 @@
+from typing import Optional, Union
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,12 +26,12 @@ class UserResponse(BaseModel):
     id: str
     username: str
     role: str
-    profile_image_url: str | None = None
-    bio: str | None = None
-    default_language: str | None = None
-    earned_awards: list | None = None
+    profile_image_url: Optional[str] = None
+    bio: Optional[str] = None
+    default_language: Optional[str] = None
+    earned_awards: Optional[list] = None
     is_admin: bool = False
-    game_log: list | None = None
+    game_log: Optional[list] = None
     has_imported_defaults: bool = False
 
 class SetupRootRequest(BaseModel):
@@ -141,3 +142,4 @@ async def get_bootstrap_status(db: AsyncSession = Depends(get_db)):
         has_admin=admin_result.scalars().first() is not None,
         has_users=user_result.first() is not None,
     )
+

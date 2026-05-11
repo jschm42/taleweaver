@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -17,15 +17,15 @@ class SessionStateCreate(SessionStateBase):
     session_id: str
 
 class SessionStateUpdate(BaseModel):
-    scene_id: str | None = None
-    current_scene_id: str | None = None
-    in_game_time: int | None = None
-    inventory: list[str] | None = None
-    entity_states: dict[str, Any] | None = None
-    exit_states: dict[str, Any] | None = None
-    discovered_scenes: list[str] | None = None
-    is_completed: bool | None = None
-    is_debug_enabled: bool | None = None
+    scene_id: Optional[str] = None
+    current_scene_id: Optional[str] = None
+    in_game_time: Optional[int] = None
+    inventory: Optional[list[str]] = None
+    entity_states: Optional[dict[str, Any]] = None
+    exit_states: Optional[dict[str, Any]] = None
+    discovered_scenes: Optional[list[str]] = None
+    is_completed: Optional[bool] = None
+    is_debug_enabled: Optional[bool] = None
 
 class GameSessionBase(BaseModel):
     user_id: str
@@ -37,9 +37,9 @@ class GameSessionCreate(GameSessionBase):
     pass
 
 class GameSessionUpdate(BaseModel):
-    status: str | None = None
+    status: Optional[str] = None
 
 class GameSession(GameSessionBase):
     id: str
-    state: SessionStateBase | None = None
+    state: Optional[SessionStateBase] = None
     model_config = {"from_attributes": True}

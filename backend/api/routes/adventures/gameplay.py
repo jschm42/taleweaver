@@ -173,3 +173,4 @@ async def get_walkthrough(
         raise HTTPException(status_code=403, detail="The walkthrough is not revealed yet.")
 
     return {"walkthrough": state.walkthrough or "No walkthrough available for this adventure."}
+

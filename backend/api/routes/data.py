@@ -1,3 +1,4 @@
+from typing import Optional, Union
 import os
 import uuid
 
@@ -17,7 +18,7 @@ def _get_extension(filename: str) -> str:
 async def upload_image(
     file: UploadFile = File(...),
     type: str = Query("character", description="Type of upload: 'character' or 'adventure'"),
-    adventure_id: str | None = Query(None, description="Optional ID for adventure-specific subfolders")
+    adventure_id: Optional[str] = Query(None, description="Optional ID for adventure-specific subfolders")
 ):
     """
     Uploads an image, resizes/crops it based on type, and returns the URL.
@@ -67,3 +68,4 @@ async def upload_image(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+

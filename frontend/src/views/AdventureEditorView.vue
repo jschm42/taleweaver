@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authState } from '@/store/auth'
-import { ArrowLeft, Save, Trash2, Wand2, Sparkles, Image as ImageIcon, Plus, X, AlertTriangle } from 'lucide-vue-next'
+import { ArrowLeft, Save, X, AlertTriangle } from 'lucide-vue-next'
 import { getItemIcon } from '@/utils/game_icons'
 import bronzeTrophy from '@/assets/svg/bronze-award-trophy.svg'
 import silverTrophy from '@/assets/svg/silver-award-trophy.svg'
@@ -317,19 +317,6 @@ const editorObjects = computed<any[]>(() => {
   return mergeUniqueById(source, inferred)
 })
 
-function nonZeroStatEntries(stats: Record<string, unknown> | null | undefined): Array<[string, number]> {
-  if (!stats || typeof stats !== 'object') return []
-  return Object.entries(stats)
-    .map(([key, value]) => {
-      if (typeof value === 'number' && Number.isFinite(value)) return [key, value] as [string, number]
-      if (typeof value === 'string' && value.trim() !== '') {
-        const parsed = Number(value)
-        if (Number.isFinite(parsed)) return [key, parsed] as [string, number]
-      }
-      return null
-    })
-    .filter((entry): entry is [string, number] => !!entry && entry[1] !== 0)
-}
 
 
 async function fetchAdventure() {
@@ -784,7 +771,7 @@ async function suggestPrompt() {
       visualPrompt.value = data.suggested_prompt
       addNotification('AI suggested a prompt based on the description.', 'success')
     } else {
-      addNotification('AI returned an empty suggestion. Please check the asset description.', 'warn')
+      addNotification('AI returned an empty suggestion. Please check the asset description.', 'info')
     }
   } catch (error: any) {
     promptError.value = error.message
@@ -1326,7 +1313,7 @@ const goBack = () => {
                    <button 
                      v-for="mode in ['rpg', 'story', 'chat']" 
                      :key="mode" 
-                     @click="form.rule_enforcement_mode = mode"
+                     @click="form.rule_enforcement_mode = mode as 'rpg' | 'story' | 'chat'"
                      :class="[
                        'flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
                        form.rule_enforcement_mode === mode ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'

@@ -233,7 +233,7 @@ async function fetchPortalData() {
           updatePendingCreationStatus(
             template.template_id,
             template.creation_error || template.creation_status || 'Preparing...',
-            (Boolean(template.creation_error) && !template.creation_error.startsWith('Notice:')) || isFailureStatus(template.creation_status || ''),
+            (Boolean(template.creation_error) && !template.creation_error?.startsWith('Notice:')) || isFailureStatus(template.creation_status || ''),
           )
 
           void pollAdventureStatus(template.template_id, {

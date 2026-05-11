@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import uuid
-from typing import Any
+from typing import Any, Optional, Union
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -88,7 +88,7 @@ def _default_tone_catalog() -> list[dict[str, Any]]:
     return [dict(item) for item in DEFAULT_TONES]
 
 
-def _normalize_catalog(catalog: list[dict[str, Any]] | None, *, fallback: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _normalize_catalog(catalog: list[dict[str, Optional[Any]]], *, fallback: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not catalog:
         return fallback
 
@@ -113,7 +113,7 @@ def _normalize_catalog(catalog: list[dict[str, Any]] | None, *, fallback: list[d
     return normalized or fallback
 
 
-def _normalize_openrouter_model(model: str | None) -> str | None:
+def _normalize_openrouter_model(model: Optional[str]) -> Optional[str]:
     """Strip provider prefixes from models stored for OpenRouter."""
     if not isinstance(model, str):
         return model
@@ -128,7 +128,7 @@ def _normalize_openrouter_model(model: str | None) -> str | None:
     return normalized
 
 
-def _normalize_llm_settings(settings: dict | None) -> dict:
+def _normalize_llm_settings(settings: Optional[dict]) -> dict:
     """Return LLM settings with separate providers, tokens and thinking modes."""
     fallback = {
         "small_model": "",
@@ -222,7 +222,7 @@ def _normalize_llm_settings(settings: dict | None) -> dict:
     return normalized
 
 
-def _normalize_tts_settings(settings: dict | None) -> dict:
+def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     """Return TTS settings with voice list, selected voice and style context."""
     full_voice_list = list(GOOGLE_TTS_VOICE_LIST)
     full_voice_catalog = [dict(entry) for entry in GOOGLE_TTS_VOICE_CATALOG]
@@ -290,7 +290,7 @@ def _normalize_tts_settings(settings: dict | None) -> dict:
     return normalized
 
 
-def _normalize_t2i_settings(settings: dict | None) -> dict:
+def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
     """Return T2I settings with separate providers."""
     fallback = {
         "simple_model": "",
@@ -381,7 +381,7 @@ class SettingsPayload(BaseModel):
     generator_max_thinking_tokens: int = 1024
     
     preferred_provider: str # Legacy
-    ollama_url: str | None = None
+    ollama_url: Optional[str] = None
 
 class T2ISettingsPayload(BaseModel):
     simple_model: str
@@ -389,14 +389,14 @@ class T2ISettingsPayload(BaseModel):
     advanced_model: str
     advanced_model_provider: str
     provider: str # Legacy
-    ollama_url: str | None = None
-    width: int | None = None
-    height: int | None = None
-    steps: int | None = None
-    seed: int | None = None
-    image_format: str | None = "jpeg"
-    image_quality: int | None = 85
-    negative_prompt: str | None = None
+    ollama_url: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    steps: Optional[int] = None
+    seed: Optional[int] = None
+    image_format: Optional[str] = "jpeg"
+    image_quality: Optional[int] = 85
+    negative_prompt: Optional[str] = None
 class GameSettingsPayload(BaseModel):
     clock_24h: bool = False
     date_format: str = "DD.MM.YY"
@@ -411,17 +411,17 @@ class TTSSettingsPayload(BaseModel):
     use_vocal_tags: bool = True
     use_text_chunking: bool = True
     voice_list: list[str] = Field(default_factory=list)
-    voice_catalog: list[dict[str, str]] | None = None
+    voice_catalog: list[dict[str, Optional[str]]] = None
     sample_context: str = ""
     speech_rate: float = 1.0
 
 
 class CatalogTilePayload(BaseModel):
-    id: str | None = None
+    id: Optional[str] = None
     name: str
-    description: str | None = None
-    instruction: str | None = None
-    image_url: str | None = None
+    description: Optional[str] = None
+    instruction: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class CatalogUpdatePayload(BaseModel):
@@ -431,9 +431,9 @@ class CatalogUpdatePayload(BaseModel):
 class CatalogGeneratePayload(BaseModel):
     target_id: str
     catalog_type: str  # 'styles' or 'tones'
-    prompt: str | None = None
-    name: str | None = None
-    description: str | None = None
+    prompt: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
 
 @router.get("")
 async def get_settings(
@@ -636,7 +636,7 @@ async def update_tts_settings(
 class TestLLMPayload(BaseModel):
     model: str
     provider: str
-    ollama_url: str | None = None
+    ollama_url: Optional[str] = None
 
 @router.post("/test-llm")
 async def test_llm_connection(
@@ -670,7 +670,7 @@ async def test_llm_connection(
 class TestVisionPayload(BaseModel):
     model: str
     provider: str
-    ollama_url: str | None = None
+    ollama_url: Optional[str] = None
 
 @router.post("/test-vision")
 async def test_vision_connection(
@@ -887,3 +887,4 @@ async def get_elevenlabs_models():
     models = PREDEFINED_TTS_MODELS.get("elevenlabs", [])
     # Return in the format expected by frontend: {model_id, name}
     return [{"model_id": m["id"], "name": m["name"]} for m in models]
+

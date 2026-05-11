@@ -108,3 +108,4 @@ async def import_character(
     await db.commit()
     await db.refresh(char)
     return char
+

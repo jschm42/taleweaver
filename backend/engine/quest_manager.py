@@ -105,3 +105,4 @@ class QuestManager:
         # We'd need to fetch the scene label to compare.
         # For now, return False until we have a better way to map ID to Name here.
         return False
+

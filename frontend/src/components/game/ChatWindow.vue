@@ -454,16 +454,6 @@ function handleRetry() {
   }
 }
 
-function isLatestAssistantMessage(index: number): boolean {
-  for (let i = props.messages.length - 1; i >= 0; i -= 1) {
-    const candidate = props.messages[i] as any
-    if (!candidate) continue
-    if (candidate.role !== 'assistant') continue
-    if (candidate.is_debug) continue
-    return i === index
-  }
-  return false
-}
 
 function handleGlobalKeydown(e: KeyboardEvent) {
   if (e.code !== 'Space' || !configState.isTtsEnabled) return

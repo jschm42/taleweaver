@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import os
+from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
@@ -88,23 +89,24 @@ class Settings(BaseSettings):
     
     # Use existing key from environment or generate a temporary one
     ENCRYPTION_KEY: str = Field(default_factory=generate_temp_key)
+    SECRET_KEY: Optional[str] = None
 
     # API Keys from Environment (Optional)
     # These take precedence over database-stored keys
-    OPENAI_API_KEY: str | None = None
-    ANTHROPIC_API_KEY: str | None = None
-    GOOGLE_API_KEY: str | None = None
-    GEMINI_API_KEY: str | None = None
-    OPENROUTER_API_KEY: str | None = None
-    DEEPSEEK_API_KEY: str | None = None
-    MISTRAL_API_KEY: str | None = None
-    GROQ_API_KEY: str | None = None
-    BLACK_FOREST_LABS_API_KEY: str | None = None
+    OPENAI_API_KEY: Optional[str] = None
+    ANTHROPIC_API_KEY: Optional[str] = None
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
+    OPENROUTER_API_KEY: Optional[str] = None
+    DEEPSEEK_API_KEY: Optional[str] = None
+    MISTRAL_API_KEY: Optional[str] = None
+    GROQ_API_KEY: Optional[str] = None
+    BLACK_FOREST_LABS_API_KEY: Optional[str] = None
     
     # Debug / Development
     TALEWEAVER_DEBUG_ENABLED: bool = False
     
-    def get_env_api_key(self, provider: str) -> str | None:
+    def get_env_api_key(self, provider: str) -> Optional[str]:
         """Returns the API key for a provider if set in environment variables."""
         p = provider.lower()
         if p == "openai": return self.OPENAI_API_KEY

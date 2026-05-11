@@ -8,7 +8,7 @@ import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from copy import deepcopy
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, Union
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -118,7 +118,7 @@ def _is_service_unavailable_error(exc: Exception) -> bool:
     return any(p in text for p in patterns)
 
 
-def _friendly_llm_error_message(exc: Exception) -> str | None:
+def _friendly_llm_error_message(exc: Exception) -> Optional[str]:
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
@@ -130,7 +130,7 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
     return None
 
 
-def _llm_error_type(exc: Exception) -> str | None:
+def _llm_error_type(exc: Exception) -> Optional[str]:
     if _is_token_limit_error(exc):
         return "token_limit"
     if _is_rate_limit_error(exc):
@@ -148,11 +148,11 @@ class GameTurnManager:
         self.db = db
         self.game_id = game_id
         self.user = user
-        self.state: SessionState | None = None
-        self.adventure: AdventureTemplate | None = None
-        self.avatar: Avatar | None = None
+        self.state: Optional[SessionState] = None
+        self.adventure: Optional[AdventureTemplate] = None
+        self.avatar: Optional[Avatar] = None
         self.stop_requested = False
-        self.turn_language: str | None = None
+        self.turn_language: Optional[str] = None
 
     @staticmethod
     def _compact_json(payload: object) -> str:
@@ -292,8 +292,8 @@ class GameTurnManager:
 
     def _apply_gm_notes_update(
         self,
-        remember_notes: list[str] | None,
-        forget_notes: list[str] | None,
+        remember_notes: Optional[list[str]],
+        forget_notes: Optional[list[str]],
         clear_notes: bool,
     ) -> None:
         existing = self._get_gm_notes()
@@ -398,7 +398,7 @@ class GameTurnManager:
         logger.debug(f"[Turn {self.game_id}] Initialization (DB) took {duration:.4f}s")
         return True
 
-    async def process_turn(self, message: str, auto_visualize: bool = False, language: str | None = None) -> AsyncGenerator[str, None]:
+    async def process_turn(self, message: str, auto_visualize: bool = False, language: Optional[str] = None) -> AsyncGenerator[str, None]:
         self.turn_language = language
         if not await self.initialize():
             yield f"event: error\ndata: {json.dumps({'detail': 'Game session not found.'})}\n\n"
@@ -700,7 +700,7 @@ class GameTurnManager:
         self.state.combat_json = combat
         flag_modified(self.state, "entity_states")
 
-    async def _find_fight_target(self, target_hint: str) -> WorldEntity | None:
+    async def _find_fight_target(self, target_hint: str) -> Optional[WorldEntity]:
         ent_res = await self.db.execute(
             select(WorldEntity).where(
                 WorldEntity.session_id == self.game_id,
@@ -766,7 +766,7 @@ class GameTurnManager:
         })
         combat["log"] = logs[-80:]
 
-    async def _emit_combat_final(self, status_note: str | None = None) -> AsyncGenerator[str, None]:
+    async def _emit_combat_final(self, status_note: Optional[str] = None) -> AsyncGenerator[str, None]:
         await self.db.commit()
         combat_snap = AdventureLogic.get_combat_snapshot(self.state)
         # Ensure we don't send a zombie combat object that has no active phase
@@ -967,7 +967,7 @@ class GameTurnManager:
             pass
         return True
 
-    def _find_consumable(self, item_name: str) -> dict[str, Any] | None:
+    def _find_consumable(self, item_name: str) -> dict[str, Optional[Any]]:
         for item in list(self.avatar.inventory or []):
             if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower() and item.get("item_type") == "CONSUMABLE":
                 return item
@@ -1065,7 +1065,7 @@ class GameTurnManager:
         return 0
 
     @staticmethod
-    def _parse_json_object(raw: str) -> dict[str, Any] | None:
+    def _parse_json_object(raw: str) -> dict[str, Optional[Any]]:
         text = (raw or "").strip()
         if not text:
             return None
@@ -1093,7 +1093,7 @@ class GameTurnManager:
                 return None
         return None
 
-    async def _request_llm_combat_special_event(self, combat: dict[str, Any]) -> dict[str, Any] | None:
+    async def _request_llm_combat_special_event(self, combat: dict[str, Any]) -> dict[str, Optional[Any]]:
         llm_settings = self.user.llm_settings or {}
         complex_model_provider = (
             llm_settings.get("complex_model_provider")
@@ -1217,7 +1217,7 @@ class GameTurnManager:
             return f"{self.avatar.name} uses {item.get('name', item_name)} ({', '.join(changes)})."
         return f"{self.avatar.name} uses {item.get('name', item_name)}."
 
-    async def _maybe_trigger_special_event(self, combat: dict[str, Any]) -> str | None:
+    async def _maybe_trigger_special_event(self, combat: dict[str, Any]) -> Optional[str]:
         if random.random() > 0.25:
             return None
 
@@ -1407,7 +1407,7 @@ class GameTurnManager:
         existing_ids.update({row.id for row in res.all() if row.id})
         return existing_ids
 
-    async def _resolve_loot_command(self, user_msg: str, combat: dict[str, Any]) -> str | None:
+    async def _resolve_loot_command(self, user_msg: str, combat: dict[str, Any]) -> Optional[str]:
         low = user_msg.lower().strip()
         if not low.startswith("/loot"):
             return None
@@ -1635,7 +1635,7 @@ class GameTurnManager:
             yield chunk
         return
 
-    async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: str | None = None) -> AsyncGenerator[str, None]:
+    async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: Optional[str] = None) -> AsyncGenerator[str, None]:
         _ = auto_visualize
         cycle_start = time.perf_counter()
         # Load Context and LLM Settings
@@ -2663,7 +2663,7 @@ class GameTurnManager:
     async def _emit_system_message(
         self,
         message: str,
-        stream_callback: Callable[[str], Awaitable[None]] | None = None,
+        stream_callback: Callable[[str], Optional[Awaitable[None]]] = None,
     ) -> None:
         """Persist a system message and optionally stream it via callback."""
         self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=message))
@@ -2671,7 +2671,7 @@ class GameTurnManager:
         if stream_callback:
             await stream_callback(message)
 
-    def _get_pending_ag_image_confirmation(self) -> dict[str, Any] | None:
+    def _get_pending_ag_image_confirmation(self) -> dict[str, Optional[Any]]:
         exit_states = dict(self.state.exit_states or {})
         pending = exit_states.get(AG_IMAGE_CONFIRMATION_STATE_KEY)
         if not isinstance(pending, dict):
@@ -2754,7 +2754,7 @@ class GameTurnManager:
         self.state.exit_states = exit_states
         flag_modified(self.state, "exit_states")
 
-    def _get_last_ag_generation_request(self) -> AdventureGenerationRequest | None:
+    def _get_last_ag_generation_request(self) -> Optional[AdventureGenerationRequest]:
         exit_states = dict(self.state.exit_states or {})
         raw = exit_states.get(AG_LAST_REQUEST_STATE_KEY)
         if not isinstance(raw, dict):
@@ -2764,7 +2764,7 @@ class GameTurnManager:
         except Exception:
             return None
 
-    def _set_last_ag_generation_error(self, error_type: str | None) -> None:
+    def _set_last_ag_generation_error(self, error_type: Optional[str]) -> None:
         exit_states = dict(self.state.exit_states or {})
         if error_type:
             exit_states[AG_LAST_ERROR_STATE_KEY] = error_type
@@ -2773,7 +2773,7 @@ class GameTurnManager:
         self.state.exit_states = exit_states
         flag_modified(self.state, "exit_states")
 
-    def _get_last_ag_generation_error(self) -> str | None:
+    def _get_last_ag_generation_error(self) -> Optional[str]:
         exit_states = dict(self.state.exit_states or {})
         value = exit_states.get(AG_LAST_ERROR_STATE_KEY)
         return value if isinstance(value, str) and value else None
@@ -2807,7 +2807,7 @@ class GameTurnManager:
     async def _apply_adventure_generator_tools(
         self,
         event,
-        stream_callback: Callable[[str], Awaitable[None]] | None = None,
+        stream_callback: Callable[[str], Optional[Awaitable[None]]] = None,
     ) -> None:
         """Executes adventure-generator tool requests from a structured event/intent model."""
         if not self.adventure.is_adventure_generator:
@@ -2876,7 +2876,7 @@ class GameTurnManager:
                     msg = f"SYSTEM ERROR: Adventure generation failed: {e}"
                 await self._emit_system_message(msg, stream_callback=stream_callback)
 
-    async def _generate_terminal_epilogue_text(self, language: str | None = None) -> str:
+    async def _generate_terminal_epilogue_text(self, language: Optional[str] = None) -> str:
         status = self.state.session.status if self.state and self.state.session else None
         status_note = self.state.session.status_note if self.state and self.state.session else None
 
@@ -2963,7 +2963,7 @@ class GameTurnManager:
         except Exception:
             return fallback
 
-    async def create_terminal_epilogue(self, language: str | None = None) -> dict[str, Any]:
+    async def create_terminal_epilogue(self, language: Optional[str] = None) -> dict[str, Any]:
         if not await self.initialize():
             raise HTTPException(status_code=404, detail="Game session not found.")
 
@@ -2994,7 +2994,7 @@ class GameTurnManager:
             **self._build_terminal_flags_payload(),
         }
 
-    async def _finalize_session(self, status: str, note: str | None = None):
+    async def _finalize_session(self, status: str, note: Optional[str] = None):
         """Updates the session status and records the outcome in the user's game log."""
         previous_status = self.state.session.status if self.state and self.state.session else None
         if self.state.session:
@@ -3023,3 +3023,4 @@ class GameTurnManager:
         self.user.game_log = current_log
         flag_modified(self.user, "game_log")
         logger.info(f"Session {self.game_id} finalized with status {status}")
+

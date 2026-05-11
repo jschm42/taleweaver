@@ -5,7 +5,7 @@ import random
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Union
 
 from PIL import Image, ImageDraw, ImageFilter
 from pydantic import BaseModel, Field
@@ -79,7 +79,7 @@ class AbstractGeometricGradientStrategy(ImageGenerationStrategy):
     Strategy: Generates a modern, soft background combined with 
     flowing, transparent geometric shapes.
     """
-    def __init__(self, theme: ColorTheme | None = None):
+    def __init__(self, theme: Optional[ColorTheme] = None):
         self.theme = theme
 
     def generate(self, width: int, height: int) -> Image.Image:
@@ -215,9 +215,9 @@ class BlobIconStrategy(ImageGenerationStrategy):
     DEFAULT_ICONS: list[str] = ["star", "heart", "sun", "moon", "cloud", "leaf"]
 
     def __init__(self, 
-                 allowed_icons: list[str] | None = None, 
-                 theme: ColorTheme | None = None,
-                 config: PlaceholderConfig | None = None):
+                 allowed_icons: Optional[list[str]] = None, 
+                 theme: Optional[ColorTheme] = None,
+                 config: Optional[PlaceholderConfig] = None):
         self.allowed_icons = allowed_icons or self.DEFAULT_ICONS
         self.theme = theme
         self.config = config or PlaceholderConfig()
@@ -495,7 +495,7 @@ class PlaceholderImageGenerator:
     Main class for managing and creating placeholder images.
     Uses Dependency Injection for the generation strategy.
     """
-    def __init__(self, strategy: ImageGenerationStrategy | None = None):
+    def __init__(self, strategy: Optional[ImageGenerationStrategy] = None):
         # Default fallback set to the organic strategy
         self.strategy = strategy or OrganicGradientStrategy()
 
@@ -542,3 +542,4 @@ if __name__ == "__main__":
     generator_scifi = PlaceholderImageGenerator(BlobIconStrategy(theme=ColorTheme.SCI_FI))
     saved_path_scifi = generator_scifi.create_and_save("placeholders/banner_scifi.jpg", size=(1200, 400))
     print(f"Saved: {saved_path_scifi}")
+
