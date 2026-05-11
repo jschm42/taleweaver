@@ -118,14 +118,39 @@ function calculateLayout() {
   })
 
   // 3. Add edges (Normalize IDs!)
+  const processedEdges = new Set<string>()
+  const mergedEdges: Array<{ from: string, to: string, isBidirectional: boolean, labels: string[] }> = []
+
   props.mapData.edges.forEach(edge => {
     const fromId = safeId(edge.from)
     const toId = safeId(edge.to)
     
-    // Only add edge if both nodes exist in the graph
-    if (g.hasNode(fromId) && g.hasNode(toId)) {
-      g.setEdge(fromId, toId)
+    // Skip if nodes don't exist
+    if (!g.hasNode(fromId) || !g.hasNode(toId)) return
+
+    const forwardKey = `${fromId}->${toId}`
+    const reverseKey = `${toId}->${fromId}`
+
+    // Check if we already merged the reverse of this edge
+    const existing = mergedEdges.find(me => me.from === toId && me.to === fromId)
+    if (existing) {
+      existing.isBidirectional = true
+      if (edge.label && !existing.labels.includes(edge.label)) {
+        existing.labels.push(edge.label)
+      }
+    } else {
+      mergedEdges.push({
+        from: fromId,
+        to: toId,
+        isBidirectional: false,
+        labels: edge.label ? [edge.label] : []
+      })
     }
+  })
+
+  // Add the merged edges to Dagre
+  mergedEdges.forEach(me => {
+    g.setEdge(me.from, me.to, { isBidirectional: me.isBidirectional, labels: me.labels })
   })
 
   dagre.layout(g)
@@ -220,33 +245,26 @@ async function renderMap() {
       
       const rawEdge = props.mapData!.edges.find(re => safeId(re.from) === e.v && safeId(re.to) === e.w)
       const options = rawEdge?.is_locked ? lockedEdgeOptions : edgeOptions
+      const isBidirectional = edge.isBidirectional
       
       const simplified = flatPoints.length > 4 
         ? [flatPoints[0], flatPoints[Math.floor(flatPoints.length/2)], flatPoints[flatPoints.length-1]]
         : flatPoints
       rc.curve(simplified, options)
 
-      // Arrow head
+      // Arrow head at THE END (Always)
       if (flatPoints.length >= 2) {
-        const last = flatPoints[flatPoints.length - 1]
-        const secondLast = flatPoints[flatPoints.length - 2]
-        const angle = Math.atan2(last[1] - secondLast[1], last[0] - secondLast[0])
-        const headLen = 12
-        const h1x = last[0] - headLen * Math.cos(angle - Math.PI / 6)
-        const h1y = last[1] - headLen * Math.sin(angle - Math.PI / 6)
-        const h2x = last[0] - headLen * Math.cos(angle + Math.PI / 6)
-        const h2y = last[1] - headLen * Math.sin(angle + Math.PI / 6)
-        
-        rc.polygon([[last[0], last[1]], [h1x, h1y], [h2x, h2y]], {
-          ...options,
-          fill: options.stroke,
-          fillStyle: 'solid',
-          roughness: 0.2
-        })
+        drawArrowHead(rc, flatPoints[flatPoints.length - 2], flatPoints[flatPoints.length - 1], options)
       }
 
-      // Store midpoint for hover detection instead of drawing label directly
-      if (rawEdge?.label) {
+      // Arrow head at THE START (If bidirectional)
+      if (isBidirectional && flatPoints.length >= 2) {
+        drawArrowHead(rc, flatPoints[1], flatPoints[0], options)
+      }
+
+      // Store midpoint for hover detection
+      const label = edge.labels?.join(' / ') || rawEdge?.label
+      if (label) {
         const midIdx = Math.floor(points.length / 2)
         const midPoint = points[midIdx]
         edgeMidpoints.value.push({
@@ -254,7 +272,7 @@ async function renderMap() {
           to: e.w,
           x: midPoint.x + margin,
           y: midPoint.y + margin,
-          label: rawEdge.label
+          label: label
         })
       }
     }
@@ -294,6 +312,25 @@ async function renderMap() {
     } else {
       ctx.fillText(label, node.x + margin, node.y + margin)
     }
+  })
+}
+
+/**
+ * Helper to draw a sketchy arrow head pointing from p1 to p2.
+ */
+function drawArrowHead(rc: any, p1: [number, number], p2: [number, number], options: any) {
+  const angle = Math.atan2(p2[1] - p1[1], p2[0] - p1[0])
+  const headLen = 12
+  const h1x = p2[0] - headLen * Math.cos(angle - Math.PI / 6)
+  const h1y = p2[1] - headLen * Math.sin(angle - Math.PI / 6)
+  const h2x = p2[0] - headLen * Math.cos(angle + Math.PI / 6)
+  const h2y = p2[1] - headLen * Math.sin(angle + Math.PI / 6)
+  
+  rc.polygon([[p2[0], p2[1]], [h1x, h1y], [h2x, h2y]], {
+    ...options,
+    fill: options.stroke,
+    fillStyle: 'solid',
+    roughness: 0.2
   })
 }
 
