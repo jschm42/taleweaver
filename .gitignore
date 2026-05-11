@@ -215,3 +215,6 @@ data/
 logs/
 nginx/ssl/
 scratch/
+
+# Editor
+.vscode/

@@ -1,8 +1,7 @@
-import os
 import json
-import sqlite3
+import os
 import shutil
-import sys
+import sqlite3
 from pprint import pformat
 
 # Paths

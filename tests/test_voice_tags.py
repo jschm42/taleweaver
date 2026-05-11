@@ -4,12 +4,12 @@ Tests for Voice-Tag support in GM narration.
 Voice-tags like [shouting] or [very fast] are runtime markup produced by the GM.
 They are stored unchanged in ChatMessage.content and passed through to TTS.
 """
-import re
-import os
 import base64
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+import os
+import re
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Prompt guidance
@@ -142,8 +142,8 @@ async def test_tts_engine_passes_voice_tags_in_transcript():
 @pytest.mark.asyncio
 async def test_tts_engine_converts_uppercase_l16_mime_to_valid_wav(tmp_path, monkeypatch):
     """Gemini 2.5 may return audio/L16;rate=24000 and must be wrapped as WAV."""
-    from backend.engine.tts_engine import TTSEngine
     from backend.core.config import settings
+    from backend.engine.tts_engine import TTSEngine
 
     # 16-bit PCM sample pair (very short test payload)
     raw_pcm = b"\x00\x00\x10\x00"
@@ -208,8 +208,8 @@ async def test_tts_engine_converts_uppercase_l16_mime_to_valid_wav(tmp_path, mon
 @pytest.mark.asyncio
 async def test_tts_engine_skips_empty_inline_data_and_uses_non_empty_chunk(tmp_path, monkeypatch):
     """Responses with an empty first inlineData part must still produce audio."""
-    from backend.engine.tts_engine import TTSEngine
     from backend.core.config import settings
+    from backend.engine.tts_engine import TTSEngine
 
     non_empty_pcm = b"\x01\x00\x02\x00\x03\x00\x04\x00"
     encoded_non_empty = base64.b64encode(non_empty_pcm).decode("ascii")

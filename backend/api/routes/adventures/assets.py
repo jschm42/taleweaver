@@ -1,25 +1,24 @@
+import asyncio
 import logging
 import os
-import asyncio
 import uuid
-import json
-from typing import Optional, Dict, Any, Literal, List
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, UploadFile, Form
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from typing import Literal
 
-from backend.core.database import get_db
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.api.routes.adventures.schemas import SuggestPromptRequest, SuggestPromptResponse
+from backend.core import prompts
 from backend.core.auth import get_current_user
 from backend.core.config import settings
-from backend.core import prompts
-from backend.models.user import User
-from backend.models.adventure_template import AdventureTemplate
-from backend.engine.world_generator import WorldGenerator
-from backend.engine.media_engine import MediaEngine
-from backend.core.style_catalog import resolve_style_instruction
-from backend.api.routes.adventures.schemas import SuggestPromptRequest, SuggestPromptResponse
+from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
+from backend.core.style_catalog import resolve_style_instruction
+from backend.engine.media_engine import MediaEngine
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.user import User
 
 router = APIRouter(prefix="/{template_id}/visuals", tags=["Assets"])
 logger = logging.getLogger(__name__)
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 class RegenerateVisualRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
     target_id: str
-    prompt: Optional[str] = None
+    prompt: str | None = None
     use_advanced_model: bool = False
 
 @router.post("/regenerate")
@@ -39,7 +38,7 @@ async def regenerate_visual(
 ):
     """Regenerate a specific visual asset (cover, scene, character)."""
     from backend.models.avatar import Avatar
-    from backend.models.world_entity import WorldScene, WorldEntity
+    from backend.models.world_entity import WorldEntity, WorldScene
     
     adv = await db.get(AdventureTemplate, template_id)
     if not adv or adv.owner_id != current_user.id:
@@ -134,7 +133,7 @@ async def suggest_prompt(
 ):
     """Generate an AI prompt suggestion based on the asset's description."""
     from backend.models.avatar import Avatar
-    from backend.models.world_entity import WorldScene, WorldEntity
+    from backend.models.world_entity import WorldEntity, WorldScene
     
     adv = await db.get(AdventureTemplate, template_id)
     if not adv or adv.owner_id != current_user.id:
@@ -209,7 +208,7 @@ async def upload_visual(
 ):
     """Manually upload a visual asset."""
     from backend.models.avatar import Avatar
-    from backend.models.world_entity import WorldScene, WorldEntity
+    from backend.models.world_entity import WorldEntity, WorldScene
     
     adv = await db.get(AdventureTemplate, template_id)
     if not adv or adv.owner_id != current_user.id:

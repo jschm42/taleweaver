@@ -1,13 +1,12 @@
+
 import pytest
-import json
 from sqlalchemy import select
-from backend.models.user import User
-from backend.models.adventure_template import AdventureTemplate
-from backend.models.avatar import Avatar
-from backend.models.game_session import GameSession
-from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
+
 from backend.api.routes.adventures.sessions import start_session_for_template
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.session_state import SessionState
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldScene
 
 pytestmark = pytest.mark.asyncio
 

@@ -1,13 +1,13 @@
-import re
-import os
-import uuid
 import logging
-from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException
+import os
+import re
+import uuid
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from typing import Optional, Any
-import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -21,24 +21,23 @@ TTS_MODEL_ALIASES = {
     "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
 }
 
-from backend.core.database import get_db
-from backend.core.auth import get_current_user, get_current_admin
-from backend.models.user import User
-from backend.core.security import encryption_util
-from backend.core.models_config import (
-    LLM_PROVIDERS,
-    IMAGE_PROVIDERS,
-    TTS_PROVIDERS,
-    PREDEFINED_LLM_MODELS,
-    PREDEFINED_IMAGE_MODELS,
-    PREDEFINED_TTS_MODELS
-)
-from backend.core.llm_router import GameMasterLLM
-from backend.engine.media_engine import MediaEngine
+from backend.core.auth import get_current_admin, get_current_user
 from backend.core.config import settings
-from backend.core.style_catalog import default_image_styles_catalog
+from backend.core.database import get_db
+from backend.core.llm_router import GameMasterLLM
+from backend.core.models_config import (
+    IMAGE_PROVIDERS,
+    LLM_PROVIDERS,
+    PREDEFINED_IMAGE_MODELS,
+    PREDEFINED_LLM_MODELS,
+    PREDEFINED_TTS_MODELS,
+    TTS_PROVIDERS,
+)
+from backend.core.security import encryption_util
 from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_LIST
+from backend.engine.media_engine import MediaEngine
 from backend.engine.tts_engine import TTSEngine
+from backend.models.user import User
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 print(f"DEBUG: Loading config_api module, router prefix: {router.prefix}")
@@ -89,7 +88,7 @@ def _default_tone_catalog() -> list[dict[str, Any]]:
     return [dict(item) for item in DEFAULT_TONES]
 
 
-def _normalize_catalog(catalog: Optional[list[dict[str, Any]]], *, fallback: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _normalize_catalog(catalog: list[dict[str, Any]] | None, *, fallback: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not catalog:
         return fallback
 
@@ -114,7 +113,7 @@ def _normalize_catalog(catalog: Optional[list[dict[str, Any]]], *, fallback: lis
     return normalized or fallback
 
 
-def _normalize_openrouter_model(model: Optional[str]) -> Optional[str]:
+def _normalize_openrouter_model(model: str | None) -> str | None:
     """Strip provider prefixes from models stored for OpenRouter."""
     if not isinstance(model, str):
         return model
@@ -129,7 +128,7 @@ def _normalize_openrouter_model(model: Optional[str]) -> Optional[str]:
     return normalized
 
 
-def _normalize_llm_settings(settings: Optional[dict]) -> dict:
+def _normalize_llm_settings(settings: dict | None) -> dict:
     """Return LLM settings with separate providers, tokens and thinking modes."""
     fallback = {
         "small_model": "",
@@ -223,7 +222,7 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
     return normalized
 
 
-def _normalize_tts_settings(settings: Optional[dict]) -> dict:
+def _normalize_tts_settings(settings: dict | None) -> dict:
     """Return TTS settings with voice list, selected voice and style context."""
     full_voice_list = list(GOOGLE_TTS_VOICE_LIST)
     full_voice_catalog = [dict(entry) for entry in GOOGLE_TTS_VOICE_CATALOG]
@@ -291,7 +290,7 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     return normalized
 
 
-def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
+def _normalize_t2i_settings(settings: dict | None) -> dict:
     """Return T2I settings with separate providers."""
     fallback = {
         "simple_model": "",
@@ -382,7 +381,7 @@ class SettingsPayload(BaseModel):
     generator_max_thinking_tokens: int = 1024
     
     preferred_provider: str # Legacy
-    ollama_url: Optional[str] = None
+    ollama_url: str | None = None
 
 class T2ISettingsPayload(BaseModel):
     simple_model: str
@@ -390,14 +389,14 @@ class T2ISettingsPayload(BaseModel):
     advanced_model: str
     advanced_model_provider: str
     provider: str # Legacy
-    ollama_url: Optional[str] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
-    steps: Optional[int] = None
-    seed: Optional[int] = None
-    image_format: Optional[str] = "jpeg"
-    image_quality: Optional[int] = 85
-    negative_prompt: Optional[str] = None
+    ollama_url: str | None = None
+    width: int | None = None
+    height: int | None = None
+    steps: int | None = None
+    seed: int | None = None
+    image_format: str | None = "jpeg"
+    image_quality: int | None = 85
+    negative_prompt: str | None = None
 class GameSettingsPayload(BaseModel):
     clock_24h: bool = False
     date_format: str = "DD.MM.YY"
@@ -412,17 +411,17 @@ class TTSSettingsPayload(BaseModel):
     use_vocal_tags: bool = True
     use_text_chunking: bool = True
     voice_list: list[str] = Field(default_factory=list)
-    voice_catalog: Optional[list[dict[str, str]]] = None
+    voice_catalog: list[dict[str, str]] | None = None
     sample_context: str = ""
     speech_rate: float = 1.0
 
 
 class CatalogTilePayload(BaseModel):
-    id: Optional[str] = None
+    id: str | None = None
     name: str
-    description: Optional[str] = None
-    instruction: Optional[str] = None
-    image_url: Optional[str] = None
+    description: str | None = None
+    instruction: str | None = None
+    image_url: str | None = None
 
 
 class CatalogUpdatePayload(BaseModel):
@@ -432,9 +431,9 @@ class CatalogUpdatePayload(BaseModel):
 class CatalogGeneratePayload(BaseModel):
     target_id: str
     catalog_type: str  # 'styles' or 'tones'
-    prompt: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
+    prompt: str | None = None
+    name: str | None = None
+    description: str | None = None
 
 @router.get("")
 async def get_settings(
@@ -637,7 +636,7 @@ async def update_tts_settings(
 class TestLLMPayload(BaseModel):
     model: str
     provider: str
-    ollama_url: Optional[str] = None
+    ollama_url: str | None = None
 
 @router.post("/test-llm")
 async def test_llm_connection(
@@ -671,7 +670,7 @@ async def test_llm_connection(
 class TestVisionPayload(BaseModel):
     model: str
     provider: str
-    ollama_url: Optional[str] = None
+    ollama_url: str | None = None
 
 @router.post("/test-vision")
 async def test_vision_connection(

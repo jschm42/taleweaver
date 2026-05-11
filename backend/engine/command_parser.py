@@ -1,5 +1,6 @@
 from backend.models.avatar import Avatar
 
+
 class CommandParser:
     @staticmethod
     def parse_command(avatar: Avatar, command_text: str) -> str:

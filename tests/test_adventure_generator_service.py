@@ -21,7 +21,6 @@ async def test_service_disables_all_image_generation_when_scene_images_disabled(
 
         async def fake_generate_world(*_args, **kwargs):
             captured_kwargs.update(kwargs)
-            return None
 
         monkeypatch.setattr(
             "backend.engine.adventure_generator_service.WorldGenerator.generate_world",

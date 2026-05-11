@@ -1,15 +1,16 @@
 import base64
+import json
 import logging
 import os
-import json
-from typing import Optional, List
-from pydantic import Field, model_validator, BaseModel
+
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
+
 
 def get_app_version() -> str:
     try:
         path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "version.json")
-        with open(path, "r") as f:
+        with open(path) as f:
             data = json.load(f)
             v = data.get("version", "0.1.0")
             s = data.get("suffix", "")
@@ -35,13 +36,13 @@ class TTSSettings(BaseModel):
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
     use_vocal_tags: bool = True
-    voice_list: List[str] = [
+    voice_list: list[str] = [
         "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe",
         "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome",
         "Algenib", "Rasalgethi", "Laomedeia", "Achernar", "Alnilam", "Schedar", "Gacrux",
         "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager"
     ]
-    voice_catalog: List[dict] = []
+    voice_catalog: list[dict] = []
     sample_context: str = ""
     speech_rate: float = 1.0
 
@@ -90,20 +91,20 @@ class Settings(BaseSettings):
 
     # API Keys from Environment (Optional)
     # These take precedence over database-stored keys
-    OPENAI_API_KEY: Optional[str] = None
-    ANTHROPIC_API_KEY: Optional[str] = None
-    GOOGLE_API_KEY: Optional[str] = None
-    GEMINI_API_KEY: Optional[str] = None
-    OPENROUTER_API_KEY: Optional[str] = None
-    DEEPSEEK_API_KEY: Optional[str] = None
-    MISTRAL_API_KEY: Optional[str] = None
-    GROQ_API_KEY: Optional[str] = None
-    BLACK_FOREST_LABS_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: str | None = None
+    ANTHROPIC_API_KEY: str | None = None
+    GOOGLE_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
+    OPENROUTER_API_KEY: str | None = None
+    DEEPSEEK_API_KEY: str | None = None
+    MISTRAL_API_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
+    BLACK_FOREST_LABS_API_KEY: str | None = None
     
     # Debug / Development
     TALEWEAVER_DEBUG_ENABLED: bool = False
     
-    def get_env_api_key(self, provider: str) -> Optional[str]:
+    def get_env_api_key(self, provider: str) -> str | None:
         """Returns the API key for a provider if set in environment variables."""
         p = provider.lower()
         if p == "openai": return self.OPENAI_API_KEY

@@ -1,25 +1,23 @@
-import os
+import io
 import json
+import logging
+import os
 import uuid
 import zipfile
-import io
-import shutil
-import logging
-from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.adventure_format import validate_manifest_version
+from backend.core.auth import get_password_hash
 from backend.core.config import settings
-from backend.models.user import User
+from backend.engine.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
-from backend.engine.world_generator import WorldGenerator
-from backend.core.auth import get_password_hash
-from backend.core.adventure_format import validate_manifest_version
+from backend.models.user import User
 from backend.utils.text_utils import generate_adventure_id, generate_session_id
 
 logger = logging.getLogger(__name__)
@@ -35,7 +33,7 @@ def _build_local_default_user() -> User:
 
 class AdventureTemplateImporter:
     @staticmethod
-    async def import_from_directory(db: AsyncSession, directory: str, owner_id: Optional[str] = None, delete_after: bool = False, allow_session: bool = False):
+    async def import_from_directory(db: AsyncSession, directory: str, owner_id: str | None = None, delete_after: bool = False, allow_session: bool = False):
         """Scans a directory for .adv or .adz files and imports them."""
         if not os.path.exists(directory):
             logger.warning(f"Import directory {directory} does not exist.")
@@ -60,19 +58,19 @@ class AdventureTemplateImporter:
                 logger.error(f"Error during import of {file_path}: {e}")
 
     @staticmethod
-    async def import_file(db: AsyncSession, file_path: str, owner_id: Optional[str] = None, allow_session: bool = True) -> bool:
+    async def import_file(db: AsyncSession, file_path: str, owner_id: str | None = None, allow_session: bool = True) -> bool:
         """Imports a single file (.adv or .adz)."""
         if file_path.endswith(".adz"):
             with open(file_path, "rb") as f:
                 return await AdventureTemplateImporter.import_adz(db, f.read(), owner_id=owner_id)
         elif file_path.endswith(".adv"):
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 payload = json.load(f)
                 return await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=owner_id, allow_session=allow_session)
         return False
 
     @staticmethod
-    async def import_adz(db: AsyncSession, adz_data: bytes, owner_id: Optional[str] = None) -> bool:
+    async def import_adz(db: AsyncSession, adz_data: bytes, owner_id: str | None = None) -> bool:
         """Logic for ADZ (ZIP) import, including assets."""
         try:
             zip_buffer = io.BytesIO(adz_data)
@@ -255,13 +253,13 @@ class AdventureTemplateImporter:
 
                 await db.commit()
                 return True
-        except Exception as e:
+        except Exception:
             logger.exception("ADZ Import failed")
             await db.rollback()
             return False
 
     @staticmethod
-    async def import_adv_manifest(db: AsyncSession, payload: Dict[str, Any], owner_id: Optional[str] = None, allow_session: bool = True) -> bool:
+    async def import_adv_manifest(db: AsyncSession, payload: dict[str, Any], owner_id: str | None = None, allow_session: bool = True) -> bool:
         """Logic for pure .adv (JSON) import."""
         try:
             try:
@@ -466,7 +464,7 @@ class AdventureTemplateImporter:
                 await WorldGenerator.apply_manifest(db, new_template.id, manifest, user=user)
                 await db.commit()
                 return True
-        except Exception as e:
+        except Exception:
             logger.exception("ADV Import failed")
             await db.rollback()
             return False

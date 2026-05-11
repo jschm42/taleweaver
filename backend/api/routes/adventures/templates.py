@@ -1,33 +1,34 @@
 import logging
 import os
-import uuid
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, or_
 
-from backend.core.database import get_db, AsyncSessionLocal
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.schemas import (
+    AdventureTemplateResponse,
+    AdventureTemplateSummaryResponse,
+    AdventureTemplateUpdate,
+    CreateAdventureTemplatePayload,
+)
 from backend.core.auth import get_current_user
 from backend.core.config import settings
-from backend.models.user import User
+from backend.core.database import AsyncSessionLocal, get_db
+from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
 from backend.models.adventure_template import AdventureTemplate
+from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
-from backend.models.avatar import Avatar
-from backend.models.world_entity import WorldScene, WorldEntity
-from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
-from backend.api.routes.adventures.schemas import (
-    AdventureTemplateSummaryResponse, AdventureTemplateResponse,
-    CreateAdventureTemplatePayload, AdventureTemplateUpdate
-)
-from backend.api.routes.adventures.logic import AdventureLogic
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldScene
 from backend.utils.text_utils import generate_adventure_id, generate_session_id
 
 router = APIRouter(tags=["Adventures"])
 logger = logging.getLogger(__name__)
 
-@router.get("/templates", response_model=List[AdventureTemplateSummaryResponse])
+@router.get("/templates", response_model=list[AdventureTemplateSummaryResponse])
 async def list_templates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -403,8 +404,9 @@ async def export_adventure_adz(
     current_user: User = Depends(get_current_user),
 ):
     """Exports the adventure as a portable .adz (ZIP) bundle including assets."""
-    from backend.engine.adventure_exporter import AdventureExporter
     import io
+
+    from backend.engine.adventure_exporter import AdventureExporter
     try:
         zip_data = await AdventureExporter.export_adz(db, template_id)
         return StreamingResponse(

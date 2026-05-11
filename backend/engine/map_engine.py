@@ -8,9 +8,9 @@ Responsibilities:
 """
 from __future__ import annotations
 
-from typing import Optional
-from sqlalchemy.orm.attributes import flag_modified
 import logging
+
+from sqlalchemy.orm.attributes import flag_modified
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +28,9 @@ class MapEngine:
     def register_visit(
         world_map,
         scene_id: str,
-        label: Optional[str] = None,
-        description: Optional[str] = None,
-        image_url: Optional[str] = None,
+        label: str | None = None,
+        description: str | None = None,
+        image_url: str | None = None,
     ) -> None:
         """
         Upsert a scene node. If the node already exists only missing fields

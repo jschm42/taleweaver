@@ -1,8 +1,8 @@
-import os
-import json
 import datetime
+import json
 import logging
-from typing import Any, Optional, Dict
+import os
+from typing import Any
 
 from backend.core.config import settings
 
@@ -30,7 +30,7 @@ def _prepare_value(value: Any) -> Any:
     return _truncate_text(value)
 
 
-def _write_entry(entry: Dict[str, Any]) -> None:
+def _write_entry(entry: dict[str, Any]) -> None:
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -57,14 +57,14 @@ def log_llm_interaction(
     system_prompt: str,
     user_prompt: str,
     response_content: str,
-    raw_response: Optional[dict] = None,
+    raw_response: dict | None = None,
     *,
     event_type: str = "llm_interaction",
-    adventure_id: Optional[str] = None,
-    game_id: Optional[str] = None,
-    operation: Optional[str] = None,
-    phase: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
+    adventure_id: str | None = None,
+    game_id: str | None = None,
+    operation: str | None = None,
+    phase: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ):
     """
     Logs an LLM interaction to a local JSONL file for debugging.

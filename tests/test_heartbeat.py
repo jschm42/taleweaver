@@ -4,10 +4,10 @@ Unit tests for the HeartbeatManager and status-effect tick logic.
 LLM calls are not involved here; we test the pure game-logic functions
 in isolation using simple Avatar stubs.
 """
-import pytest
 from unittest.mock import MagicMock
 
-from backend.engine.rule_engine import RuleEngine, RESOURCE_CAP
+from backend.engine.rule_engine import RESOURCE_CAP, RuleEngine
+
 
 def _apply_status_effect_ticks(avatar):
     return RuleEngine.apply_ticks(avatar)

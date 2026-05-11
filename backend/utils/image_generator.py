@@ -1,27 +1,27 @@
-import random
 import colorsys
-import math
-import io
 import logging
+import math
+import random
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Tuple, List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Any
+
 from PIL import Image, ImageDraw, ImageFilter
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 # Type aliases for better readability
-ColorRGB = Tuple[int, int, int]
-Dimensions = Tuple[int, int]
+ColorRGB = tuple[int, int, int]
+Dimensions = tuple[int, int]
 
 class PlaceholderConfig(BaseModel):
     """
     Configuration for the placeholder generation.
     Defines visual parameters like color palettes, blob counts, and icon styles.
     """
-    palette: List[str] = Field(default=["#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8"])
+    palette: list[str] = Field(default=["#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8"])
     blob_count: int = Field(default=12)
     icon_count: int = Field(default=7)
     icon_size_min: int = Field(default=150)
@@ -79,7 +79,7 @@ class AbstractGeometricGradientStrategy(ImageGenerationStrategy):
     Strategy: Generates a modern, soft background combined with 
     flowing, transparent geometric shapes.
     """
-    def __init__(self, theme: Optional[ColorTheme] = None):
+    def __init__(self, theme: ColorTheme | None = None):
         self.theme = theme
 
     def generate(self, width: int, height: int) -> Image.Image:
@@ -212,12 +212,12 @@ class BlobIconStrategy(ImageGenerationStrategy):
     Generates procedural blob + icon images server-side with PIL.
     """
 
-    DEFAULT_ICONS: List[str] = ["star", "heart", "sun", "moon", "cloud", "leaf"]
+    DEFAULT_ICONS: list[str] = ["star", "heart", "sun", "moon", "cloud", "leaf"]
 
     def __init__(self, 
-                 allowed_icons: Optional[List[str]] = None, 
-                 theme: Optional[ColorTheme] = None,
-                 config: Optional[PlaceholderConfig] = None):
+                 allowed_icons: list[str] | None = None, 
+                 theme: ColorTheme | None = None,
+                 config: PlaceholderConfig | None = None):
         self.allowed_icons = allowed_icons or self.DEFAULT_ICONS
         self.theme = theme
         self.config = config or PlaceholderConfig()
@@ -260,7 +260,7 @@ class BlobIconStrategy(ImageGenerationStrategy):
         self._draw_icons(img, palette)
         return img.convert("RGB")
 
-    def _add_pattern_overlay(self, image: Image.Image, palette: List[str]) -> None:
+    def _add_pattern_overlay(self, image: Image.Image, palette: list[str]) -> None:
         """Adds a halftone-like dot grid or line grid overlay."""
         width, height = image.size
         layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -285,7 +285,7 @@ class BlobIconStrategy(ImageGenerationStrategy):
                 
         image.alpha_composite(layer)
 
-    def _draw_blobs(self, image: Image.Image, palette: List[str], count: int, opacity: float, intensity: float) -> None:
+    def _draw_blobs(self, image: Image.Image, palette: list[str], count: int, opacity: float, intensity: float) -> None:
         width, height = image.size
         blob_alpha = int(max(0.0, min(1.0, opacity)) * 255)
 
@@ -333,7 +333,7 @@ class BlobIconStrategy(ImageGenerationStrategy):
             blob_layer.alpha_composite(grad_layer)
             image.alpha_composite(blob_layer)
 
-    def _draw_oil_strokes(self, image: Image.Image, palette: List[str]) -> None:
+    def _draw_oil_strokes(self, image: Image.Image, palette: list[str]) -> None:
         width, height = image.size
         layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(layer, "RGBA")
@@ -353,7 +353,7 @@ class BlobIconStrategy(ImageGenerationStrategy):
 
         image.alpha_composite(layer.filter(ImageFilter.GaussianBlur(1)))
 
-    def _draw_icons(self, image: Image.Image, palette: List[str]) -> None:
+    def _draw_icons(self, image: Image.Image, palette: list[str]) -> None:
         width, height = image.size
         count = max(0, self.config.icon_count)
 
@@ -485,7 +485,7 @@ class BlobIconStrategy(ImageGenerationStrategy):
         return int(r2 * 255), int(g2 * 255), int(b2 * 255)
 
     @staticmethod
-    def _pick(values: List[Any]) -> Any:
+    def _pick(values: list[Any]) -> Any:
         if not values:
             return "#ffffff"
         return values[random.randrange(0, len(values))]
@@ -495,7 +495,7 @@ class PlaceholderImageGenerator:
     Main class for managing and creating placeholder images.
     Uses Dependency Injection for the generation strategy.
     """
-    def __init__(self, strategy: Optional[ImageGenerationStrategy] = None):
+    def __init__(self, strategy: ImageGenerationStrategy | None = None):
         # Default fallback set to the organic strategy
         self.strategy = strategy or OrganicGradientStrategy()
 

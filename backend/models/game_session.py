@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, ForeignKey
+
+from sqlalchemy import Column, ForeignKey, String
 from sqlalchemy.orm import relationship
+
 from backend.models.base import Base, TimestampMixin
+
 
 class GameSession(Base, TimestampMixin):
     __tablename__ = "game_sessions"

@@ -1,6 +1,9 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Boolean, JSON, ForeignKey
+
+from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, String
+
 from backend.models.base import Base, TimestampMixin
+
 
 class GenerationCancelled(Exception):
     """Raised when the user cancels a background generation task."""

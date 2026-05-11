@@ -1,6 +1,6 @@
-from typing import Optional
 
-def get_item_slot(name: str, item_type: str) -> Optional[str]:
+
+def get_item_slot(name: str, item_type: str) -> str | None:
     """
     Attempts to determine the appropriate equipment slot for an item based on its name and type.
     Returns None if the item is not equippable or no slot can be determined.

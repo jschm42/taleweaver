@@ -1,17 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 import os
 import shutil
 from uuid import uuid4
-from typing import Optional
 
-from backend.core.database import get_db
-from backend.core.auth import get_current_user, get_current_admin, get_password_hash
-from backend.models.user import User
-from backend.core.config import settings
-from backend.api.routes.auth_api import UserResponse
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.api.routes.auth_api import UserResponse
+from backend.core.auth import get_current_admin, get_current_user, get_password_hash
+from backend.core.config import settings
+from backend.core.database import get_db
+from backend.models.user import User
 
 router = APIRouter()
 
@@ -21,18 +21,18 @@ class UserCreateRequest(BaseModel):
     role: str = "user"
 
 class UserUpdateRequest(BaseModel):
-    username: Optional[str] = None
-    role: Optional[str] = None
-    password: Optional[str] = None
-    bio: Optional[str] = None
-    default_language: Optional[str] = None
+    username: str | None = None
+    role: str | None = None
+    password: str | None = None
+    bio: str | None = None
+    default_language: str | None = None
 
 class BioUpdateRequest(BaseModel):
     bio: str
 
 
 class ProfileImageGenerateRequest(BaseModel):
-    bio: Optional[str] = None
+    bio: str | None = None
 
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db)):
@@ -140,7 +140,7 @@ async def generate_my_bio(current_user: User = Depends(get_current_user), db: As
 
 @router.post("/users/me/profile-image/generate", response_model=UserResponse)
 async def generate_my_profile_image(
-    payload: Optional[ProfileImageGenerateRequest] = None,
+    payload: ProfileImageGenerateRequest | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

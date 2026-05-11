@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, JSON, Boolean, ForeignKey, Integer
+
+from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import synonym
+
 from backend.models.base import Base, TimestampMixin
+
 
 class WorldScene(Base, TimestampMixin):
     """

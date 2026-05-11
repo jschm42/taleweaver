@@ -1,43 +1,45 @@
+from typing import Any
+
 from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
+
 
 class AvatarBase(BaseModel):
     name: str
-    role: Optional[str] = None
-    description: Optional[str] = None
-    profile_image: Optional[str] = None
-    hp: Optional[int] = 200
-    stamina: Optional[int] = 200
-    mana: Optional[int] = 200
-    strength: Optional[int] = 10
-    intelligence: Optional[int] = 10
-    wisdom: Optional[int] = 10
-    dexterity: Optional[int] = 10
-    charisma: Optional[int] = 10
-    armor_class: Optional[int] = 10
-    stats: Optional[Dict[str, Any]] = None
-    inventory: Optional[List[Dict[str, Any]]] = None
-    equipment: Optional[Dict[str, Any]] = None
-    status_effects: Optional[List[str]] = None
+    role: str | None = None
+    description: str | None = None
+    profile_image: str | None = None
+    hp: int | None = 200
+    stamina: int | None = 200
+    mana: int | None = 200
+    strength: int | None = 10
+    intelligence: int | None = 10
+    wisdom: int | None = 10
+    dexterity: int | None = 10
+    charisma: int | None = 10
+    armor_class: int | None = 10
+    stats: dict[str, Any] | None = None
+    inventory: list[dict[str, Any]] | None = None
+    equipment: dict[str, Any] | None = None
+    status_effects: list[str] | None = None
 
 class AvatarCreate(AvatarBase):
     user_id: str
 
 class AvatarUpdate(BaseModel):
-    name: Optional[str] = None
-    hp: Optional[int] = None
-    stamina: Optional[int] = None
-    mana: Optional[int] = None
-    strength: Optional[int] = None
-    intelligence: Optional[int] = None
-    wisdom: Optional[int] = None
-    dexterity: Optional[int] = None
-    charisma: Optional[int] = None
-    armor_class: Optional[int] = None
-    stats: Optional[Dict[str, Any]] = None
-    inventory: Optional[List[Dict[str, Any]]] = None
-    equipment: Optional[Dict[str, Any]] = None
-    status_effects: Optional[List[str]] = None
+    name: str | None = None
+    hp: int | None = None
+    stamina: int | None = None
+    mana: int | None = None
+    strength: int | None = None
+    intelligence: int | None = None
+    wisdom: int | None = None
+    dexterity: int | None = None
+    charisma: int | None = None
+    armor_class: int | None = None
+    stats: dict[str, Any] | None = None
+    inventory: list[dict[str, Any]] | None = None
+    equipment: dict[str, Any] | None = None
+    status_effects: list[str] | None = None
 
 class AvatarInDBBase(AvatarBase):
     id: str

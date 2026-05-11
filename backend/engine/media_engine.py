@@ -2,26 +2,27 @@
 MediaEngine — Handles AI image generation for scenes and entities.
 Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imagen), while using the direct BFL API for Black Forest Labs.
 """
+import asyncio
+import io
 import logging
 import os
 import time
 import uuid
-import requests
-import io
-import asyncio
-from typing import Optional, Any
-from PIL import Image
-from backend.core.security import encryption_util
-from backend.core.config import settings
-from backend.core import prompts
-from backend.utils.svg_generator import SVGPlaceholderGenerator
-from backend.utils.image_generator import (
-    PlaceholderImageGenerator, 
-    OrganicGradientStrategy, 
-    BlobIconStrategy, 
-    ColorTheme
-)
+from typing import Any
+
 import litellm
+import requests
+from PIL import Image
+
+from backend.core import prompts
+from backend.core.config import settings
+from backend.core.security import encryption_util
+from backend.utils.image_generator import (
+    ColorTheme,
+    OrganicGradientStrategy,
+    PlaceholderImageGenerator,
+)
+from backend.utils.svg_generator import SVGPlaceholderGenerator
 from backend.utils.text_utils import slugify
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ BFL_API_BASE = "https://api.bfl.ai/v1"
 NO_TEXT_IMAGE_PROMPT_SUFFIX = prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX
 
 import shutil
+
 
 class MediaEngine:
     @staticmethod
@@ -101,9 +103,9 @@ class MediaEngine:
         model: str,
         api_key: str,
         target_dir: str,
-        filename: Optional[str] = None,
-        provider_options: Optional[dict[str, Any]] = None,
-    ) -> Optional[str]:
+        filename: str | None = None,
+        provider_options: dict[str, Any] | None = None,
+    ) -> str | None:
         """Generate a BFL image by calling the REST API directly and polling for completion."""
         provider_options = provider_options or {}
         model_slug = MediaEngine._normalize_black_forest_labs_model(model)
@@ -188,7 +190,7 @@ class MediaEngine:
         return None
 
     @staticmethod
-    def _resolve_api_key(provider: str, api_keys_dict: dict) -> Optional[str]:
+    def _resolve_api_key(provider: str, api_keys_dict: dict) -> str | None:
         """Resolves API key by checking environment variables first, then the provided dictionary."""
         provider_key = (provider or "").lower()
         
@@ -211,14 +213,14 @@ class MediaEngine:
     async def generate_image(
         prompt: str, 
         model: str, 
-        api_key: Optional[str], 
+        api_key: str | None, 
         provider: str = "openai",
-        adventure_id: Optional[str] = None,
-        target_dir: Optional[str] = None,
-        filename: Optional[str] = None,
-        provider_options: Optional[dict[str, Any]] = None,
-        style_instruction: Optional[str] = None,
-    ) -> Optional[str]:
+        adventure_id: str | None = None,
+        target_dir: str | None = None,
+        filename: str | None = None,
+        provider_options: dict[str, Any] | None = None,
+        style_instruction: str | None = None,
+    ) -> str | None:
         """Generates an image and saves it locally."""
         provider_key = (provider or "openai").lower()
         if not prompt or not model:
@@ -467,7 +469,7 @@ class MediaEngine:
             raise
 
     @staticmethod
-    def _extract_image_payload(response: Any) -> tuple[Optional[str], Optional[str]]:
+    def _extract_image_payload(response: Any) -> tuple[str | None, str | None]:
         """Extract URL or base64 image payload from provider responses."""
         if not response:
             return None, None
@@ -508,13 +510,13 @@ class MediaEngine:
         model: str,
         ollama_url: str,
         target_dir: str,
-        filename: Optional[str] = None,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
-        steps: Optional[int] = None,
-        seed: Optional[int] = None,
-        negative_prompt: Optional[str] = None,
-    ) -> Optional[str]:
+        filename: str | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        steps: int | None = None,
+        seed: int | None = None,
+        negative_prompt: str | None = None,
+    ) -> str | None:
         """Generate an image through Ollama's local HTTP API."""
         try:
             base = ollama_url.rstrip("/")
@@ -569,7 +571,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
+    async def _save_b64_image(b64_data: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
         """Decodes and saves a base64 image string."""
         import base64
         import re
@@ -615,7 +617,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
+    async def _save_remote_image(url: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
         """Downloads a remote image and persists it in the specified directory."""
         try:
             response = await asyncio.to_thread(requests.get, url, timeout=30)
@@ -644,12 +646,12 @@ class MediaEngine:
             else:
                 logger.error(f"Failed to download image from {url}, status: {response.status_code}")
                 return None
-        except Exception as e:
+        except Exception:
             logger.exception("Error saving remote image")
             return None
 
     @staticmethod
-    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = True) -> Optional[str]:
+    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: str | None = None, use_advanced_model: bool = True) -> str | None:
         """High-level wrapper for gameplay scene generation (uses Advanced Model by default)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -693,7 +695,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = False) -> Optional[str]:
+    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: str | None = None, use_advanced_model: bool = False) -> str | None:
         """High-level wrapper for NPC/Object generation (uses Simple Model by default)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -738,7 +740,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
+    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: str | None = None) -> str | None:
         """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -786,9 +788,9 @@ class MediaEngine:
         adventure_id: str,
         entity_id: str,
         target_dir: str,
-        filename: Optional[str] = None,
+        filename: str | None = None,
         category: str = "",
-        theme: Optional[str] = None
+        theme: str | None = None
     ) -> str:
         """
         Generates a high-quality PIL-based placeholder image.

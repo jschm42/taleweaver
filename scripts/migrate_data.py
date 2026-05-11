@@ -1,5 +1,5 @@
-import sqlite3
 import os
+import sqlite3
 
 # Possible Database paths
 DB_PATHS = ["taleweaver.db", "backend/taleweaver.db"]

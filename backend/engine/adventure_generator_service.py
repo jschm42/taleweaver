@@ -1,18 +1,20 @@
-import uuid
 import logging
-from typing import List, Optional, Callable, Awaitable
+import uuid
+from collections.abc import Awaitable, Callable
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.models.adventure_template import AdventureTemplate
-from backend.models.user import User
+
+from backend.core.style_catalog import default_image_styles_catalog
 from backend.engine.rule_engine import AdventureGenerationRequest
 from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
-from backend.core.style_catalog import default_image_styles_catalog
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.user import User
 
 logger = logging.getLogger(__name__)
 
 class AdventureGeneratorService:
     @staticmethod
-    async def get_available_image_styles(user: User) -> List[str]:
+    async def get_available_image_styles(user: User) -> list[str]:
         """Returns the list of available image styles for the user."""
         catalog = user.image_styles_catalog or []
         if not catalog:
@@ -21,7 +23,7 @@ class AdventureGeneratorService:
         return [s.get("id") or s.get("name") for s in catalog if s.get("id") or s.get("name")]
 
     @staticmethod
-    async def get_available_tones(user: User) -> List[str]:
+    async def get_available_tones(user: User) -> list[str]:
         """Returns the list of available narrative tones."""
         catalog = user.tone_catalog or []
         if not catalog:
@@ -34,7 +36,7 @@ class AdventureGeneratorService:
         db: AsyncSession,
         user: User,
         request: AdventureGenerationRequest,
-        progress_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+        progress_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> str:
         """
         Triggers the world generation and saves the new template to the user's library.

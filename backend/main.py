@@ -1,14 +1,16 @@
+import logging
+import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import os
-import logging
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
-from backend.core.database import engine, apply_sqlite_compat_migrations
-from backend.models.base import Base
+
 from backend.core.config import settings
+from backend.core.database import engine
+from backend.models.base import Base
 
 # Configure logging based on .env settings
 logging.basicConfig(
@@ -19,15 +21,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import all models so SQLAlchemy metadata registers them before create_all
-import backend.models.user
-import backend.models.avatar
 import backend.models.adventure_template
+import backend.models.avatar
+import backend.models.chat
 import backend.models.game_session
 import backend.models.session_state
-import backend.models.chat
+import backend.models.user
 import backend.models.world_map
-
-from backend.api.routes import config_api, adventures, avatars, data, characters, map_api, auth_api, users_api, tts_api
+from backend.api.routes import (
+    adventures,
+    auth_api,
+    avatars,
+    characters,
+    config_api,
+    data,
+    map_api,
+    tts_api,
+    users_api,
+)
 
 
 @asynccontextmanager
@@ -44,7 +55,6 @@ async def lifespan(app: FastAPI):
     # Auto-import adventures
     from backend.core.database import AsyncSessionLocal
     from backend.engine.adventure_importer import AdventureTemplateImporter
-    from backend.models.adventure_template import AdventureTemplate
     
     async with AsyncSessionLocal() as db:
         # Check if we have any admins in the database

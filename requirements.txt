@@ -13,6 +13,11 @@ passlib[bcrypt]
 pyjwt
 httpx
 
-# Testing
+# Testing & Linting
 pytest
 pytest-asyncio
+ruff
+mypy
+types-Pillow
+types-python-jose
+types-cryptography

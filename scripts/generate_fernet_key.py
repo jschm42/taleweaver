@@ -1,5 +1,3 @@
-import base64
-import os
 
 try:
     from cryptography.fernet import Fernet

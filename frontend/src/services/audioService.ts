@@ -140,7 +140,7 @@ class AudioService {
   private sanitizeSegmentForTts(text: string): string {
     return String(text || '')
       // Keep image alt text but drop URLs from markdown images.
-      .replace(/!\[([^\]]*)\]\([^\)]*\)/g, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
       // Drop standalone portrait marker lines that should never be spoken.
       .replace(/^\s*[^\n]*-portrait\s*$/gim, '')
       // Normalize excessive whitespace after removals.

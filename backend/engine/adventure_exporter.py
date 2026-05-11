@@ -1,23 +1,24 @@
-import os
-import json
-import zipfile
 import io
+import json
 import logging
-from typing import Optional, Dict, Any
+import os
+import zipfile
+from typing import Any
+
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi.encoders import jsonable_encoder
 from backend.core.config import settings
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
-from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
 
 class AdventureExporter:
     @staticmethod
-    async def build_full_manifest(db: AsyncSession, template_id: str) -> Dict[str, Any]:
+    async def build_full_manifest(db: AsyncSession, template_id: str) -> dict[str, Any]:
         """
         Gathers all database entities for an adventure and builds a single JSON manifest.
         This follows the standard TaleWeaver .adv format.

@@ -1,15 +1,19 @@
-from typing import List, Optional
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from backend.core.database import get_db
-from backend.core.auth import create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash
-from backend.models.user import User
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.core.auth import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    create_access_token,
+    get_current_user,
+    get_password_hash,
+)
+from backend.core.database import get_db
+from backend.models.user import User
 
 router = APIRouter()
 
@@ -21,12 +25,12 @@ class UserResponse(BaseModel):
     id: str
     username: str
     role: str
-    profile_image_url: Optional[str] = None
-    bio: Optional[str] = None
-    default_language: Optional[str] = None
-    earned_awards: Optional[list] = None
+    profile_image_url: str | None = None
+    bio: str | None = None
+    default_language: str | None = None
+    earned_awards: list | None = None
     is_admin: bool = False
-    game_log: Optional[list] = None
+    game_log: list | None = None
     has_imported_defaults: bool = False
 
 class SetupRootRequest(BaseModel):
@@ -68,9 +72,10 @@ async def read_users_me(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from backend.models.game_session import GameSession
-    from backend.engine.adventure_importer import AdventureTemplateImporter
     import os
+
+    from backend.engine.adventure_importer import AdventureTemplateImporter
+    from backend.models.game_session import GameSession
     
     # 1. Trigger background import of defaults if never done
     if not current_user.has_imported_defaults:

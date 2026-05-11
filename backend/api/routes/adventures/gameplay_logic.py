@@ -1,40 +1,52 @@
-import json
 import asyncio
+import json
 import logging
-import uuid
+import random
 import re
 import time
-import random
+import uuid
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from copy import deepcopy
-from backend.engine.quest_manager import QuestManager
 from datetime import datetime
-from typing import Optional, Dict, Any, AsyncGenerator, Callable, Awaitable, List
+from typing import Any
 
-from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.models.user import User
-from backend.models.adventure_template import AdventureTemplate
-from backend.models.avatar import Avatar
-from backend.models.session_state import SessionState
-from backend.models.chat import ChatMessage
-from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
-from backend.models.world_map import WorldMap
-from backend.engine.rule_engine import RuleEngine, GameEvent, GameOverException, SkillCheckResult, AttackResult, WorldEntityUpdate, RESOURCE_CAP, ToolResults, AdventureGeneratorToolIntent, AdventureGenerationRequest
-from backend.engine.map_engine import MapEngine
-from backend.engine.memory_manager import MemoryManager
-from backend.engine.command_parser import CommandParser
-from backend.engine.skill_check import roll_skill_check, roll_attack
-from backend.engine.stat_aggregator import calculate_total_stats
-from backend.engine.debug_engine import DebugEngine
-from backend.core.llm_router import GameMasterLLM
-from backend.core.llm_logger import log_structured_event
+from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import prompts
 from backend.core.config import settings
-from backend.api.routes.adventures.logic import AdventureLogic
+from backend.core.llm_logger import log_structured_event
+from backend.core.llm_router import GameMasterLLM
+from backend.engine.command_parser import CommandParser
+from backend.engine.debug_engine import DebugEngine
+from backend.engine.map_engine import MapEngine
+from backend.engine.memory_manager import MemoryManager
+from backend.engine.quest_manager import QuestManager
+from backend.engine.rule_engine import (
+    RESOURCE_CAP,
+    AdventureGenerationRequest,
+    AdventureGeneratorToolIntent,
+    AttackResult,
+    GameEvent,
+    GameOverException,
+    RuleEngine,
+    SkillCheckResult,
+    ToolResults,
+    WorldEntityUpdate,
+)
+from backend.engine.skill_check import roll_attack, roll_skill_check
+from backend.engine.stat_aggregator import calculate_total_stats
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.avatar import Avatar
+from backend.models.chat import ChatMessage
+from backend.models.session_state import SessionState
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.models.world_map import WorldMap
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +118,7 @@ def _is_service_unavailable_error(exc: Exception) -> bool:
     return any(p in text for p in patterns)
 
 
-def _friendly_llm_error_message(exc: Exception) -> Optional[str]:
+def _friendly_llm_error_message(exc: Exception) -> str | None:
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
@@ -118,7 +130,7 @@ def _friendly_llm_error_message(exc: Exception) -> Optional[str]:
     return None
 
 
-def _llm_error_type(exc: Exception) -> Optional[str]:
+def _llm_error_type(exc: Exception) -> str | None:
     if _is_token_limit_error(exc):
         return "token_limit"
     if _is_rate_limit_error(exc):
@@ -136,11 +148,11 @@ class GameTurnManager:
         self.db = db
         self.game_id = game_id
         self.user = user
-        self.state: Optional[SessionState] = None
-        self.adventure: Optional[AdventureTemplate] = None
-        self.avatar: Optional[Avatar] = None
+        self.state: SessionState | None = None
+        self.adventure: AdventureTemplate | None = None
+        self.avatar: Avatar | None = None
         self.stop_requested = False
-        self.turn_language: Optional[str] = None
+        self.turn_language: str | None = None
 
     @staticmethod
     def _compact_json(payload: object) -> str:
@@ -218,14 +230,14 @@ class GameTurnManager:
             notes_json=self._compact_json(notes),
         )
 
-    def _get_gm_notes(self) -> List[str]:
+    def _get_gm_notes(self) -> list[str]:
         exit_states = self.state.exit_states or {}
         notes = exit_states.get(GM_NOTES_STATE_KEY)
         if not isinstance(notes, list):
             return []
         return [str(n).strip() for n in notes if str(n).strip()]
 
-    def _get_terminal_epilogue_state(self) -> Dict[str, bool]:
+    def _get_terminal_epilogue_state(self) -> dict[str, bool]:
         exit_states = self.state.exit_states or {}
         epilogue_state = exit_states.get(TERMINAL_EPILOGUE_STATE_KEY) or {}
         if not isinstance(epilogue_state, dict):
@@ -268,7 +280,7 @@ class GameTurnManager:
         self.state.exit_states = exit_states
         flag_modified(self.state, "exit_states")
 
-    def _build_terminal_flags_payload(self) -> Dict[str, Any]:
+    def _build_terminal_flags_payload(self) -> dict[str, Any]:
         pending, input_locked = self._terminal_status_flags()
         return {
             "game_over": (self.state.session.status == "game_over") if self.state and self.state.session else False,
@@ -280,8 +292,8 @@ class GameTurnManager:
 
     def _apply_gm_notes_update(
         self,
-        remember_notes: Optional[List[str]],
-        forget_notes: Optional[List[str]],
+        remember_notes: list[str] | None,
+        forget_notes: list[str] | None,
         clear_notes: bool,
     ) -> None:
         existing = self._get_gm_notes()
@@ -386,7 +398,7 @@ class GameTurnManager:
         logger.debug(f"[Turn {self.game_id}] Initialization (DB) took {duration:.4f}s")
         return True
 
-    async def process_turn(self, message: str, auto_visualize: bool = False, language: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def process_turn(self, message: str, auto_visualize: bool = False, language: str | None = None) -> AsyncGenerator[str, None]:
         self.turn_language = language
         if not await self.initialize():
             yield f"event: error\ndata: {json.dumps({'detail': 'Game session not found.'})}\n\n"
@@ -623,7 +635,7 @@ class GameTurnManager:
                 flag_modified(self.state, "entity_states")
                 response = f"Added {ent.name} to your inventory."
             else:
-                response = f"You cannot take that."
+                response = "You cannot take that."
         
         elif response.startswith("[TRIGGER_WALKTHROUGH_REVEAL]"):
             if self.avatar.exp >= WALKTHROUGH_REVEAL_COST:
@@ -664,7 +676,7 @@ class GameTurnManager:
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
         self.stop_requested = True # Stop after direct slash response
 
-    def _read_combat_state(self) -> Dict[str, Any]:
+    def _read_combat_state(self) -> dict[str, Any]:
         states = self.state.entity_states or {}
         combat = states.get("__combat__")
         if isinstance(combat, dict):
@@ -679,7 +691,7 @@ class GameTurnManager:
         combat = self._read_combat_state()
         return bool(combat.get("active") or combat.get("loot_pending") or combat.get("outcome"))
 
-    def _set_combat_state(self, combat: Dict[str, Any]) -> None:
+    def _set_combat_state(self, combat: dict[str, Any]) -> None:
         # Sync to both locations to ensure compatibility across the engine
         states = dict(self.state.entity_states or {})
         states["__combat__"] = combat
@@ -688,7 +700,7 @@ class GameTurnManager:
         self.state.combat_json = combat
         flag_modified(self.state, "entity_states")
 
-    async def _find_fight_target(self, target_hint: str) -> Optional[WorldEntity]:
+    async def _find_fight_target(self, target_hint: str) -> WorldEntity | None:
         ent_res = await self.db.execute(
             select(WorldEntity).where(
                 WorldEntity.session_id == self.game_id,
@@ -744,7 +756,7 @@ class GameTurnManager:
                 return dice
         return "1d6"
 
-    def _append_combat_log(self, combat: Dict[str, Any], text: str, entry_type: str = "log") -> None:
+    def _append_combat_log(self, combat: dict[str, Any], text: str, entry_type: str = "log") -> None:
         logs = list(combat.get("log") or [])
         logs.append({
             "round": combat.get("round", 1),
@@ -754,7 +766,7 @@ class GameTurnManager:
         })
         combat["log"] = logs[-80:]
 
-    async def _emit_combat_final(self, status_note: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def _emit_combat_final(self, status_note: str | None = None) -> AsyncGenerator[str, None]:
         await self.db.commit()
         combat_snap = AdventureLogic.get_combat_snapshot(self.state)
         # Ensure we don't send a zombie combat object that has no active phase
@@ -771,7 +783,7 @@ class GameTurnManager:
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
-    async def _emit_combat_aftermath_narration(self, combat: Dict[str, Any]) -> AsyncGenerator[str, None]:
+    async def _emit_combat_aftermath_narration(self, combat: dict[str, Any]) -> AsyncGenerator[str, None]:
         outcome = str(combat.get("outcome") or "").lower()
         if outcome not in {"victory", "escaped"}:
             return
@@ -955,13 +967,13 @@ class GameTurnManager:
             pass
         return True
 
-    def _find_consumable(self, item_name: str) -> Optional[Dict[str, Any]]:
+    def _find_consumable(self, item_name: str) -> dict[str, Any] | None:
         for item in list(self.avatar.inventory or []):
             if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower() and item.get("item_type") == "CONSUMABLE":
                 return item
         return None
 
-    def _sync_combat_player_snapshot(self, combat: Dict[str, Any]) -> None:
+    def _sync_combat_player_snapshot(self, combat: dict[str, Any]) -> None:
         player = dict(combat.get("player") or {})
         player_stats = calculate_total_stats(self.avatar)
         player["name"] = self.avatar.name
@@ -1014,7 +1026,7 @@ class GameTurnManager:
 
         return total
 
-    def _resource_delta_from_consumable(self, item: Dict[str, Any], resource: str) -> int:
+    def _resource_delta_from_consumable(self, item: dict[str, Any], resource: str) -> int:
         key_map = {
             "hp": ["hp_change", "health_change", "heal", "heal_amount", "restore_hp", "restore_health", "hp_delta"],
             "mana": ["mana_change", "restore_mana", "mana_restore", "mana_delta"],
@@ -1053,7 +1065,7 @@ class GameTurnManager:
         return 0
 
     @staticmethod
-    def _parse_json_object(raw: str) -> Optional[Dict[str, Any]]:
+    def _parse_json_object(raw: str) -> dict[str, Any] | None:
         text = (raw or "").strip()
         if not text:
             return None
@@ -1081,7 +1093,7 @@ class GameTurnManager:
                 return None
         return None
 
-    async def _request_llm_combat_special_event(self, combat: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _request_llm_combat_special_event(self, combat: dict[str, Any]) -> dict[str, Any] | None:
         llm_settings = self.user.llm_settings or {}
         complex_model_provider = (
             llm_settings.get("complex_model_provider")
@@ -1205,7 +1217,7 @@ class GameTurnManager:
             return f"{self.avatar.name} uses {item.get('name', item_name)} ({', '.join(changes)})."
         return f"{self.avatar.name} uses {item.get('name', item_name)}."
 
-    async def _maybe_trigger_special_event(self, combat: Dict[str, Any]) -> Optional[str]:
+    async def _maybe_trigger_special_event(self, combat: dict[str, Any]) -> str | None:
         if random.random() > 0.25:
             return None
 
@@ -1329,7 +1341,7 @@ class GameTurnManager:
         self._append_combat_log(combat, f"Round {combat['round']}: {self.avatar.name}'s turn.", "turn")
         self._set_combat_state(combat)
 
-    async def _spawn_scene_item(self, item: Dict[str, Any]) -> None:
+    async def _spawn_scene_item(self, item: dict[str, Any]) -> None:
         name = str(item.get("name") or "Unknown Loot")
         raw_id = str(item.get("id") or f"LOOT_{uuid.uuid4().hex[:8]}")
         safe_id = re.sub(r"[^A-Za-z0-9_\-]", "_", raw_id)[:50]
@@ -1395,7 +1407,7 @@ class GameTurnManager:
         existing_ids.update({row.id for row in res.all() if row.id})
         return existing_ids
 
-    async def _resolve_loot_command(self, user_msg: str, combat: Dict[str, Any]) -> Optional[str]:
+    async def _resolve_loot_command(self, user_msg: str, combat: dict[str, Any]) -> str | None:
         low = user_msg.lower().strip()
         if not low.startswith("/loot"):
             return None
@@ -1623,7 +1635,7 @@ class GameTurnManager:
             yield chunk
         return
 
-    async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: str | None = None) -> AsyncGenerator[str, None]:
         _ = auto_visualize
         cycle_start = time.perf_counter()
         # Load Context and LLM Settings
@@ -1716,7 +1728,7 @@ class GameTurnManager:
             phase="context",
             db_prep_ms=round(db_duration * 1000, 2),
             history_count=len(history),
-            history_chars=sum(len((m.get("content") or "")) for m in history),
+            history_chars=sum(len(m.get("content") or "") for m in history),
             mechanics_system_prompt_chars=mechanics_prompt_chars,
             narration_system_prompt_chars=narration_prompt_chars,
             prompt_delta_chars=prompt_delta_chars,
@@ -2381,9 +2393,9 @@ class GameTurnManager:
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
-    async def _apply_game_event(self, event: GameEvent) -> List[str]:
+    async def _apply_game_event(self, event: GameEvent) -> list[str]:
         """Applies technical mutations from a GameEvent to the database and session state. Returns messages for the UI."""
-        system_messages: List[str] = []
+        system_messages: list[str] = []
         existing_item_ids = await self._collect_existing_item_ids()
         
         # If we are removing items in this event, they don't count as "existing" for duplicate checks
@@ -2651,7 +2663,7 @@ class GameTurnManager:
     async def _emit_system_message(
         self,
         message: str,
-        stream_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+        stream_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         """Persist a system message and optionally stream it via callback."""
         self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=message))
@@ -2659,7 +2671,7 @@ class GameTurnManager:
         if stream_callback:
             await stream_callback(message)
 
-    def _get_pending_ag_image_confirmation(self) -> Optional[Dict[str, Any]]:
+    def _get_pending_ag_image_confirmation(self) -> dict[str, Any] | None:
         exit_states = dict(self.state.exit_states or {})
         pending = exit_states.get(AG_IMAGE_CONFIRMATION_STATE_KEY)
         if not isinstance(pending, dict):
@@ -2742,7 +2754,7 @@ class GameTurnManager:
         self.state.exit_states = exit_states
         flag_modified(self.state, "exit_states")
 
-    def _get_last_ag_generation_request(self) -> Optional[AdventureGenerationRequest]:
+    def _get_last_ag_generation_request(self) -> AdventureGenerationRequest | None:
         exit_states = dict(self.state.exit_states or {})
         raw = exit_states.get(AG_LAST_REQUEST_STATE_KEY)
         if not isinstance(raw, dict):
@@ -2752,7 +2764,7 @@ class GameTurnManager:
         except Exception:
             return None
 
-    def _set_last_ag_generation_error(self, error_type: Optional[str]) -> None:
+    def _set_last_ag_generation_error(self, error_type: str | None) -> None:
         exit_states = dict(self.state.exit_states or {})
         if error_type:
             exit_states[AG_LAST_ERROR_STATE_KEY] = error_type
@@ -2761,7 +2773,7 @@ class GameTurnManager:
         self.state.exit_states = exit_states
         flag_modified(self.state, "exit_states")
 
-    def _get_last_ag_generation_error(self) -> Optional[str]:
+    def _get_last_ag_generation_error(self) -> str | None:
         exit_states = dict(self.state.exit_states or {})
         value = exit_states.get(AG_LAST_ERROR_STATE_KEY)
         return value if isinstance(value, str) and value else None
@@ -2795,7 +2807,7 @@ class GameTurnManager:
     async def _apply_adventure_generator_tools(
         self,
         event,
-        stream_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+        stream_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         """Executes adventure-generator tool requests from a structured event/intent model."""
         if not self.adventure.is_adventure_generator:
@@ -2864,7 +2876,7 @@ class GameTurnManager:
                     msg = f"SYSTEM ERROR: Adventure generation failed: {e}"
                 await self._emit_system_message(msg, stream_callback=stream_callback)
 
-    async def _generate_terminal_epilogue_text(self, language: Optional[str] = None) -> str:
+    async def _generate_terminal_epilogue_text(self, language: str | None = None) -> str:
         status = self.state.session.status if self.state and self.state.session else None
         status_note = self.state.session.status_note if self.state and self.state.session else None
 
@@ -2951,7 +2963,7 @@ class GameTurnManager:
         except Exception:
             return fallback
 
-    async def create_terminal_epilogue(self, language: Optional[str] = None) -> Dict[str, Any]:
+    async def create_terminal_epilogue(self, language: str | None = None) -> dict[str, Any]:
         if not await self.initialize():
             raise HTTPException(status_code=404, detail="Game session not found.")
 
@@ -2982,7 +2994,7 @@ class GameTurnManager:
             **self._build_terminal_flags_payload(),
         }
 
-    async def _finalize_session(self, status: str, note: Optional[str] = None):
+    async def _finalize_session(self, status: str, note: str | None = None):
         """Updates the session status and records the outcome in the user's game log."""
         previous_status = self.state.session.status if self.state and self.state.session else None
         if self.state.session:

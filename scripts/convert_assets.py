@@ -1,5 +1,7 @@
 import os
+
 from PIL import Image
+
 
 def convert_png_to_jpg(directory):
     for root, dirs, files in os.walk(directory):

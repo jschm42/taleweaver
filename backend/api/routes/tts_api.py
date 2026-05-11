@@ -1,19 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Any
 import logging
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import get_current_user
-from backend.models.user import User
-from backend.models.game_session import GameSession
-from backend.models.session_state import SessionState
-from backend.models.adventure_template import AdventureTemplate
-from backend.engine.tts_engine import TTSEngine, TTSTimeoutError, TTSRateLimitError
-from backend.core.security import encryption_util
 from backend.core.config import settings
 from backend.core.database import get_db
+from backend.core.security import encryption_util
+from backend.engine.tts_engine import TTSEngine, TTSRateLimitError, TTSTimeoutError
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.game_session import GameSession
+from backend.models.session_state import SessionState
+from backend.models.user import User
 
 router = APIRouter(prefix="/tts", tags=["TTS"])
 logger = logging.getLogger(__name__)
@@ -36,15 +37,15 @@ async def _resolve_tts_settings_source_user(db: AsyncSession, current_user: User
 
 class TTSGeneratePayload(BaseModel):
     text: str = Field(default="")
-    scene_description: Optional[str] = Field(default=None)
-    adventure_id: Optional[str] = Field(default=None)
-    session_id: Optional[str] = Field(default=None)
-    title: Optional[str] = Field(default=None)
-    scene_name: Optional[str] = Field(default=None)
-    tone: Optional[str] = Field(default=None)
-    voice_override: Optional[str] = Field(default=None)
-    speaker_voices: Optional[dict[str, str]] = Field(default=None)
-    director_notes: Optional[str] = Field(default=None)
+    scene_description: str | None = Field(default=None)
+    adventure_id: str | None = Field(default=None)
+    session_id: str | None = Field(default=None)
+    title: str | None = Field(default=None)
+    scene_name: str | None = Field(default=None)
+    tone: str | None = Field(default=None)
+    voice_override: str | None = Field(default=None)
+    speaker_voices: dict[str, str] | None = Field(default=None)
+    director_notes: str | None = Field(default=None)
 
     @staticmethod
     def _coerce_required_text(value: Any) -> str:
@@ -57,7 +58,7 @@ class TTSGeneratePayload(BaseModel):
         return ""
 
     @staticmethod
-    def _coerce_optional_text(value: Any) -> Optional[str]:
+    def _coerce_optional_text(value: Any) -> str | None:
         if value is None:
             return None
         if isinstance(value, str):
@@ -73,7 +74,7 @@ class TTSGeneratePayload(BaseModel):
 
     @field_validator("scene_description", "adventure_id", "session_id", "title", "scene_name", "tone", "voice_override", "director_notes", mode="before")
     @classmethod
-    def _validate_optional_text(cls, value: Any) -> Optional[str]:
+    def _validate_optional_text(cls, value: Any) -> str | None:
         return cls._coerce_optional_text(value)
 
 @router.post("/generate")

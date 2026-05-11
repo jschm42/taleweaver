@@ -1,5 +1,5 @@
 import logging
-from typing import List
+
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 
@@ -13,7 +13,7 @@ class QuestManager:
     """
 
     @staticmethod
-    def evaluate_quests(avatar: Avatar, state: SessionState) -> List[str]:
+    def evaluate_quests(avatar: Avatar, state: SessionState) -> list[str]:
         """
         Evaluates current unresolved quests against the current game state.
         Returns a list of quest IDs that have just been completed.

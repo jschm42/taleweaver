@@ -1,16 +1,16 @@
-import pytest
-import json
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from sqlalchemy import select
 
-from backend.models.user import User
+from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.engine.rule_engine import AdventureGeneratorToolIntent, GameEvent
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
-from backend.models.session_state import SessionState
 from backend.models.chat import ChatMessage
+from backend.models.session_state import SessionState
+from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldScene
-from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import GameEvent, AdventureGeneratorToolIntent
 
 pytestmark = pytest.mark.asyncio
 
@@ -109,8 +109,8 @@ async def test_game_loop_standard_turn(setup_test_db, monkeypatch):
 
 async def test_game_loop_session_overrides_template(setup_test_db, monkeypatch):
     """Verifies that the GameMaster receives plot/rules from SessionState, not AdventureTemplate."""
-    from tests.conftest import TestSessionLocal
     from backend.engine.memory_manager import MemoryManager
+    from tests.conftest import TestSessionLocal
     
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_game_context(db)
@@ -1146,8 +1146,9 @@ async def test_rule_engine_apply_event_game_over():
         new_inventory_items=[]
     )
     
-    from backend.engine.rule_engine import RuleEngine, GameOverException
     import pytest
+
+    from backend.engine.rule_engine import GameOverException, RuleEngine
     with pytest.raises(GameOverException):
         RuleEngine.apply_event(avatar, event)
     assert avatar.hp == 0
@@ -1286,8 +1287,8 @@ async def test_combat_loot_take_moves_item_to_inventory(setup_test_db, monkeypat
 
 
 async def test_combat_auto_triggers_from_gm_requested_attacks(setup_test_db, monkeypatch):
-    from tests.conftest import TestSessionLocal
     from backend.engine.rule_engine import AttackRequest
+    from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
         user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)

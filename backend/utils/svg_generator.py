@@ -1,9 +1,9 @@
-import random
 import colorsys
 import math
 import os
+import random
 import re
-from typing import List, Tuple
+
 
 class SVGPlaceholderGenerator:
     """
@@ -24,7 +24,7 @@ class SVGPlaceholderGenerator:
             "frontend", "src", "assets", "svg"
         )
 
-    def _random_hex_color(self, saturation_range: Tuple[float, float] = (0.2, 0.5), value_range: Tuple[float, float] = (0.1, 0.4)) -> str:
+    def _random_hex_color(self, saturation_range: tuple[float, float] = (0.2, 0.5), value_range: tuple[float, float] = (0.1, 0.4)) -> str:
         """
         Generiert eine zufällige, düstere Hex-Farbe basierend auf dem HSV-Farbraum.
         """
@@ -57,7 +57,7 @@ class SVGPlaceholderGenerator:
 
     def _generate_shapes(self) -> str:
         """Generiert zufällige geometrische Formen."""
-        shapes: List[str] = []
+        shapes: list[str] = []
         for _ in range(self.num_shapes):
             shape_type = random.choice(["circle", "polygon"])
             color = self._random_hex_color(saturation_range=(0.3, 0.8), value_range=(0.8, 1.0))
@@ -86,7 +86,7 @@ class SVGPlaceholderGenerator:
             # Fallback auf generisches prozedurales SVG falls Datei fehlt
             return self._generate_fallback_svg()
         
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             content = f.read()
             
         if color_override:

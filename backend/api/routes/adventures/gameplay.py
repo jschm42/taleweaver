@@ -1,29 +1,30 @@
 import logging
 from typing import Any, cast
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.database import get_db
-from backend.core.auth import get_current_user
-from backend.models.user import User
-from backend.models.adventure_template import AdventureTemplate
-from backend.models.avatar import Avatar
-from backend.models.game_session import GameSession
-from backend.models.session_state import SessionState
-from backend.models.chat import ChatMessage
-from backend.models.world_entity import WorldScene, WorldEntity
-from backend.models.world_map import WorldMap
-from backend.engine.map_engine import MapEngine
+from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.schemas import (
     ChatRequest,
     ChatResponse,
     TerminalEpilogueRequest,
     TerminalEpilogueResponse,
 )
-from backend.api.routes.adventures.logic import AdventureLogic
-from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.core.auth import get_current_user
+from backend.core.database import get_db
+from backend.engine.map_engine import MapEngine
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.avatar import Avatar
+from backend.models.chat import ChatMessage
+from backend.models.game_session import GameSession
+from backend.models.session_state import SessionState
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.world_map import WorldMap
 
 router = APIRouter(tags=["Gameplay"])
 logger = logging.getLogger(__name__)

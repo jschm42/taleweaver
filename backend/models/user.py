@@ -1,6 +1,9 @@
 import uuid
-from sqlalchemy import Column, String, JSON, Boolean
+
+from sqlalchemy import JSON, Boolean, Column, String
+
 from backend.models.base import Base, TimestampMixin
+
 
 class User(Base, TimestampMixin):
     __tablename__ = "users"

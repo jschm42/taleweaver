@@ -5,15 +5,14 @@ Uses an in-memory SQLite database so tests are fully isolated and
 never touch the production database. All LLM calls are mocked to
 avoid API costs and network latency.
 """
-import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import backend.core.database as core_database
-from backend.main import app
 from backend.core.auth import create_access_token, get_password_hash
 from backend.core.database import get_db
+from backend.main import app
 from backend.models.base import Base
 from backend.models.user import User
 

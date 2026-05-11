@@ -1,13 +1,14 @@
-import os
-import uuid
+import asyncio
 import base64
 import logging
-import struct
 import math
-import asyncio
+import os
 import random
+import struct
+import uuid
+
 import httpx
-from typing import Optional
+
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -23,12 +24,12 @@ class TTSTimeoutError(RuntimeError):
 class TTSRateLimitError(RuntimeError):
     """Raised when upstream TTS provider rate-limits requests (HTTP 429)."""
 
-    def __init__(self, message: str, retry_after_seconds: Optional[float] = None):
+    def __init__(self, message: str, retry_after_seconds: float | None = None):
         super().__init__(message)
         self.retry_after_seconds = retry_after_seconds
 
 
-def _parse_retry_after_seconds(response: httpx.Response) -> Optional[float]:
+def _parse_retry_after_seconds(response: httpx.Response) -> float | None:
     header = response.headers.get("Retry-After")
     if not header:
         return None
@@ -41,7 +42,7 @@ def _parse_retry_after_seconds(response: httpx.Response) -> Optional[float]:
     return min(value, 60.0)
 
 
-def _parse_google_retry_delay_seconds(response: httpx.Response) -> Optional[float]:
+def _parse_google_retry_delay_seconds(response: httpx.Response) -> float | None:
     """Extract retry delay from Google error details when available.
 
     Expected shape includes retry info entries like:
@@ -172,7 +173,7 @@ def _parse_l16_sample_rate(mime_type: str) -> int:
     return default_rate
 
 
-def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[str] = None) -> str:
+def _resolve_audio_output_dir(adventure_id: str | None, session_id: str | None = None) -> str:
     """Return target directory for generated audio.
 
     If adventure_id + session_id are known, store clips under that concrete session.
@@ -183,7 +184,7 @@ def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[
     return os.path.join(settings.DATA_DIR, "audio")
 
 
-def _resolve_audio_public_url(adventure_id: Optional[str], filename: str, session_id: Optional[str] = None) -> str:
+def _resolve_audio_public_url(adventure_id: str | None, filename: str, session_id: str | None = None) -> str:
     """Return static URL for generated audio based on storage location."""
     if session_id:
         return f"/data/adventures/sessions/{session_id}/tts/{filename}"
@@ -209,20 +210,20 @@ class TTSEngine:
         voice: str = "Puck",
         elevenlabs_voice_id: str = "",
         use_vocal_tags: bool = True,
-        api_key: Optional[str] = None,
-        adventure_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        scene_description: Optional[str] = None,
-        style_description: Optional[str] = None,
+        api_key: str | None = None,
+        adventure_id: str | None = None,
+        session_id: str | None = None,
+        scene_description: str | None = None,
+        style_description: str | None = None,
         model_name: str = "gemini-3.1-flash-tts-preview",
-        title: Optional[str] = None,
-        scene_name: Optional[str] = None,
-        tone: Optional[str] = None,
+        title: str | None = None,
+        scene_name: str | None = None,
+        tone: str | None = None,
         include_style_context: bool = True,
         speed: float = 1.0,
-        director_notes: Optional[str] = None,
+        director_notes: str | None = None,
         **_unused_kwargs: object,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Generates speech using the specified provider and returns the relative URL to the audio file.
         """
@@ -279,10 +280,10 @@ class TTSEngine:
         text: str,
         voice_id: str,
         api_key: str,
-        adventure_id: Optional[str] = None,
-        session_id: Optional[str] = None,
+        adventure_id: str | None = None,
+        session_id: str | None = None,
         model_id: str = "eleven_multilingual_v2",
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Generates speech using ElevenLabs Streaming API.
         """
@@ -343,20 +344,20 @@ class TTSEngine:
         text: str,
         voice: str,
         api_key: str,
-        adventure_id: Optional[str],
-        session_id: Optional[str] = None,
+        adventure_id: str | None,
+        session_id: str | None = None,
         include_style_context: bool = True,
         speed: float = 1.0,
-        director_notes: Optional[str] = None,
-        scene_description: Optional[str] = None,
-        style_description: Optional[str] = None,
+        director_notes: str | None = None,
+        scene_description: str | None = None,
+        style_description: str | None = None,
         model_name: str = "gemini-3.1-flash-tts-preview",
-        tone: Optional[str] = None,
+        tone: str | None = None,
         use_vocal_tags: bool = True,
-        title: Optional[str] = None,
-        scene_name: Optional[str] = None,
+        title: str | None = None,
+        scene_name: str | None = None,
         **_kwargs: object,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Generates speech and returns the relative URL to the audio file.
         """
@@ -450,7 +451,7 @@ class TTSEngine:
             timeout = httpx.Timeout(timeout_seconds, connect=20.0)
             max_attempts = int(getattr(settings, "TTS_RATE_LIMIT_MAX_RETRIES", 5))
             max_attempts = max(1, min(max_attempts, 10))
-            data: Optional[dict] = None
+            data: dict | None = None
 
             async with httpx.AsyncClient() as client:
                 for attempt in range(1, max_attempts + 1):
@@ -497,7 +498,7 @@ class TTSEngine:
             # Some TTS responses include multiple inlineData parts where the first
             # part may have empty data. Aggregate all non-empty audio chunks.
             audio_chunks: list[bytes] = []
-            mime_type: Optional[str] = None
+            mime_type: str | None = None
 
             for part in parts:
                 inline_data = part.get("inlineData") or {}

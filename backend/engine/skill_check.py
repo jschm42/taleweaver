@@ -1,6 +1,8 @@
 import random
-from backend.models.avatar import Avatar
+
 from backend.engine.stat_aggregator import calculate_total_stats
+from backend.models.avatar import Avatar
+
 
 def roll_skill_check(avatar: Avatar, base_stat: str, challenge_rating: int) -> dict:
     """

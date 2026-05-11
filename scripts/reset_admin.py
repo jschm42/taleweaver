@@ -1,15 +1,16 @@
+import asyncio
 import os
 import sys
-import asyncio
-from passlib.context import CryptContext
+
 from sqlalchemy import select
 
 # Add root to path so we can import backend
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.core.database import AsyncSessionLocal
 from backend.core.auth import get_password_hash
+from backend.core.database import AsyncSessionLocal
 from backend.models.user import User
+
 
 async def reset_admin(username="admin", password="password"):
     async with AsyncSessionLocal() as db:

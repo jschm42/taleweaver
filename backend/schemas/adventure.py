@@ -1,5 +1,7 @@
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Dict, Any, List, Literal
+
 
 class QuestSchema(BaseModel):
     id: str
@@ -21,30 +23,30 @@ class AwardSchema(BaseModel):
 
 class AdventureTemplateBase(BaseModel):
     title: str = Field(..., max_length=50)
-    image_url: Optional[str] = None
-    teaser: Optional[str] = Field(None, max_length=300)
-    version: Optional[str] = Field(None, max_length=15)
-    original_prompt: Optional[str] = Field(None, max_length=20000)
-    rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
-    time_per_turn: Optional[int] = 5
-    pacing_minutes: Optional[int] = 5
-    clock_enabled: Optional[bool] = False
-    time_system: Optional[str] = "calendar"
-    time_config: Optional[Dict[str, Any]] = None
+    image_url: str | None = None
+    teaser: str | None = Field(None, max_length=300)
+    version: str | None = Field(None, max_length=15)
+    original_prompt: str | None = Field(None, max_length=20000)
+    rule_enforcement_mode: Literal["rpg", "story", "chat"] | None = "rpg"
+    time_per_turn: int | None = 5
+    pacing_minutes: int | None = 5
+    clock_enabled: bool | None = False
+    time_system: str | None = "calendar"
+    time_config: dict[str, Any] | None = None
     
     generate_npc_images: bool = True
     generate_item_images: bool = True
     generate_scene_images: bool = True
     automatic_cover_generation: bool = True
     
-    selected_image_styles: Optional[List[Dict[str, Any]]] = None
-    selected_tone: Optional[Dict[str, Any]] = None
-    game_over_rules: Optional[Dict[str, Any]] = None
-    quests: Optional[List[QuestSchema]] = None
-    awards: Optional[List[AwardSchema]] = None
+    selected_image_styles: list[dict[str, Any]] | None = None
+    selected_tone: dict[str, Any] | None = None
+    game_over_rules: dict[str, Any] | None = None
+    quests: list[QuestSchema] | None = None
+    awards: list[AwardSchema] | None = None
     is_completed: bool = False
-    min_scenes: Optional[int] = 1
-    max_scenes: Optional[int] = 5
+    min_scenes: int | None = 1
+    max_scenes: int | None = 5
     
     award_generation_enabled: bool = True
     min_awards: int = 3
@@ -53,58 +55,58 @@ class AdventureTemplateBase(BaseModel):
 
 
     # Narrative Meta (User editable in Plot tab)
-    plot: Optional[str] = None
-    rules: Optional[str] = None
-    intro_text: Optional[str] = None
-    walkthrough: Optional[str] = None
-    completed_condition: Optional[str] = None
-    gameover_condition: Optional[str] = None
-    tts_director_notes: Optional[str] = None
+    plot: str | None = None
+    rules: str | None = None
+    intro_text: str | None = None
+    walkthrough: str | None = None
+    completed_condition: str | None = None
+    gameover_condition: str | None = None
+    tts_director_notes: str | None = None
 
     # GM Capabilities
-    allow_dynamic_items: Optional[bool] = True
+    allow_dynamic_items: bool | None = True
 
 
 class AdventureTemplateCreate(AdventureTemplateBase):
     pass
 
 class AdventureTemplateUpdate(BaseModel):
-    title: Optional[str] = None
-    teaser: Optional[str] = Field(None, max_length=300)
-    version: Optional[str] = Field(None, max_length=15)
-    original_prompt: Optional[str] = Field(None, max_length=20000)
-    rule_enforcement_mode: Optional[Literal["rpg", "story", "chat", "strict"]] = None
-    time_per_turn: Optional[int] = None
-    pacing_minutes: Optional[int] = None
-    clock_enabled: Optional[bool] = None
-    time_system: Optional[str] = None
-    time_config: Optional[Dict[str, Any]] = None
-    selected_image_styles: Optional[List[Dict[str, Any]]] = None
-    selected_tone: Optional[Dict[str, Any]] = None
-    game_over_rules: Optional[Dict[str, Any]] = None
-    min_scenes: Optional[int] = None
-    max_scenes: Optional[int] = None
-    max_awards: Optional[int] = None
-    is_adventure_generator: Optional[bool] = None
+    title: str | None = None
+    teaser: str | None = Field(None, max_length=300)
+    version: str | None = Field(None, max_length=15)
+    original_prompt: str | None = Field(None, max_length=20000)
+    rule_enforcement_mode: Literal["rpg", "story", "chat", "strict"] | None = None
+    time_per_turn: int | None = None
+    pacing_minutes: int | None = None
+    clock_enabled: bool | None = None
+    time_system: str | None = None
+    time_config: dict[str, Any] | None = None
+    selected_image_styles: list[dict[str, Any]] | None = None
+    selected_tone: dict[str, Any] | None = None
+    game_over_rules: dict[str, Any] | None = None
+    min_scenes: int | None = None
+    max_scenes: int | None = None
+    max_awards: int | None = None
+    is_adventure_generator: bool | None = None
     
     # Editable Narrative Meta
-    plot: Optional[str] = None
-    rules: Optional[str] = None
-    intro_text: Optional[str] = None
-    walkthrough: Optional[str] = None
-    completed_condition: Optional[str] = None
-    gameover_condition: Optional[str] = None
-    tts_director_notes: Optional[str] = None
+    plot: str | None = None
+    rules: str | None = None
+    intro_text: str | None = None
+    walkthrough: str | None = None
+    completed_condition: str | None = None
+    gameover_condition: str | None = None
+    tts_director_notes: str | None = None
 
     # GM Capabilities
-    allow_dynamic_items: Optional[bool] = None
+    allow_dynamic_items: bool | None = None
     
     # Status and Warnings
-    creation_error: Optional[str] = None
+    creation_error: str | None = None
     
     # Extra fields for frontend convenience
-    selected_style_id: Optional[str] = None
-    selected_tone_id: Optional[str] = None
+    selected_style_id: str | None = None
+    selected_tone_id: str | None = None
 
     @field_validator("selected_tone", mode="before")
     @classmethod
@@ -128,10 +130,10 @@ class AdventureTemplate(AdventureTemplateInDBBase):
     pass
 
 class AdventureTemplateDebugResponse(BaseModel):
-    adventure: Dict[str, Any]
-    protagonist: Optional[Dict[str, Any]] = None
-    scenes: List[Dict[str, Any]]
-    npcs: List[Dict[str, Any]]
-    objects: List[Dict[str, Any]]
-    exits: List[Dict[str, Any]]
-    entities_all: Optional[List[Dict[str, Any]]] = None
+    adventure: dict[str, Any]
+    protagonist: dict[str, Any] | None = None
+    scenes: list[dict[str, Any]]
+    npcs: list[dict[str, Any]]
+    objects: list[dict[str, Any]]
+    exits: list[dict[str, Any]]
+    entities_all: list[dict[str, Any]] | None = None

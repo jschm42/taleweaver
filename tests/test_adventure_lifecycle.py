@@ -1,19 +1,19 @@
-import pytest
-import zipfile
 import io
 import json
 import os
-from unittest.mock import AsyncMock, MagicMock
+import zipfile
+from unittest.mock import AsyncMock
+
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.adventure_template import AdventureTemplate
-from backend.models.avatar import Avatar
-from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
-from backend.models.user import User
 from backend.engine.adventure_exporter import AdventureExporter
 from backend.engine.adventure_importer import AdventureTemplateImporter
-from backend.core.config import settings
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.avatar import Avatar
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldScene
 
 pytestmark = pytest.mark.asyncio
 
@@ -169,8 +169,9 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
         monkeypatch.setattr("builtins.open", fake_open)
 
         # Delete adventure before import to avoid duplicate title conflict
-        from backend.models.world_entity import WorldScene, WorldEntity
         from sqlalchemy import delete
+
+        from backend.models.world_entity import WorldEntity, WorldScene
         await db.execute(delete(WorldEntity).where(WorldEntity.template_id == adventure_id))
         await db.execute(delete(WorldScene).where(WorldScene.template_id == adventure_id))
         await db.execute(delete(Avatar).where(Avatar.template_id == adventure_id))

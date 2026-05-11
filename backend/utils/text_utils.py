@@ -1,7 +1,8 @@
-import re
 import random
+import re
 import string
 import uuid
+
 
 def slugify(text: str) -> str:
     """

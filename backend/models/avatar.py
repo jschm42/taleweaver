@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, Integer, JSON, ForeignKey
+
+from sqlalchemy import JSON, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import synonym
+
 from backend.models.base import Base, TimestampMixin
+
 
 class Avatar(Base, TimestampMixin):
     __tablename__ = "avatars"

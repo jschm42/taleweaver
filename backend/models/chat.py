@@ -1,6 +1,9 @@
 import uuid
-from sqlalchemy import Column, String, ForeignKey, Text
+
+from sqlalchemy import Column, ForeignKey, String, Text
+
 from backend.models.base import Base, TimestampMixin
+
 
 class ChatMessage(Base, TimestampMixin):
     """

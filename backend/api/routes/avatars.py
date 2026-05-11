@@ -5,14 +5,16 @@ Provides endpoints to read and update an avatar's stats, inventory,
 equipment, and status effects.
 """
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
-from backend.models.avatar import Avatar
-from backend.schemas.avatar import Avatar as AvatarSchema, AvatarUpdate
 from backend.engine.stat_aggregator import calculate_total_stats
+from backend.models.avatar import Avatar
+from backend.schemas.avatar import Avatar as AvatarSchema
+from backend.schemas.avatar import AvatarUpdate
 
 router = APIRouter(prefix="/avatars", tags=["Avatars"])
 logger = logging.getLogger(__name__)

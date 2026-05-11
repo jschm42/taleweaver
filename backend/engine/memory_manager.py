@@ -1,8 +1,9 @@
 import json
-from typing import List, Optional
-from backend.models.avatar import Avatar
-from backend.engine.stat_aggregator import calculate_total_stats
+
 from backend.core import prompts
+from backend.engine.stat_aggregator import calculate_total_stats
+from backend.models.avatar import Avatar
+
 
 class MemoryManager:
     """
@@ -127,7 +128,7 @@ class MemoryManager:
         return location_context
 
     @staticmethod
-    def format_game_time(minutes: int, time_system: str = "calendar", time_config: Optional[dict] = None) -> str:
+    def format_game_time(minutes: int, time_system: str = "calendar", time_config: dict | None = None) -> str:
         """Translates total minutes into a formatted string based on the system."""
         time_config = time_config or {}
         day_label = time_config.get("day_label", "Day")
@@ -163,14 +164,14 @@ class MemoryManager:
         entities=None, 
         exits=None,
         in_game_time: int = 0,
-        awards: Optional[List[dict]] = None,
-        plot: Optional[str] = None,
-        rules: Optional[str] = None,
-        walkthrough: Optional[str] = None,
-        completed_condition: Optional[str] = None,
-        gameover_condition: Optional[str] = None,
+        awards: list[dict] | None = None,
+        plot: str | None = None,
+        rules: str | None = None,
+        walkthrough: str | None = None,
+        completed_condition: str | None = None,
+        gameover_condition: str | None = None,
         time_system: str = "calendar",
-        time_config: Optional[dict] = None,
+        time_config: dict | None = None,
         is_adventure_generator: bool = False,
         location_detail_level: str = "full"
     ) -> str:
@@ -232,14 +233,14 @@ class MemoryManager:
         entities=None, 
         exits=None,
         in_game_time: int = 0,
-        awards: Optional[List[dict]] = None,
-        plot: Optional[str] = None,
-        rules: Optional[str] = None,
-        walkthrough: Optional[str] = None,
-        completed_condition: Optional[str] = None,
-        gameover_condition: Optional[str] = None,
+        awards: list[dict] | None = None,
+        plot: str | None = None,
+        rules: str | None = None,
+        walkthrough: str | None = None,
+        completed_condition: str | None = None,
+        gameover_condition: str | None = None,
         time_system: str = "calendar",
-        time_config: Optional[dict] = None,
+        time_config: dict | None = None,
         is_adventure_generator: bool = False,
         location_detail_level: str = "full"
     ) -> list[dict]:

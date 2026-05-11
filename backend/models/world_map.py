@@ -8,8 +8,10 @@ Stored as two JSON columns so the graph can be traversed and serialised
 to Mermaid.js notation in O(V + E) time.
 """
 import uuid
-from sqlalchemy import Column, String, JSON, ForeignKey
+
+from sqlalchemy import JSON, Column, ForeignKey, String
 from sqlalchemy.orm import synonym
+
 from backend.models.base import Base, TimestampMixin
 
 

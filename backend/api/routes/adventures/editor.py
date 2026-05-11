@@ -1,24 +1,18 @@
 import logging
-import uuid
-import json
-from typing import Optional, List, Dict, Any, Literal
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-from backend.core.database import get_db
-from backend.core.auth import get_current_user
-from backend.core.config import settings
-from backend.models.user import User
-from backend.models.adventure_template import AdventureTemplate
-from backend.models.session_state import SessionState
-from backend.models.avatar import Avatar
-from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
-from backend.models.world_map import WorldMap
-from backend.engine.world_generator import WorldGenerator
-from backend.core.llm_router import GameMasterLLM
+
 from backend.api.routes.adventures.schemas import AdventureTemplateDebugResponse
-from backend.api.routes.adventures.logic import AdventureLogic
+from backend.core.auth import get_current_user
+from backend.core.database import get_db
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.avatar import Avatar
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 router = APIRouter(tags=["Editor"])
 logger = logging.getLogger(__name__)
@@ -26,13 +20,13 @@ logger = logging.getLogger(__name__)
 class EntityUpdateRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
     target_id: str
-    name: Optional[str] = None
-    teaser: Optional[str] = None
-    description: Optional[str] = None
-    hp: Optional[int] = None
-    mana: Optional[int] = None
-    stamina: Optional[int] = None
-    voice: Optional[str] = None
+    name: str | None = None
+    teaser: str | None = None
+    description: str | None = None
+    hp: int | None = None
+    mana: int | None = None
+    stamina: int | None = None
+    voice: str | None = None
 
 class AIEditRequest(BaseModel):
     prompt: str

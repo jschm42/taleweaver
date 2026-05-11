@@ -1,16 +1,18 @@
-from typing import Optional, Any
 from copy import deepcopy
 from datetime import datetime
+from typing import Any
+
 from sqlalchemy import select
-from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.models.game_session import GameSession
-from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldScene, WorldEntity, WorldExit
-from backend.models.adventure_template import AdventureTemplate
-from backend.models.user import User
-from backend.models.world_map import WorldMap
+from sqlalchemy.orm.attributes import flag_modified
+
 from backend.engine.map_engine import MapEngine
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.session_state import SessionState
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.models.world_map import WorldMap
+
 
 class DebugEngine:
     @staticmethod
@@ -18,9 +20,9 @@ class DebugEngine:
         db: AsyncSession,
         state: SessionState,
         args: str,
-        user: Optional[User] = None,
-        adventure: Optional[AdventureTemplate] = None,
-        avatar: Optional[Any] = None,
+        user: User | None = None,
+        adventure: AdventureTemplate | None = None,
+        avatar: Any | None = None,
     ) -> str:
         """
         Processes /debug sub-commands and returns atmospheric yet technical info.
@@ -28,7 +30,7 @@ class DebugEngine:
         Optional ``user`` and ``adventure`` objects are required for sub-commands
         that mutate persistent data (e.g. ``award``).
         """
-        sub = args.split(" ")[0].lower() if args else ""
+        sub = args.split(" ", maxsplit=1)[0].lower() if args else ""
         adv_id = state.adventure_id
         scene_id = state.scene_id
 
@@ -231,7 +233,7 @@ class DebugEngine:
             # Return engine diagnostics
             import platform
             import sys
-            import os
+
             from backend.core.config import settings
             
             lines = [

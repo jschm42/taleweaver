@@ -1,8 +1,9 @@
 import os
 import uuid
-from typing import Optional
-from fastapi import APIRouter, File, UploadFile, HTTPException, Query
+
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from PIL import Image
+
 from backend.core.config import settings
 
 router = APIRouter()
@@ -10,13 +11,13 @@ router = APIRouter()
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 
 def _get_extension(filename: str) -> str:
-    return filename.split(".")[-1].lower() if "." in filename else ""
+    return filename.rsplit(".", maxsplit=1)[-1].lower() if "." in filename else ""
 
 @router.post("/data/image")
 async def upload_image(
     file: UploadFile = File(...),
     type: str = Query("character", description="Type of upload: 'character' or 'adventure'"),
-    adventure_id: Optional[str] = Query(None, description="Optional ID for adventure-specific subfolders")
+    adventure_id: str | None = Query(None, description="Optional ID for adventure-specific subfolders")
 ):
     """
     Uploads an image, resizes/crops it based on type, and returns the URL.

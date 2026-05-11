@@ -4,16 +4,17 @@ Revision ID: c75ba74ff965
 Revises: 0b669575012e
 Create Date: 2026-05-07 23:28:18.500049
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+
+import sqlalchemy as sa
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'c75ba74ff965'
-down_revision: Union[str, Sequence[str], None] = '0b669575012e'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = '0b669575012e'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

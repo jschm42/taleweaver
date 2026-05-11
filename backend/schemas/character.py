@@ -1,36 +1,38 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
+
 
 class CharacterBase(BaseModel):
     name: str = Field(..., max_length=30)
-    profile_image: Optional[str] = None
-    stats: Optional[Dict[str, Any]] = None
-    strength: Optional[int] = 10
-    intelligence: Optional[int] = 10
-    wisdom: Optional[int] = 10
-    dexterity: Optional[int] = 10
-    charisma: Optional[int] = 10
-    armor_class: Optional[int] = 10
-    inventory: Optional[List[Dict[str, Any]]] = None
-    equipment: Optional[Dict[str, Any]] = None
-    status_effects: Optional[List[str]] = None
+    profile_image: str | None = None
+    stats: dict[str, Any] | None = None
+    strength: int | None = 10
+    intelligence: int | None = 10
+    wisdom: int | None = 10
+    dexterity: int | None = 10
+    charisma: int | None = 10
+    armor_class: int | None = 10
+    inventory: list[dict[str, Any]] | None = None
+    equipment: dict[str, Any] | None = None
+    status_effects: list[str] | None = None
 
 class CharacterCreate(CharacterBase):
     pass
 
 class CharacterUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=30)
-    profile_image: Optional[str] = None
-    stats: Optional[Dict[str, Any]] = None
-    strength: Optional[int] = None
-    intelligence: Optional[int] = None
-    wisdom: Optional[int] = None
-    dexterity: Optional[int] = None
-    charisma: Optional[int] = None
-    armor_class: Optional[int] = None
-    inventory: Optional[List[Dict[str, Any]]] = None
-    equipment: Optional[Dict[str, Any]] = None
-    status_effects: Optional[List[str]] = None
+    name: str | None = Field(None, max_length=30)
+    profile_image: str | None = None
+    stats: dict[str, Any] | None = None
+    strength: int | None = None
+    intelligence: int | None = None
+    wisdom: int | None = None
+    dexterity: int | None = None
+    charisma: int | None = None
+    armor_class: int | None = None
+    inventory: list[dict[str, Any]] | None = None
+    equipment: dict[str, Any] | None = None
+    status_effects: list[str] | None = None
 
 class CharacterInDBBase(CharacterBase):
     id: str

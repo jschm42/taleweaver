@@ -1,13 +1,15 @@
+from typing import Any
+
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+
 
 class SessionStateBase(BaseModel):
     current_scene_id: str
     in_game_time: int = 0
-    inventory: List[str] = []
-    entity_states: Dict[str, Any] = {}
-    exit_states: Dict[str, Any] = {}
-    discovered_scenes: List[str] = []
+    inventory: list[str] = []
+    entity_states: dict[str, Any] = {}
+    exit_states: dict[str, Any] = {}
+    discovered_scenes: list[str] = []
     is_completed: bool = False
     is_debug_enabled: bool = False
 
@@ -15,15 +17,15 @@ class SessionStateCreate(SessionStateBase):
     session_id: str
 
 class SessionStateUpdate(BaseModel):
-    scene_id: Optional[str] = None
-    current_scene_id: Optional[str] = None
-    in_game_time: Optional[int] = None
-    inventory: Optional[List[str]] = None
-    entity_states: Optional[Dict[str, Any]] = None
-    exit_states: Optional[Dict[str, Any]] = None
-    discovered_scenes: Optional[List[str]] = None
-    is_completed: Optional[bool] = None
-    is_debug_enabled: Optional[bool] = None
+    scene_id: str | None = None
+    current_scene_id: str | None = None
+    in_game_time: int | None = None
+    inventory: list[str] | None = None
+    entity_states: dict[str, Any] | None = None
+    exit_states: dict[str, Any] | None = None
+    discovered_scenes: list[str] | None = None
+    is_completed: bool | None = None
+    is_debug_enabled: bool | None = None
 
 class GameSessionBase(BaseModel):
     user_id: str
@@ -35,9 +37,9 @@ class GameSessionCreate(GameSessionBase):
     pass
 
 class GameSessionUpdate(BaseModel):
-    status: Optional[str] = None
+    status: str | None = None
 
 class GameSession(GameSessionBase):
     id: str
-    state: Optional[SessionStateBase] = None
+    state: SessionStateBase | None = None
     model_config = {"from_attributes": True}

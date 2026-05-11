@@ -22,7 +22,7 @@ import { configState } from '@/store/config'
 const router = useRouter()
 const route = useRoute()
 
-interface PendingAdventureCard {
+interface PendingAdventureState {
   adventureId: string
   title: string
   status: string
@@ -97,8 +97,8 @@ const importWarningType = ref<'defaults' | 'samples'>('defaults')
 const importConflicts = ref<Array<{ title: string; already_exists: boolean }>>([])
 
 const importInput = ref<HTMLInputElement | null>(null)
-const pendingImports = ref<PendingAdventureCard[]>([])
-const pendingCreations = ref<PendingAdventureCard[]>([])
+const pendingImports = ref<PendingAdventureState[]>([])
+const pendingCreations = ref<PendingAdventureState[]>([])
 const loadingWordIndex = ref(0)
 const loadingWords = [
   'Checking manifest',

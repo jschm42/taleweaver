@@ -1,22 +1,24 @@
 import logging
 import os
-from typing import Any, Dict, List, Optional
 from copy import deepcopy
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+
+from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.schemas import GameSessionResponse
+from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
-from backend.core.auth import get_current_user
-from backend.models.user import User
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
-from backend.models.game_session import GameSession
 from backend.models.chat import ChatMessage
+from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
-from backend.api.routes.adventures.schemas import GameSessionResponse
-from backend.api.routes.adventures.logic import AdventureLogic
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.utils.text_utils import generate_session_id
 
 router = APIRouter(tags=["Sessions"])
@@ -96,11 +98,11 @@ def _iter_avatar_items(avatar: Avatar):
         if isinstance(item, dict):
             yield (f"equipment.{slot}", item)
 
-async def _resolve_session_asset(state: SessionState, key: str, fallback: Optional[str] = None) -> Optional[str]:
+async def _resolve_session_asset(state: SessionState, key: str, fallback: str | None = None) -> str | None:
     # Placeholder or import from logic if needed
     return AdventureLogic.resolve_session_asset(state, key, fallback)
 
-@router.get("/sessions", response_model=List[GameSessionResponse])
+@router.get("/sessions", response_model=list[GameSessionResponse])
 async def list_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -355,7 +357,7 @@ async def check_session_item_integrity(
     game_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Checks if session avatar item modifiers/effects match available template object data."""
     session_res = await db.execute(
         select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
@@ -377,7 +379,7 @@ async def check_session_item_integrity(
     )
     entities_by_id = {ent.id: ent for ent in template_entities_res.scalars().all() if ent.id}
 
-    issues: list[Dict[str, Any]] = []
+    issues: list[dict[str, Any]] = []
     checked_items = 0
 
     for location, item in _iter_avatar_items(avatar):

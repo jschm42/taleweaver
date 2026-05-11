@@ -4,25 +4,25 @@ Tests for the Adventures REST API (Package 4).
 Covers: create, list, get, update, delete, pause/resume, and game-state
 sub-routes. All tests follow the Arrange-Act-Assert pattern.
 """
+import json
+import os
+from io import BytesIO
+
 import pytest
 import pytest_asyncio
-import json
 from httpx import AsyncClient
-from io import BytesIO
-import os
+from PIL import Image
 from sqlalchemy import delete, select
 
-from PIL import Image
+from backend.engine.debug_engine import DebugEngine
 from backend.models.adventure import Adventure
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
 from backend.models.game_state import GameState
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldEntity
-from backend.models.world_entity import WorldScene
 from backend.models.user import User
-from backend.engine.debug_engine import DebugEngine
+from backend.models.world_entity import WorldEntity, WorldScene
 from tests.conftest import TestSessionLocal
 
 pytestmark = pytest.mark.asyncio

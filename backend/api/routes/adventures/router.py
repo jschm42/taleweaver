@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from backend.api.routes.adventures.templates import router as templates_router
-from backend.api.routes.adventures.sessions import router as sessions_router
-from backend.api.routes.adventures.gameplay import router as gameplay_router
+
 from backend.api.routes.adventures.assets import router as assets_router
 from backend.api.routes.adventures.editor import router as editor_router
+from backend.api.routes.adventures.gameplay import router as gameplay_router
 from backend.api.routes.adventures.imports import router as imports_router
+from backend.api.routes.adventures.sessions import router as sessions_router
+from backend.api.routes.adventures.templates import router as templates_router
 
 router = APIRouter(prefix="/adventures")
 

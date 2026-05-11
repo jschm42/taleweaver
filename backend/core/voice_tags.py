@@ -6,7 +6,6 @@ stays predictable.
 
 from typing import Final
 
-
 VOICE_TAG_CATALOG: Final[tuple[str, ...]] = (
     "bored",
     "reluctantly",

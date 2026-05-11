@@ -1,15 +1,16 @@
+
 from pydantic import BaseModel
-from typing import Optional
+
 
 class UserBase(BaseModel):
     username: str
-    earned_awards: Optional[List[Dict[str, Any]]] = None
+    earned_awards: List[Dict[str, Any]] | None = None
 
 class UserCreate(UserBase):
     pass
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = None
+    username: str | None = None
 
 class UserInDBBase(UserBase):
     id: str

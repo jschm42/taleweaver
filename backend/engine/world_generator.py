@@ -1,20 +1,22 @@
-import logging
 import asyncio
+import logging
 import os
-from typing import List, Optional, Dict, Literal, Any, Callable, Awaitable, Union
-from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from collections.abc import Awaitable, Callable
+from typing import Any, Literal
 
-from backend.core.llm_router import GameMasterLLM
-from backend.core.llm_logger import log_structured_event
-from backend.models.user import User
-from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
-from backend.models.adventure_template import AdventureTemplate, GenerationCancelled
-from backend.core.config import settings
+from pydantic import BaseModel, Field
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.core import prompts
+from backend.core.config import settings
+from backend.core.llm_logger import log_structured_event
+from backend.core.llm_router import GameMasterLLM
 from backend.core.style_catalog import resolve_style_instruction
-from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_NAMES
+from backend.core.tts_voices import GOOGLE_TTS_VOICE_NAMES
+from backend.models.adventure_template import AdventureTemplate, GenerationCancelled
+from backend.models.user import User
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ IMAGE_MODERATION_MARKERS = (
 )
 
 
-def is_image_moderation_error(error: Union[Exception, str, None]) -> bool:
+def is_image_moderation_error(error: Exception | str | None) -> bool:
     if error is None:
         return False
     message = str(error).lower()
@@ -39,7 +41,7 @@ def is_image_moderation_error(error: Union[Exception, str, None]) -> bool:
 
 def _build_voice_assignment_requirement(
     enabled: bool,
-    available_voice_list: Optional[List[str]] = None,
+    available_voice_list: list[str] | None = None,
 ) -> str:
     return ""
 
@@ -54,7 +56,7 @@ def _image_generation_timeout_seconds() -> float:
 
 
 def _validate_t2i_prerequisites(
-    user: Optional[User],
+    user: User | None,
     *,
     need_scene_images: bool,
     need_npc_images: bool,
@@ -103,7 +105,7 @@ def _validate_t2i_prerequisites(
                     raise ValueError(f"API key missing for simple image provider '{provider}'.")
 
 
-async def _publish_generation_status(db: AsyncSession, adventure: Optional[AdventureTemplate], status: str) -> None:
+async def _publish_generation_status(db: AsyncSession, adventure: AdventureTemplate | None, status: str) -> None:
     """Publish live status text via the active session without committing mid-generation."""
     if not adventure:
         return
@@ -119,9 +121,9 @@ async def _publish_generation_status(db: AsyncSession, adventure: Optional[Adven
 
 async def _publish_generation_status_with_callback(
     db: AsyncSession,
-    adventure: Optional[AdventureTemplate],
+    adventure: AdventureTemplate | None,
     status: str,
-    status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    status_callback: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
     """Persist generation status and optionally forward it to an external observer (e.g., in-game chat)."""
     await _publish_generation_status(db, adventure, status)
@@ -132,7 +134,7 @@ async def _publish_generation_status_with_callback(
             logger.warning("Generation status callback failed for %s: %s", status, exc)
 
 
-def _uses_ollama_t2i(user: Optional[User]) -> bool:
+def _uses_ollama_t2i(user: User | None) -> bool:
     if not user:
         return False
     t2i_settings = user.t2i_settings or {}
@@ -152,7 +154,7 @@ class WorldExitSchema(BaseModel):
     to_scene_id: str
     label: str = Field(..., description="How to describe the transition, e.g., 'a narrow stone staircase'")
     is_locked: bool = False
-    lock_description: Optional[str] = None
+    lock_description: str | None = None
     
     model_config = {"extra": "forbid"}
 
@@ -165,33 +167,33 @@ class WorldEntitySchema(BaseModel):
     spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'sitting in the armchair', 'hidden in a drawer'")
     
     # Advanced Item Fields (only for type='OBJECT')
-    item_type: Optional[str] = Field(None, description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
-    wearable_slots: Optional[List[str]] = Field(None, description="If WEARABLE, which slots? e.g. ['Head'], ['Chest'], ['Hands'], ['Ring_1'], ['Ring_2']")
+    item_type: str | None = Field(None, description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
+    wearable_slots: list[str] | None = Field(None, description="If WEARABLE, which slots? e.g. ['Head'], ['Chest'], ['Hands'], ['Ring_1'], ['Ring_2']")
     is_hidden: bool = Field(False, description="If True, the player must SEARCH or trigger an event to see this.")
     is_portable: bool = Field(True, description="Whether the item can be picked up. False for STATIC objects.")
-    combination_ingredients: Optional[List[str]] = Field(None, description="Item IDs required to trigger a combination.")
-    reveals_item_id: Optional[str] = Field(None, description="Item slug revealed when combination occurs.")
+    combination_ingredients: list[str] | None = Field(None, description="Item IDs required to trigger a combination.")
+    reveals_item_id: str | None = Field(None, description="Item slug revealed when combination occurs.")
     
     # NPC Specific Fields (only for type='NPC')
-    npc_type: Optional[str] = Field(None, description="One of: HUMANOID, ANIMAL, MONSTER, BEING")
-    movement_type: Optional[str] = Field(None, description="One of: STATIONARY, MOVABLE")
-    hp: Optional[int] = Field(None, description="Optional hitpoints")
-    mana: Optional[int] = Field(None, description="Optional mana")
-    stamina: Optional[int] = Field(None, description="Optional stamina")
+    npc_type: str | None = Field(None, description="One of: HUMANOID, ANIMAL, MONSTER, BEING")
+    movement_type: str | None = Field(None, description="One of: STATIONARY, MOVABLE")
+    hp: int | None = Field(None, description="Optional hitpoints")
+    mana: int | None = Field(None, description="Optional mana")
+    stamina: int | None = Field(None, description="Optional stamina")
     is_attackable: bool = Field(True, description="If False, the player cannot start a fight with this NPC.")
 
     # Stat Modifiers (for OBJECTS)
-    stat_modifier_strength: Optional[int] = None
-    stat_modifier_dexterity: Optional[int] = None
-    stat_modifier_intelligence: Optional[int] = None
-    stat_modifier_wisdom: Optional[int] = None
-    stat_modifier_charisma: Optional[int] = None
-    stat_modifier_armor_class: Optional[int] = None
-    hp_change: Optional[int] = Field(None, description="For CONSUMABLE objects: HP delta when consumed (positive or negative).")
-    stamina_change: Optional[int] = Field(None, description="For CONSUMABLE objects: Stamina delta when consumed (positive or negative).")
-    mana_change: Optional[int] = Field(None, description="For CONSUMABLE objects: Mana delta when consumed (positive or negative).")
+    stat_modifier_strength: int | None = None
+    stat_modifier_dexterity: int | None = None
+    stat_modifier_intelligence: int | None = None
+    stat_modifier_wisdom: int | None = None
+    stat_modifier_charisma: int | None = None
+    stat_modifier_armor_class: int | None = None
+    hp_change: int | None = Field(None, description="For CONSUMABLE objects: HP delta when consumed (positive or negative).")
+    stamina_change: int | None = Field(None, description="For CONSUMABLE objects: Stamina delta when consumed (positive or negative).")
+    mana_change: int | None = Field(None, description="For CONSUMABLE objects: Mana delta when consumed (positive or negative).")
     
-    inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in this NPC's or Object's inventory.")
+    inventory: list[str] | None = Field(None, description="List of object IDs to start in this NPC's or Object's inventory.")
     
     model_config = {"extra": "forbid"}
 
@@ -200,7 +202,7 @@ class QuestSchema(BaseModel):
     title: str = Field(..., description="Short, descriptive title")
     description: str = Field(..., description="Narrative description of what needs to be done")
     goal: str = Field(..., description="Technical condition for completion (for GM reference)")
-    impact: Optional[str] = Field(None, description="How this affects the world when completed")
+    impact: str | None = Field(None, description="How this affects the world when completed")
     exp_reward: int = Field(250, description="EXP awarded for completion (e.g., 50, 100, 250)")
     is_main: bool = Field(True, description="True if this quest is required to finish the adventure")
     status: str = Field("open", description="Current state: open, completed, failed")
@@ -217,16 +219,16 @@ class AwardTemplateSchema(BaseModel):
     model_config = {"extra": "forbid"}
 
 class EquipmentSchema(BaseModel):
-    Head: Optional[str] = None
-    Chest: Optional[str] = None
-    Hands: Optional[str] = None
-    Legs: Optional[str] = None
-    Feet: Optional[str] = None
-    Neck: Optional[str] = None
-    Ring_1: Optional[str] = None
-    Ring_2: Optional[str] = None
-    MainHand: Optional[str] = None
-    OffHand: Optional[str] = None
+    Head: str | None = None
+    Chest: str | None = None
+    Hands: str | None = None
+    Legs: str | None = None
+    Feet: str | None = None
+    Neck: str | None = None
+    Ring_1: str | None = None
+    Ring_2: str | None = None
+    MainHand: str | None = None
+    OffHand: str | None = None
     
     model_config = {"extra": "forbid"}
 
@@ -240,8 +242,8 @@ class ProtagonistSchema(BaseModel):
     wisdom: int = Field(10, description="Base wisdom stat (1-99)")
     charisma: int = Field(10, description="Base charisma stat (1-99)")
     armor_class: int = Field(10, description="Base armor class stat (1-99)")
-    starting_inventory: Optional[List[str]] = Field(None, description="List of object IDs to start in the player's pocket.")
-    starting_equipment: Optional[EquipmentSchema] = Field(None, description="Initial equipment setup.")
+    starting_inventory: list[str] | None = Field(None, description="List of object IDs to start in the player's pocket.")
+    starting_equipment: EquipmentSchema | None = Field(None, description="Initial equipment setup.")
     hp: int = Field(200, description="Base health points")
     mana: int = Field(200, description="Base mana points")
     stamina: int = Field(200, description="Base stamina points")
@@ -249,8 +251,8 @@ class ProtagonistSchema(BaseModel):
     model_config = {"extra": "forbid"}
 
 class TimeConfigSchema(BaseModel):
-    day_label: Optional[str] = Field(None, description="Label for the day unit, e.g. 'Day', 'Sol', 'Cycle'")
-    start_year_override: Optional[int] = Field(None, description="Override for the starting year in calendar mode")
+    day_label: str | None = Field(None, description="Label for the day unit, e.g. 'Day', 'Sol', 'Cycle'")
+    start_year_override: int | None = Field(None, description="Override for the starting year in calendar mode")
     
     model_config = {"extra": "forbid"}
 
@@ -263,24 +265,24 @@ class WorldManifesto(BaseModel):
     language: str = Field("English", description="The target language for all generated content.")
     plot: str = Field(..., description="The main plotline, goals, and narrative arc of the adventure.")
     rules: str = Field(..., description="Special rules or mechanics specific to this adventure world.")
-    intro_text: Optional[str] = Field(None, description="Optional intro text shown once when a new session starts.")
+    intro_text: str | None = Field(None, description="Optional intro text shown once when a new session starts.")
     walkthrough: str = Field(..., description="A secret GM walkthrough/solution for the adventure.")
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
     tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
-    scenes: List[WorldSceneSchema]
-    exits: List[WorldExitSchema]
-    npcs: List[WorldEntitySchema]
-    objects: List[WorldEntitySchema]
-    quests: List[QuestSchema] = Field(default_factory=list)
-    awards: List[AwardTemplateSchema] = Field(default_factory=list)
+    scenes: list[WorldSceneSchema]
+    exits: list[WorldExitSchema]
+    npcs: list[WorldEntitySchema]
+    objects: list[WorldEntitySchema]
+    quests: list[QuestSchema] = Field(default_factory=list)
+    awards: list[AwardTemplateSchema] = Field(default_factory=list)
     
     # Optional Time Initialization
-    start_date: Optional[str] = Field(None, description="Initial in-game date, e.g. '2026-04-17'")
-    start_time: Optional[str] = Field(None, description="Initial in-game time, e.g. '08:00'")
-    time_system: Optional[str] = Field("calendar", description="One of: calendar, relative")
-    time_config: Optional[TimeConfigSchema] = Field(None, description="Detailed configuration for the time system.")
-    origin_id: Optional[str] = Field(None, description="A stable ID for this adventure template.")
+    start_date: str | None = Field(None, description="Initial in-game date, e.g. '2026-04-17'")
+    start_time: str | None = Field(None, description="Initial in-game time, e.g. '08:00'")
+    time_system: str | None = Field("calendar", description="One of: calendar, relative")
+    time_config: TimeConfigSchema | None = Field(None, description="Detailed configuration for the time system.")
+    origin_id: str | None = Field(None, description="A stable ID for this adventure template.")
     
     model_config = {"extra": "forbid"}
 
@@ -292,8 +294,8 @@ class WorldGenerator:
         template_id: str, 
         title: str, 
         original_prompt: str,
-        model: Optional[str] = None, # Resolve from user settings if not provided
-        provider: Optional[str] = None,
+        model: str | None = None, # Resolve from user settings if not provided
+        provider: str | None = None,
         generate_scene_images: bool = False,
         generate_npc_images: bool = False,
         generate_item_images: bool = False,
@@ -304,10 +306,10 @@ class WorldGenerator:
         award_generation_enabled: bool = True,
         min_awards: int = 3,
         max_awards: int = 5,
-        selected_image_styles: Optional[List[str]] = None,
-        selected_tone: Optional[str] = None,
-        language: Optional[str] = None,
-        status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+        selected_image_styles: list[str] | None = None,
+        selected_tone: str | None = None,
+        language: str | None = None,
+        status_callback: Callable[[str], Awaitable[None]] | None = None,
 
     ) -> None:
         """
@@ -484,14 +486,14 @@ class WorldGenerator:
         db: AsyncSession, 
         template_id: str, 
         manifest_dict: dict, 
-        user: Optional[User] = None,
+        user: User | None = None,
         gen_npc: bool = False,
         gen_items: bool = False,
         gen_scenes: bool = False,
         gen_protagonist_image: bool = False,
-        existing_images: Optional[dict] = None,
-        selected_image_styles: Optional[List[str]] = None,
-        status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+        existing_images: dict | None = None,
+        selected_image_styles: list[str] | None = None,
+        status_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         """
         Populates (or re-populates) the world entities based on a manifest dictionary.
@@ -962,7 +964,7 @@ class WorldGenerator:
         objects = manifest_dict.get("objects", [])
         total_objects = len(objects)
         
-        def _inventory_item_id(entry: Any) -> Optional[str]:
+        def _inventory_item_id(entry: Any) -> str | None:
             if isinstance(entry, str):
                 return entry
             if isinstance(entry, dict):
@@ -981,7 +983,7 @@ class WorldGenerator:
         for inv in npc_inventories.values():
             all_npc_inventory_item_ids.update(inv)
 
-        def _extract_numeric_stat(obj: Dict[str, Any], source_item: Dict[str, Any], *keys: str) -> Optional[int]:
+        def _extract_numeric_stat(obj: dict[str, Any], source_item: dict[str, Any], *keys: str) -> int | None:
             for key in keys:
                 value = obj.get(key)
                 if isinstance(value, (int, float)):
@@ -1006,7 +1008,7 @@ class WorldGenerator:
 
             return None
 
-        def _extract_numeric_effect(obj: Dict[str, Any], source_item: Dict[str, Any], *keys: str) -> Optional[int]:
+        def _extract_numeric_effect(obj: dict[str, Any], source_item: dict[str, Any], *keys: str) -> int | None:
             for key in keys:
                 value = obj.get(key)
                 if isinstance(value, (int, float)):

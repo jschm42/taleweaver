@@ -1,8 +1,11 @@
 import asyncio
+
 from backend.core.database import engine
-from backend.models.base import Base
+
 # Make sure all models are imported so Base metadata is updated
 from backend.models import *
+from backend.models.base import Base
+
 
 async def init_db():
     print("Initializing database...")

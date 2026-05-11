@@ -1,4 +1,3 @@
-import pytest
 
 from backend.engine import world_generator
 

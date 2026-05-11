@@ -1,6 +1,9 @@
 import uuid
-from sqlalchemy import Column, String, Integer, JSON, ForeignKey
+
+from sqlalchemy import JSON, Column, ForeignKey, Integer, String
+
 from backend.models.base import Base, TimestampMixin
+
 
 class Character(Base, TimestampMixin):
     """

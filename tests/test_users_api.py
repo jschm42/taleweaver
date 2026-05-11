@@ -5,7 +5,6 @@ from backend.core.auth import create_access_token, get_password_hash
 from backend.models.user import User
 from tests.conftest import TestSessionLocal
 
-
 pytestmark = pytest.mark.asyncio
 
 

@@ -7,17 +7,17 @@ POST /api/adventures/{template_id}/map/visit    — register a scene visit (inte
 POST /api/adventures/{template_id}/map/exit     — register an exit between scenes
 """
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.database import get_db
-from backend.models.world_map import WorldMap
-from backend.models.adventure_template import AdventureTemplate
-from backend.engine.map_engine import MapEngine
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.core.database import get_db
+from backend.engine.map_engine import MapEngine
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.world_map import WorldMap
 
 router = APIRouter(tags=["WorldMap"])
 logger = logging.getLogger(__name__)
@@ -27,15 +27,15 @@ logger = logging.getLogger(__name__)
 
 class VisitPayload(BaseModel):
     scene_id: str
-    label: Optional[str] = None
-    description: Optional[str] = None
-    image_url: Optional[str] = None
+    label: str | None = None
+    description: str | None = None
+    image_url: str | None = None
 
 
 class ExitPayload(BaseModel):
     from_scene: str
     to_scene: str
-    exit_label: Optional[str] = ""
+    exit_label: str | None = ""
 
 
 # ── Route helpers ─────────────────────────────────────────────────────────────

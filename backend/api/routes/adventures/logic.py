@@ -1,20 +1,17 @@
 import logging
-import re
 from datetime import datetime
-from typing import Optional, Dict, Any, List
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any
+
 from sqlalchemy import select
-from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.core.config import settings
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldScene, WorldEntity
+from backend.models.world_entity import WorldEntity, WorldScene
 from backend.models.world_map import WorldMap
-from backend.engine.world_generator import WorldGenerator
-from backend.engine.map_engine import MapEngine
-from backend.schemas.adventure import AdventureTemplateDebugResponse
-from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +32,7 @@ class AdventureLogic:
         return world_map
 
     @staticmethod
-    def calculate_quest_progress(quests: Optional[List[Dict[str, Any]]]) -> int:
+    def calculate_quest_progress(quests: list[dict[str, Any]] | None) -> int:
         if not quests:
             return 0
         total = len(quests)
@@ -53,7 +50,7 @@ class AdventureLogic:
         return snap if isinstance(snap, dict) else {}
 
     @staticmethod
-    def get_combat_snapshot(state: SessionState) -> Optional[Dict[str, Any]]:
+    def get_combat_snapshot(state: SessionState) -> dict[str, Any] | None:
         raw = state.entity_states or {}
         if not isinstance(raw, dict):
             return None
@@ -63,13 +60,13 @@ class AdventureLogic:
         return combat
 
     @staticmethod
-    def resolve_session_asset(state: SessionState, key: str, fallback: Optional[str] = None) -> Optional[str]:
+    def resolve_session_asset(state: SessionState, key: str, fallback: str | None = None) -> str | None:
         snapshot = AdventureLogic.extract_asset_snapshot(state)
         value = snapshot.get(key)
         return value if isinstance(value, str) and value else fallback
 
     @staticmethod
-    def resolve_start_datetime(manifest: Optional[dict[str, Any]], state: Optional[SessionState] = None) -> Optional[str]:
+    def resolve_start_datetime(manifest: dict[str, Any] | None, state: SessionState | None = None) -> str | None:
         """Returns a usable ISO datetime string. Prioritizes session-specific state over manifest."""
         if state and state.start_datetime:
             return state.start_datetime
@@ -106,7 +103,7 @@ class AdventureLogic:
             return None
 
     @staticmethod
-    async def resolve_session_state(db: AsyncSession, session_or_template_id: str, user_id: Optional[str] = None) -> Optional[SessionState]:
+    async def resolve_session_state(db: AsyncSession, session_or_template_id: str, user_id: str | None = None) -> SessionState | None:
         """Resolve a session state by session id first, then by template/adventure id."""
         from sqlalchemy.orm import selectinload
         direct_res = await db.execute(
@@ -175,7 +172,7 @@ class AdventureLogic:
         return None
 
     @staticmethod
-    async def build_session_entities(db: AsyncSession, state: SessionState) -> List[Dict[str, Any]]:
+    async def build_session_entities(db: AsyncSession, state: SessionState) -> list[dict[str, Any]]:
         """Fetches and processes entities for the current scene, applying session overrides."""
         ent_res = await db.execute(
             select(WorldEntity).where(
@@ -319,13 +316,14 @@ class AdventureLogic:
         Order is important to avoid FK violations.
         Also cleans up physical assets.
         """
-        from backend.models.world_entity import WorldScene, WorldExit, WorldEntity
-        from backend.models.world_map import WorldMap
+        from sqlalchemy import delete
+
+        from backend.engine.media_engine import MediaEngine
+        from backend.models.avatar import Avatar
         from backend.models.game_session import GameSession
         from backend.models.session_state import SessionState
-        from backend.models.avatar import Avatar
-        from backend.engine.media_engine import MediaEngine
-        from sqlalchemy import delete
+        from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+        from backend.models.world_map import WorldMap
 
         # 1. Resolve and Delete Sessions & States
         # We find sessions first to delete their states

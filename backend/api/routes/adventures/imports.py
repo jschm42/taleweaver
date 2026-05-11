@@ -1,25 +1,26 @@
+import io
+import json
 import logging
 import os
 import zipfile
-import io
-import json
-from typing import List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from typing import Any
 
-from backend.core.database import get_db
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.api.routes.adventures.schemas import ImportCheckItem, ImportCheckResponse
 from backend.core.auth import get_current_user
 from backend.core.config import settings
-from backend.models.user import User
-from backend.models.adventure_template import AdventureTemplate
+from backend.core.database import get_db
 from backend.engine.adventure_importer import AdventureTemplateImporter
-from backend.api.routes.adventures.schemas import ImportCheckResponse, ImportCheckItem
+from backend.models.adventure_template import AdventureTemplate
+from backend.models.user import User
 
 router = APIRouter(tags=["Adventure Imports"])
 logger = logging.getLogger(__name__)
 
-async def _get_import_check_items(db: AsyncSession, user_id: str, directories: List[str]) -> List[ImportCheckItem]:
+async def _get_import_check_items(db: AsyncSession, user_id: str, directories: list[str]) -> list[ImportCheckItem]:
     """Scans directories for adventures and checks if they already exist in the user's library."""
     check_items = []
     
@@ -42,7 +43,7 @@ async def _get_import_check_items(db: AsyncSession, user_id: str, directories: L
                             title = adv_data.get("title")
                             origin_id = adv_data.get("origin_id") or manifest.get("origin_id")
                 else:
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, encoding="utf-8") as f:
                         payload = json.load(f)
                         is_session = payload.get("type") == "SESSION_BUNDLE"
                         title = payload.get("adventure", {}).get("title") if is_session else payload.get("title")
@@ -133,7 +134,7 @@ async def reimport_defaults(
 
 @router.post("/import")
 async def import_adventure(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

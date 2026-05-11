@@ -1,14 +1,15 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from sqlalchemy import select
 
-from backend.models.user import User
+from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.engine.rule_engine import GameEvent, InventoryItem
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
+from backend.models.user import User
 from backend.models.world_entity import WorldEntity
-from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import GameEvent, InventoryItem
 
 pytestmark = pytest.mark.asyncio
 

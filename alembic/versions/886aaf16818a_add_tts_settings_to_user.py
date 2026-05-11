@@ -4,18 +4,17 @@ Revision ID: 886aaf16818a
 Revises: dab2beb3a37f
 Create Date: 2026-05-08 10:52:45.074146
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '886aaf16818a'
-down_revision: Union[str, Sequence[str], None] = 'dab2beb3a37f'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'dab2beb3a37f'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
