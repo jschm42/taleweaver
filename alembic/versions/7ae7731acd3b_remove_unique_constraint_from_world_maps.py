@@ -37,32 +37,41 @@ def upgrade() -> None:
 
     # 2. Find the index name for the unique constraint on world_maps.template_id
     conn = op.get_bind()
-    # Use PRAGMA to find the index name since it might be an auto-index
-    res = conn.execute(sa.text("PRAGMA index_list('world_maps')")).fetchall()
-    target_index = None
-    for row in res:
-        # row: (seq, name, unique, origin, partial)
-        if row[2] == 1: # unique index
-            info = conn.execute(sa.text(f"PRAGMA index_info('{row[1]}')")).fetchall()
-            # info: (seqno, cid, name)
-            for col in info:
-                if col[2] == 'template_id':
-                    target_index = row[1]
-                    break
-            if target_index:
-                break
     
-    if target_index:
+    # Use SQLAlchemy reflection to find the constraint name as it sees it
+    from sqlalchemy.engine import reflection
+    insp = reflection.Inspector.from_engine(conn)
+    
+    target_constraint = None
+    
+    # Check unique constraints first
+    uqs = insp.get_unique_constraints('world_maps')
+    for uq in uqs:
+        if 'template_id' in uq['column_names']:
+            target_constraint = uq['name']
+            break
+            
+    if target_constraint:
         with op.batch_alter_table('world_maps', schema=None) as batch_op:
-            # Drop the constraint by its discovered name
-            batch_op.drop_constraint(target_index, type_='unique')
+            batch_op.drop_constraint(target_constraint, type_='unique')
     else:
-        # Fallback: try by convention just in case
-        try:
-            with op.batch_alter_table('world_maps', schema=None, naming_convention=naming_convention) as batch_op:
-                batch_op.drop_constraint('uq_world_maps_template_id', type_='unique')
-        except Exception:
-            pass
+        # Check indexes if not found as a constraint (SQLite often treats them as indexes)
+        idxs = insp.get_indexes('world_maps')
+        for idx in idxs:
+            if idx.get('unique') and 'template_id' in idx['column_names']:
+                target_constraint = idx['name']
+                break
+        
+        if target_constraint:
+            with op.batch_alter_table('world_maps', schema=None) as batch_op:
+                batch_op.drop_index(target_constraint)
+        else:
+            # Last resort: try by convention
+            try:
+                with op.batch_alter_table('world_maps', schema=None, naming_convention=naming_convention) as batch_op:
+                    batch_op.drop_constraint('uq_world_maps_template_id', type_='unique')
+            except Exception:
+                pass
     # ### end Alembic commands ###
 
 
