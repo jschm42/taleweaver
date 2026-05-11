@@ -149,6 +149,7 @@ class AdventureGeneratorToolIntent(BaseModel):
     remember_notes: Optional[list[str]] = None
     forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
+    new_status_effects: list[str] = []
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None

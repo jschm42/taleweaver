@@ -376,7 +376,7 @@ class GameTurnManager:
             hp_change=intent.hp_change,
             stamina_change=intent.stamina_change,
             mana_change=intent.mana_change,
-            new_status_effects=[],
+            new_status_effects=intent.new_status_effects or [],
             new_inventory_items=intent.new_inventory_items or [],
             removed_inventory_item_ids=intent.removed_inventory_item_ids,
             updated_inventory_items=intent.updated_inventory_items or [],
