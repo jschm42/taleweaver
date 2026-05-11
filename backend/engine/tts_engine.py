@@ -194,6 +194,18 @@ def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
     return candidate
 
 
+def _ensure_within_data_dir(path: str) -> str:
+    """Validate that a path resolves inside DATA_DIR and return its absolute form."""
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
 def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[str] = None) -> str:
     """Return target directory for generated audio.
 
@@ -218,7 +230,7 @@ def _resolve_audio_public_url(adventure_id: Optional[str], filename: str, sessio
 def _public_url_from_filepath(filepath: str) -> str:
     """Build a stable /data URL from the actual file path on disk."""
     data_root = os.path.abspath(settings.DATA_DIR)
-    abs_path = os.path.abspath(filepath)
+    abs_path = _ensure_within_data_dir(filepath)
     rel_path = os.path.relpath(abs_path, data_root)
     return f"/data/{rel_path.replace(os.sep, '/')}"
 
@@ -352,7 +364,7 @@ class TTSEngine:
             os.makedirs(audio_dir, exist_ok=True)
 
             filename = f"{uuid.uuid4()}.mp3"
-            filepath = os.path.join(audio_dir, filename)
+            filepath = _ensure_within_data_dir(os.path.join(audio_dir, filename))
 
             with open(filepath, "wb") as f:
                 f.write(audio_bytes)
@@ -575,7 +587,7 @@ class TTSEngine:
             os.makedirs(audio_dir, exist_ok=True)
 
             filename = f"{uuid.uuid4()}.{ext}"
-            filepath = os.path.join(audio_dir, filename)
+            filepath = _ensure_within_data_dir(os.path.join(audio_dir, filename))
 
             with open(filepath, "wb") as f:
                 f.write(audio_bytes)

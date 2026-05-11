@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import uuid
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -45,6 +45,8 @@ print(f"DEBUG: Loading config_api module, router prefix: {router.prefix}")
 DEFAULT_SMALL_MAX_TOKENS = 12288
 DEFAULT_COMPLEX_MAX_TOKENS = 24576
 DEFAULT_GENERATOR_MAX_TOKENS = 32768
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
 
 async def _resolve_global_settings_owner(db: AsyncSession, fallback_user: User) -> User:
@@ -75,6 +77,45 @@ async def _broadcast_global_settings(db: AsyncSession, source_user: User) -> Non
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
     return slug.strip("-") or "item"
+
+
+def _sanitize_path_component(value: str) -> Optional[str]:
+    """Return a safe single path segment, or None when invalid."""
+    candidate = (value or "").strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    """Validate that path resolves inside DATA_DIR and return absolute path."""
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
+def _safe_data_path(*parts: str) -> str:
+    """Build a safe path rooted at DATA_DIR."""
+    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
+
+
+def _sanitize_image_extension(filename: Optional[str]) -> str:
+    """Return a safe image extension with png fallback."""
+    if not filename or "." not in filename:
+        return "png"
+    ext = filename.rsplit(".", 1)[-1].strip().lower()
+    return ext if ext in _SAFE_IMAGE_EXTENSIONS else "png"
 
 
 from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES, DEFAULT_TONES
@@ -128,7 +169,7 @@ def _normalize_openrouter_model(model: Optional[str]) -> Optional[str]:
     return normalized
 
 
-def _normalize_llm_settings(settings: Optional[dict]) -> dict:
+def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
     """Return LLM settings with separate providers, tokens and thinking modes."""
     fallback = {
         "small_model": "",
@@ -149,10 +190,10 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
         "preferred_provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
     }
-    if not settings:
+    if not llm_settings:
         return fallback
 
-    normalized = dict(settings)
+    normalized = dict(llm_settings)
     
     # Provider normalization
     if "small_model_provider" not in normalized:
@@ -222,7 +263,7 @@ def _normalize_llm_settings(settings: Optional[dict]) -> dict:
     return normalized
 
 
-def _normalize_tts_settings(settings: Optional[dict]) -> dict:
+def _normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
     """Return TTS settings with voice list, selected voice and style context."""
     full_voice_list = list(GOOGLE_TTS_VOICE_LIST)
     full_voice_catalog = [dict(entry) for entry in GOOGLE_TTS_VOICE_CATALOG]
@@ -239,10 +280,10 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
         "sample_context": "A resonant, authoritative voice. Cinematic, grand, and articulate. The tone is epic and wise, carrying the weight of history with a clear, commanding presence and immersive storytelling.",
         "speech_rate": 1.0
     }
-    if not settings:
+    if not tts_settings:
         return fallback
 
-    normalized = dict(settings)
+    normalized = dict(tts_settings)
 
     # Accept historical/alternate keys to avoid silently resetting model selection.
     if "selected_model" not in normalized:
@@ -290,7 +331,7 @@ def _normalize_tts_settings(settings: Optional[dict]) -> dict:
     return normalized
 
 
-def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
+def _normalize_t2i_settings(t2i_settings: Optional[dict]) -> dict:
     """Return T2I settings with separate providers."""
     fallback = {
         "simple_model": "",
@@ -307,10 +348,10 @@ def _normalize_t2i_settings(settings: Optional[dict]) -> dict:
         "image_quality": 85,
         "negative_prompt": None,
     }
-    if not settings:
+    if not t2i_settings:
         return fallback
 
-    normalized = dict(settings)
+    normalized = dict(t2i_settings)
     if "simple_model_provider" not in normalized:
         normalized["simple_model_provider"] = normalized.get("provider") or "openai"
     if "advanced_model_provider" not in normalized:
@@ -356,6 +397,22 @@ def _is_t2i_configured(user: User, db_keys: dict) -> bool:
         return bool(settings.get_env_api_key(provider)) or (db_keys and provider in db_keys)
 
     return has_key(simple_provider) and bool(simple_model)
+
+
+def _resolve_provider_api_key(provider: str, encrypted_keys: Optional[dict]) -> Optional[str]:
+    """Resolve provider API key from environment first, then encrypted DB keys."""
+    provider_key = (provider or "").lower()
+    env_key = settings.get_env_api_key(provider_key)
+    if env_key:
+        return env_key
+
+    if encrypted_keys and provider_key in encrypted_keys:
+        try:
+            return encryption_util.decrypt_key(encrypted_keys[provider_key])
+        except (ValueError, TypeError, KeyError):
+            logger.error("Failed to decrypt API key for provider: %s", provider_key)
+            return None
+    return None
 
 class ApiKeyPayload(BaseModel):
     provider: str
@@ -558,24 +615,24 @@ async def delete_api_key(
 ):
     """Deletes an encrypted API key for the authenticated user."""
     provider_lower = provider.lower()
-    logger.info(f"[Admin] Deleting API key for provider: {provider} (lower: {provider_lower})")
+    logger.info("[Admin] Deleting API key for provider: %s (lower: %s)", provider, provider_lower)
     
     # Block deletion for environment-configured keys
     if settings.get_env_api_key(provider_lower):
-        logger.warning(f"[Admin] Blocked deletion of env key: {provider_lower}")
+        logger.warning("[Admin] Blocked deletion of env key: %s", provider_lower)
         raise HTTPException(
             status_code=403, 
             detail=f"The API key for {provider} is managed via environment variables and cannot be deleted here."
         )
 
     user = await _resolve_global_settings_owner(db, current_user)
-    logger.info(f"[Admin] Settings owner for delete: {user.username}")
+    logger.info("[Admin] Settings owner resolved for delete operation")
     
     current_keys = user.encrypted_api_keys or {}
-    logger.info(f"[Admin] Current keys in DB: {list(current_keys.keys())}")
+    logger.info("[Admin] Current API key count in DB: %d", len(current_keys))
     
     if provider_lower not in current_keys:
-        logger.error(f"[Admin] Key not found for provider: {provider_lower}")
+        logger.error("[Admin] Key not found for provider: %s", provider_lower)
         raise HTTPException(status_code=404, detail=f"No key found for {provider}.")
 
     new_keys = dict(current_keys)
@@ -584,7 +641,7 @@ async def delete_api_key(
 
     await _broadcast_global_settings(db, user)
     await db.commit()
-    logger.info(f"[Admin] Successfully removed key for {provider_lower}")
+    logger.info("[Admin] Successfully removed key for %s", provider_lower)
     return {"status": "success", "message": f"{provider} key removed."}
 
 @router.post("/llm")
@@ -664,7 +721,7 @@ async def test_llm_connection(
         end_time = time.perf_counter()
         latency = round(end_time - start_time, 2)
         return {"status": "success", "message": response, "response_time": latency}
-    except Exception as e:
+    except (ValueError, RuntimeError, TypeError) as e:
         return {"status": "error", "message": str(e)}
 
 class TestVisionPayload(BaseModel):
@@ -689,7 +746,7 @@ async def test_vision_connection(
         api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider_key])
 
     try:
-        test_dir = os.path.join(settings.DATA_DIR, "scratch", "test_connection")
+        test_dir = _safe_data_path("scratch", "test_connection")
         os.makedirs(test_dir, exist_ok=True)
         provider_options = {"ollama_url": payload.ollama_url} if payload.ollama_url else {}
         
@@ -705,7 +762,7 @@ async def test_vision_connection(
             return {"status": "success", "message": "Image generation successful!", "image_url": img_url}
         else:
             return {"status": "error", "message": "Image generation failed."}
-    except Exception as e:
+    except (ValueError, RuntimeError, TypeError) as e:
         return {"status": "error", "message": str(e)}
 
 @router.post("/test-tts")
@@ -742,7 +799,7 @@ async def test_tts_connection(
         if not audio_url:
             return {"status": "error", "message": "Failed to generate test audio."}
         return {"status": "success", "audio_url": audio_url}
-    except Exception as e:
+    except (ValueError, RuntimeError, TypeError) as e:
         return {"status": "error", "message": str(e)}
 
 
@@ -794,12 +851,16 @@ async def generate_catalog_image(
     if not model:
         return {"status": "error", "message": "The 'Simple Model' for image generation is not configured. Please set it in Visual Preferences."}
         
-    api_key = MediaEngine._resolve_api_key(provider, user.encrypted_api_keys)
+    api_key = _resolve_provider_api_key(provider, user.encrypted_api_keys)
     if provider != "ollama" and not api_key:
         return {"status": "error", "message": f"No API key for {provider}"}
 
     try:
-        catalog_dir = os.path.join(settings.DATA_DIR, "catalog", payload.catalog_type)
+        catalog_type = _sanitize_path_component(payload.catalog_type)
+        if not catalog_type:
+            return {"status": "error", "message": "Invalid catalog type."}
+
+        catalog_dir = _safe_data_path("catalog", catalog_type)
         os.makedirs(catalog_dir, exist_ok=True)
         
         base_prompt = payload.prompt
@@ -810,23 +871,25 @@ async def generate_catalog_image(
                 base_prompt += f" Context: {payload.description}"
             base_prompt += " High quality, professional digital art, no text."
 
+        safe_target_id = _slugify(payload.target_id)
+
         img_url = await MediaEngine.generate_image(
             prompt=base_prompt,
             model=model,
             api_key=api_key,
             provider=provider,
             target_dir=catalog_dir,
-            filename=f"{payload.target_id}_{uuid.uuid4().hex[:8]}",
+            filename=f"{safe_target_id}_{uuid.uuid4().hex[:8]}",
             provider_options=t2i
         )
         
-        logger.info(f"Catalog generate result for '{payload.target_id}': img_url={img_url!r}")
+        logger.info("Catalog generate result for '%s': img_url=%r", payload.target_id, img_url)
         if img_url:
             return {"status": "success", "image_url": img_url}
         else:
             return {"status": "error", "message": "Generation failed: The provider returned no image data. Check your API logs or model configuration."}
-    except Exception as e:
-        logger.exception(f"Catalog generate exception for '{payload.target_id}'")
+    except (ValueError, RuntimeError, TypeError) as e:
+        logger.exception("Catalog generate exception for '%s'", payload.target_id)
         error_msg = str(e)
         if "OpenrouterException" in error_msg:
             try:
@@ -834,7 +897,7 @@ async def generate_catalog_image(
                 err_json = error_msg.split("-", 1)[1].strip()
                 err_data = json.loads(err_json)
                 error_msg = err_data.get("error", {}).get("message", error_msg)
-            except:
+            except (ValueError, IndexError, KeyError, TypeError):
                 pass
         return {"status": "error", "message": f"Generation Error: {error_msg}"}
 
@@ -851,19 +914,24 @@ async def upload_catalog_image(
     _ = db
     _ = current_user
     try:
-        catalog_dir = os.path.join(settings.DATA_DIR, "catalog", catalog_type)
+        safe_catalog_type = _sanitize_path_component(catalog_type)
+        if not safe_catalog_type:
+            return {"status": "error", "message": "Invalid catalog type."}
+
+        catalog_dir = _safe_data_path("catalog", safe_catalog_type)
         os.makedirs(catalog_dir, exist_ok=True)
         
-        ext = file.filename.split(".")[-1] if "." in file.filename else "png"
-        filename = f"{target_id}_{uuid.uuid4().hex[:8]}.{ext}"
-        filepath = os.path.join(catalog_dir, filename)
+        ext = _sanitize_image_extension(file.filename)
+        safe_target_id = _slugify(target_id)
+        filename = f"{safe_target_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        filepath = _ensure_within_data_dir(os.path.join(catalog_dir, filename))
         
         with open(filepath, "wb") as f:
             f.write(await file.read())
             
         rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
         return {"status": "success", "image_url": f"/data/{rel_path}"}
-    except Exception as e:
+    except (ValueError, RuntimeError, TypeError) as e:
         return {"status": "error", "message": str(e)}
 
 

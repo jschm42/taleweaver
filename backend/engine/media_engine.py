@@ -3,12 +3,16 @@ MediaEngine — Handles AI image generation for scenes and entities.
 Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imagen), while using the direct BFL API for Black Forest Labs.
 """
 import asyncio
+import base64
 import io
 import logging
 import os
+import re
+import shutil
 import time
 import uuid
-from typing import Any, Optional, Union
+from urllib.parse import urlsplit, urlunsplit
+from typing import Any
 
 import litellm
 import requests
@@ -32,22 +36,86 @@ BFL_API_BASE = "https://api.bfl.ai/v1"
 # Use centralized prompts
 NO_TEXT_IMAGE_PROMPT_SUFFIX = prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX
 
-import shutil
+
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    """Validate that a path resolves inside DATA_DIR and return its absolute form."""
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
+def _safe_data_path(*parts: str) -> str:
+    """Build a safe path under DATA_DIR."""
+    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
+
+
+def _normalize_output_filename(filename: str | None, extension: str) -> str:
+    """Return a sanitized output filename with a safe image extension."""
+    ext = "jpg" if extension.lower() == "jpeg" else extension.lower()
+    candidate = (filename or "").strip()
+    if not candidate:
+        return f"{uuid.uuid4()}.{ext}"
+
+    # Keep only the final segment to prevent directory traversal.
+    candidate = os.path.basename(candidate)
+    stem, original_ext = os.path.splitext(candidate)
+    stem = _SAFE_FILENAME_RE.sub("_", stem).strip("._")
+    if not stem:
+        stem = str(uuid.uuid4())
+
+    normalized_ext = original_ext.lower().lstrip(".")
+    if normalized_ext not in {"png", "jpg", "jpeg"}:
+        normalized_ext = ext
+    return f"{stem}.{normalized_ext}"
+
+
+def _redact_url_for_logs(url: str) -> str:
+    """Redact URL query/fragment so signed tokens are not logged."""
+    try:
+        parts = urlsplit(url or "")
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    except ValueError:
+        return "<invalid-url>"
+
+
+def _safe_prompt_summary(prompt: str) -> str:
+    """Return a non-sensitive summary of a prompt for logging."""
+    return f"len={len(prompt or '')}"
+
+
+def _sanitize_generation_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Return generation kwargs safe for logs."""
+    sanitized = dict(kwargs)
+    if "api_key" in sanitized:
+        sanitized["api_key"] = "<redacted>"
+    if "prompt" in sanitized:
+        sanitized["prompt"] = _safe_prompt_summary(str(sanitized.get("prompt") or ""))
+    if "messages" in sanitized:
+        sanitized["messages"] = "<redacted>"
+    return sanitized
 
 
 class MediaEngine:
     @staticmethod
     async def cleanup_adventure_assets(adventure_id: str):
         """Removes all generated assets for an adventure from disk."""
-        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id)
+        target_dir = _safe_data_path("adventures", "library", adventure_id)
         if os.path.exists(target_dir):
             try:
                 # Use a thread pool executor for blocking I/O if needed, 
                 # but for simplicity we'll just use shutil in this async context.
                 shutil.rmtree(target_dir)
-                logger.info(f"Cleaned up assets for adventure {adventure_id}")
-            except Exception as e:
-                logger.error(f"Failed to cleanup assets for adventure {adventure_id}: {e}")
+                logger.info("Cleaned up assets for adventure %s", adventure_id)
+            except OSError as e:
+                logger.error("Failed to cleanup assets for adventure %s: %s", adventure_id, e)
 
 
     @classmethod
@@ -57,7 +125,6 @@ class MediaEngine:
     @staticmethod
     def _sanitize_prompt(prompt: str) -> str:
         """Corrects common typos that trigger safety filters (e.g. 'raping' -> 'rapping')."""
-        import re
         # Case-insensitive replacement of 'raping' with 'rapping', but only if preceded by 'rap', 'battle', etc.
         # or as a standalone word that is clearly a typo in this context.
         # Actually, in a TTRPG/Creative context, 'raping' is almost always a typo for 'rapping'.
@@ -103,16 +170,16 @@ class MediaEngine:
         model: str,
         api_key: str,
         target_dir: str,
-        filename: Optional[str] = None,
-        provider_options: dict[str, Optional[Any]] = None,
-    ) -> Optional[str]:
+        filename: str | None = None,
+        provider_options: dict[str, Any | None] = None,
+    ) -> str | None:
         """Generate a BFL image by calling the REST API directly and polling for completion."""
         provider_options = provider_options or {}
         model_slug = MediaEngine._normalize_black_forest_labs_model(model)
         endpoint = f"{BFL_API_BASE}/{model_slug}"
 
         payload: dict[str, Any] = {"prompt": prompt[:1500]}
-        logger.info("BFL Submission payload (truncated prompt): %s", payload["prompt"])
+        logger.info("BFL submission payload prepared (prompt_%s)", _safe_prompt_summary(prompt))
         optional_fields = (
             "input_image",
             "input_image_2",
@@ -140,13 +207,13 @@ class MediaEngine:
             timeout=settings.VISUAL_TIMEOUT,
         )
         if response.status_code != 200:
-            logger.error("BFL image generation submit failed. status=%s body=%s", response.status_code, response.text)
+            logger.error("BFL image generation submit failed. status=%s", response.status_code)
             return None
 
         body = response.json()
         polling_url = body.get("polling_url")
         if not polling_url:
-            logger.error("BFL response did not include polling_url: %s", body)
+            logger.error("BFL response did not include polling_url")
             return None
 
         poll_deadline = time.monotonic() + 600.0
@@ -159,38 +226,37 @@ class MediaEngine:
             )
             if poll_response.status_code != 200:
                 logger.error(
-                    "BFL polling failed. status=%s body=%s",
+                    "BFL polling failed. status=%s",
                     poll_response.status_code,
-                    poll_response.text,
                 )
                 return None
 
             poll_body = poll_response.json()
             status = str(poll_body.get("status") or "").lower()
-            logger.info("BFL polling status for %s: %s", polling_url, status)
+            logger.info("BFL polling status: %s", status)
             if status == "ready":
                 result = poll_body.get("result") or {}
                 sample_url = result.get("sample")
                 if not sample_url:
-                    logger.error("BFL polling response missing result.sample: %s", poll_body)
+                    logger.error("BFL polling response missing result.sample")
                     return None
                 return await MediaEngine._save_remote_image(sample_url, target_dir, filename)
             
             if "moderated" in status:
-                logger.warning("BFL generation moderated: %s", poll_body)
+                logger.warning("BFL generation moderated")
                 raise ValueError(f"BFL Image Generation blocked by safety filter: {status}")
 
             if status in {"error", "failed", "expired", "task not found", "tasknotfound"}:
-                logger.error("BFL generation failed, expired or not found: %s", poll_body)
+                logger.error("BFL generation failed, expired or not found")
                 return None
 
             await asyncio.sleep(2.0)
 
-        logger.error("BFL polling timed out after 600s for prompt: %s", prompt)
+        logger.error("BFL polling timed out after 600s")
         return None
 
     @staticmethod
-    def _resolve_api_key(provider: str, api_keys_dict: dict) -> Optional[str]:
+    def _resolve_api_key(provider: str, api_keys_dict: dict) -> str | None:
         """Resolves API key by checking environment variables first, then the provided dictionary."""
         provider_key = (provider or "").lower()
         
@@ -203,8 +269,8 @@ class MediaEngine:
         if api_keys_dict and provider_key in api_keys_dict:
             try:
                 return encryption_util.decrypt_key(api_keys_dict[provider_key])
-            except Exception as e:
-                logger.error(f"Failed to decrypt API key for {provider_key}: {e}")
+            except (ValueError, TypeError, KeyError):
+                logger.error("Failed to decrypt API key for provider '%s'", provider_key)
                 return None
             
         return None
@@ -213,14 +279,14 @@ class MediaEngine:
     async def generate_image(
         prompt: str, 
         model: str, 
-        api_key: Optional[str], 
+        api_key: str | None, 
         provider: str = "openai",
-        adventure_id: Optional[str] = None,
-        target_dir: Optional[str] = None,
-        filename: Optional[str] = None,
-        provider_options: dict[str, Optional[Any]] = None,
-        style_instruction: Optional[str] = None,
-    ) -> Optional[str]:
+        adventure_id: str | None = None,
+        target_dir: str | None = None,
+        filename: str | None = None,
+        provider_options: dict[str, Any | None] = None,
+        style_instruction: str | None = None,
+    ) -> str | None:
         """Generates an image and saves it locally."""
         provider_key = (provider or "openai").lower()
         if not prompt or not model:
@@ -233,10 +299,10 @@ class MediaEngine:
             while prompt.endswith("."):
                 prompt = prompt[:-1].strip()
             prompt += f". Style: {style_instruction}."
-            logger.info(f"Style instruction injected: {style_instruction}")
+            logger.info("Style instruction injected")
 
         prompt = MediaEngine._apply_no_text_instruction(prompt)
-        logger.info(f"Final prompt for image generation: {prompt}")
+        logger.info("Image prompt prepared (%s)", _safe_prompt_summary(prompt))
 
         if provider_key != "ollama" and not api_key:
             # Try to resolve from ENV if not passed
@@ -245,7 +311,7 @@ class MediaEngine:
                 raise ValueError(f"Missing API key for image generation provider '{provider_key}'.")
 
         if provider_key == "ollama":
-            logger.info(f"Generating image with local Ollama: {prompt}")
+            logger.info("Generating image with local Ollama (%s)", _safe_prompt_summary(prompt))
             remote_prefixes = (
                 "openai/",
                 "openrouter/",
@@ -265,11 +331,18 @@ class MediaEngine:
         # Default target dir if not provided
         if target_dir is None:
             if adventure_id:
-                target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id)
+                target_dir = _safe_data_path("adventures", "library", adventure_id)
             else:
-                target_dir = os.path.join(settings.DATA_DIR, "adventures", "library")
+                target_dir = _safe_data_path("adventures", "library")
+        else:
+            target_dir = _ensure_within_data_dir(target_dir)
 
-        logger.info(f"Generating image with model {model} (provider: {provider_key}). Prompt: {prompt}")
+        logger.info(
+            "Generating image with model %s (provider: %s, prompt_%s)",
+            model,
+            provider_key,
+            _safe_prompt_summary(prompt),
+        )
         
         try:
             provider_options = provider_options or {}
@@ -277,7 +350,7 @@ class MediaEngine:
             # SPECIAL CASE: OpenRouter does not support /v1/images/generations.
             # It uses /v1/chat/completions with modalities=["image"].
             if provider_key == "openrouter":
-                logger.info(f"Using OpenRouter specialized image generation for model {model}")
+                logger.info("Using OpenRouter specialized image generation for model %s", model)
                 kwargs: dict[str, Any] = {
                     "model": f"openrouter/{model}" if not model.startswith("openrouter/") else model,
                     "messages": [{"role": "user", "content": prompt}],
@@ -296,7 +369,7 @@ class MediaEngine:
 
                 # Use completion instead of image_generation
                 response = MediaEngine._get_litellm().completion(**kwargs)
-                logger.info(f"OpenRouter completion response: {response}")
+                logger.info("OpenRouter completion finished")
                 
                 # OpenRouter returns images in the message content or as a specific field in some versions.
                 image_url = None
@@ -351,7 +424,6 @@ class MediaEngine:
                 
                 if not image_url and not b64_data:
                     # Fallback for string content
-                    import re
                     url_match = re.search(r'https?://[^\s)"\']+\.(?:jpg|jpeg|png|webp)', str(content))
                     if url_match:
                         image_url = url_match.group(0)
@@ -368,9 +440,9 @@ class MediaEngine:
                 if b64_data:
                     return await MediaEngine._save_b64_image(b64_data, target_dir, filename, image_format, image_quality)
                 
-                logger.info(f"OpenRouter content type: {type(content)}, value: {repr(content)[:500]}")
-                logger.warning(f"Could not find image URL or data in OpenRouter response content: {content}")
-                raise RuntimeError(f"OpenRouter generation failed to return an image. Response: {response}")
+                logger.info("OpenRouter response content type: %s", type(content).__name__)
+                logger.warning("Could not find image URL or image data in OpenRouter response")
+                raise RuntimeError("OpenRouter generation failed to return an image.")
 
             if provider_key == "black_forest_labs":
                 return await MediaEngine._generate_image_black_forest_labs_direct(
@@ -401,7 +473,7 @@ class MediaEngine:
                 ollama_url = (provider_options.get("ollama_url") or "http://localhost:11434").rstrip("/")
                 kwargs["api_base"] = ollama_url
 
-            logger.info(f"Final image generation kwargs: {kwargs}")
+            logger.info("Final image generation kwargs: %s", _sanitize_generation_kwargs(kwargs))
 
             # Call LiteLLM first - wrap in to_thread because LiteLLM image_generation is synchronous
             response = await asyncio.to_thread(
@@ -436,13 +508,13 @@ class MediaEngine:
                     return direct_result
                 raise RuntimeError("Ollama image generation returned no image payload.")
             else:
-                logger.error(f"No image data in response: {response}")
+                logger.error("No image data in provider response")
                 return None
 
         except Exception as e:
             error_str = str(e)
             if provider_key == "ollama":
-                logger.warning(f"LiteLLM ollama path failed ({error_str}); trying direct Ollama API fallback.")
+                logger.warning("LiteLLM ollama path failed; trying direct Ollama API fallback.")
                 direct_result = await MediaEngine._generate_image_ollama_direct(
                     prompt=prompt,
                     model=model,
@@ -460,16 +532,19 @@ class MediaEngine:
                 raise RuntimeError(
                     f"Ollama image generation failed for model '{model}'. "
                     f"Original error: {error_str}"
-                )
+                ) from e
             err_lower = error_str.lower()
             if "content moderated" in err_lower or "safety filter" in err_lower or "moderated" in err_lower:
-                logger.warning(f"Image generation was moderated (Safety Filter) for prompt: '{prompt}'. Error: {error_str}")
-                raise ValueError("Image generation was blocked by the AI provider's safety filter. Please adjust the description to avoid sensitive content.")
-            logger.error(f"Image generation failed for prompt: '{prompt}'. Error: {error_str}")
+                logger.warning("Image generation was moderated (Safety Filter).")
+                raise ValueError(
+                    "Image generation was blocked by the AI provider's safety filter. "
+                    "Please adjust the description to avoid sensitive content."
+                ) from e
+            logger.error("Image generation failed (%s)", type(e).__name__)
             raise
 
     @staticmethod
-    def _extract_image_payload(response: Any) -> tuple[Optional[str], Optional[str]]:
+    def _extract_image_payload(response: Any) -> tuple[str | None, str | None]:
         """Extract URL or base64 image payload from provider responses."""
         if not response:
             return None, None
@@ -510,13 +585,13 @@ class MediaEngine:
         model: str,
         ollama_url: str,
         target_dir: str,
-        filename: Optional[str] = None,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
-        steps: Optional[int] = None,
-        seed: Optional[int] = None,
-        negative_prompt: Optional[str] = None,
-    ) -> Optional[str]:
+        filename: str | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        steps: int | None = None,
+        seed: int | None = None,
+        negative_prompt: str | None = None,
+    ) -> str | None:
         """Generate an image through Ollama's local HTTP API."""
         try:
             base = ollama_url.rstrip("/")
@@ -547,9 +622,8 @@ class MediaEngine:
             response = await asyncio.to_thread(requests.post, endpoint, json=payload, timeout=120)
             if response.status_code != 200:
                 logger.error(
-                    "Ollama direct image generation failed. status=%s body=%s",
+                    "Ollama direct image generation failed. status=%s",
                     response.status_code,
-                    response.text,
                 )
                 return None
 
@@ -564,26 +638,22 @@ class MediaEngine:
             if b64_json:
                 return await MediaEngine._save_b64_image(b64_json, target_dir, filename, image_format, image_quality)
 
-            logger.error("Ollama response did not include image payload: %s", body)
+            logger.error("Ollama response did not include image payload")
             return None
-        except Exception:
+        except (requests.RequestException, OSError, TypeError, ValueError):
             logger.exception("Error during direct Ollama image generation")
             return None
 
     @staticmethod
-    async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
+    async def _save_b64_image(b64_data: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
         """Decodes and saves a base64 image string."""
-        import base64
-        import re
         try:
+            target_dir = _ensure_within_data_dir(target_dir)
             os.makedirs(target_dir, exist_ok=True)
             ext = "jpg" if image_format.lower() == "jpeg" else "png"
-            
-            final_filename = filename or f"{uuid.uuid4()}.{ext}"
-            if not any(final_filename.lower().endswith(e) for e in (".png", ".jpg", ".jpeg")):
-                final_filename += f".{ext}"
+            final_filename = _normalize_output_filename(filename, ext)
                 
-            filepath = os.path.join(target_dir, final_filename)
+            filepath = _ensure_within_data_dir(os.path.join(target_dir, final_filename))
             
             if b64_data.startswith("data:image/"):
                 if ";base64," in b64_data:
@@ -597,7 +667,7 @@ class MediaEngine:
             if padding_needed:
                 b64_data += '=' * (4 - padding_needed)
 
-            logger.info(f"Decoding b64 image (length: {len(b64_data)}, starts with: {b64_data[:30]}...)")
+            logger.info("Decoding base64 image payload (length=%d)", len(b64_data))
             image_bytes = base64.b64decode(b64_data)
             
             if image_format.lower() == "jpeg":
@@ -612,24 +682,22 @@ class MediaEngine:
             
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"
-        except Exception as e:
-            logger.exception(f"Error saving b64 image: {str(e)}")
+        except (ValueError, OSError, TypeError):
+            logger.exception("Error saving b64 image")
             return None
 
     @staticmethod
-    async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
+    async def _save_remote_image(url: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
         """Downloads a remote image and persists it in the specified directory."""
         try:
             response = await asyncio.to_thread(requests.get, url, timeout=30)
             if response.status_code == 200:
+                target_dir = _ensure_within_data_dir(target_dir)
                 os.makedirs(target_dir, exist_ok=True)
                 ext = "jpg" if image_format.lower() == "jpeg" else "png"
-                
-                final_filename = filename or f"{uuid.uuid4()}.{ext}"
-                if not any(final_filename.lower().endswith(e) for e in (".png", ".jpg", ".jpeg")):
-                    final_filename += f".{ext}"
+                final_filename = _normalize_output_filename(filename, ext)
                     
-                filepath = os.path.join(target_dir, final_filename)
+                filepath = _ensure_within_data_dir(os.path.join(target_dir, final_filename))
                 
                 if image_format.lower() == "jpeg":
                     img = Image.open(io.BytesIO(response.content))
@@ -644,14 +712,18 @@ class MediaEngine:
                 rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
                 return f"/data/{rel_path}"
             else:
-                logger.error(f"Failed to download image from {url}, status: {response.status_code}")
+                logger.error(
+                    "Failed to download image from %s, status: %s",
+                    _redact_url_for_logs(url),
+                    response.status_code,
+                )
                 return None
-        except Exception:
+        except (requests.RequestException, OSError, ValueError):
             logger.exception("Error saving remote image")
             return None
 
     @staticmethod
-    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = True) -> Optional[str]:
+    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: str | None = None, use_advanced_model: bool = True) -> str | None:
         """High-level wrapper for gameplay scene generation (uses Advanced Model by default)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -665,17 +737,17 @@ class MediaEngine:
             provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
             model = t2i.get("simple_model")
         
-        logger.info(f"Resolving scene generation: provider={provider}, model={model}")
+        logger.info("Resolving scene generation: provider=%s, model=%s", provider, model)
         
         if not model:
             raise ValueError("Missing image model configuration for scenes.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider != "ollama" and not api_key:
-            logger.error(f"API key resolution failed for provider: {provider} (Advanced Model/Scenes). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
+            logger.error("API key resolution failed for provider: %s (Advanced Model/Scenes)", provider)
             raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model). Please check your Visual Preferences in Admin settings.")
         
-        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id, "scenes")
+        target_dir = _safe_data_path("adventures", "library", adventure_id, "scenes")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
         
         # Use adventure_id as prefix for clarity
@@ -695,8 +767,9 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = False) -> Optional[str]:
+    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: str | None = None, use_advanced_model: bool = False) -> str | None:
         """High-level wrapper for NPC/Object generation (uses Simple Model by default)."""
+        _ = entity_type
         t2i = user_config.get("t2i_settings")
         if not t2i: 
             logger.warning("No T2I settings found in user_config")
@@ -709,17 +782,17 @@ class MediaEngine:
             provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
             model = t2i.get("simple_model")
         
-        logger.info(f"Resolving entity generation: provider={provider}, model={model}")
+        logger.info("Resolving entity generation: provider=%s, model=%s", provider, model)
         
         if not model:
             raise ValueError("Missing image model configuration for entities.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider != "ollama" and not api_key:
-            logger.error(f"API key resolution failed for provider: {provider} (Simple Model/Entities). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
+            logger.error("API key resolution failed for provider: %s (Simple Model/Entities)", provider)
             raise ValueError(f"Missing image configuration or API key for {provider} (Simple Model). Please check your Visual Preferences in Admin settings.")
         
-        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id, "entities")
+        target_dir = _safe_data_path("adventures", "library", adventure_id, "entities")
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
         
         # Use adventure_id and entity_id as prefix for clarity
@@ -740,7 +813,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
+    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: str | None = None) -> str | None:
         """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -750,17 +823,17 @@ class MediaEngine:
         provider = (t2i.get("advanced_model_provider") or t2i.get("provider", "openai")).lower()
         model = t2i.get("advanced_model")
         
-        logger.info(f"Resolving adventure cover generation: provider={provider}, model={model}")
+        logger.info("Resolving adventure cover generation: provider=%s, model=%s", provider, model)
         
         if not model:
             raise ValueError("Missing image model configuration for adventure cover.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
         if provider != "ollama" and not api_key:
-            logger.error(f"API key resolution failed for provider: {provider} (Advanced Model/Cover). Available keys: {list(api_keys.keys()) if api_keys else 'None'}")
+            logger.error("API key resolution failed for provider: %s (Advanced Model/Cover)", provider)
             raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model/Cover). Please check your Visual Preferences in Admin settings.")
         
-        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", adventure_id)
+        target_dir = _safe_data_path("adventures", "library", adventure_id)
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
         
         # Use adventure_id as prefix for clarity
@@ -788,15 +861,16 @@ class MediaEngine:
         adventure_id: str,
         entity_id: str,
         target_dir: str,
-        filename: Optional[str] = None,
+        filename: str | None = None,
         category: str = "",
-        theme: Optional[str] = None
+        theme: str | None = None
     ) -> str:
         """
         Generates a high-quality PIL-based placeholder image.
         Uses organic gradients for scenes and blob-icons for entities.
         """
         try:
+            target_dir = _ensure_within_data_dir(target_dir)
             os.makedirs(target_dir, exist_ok=True)
             
             # Determine format and extension
@@ -811,10 +885,9 @@ class MediaEngine:
             
             if not filename:
                 filename = f"placeholder_{entity_id}_{uuid.uuid4().hex[:6]}.{ext}"
-            elif not any(filename.lower().endswith(e) for e in (".png", ".jpg", ".jpeg")):
-                filename += f".{ext}"
+            filename = _normalize_output_filename(filename, ext)
             
-            filepath = os.path.join(target_dir, filename)
+            filepath = _ensure_within_data_dir(os.path.join(target_dir, filename))
             
             # Select strategy and theme based on category
             cat = category.upper()
@@ -851,8 +924,8 @@ class MediaEngine:
             
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"
-        except Exception as e:
-            logger.error(f"Failed to generate high-quality placeholder: {e}")
+        except (OSError, ValueError, TypeError) as e:
+            logger.error("Failed to generate high-quality placeholder: %s", e)
             # Fallback to SVG if PIL fails
             return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
 
@@ -868,18 +941,21 @@ class MediaEngine:
         Generates a procedural SVG placeholder as a fallback.
         Ensures consistent visual style for 'unmanifested' content.
         """
+        _ = adventure_id
         try:
+            target_dir = _ensure_within_data_dir(target_dir)
             os.makedirs(target_dir, exist_ok=True)
+            filename = os.path.basename(filename)
             if not filename.endswith(".svg"):
                 filename += ".svg"
             
-            filepath = os.path.join(target_dir, filename)
+            filepath = _ensure_within_data_dir(os.path.join(target_dir, filename))
             generator = SVGPlaceholderGenerator(width=1200, height=800, num_shapes=15)
             generator.save(filepath, title=entity_id, category=category)
             
             rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
             return f"/data/{rel_path}"
-        except Exception as e:
-            logger.error(f"Failed to generate SVG placeholder: {e}")
+        except (OSError, ValueError, TypeError) as e:
+            logger.error("Failed to generate SVG placeholder: %s", e)
             return ""
 

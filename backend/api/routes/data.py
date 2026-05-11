@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional
 import os
 import uuid
 import re
@@ -15,10 +15,26 @@ ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 def _get_extension(filename: str) -> str:
     return filename.rsplit(".", maxsplit=1)[-1].lower() if "." in filename else ""
 
+
+def _safe_data_path(*parts: str) -> str:
+    """Build a path under DATA_DIR and reject traversal."""
+    data_root = os.path.abspath(settings.DATA_DIR)
+    candidate = os.path.abspath(os.path.join(data_root, *parts))
+    try:
+        if os.path.commonpath([candidate, data_root]) != data_root:
+            raise HTTPException(status_code=400, detail="Invalid path traversal attempt")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid path traversal attempt") from exc
+    return candidate
+
 @router.post("/data/image")
 async def upload_image(
     file: UploadFile = File(...),
-    type: str = Query("character", description="Type of upload: 'character' or 'adventure'"),
+    upload_type: str = Query(
+        "character",
+        alias="type",
+        description="Type of upload: 'character' or 'adventure'",
+    ),
     adventure_id: Optional[str] = Query(None, description="Optional ID for adventure-specific subfolders")
 ):
     """
@@ -26,7 +42,7 @@ async def upload_image(
     - characters: saved to data/characters, max 256x256
     - adventures: saved to data/adventures/library/{adventure_id}, max 512x512
     """
-    if type not in {"character", "adventure"}:
+    if upload_type not in {"character", "adventure"}:
         raise HTTPException(status_code=400, detail="Invalid upload type")
 
     if not file.filename:
@@ -36,9 +52,9 @@ async def upload_image(
         raise HTTPException(status_code=400, detail="Unsupported file extension. Use jpg, png, or webp.")
 
     # Determine target directory
-    if type == "character":
+    if upload_type == "character":
         subfolder = "characters"
-        target_dir = os.path.join(settings.DATA_DIR, subfolder)
+        target_dir = _safe_data_path(subfolder)
     else:
         if adventure_id:
             # Security: Validate adventure_id to prevent path traversal
@@ -47,26 +63,20 @@ async def upload_image(
             subfolder = f"adventures/library/{adventure_id}"
         else:
             subfolder = "adventures/library"
-        target_dir = os.path.join(settings.DATA_DIR, subfolder)
-    
-    # Final safety check: ensure target_dir is still within DATA_DIR
-    target_dir = os.path.abspath(target_dir)
-    data_dir_abs = os.path.abspath(settings.DATA_DIR)
-    if not target_dir.startswith(data_dir_abs):
-        raise HTTPException(status_code=400, detail="Invalid path traversal attempt")
+        target_dir = _safe_data_path(subfolder)
     
     os.makedirs(target_dir, exist_ok=True)
 
     # Generate a unique filename
     filename = f"{uuid.uuid4()}.{ext}"
-    filepath = os.path.join(target_dir, filename)
+    filepath = _safe_data_path(subfolder, filename)
 
     try:
         # Read the image using Pillow
         image = Image.open(file.file)
         
         # Max dimensions based on type
-        max_size = (256, 256) if type == "character" else (512, 512)
+        max_size = (256, 256) if upload_type == "character" else (512, 512)
         
         # Convert to RGB if needed
         if image.mode in ("RGBA", "P"):
@@ -82,4 +92,4 @@ async def upload_image(
         return {"url": url}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}") from e

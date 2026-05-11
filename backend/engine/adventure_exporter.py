@@ -16,6 +16,29 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
 
+
+def _ensure_within_data_dir(path: str) -> str:
+    """Validate that a path resolves inside DATA_DIR and return absolute path."""
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
+def _safe_data_path(*parts: str) -> str:
+    """Build a safe path rooted at DATA_DIR."""
+    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
+
+
+def _safe_zip_asset_name(path: str) -> str:
+    """Return a flattened safe asset name for zip entries."""
+    base = os.path.basename(path or "")
+    return base or "asset"
+
 class AdventureExporter:
     @staticmethod
     async def build_full_manifest(db: AsyncSession, template_id: str) -> dict[str, Any]:
@@ -78,7 +101,6 @@ class AdventureExporter:
                 "completed_condition": adv.completed_condition,
                 "gameover_condition": adv.gameover_condition,
                 "tts_director_notes": adv.tts_director_notes,
-                "original_prompt": adv.original_prompt,
                 "starting_timestamp": adv.starting_timestamp,
                 "is_adventure_generator": adv.is_adventure_generator,
             },
@@ -118,10 +140,10 @@ class AdventureExporter:
         manifest = await AdventureExporter.build_full_manifest(db, template_id)
         
         # Gather local assets
-        adventure_dir = os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
+        adventure_dir = _safe_data_path("adventures", "library", template_id)
         if not os.path.exists(adventure_dir):
             # Legacy fallback for pre-migration adventures.
-            adventure_dir = os.path.join(settings.DATA_DIR, "adventures", template_id)
+            adventure_dir = _safe_data_path("adventures", template_id)
         asset_mapping = {} # local_path -> zip_path
         
         # Update manifest to point to relative paths in the zip
@@ -131,20 +153,24 @@ class AdventureExporter:
             # Convert URL to local path relative to DATA_DIR
             # URL format is /data/path/to/file.ext
             rel_path = path.replace("/data/", "", 1).lstrip("/")
-            local_full = os.path.join(settings.DATA_DIR, rel_path)
+            try:
+                local_full = _ensure_within_data_dir(os.path.join(settings.DATA_DIR, rel_path))
+            except ValueError:
+                logger.warning("Skipping unsafe asset path during ADZ export: %s", path)
+                return path
             
             if os.path.exists(local_full):
-                fname = os.path.basename(local_full)
+                fname = _safe_zip_asset_name(local_full)
                 zip_rel = f"assets/{fname}"
                 asset_mapping[local_full] = zip_rel
                 return zip_rel
             
             # Fallback: search in adventure_dir if not found directly 
             # (handles cases where path might be different but file exists there)
-            fname = os.path.basename(path)
-            for root, dirs, files in os.walk(adventure_dir):
+            fname = _safe_zip_asset_name(path)
+            for root, _dirs, files in os.walk(adventure_dir):
                 if fname in files:
-                    local_full = os.path.join(root, fname)
+                    local_full = _ensure_within_data_dir(os.path.join(root, fname))
                     zip_rel = f"assets/{fname}"
                     asset_mapping[local_full] = zip_rel
                     return zip_rel
@@ -173,7 +199,8 @@ class AdventureExporter:
             # 2. Add Assets
             for local_full, zip_rel in asset_mapping.items():
                 if os.path.exists(local_full):
-                    zip_file.write(local_full, zip_rel)
+                    safe_local_full = _ensure_within_data_dir(local_full)
+                    zip_file.write(safe_local_full, zip_rel)
                     
         return zip_buffer.getvalue()
 

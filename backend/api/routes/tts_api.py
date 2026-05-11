@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -128,7 +128,7 @@ async def generate_tts(
     
     # Log provider and model
     logger.info("TTS provider: %s, model: %s", provider, model)
-    logger.info("[API] TTS Request: provider=%s, model=%s, text='%s...'", provider, model, payload.text[:50])
+    logger.info("[API] TTS Request: provider=%s, model=%s, text_len=%d", provider, model, len(payload.text or ""))
 
     normalized_adventure_id = payload.adventure_id
     normalized_session_id = payload.session_id
@@ -228,21 +228,17 @@ async def test_tts_connection_v2(
     if use_vocal_tags:
         test_text = "[excited] Tale Weaver connection test successful!"
 
-    
-    try:
-        audio_url = await TTSEngine.generate_speech(
-            text=test_text,
-            provider=provider,
-            voice=tts_settings.get("selected_voice", "Puck"),
-            elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
-            use_vocal_tags=tts_settings.get("use_vocal_tags", True),
-            api_key=api_key,
-            model_name=tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview"),
-            speed=float(tts_settings.get("speech_rate", 1.0)),
-        )
-        if not audio_url:
-            return {"status": "error", "message": "Failed to generate test audio."}
-        return {"status": "success", "audio_url": audio_url}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    audio_url = await TTSEngine.generate_speech(
+        text=test_text,
+        provider=provider,
+        voice=tts_settings.get("selected_voice", "Puck"),
+        elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
+        use_vocal_tags=tts_settings.get("use_vocal_tags", True),
+        api_key=api_key,
+        model_name=tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview"),
+        speed=float(tts_settings.get("speech_rate", 1.0)),
+    )
+    if not audio_url:
+        return {"status": "error", "message": "Failed to generate test audio."}
+    return {"status": "success", "audio_url": audio_url}
 

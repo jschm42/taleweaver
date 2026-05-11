@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
@@ -21,6 +21,18 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_join(base_dir: str, *parts: str) -> str | None:
+    """Safely join path parts and ensure result stays inside base_dir."""
+    base_abs = os.path.abspath(base_dir)
+    candidate = os.path.abspath(os.path.join(base_abs, *parts))
+    try:
+        if os.path.commonpath([candidate, base_abs]) != base_abs:
+            return None
+    except ValueError:
+        return None
+    return candidate
 
 # Import all models so SQLAlchemy metadata registers them before create_all
 import backend.models.adventure_template
@@ -44,7 +56,7 @@ from backend.api.routes import (
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     """Manages application startup and shutdown lifecycle."""
     # Startup: create DB tables
     async with engine.begin() as conn:
@@ -159,13 +171,13 @@ if os.path.exists("frontend_dist"):
     @app.get("/assets/{path:path}")
     async def serve_assets(path: str):
         # 1. Try backend static assets (like catalog images)
-        backend_asset = os.path.join("backend/static/assets", path)
-        if os.path.isfile(backend_asset):
+        backend_asset = _safe_join("backend/static/assets", path)
+        if backend_asset and os.path.isfile(backend_asset):
             return FileResponse(backend_asset)
         
         # 2. Try frontend built assets (JS, CSS)
-        frontend_asset = os.path.join("frontend_dist/assets", path)
-        if os.path.isfile(frontend_asset):
+        frontend_asset = _safe_join("frontend_dist/assets", path)
+        if frontend_asset and os.path.isfile(frontend_asset):
             return FileResponse(frontend_asset)
             
         return {"error": "Asset not found"}
@@ -174,8 +186,8 @@ if os.path.exists("frontend_dist"):
     @app.get("/{catchall:path}")
     async def serve_spa(catchall: str):
         # Check if the specific file exists in frontend_dist (e.g. favicon.ico)
-        full_path = os.path.join("frontend_dist", catchall)
-        if catchall and os.path.isfile(full_path):
+        full_path = _safe_join("frontend_dist", catchall)
+        if catchall and full_path and os.path.isfile(full_path):
             return FileResponse(full_path)
             
         # Otherwise serve the index.html for the SPA
