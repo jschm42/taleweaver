@@ -77,6 +77,28 @@ def _normalize_output_filename(filename: str | None, extension: str) -> str:
     return f"{stem}.{normalized_ext}"
 
 
+def _resolve_output_dir(target_dir: str) -> str:
+    """Resolve an output directory to a validated location inside DATA_DIR."""
+    candidate = str(target_dir or "").strip()
+    if not candidate:
+        raise ValueError("Target directory is required.")
+    if os.path.isabs(candidate):
+        return _ensure_within_data_dir(candidate)
+
+    parts = [part for part in re.split(r"[\\/]+", candidate) if part and part not in {".", ".."}]
+    if not parts:
+        raise ValueError("Invalid target directory.")
+    return _safe_data_path(*parts)
+
+
+def _build_output_filepath(target_dir: str, filename: str | None, extension: str) -> str:
+    """Build a validated output file path inside DATA_DIR."""
+    resolved_dir = _resolve_output_dir(target_dir)
+    os.makedirs(resolved_dir, exist_ok=True)
+    safe_filename = _normalize_output_filename(filename, extension)
+    return _ensure_within_data_dir(os.path.join(resolved_dir, safe_filename))
+
+
 def _redact_url_for_logs(url: str) -> str:
     """Redact URL query/fragment so signed tokens are not logged."""
     try:
@@ -335,7 +357,7 @@ class MediaEngine:
             else:
                 target_dir = _safe_data_path("adventures", "library")
         else:
-            target_dir = _ensure_within_data_dir(target_dir)
+            target_dir = _resolve_output_dir(target_dir)
 
         logger.info(
             "Generating image with model %s (provider: %s, prompt_%s)",
@@ -648,12 +670,8 @@ class MediaEngine:
     async def _save_b64_image(b64_data: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
         """Decodes and saves a base64 image string."""
         try:
-            target_dir = _ensure_within_data_dir(target_dir)
-            os.makedirs(target_dir, exist_ok=True)
             ext = "jpg" if image_format.lower() == "jpeg" else "png"
-            final_filename = _normalize_output_filename(filename, ext)
-                
-            filepath = _ensure_within_data_dir(os.path.join(target_dir, final_filename))
+            filepath = _build_output_filepath(target_dir, filename, ext)
             
             if b64_data.startswith("data:image/"):
                 if ";base64," in b64_data:
@@ -692,12 +710,8 @@ class MediaEngine:
         try:
             response = await asyncio.to_thread(requests.get, url, timeout=30)
             if response.status_code == 200:
-                target_dir = _ensure_within_data_dir(target_dir)
-                os.makedirs(target_dir, exist_ok=True)
                 ext = "jpg" if image_format.lower() == "jpeg" else "png"
-                final_filename = _normalize_output_filename(filename, ext)
-                    
-                filepath = _ensure_within_data_dir(os.path.join(target_dir, final_filename))
+                filepath = _build_output_filepath(target_dir, filename, ext)
                 
                 if image_format.lower() == "jpeg":
                     img = Image.open(io.BytesIO(response.content))

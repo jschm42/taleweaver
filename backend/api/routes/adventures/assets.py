@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import os
+import re
 import uuid
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -22,6 +23,68 @@ from backend.models.user import User
 
 router = APIRouter(prefix="/{template_id}/visuals", tags=["Assets"])
 logger = logging.getLogger(__name__)
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
+    return slug.strip("-") or "item"
+
+
+def _sanitize_path_component(value: str) -> Optional[str]:
+    candidate = (value or "").strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
+def _safe_data_path(*parts: str) -> str:
+    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
+
+
+def _sanitize_image_extension(filename: Optional[str]) -> str:
+    if not filename or "." not in filename:
+        return "png"
+    ext = filename.rsplit(".", 1)[-1].strip().lower()
+    return ext if ext in _SAFE_IMAGE_EXTENSIONS else "png"
+
+
+def _build_uploaded_visual_path(template_id: str, target_type: str, target_id: str, original_filename: Optional[str]) -> str:
+    safe_template_id = _sanitize_path_component(template_id)
+    if not safe_template_id:
+        raise ValueError("Invalid adventure template identifier.")
+
+    base_storage_path = _safe_data_path("adventures", "library", safe_template_id, "visuals")
+    file_ext = _sanitize_image_extension(original_filename)
+    safe_target_id = _slugify(target_id)
+
+    if target_type == "cover":
+        storage_path = base_storage_path
+        filename = f"cover_{safe_target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
+    else:
+        storage_path = _ensure_within_data_dir(os.path.join(base_storage_path, target_type))
+        filename = f"{safe_target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
+
+    os.makedirs(storage_path, exist_ok=True)
+    return _ensure_within_data_dir(os.path.join(storage_path, filename))
 
 class RegenerateVisualRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
@@ -115,14 +178,14 @@ async def regenerate_visual(
 
         await db.commit()
         return {"status": "success", "image_url": image_url}
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Visual generation timed out.")
-    except ValueError as e:
-        logger.warning(f"Visual regeneration blocked/invalid: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except asyncio.TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Visual generation timed out.") from exc
+    except ValueError as exc:
+        logger.warning("Visual regeneration blocked/invalid: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid visual regeneration request.") from exc
+    except Exception as exc:
         logger.exception("Visual regeneration failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Visual generation failed.") from exc
 
 @router.post("/suggest-prompt", response_model=SuggestPromptResponse)
 async def suggest_prompt(
@@ -142,7 +205,7 @@ async def suggest_prompt(
     name = ""
     description = ""
 
-    logger.info(f"Suggesting prompt for {payload.target_type} ({payload.target_id}) in adventure {template_id}")
+    logger.info("Suggesting prompt for %s (%s) in adventure %s", payload.target_type, payload.target_id, template_id)
 
     if payload.target_type == "cover":
         name = adv.title
@@ -166,10 +229,10 @@ async def suggest_prompt(
             name = entity.name
             description = entity.description
 
-    logger.info(f"Resolved name: '{name}', description length: {len(description) if description else 0}")
+    logger.info("Resolved name '%s', description length: %d", name, len(description) if description else 0)
 
     if not description:
-        logger.warning(f"No description found for {payload.target_type} {payload.target_id}")
+        logger.warning("No description found for %s %s", payload.target_type, payload.target_id)
         return SuggestPromptResponse(suggested_prompt="")
 
     # Enforce small model for prompt optimization
@@ -216,17 +279,12 @@ async def upload_visual(
 
     try:
         content = await file.read()
-        file_ext = file.filename.split(".")[-1] if "." in file.filename else "png"
-        
-        filename = f"{target_type}_{target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
-        storage_path = os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "visuals")
-        os.makedirs(storage_path, exist_ok=True)
-        
-        full_path = os.path.join(storage_path, filename)
+        full_path = _build_uploaded_visual_path(template_id, target_type, target_id, file.filename)
         with open(full_path, "wb") as f:
             f.write(content)
             
-        relative_url = f"/data/adventures/library/{template_id}/visuals/{filename}"
+        rel_path = os.path.relpath(full_path, settings.DATA_DIR).replace("\\", "/")
+        relative_url = f"/data/{rel_path}"
         
         if target_type == "cover":
             adv.image_url = relative_url
@@ -242,8 +300,8 @@ async def upload_visual(
             if entity: entity.image_url = relative_url
             
         await db.commit()
-        return {"status": "success", "image_url": relative_url}
-    except Exception as e:
-        logger.error(f"Failed to upload visual for {template_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"status": "uploaded", "target_type": target_type, "image_url": relative_url}
+    except Exception as exc:
+        logger.exception("Failed to upload visual for %s", template_id)
+        raise HTTPException(status_code=500, detail="Visual upload failed.") from exc
 

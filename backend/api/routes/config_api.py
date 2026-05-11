@@ -118,6 +118,27 @@ def _sanitize_image_extension(filename: Optional[str]) -> str:
     return ext if ext in _SAFE_IMAGE_EXTENSIONS else "png"
 
 
+def _route_error_response(operation: str, message: str, exc: Exception) -> dict[str, str]:
+    """Log internal exception details while returning a generic client-safe message."""
+    logger.exception("%s failed", operation, exc_info=exc)
+    return {"status": "error", "message": message}
+
+
+def _build_catalog_upload_path(catalog_type: str, target_id: str, original_filename: Optional[str]) -> str:
+    """Create a validated file path for uploaded catalog images."""
+    safe_catalog_type = _sanitize_path_component(catalog_type)
+    if not safe_catalog_type:
+        raise ValueError("Invalid catalog type.")
+
+    catalog_dir = _safe_data_path("catalog", safe_catalog_type)
+    os.makedirs(catalog_dir, exist_ok=True)
+
+    ext = _sanitize_image_extension(original_filename)
+    safe_target_id = _slugify(target_id)
+    filename = f"{safe_target_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    return _ensure_within_data_dir(os.path.join(catalog_dir, filename))
+
+
 from backend.core.catalog_defaults import DEFAULT_IMAGE_STYLES, DEFAULT_TONES
 
 
@@ -721,8 +742,12 @@ async def test_llm_connection(
         end_time = time.perf_counter()
         latency = round(end_time - start_time, 2)
         return {"status": "success", "message": response, "response_time": latency}
-    except (ValueError, RuntimeError, TypeError) as e:
-        return {"status": "error", "message": str(e)}
+    except (ValueError, RuntimeError, TypeError) as exc:
+        return _route_error_response(
+            "LLM connection test",
+            "Connection test failed. Check provider settings and server logs.",
+            exc,
+        )
 
 class TestVisionPayload(BaseModel):
     model: str
@@ -762,8 +787,12 @@ async def test_vision_connection(
             return {"status": "success", "message": "Image generation successful!", "image_url": img_url}
         else:
             return {"status": "error", "message": "Image generation failed."}
-    except (ValueError, RuntimeError, TypeError) as e:
-        return {"status": "error", "message": str(e)}
+    except (ValueError, RuntimeError, TypeError) as exc:
+        return _route_error_response(
+            "Vision connection test",
+            "Image connection test failed. Check provider settings and server logs.",
+            exc,
+        )
 
 @router.post("/test-tts")
 async def test_tts_connection(
@@ -799,8 +828,12 @@ async def test_tts_connection(
         if not audio_url:
             return {"status": "error", "message": "Failed to generate test audio."}
         return {"status": "success", "audio_url": audio_url}
-    except (ValueError, RuntimeError, TypeError) as e:
-        return {"status": "error", "message": str(e)}
+    except (ValueError, RuntimeError, TypeError) as exc:
+        return _route_error_response(
+            "TTS connection test",
+            "TTS connection test failed. Check provider settings and server logs.",
+            exc,
+        )
 
 
 @router.post("/image-styles")
@@ -888,18 +921,12 @@ async def generate_catalog_image(
             return {"status": "success", "image_url": img_url}
         else:
             return {"status": "error", "message": "Generation failed: The provider returned no image data. Check your API logs or model configuration."}
-    except (ValueError, RuntimeError, TypeError) as e:
-        logger.exception("Catalog generate exception for '%s'", payload.target_id)
-        error_msg = str(e)
-        if "OpenrouterException" in error_msg:
-            try:
-                import json
-                err_json = error_msg.split("-", 1)[1].strip()
-                err_data = json.loads(err_json)
-                error_msg = err_data.get("error", {}).get("message", error_msg)
-            except (ValueError, IndexError, KeyError, TypeError):
-                pass
-        return {"status": "error", "message": f"Generation Error: {error_msg}"}
+    except (ValueError, RuntimeError, TypeError) as exc:
+        return _route_error_response(
+            "Catalog image generation",
+            "Generation failed. Check provider settings and server logs.",
+            exc,
+        )
 
 
 @router.post("/catalog/upload")
@@ -914,25 +941,19 @@ async def upload_catalog_image(
     _ = db
     _ = current_user
     try:
-        safe_catalog_type = _sanitize_path_component(catalog_type)
-        if not safe_catalog_type:
-            return {"status": "error", "message": "Invalid catalog type."}
-
-        catalog_dir = _safe_data_path("catalog", safe_catalog_type)
-        os.makedirs(catalog_dir, exist_ok=True)
-        
-        ext = _sanitize_image_extension(file.filename)
-        safe_target_id = _slugify(target_id)
-        filename = f"{safe_target_id}_{uuid.uuid4().hex[:8]}.{ext}"
-        filepath = _ensure_within_data_dir(os.path.join(catalog_dir, filename))
+        filepath = _build_catalog_upload_path(catalog_type, target_id, file.filename)
         
         with open(filepath, "wb") as f:
             f.write(await file.read())
             
         rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
         return {"status": "success", "image_url": f"/data/{rel_path}"}
-    except (ValueError, RuntimeError, TypeError) as e:
-        return {"status": "error", "message": str(e)}
+    except (ValueError, RuntimeError, TypeError) as exc:
+        return _route_error_response(
+            "Catalog image upload",
+            "Upload failed. Verify the catalog type and file, then try again.",
+            exc,
+        )
 
 
 @router.post("/game")

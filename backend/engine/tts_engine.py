@@ -1,4 +1,5 @@
-from typing import Optional, Union
+import binascii
+from typing import Optional
 import asyncio
 import base64
 import logging
@@ -127,6 +128,34 @@ def _tts_timeout_seconds(text: str) -> float:
     timeout = base_timeout + (chunks * per_1k_chars)
     return max(30.0, min(timeout, max_timeout))
 
+
+def _strip_vocal_tags(text: str) -> str:
+    """Remove simple bracketed vocal tags without regex backtracking."""
+    if not text:
+        return ""
+
+    result: list[str] = []
+    square_depth = 0
+    paren_depth = 0
+
+    for char in text:
+        if char == "[":
+            square_depth += 1
+            continue
+        if char == "]" and square_depth > 0:
+            square_depth -= 1
+            continue
+        if char == "(":
+            paren_depth += 1
+            continue
+        if char == ")" and paren_depth > 0:
+            paren_depth -= 1
+            continue
+        if square_depth == 0 and paren_depth == 0:
+            result.append(char)
+
+    return "".join(result).strip()
+
 def _add_wav_header(pcm_data: bytes, sample_rate: int = 24000) -> bytes:
     """Adds a WAV header to raw PCM data (Linear 16-bit)."""
     num_channels = 1
@@ -212,6 +241,7 @@ def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[
     If adventure_id + session_id are known, store clips under that concrete session.
     Otherwise, keep legacy global fallback for compatibility.
     """
+    _ = adventure_id
     safe_session_id = _sanitize_path_component(session_id)
     if session_id and not safe_session_id:
         logger.warning("Invalid session_id for audio output path; using global audio fallback.")
@@ -222,6 +252,7 @@ def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[
 
 def _resolve_audio_public_url(adventure_id: Optional[str], filename: str, session_id: Optional[str] = None) -> str:
     """Return static URL for generated audio based on storage location."""
+    _ = adventure_id
     if session_id:
         return f"/data/adventures/sessions/{session_id}/tts/{filename}"
     return f"/data/audio/{filename}"
@@ -233,6 +264,23 @@ def _public_url_from_filepath(filepath: str) -> str:
     abs_path = _ensure_within_data_dir(filepath)
     rel_path = os.path.relpath(abs_path, data_root)
     return f"/data/{rel_path.replace(os.sep, '/')}"
+
+
+def _build_audio_output_path(
+    adventure_id: Optional[str],
+    session_id: Optional[str],
+    extension: str,
+) -> str:
+    """Create a validated output file path for synthesized audio."""
+    _ = adventure_id
+    normalized_ext = str(extension or "wav").strip().lower()
+    if normalized_ext not in {"mp3", "wav", "ogg"}:
+        normalized_ext = "wav"
+
+    audio_dir = _ensure_within_data_dir(_resolve_audio_output_dir(adventure_id, session_id=session_id))
+    os.makedirs(audio_dir, exist_ok=True)
+    filename = f"{uuid.uuid4()}.{normalized_ext}"
+    return _ensure_within_data_dir(os.path.join(audio_dir, filename))
 
 class TTSEngine:
     """
@@ -265,18 +313,14 @@ class TTSEngine:
         """
         logger.info("[TTS] generate_speech called for provider: %s, text length: %d", provider, len(text or ''))
         if not api_key:
-            logger.error(f"No API key provided for {provider} TTS.")
+            logger.error("No API key provided for %s TTS.", provider)
             return None
 
         # Handle vocal tags toggle
         if not use_vocal_tags:
             logger.info("[TTS] Vocal tags are DISABLED. Stripping tags from input text.")
-            # Simple regex to remove common vocal tags like [Laughs], (Sighs), etc. if they are in brackets
-            import re
             original_len = len(text or "")
-            text = re.sub(r'\[.*?\]', '', text)
-            text = re.sub(r'\(.*?\)', '', text)
-            text = text.strip()
+            text = _strip_vocal_tags(text or "")
             logger.info("[TTS] Text stripped: %d -> %d characters", original_len, len(text))
         else:
             logger.info("[TTS] Vocal tags are ENABLED. Keeping tags in input text.")
@@ -351,7 +395,7 @@ class TTSEngine:
                 response = await client.post(url, json=data, headers=headers, timeout=timeout)
                 
                 if response.status_code != 200:
-                    logger.error(f"ElevenLabs TTS Error {response.status_code}: {response.text}")
+                    logger.error("ElevenLabs TTS Error %s: %s", response.status_code, response.text)
                     return None
                 
                 audio_bytes = response.content
@@ -360,18 +404,14 @@ class TTSEngine:
                 logger.error("ElevenLabs TTS returned zero audio bytes.")
                 return None
 
-            audio_dir = _resolve_audio_output_dir(adventure_id, session_id=session_id)
-            os.makedirs(audio_dir, exist_ok=True)
-
-            filename = f"{uuid.uuid4()}.mp3"
-            filepath = _ensure_within_data_dir(os.path.join(audio_dir, filename))
+            filepath = _build_audio_output_path(adventure_id, session_id, "mp3")
 
             with open(filepath, "wb") as f:
                 f.write(audio_bytes)
 
             return _public_url_from_filepath(filepath)
 
-        except Exception:
+        except (httpx.HTTPError, OSError, ValueError):
             logger.exception("Failed to generate speech with ElevenLabs")
             return None
 
@@ -403,7 +443,8 @@ class TTSEngine:
 
         # Removed multi-speaker support as we transition to single speaker model.
         # However, we keep the signature for internal use in _synthesize_google.
-        valid_speaker_voices: dict[str, str] = {}
+        _ = speed
+        _ = use_vocal_tags
         
         # Build structured prompt sections
         prompt_sections = []
@@ -551,7 +592,7 @@ class TTSEngine:
 
                 try:
                     audio_chunks.append(base64.b64decode(candidate_b64))
-                except Exception:
+                except (binascii.Error, ValueError, TypeError):
                     logger.warning("Failed to decode inline audio chunk (mime=%s).", candidate_mime)
 
             if not audio_chunks:
@@ -582,12 +623,7 @@ class TTSEngine:
             elif "ogg" in normalized_mime_type:
                 ext = "ogg"
 
-            # Save to concrete session directory when session_id is available.
-            audio_dir = _resolve_audio_output_dir(adventure_id, session_id=session_id)
-            os.makedirs(audio_dir, exist_ok=True)
-
-            filename = f"{uuid.uuid4()}.{ext}"
-            filepath = _ensure_within_data_dir(os.path.join(audio_dir, filename))
+            filepath = _build_audio_output_path(adventure_id, session_id, ext)
 
             with open(filepath, "wb") as f:
                 f.write(audio_bytes)
@@ -602,9 +638,7 @@ class TTSEngine:
                 model_name,
             )
             raise TTSTimeoutError("Timed out while generating speech.") from exc
-        except TTSRateLimitError:
-            raise
-        except Exception:
+        except (httpx.HTTPError, OSError, ValueError, TypeError):
             logger.exception("Failed to generate speech with Gemini")
             return None
 

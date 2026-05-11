@@ -3,6 +3,7 @@ import os
 import sys
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 # Add root to path so we can import backend
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -34,9 +35,9 @@ async def reset_admin(username="admin", password="password"):
                 db.add(user)
             
             await db.commit()
-            print(f"Successfully set '{username}' with role 'admin' and password '{password}'.")
-        except Exception as e:
-            print(f"Error: {e}")
+            print(f"Successfully set '{username}' with role 'admin'.")
+        except SQLAlchemyError as exc:
+            print(f"Error: {exc}")
             await db.rollback()
 
 if __name__ == "__main__":
