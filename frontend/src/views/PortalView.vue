@@ -16,6 +16,7 @@ import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
 import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
 import AboutModal from '@/components/portal/AboutModal.vue'
+import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
 
 const { route, router, activeSection, pushSection } = usePortalSectionRouting()
 const showAboutModal = ref(false)
@@ -64,6 +65,10 @@ const {
   startLoadingWords,
   stopLoadingWords,
   setLoadingState,
+  showConflictModal,
+  activeConflict,
+  closeConflictModal,
+  confirmConflictOverwrite,
 } = usePortalData()
 
 watch(importInput, () => undefined)
@@ -239,6 +244,14 @@ onUnmounted(() => {
       <AboutModal
         :isOpen="showAboutModal"
         @close="showAboutModal = false"
+      />
+
+      <ImportConflictModal
+        v-if="showConflictModal"
+        :conflict="activeConflict"
+        :is-importing="isImporting"
+        @close="closeConflictModal"
+        @confirm="confirmConflictOverwrite"
       />
     </Teleport>
 

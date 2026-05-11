@@ -19,8 +19,19 @@ from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.utils.text_utils import generate_adventure_id, generate_session_id
+from backend.engine.media_engine import MediaEngine
 
 logger = logging.getLogger(__name__)
+
+
+class AdventureConflictError(Exception):
+    """Raised when an adventure being imported already exists."""
+    def __init__(self, title: str, existing_version: Optional[str], new_version: Optional[str], template_id: str):
+        self.title = title
+        self.existing_version = existing_version
+        self.new_version = new_version
+        self.template_id = template_id
+        super().__init__(f"Adventure '{title}' already exists.")
 
 
 def _build_local_default_user() -> User:
@@ -58,19 +69,34 @@ class AdventureTemplateImporter:
                 logger.error(f"Error during import of {file_path}: {e}")
 
     @staticmethod
-    async def import_file(db: AsyncSession, file_path: str, owner_id: Optional[str] = None, allow_session: bool = True) -> bool:
+    async def delete_template_for_overwrite(db: AsyncSession, template_id: str):
+        """Helper to cleanly delete a template and its assets before an overwrite import."""
+        # 1. Delete assets from disk
+        await MediaEngine.cleanup_adventure_assets(template_id)
+        
+        # 2. Delete from DB (cascades should handle the rest if configured, 
+        # but for safety we use the existing delete logic if available)
+        # Assuming a simple delete for now, or calling a shared delete method.
+        # For now, let's just delete the template and assume cascades.
+        template = await db.get(AdventureTemplate, template_id)
+        if template:
+            await db.delete(template)
+            await db.flush()
+
+    @staticmethod
+    async def import_file(db: AsyncSession, file_path: str, owner_id: Optional[str] = None, allow_session: bool = True, overwrite: bool = False) -> bool:
         """Imports a single file (.adv or .adz)."""
         if file_path.endswith(".adz"):
             with open(file_path, "rb") as f:
-                return await AdventureTemplateImporter.import_adz(db, f.read(), owner_id=owner_id)
+                return await AdventureTemplateImporter.import_adz(db, f.read(), owner_id=owner_id, overwrite=overwrite)
         elif file_path.endswith(".adv"):
             with open(file_path, encoding="utf-8") as f:
                 payload = json.load(f)
-                return await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=owner_id, allow_session=allow_session)
+                return await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=owner_id, allow_session=allow_session, overwrite=overwrite)
         return False
 
     @staticmethod
-    async def import_adz(db: AsyncSession, adz_data: bytes, owner_id: Optional[str] = None) -> bool:
+    async def import_adz(db: AsyncSession, adz_data: bytes, owner_id: Optional[str] = None, overwrite: bool = False) -> bool:
         """Logic for ADZ (ZIP) import, including assets."""
         try:
             zip_buffer = io.BytesIO(adz_data)
@@ -104,9 +130,18 @@ class AdventureTemplateImporter:
                     query = query.where(AdventureTemplate.title == adv_data["title"])
                 
                 existing_res = await db.execute(query)
-                if existing_res.scalars().first():
-                    logger.info(f"AdventureTemplate '{adv_data['title']}' (origin: {origin_id}) already exists. Skipping.")
-                    return False
+                existing = existing_res.scalars().first()
+                if existing:
+                    if not overwrite:
+                        raise AdventureConflictError(
+                            title=adv_data["title"],
+                            existing_version=existing.version,
+                            new_version=adv_data.get("version"),
+                            template_id=existing.id
+                        )
+                    else:
+                        logger.info(f"Overwriting existing adventure '{adv_data['title']}'...")
+                        await AdventureTemplateImporter.delete_template_for_overwrite(db, existing.id)
 
 
                 # Create new template ID
@@ -261,13 +296,15 @@ class AdventureTemplateImporter:
                 from backend.engine.media_engine import MediaEngine
                 await MediaEngine.ensure_thumbnails(new_template_id)
                 return True
+        except AdventureConflictError:
+            raise
         except Exception:
             logger.exception("ADZ Import failed")
             await db.rollback()
             return False
 
     @staticmethod
-    async def import_adv_manifest(db: AsyncSession, payload: dict[str, Any], owner_id: Optional[str] = None, allow_session: bool = True) -> bool:
+    async def import_adv_manifest(db: AsyncSession, payload: dict[str, Any], owner_id: Optional[str] = None, allow_session: bool = True, overwrite: bool = False) -> bool:
         """Logic for pure .adv (JSON) import."""
         try:
             try:
@@ -289,9 +326,18 @@ class AdventureTemplateImporter:
                 query = query.where(AdventureTemplate.title == title)
             
             existing_res = await db.execute(query)
-            if existing_res.scalars().first():
-                logger.info(f"AdventureTemplate '{title}' (origin: {origin_id}) already exists. Skipping.")
-                return False
+            existing = existing_res.scalars().first()
+            if existing:
+                if not overwrite:
+                    raise AdventureConflictError(
+                        title=title,
+                        existing_version=existing.version,
+                        new_version=payload.get("version") or (payload.get("adventure", {}).get("version") if is_session else None),
+                        template_id=existing.id
+                    )
+                else:
+                    logger.info(f"Overwriting existing adventure '{title}'...")
+                    await AdventureTemplateImporter.delete_template_for_overwrite(db, existing.id)
 
             user = None
             if owner_id:
@@ -488,6 +534,8 @@ class AdventureTemplateImporter:
                 from backend.engine.media_engine import MediaEngine
                 await MediaEngine.ensure_thumbnails(new_template.id)
                 return True
+        except AdventureConflictError:
+            raise
         except Exception:
             logger.exception("ADV Import failed")
             await db.rollback()

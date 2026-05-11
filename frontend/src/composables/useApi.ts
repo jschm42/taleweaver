@@ -61,7 +61,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       try {
         const parsed = JSON.parse(bodyText)
         if (parsed && typeof parsed.detail === 'string') {
-          detail = parsed.detail
+          // If the JSON contains more than just the detail (e.g. conflict_info),
+          // keep the full JSON string so the caller can parse it.
+          if (Object.keys(parsed).length > 1) {
+            detail = bodyText
+          } else {
+            detail = parsed.detail
+          }
         }
       } catch {
         // Keep plain-text fallback when response is not JSON.
@@ -276,22 +282,24 @@ export const api = {
   },
 
   /** Import an ADZ file via FormData. */
-  async importAdz(file: File): Promise<{ status: string; adventure_id: string }> {
+  async importAdz(file: File, overwrite: boolean = false): Promise<{ status: string; adventure_id: string }> {
     const formData = new FormData()
     formData.append('file', file)
 
-    return request('/adventures/import/adz', {
+    const url = `/adventures/import/adz${overwrite ? '?overwrite=true' : ''}`
+    return request(url, {
       method: 'POST',
       body: formData,
     })
   },
 
   /** Import an ADV blueprint file via FormData. */
-  async importAdv(file: File): Promise<{ status: string; adventure_id: string }> {
+  async importAdv(file: File, overwrite: boolean = false): Promise<{ status: string; adventure_id: string }> {
     const formData = new FormData()
     formData.append('file', file)
 
-    return request('/adventures/import/adv', {
+    const url = `/adventures/import/adv${overwrite ? '?overwrite=true' : ''}`
+    return request(url, {
       method: 'POST',
       body: formData,
     })
