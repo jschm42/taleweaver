@@ -212,6 +212,7 @@ class GameTurnManager:
                 {
                     "id": entity.id,
                     "name": entity.name,
+                    "scene_id": entity.current_scene_id,
                     "position": entity.spatial_position,
                 }
             )
@@ -219,15 +220,37 @@ class GameTurnManager:
                 break
         return reduced_npcs
 
-    def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict]) -> str:
+    @staticmethod
+    def _build_chat_progression_scenes(adventure: AdventureTemplate) -> list[dict]:
+        reduced_scenes = []
+        for scene in (adventure.scenes or []):
+            reduced_scenes.append({
+                "id": scene.get("id"),
+                "label": scene.get("name") or scene.get("label")
+            })
+        return reduced_scenes
+
+    def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict], scenes: list[dict]) -> str:
         notes = self._get_gm_notes()
         if len(notes) > GM_NOTES_PROMPT_MAX_ITEMS:
             notes = notes[-GM_NOTES_PROMPT_MAX_ITEMS:]
+        
+        current_scene_label = "Unknown"
+        if self.state and self.state.current_scene_id:
+            # Try to find label from adventure or db
+            for s in (self.adventure.scenes or []):
+                if s.get("id") == self.state.current_scene_id:
+                    current_scene_label = s.get("name") or s.get("label")
+                    break
+
         return prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT.format(
             quests_json=self._compact_json(quests),
             awards_json=self._compact_json(awards),
             npcs_json=self._compact_json(npcs),
+            scenes_json=self._compact_json(scenes),
             notes_json=self._compact_json(notes),
+            current_scene_id=self.state.current_scene_id,
+            current_scene_label=current_scene_label,
         )
 
     def _get_gm_notes(self) -> list[str]:
@@ -2143,11 +2166,13 @@ class GameTurnManager:
             reduced_quests = self._build_chat_progression_quests()
             reduced_awards = self._build_chat_progression_awards(mechanics_awards)
             reduced_npcs = self._build_chat_progression_npcs(entities)
+            reduced_scenes = self._build_chat_progression_scenes(self.adventure)
 
             progression_prompt = self._build_chat_rule_pass_prompt(
                 quests=reduced_quests,
                 awards=reduced_awards,
                 npcs=reduced_npcs,
+                scenes=reduced_scenes,
             )
 
             if language:
