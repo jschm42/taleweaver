@@ -1296,6 +1296,8 @@ async def test_import_adv_file_keeps_quests_npcs_and_initial_scene(client: Async
         None,
     )
     assert template_row is not None
+    assert template_row.get("is_ready") is True
+    assert template_row.get("creation_status") == "Ready"
     adventure_id = template_row["template_id"]
 
     debug_resp = await client.get(f"/api/adventures/{adventure_id}/debug")
@@ -1370,6 +1372,8 @@ async def test_import_adv_file_missing_start_scene_id_uses_fallback(client: Asyn
         None,
     )
     assert template_row is not None
+    assert template_row.get("is_ready") is True
+    assert template_row.get("creation_status") == "Ready"
     adventure_id = template_row["template_id"]
 
     debug_resp = await client.get(f"/api/adventures/{adventure_id}/debug")

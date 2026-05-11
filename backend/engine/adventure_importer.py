@@ -240,6 +240,11 @@ class AdventureTemplateImporter:
                     user=user,
                     existing_images=image_urls
                 )
+
+                # apply_manifest toggles readiness during persistence; imports must remain ready.
+                new_template.is_ready = True
+                new_template.creation_status = "Ready"
+                new_template.creation_error = None
                 
                 if adv_data.get("image_url") in existing_images_mapping:
                     new_template.image_url = existing_images_mapping[adv_data["image_url"]]
@@ -339,6 +344,11 @@ class AdventureTemplateImporter:
                 await db.flush()
                 
                 await WorldGenerator.apply_manifest(db, new_template.id, data, user=user)
+
+                # Imported session bundles should not enter generation polling state.
+                new_template.is_ready = True
+                new_template.creation_status = "Ready"
+                new_template.creation_error = None
                 
                 old_state = data.get("game_state") or data.get("session_state")
                 old_avatar = data.get("avatar")
@@ -462,6 +472,11 @@ class AdventureTemplateImporter:
                         o["start_scene_id"] = o.get("current_scene_id") or o.get("scene_id") or default_scene_id
 
                 await WorldGenerator.apply_manifest(db, new_template.id, manifest, user=user)
+
+                # Imports populate world data directly; mark template as fully ready.
+                new_template.is_ready = True
+                new_template.creation_status = "Ready"
+                new_template.creation_error = None
                 await db.commit()
                 return True
         except Exception:
