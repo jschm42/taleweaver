@@ -58,9 +58,9 @@ class Settings(BaseSettings):
     # Storage configuration
     DATA_DIR: str = "data"
     
-    VISUAL_TIMEOUT: int = 120
+    VISUAL_TIMEOUT: int = 300
     INTELLIGENCE_TIMEOUT: int = 60
-    WORLDBUILDING_TIMEOUT: int = 180
+    WORLDBUILDING_TIMEOUT: int = 600
     TTS_TIMEOUT_SECONDS: int = 120
     TTS_TIMEOUT_PER_1K_CHARS: int = 20
     TTS_TIMEOUT_MAX_SECONDS: int = 300
