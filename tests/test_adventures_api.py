@@ -6,6 +6,7 @@ sub-routes. All tests follow the Arrange-Act-Assert pattern.
 """
 import json
 import os
+import zipfile
 from io import BytesIO
 
 import pytest
@@ -1446,6 +1447,67 @@ async def test_import_adv_file_npc_inventory_dict_entries(client: AsyncClient):
         None,
     )
     assert template_row is not None
+
+
+async def test_import_adz_file_marks_template_ready(client: AsyncClient):
+    """ADZ import should create a ready template instead of entering generation polling state."""
+    adz_manifest = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADZ Ready Import Quest",
+            "context": "Imported from bundled ADZ",
+            "strict_rules": True,
+            "rule_enforcement_mode": "rpg",
+            "time_per_turn": 5,
+        },
+        "protagonist": {
+            "name": "Archive Runner",
+            "role": "Tester",
+            "description": "Verifies ADZ readiness after import.",
+            "inventory": [],
+            "equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ENTRY", "name": "Entry Hall", "description": "A calm starting area."},
+            {"id": "LIBRARY", "name": "Library", "description": "Shelves filled with lore."},
+        ],
+        "exits": [
+            {
+                "from_scene_id": "ENTRY",
+                "to_scene_id": "LIBRARY",
+                "label": "archway",
+                "is_locked": False,
+                "lock_description": None,
+            }
+        ],
+        "npcs": [],
+        "objects": [],
+    }
+
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("adventure.adv", json.dumps(adz_manifest))
+    zip_buffer.seek(0)
+
+    resp = await client.post(
+        "/api/adventures/import/adz",
+        files={"file": ("ready_import.adz", zip_buffer.getvalue(), "application/zip")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("status") == "success"
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    template_row = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADZ Ready Import Quest"),
+        None,
+    )
+    assert template_row is not None
+    assert template_row.get("is_ready") is True
+    assert template_row.get("creation_status") == "Ready"
 
 
 async def test_import_adv_preserves_item_stats_from_starting_inventory_dict(client: AsyncClient):
