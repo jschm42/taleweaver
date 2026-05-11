@@ -435,6 +435,11 @@ class GameTurnManager:
                 return
             else:
                 logger.warning(f"[Turn {self.game_id}] Debug command ignored: TALEWEAVER_DEBUG_ENABLED is False.")
+                # If debug is disabled, treat it as an unknown command to the user
+                unknown_msg = "Unknown command: /debug. Type /help for a list of commands."
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=unknown_msg))
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': unknown_msg})}\n\n"
+                return
 
         # 1. Combat & Loot Handling (Active Phase)
         if self._has_combat_phase():
@@ -450,7 +455,7 @@ class GameTurnManager:
             
         is_rule_pass = False
         if user_msg.startswith("/"):
-            response = CommandParser.parse_command(self.avatar, user_msg)
+            response = CommandParser.parse_command(self.avatar, user_msg, debug_enabled=settings.TALEWEAVER_DEBUG_ENABLED)
             
             if response == "[RULE_PASS]":
                 is_rule_pass = True

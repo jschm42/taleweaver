@@ -113,8 +113,15 @@ function navigateHistory(direction: 'up' | 'down') {
 const filteredCommands = computed(() => {
   if (!inputText.value.startsWith('/')) return []
   const q = inputText.value.toLowerCase().slice(1)
-  if (!q) return commands
-  return commands.filter(c => c.label.toLowerCase().includes(q))
+  
+  const debugEnabled = !!props.sheet?.debug_mode
+  let list = commands
+  if (!debugEnabled) {
+    list = list.filter(c => !c.id.startsWith('/debug'))
+  }
+  
+  if (!q) return list
+  return list.filter(c => c.label.toLowerCase().includes(q))
 })
 
 watch(inputText, (newVal) => {
@@ -309,6 +316,10 @@ function formatBolds(text: string) {
     const lowered = normalized.toLowerCase()
     for (const [key, value] of Object.entries(props.npcMetadata || {})) {
       if (String(key).toLowerCase() === lowered) {
+        return { key, data: value }
+      }
+      // Fallback: search by name property within the metadata object
+      if (value && typeof value === 'object' && value.name && String(value.name).toLowerCase() === lowered) {
         return { key, data: value }
       }
     }
@@ -756,6 +767,7 @@ onUnmounted(() => {
             v-if="showCommandPopup && filteredCommands.length > 0"
             :query="inputText"
             :active-index="commandPopupIndex"
+            :debug-mode="!!sheet?.debug_mode"
             @select="selectCommand"
             @close="showCommandPopup = false"
             @update:active-index="val => commandPopupIndex = val"

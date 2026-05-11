@@ -60,7 +60,6 @@ async def _get_npc_metadata(template_id: str, db: AsyncSession) -> dict:
             "entity_type": "NPC",
         }
         metadata[npc.id] = data
-        metadata[npc.name] = data
     return metadata
 
 async def _enrich_map_nodes(template_id: str, nodes: dict, db: AsyncSession) -> dict:

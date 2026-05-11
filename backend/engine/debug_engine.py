@@ -48,7 +48,8 @@ class DebugEngine:
             
             lines = [f"--- DEBUG: ENTITIES IN {scene_id} ---"]
             for e in entities:
-                lines.append(f"- [{e.entity_type}] {e.name} (ID: {e.id}): {e.description[:50]}...")
+                pos = f" @ {e.spatial_position}" if e.spatial_position else ""
+                lines.append(f"- [{e.entity_type}] {e.name} (ID: {e.id}){pos}: {e.description[:50]}...")
             return "\n".join(lines)
 
         elif sub == "plot" or sub == "context":
@@ -69,6 +70,19 @@ class DebugEngine:
                 f"Total Scenes: {len(s_count.scalars().all())}\n"
                 f"Total Entities: {len(e_count.scalars().all())}\n"
                 f"Total Connections: {len(ex_count.scalars().all())}"
+            )
+            
+        elif sub == "session":
+            res = await db.execute(select(WorldScene).where(WorldScene.id == scene_id, WorldScene.session_id == state.session_id))
+            scene = res.scalars().first()
+            label = scene.label if scene else "Unknown"
+            
+            return (
+                f"--- DEBUG: SESSION STATE ---\n"
+                f"Session ID: {state.session_id}\n"
+                f"Current Scene: {label} (ID: {scene_id})\n"
+                f"In-Game Time: {state.in_game_time} minutes\n"
+                f"Debug Logging: {'ON' if state.is_debug_enabled else 'OFF'}"
             )
             
         elif sub == "log":
@@ -273,18 +287,33 @@ class DebugEngine:
             res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.entity_type == "NPC"))
             npcs = res.scalars().all()
             if not npcs: return "DEBUG: No NPCs found for this session."
+            
+            res_scenes = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
+            scene_map = {s.id: s.label for s in res_scenes.scalars().all()}
+
             lines = ["--- DEBUG: ALL NPCs ---"]
             for n in npcs:
-                lines.append(f"- {n.name} (ID: {n.id}) @ {n.current_scene_id}")
+                loc_label = scene_map.get(n.current_scene_id, n.current_scene_id)
+                pos = f" ({n.spatial_position})" if n.spatial_position else ""
+                lines.append(f"- {n.name} (ID: {n.id}) @ {loc_label}{pos}")
             return "\n".join(lines)
 
         elif sub == "items":
             res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.entity_type == "OBJECT"))
             items = res.scalars().all()
             if not items: return "DEBUG: No items found for this session."
+            
+            res_scenes = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
+            scene_map = {s.id: s.label for s in res_scenes.scalars().all()}
+
             lines = ["--- DEBUG: ALL ITEMS ---"]
             for i in items:
-                loc = "Inventory" if i.is_in_inventory else f"Scene: {i.current_scene_id}"
+                if i.is_in_inventory:
+                    loc = "Inventory"
+                else:
+                    loc_label = scene_map.get(i.current_scene_id, i.current_scene_id)
+                    pos = f" ({i.spatial_position})" if i.spatial_position else ""
+                    loc = f"Scene: {loc_label}{pos}"
                 lines.append(f"- {i.name} (ID: {i.id}) @ {loc}")
             return "\n".join(lines)
 
@@ -333,5 +362,5 @@ class DebugEngine:
             if len(parts) < 2: return "DEBUG ERROR: Usage: /debug gen_item [PROMPT]"
             return f"[TRIGGER_GEN_ITEM] {parts[1]}"
 
-        return "DEBUG USAGE: /debug [szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID | gen_item PROMPT]"
+        return "DEBUG USAGE: /debug [session | szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID | gen_item PROMPT]"
 

@@ -173,27 +173,34 @@ class AdventureLogic:
 
     @staticmethod
     async def build_session_entities(db: AsyncSession, state: SessionState) -> list[dict[str, Any]]:
-        """Fetches and processes entities for the current scene, applying session overrides."""
-        ent_res = await db.execute(
-            select(WorldEntity).where(
-                WorldEntity.session_id == state.session_id, 
-                WorldEntity.current_scene_id == state.current_scene_id
-            )
-        )
-        base_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in ent_res.scalars().all()]
-        
-        session_overrides = state.entity_states or {}
-        entities = []
-        for ent in base_entities:
-            eid = ent.get("id")
-            
-            if eid in session_overrides:
-                ent.update(session_overrides[eid])
-            
-            if ent.get("is_hidden") or ent.get("is_in_inventory"):
-                continue
-            entities.append(ent)
-        return entities
+      """Fetches and processes entities for the current session, filtering for the current scene."""
+      # Fetch all entities for this session to handle movement correctly
+      ent_res = await db.execute(
+          select(WorldEntity).where(
+              WorldEntity.session_id == state.session_id
+          )
+      )
+      base_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in ent_res.scalars().all()]
+      
+      session_overrides = state.entity_states or {}
+      entities = []
+      for ent in base_entities:
+          eid = ent.get("id")
+          
+          # Apply session overrides (HP, position, scene_id, etc.)
+          if eid in session_overrides:
+              ent.update(session_overrides[eid])
+          
+          # Filter for the CURRENT scene
+          if ent.get("current_scene_id") != state.current_scene_id:
+              continue
+          
+          # Filter out hidden or inventory items
+          if ent.get("is_hidden") or ent.get("is_in_inventory"):
+              continue
+              
+          entities.append(ent)
+      return entities
 
     @staticmethod
     async def build_sheet_snapshot(avatar: Avatar, state: SessionState, db: AsyncSession) -> dict:
