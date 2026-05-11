@@ -50,7 +50,6 @@ For the best experience, we recommend using high-tier models, especially for **W
 
 > [!WARNING]
 Use providers with a good latency for the world generation to avoid long wait times. 
-
 > **Small / Preview Models:** Models like `Gemini 1.5 Flash` or `GPT-4o-mini` are excellent for quick chat responses but may occasionally struggle with the complex, deep JSON schemas required for generating entire worlds. If world generation fails repeatedly, try a more powerful "Pro" or "Sonnet" class model.
 
 ## 1. The Vision
