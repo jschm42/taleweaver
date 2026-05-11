@@ -44,12 +44,20 @@ class DebugEngine:
         elif sub == "entities":
             res = await db.execute(select(WorldEntity).where(WorldEntity.current_scene_id == scene_id, WorldEntity.session_id == state.session_id))
             entities = res.scalars().all()
-            if not entities: return "--- DEBUG: No entities or objects found in this scene. ---"
+            
+            overrides = state.entity_states or {}
+            processed = []
+            for e in entities:
+                data = {c.name: getattr(e, c.name) for c in e.__table__.columns}
+                if e.id in overrides: data.update(overrides[e.id])
+                processed.append(data)
+
+            if not processed: return "--- DEBUG: No entities or objects found in this scene. ---"
             
             lines = [f"--- DEBUG: ENTITIES IN {scene_id} ---"]
-            for e in entities:
-                pos = f" @ {e.spatial_position}" if e.spatial_position else ""
-                lines.append(f"- [{e.entity_type}] {e.name} (ID: {e.id}){pos}: {e.description[:50]}...")
+            for e in processed:
+                pos = f" @ {e.get('spatial_position')}" if e.get('spatial_position') else ""
+                lines.append(f"- [{e.get('entity_type')}] {e.get('name')} (ID: {e.get('id')}){pos}: {str(e.get('description', ''))[:50]}...")
             return "\n".join(lines)
 
         elif sub == "plot" or sub == "context":
@@ -285,36 +293,52 @@ class DebugEngine:
 
         elif sub == "npcs":
             res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.entity_type == "NPC"))
-            npcs = res.scalars().all()
-            if not npcs: return "DEBUG: No NPCs found for this session."
+            npcs_db = res.scalars().all()
+            if not npcs_db: return "--- DEBUG: No NPCs found for this session. ---"
+            
+            overrides = state.entity_states or {}
+            npcs = []
+            for e in npcs_db:
+                data = {c.name: getattr(e, c.name) for c in e.__table__.columns}
+                if e.id in overrides: data.update(overrides[e.id])
+                npcs.append(data)
             
             res_scenes = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
             scene_map = {s.id: s.label for s in res_scenes.scalars().all()}
 
             lines = ["--- DEBUG: ALL NPCs ---"]
             for n in npcs:
-                loc_label = scene_map.get(n.current_scene_id, n.current_scene_id)
-                pos = f" ({n.spatial_position})" if n.spatial_position else ""
-                lines.append(f"- {n.name} (ID: {n.id}) @ {loc_label}{pos}")
+                curr_scene = n.get("current_scene_id")
+                loc_label = scene_map.get(curr_scene, curr_scene)
+                pos = f" ({n.get('spatial_position')})" if n.get('spatial_position') else ""
+                lines.append(f"- {n.get('name')} (ID: {n.get('id')}) @ {loc_label}{pos}")
             return "\n".join(lines)
 
         elif sub == "items":
             res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.entity_type == "OBJECT"))
-            items = res.scalars().all()
-            if not items: return "DEBUG: No items found for this session."
+            items_db = res.scalars().all()
+            if not items_db: return "--- DEBUG: No items found for this session. ---"
+            
+            overrides = state.entity_states or {}
+            items = []
+            for e in items_db:
+                data = {c.name: getattr(e, c.name) for c in e.__table__.columns}
+                if e.id in overrides: data.update(overrides[e.id])
+                items.append(data)
             
             res_scenes = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
             scene_map = {s.id: s.label for s in res_scenes.scalars().all()}
 
             lines = ["--- DEBUG: ALL ITEMS ---"]
             for i in items:
-                if i.is_in_inventory:
+                if i.get("is_in_inventory"):
                     loc = "Inventory"
                 else:
-                    loc_label = scene_map.get(i.current_scene_id, i.current_scene_id)
-                    pos = f" ({i.spatial_position})" if i.spatial_position else ""
+                    curr_scene = i.get("current_scene_id")
+                    loc_label = scene_map.get(curr_scene, curr_scene)
+                    pos = f" ({i.get('spatial_position')})" if i.get('spatial_position') else ""
                     loc = f"Scene: {loc_label}{pos}"
-                lines.append(f"- {i.name} (ID: {i.id}) @ {loc}")
+                lines.append(f"- {i.get('name')} (ID: {i.get('id')}) @ {loc}")
             return "\n".join(lines)
 
         elif sub == "exits":

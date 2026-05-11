@@ -2561,8 +2561,13 @@ class GameTurnManager:
             for move in event.moved_entities:
                 eid = move.entity_id
                 if eid not in states: states[eid] = {}
-                if move.to_scene_id: states[eid]["current_scene_id"] = move.to_scene_id
-                if move.to_spatial_position: states[eid]["spatial_position"] = move.to_spatial_position
+                if move.to_scene_id: 
+                    states[eid]["current_scene_id"] = move.to_scene_id
+                    # If moving to a new scene, clear spatial position unless a new one is provided
+                    if not move.to_spatial_position:
+                        states[eid]["spatial_position"] = None
+                if move.to_spatial_position: 
+                    states[eid]["spatial_position"] = move.to_spatial_position
                 state_dirty = True
 
         if event.updated_entities:
