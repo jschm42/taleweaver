@@ -5,14 +5,14 @@ import { api } from '@/composables/useApi'
 import { authState } from '@/store/auth'
 import type { AdventureTemplateSummary, GameSession } from '@/types'
 import PortalSidebar from '@/components/portal/PortalSidebar.vue'
-import PendingAdventureCard from '@/components/portal/PendingAdventureCard.vue'
-import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
+import LlmWarningBanner from '@/components/portal/LlmWarningBanner.vue'
 import PortalLibraryToolbar from '@/components/portal/PortalLibraryToolbar.vue'
+import AdventureLibraryGrid from '@/components/portal/AdventureLibraryGrid.vue'
+import GameSessionsGrid from '@/components/portal/GameSessionsGrid.vue'
 import UserProfileContent from '@/components/portal/UserProfileContent.vue'
-import AdventureTemplateCard from '@/components/portal/AdventureTemplateCard.vue'
-import GameSessionCard from '@/components/portal/GameSessionCard.vue'
-import PortalCreateAdventureCard from '@/components/portal/PortalCreateAdventureCard.vue'
-import ImportExamplesCard from '@/components/portal/ImportExamplesCard.vue'
+import PortalFooter from '@/components/portal/PortalFooter.vue'
+
+import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
 import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
 import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
@@ -605,22 +605,8 @@ onUnmounted(() => {
     <main class="flex-1 flex flex-col relative overflow-hidden">
       <!-- Scrollable Content -->
       <div class="flex-1 overflow-y-auto" :class="activeSection !== 'profile' ? 'p-10' : ''">
-        <!-- LLM Warning Banner -->
-        <div v-if="configState.isLoaded && !configState.hasLlmConfig && activeSection !== 'profile'" 
-             class="mb-8 p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col md:flex-row items-center justify-between gap-6 animate-pulse-subtle">
-          <div class="flex items-center gap-5">
-            <div class="w-14 h-14 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500 text-2xl shadow-lg shadow-amber-500/10">
-              <i class="ra ra-warning"></i>
-            </div>
-            <div>
-              <h3 class="text-amber-500 font-black uppercase tracking-widest text-sm mb-1">Intelligence Required</h3>
-              <p class="text-slate-400 text-sm max-w-xl">No AI provider has been fully configured yet. Adventures cannot be generated or played without an active LLM connection.</p>
-            </div>
-          </div>
-          <router-link to="/admin" class="px-6 py-3 rounded-xl bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-[0.2em] hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 whitespace-nowrap">
-            Configure Now
-          </router-link>
-        </div>
+        
+        <LlmWarningBanner :active-section="activeSection" />
 
         <PortalLibraryToolbar
           v-if="activeSection !== 'profile'"
@@ -638,33 +624,16 @@ onUnmounted(() => {
         </div>
 
         <div v-else>
-          <div v-if="activeSection === 'templates'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-            <PortalCreateAdventureCard @click="openCreateModal" />
-            
-            <ImportExamplesCard 
-              v-if="!isSeeding" 
-              @import="handleImportSamplesClick" 
-            />
-
-            <!-- Loading indicator for seeding -->
-            <div v-if="isSeeding" class="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl aspect-[3/2] bg-white/5 gap-3">
-              <div class="w-8 h-8 border-2 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
-              <span class="text-xxs text-aether-primary uppercase tracking-widest font-bold">Importing Tales...</span>
-            </div>
-
-            <PendingAdventureCard
-              v-for="pending in pendingCards"
-              :key="`pending-${pending.adventureId}`"
-              :pending="pending"
+          <div v-if="activeSection === 'templates'">
+            <AdventureLibraryGrid
+              :visible-templates="visibleTemplates"
+              :pending-cards="pendingCards"
+              :is-seeding="isSeeding"
               :loading-word-index="loadingWordIndex"
-              @remove-failed="removeFailedPendingCard"
-              @cancel="cancelAdventure"
-            />
-
-            <AdventureTemplateCard
-              v-for="entry in visibleTemplates"
-              :key="entry.template_id"
-              :template="entry"
+              @create="openCreateModal"
+              @import-samples="handleImportSamplesClick"
+              @remove-failed-pending="removeFailedPendingCard"
+              @cancel-pending="cancelAdventure"
               @start-session="startSession"
               @edit="editAdventure"
               @export-adz="exportAdventureAdz"
@@ -673,31 +642,13 @@ onUnmounted(() => {
             />
           </div>
 
-          <div v-else-if="activeSection === 'sessions'" class="space-y-6">
-            <div v-if="sessions.length === 0" class="rounded-xl border border-white/10 bg-aether-surface/20 p-12 text-center flex flex-col items-center gap-4">
-              <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-3xl text-slate-500 mb-2">
-                <i class="ra ra-pawn"></i>
-              </div>
-              <p class="text-slate-400 max-w-md">
-                No active sessions yet. Discover new worlds in the Adventure Library and start your journey.
-              </p>
-              <button 
-                @click="activeSection = 'templates'"
-                class="mt-2 px-6 py-3 rounded-xl bg-aether-primary/10 border border-aether-primary/30 text-aether-primary font-bold hover:bg-aether-primary/20 transition-all uppercase tracking-widest text-xxs flex items-center gap-3"
-              >
-                <i class="ra ra-book text-sm"></i>
-                Adventure Library
-              </button>
-            </div>
-            <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-              <GameSessionCard
-                v-for="entry in sessions"
-                :key="entry.game_id"
-                :session="entry"
-                @resume="playSession"
-                @delete="confirmDeleteSession(entry.game_id, entry.adventure_title)"
-              />
-            </div>
+          <div v-else-if="activeSection === 'sessions'">
+            <GameSessionsGrid
+              :sessions="sessions"
+              @resume="playSession"
+              @delete="confirmDeleteSession"
+              @switch-to-templates="activeSection = 'templates'"
+            />
           </div>
 
           <div v-else-if="activeSection === 'profile'">
@@ -705,12 +656,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Footer -->
-        <footer class="mt-auto py-8 border-t border-white/5 text-center">
-          <p class="text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-            © 2026 Jean Schmitz • Released under MIT License • TaleWeaver v{{ configState.appVersion }}
-          </p>
-        </footer>
+        <PortalFooter />
       </div>
     </main>
 
