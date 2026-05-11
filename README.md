@@ -4,7 +4,7 @@
 </p>
 
 
-# TaleWeaver - AI Text Adventure World Generator (v0.1.0-beta)
+# TaleWeaver - AI Text Adventure World Generator
 
 > [!IMPORTANT]
 > **TaleWeaver is currently in active development.**
