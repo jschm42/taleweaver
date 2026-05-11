@@ -1647,22 +1647,22 @@ class GameTurnManager:
         scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.session_id == self.game_id))
         current_scene = scene_res.scalars().first()
 
-        ent_res = await self.db.execute(select(WorldEntity).where(
+        # Fetch all entities in the session to handle global NPC awareness
+        all_ent_res = await self.db.execute(select(WorldEntity).where(
             WorldEntity.session_id == self.game_id, 
-            WorldEntity.current_scene_id == self.state.current_scene_id,
-            WorldEntity.is_hidden == False,
             WorldEntity.is_in_inventory == False
         ))
-        entities = ent_res.scalars().all()
+        all_entities = list(all_ent_res.scalars().all())
+
         exit_res = await self.db.execute(select(WorldExit).where(
             WorldExit.from_scene_id == self.state.current_scene_id,
             WorldExit.session_id == self.game_id
         ))
         exits = exit_res.scalars().all()
         
-        # Apply session overrides to entities so LLM sees current HP/state
+        # Apply session overrides to entities so LLM sees current HP/state/location
         overrides = self.state.entity_states or {}
-        for ent in entities:
+        for ent in all_entities:
             if ent.id in overrides:
                 ov = overrides[ent.id]
                 if "hp" in ov: ent.hp = ov["hp"]
@@ -1671,6 +1671,15 @@ class GameTurnManager:
                 if "spatial_position" in ov: ent.spatial_position = ov["spatial_position"]
                 if "name" in ov: ent.name = ov["name"]
                 if "description" in ov: ent.description = ov["description"]
+                if "current_scene_id" in ov: ent.current_scene_id = ov["current_scene_id"]
+
+        # Partition entities into "here" vs "elsewhere"
+        entities = [e for e in all_entities if e.current_scene_id == self.state.current_scene_id]
+        other_npcs = [e for e in all_entities if e.current_scene_id != self.state.current_scene_id and e.entity_type == "NPC"]
+
+        # Fetch scene labels for all scenes to provide human-readable locations for world NPCs
+        all_scenes_res = await self.db.execute(select(WorldScene).where(WorldScene.session_id == self.game_id))
+        scene_map = {s.id: s.label for s in all_scenes_res.scalars().all()}
         
         db_duration = time.perf_counter() - db_start
         logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
@@ -1692,6 +1701,8 @@ class GameTurnManager:
             time_config=self.state.time_config or self.adventure.time_config,
             is_adventure_generator=self.adventure.is_adventure_generator,
             location_detail_level="concise",
+            other_npcs=other_npcs,
+            scene_map=scene_map
         )[0]["content"]
 
         narration_system_prompt = MemoryManager.build_context(
@@ -1710,6 +1721,8 @@ class GameTurnManager:
             time_config=self.state.time_config or self.adventure.time_config,
             is_adventure_generator=self.adventure.is_adventure_generator,
             location_detail_level="full",
+            other_npcs=other_npcs,
+            scene_map=scene_map
         )[0]["content"]
         notes_prompt_block = self._build_gm_notes_prompt_block()
         mechanics_system_prompt += notes_prompt_block

@@ -1,4 +1,4 @@
-﻿"""
+"""
 MediaEngine handles AI image generation for scenes and entities.
 Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imagen), while using the direct BFL API for Black Forest Labs.
 """
@@ -222,7 +222,7 @@ class MediaEngine:
         api_key: str,
         target_dir: str,
         filename: Optional[str] = None,
-        provider_options: dict[str, Any | None] = None,
+        provider_options: Optional[dict[str, Any]] = None,
     ) -> Optional[str]:
         """Generate a BFL image by calling the REST API directly and polling for completion."""
         provider_options = provider_options or {}
@@ -335,7 +335,7 @@ class MediaEngine:
         adventure_id: Optional[str] = None,
         target_dir: Optional[str] = None,
         filename: Optional[str] = None,
-        provider_options: dict[str, Any | None] = None,
+        provider_options: Optional[dict[str, Any]] = None,
         style_instruction: Optional[str] = None,
     ) -> Optional[str]:
         """Generates an image and saves it locally."""
@@ -637,10 +637,10 @@ class MediaEngine:
         ollama_url: str,
         target_dir: str,
         filename: Optional[str] = None,
-        width: int | None = None,
-        height: int | None = None,
-        steps: int | None = None,
-        seed: int | None = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        steps: Optional[int] = None,
+        seed: Optional[int] = None,
         negative_prompt: Optional[str] = None,
     ) -> Optional[str]:
         """Generate an image through Ollama's local HTTP API."""
