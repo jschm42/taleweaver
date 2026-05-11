@@ -253,8 +253,9 @@ def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[
 def _resolve_audio_public_url(adventure_id: Optional[str], filename: str, session_id: Optional[str] = None) -> str:
     """Return static URL for generated audio based on storage location."""
     _ = adventure_id
-    if session_id:
-        return f"/data/adventures/sessions/{session_id}/tts/{filename}"
+    safe_session_id = _sanitize_path_component(session_id)
+    if safe_session_id:
+        return f"/data/adventures/sessions/{safe_session_id}/tts/{filename}"
     return f"/data/audio/{filename}"
 
 
@@ -316,6 +317,10 @@ class TTSEngine:
             logger.error("No API key provided for %s TTS.", provider)
             return None
 
+        safe_session_id = _sanitize_path_component(session_id)
+        if session_id and not safe_session_id:
+            logger.warning("Invalid session_id for TTS output path; using adventure-level fallback.")
+
         # Handle vocal tags toggle
         if not use_vocal_tags:
             logger.info("[TTS] Vocal tags are DISABLED. Stripping tags from input text.")
@@ -333,7 +338,7 @@ class TTSEngine:
                 voice_id=elevenlabs_voice_id,
                 api_key=api_key,
                 adventure_id=adventure_id,
-                session_id=session_id,
+                session_id=safe_session_id,
                 model_id=sanitized_model
             )
         else:
@@ -342,7 +347,7 @@ class TTSEngine:
                 voice=voice,
                 api_key=api_key,
                 adventure_id=adventure_id,
-                session_id=session_id,
+                session_id=safe_session_id,
                 include_style_context=include_style_context,
                 speed=speed,
                 director_notes=director_notes,

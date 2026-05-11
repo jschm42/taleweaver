@@ -133,11 +133,17 @@ async def post_chat_message(
     current_user: User = Depends(get_current_user),
 ):
     """Processes a user message and returns a streaming response."""
-    manager = GameTurnManager(db, game_id, current_user)
-    return StreamingResponse(
-        manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
-        media_type="text/event-stream"
-    )
+    try:
+        manager = GameTurnManager(db, game_id, current_user)
+        return StreamingResponse(
+            manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
+            media_type="text/event-stream"
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to start chat turn for session %s", game_id)
+        raise HTTPException(status_code=500, detail="Unable to process this turn.")
 
 
 @router.post("/{game_id}/terminal-epilogue", response_model=TerminalEpilogueResponse)

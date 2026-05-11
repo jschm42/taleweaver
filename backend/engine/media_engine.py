@@ -1,11 +1,12 @@
-"""
-MediaEngine — Handles AI image generation for scenes and entities.
+﻿"""
+MediaEngine handles AI image generation for scenes and entities.
 Integrated with LiteLLM to support OpenAI (DALL-E), OpenRouter, and Google (Imagen), while using the direct BFL API for Black Forest Labs.
 """
 import asyncio
 import base64
 import io
 import logging
+from typing import Optional
 import os
 import re
 import shutil
@@ -38,6 +39,23 @@ NO_TEXT_IMAGE_PROMPT_SUFFIX = prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX
 
 
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
+    """Return a safe single path component, or None when invalid."""
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
 
 
 def _ensure_within_data_dir(path: str) -> str:
@@ -54,10 +72,16 @@ def _ensure_within_data_dir(path: str) -> str:
 
 def _safe_data_path(*parts: str) -> str:
     """Build a safe path under DATA_DIR."""
-    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
+    safe_parts: list[str] = []
+    for part in parts:
+        safe_part = _sanitize_path_component(part)
+        if not safe_part:
+            raise ValueError("Invalid path component.")
+        safe_parts.append(safe_part)
+    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *safe_parts))
 
 
-def _normalize_output_filename(filename: str | None, extension: str) -> str:
+def _normalize_output_filename(filename: Optional[str], extension: str) -> str:
     """Return a sanitized output filename with a safe image extension."""
     ext = "jpg" if extension.lower() == "jpeg" else extension.lower()
     candidate = (filename or "").strip()
@@ -85,15 +109,20 @@ def _resolve_output_dir(target_dir: str) -> str:
     if os.path.isabs(candidate):
         return _ensure_within_data_dir(candidate)
 
-    parts = [part for part in re.split(r"[\\/]+", candidate) if part and part not in {".", ".."}]
-    if not parts:
+    safe_parts: list[str] = []
+    for part in re.split(r"[\\/]+", candidate):
+        safe_part = _sanitize_path_component(part)
+        if not safe_part:
+            continue
+        safe_parts.append(safe_part)
+    if not safe_parts:
         raise ValueError("Invalid target directory.")
-    return _safe_data_path(*parts)
+    return _safe_data_path(*safe_parts)
 
 
-def _build_output_filepath(target_dir: str, filename: str | None, extension: str) -> str:
+def _build_output_filepath(target_dir: str, filename: Optional[str], extension: str) -> str:
     """Build a validated output file path inside DATA_DIR."""
-    resolved_dir = _resolve_output_dir(target_dir)
+    resolved_dir = _ensure_within_data_dir(target_dir)
     os.makedirs(resolved_dir, exist_ok=True)
     safe_filename = _normalize_output_filename(filename, extension)
     return _ensure_within_data_dir(os.path.join(resolved_dir, safe_filename))
@@ -192,9 +221,9 @@ class MediaEngine:
         model: str,
         api_key: str,
         target_dir: str,
-        filename: str | None = None,
+        filename: Optional[str] = None,
         provider_options: dict[str, Any | None] = None,
-    ) -> str | None:
+    ) -> Optional[str]:
         """Generate a BFL image by calling the REST API directly and polling for completion."""
         provider_options = provider_options or {}
         model_slug = MediaEngine._normalize_black_forest_labs_model(model)
@@ -278,7 +307,7 @@ class MediaEngine:
         return None
 
     @staticmethod
-    def _resolve_api_key(provider: str, api_keys_dict: dict) -> str | None:
+    def _resolve_api_key(provider: str, api_keys_dict: dict) -> Optional[str]:
         """Resolves API key by checking environment variables first, then the provided dictionary."""
         provider_key = (provider or "").lower()
         
@@ -301,14 +330,14 @@ class MediaEngine:
     async def generate_image(
         prompt: str, 
         model: str, 
-        api_key: str | None, 
+        api_key: Optional[str], 
         provider: str = "openai",
-        adventure_id: str | None = None,
-        target_dir: str | None = None,
-        filename: str | None = None,
+        adventure_id: Optional[str] = None,
+        target_dir: Optional[str] = None,
+        filename: Optional[str] = None,
         provider_options: dict[str, Any | None] = None,
-        style_instruction: str | None = None,
-    ) -> str | None:
+        style_instruction: Optional[str] = None,
+    ) -> Optional[str]:
         """Generates an image and saves it locally."""
         provider_key = (provider or "openai").lower()
         if not prompt or not model:
@@ -566,7 +595,7 @@ class MediaEngine:
             raise
 
     @staticmethod
-    def _extract_image_payload(response: Any) -> tuple[str | None, str | None]:
+    def _extract_image_payload(response: Any) -> tuple[Optional[str], Optional[str]]:
         """Extract URL or base64 image payload from provider responses."""
         if not response:
             return None, None
@@ -607,13 +636,13 @@ class MediaEngine:
         model: str,
         ollama_url: str,
         target_dir: str,
-        filename: str | None = None,
+        filename: Optional[str] = None,
         width: int | None = None,
         height: int | None = None,
         steps: int | None = None,
         seed: int | None = None,
-        negative_prompt: str | None = None,
-    ) -> str | None:
+        negative_prompt: Optional[str] = None,
+    ) -> Optional[str]:
         """Generate an image through Ollama's local HTTP API."""
         try:
             base = ollama_url.rstrip("/")
@@ -667,11 +696,12 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_b64_image(b64_data: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
+    async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Decodes and saves a base64 image string."""
         try:
+            safe_target_dir = _resolve_output_dir(target_dir)
             ext = "jpg" if image_format.lower() == "jpeg" else "png"
-            filepath = _build_output_filepath(target_dir, filename, ext)
+            filepath = _build_output_filepath(safe_target_dir, filename, ext)
             
             if b64_data.startswith("data:image/"):
                 if ";base64," in b64_data:
@@ -705,13 +735,14 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def _save_remote_image(url: str, target_dir: str, filename: str | None = None, image_format: str = "jpeg", quality: int = 85) -> str | None:
+    async def _save_remote_image(url: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Downloads a remote image and persists it in the specified directory."""
         try:
             response = await asyncio.to_thread(requests.get, url, timeout=30)
             if response.status_code == 200:
+                safe_target_dir = _resolve_output_dir(target_dir)
                 ext = "jpg" if image_format.lower() == "jpeg" else "png"
-                filepath = _build_output_filepath(target_dir, filename, ext)
+                filepath = _build_output_filepath(safe_target_dir, filename, ext)
                 
                 if image_format.lower() == "jpeg":
                     img = Image.open(io.BytesIO(response.content))
@@ -737,7 +768,7 @@ class MediaEngine:
             return None
 
     @staticmethod
-    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: str | None = None, use_advanced_model: bool = True) -> str | None:
+    async def generate_scene_image(prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = True) -> Optional[str]:
         """High-level wrapper for gameplay scene generation (uses Advanced Model by default)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -781,7 +812,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: str | None = None, use_advanced_model: bool = False) -> str | None:
+    async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = False) -> Optional[str]:
         """High-level wrapper for NPC/Object generation (uses Simple Model by default)."""
         _ = entity_type
         t2i = user_config.get("t2i_settings")
@@ -827,7 +858,7 @@ class MediaEngine:
         )
 
     @staticmethod
-    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: str | None = None) -> str | None:
+    async def generate_adventure_cover(title: str, original_prompt: str, adventure_id: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None) -> Optional[str]:
         """High-level wrapper for adventure cover generation (uses Advanced Model, 3:2 aspect ratio)."""
         t2i = user_config.get("t2i_settings")
         if not t2i: 
@@ -875,9 +906,9 @@ class MediaEngine:
         adventure_id: str,
         entity_id: str,
         target_dir: str,
-        filename: str | None = None,
+        filename: Optional[str] = None,
         category: str = "",
-        theme: str | None = None
+        theme: Optional[str] = None
     ) -> str:
         """
         Generates a high-quality PIL-based placeholder image.
