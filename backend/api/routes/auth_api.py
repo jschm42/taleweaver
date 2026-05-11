@@ -6,7 +6,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import (
@@ -114,10 +114,11 @@ async def read_users_me(
 
     # Count unique adventures played by this user
     result = await db.execute(
-        select(func.count(GameSession.template_id.distinct()))
+        select(GameSession.template_id)
         .where(GameSession.user_id == current_user.id)
+        .distinct()
     )
-    adventure_count = result.scalar() or 0
+    adventure_count = len(result.scalars().all())
     
     # We convert the ORM object to a dict and add the extra field
     user_data = {

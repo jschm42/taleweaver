@@ -44,7 +44,7 @@ class TTSGeneratePayload(BaseModel):
     scene_name: Optional[str] = Field(default=None)
     tone: Optional[str] = Field(default=None)
     voice_override: Optional[str] = Field(default=None)
-    speaker_voices: dict[str, Optional[str]] = Field(default=None)
+    speaker_voices: Optional[dict[str, Optional[str]]] = Field(default=None)
     director_notes: Optional[str] = Field(default=None)
 
     @staticmethod
