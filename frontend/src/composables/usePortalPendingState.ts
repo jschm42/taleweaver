@@ -168,9 +168,16 @@ export function usePortalPendingState(
             await options?.onReady?.()
             resolve()
           }
-        } catch {
-          clearInterval(pollInterval)
-          resolve()
+        } catch (err: unknown) {
+          // Stop polling only when the adventure was explicitly deleted (404).
+          // For transient network errors, keep retrying on the next tick.
+          const isNotFound =
+            err instanceof Error && err.message.startsWith('API 404')
+          if (isNotFound) {
+            clearInterval(pollInterval)
+            options?.onFailure?.('Adventure not found')
+            resolve()
+          }
         }
       }, 1500)
     })

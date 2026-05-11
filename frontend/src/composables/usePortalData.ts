@@ -138,10 +138,22 @@ export function usePortalData(): UsePortalDataResult {
   /** Loads templates and sessions and synchronizes pending generation state. */
   async function fetchPortalData() {
     try {
-      const [fetchedTemplates, fetchedSessions] = await Promise.all([
-        api.listAdventureTemplates(),
-        api.listSessions(),
-      ])
+      let fetchedTemplates: AdventureTemplateSummary[]
+      let fetchedSessions: GameSession[]
+      try {
+        ;[fetchedTemplates, fetchedSessions] = await Promise.all([
+          api.listAdventureTemplates(),
+          api.listSessions(),
+        ])
+      } catch {
+        // Single automatic retry after a brief delay to handle transient backend unavailability
+        // (e.g., the backend is briefly busy right after starting a generation task).
+        await new Promise<void>((resolve) => setTimeout(resolve, 1500))
+        ;[fetchedTemplates, fetchedSessions] = await Promise.all([
+          api.listAdventureTemplates(),
+          api.listSessions(),
+        ])
+      }
 
       templates.value = Array.isArray(fetchedTemplates)
         ? fetchedTemplates.map((entry) => ({
