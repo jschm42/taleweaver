@@ -354,6 +354,9 @@ class GameTurnManager:
             game_over=bool(intent.game_over),
             game_completed=bool(intent.game_completed),
             status_note=intent.status_note,
+            moved_entities=intent.moved_entities,
+            updated_entities=intent.updated_entities,
+            deleted_entities=intent.deleted_entities,
         )
 
     async def initialize(self) -> bool:

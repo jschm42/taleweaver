@@ -152,6 +152,11 @@ class AdventureGeneratorToolIntent(BaseModel):
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
+    
+    # World State Updates
+    moved_entities: Optional[list[EntityMovement]] = None
+    updated_entities: Optional[list[WorldEntityUpdate]] = None
+    deleted_entities: Optional[list[str]] = None
 
     tool_results: Optional[ToolResults] = None
     narrative_description: str = ""
