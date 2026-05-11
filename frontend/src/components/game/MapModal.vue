@@ -35,6 +35,20 @@ const tooltipPos = ref({ x: 0, y: 0 })
 
 // Node positions for hit testing
 const nodeBounds = ref<Record<string, { x: number, y: number, w: number, h: number }>>({})
+// Edge midpoints for hit testing
+const edgeMidpoints = ref<Array<{ from: string, to: string, x: number, y: number, label: string }>>([])
+const hoveredEdge = ref<{ label: string, x: number, y: number } | null>(null)
+
+// Zoom & Pan State
+const zoom = ref(1)
+const offset = ref({ x: 0, y: 0 })
+const isPanning = ref(false)
+const lastMousePos = ref({ x: 0, y: 0 })
+
+function resetView() {
+  zoom.value = 1
+  offset.value = { x: 0, y: 0 }
+}
 
 /**
  * Normalizes an ID to match the backend safe_id logic.
@@ -71,20 +85,18 @@ function calculateLayout() {
   const currentId = props.mapData.current_scene_id
   if (currentId) visitedIds.add(currentId)
 
-  // In normal mode, find nodes that are connected to visited nodes
-  if (!props.isDebug) {
-    props.mapData.edges.forEach(edge => {
-      const fromId = safeId(edge.from)
-      const toId = safeId(edge.to)
-      if (visitedIds.has(fromId) || visitedIds.has(toId)) {
-        if (visitedIds.has(fromId)) discoveredIds.add(toId)
-        if (visitedIds.has(toId)) discoveredIds.add(fromId)
-      }
-    })
-  }
+  // Find nodes that are connected to visited nodes (discovered nodes)
+  props.mapData.edges.forEach(edge => {
+    const fromId = safeId(edge.from)
+    const toId = safeId(edge.to)
+    if (visitedIds.has(fromId) || visitedIds.has(toId)) {
+      if (visitedIds.has(fromId)) discoveredIds.add(toId)
+      if (visitedIds.has(toId)) discoveredIds.add(fromId)
+    }
+  })
 
   // 2. Add nodes to graph
-  // Show visited nodes
+  // Show visited nodes (override template if needed)
   visitedIds.forEach(id => {
     const node = props.nodes[id] || props.mapData!.nodes[id]
     const isStart = id === firstId
@@ -135,8 +147,9 @@ async function renderMap() {
 
   const rc = rough.canvas(canvas)
   
-  // Reset bounds for hit testing
+  // Reset hit testing data
   nodeBounds.value = {}
+  edgeMidpoints.value = []
 
   // Determine canvas size based on graph size
   const graphInfo = g.graph()
@@ -203,32 +216,22 @@ async function renderMap() {
     const edge = g.edge(e)
     const points = edge.points
     if (points && points.length > 1) {
-      const p1 = points[0]
-      const p2 = points[points.length - 1]
+      const flatPoints: [number, number][] = points.map(p => [p.x + margin, p.y + margin])
       
-      // Use the edge data to check if locked
       const rawEdge = props.mapData!.edges.find(re => safeId(re.from) === e.v && safeId(re.to) === e.w)
       const options = rawEdge?.is_locked ? lockedEdgeOptions : edgeOptions
       
-      // Draw smoother curve
-      const flatPoints: [number, number][] = points.map(p => [p.x + margin, p.y + margin])
-      // If many points, we just use a few to keep it smooth
       const simplified = flatPoints.length > 4 
         ? [flatPoints[0], flatPoints[Math.floor(flatPoints.length/2)], flatPoints[flatPoints.length-1]]
         : flatPoints
       rc.curve(simplified, options)
 
-      // Draw arrow head at the end
+      // Arrow head
       if (flatPoints.length >= 2) {
         const last = flatPoints[flatPoints.length - 1]
         const secondLast = flatPoints[flatPoints.length - 2]
-        
-        // Use a small distance back from the last point to calculate angle
-        // to avoid issues with very short final segments
         const angle = Math.atan2(last[1] - secondLast[1], last[0] - secondLast[0])
         const headLen = 12
-        
-        // Draw arrow head as a filled sketchy triangle
         const h1x = last[0] - headLen * Math.cos(angle - Math.PI / 6)
         const h1y = last[1] - headLen * Math.sin(angle - Math.PI / 6)
         const h2x = last[0] - headLen * Math.cos(angle + Math.PI / 6)
@@ -242,28 +245,17 @@ async function renderMap() {
         })
       }
 
-      // Draw edge label if exists
+      // Store midpoint for hover detection instead of drawing label directly
       if (rawEdge?.label) {
         const midIdx = Math.floor(points.length / 2)
         const midPoint = points[midIdx]
-        
-        // Background for text contrast
-        const text = rawEdge.label
-        ctx.font = 'bold italic 12px Acme, sans-serif'
-        const metrics = ctx.measureText(text)
-        const bgW = metrics.width + 10
-        const bgH = 16
-        
-        ctx.save()
-        ctx.shadowBlur = 0 // Disable shadow for text background
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)'
-        ctx.fillRect(midPoint.x + margin - bgW/2, midPoint.y + margin - bgH - 5, bgW, bgH)
-        
-        ctx.fillStyle = '#ffd97d'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'bottom'
-        ctx.fillText(text, midPoint.x + margin, midPoint.y + margin - 7)
-        ctx.restore()
+        edgeMidpoints.value.push({
+          from: e.v,
+          to: e.w,
+          x: midPoint.x + margin,
+          y: midPoint.y + margin,
+          label: rawEdge.label
+        })
       }
     }
   })
@@ -277,10 +269,8 @@ async function renderMap() {
     const w = node.width
     const h = node.height
 
-    // Store bounds for hit testing
     nodeBounds.value[id] = { x, y, w, h }
 
-    // Draw sketchy box
     const nodeData = props.mapData?.nodes[id]
     const isVisited = !!nodeData
     const options = isCurrent ? currentNodeOptions : (isVisited ? nodeOptions : discoveredNodeOptions)
@@ -294,7 +284,6 @@ async function renderMap() {
     ctx.textBaseline = 'middle'
     const label = isCurrent ? `${node.label} 📍` : node.label
     
-    // Simple text wrapping for long labels
     const words = label.split(' ')
     if (words.length > 3 && label.length > 20) {
       const mid = Math.floor(words.length / 2)
@@ -313,32 +302,79 @@ async function renderMap() {
  */
 function handleMouseMove(e: MouseEvent) {
   if (!canvasRef.value) return
-  const rect = canvasRef.value.getBoundingClientRect()
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
+  
+  // Update Panning
+  if (isPanning.value) {
+    offset.value.x += e.clientX - lastMousePos.value.x
+    offset.value.y += e.clientY - lastMousePos.value.y
+    lastMousePos.value = { x: e.clientX, y: e.clientY }
+    return
+  }
+  lastMousePos.value = { x: e.clientX, y: e.clientY }
 
-  let foundId: string | null = null
+  const rect = canvasRef.value.getBoundingClientRect()
+  
+  // Map screen coordinates to untransformed canvas coordinates
+  // We need to account for CSS scale (zoom) and translation (offset)
+  const x = (e.clientX - rect.left) / zoom.value
+  const y = (e.clientY - rect.top) / zoom.value
+
+  let foundNodeId: string | null = null
   for (const [id, bounds] of Object.entries(nodeBounds.value)) {
     if (x >= bounds.x && x <= bounds.x + bounds.w && y >= bounds.y && y <= bounds.y + bounds.h) {
-      foundId = id
+      foundNodeId = id
       break
     }
   }
 
-  if (foundId !== hoveredNodeId.value) {
-    hoveredNodeId.value = foundId
-    if (foundId) {
-      // Find metadata by original ID or safe ID
-      const nodeData = props.mapData?.nodes[foundId]
-      const originalId = nodeData?.id || foundId
+
+  // Also check for edges if no node is found
+  let foundEdge = null
+  if (!foundNodeId) {
+    for (const em of edgeMidpoints.value) {
+      const dist = Math.sqrt(Math.pow(x - em.x, 2) + Math.pow(y - em.y, 2))
+      if (dist < 30) { // Distance threshold for edges
+        foundEdge = { label: em.label, x: e.clientX, y: e.clientY }
+        break
+      }
+    }
+  }
+  hoveredEdge.value = foundEdge
+
+  if (foundNodeId !== hoveredNodeId.value) {
+    hoveredNodeId.value = foundNodeId
+    if (foundNodeId) {
+      const nodeData = props.mapData?.nodes[foundNodeId]
+      const originalId = nodeData?.id || foundNodeId
       hoveredNode.value = props.nodes[originalId] || nodeData
       tooltipPos.value = { x: e.clientX, y: e.clientY }
     } else {
       hoveredNode.value = null
     }
-  } else if (foundId) {
+  } else if (foundNodeId) {
     tooltipPos.value = { x: e.clientX, y: e.clientY }
   }
+}
+
+function handleMouseDown(e: MouseEvent) {
+  if (e.button === 0) { // Left click for pan
+    isPanning.value = true
+    lastMousePos.value = { x: e.clientX, y: e.clientY }
+  }
+}
+
+function handleMouseUp() {
+  isPanning.value = false
+}
+
+function handleWheel(e: WheelEvent) {
+  e.preventDefault()
+  const delta = e.deltaY > 0 ? 0.9 : 1.1
+  const newZoom = Math.max(0.2, Math.min(3, zoom.value * delta))
+  
+  // Simple zoom towards mouse could be added here, 
+  // but center zoom is easier for now.
+  zoom.value = newZoom
 }
 
 watch(() => [props.open, props.mapData], async () => {
@@ -388,6 +424,40 @@ onMounted(() => {
                   <span class="inline-block w-3 h-3 rounded bg-[#3d1f00] border border-[#8b6914]"></span> Visited
                 </span>
               </div>
+              
+              <!-- Map Controls -->
+              <div class="flex items-center bg-slate-800/50 rounded-full px-1.5 py-1 border border-slate-700/50 gap-1">
+                <button 
+                  @click="zoom = Math.max(0.2, zoom - 0.1)" 
+                  class="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                  title="Zoom Out"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                  </svg>
+                </button>
+                <span class="text-xxs font-mono text-slate-500 min-w-[3rem] text-center">{{ Math.round(zoom * 100) }}%</span>
+                <button 
+                  @click="zoom = Math.min(3, zoom + 0.1)" 
+                  class="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                  title="Zoom In"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+                <div class="w-px h-4 bg-slate-700 mx-1"></div>
+                <button 
+                  @click="resetView" 
+                  class="p-1.5 rounded-full text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
+                  title="Reset View"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+
               <button
                 @click="emit('close')"
                 class="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
@@ -416,12 +486,19 @@ onMounted(() => {
             <div
               v-else
               class="w-full h-full flex items-center justify-center relative z-10"
+              @wheel="handleWheel"
+              @mousedown="handleMouseDown"
+              @mousemove="handleMouseMove"
+              @mouseup="handleMouseUp"
+              @mouseleave="handleMouseUp"
             >
               <canvas 
                 ref="canvasRef" 
-                @mousemove="handleMouseMove" 
-                @mouseleave="hoveredNode = null"
-                class="max-w-none transition-transform duration-300"
+                class="max-w-none cursor-grab active:cursor-grabbing will-change-transform"
+                :style="{ 
+                  transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+                  transformOrigin: 'center center'
+                }"
               />
             </div>
 
@@ -472,11 +549,31 @@ onMounted(() => {
                 </div>
               </Transition>
             </Teleport>
+
+            <!-- EDGE HOVER LABEL -->
+            <Teleport to="body">
+              <Transition name="fade">
+                <div 
+                  v-if="hoveredEdge" 
+                  class="fixed z-[110] pointer-events-none px-3 py-1.5 bg-slate-900/90 border border-amber-500/50 rounded-lg shadow-xl backdrop-blur-sm animate-tooltip-in"
+                  :style="{ left: (hoveredEdge.x + 15) + 'px', top: (hoveredEdge.y - 30) + 'px' }"
+                >
+                  <div class="flex items-center gap-2">
+                    <i class="ra ra-trail text-amber-400 text-xs"></i>
+                    <span class="text-xs font-bold text-amber-200 uppercase tracking-tight">{{ hoveredEdge.label }}</span>
+                  </div>
+                </div>
+              </Transition>
+            </Teleport>
           </div>
 
           <!-- Footer hint -->
-          <div class="px-8 py-3 border-t border-slate-800 text-xs text-slate-600 text-right shrink-0">
-            Tip: hover over rooms for details • sketched in real-time
+          <div class="px-8 py-3 border-t border-slate-800 text-xs text-slate-600 flex justify-between items-center shrink-0">
+            <div class="flex gap-4">
+              <span><i class="ra ra-plain-dagger mr-1"></i> Drag to pan</span>
+              <span><i class="ra ra-scroll-unfurled mr-1"></i> Scroll to zoom</span>
+            </div>
+            <span>Tip: hover over rooms for details • sketched in real-time</span>
           </div>
         </div>
       </div>

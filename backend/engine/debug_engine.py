@@ -356,24 +356,35 @@ class DebugEngine:
             scenes_res = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
             exits_res = await db.execute(select(WorldExit).where(WorldExit.session_id == state.session_id))
             
-            scenes = scenes_res.scalars().all()
-            exits = exits_res.scalars().all()
+            scenes = list(scenes_res.scalars().all())
+            exits = list(exits_res.scalars().all())
+
+            # 2. Also fetch from template to be absolutely sure we have everything
+            if state.template_id:
+                t_scenes_res = await db.execute(select(WorldScene).where(WorldScene.template_id == state.template_id))
+                t_exits_res = await db.execute(select(WorldExit).where(WorldExit.template_id == state.template_id))
+                
+                # Add template scenes/exits if not already in the session list (by ID/label)
+                session_scene_ids = {s.id for s in scenes}
+                for ts in t_scenes_res.scalars().all():
+                    if ts.id not in session_scene_ids:
+                        scenes.append(ts)
+                
+                # For exits, we compare from/to/label to avoid duplicates
+                session_exits = {(e.from_scene_id, e.to_scene_id, e.label) for e in exits}
+                for te in t_exits_res.scalars().all():
+                    if (te.from_scene_id, te.to_scene_id, te.label) not in session_exits:
+                        exits.append(te)
             
-            # 2. Get or create the map
-            map_res = await db.execute(select(WorldMap).where(WorldMap.template_id == state.template_id))
-            world_map = map_res.scalars().first()
-            if not world_map:
-                world_map = WorldMap(template_id=state.template_id)
-                db.add(world_map)
-                await db.flush()
+            # 3. Get or create the map for this SPECIFIC session
+            from backend.api.routes.adventures.logic import AdventureLogic
+            world_map = await AdventureLogic.get_or_create_map(db, state.template_id, session_id=state.session_id)
             
-            # 3. Register everything
+            # 4. Register everything
             for s in scenes:
                 MapEngine.register_visit(world_map, s.id, label=s.label, description=s.description, image_url=s.image_url)
             
-            # 4. Restore the actual current position
-            # register_visit overwrites current_scene_id with the last one in the loop.
-            # We must set it back to the safe version of our actual current scene_id.
+            # 5. Restore the actual current position
             world_map.current_scene_id = MapEngine._safe_id(state.scene_id)
             
             for e in exits:
