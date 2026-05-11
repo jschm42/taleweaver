@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import random
+import re
 import struct
 import uuid
 
@@ -174,14 +175,36 @@ def _parse_l16_sample_rate(mime_type: str) -> int:
     return default_rate
 
 
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
+    """Return a safe single path component, or None when invalid."""
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
 def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[str] = None) -> str:
     """Return target directory for generated audio.
 
     If adventure_id + session_id are known, store clips under that concrete session.
     Otherwise, keep legacy global fallback for compatibility.
     """
-    if session_id:
-        return os.path.join(settings.DATA_DIR, "adventures", "sessions", session_id, "tts")
+    safe_session_id = _sanitize_path_component(session_id)
+    if session_id and not safe_session_id:
+        logger.warning("Invalid session_id for audio output path; using global audio fallback.")
+    if safe_session_id:
+        return os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_session_id, "tts")
     return os.path.join(settings.DATA_DIR, "audio")
 
 
