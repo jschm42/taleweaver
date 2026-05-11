@@ -186,6 +186,20 @@ class MapEngine:
 
         return "\n".join(lines)
 
+    @staticmethod
+    def to_dict(world_map) -> dict:
+        """
+        Serializes the WorldMap into a raw dictionary for frontend rendering (e.g. Rough.js).
+        """
+        if not world_map:
+            return {"nodes": {}, "edges": [], "current_scene_id": None}
+            
+        return {
+            "nodes": world_map.nodes or {},
+            "edges": world_map.edges or [],
+            "current_scene_id": world_map.current_scene_id
+        }
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 

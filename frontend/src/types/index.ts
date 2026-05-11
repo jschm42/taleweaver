@@ -91,6 +91,28 @@ export interface CombatState {
   log?: CombatLogEntry[]
 }
 
+export interface MapNode {
+  id: string
+  label: string
+  description?: string
+  image_url?: string | null
+  [key: string]: unknown
+}
+
+export interface MapEdge {
+  from: string
+  to: string
+  label?: string
+  is_locked?: boolean
+  [key: string]: unknown
+}
+
+export interface WorldMapData {
+  nodes: Record<string, MapNode>
+  edges: MapEdge[]
+  current_scene_id: string | null
+}
+
 /** Summary of a game session returned by GET /api/adventures. */
 export interface GameSession {
   game_id: string
@@ -212,7 +234,7 @@ export type WsIncoming =
   | { role: 'assistant' | 'system'; content: string }
   | { type: 'sheet_update'; data: CharacterSheet }
   | { type: 'game_over'; reason: string }
-  | { type: 'map_update'; mermaid: string }
+  | { type: 'map_update'; mermaid?: string; map_data?: WorldMapData }
   | { type: 'image_update'; url: string }
 
 export interface Award {

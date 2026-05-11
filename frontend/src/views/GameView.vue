@@ -60,6 +60,7 @@ const {
   adventureImage,
   entities,
   mermaidData,
+  mapData,
   nodes,
   npcMetadata,
   currentSceneImage,
@@ -502,7 +503,7 @@ watch(showCombatDialog, (visible) => {
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
     />
-    <MapModal :open="showMap" :mermaid-src="mermaidData" :nodes="nodes" @close="showMap = false" />
+    <MapModal :open="showMap" :map-data="mapData" :nodes="nodes" :is-debug="!!sheet?.debug_mode" @close="showMap = false" />
     <QuestsModal 
       :is-open="showQuests" 
       :quests="quests" 

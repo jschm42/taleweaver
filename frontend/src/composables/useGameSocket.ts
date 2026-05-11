@@ -15,6 +15,7 @@ export interface UseGameSocket {
   messages: Ref<ChatMessage[]>
   sheet: Ref<CharacterSheet | null>
   mermaidData: Ref<string>
+  mapData: Ref<any | null>
   nodes: Ref<Record<string, any>>
   npcMetadata: Ref<Record<string, any>>
   currentSceneImage: Ref<string | null>
@@ -54,6 +55,7 @@ export function useGameSocket(): UseGameSocket {
   const messages = ref<ChatMessage[]>([])
   const sheet = ref<CharacterSheet | null>(null)
   const mermaidData = ref<string>('')
+  const mapData = ref<any | null>(null)
   const nodes = ref<Record<string, any>>({})
   const npcMetadata = ref<Record<string, any>>({})
   const currentSceneImage = ref<string | null>(null)
@@ -129,6 +131,7 @@ export function useGameSocket(): UseGameSocket {
 
     if (data.sheet) sheet.value = data.sheet
     mermaidData.value = data.mermaid || ''
+    if (data.map_data) mapData.value = data.map_data
     if (data.nodes) nodes.value = data.nodes
     if (data.npc_metadata) npcMetadata.value = data.npc_metadata
     entities.value = data.entities || []
@@ -408,6 +411,7 @@ export function useGameSocket(): UseGameSocket {
     messages,
     sheet,
     mermaidData,
+    mapData,
     nodes,
     npcMetadata,
     currentSceneImage,

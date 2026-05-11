@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
+from backend.engine.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -19,14 +20,19 @@ class AdventureLogic:
     """Class grouping core business logic and helper functions for Adventure management."""
 
     @staticmethod
-    async def get_or_create_map(db: AsyncSession, template_id: str) -> WorldMap:
-        """Fetch or lazily create a WorldMap row for the given adventure."""
-        result = await db.execute(
-            select(WorldMap).where(WorldMap.template_id == template_id)
-        )
+    async def get_or_create_map(db: AsyncSession, template_id: str, session_id: Optional[str] = None) -> WorldMap:
+        """Fetch or lazily create a WorldMap row for the given adventure session."""
+        query = select(WorldMap).where(WorldMap.template_id == template_id)
+        if session_id:
+            query = query.where(WorldMap.session_id == session_id)
+        else:
+            query = query.where(WorldMap.session_id == None)
+
+        result = await db.execute(query)
         world_map = result.scalars().first()
+        
         if not world_map:
-            world_map = WorldMap(template_id=template_id)
+            world_map = WorldMap(template_id=template_id, session_id=session_id)
             db.add(world_map)
             await db.flush()
         return world_map
@@ -315,6 +321,19 @@ class AdventureLogic:
         }
         
         return snapshot
+
+    @staticmethod
+    async def get_all_scene_metadata(db: AsyncSession, template_id: str) -> dict:
+        scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+        metadata = {}
+        for s in scene_res.scalars().all():
+            metadata[MapEngine._safe_id(s.id)] = {
+                "id": s.id,
+                "label": s.label,
+                "description": s.description,
+                "image_url": s.image_url
+            }
+        return metadata
 
     @staticmethod
     async def delete_adventure(db: AsyncSession, template_id: str):

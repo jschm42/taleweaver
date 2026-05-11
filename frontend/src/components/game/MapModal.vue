@@ -1,177 +1,359 @@
 <script setup lang="ts">
 /**
- * MapModal — Renders the world map as an interactive Mermaid.js flowchart.
+ * MapModal — Renders the world map as an interactive, hand-drawn sketch using Rough.js.
  *
  * Props:
  *   open        — controls modal visibility
- *   mermaidSrc  — the Mermaid diagram string received from the server
+ *   mapData     — the raw graph data (nodes + edges)
+ *   nodes       — metadata for tooltips (scene details)
  *
  * Emits: close
  */
-import { watch, ref, nextTick, onMounted } from 'vue'
-import mermaid from 'mermaid'
+import { watch, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import rough from 'roughjs'
+import dagre from 'dagre'
 import mapSvg from '@/assets/svg/fantasy-rpg-map.svg'
+import type { WorldMapData, MapNode } from '@/types'
 
 const props = defineProps<{
   open: boolean
-  mermaidSrc: string
+  mapData: WorldMapData | null
   nodes: Record<string, any>
+  isDebug?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
+const canvasRef = ref<HTMLCanvasElement | null>(null)
 const mapContainer = ref<HTMLDivElement | null>(null)
 const renderError = ref<string | null>(null)
 
 // Tooltip State
+const hoveredNodeId = ref<string | null>(null)
 const hoveredNode = ref<any | null>(null)
 const tooltipPos = ref({ x: 0, y: 0 })
 
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'base', // Use base to fully control with themeVariables
-  themeVariables: {
-    fontFamily: 'Acme, sans-serif',
-    primaryColor: '#3d1f00', // ink-light
-    primaryTextColor: '#f5e6c8', // parchment
-    primaryBorderColor: '#8b6914', // panel-border-gold
-    lineColor: '#c9a84c', // gold
-    secondaryColor: '#1a0a00',
-    tertiaryColor: '#1a0a00',
-    mainBkg: '#1a0a00',
-    nodeBorder: '#8b6914',
-    clusterBkg: '#0d0d0d',
-    titleColor: '#c9a84c',
-    edgeLabelBackground: '#0d0d0d',
-  },
-  themeCSS: `
-    .node rect, .node circle, .node polygon {
-      stroke-width: 2px !important;
-      filter: drop-shadow(0px 8px 12px rgba(0,0,0,0.8));
-      pointer-events: all;
-    }
-    .edgePath .path {
-      stroke-width: 2px !important;
-      stroke: #c9a84c !important;
-      filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
-    }
-    .marker {
-      fill: #c9a84c !important;
-      stroke: #c9a84c !important;
-    }
-    .label {
-      color: #f5e6c8 !important;
-      font-weight: 500;
-      font-size: 14px;
-      pointer-events: none;
-    }
-    .visited rect {
-      fill: #3d1f00 !important;
-      stroke: #8b6914 !important;
-      stroke-width: 2px !important;
-    }
-    .current rect {
-      fill: #1a5c2a !important;
-      stroke: #c9a84c !important;
-      stroke-width: 3px !important;
-      animation: pulse-current 2s infinite;
-    }
-    .node:hover rect {
-      stroke: #f0d080 !important;
-      cursor: help;
-    }
-    .unvisited rect {
-      fill: #0d0d0d !important;
-      stroke: #3a2a1a !important;
-      opacity: 0.5;
-    }
-    @keyframes pulse-current {
-      0% { filter: drop-shadow(0 0 2px #27ae60); }
-      50% { filter: drop-shadow(0 0 10px #27ae60); }
-      100% { filter: drop-shadow(0 0 2px #27ae60); }
-    }
-  `,
-})
+// Node positions for hit testing
+const nodeBounds = ref<Record<string, { x: number, y: number, w: number, h: number }>>({})
 
-/** 
- * Matches the Mermaid-mangled node ID back to our original scene_id.
- * Mermaid flowchart IDs are often formatted as 'flowchart-[scene_id]-[index]'
+/**
+ * Normalizes an ID to match the backend safe_id logic.
  */
-function extractSceneId(mermaidId: string): string | null {
-  // Mermaid IDs are typically: [diagram-id]-flowchart-[sceneId]-[index]
-  // We use a regex to capture everything between 'flowchart-' and the final '-index'
-  const match = mermaidId.match(/flowchart-(.+)-\d+$/)
-  return match ? match[1] : null
+function safeId(raw: string): string {
+  if (!raw) return ''
+  // Python's isalnum() includes unicode letters/numbers.
+  // We use \p{L} (any letter) and \p{N} (any number) with the 'u' flag.
+  return raw.replace(/-/g, '_')
+            .split('')
+            .map(c => /[\p{L}\p{N}_]/u.test(c) ? c : '_')
+            .join('')
+            .toUpperCase()
 }
 
-/** Attaches hover events to the generated SVG nodes. */
-function addMapInteractivity(): void {
-  const nodes = mapContainer.value?.querySelectorAll('.node')
-  if (!nodes) return
+/**
+ * Uses Dagre to calculate a clean layout for the directed graph.
+ */
+function calculateLayout() {
+  if (!props.mapData) return null
 
-  console.log(`[MapMap] Synchronizing nodes...`)
+  const g = new dagre.graphlib.Graph()
+  g.setGraph({ rankdir: 'LR', nodesep: 60, edgesep: 20, ranksep: 120, ranker: 'network-simplex' })
+  g.setDefaultEdgeLabel(() => ({}))
 
-  nodes.forEach((nodeEl) => {
-    const mermaidId = nodeEl.id
-    const sceneId = extractSceneId(mermaidId)
+  // 1. Determine which nodes to show
+  const visitedIdsList = Object.keys(props.mapData.nodes).sort()
+  const firstId = visitedIdsList[0] 
+  
+  const visitedIds = new Set(visitedIdsList)
+  const discoveredIds = new Set<string>()
+  
+  // Ensure current scene is always treated as visited/shown
+  const currentId = props.mapData.current_scene_id
+  if (currentId) visitedIds.add(currentId)
 
-    nodeEl.addEventListener('mouseenter', (e: any) => {
-      if (sceneId && props.nodes[sceneId]) {
-        hoveredNode.value = props.nodes[sceneId]
-        tooltipPos.value = { x: e.clientX, y: e.clientY }
+  // In normal mode, find nodes that are connected to visited nodes
+  if (!props.isDebug) {
+    props.mapData.edges.forEach(edge => {
+      const fromId = safeId(edge.from)
+      const toId = safeId(edge.to)
+      if (visitedIds.has(fromId) || visitedIds.has(toId)) {
+        if (visitedIds.has(fromId)) discoveredIds.add(toId)
+        if (visitedIds.has(toId)) discoveredIds.add(fromId)
       }
     })
+  }
 
-    nodeEl.addEventListener('mousemove', (e: any) => {
-      tooltipPos.value = { x: e.clientX, y: e.clientY }
+  // 2. Add nodes to graph
+  // Show visited nodes
+  visitedIds.forEach(id => {
+    const node = props.nodes[id] || props.mapData!.nodes[id]
+    const isStart = id === firstId
+    g.setNode(id, { 
+      label: node?.label || id, 
+      width: 160, 
+      height: 70,
+      rank: isStart ? 0 : undefined
     })
+  })
 
-    nodeEl.addEventListener('mouseleave', () => {
-      hoveredNode.value = null
-    })
+  // Show discovered (but not visited) nodes
+  discoveredIds.forEach(id => {
+    if (!visitedIds.has(id)) {
+      // Try to find label in props.nodes (template metadata)
+      const metadata = props.nodes[id]
+      g.setNode(id, { label: metadata?.label || id, width: 160, height: 70 })
+    }
+  })
+
+  // 3. Add edges (Normalize IDs!)
+  props.mapData.edges.forEach(edge => {
+    const fromId = safeId(edge.from)
+    const toId = safeId(edge.to)
+    
+    // Only add edge if both nodes exist in the graph
+    if (g.hasNode(fromId) && g.hasNode(toId)) {
+      g.setEdge(fromId, toId)
+    }
+  })
+
+  dagre.layout(g)
+  return g
+}
+
+/**
+ * Renders the sketchy map using Rough.js on a Canvas.
+ */
+async function renderMap() {
+  if (!props.open || !canvasRef.value || !props.mapData) return
+
+  const canvas = canvasRef.value
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const g = calculateLayout()
+  if (!g) return
+
+  const rc = rough.canvas(canvas)
+  
+  // Reset bounds for hit testing
+  nodeBounds.value = {}
+
+  // Determine canvas size based on graph size
+  const graphInfo = g.graph()
+  const margin = 100
+  const width = (graphInfo.width || 800) + margin * 2
+  const height = (graphInfo.height || 600) + margin * 2
+  
+  canvas.width = width
+  canvas.height = height
+  
+  ctx.clearRect(0, 0, width, height)
+
+  // Sketching settings
+  const nodeOptions = {
+    roughness: 1.5,
+    stroke: '#8b6914',
+    strokeWidth: 2,
+    fill: '#3d1f00',
+    fillStyle: 'hachure' as const,
+    fillWeight: 1.5,
+    hachureAngle: 60,
+    hachureGap: 4
+  }
+
+  const unvisitedNodeOptions = {
+    ...nodeOptions,
+    stroke: '#5c4b2a',
+    fill: 'transparent',
+    strokeDasharray: [5, 5],
+    roughness: 1.0,
+    fillStyle: 'none' as const
+  }
+
+  const discoveredNodeOptions = {
+    ...unvisitedNodeOptions,
+    stroke: '#8b7a5e',
+    fill: 'transparent',
+    fillStyle: 'none' as const
+  }
+
+  const currentNodeOptions = {
+    ...nodeOptions,
+    stroke: '#c9a84c',
+    strokeWidth: 3,
+    fill: '#1a5c2a',
+    roughness: 2,
+    fillWeight: 3
+  }
+
+  const edgeOptions = {
+    roughness: 0.3,
+    stroke: '#ffd97d',
+    strokeWidth: 1.5
+  }
+
+  const lockedEdgeOptions = {
+    ...edgeOptions,
+    strokeDasharray: [5, 5],
+    opacity: 0.5
+  }
+
+  // 1. Draw Edges
+  g.edges().forEach(e => {
+    const edge = g.edge(e)
+    const points = edge.points
+    if (points && points.length > 1) {
+      const p1 = points[0]
+      const p2 = points[points.length - 1]
+      
+      // Use the edge data to check if locked
+      const rawEdge = props.mapData!.edges.find(re => safeId(re.from) === e.v && safeId(re.to) === e.w)
+      const options = rawEdge?.is_locked ? lockedEdgeOptions : edgeOptions
+      
+      // Draw smoother curve
+      const flatPoints: [number, number][] = points.map(p => [p.x + margin, p.y + margin])
+      // If many points, we just use a few to keep it smooth
+      const simplified = flatPoints.length > 4 
+        ? [flatPoints[0], flatPoints[Math.floor(flatPoints.length/2)], flatPoints[flatPoints.length-1]]
+        : flatPoints
+      rc.curve(simplified, options)
+
+      // Draw arrow head at the end
+      if (flatPoints.length >= 2) {
+        const last = flatPoints[flatPoints.length - 1]
+        const secondLast = flatPoints[flatPoints.length - 2]
+        
+        // Use a small distance back from the last point to calculate angle
+        // to avoid issues with very short final segments
+        const angle = Math.atan2(last[1] - secondLast[1], last[0] - secondLast[0])
+        const headLen = 12
+        
+        // Draw arrow head as a filled sketchy triangle
+        const h1x = last[0] - headLen * Math.cos(angle - Math.PI / 6)
+        const h1y = last[1] - headLen * Math.sin(angle - Math.PI / 6)
+        const h2x = last[0] - headLen * Math.cos(angle + Math.PI / 6)
+        const h2y = last[1] - headLen * Math.sin(angle + Math.PI / 6)
+        
+        rc.polygon([[last[0], last[1]], [h1x, h1y], [h2x, h2y]], {
+          ...options,
+          fill: options.stroke,
+          fillStyle: 'solid',
+          roughness: 0.2
+        })
+      }
+
+      // Draw edge label if exists
+      if (rawEdge?.label) {
+        const midIdx = Math.floor(points.length / 2)
+        const midPoint = points[midIdx]
+        
+        // Background for text contrast
+        const text = rawEdge.label
+        ctx.font = 'bold italic 12px Acme, sans-serif'
+        const metrics = ctx.measureText(text)
+        const bgW = metrics.width + 10
+        const bgH = 16
+        
+        ctx.save()
+        ctx.shadowBlur = 0 // Disable shadow for text background
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)'
+        ctx.fillRect(midPoint.x + margin - bgW/2, midPoint.y + margin - bgH - 5, bgW, bgH)
+        
+        ctx.fillStyle = '#ffd97d'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'bottom'
+        ctx.fillText(text, midPoint.x + margin, midPoint.y + margin - 7)
+        ctx.restore()
+      }
+    }
+  })
+
+  // 2. Draw Nodes
+  g.nodes().forEach(id => {
+    const node = g.node(id)
+    const isCurrent = id === props.mapData?.current_scene_id
+    const x = node.x - node.width / 2 + margin
+    const y = node.y - node.height / 2 + margin
+    const w = node.width
+    const h = node.height
+
+    // Store bounds for hit testing
+    nodeBounds.value[id] = { x, y, w, h }
+
+    // Draw sketchy box
+    const nodeData = props.mapData?.nodes[id]
+    const isVisited = !!nodeData
+    const options = isCurrent ? currentNodeOptions : (isVisited ? nodeOptions : discoveredNodeOptions)
+    
+    rc.rectangle(x, y, w, h, options)
+
+    // Text Label
+    ctx.font = isCurrent ? 'bold 15px Acme, sans-serif' : '14px Acme, sans-serif'
+    ctx.fillStyle = isVisited ? '#f5e6c8' : '#8b7a5e'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const label = isCurrent ? `${node.label} 📍` : node.label
+    
+    // Simple text wrapping for long labels
+    const words = label.split(' ')
+    if (words.length > 3 && label.length > 20) {
+      const mid = Math.floor(words.length / 2)
+      const line1 = words.slice(0, mid).join(' ')
+      const line2 = words.slice(mid).join(' ')
+      ctx.fillText(line1, node.x + margin, node.y + margin - 10)
+      ctx.fillText(line2, node.x + margin, node.y + margin + 10)
+    } else {
+      ctx.fillText(label, node.x + margin, node.y + margin)
+    }
   })
 }
 
-/** Re-renders the Mermaid diagram whenever the source changes or modal opens. */
-async function renderMermaid(): Promise<void> {
-  if (!props.open || !mapContainer.value || !props.mermaidSrc) return
+/**
+ * Hit testing for interactivity.
+ */
+function handleMouseMove(e: MouseEvent) {
+  if (!canvasRef.value) return
+  const rect = canvasRef.value.getBoundingClientRect()
+  const x = e.clientX - rect.left
+  const y = e.clientY - rect.top
 
-  renderError.value = null
-  // We don't clear innerHTML immediately to avoid flicker during re-renders
-  
-  try {
-    const id = `mermaid-map-${Date.now()}`
-    const { svg } = await mermaid.render(id, props.mermaidSrc)
-    mapContainer.value.innerHTML = svg
-
-    // Make the SVG responsive
-    const svgEl = mapContainer.value.querySelector('svg')
-    if (svgEl) {
-      svgEl.removeAttribute('width')
-      svgEl.removeAttribute('height')
-      svgEl.style.width = '100%'
-      svgEl.style.height = '100%'
-      
-      // Inject interactivity after SVG is in DOM
-      addMapInteractivity()
+  let foundId: string | null = null
+  for (const [id, bounds] of Object.entries(nodeBounds.value)) {
+    if (x >= bounds.x && x <= bounds.x + bounds.w && y >= bounds.y && y <= bounds.y + bounds.h) {
+      foundId = id
+      break
     }
-  } catch (err) {
-    renderError.value = 'Failed to render map. The data may be incomplete.'
-    console.error('[MapModal] Mermaid render error:', err)
+  }
+
+  if (foundId !== hoveredNodeId.value) {
+    hoveredNodeId.value = foundId
+    if (foundId) {
+      // Find metadata by original ID or safe ID
+      const nodeData = props.mapData?.nodes[foundId]
+      const originalId = nodeData?.id || foundId
+      hoveredNode.value = props.nodes[originalId] || nodeData
+      tooltipPos.value = { x: e.clientX, y: e.clientY }
+    } else {
+      hoveredNode.value = null
+    }
+  } else if (foundId) {
+    tooltipPos.value = { x: e.clientX, y: e.clientY }
   }
 }
 
-watch(() => [props.open, props.mermaidSrc], async () => {
-  await nextTick()
-  await renderMermaid()
-})
-
-onMounted(async () => {
+watch(() => [props.open, props.mapData], async () => {
   if (props.open) {
     await nextTick()
-    await renderMermaid()
+    renderMap()
   }
 })
+
+onMounted(() => {
+  if (props.open) {
+    renderMap()
+  }
+})
+
 </script>
 
 <template>
@@ -193,17 +375,17 @@ onMounted(async () => {
               <i class="ra ra-map text-2xl text-emerald-500"></i>
               <div>
                 <h2 class="text-xl font-bold text-white">World Map</h2>
-                <p class="text-xs text-slate-400 mt-0.5">Auto-updated as you explore</p>
+                <p class="text-xs text-slate-400 mt-0.5">Sketch of your journey</p>
               </div>
             </div>
             <div class="flex items-center gap-4">
               <!-- Legend -->
               <div class="hidden sm:flex items-center gap-4 text-xxs text-slate-400">
                 <span class="flex items-center gap-1.5">
-                  <span class="inline-block w-3 h-3 rounded bg-emerald-500"></span> Current Location
+                  <span class="inline-block w-3 h-3 rounded bg-emerald-700 border border-emerald-500"></span> Current Location
                 </span>
                 <span class="flex items-center gap-1.5">
-                  <span class="inline-block w-3 h-3 rounded bg-slate-700 border border-slate-600"></span> Visited
+                  <span class="inline-block w-3 h-3 rounded bg-[#3d1f00] border border-[#8b6914]"></span> Visited
                 </span>
               </div>
               <button
@@ -219,10 +401,10 @@ onMounted(async () => {
           </div>
 
           <!-- Map Container -->
-          <div class="flex-grow overflow-auto p-6 relative bg-slate-950 bg-radial-gradient">
+          <div class="flex-grow overflow-auto p-6 relative bg-slate-950 bg-radial-gradient" ref="mapContainer">
             <!-- Empty state -->
             <div
-              v-if="!mermaidSrc"
+              v-if="!mapData"
               class="absolute inset-0 flex flex-col items-center justify-center text-slate-600"
             >
               <i class="ra ra-compass text-6xl mb-4 opacity-50"></i>
@@ -230,21 +412,18 @@ onMounted(async () => {
               <p class="text-sm mt-1">Start your adventure to reveal the world.</p>
             </div>
 
-            <!-- Render error -->
-            <div
-              v-else-if="renderError"
-              class="absolute inset-0 flex flex-col items-center justify-center text-red-400"
-            >
-              <i class="ra ra-skull text-5xl mb-4 opacity-60"></i>
-              <p>{{ renderError }}</p>
-            </div>
-
-            <!-- Mermaid output -->
+            <!-- Rough output -->
             <div
               v-else
-              ref="mapContainer"
-              class="w-full h-full flex items-center justify-center [&_svg]:max-w-full [&_svg]:max-h-full transition-transform duration-300 relative z-10"
-            />
+              class="w-full h-full flex items-center justify-center relative z-10"
+            >
+              <canvas 
+                ref="canvasRef" 
+                @mousemove="handleMouseMove" 
+                @mouseleave="hoveredNode = null"
+                class="max-w-none transition-transform duration-300"
+              />
+            </div>
 
             <!-- Background SVG Overlay -->
             <div 
@@ -278,7 +457,7 @@ onMounted(async () => {
                     <!-- Content -->
                     <div class="p-5 bg-slate-900">
                       <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label }}</span>
+                        <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label || hoveredNode.id }}</span>
                         <div class="flex gap-1.5">
                           <span class="text-xxs px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
                             Room
@@ -297,7 +476,7 @@ onMounted(async () => {
 
           <!-- Footer hint -->
           <div class="px-8 py-3 border-t border-slate-800 text-xs text-slate-600 text-right shrink-0">
-            Tip: hover over rooms for details • type <code class="text-emerald-600 font-mono">/map</code> to refresh
+            Tip: hover over rooms for details • sketched in real-time
           </div>
         </div>
       </div>
@@ -346,6 +525,8 @@ onMounted(async () => {
     transform: scale(1) translateY(0);
   }
 }
+
+canvas {
+  filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+}
 </style>
-
-

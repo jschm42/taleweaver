@@ -415,7 +415,7 @@ class GameTurnManager:
 
         # Lazy-register initial map visit
         try:
-            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
             # Use session_id to find the scene (snapshot)
             scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.session_id == self.game_id))
             cur_scene = scene_res.scalars().first()
@@ -633,9 +633,11 @@ class GameTurnManager:
         async for chunk in self._run_llm_cycle(instruction, self.avatar):
             yield chunk
 
-        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
         final_data = jsonable_encoder({
             'mermaid': MapEngine.to_mermaid(world_map),
+            'map_data': MapEngine.to_dict(world_map),
+            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'awards': self.adventure.awards,
@@ -648,10 +650,11 @@ class GameTurnManager:
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
-            map_res = await self.db.execute(select(WorldMap).where(WorldMap.template_id == self.state.template_id))
-            world_map = map_res.scalars().first()
+            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
             final_data = jsonable_encoder({
                 'mermaid': MapEngine.to_mermaid(world_map) if world_map else None,
+                'map_data': MapEngine.to_dict(world_map) if world_map else None,
+                'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id),
                 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
                 **self._build_terminal_flags_payload(),
             })
@@ -822,10 +825,14 @@ class GameTurnManager:
         if combat_snap and not combat_snap.get("active") and not combat_snap.get("loot_pending") and not combat_snap.get("outcome"):
             combat_snap = None
 
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
         final_data = jsonable_encoder({
+            'mermaid': MapEngine.to_mermaid(world_map),
+            'map_data': MapEngine.to_dict(world_map),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': combat_snap,
+            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id),
             **self._build_terminal_flags_payload(),
             'status_note': status_note or (self.state.session.status_note if self.state.session else None),
             'status': 'success'
@@ -2450,7 +2457,11 @@ class GameTurnManager:
 
         await self.db.commit()
         
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
         final_data = jsonable_encoder({
+            'mermaid': MapEngine.to_mermaid(world_map),
+            'map_data': MapEngine.to_dict(world_map),
+            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
@@ -2537,7 +2548,7 @@ class GameTurnManager:
             
             # Map Update
             try:
-                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
                 # 1. Register exit between scenes
                 MapEngine.register_exit(world_map, old_scene_id, event.new_scene_id, exit_label=event.exit_label or "")
                 # 2. Register visit to the new scene

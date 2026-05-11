@@ -12,9 +12,9 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '886aaf16818a'
-down_revision: str | Sequence[str] | None = 'dab2beb3a37f'
-branch_labels: str | Sequence[str] | None = None
-depends_on: str | Sequence[str] | None = None
+down_revision = 'dab2beb3a37f'
+branch_labels = None
+depends_on = None
 
 
 def upgrade() -> None:

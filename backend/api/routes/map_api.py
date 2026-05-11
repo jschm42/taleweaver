@@ -47,29 +47,19 @@ class ExitPayload(BaseModel):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/adventures/{template_id}/map")
-async def get_map(template_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_map(template_id: str, session_id: Optional[str] = None, db: AsyncSession = Depends(get_db)) -> dict:
     """Return the raw scene-graph JSON (nodes + edges)."""
-    result = await db.execute(
-        select(WorldMap).where(WorldMap.template_id == template_id)
-    )
-    world_map = result.scalars().first()
+    world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     if not world_map:
         return {"nodes": {}, "edges": [], "current_scene_id": None}
 
-    return {
-        "nodes": world_map.nodes,
-        "edges": world_map.edges,
-        "current_scene_id": world_map.current_scene_id,
-    }
+    return MapEngine.to_dict(world_map)
 
 
 @router.get("/adventures/{template_id}/map/mermaid")
-async def get_mermaid(template_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_mermaid(template_id: str, session_id: Optional[str] = None, db: AsyncSession = Depends(get_db)) -> dict:
     """Return the scene graph serialised as a Mermaid.js flowchart string and node metadata."""
-    result = await db.execute(
-        select(WorldMap).where(WorldMap.template_id == template_id)
-    )
-    world_map = result.scalars().first()
+    world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     if not world_map or not world_map.nodes:
         # Return a minimal Mermaid diagram that shows an empty state.
         return {
@@ -79,6 +69,7 @@ async def get_mermaid(template_id: str, db: AsyncSession = Depends(get_db)) -> d
 
     return {
         "mermaid": MapEngine.to_mermaid(world_map),
+        "map_data": MapEngine.to_dict(world_map),
         "nodes": world_map.nodes
     }
 
@@ -87,6 +78,7 @@ async def get_mermaid(template_id: str, db: AsyncSession = Depends(get_db)) -> d
 async def post_visit(
     template_id: str,
     payload: VisitPayload,
+    session_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Register a scene visit — upserts the node and sets it as current."""
@@ -95,7 +87,7 @@ async def post_visit(
     if not adv.scalars().first():
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
 
-    world_map = await AdventureLogic.get_or_create_map(db, template_id)
+    world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     MapEngine.register_visit(
         world_map, 
         payload.scene_id, 
@@ -111,10 +103,11 @@ async def post_visit(
 async def post_exit(
     template_id: str,
     payload: ExitPayload,
+    session_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Register a directed exit between two scenes."""
-    world_map = await AdventureLogic.get_or_create_map(db, template_id)
+    world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     MapEngine.register_exit(world_map, payload.from_scene, payload.to_scene, payload.exit_label or "")
     await db.commit()
     return {"status": "ok"}

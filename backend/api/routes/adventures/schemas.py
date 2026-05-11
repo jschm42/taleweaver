@@ -197,6 +197,7 @@ class ChatResponse(BaseModel):
     sheet: dict[str, Any]
     combat: Optional[dict[str, Any]] = None
     mermaid: Optional[str] = None
+    map_data: Optional[dict[str, Any]] = None
     nodes: Optional[dict[str, Any]] = None
     entities: Optional[list[dict[str, Any]]] = None
     npc_metadata: Optional[dict[str, Any]] = None
