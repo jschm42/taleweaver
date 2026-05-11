@@ -1,0 +1,113 @@
+import { computed, ref, watch, type Ref } from 'vue'
+import { gameCommandService } from '@/services/gameCommandService'
+import { isConsumableEntity, normalizeHoverEntity } from '@/services/hoverEntityService'
+
+type ContextMenuState = {
+  x: number
+  y: number
+  items: any[]
+  title: string
+} | null
+
+type UseGameInteractionStateOptions = {
+  isActionInputBlocked: Ref<boolean>
+  ruleMode: Ref<string | undefined>
+  npcMetadata: Ref<Record<string, any>>
+  handlePlayerInput: (content: string) => Promise<void>
+}
+
+export function useGameInteractionState(options: UseGameInteractionStateOptions) {
+  const {
+    isActionInputBlocked,
+    ruleMode,
+    npcMetadata,
+    handlePlayerInput,
+  } = options
+
+  const hoveredEntity = ref<any>(null)
+  const mousePos = ref({ x: 0, y: 0 })
+  const tooltipImageFailed = ref(false)
+  const contextMenu = ref<ContextMenuState>(null)
+
+  const tooltipStyle = computed(() => {
+    if (!hoveredEntity.value) return {}
+    const x = mousePos.value.x + 20
+    const y = mousePos.value.y
+    const threshold = window.innerHeight * 0.6
+
+    const style: Record<string, string> = {
+      left: `${x}px`,
+    }
+
+    if (y > threshold) {
+      style.bottom = `${window.innerHeight - y + 10}px`
+      style.top = 'auto'
+    } else {
+      style.top = `${y + 10}px`
+      style.bottom = 'auto'
+    }
+    return style
+  })
+
+  const isConsumableHover = computed(() => isConsumableEntity(hoveredEntity.value))
+
+  const handleHover = (ent: any, event: MouseEvent) => {
+    tooltipImageFailed.value = false
+    hoveredEntity.value = normalizeHoverEntity(ent)
+    mousePos.value = { x: event.clientX, y: event.clientY }
+  }
+
+  const handleChatNpcHover = (name: string, event: MouseEvent) => {
+    const metadata = npcMetadata.value[name]
+    if (metadata) {
+      tooltipImageFailed.value = false
+      hoveredEntity.value = normalizeHoverEntity(metadata)
+      mousePos.value = { x: event.clientX, y: event.clientY }
+    }
+  }
+
+  const onTooltipImageError = (): void => {
+    tooltipImageFailed.value = true
+  }
+
+  const openContextMenu = (entity: any, event: MouseEvent) => {
+    if (isActionInputBlocked.value) return
+
+    const menu = gameCommandService.buildContextMenu(entity, ruleMode.value)
+    if (!menu) return
+
+    contextMenu.value = {
+      x: event.clientX,
+      y: event.clientY,
+      items: menu.items,
+      title: menu.title,
+    }
+
+    hoveredEntity.value = null
+  }
+
+  const handleMenuSelect = async (item: any) => {
+    if (isActionInputBlocked.value) return
+    const action = item.action
+    contextMenu.value = null
+    await handlePlayerInput(action)
+  }
+
+  watch(() => hoveredEntity.value?.image_url, () => {
+    tooltipImageFailed.value = false
+  })
+
+  return {
+    hoveredEntity,
+    mousePos,
+    tooltipImageFailed,
+    contextMenu,
+    tooltipStyle,
+    isConsumableHover,
+    handleHover,
+    handleChatNpcHover,
+    onTooltipImageError,
+    openContextMenu,
+    handleMenuSelect,
+  }
+}

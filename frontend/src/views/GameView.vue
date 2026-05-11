@@ -5,7 +5,7 @@
  * Connects to the given game session and displays the chat,
  * intercepting commands and showing the character sheet + world map.
  */
-import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
+import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
@@ -25,10 +25,19 @@ import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
-import { api } from '@/composables/useApi'
-import { authState, refreshUser } from '@/store/auth'
+import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
+import { useGameProgressState } from '@/composables/useGameProgressState'
+import { useGameUiFeedback } from '@/composables/useGameUiFeedback'
+import { useGameInteractionState } from '@/composables/useGameInteractionState'
+import { useGameSessionLifecycle } from '@/composables/useGameSessionLifecycle'
+import { useGameCommandFlow } from '@/composables/useGameCommandFlow'
+import { refreshUser } from '@/store/auth'
 import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
+import { type GameSettings } from '@/services/gameViewService'
+import { gameCommandService } from '@/services/gameCommandService'
+import { gameActionService } from '@/services/gameActionService'
+import { fixNewlines, hasNonZero } from '@/services/hoverEntityService'
 
 const props = defineProps<{
   id: string
@@ -38,17 +47,9 @@ const router = useRouter()
 const showSheet = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
-const showWalkthrough = ref(false)
-const showSuccess = ref(false)
-const showGameOver = ref(false)
-const showDebug = ref(false)
 const showDebugLog = ref(false)
-const fullWorldDebug = ref<any | null>(null)
-const walkthroughData = ref<any | null>(null)
-const trackedQuestId = ref<string | null>(null)
-const clockTick = ref(false)
 const { notifications, removeNotification, addNotification } = useNotifications()
-const gameSettings = ref<{ clock_24h: boolean; date_format?: 'DD.MM.YY' | 'MM/DD/YY' | 'YY-MM-DD' }>({
+const gameSettings = ref<GameSettings>({
   clock_24h: false,
 })
 
@@ -80,20 +81,27 @@ const {
   createTerminalEpilogue
 } = useGameSocket()
 
+const {
+  showSuccess,
+  showGameOver,
+  trackedQuestId,
+  clockTick,
+  gameTime,
+  continueCompletedGame,
+  continueGameOverReadOnly,
+  setTrackedQuest,
+} = useGameProgressState({
+  sheet,
+  quests,
+  status,
+  isCompleted,
+  pendingTerminalEpilogue,
+  gameSettings,
+  createTerminalEpilogue,
+  refreshUser,
+})
+
 const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQuestId.value))
-
-// Tooltip & Hover State
-const hoveredEntity = ref<any>(null)
-const mousePos = ref({ x: 0, y: 0 })
-const tooltipImageFailed = ref(false)
-
-// Context Menu State
-const contextMenu = ref<{
-  x: number
-  y: number
-  items: any[]
-  title: string
-} | null>(null)
 
 onBeforeUnmount(() => {
   audioService.stop()
@@ -103,232 +111,29 @@ const activeActionId = ref<string | null>(null)
 const isPassRunning = computed(() => status.value === 'connecting' || status.value === 'loading')
 const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || audioService.isPlaying.value || audioService.isGenerating.value)
 const showVoiceUnlockHint = computed(() => audioService.autoSpeechEnabled.value && !audioService.isUnlocked.value)
-const lastAudioErrorMessage = ref<string | null>(null)
-
-function isReadOnlyUiCommand(normalized: string): boolean {
-  return normalized === '/map' || normalized === '/sheet' || normalized === '/inventory' || normalized === '/quests'
-}
 
 const handleEntityClick = async (entity: any) => {
   if (isActionInputBlocked.value) return
   if (activeActionId.value) {
-    const action = activeActionId.value
-    const targetName = entity.name || entity.id
-    let command = ""
+    const { command, errorMessage } = gameCommandService.resolveEntityActionCommand(activeActionId.value, entity)
 
-    switch (action) {
-      case 'talk': command = `/talk ${targetName}`; break
-      case 'inspect': command = `/inspect ${targetName}`; break
-      case 'take': command = `/take ${targetName}`; break
-      case 'attack': 
-        if (entity.is_attackable === false) {
-          addNotification('You cannot attack this target.', 'error')
-          activeActionId.value = null
-          return
-        }
-        command = `/attack ${targetName}`; 
-        break
-      case 'push': command = `Push ${targetName}`; break
-      case 'pull': command = `Pull ${targetName}`; break
-      default: command = `${action} ${targetName}`; break
+    if (errorMessage) {
+      addNotification(errorMessage, 'error')
+      activeActionId.value = null
+      return
     }
 
     activeActionId.value = null
-    await handlePlayerInput(command)
+    if (command) {
+      await handlePlayerInput(command)
+    }
   } else {
     // Default behavior for click (e.g. pick up if portable item)
-    if (entity.entity_type === 'OBJECT' && entity.is_portable !== false) {
+    if (gameCommandService.shouldAutoTakeOnEntityClick(entity)) {
       await handleTakeDirect(entity)
     }
   }
 }
-
-const openContextMenu = (entity: any, event: MouseEvent) => {
-  if (isActionInputBlocked.value) return
-
-  const items: any[] = []
-  let title = entity.name || 'Action'
-  
-  if (entity.id === 'PLAYER') {
-    title = 'You'
-    items.push({ label: 'Inspect', action: '/sheet', icon: 'ra ra-player', color: 'text-cyan-400' })
-    items.push({ label: 'Rest', action: 'Take a rest', icon: 'ra ra-sleeping-bag', color: 'text-emerald-400' })
-    items.push({ label: 'Sing', action: 'Sing a song', icon: 'ra ra-music-spell', color: 'text-pink-400' })
-    items.push({ label: 'Dance', action: 'Start dancing', icon: 'ra ra-double-team', color: 'text-orange-400' })
-  } else if (entity.entity_type === 'NPC') {
-    items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
-    if (sheet.value?.rule_enforcement_mode === 'rpg') {
-      const isAttackable = entity.is_attackable !== false
-      if (isAttackable) {
-        items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
-      }
-    }
-    items.push({ label: 'Chat', action: `/talk ${entity.name}`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
-  } else if (entity.entity_type === 'SCENE') {
-    items.push({ label: 'Look around', action: 'Look around', icon: 'ra ra-eye', color: 'text-indigo-400' })
-    items.push({ label: 'Search', action: 'Search the area', icon: 'ra ra-magnifying-glass', color: 'text-emerald-400' })
-  } else if (entity.entity_type === 'OBJECT' || entity.entity_type === 'ITEM') {
-    items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
-    items.push({ label: 'Pick up', action: `/take ${entity.name}`, icon: 'ra ra-hand', color: 'text-amber-400' })
-    items.push({ label: 'Push', action: `Push ${entity.name}`, icon: 'ra ra-cog', color: 'text-slate-400' })
-    items.push({ label: 'Pull', action: `Pull ${entity.name}`, icon: 'ra ra-tread', color: 'text-slate-400' })
-    items.push({ label: 'Hit', action: `Hit ${entity.name}`, icon: 'ra ra-hammer', color: 'text-red-400' })
-    items.push({ label: 'Smell', action: `Smell ${entity.name}`, icon: 'ra ra-scent', color: 'text-pink-400' })
-  }
-
-  if (items.length > 0) {
-    contextMenu.value = {
-      x: event.clientX,
-      y: event.clientY,
-      items,
-      title
-    }
-    // Also hide tooltip when menu opens
-    hoveredEntity.value = null
-  }
-}
-
-const handleMenuSelect = async (item: any) => {
-  if (isActionInputBlocked.value) return
-  const action = item.action
-  contextMenu.value = null
-  await handlePlayerInput(action)
-}
-
-
-function toNumberOrNull(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value)
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return null
-}
-
-function firstNumeric(...values: unknown[]): number | null {
-  for (const value of values) {
-    const parsed = toNumberOrNull(value)
-    if (parsed !== null) return parsed
-  }
-  return null
-}
-
-function hasNonZero(value: unknown): boolean {
-  const parsed = toNumberOrNull(value)
-  return parsed !== null && parsed !== 0
-}
-
-function fixNewlines(text: string | null | undefined): string {
-  if (!text) return ''
-  return text.replace(/\\n/g, '\n')
-}
-
-function normalizeHoverEntity(entity: any): any {
-  if (!entity || typeof entity !== 'object') return entity
-
-  const normalized = { ...entity }
-  const metadata = (normalized.metadata_json && typeof normalized.metadata_json === 'object') ? normalized.metadata_json : {}
-  const embeddedStats = (metadata.stat_modifiers && typeof metadata.stat_modifiers === 'object') ? metadata.stat_modifiers : {}
-  const directStats = (normalized.stat_modifiers && typeof normalized.stat_modifiers === 'object') ? normalized.stat_modifiers : {}
-
-  const stat = (...keys: string[]) => firstNumeric(
-    ...keys.map((k) => normalized[k]),
-    ...keys.map((k) => metadata[k]),
-    ...keys.map((k) => embeddedStats[k]),
-    ...keys.map((k) => directStats[k]),
-  )
-
-  if (normalized.stat_modifier_strength == null) {
-    const value = stat('stat_modifier_strength', 'strength', 'str', 'STR')
-    if (value != null) normalized.stat_modifier_strength = value
-  }
-  if (normalized.stat_modifier_dexterity == null) {
-    const value = stat('stat_modifier_dexterity', 'stat_modifier_agility', 'dexterity', 'agility', 'dex', 'DEX', 'AGI')
-    if (value != null) normalized.stat_modifier_dexterity = value
-  }
-  if (normalized.stat_modifier_intelligence == null) {
-    const value = stat('stat_modifier_intelligence', 'intelligence', 'int', 'INT')
-    if (value != null) normalized.stat_modifier_intelligence = value
-  }
-  if (normalized.stat_modifier_wisdom == null) {
-    const value = stat('stat_modifier_wisdom', 'wisdom', 'wis', 'WIS')
-    if (value != null) normalized.stat_modifier_wisdom = value
-  }
-  if (normalized.stat_modifier_charisma == null) {
-    const value = stat('stat_modifier_charisma', 'charisma', 'cha', 'CHA')
-    if (value != null) normalized.stat_modifier_charisma = value
-  }
-  if (normalized.stat_modifier_armor_class == null) {
-    const value = stat('stat_modifier_armor_class', 'armor_class', 'ac', 'AC')
-    if (value != null) normalized.stat_modifier_armor_class = value
-  }
-
-  const effects = (metadata.effects && typeof metadata.effects === 'object') ? metadata.effects : {}
-  if (normalized.hp_change == null) {
-    const value = firstNumeric(normalized.hp_change, metadata.hp_change, metadata.health_change, effects.hp, effects.health)
-    if (value != null) normalized.hp_change = value
-  }
-  if (normalized.mana_change == null) {
-    const value = firstNumeric(normalized.mana_change, metadata.mana_change, effects.mana)
-    if (value != null) normalized.mana_change = value
-  }
-  if (normalized.stamina_change == null) {
-    const value = firstNumeric(normalized.stamina_change, metadata.stamina_change, effects.stamina, effects.energy)
-    if (value != null) normalized.stamina_change = value
-  }
-
-  return normalized
-}
-
-const handleHover = (ent: any, event: MouseEvent) => {
-  tooltipImageFailed.value = false
-  hoveredEntity.value = normalizeHoverEntity(ent)
-  mousePos.value = { x: event.clientX, y: event.clientY }
-}
-
-function onTooltipImageError(): void {
-  tooltipImageFailed.value = true
-}
-
-const tooltipStyle = computed(() => {
-  if (!hoveredEntity.value) return {}
-  const x = mousePos.value.x + 20
-  const y = mousePos.value.y
-  const threshold = window.innerHeight * 0.6
-  
-  const style: Record<string, string> = {
-    left: `${x}px`,
-  }
-
-  if (y > threshold) {
-    style.bottom = `${window.innerHeight - y + 10}px`
-    style.top = 'auto'
-  } else {
-    style.top = `${y + 10}px`
-    style.bottom = 'auto'
-  }
-  return style
-})
-
-const isConsumableHover = computed(() => {
-  const ent = hoveredEntity.value
-  if (!ent) return false
-  const itemType = String(ent.item_type || '').toUpperCase()
-  return itemType === 'CONSUMABLE' || ent.hp_change != null || ent.mana_change != null || ent.stamina_change != null
-})
-
-const handleChatNpcHover = (name: string, event: MouseEvent) => {
-  const metadata = npcMetadata.value[name]
-  if (metadata) {
-    tooltipImageFailed.value = false
-    hoveredEntity.value = normalizeHoverEntity(metadata)
-    mousePos.value = { x: event.clientX, y: event.clientY }
-  }
-}
-
-watch(() => hoveredEntity.value?.image_url, () => {
-  tooltipImageFailed.value = false
-})
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
 const npcs = computed(() => {
@@ -375,32 +180,14 @@ watch(combat, (newCombat) => {
   }
 })
 
-// --- WATCHERS FOR UI FEEDBACK (GLOW) ---
-
-watch(() => sheet.value?.inventory, (newInv, oldInv) => {
-  if (oldInv && newInv && newInv.length > oldInv.length) {
-    inventoryGlow.value = true
-    setTimeout(() => { inventoryGlow.value = false }, 3000)
-  }
-}, { deep: true })
-
-watch(() => nodes.value, (newNodes, oldNodes) => {
-  if (oldNodes && newNodes && newNodes.length > oldNodes.length) {
-    mapGlow.value = true
-    setTimeout(() => { mapGlow.value = false }, 3000)
-  }
-}, { deep: true })
-
-watch(() => quests.value, (newQuests, oldQuests) => {
-  if (oldQuests && newQuests) {
-    const newActive = newQuests.filter(q => q.status === 'active').length
-    const oldActive = oldQuests.filter(q => q.status === 'active').length
-    if (newActive > oldActive) {
-      questGlow.value = true
-      setTimeout(() => { questGlow.value = false }, 3000)
-    }
-  }
-}, { deep: true })
+useGameUiFeedback({
+  sheet,
+  nodes,
+  quests,
+  inventoryGlow,
+  mapGlow,
+  questGlow,
+})
 
 const handleTakeDirect = async (entity: any) => {
   if (isActionInputBlocked.value) return
@@ -408,274 +195,47 @@ const handleTakeDirect = async (entity: any) => {
 }
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
 
-const lastAutoSpokenSignature = ref<string | null>(null)
-const lastAutoSpeakAt = ref(0)
-const AUTO_SPEAK_DEBOUNCE_MS = 350
-
-function getMessageSignature(message: { timestamp?: Date; content: string }, index: number): string {
-  const ts = message.timestamp instanceof Date ? message.timestamp.toISOString() : ''
-  return `${index}|${ts}`
-}
-
-function findLatestSpeakableAssistantMessage(): { index: number; message: { timestamp?: Date; content: string } } | null {
-  for (let index = messages.value.length - 1; index >= 0; index -= 1) {
-    const candidate = messages.value[index] as any
-    if (!candidate) continue
-    if (candidate.role !== 'assistant') continue
-    if (candidate.is_debug) continue
-    if (!String(candidate.content || '').trim()) continue
-    return { index, message: candidate }
-  }
-  return null
-}
-
-function speakLatestAssistantMessage(options: { force?: boolean } = {}): void {
-  const { force = false } = options
-  if (!audioService.autoSpeechEnabled.value) return
-  if (!audioService.isUnlocked.value) return  // browser requires a prior user gesture
-  if (isCombatActive.value) return
-  // During active turn streaming, assistant content is still changing.
-  // Wait until the session returns to a stable state to speak the final block.
-  if (!force && (status.value === 'connecting' || status.value === 'loading')) return
-
-  const now = Date.now()
-  if (!force && now - lastAutoSpeakAt.value < AUTO_SPEAK_DEBOUNCE_MS) return
-
-  const latest = findLatestSpeakableAssistantMessage()
-  if (!latest) return
-  const { index, message: lastMsg } = latest
-
-  const signature = getMessageSignature(lastMsg, index)
-  if (!force && signature === lastAutoSpokenSignature.value) return
-
-  lastAutoSpeakAt.value = now
-  lastAutoSpokenSignature.value = signature
-  void audioService.enqueueSpeak(lastMsg.content, {
-    sceneDescription: currentSceneDescription.value,
-    adventureId: sheet.value?.adventure_id || undefined,
-    sessionId: props.id,
-    title: sheet.value?.adventure_title || undefined,
-    sceneName: sheet.value?.current_scene || undefined,
-    tone: sheet.value?.adventure_tone || undefined,
-    npcMetadata: npcMetadata.value,
-  })
-}
-
-watch(() => inputLocked.value, (isLocked) => {
-  if (isLocked || status.value === 'connecting' || status.value === 'loading') return
-  speakLatestAssistantMessage()
+const {
+  showWalkthrough,
+  showDebug,
+  walkthroughData,
+  fullWorldDebug,
+  goBack,
+  openDebugInspector,
+  revealWalkthrough,
+  buyHint,
+  handlePlayerInput,
+} = useGameCommandFlow({
+  routeId: computed(() => props.id),
+  sheet,
+  isActionInputBlocked,
+  isCombatActive,
+  disconnect,
+  router,
+  sendMessage,
+  showMap,
+  showSheet,
+  showQuests,
+  addNotification,
 })
 
-watch(() => messages.value.length, (newLength, oldLength) => {
-  if (newLength <= oldLength) return
-  const appended = messages.value[newLength - 1] as any
-  if (!appended) return
-  if (appended.role !== 'assistant') return
-  if (appended.is_debug) return
-  if (!String(appended.content || '').trim()) return
-  speakLatestAssistantMessage()
+const { speakLatestAssistantMessage } = useGameAutoSpeak({
+  messages,
+  status,
+  inputLocked,
+  isCombatActive,
+  currentSceneDescription,
+  sheet,
+  npcMetadata,
+  sessionId: computed(() => props.id),
 })
-
-watch(
-  () => {
-    const latest = findLatestSpeakableAssistantMessage()
-    if (!latest) return ''
-    return `${latest.index}|${String(latest.message.content || '').trim()}`
-  },
-  (snapshot, previous) => {
-    if (!snapshot || snapshot === previous) return
-    speakLatestAssistantMessage()
-  }
-)
-
-watch(
-  () => status.value,
-  (newStatus, oldStatus) => {
-    const wasBusy = oldStatus === 'connecting' || oldStatus === 'loading'
-    const isReady = newStatus === 'connected' || newStatus === 'completed'
-    if (!wasBusy || !isReady) return
-    speakLatestAssistantMessage()
-  }
-)
-
-watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
-  if (enabled) {
-    // Delay forced auto-speak slightly to collapse rapid toggle bursts.
-    setTimeout(() => {
-      if (!audioService.autoSpeechEnabled.value) return
-      speakLatestAssistantMessage({ force: true })
-    }, AUTO_SPEAK_DEBOUNCE_MS)
-  } else if (!enabled) {
-    lastAutoSpokenSignature.value = null
-    lastAutoSpeakAt.value = 0
-    audioService.stop()
-  }
-})
-
-onBeforeUnmount(() => {
-  audioService.stop()
-})
-
-/**
- * Formats the session clock as a full datetime derived from the adventure start.
- */
-const gameTime = computed(() => {
-  if (!(sheet.value as any)?.start_datetime && (sheet.value as any)?.time_system !== 'relative') return null
-
-  const timeSystem = (sheet.value as any)?.time_system || 'calendar'
-  const timeConfig = (sheet.value as any)?.time_config || {}
-  const dayLabel = timeConfig.day_label || 'Day'
-  const elapsedMinutes = (sheet.value as any)?.in_game_time ?? 0
-
-  if (timeSystem === 'relative') {
-    const totalMinutes = elapsedMinutes
-    // Support custom start time in relative mode too
-    let baseHour = 8
-    if (timeConfig.start_time) {
-      const [h] = timeConfig.start_time.split(':').map(Number)
-      if (!isNaN(h)) baseHour = h
-    }
-
-    const totalHours = Math.floor(totalMinutes / 60)
-    const extraMinutes = totalMinutes % 60
-    const currentHour = (baseHour + totalHours) % 24
-    const daysPassed = Math.floor((baseHour + totalHours) / 24)
-    
-    const timeStr = `${currentHour.toString().padStart(2, '0')}:${extraMinutes.toString().padStart(2, '0')}`
-    return {
-      date: `${dayLabel} ${1 + daysPassed}`,
-      dateShort: `${dayLabel} ${1 + daysPassed}`,
-      time: timeStr
-    }
-  }
-
-  // Calendar mode
-  const start = new Date((sheet.value as any).start_datetime || 0)
-  if (Number.isNaN(start.getTime())) return null
-
-  const current = new Date(start.getTime() + elapsedMinutes * 60_000)
-
-  const date = current.toLocaleDateString('de-DE', {
-    weekday: 'long',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-
-  const dateShort = (() => {
-    const d = current.getDate().toString().padStart(2, '0')
-    const m = (current.getMonth() + 1).toString().padStart(2, '0')
-    const y = current.getFullYear().toString()
-    const yShort = y.slice(-2)
-    
-    switch (gameSettings.value.date_format) {
-      case 'MM/DD/YY': return `${m}/${d}/${yShort}`
-      case 'YY-MM-DD': return `${yShort}-${m}-${d}`
-      default: return `${d}.${m}.${y}` // Keep full year for sci-fi/historical
-    }
-  })()
-
-  const time = current.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: !gameSettings.value.clock_24h,
-  }).replace(/^0/, '')
-
-  const time24 = current.toLocaleTimeString('de-DE', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-
-  return { 
-    date, 
-    dateShort,
-    time: gameSettings.value.clock_24h ? time24 : time 
-  }
-})
-
-// Flash the clock on every update to give a living-time feel
-watch(() => sheet.value?.in_game_time, () => {
-  clockTick.value = true
-  setTimeout(() => { clockTick.value = false }, 600)
-})
-
-// Auto-untrack completed quests & Default tracking for new sessions
-watch(quests, (newQuests) => {
-  if (trackedQuestId.value) {
-    const tracked = newQuests.find(q => q.id === trackedQuestId.value)
-    if (tracked && tracked.status === 'completed') {
-      trackedQuestId.value = null
-    }
-  }
-  
-  if (!trackedQuestId.value && newQuests && newQuests.length > 0) {
-    const firstMain = newQuests.find(q => q.is_main && q.status === 'open')
-    if (firstMain) {
-      trackedQuestId.value = firstMain.id
-    }
-  }
-}, { immediate: true })
-
-watch(isCompleted, (val) => {
-  if (val && pendingTerminalEpilogue.value) {
-    showSuccess.value = true
-  }
-})
-
-watch(status, async (val) => {
-  if (val === 'game_over' && pendingTerminalEpilogue.value) {
-    showGameOver.value = true
-    await refreshUser()
-  } else if (isCompleted.value && pendingTerminalEpilogue.value) {
-    showSuccess.value = true
-    await refreshUser()
-  }
-})
-
-watch(pendingTerminalEpilogue, async (pending) => {
-  if (!pending) {
-    showSuccess.value = false
-    showGameOver.value = false
-    return
-  }
-
-  if (status.value === 'game_over') {
-    showGameOver.value = true
-  } else if (isCompleted.value) {
-    showSuccess.value = true
-  }
-
-  await refreshUser()
-})
-
-const continueCompletedGame = async () => {
-  showSuccess.value = false
-  await createTerminalEpilogue()
-  await refreshUser()
-}
-
-const continueGameOverReadOnly = async () => {
-  showGameOver.value = false
-  await createTerminalEpilogue()
-  await refreshUser()
-}
 
 const handleTrackQuest = (questId: string | null) => {
-  trackedQuestId.value = questId
+  setTrackedQuest(questId)
   showQuests.value = false
 }
 
 const brokenImages = ref<Record<string, boolean>>({})
-const BASE = '/api'
-
-function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {}
-  if (authState.token) {
-    headers.Authorization = `Bearer ${authState.token}`
-  }
-  return headers
-}
 
 const handleImageError = (path?: string | null) => {
   if (!path) return
@@ -686,207 +246,73 @@ const showImage = (path?: string | null) => {
   return !!path && !brokenImages.value[path]
 }
 
-const goBack = () => {
-  disconnect()
-  router.push({ name: 'portal' })
-}
+useGameSessionLifecycle({
+  routeId: computed(() => props.id),
+  status,
+  gameSettings,
+  router,
+  connect,
+  disconnect,
+  closePanels: () => {
+    showSheet.value = false
+    showMap.value = false
+    showQuests.value = false
+    showWalkthrough.value = false
+    showDebug.value = false
+  },
+})
 
-const openDebugInspector = async () => {
-  showDebug.value = true
-
-  if (!props.id) {
-    fullWorldDebug.value = null
-    return
-  }
-
-  try {
-    const res = await fetch(`${BASE}/adventures/${props.id}/chat?include_full_world=true`, {
-      headers: authHeaders()
-    })
-    if (!res.ok) {
-      fullWorldDebug.value = null
-      return
-    }
-    const data = await res.json()
-    fullWorldDebug.value = data.full_world || null
-  } catch {
-    fullWorldDebug.value = null
-  }
-}
-
-const loadWalkthrough = async () => {
-  if (!props.id) return
-  try {
-    const res = await fetch(`${BASE}/adventures/${props.id}/walkthrough`, { headers: authHeaders() })
-    if (!res.ok) {
-      walkthroughData.value = {
-        available: false,
-        preview: 'No walkthrough available for this adventure yet.',
-        message: 'No walkthrough available for this adventure yet.',
-        current_xp: sheet.value?.exp || 0,
-        reveal_cost: 200,
-        hint_cost: 50,
-      }
-      return
-    }
-    walkthroughData.value = await res.json()
-  } catch (error) {
-    console.error('Failed to load walkthrough', error)
-    walkthroughData.value = {
-      available: false,
-      preview: 'No walkthrough available for this adventure yet.',
-      message: 'No walkthrough available for this adventure yet.',
-      current_xp: sheet.value?.exp || 0,
-      reveal_cost: 200,
-      hint_cost: 50,
-    }
-  }
-}
-
-const openWalkthroughPanel = async () => {
-  await loadWalkthrough()
-  showWalkthrough.value = true
-}
-
-const revealWalkthrough = async () => {
-  await sendMessage('/walkthrough reveal')
-  await loadWalkthrough()
-}
-
-const buyHint = async () => {
-  await sendMessage('/hint')
-  await loadWalkthrough()
-}
-
-const handlePlayerInput = async (content: string) => {
-  // Unlock the AudioContext on every user send so async TTS play() is allowed.
-  audioService.unlock()
-  const normalized = content.trim().toLowerCase()
-
-  if (isReadOnlyUiCommand(normalized)) {
-    if (normalized === '/map') {
-      showMap.value = true
-      return
-    }
-
-    if (normalized === '/sheet' || normalized === '/inventory') {
-      showSheet.value = true
-      return
-    }
-
-    showQuests.value = true
-    return
-  }
-
-  if (isActionInputBlocked.value) {
-    return
-  }
-
-  if (isCombatActive.value) {
-    const msg = content.trim().toLowerCase()
-    const allowed = msg === 'attack' || msg === '/attack' || msg === 'run' || msg === '/run' || msg.startsWith('/consume ')
-    if (!allowed) {
-      return
-    }
-  }
-
-  if (normalized === '/walkthrough') {
-    await openWalkthroughPanel()
-    return
-  }
-
-  if (normalized === '/walkthrough reveal') {
-    await revealWalkthrough()
-    showWalkthrough.value = true
-    return
-  }
-
-  if (normalized === '/hint') {
-    await buyHint()
-    return
-  }
-
-  if (normalized === '/debug walkthrough') {
-    await sendMessage('/debug walkthrough')
-    await loadWalkthrough()
-    showWalkthrough.value = true
-    return
-  }
-
-  if (normalized === '/debug reveal_map') {
-    await sendMessage('/debug reveal_map')
-    showMap.value = true
-    return
-  }
-
-  if (normalized === '/debug session') {
-    await openDebugInspector()
-    return
-  }
-
-  await sendMessage(content)
-}
+const {
+  hoveredEntity,
+  mousePos,
+  tooltipImageFailed,
+  contextMenu,
+  tooltipStyle,
+  isConsumableHover,
+  handleHover,
+  handleChatNpcHover,
+  onTooltipImageError,
+  openContextMenu,
+  handleMenuSelect,
+} = useGameInteractionState({
+  isActionInputBlocked,
+  ruleMode: computed(() => sheet.value?.rule_enforcement_mode),
+  npcMetadata,
+  handlePlayerInput,
+})
 
 const handleUnlockVoice = () => {
   audioService.unlock()
   speakLatestAssistantMessage({ force: true })
 }
 
-watch(() => audioService.lastError.value, (message) => {
-  if (!message || message === lastAudioErrorMessage.value) return
-  addNotification(message, 'error')
-  lastAudioErrorMessage.value = message
-})
-
 const handleEquipFromSheet = async (name: string) => {
-  if (isActionInputBlocked.value) return
-  await sendMessage(`/equip ${name}`)
+  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/equip ${name}`)
 }
 
 const handleUnequipFromSheet = async (slot: string) => {
-  if (isActionInputBlocked.value) return
-  await sendMessage(`/unequip ${slot}`)
+  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/unequip ${slot}`)
 }
 
 const handleConsumeFromSheet = async (name: string) => {
-  if (isActionInputBlocked.value) return
-  await sendMessage(`/consume ${name}`)
+  await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/consume ${name}`)
 }
 
 const handleSheetChanged = async () => {
-  if (isActionInputBlocked.value) return
-  if (sheet.value?.rule_enforcement_mode === 'chat') return
+  if (!gameActionService.shouldRunRulePass(isActionInputBlocked.value, sheet.value?.rule_enforcement_mode)) return
   await sendMessage('/rule-pass')
 }
 
 const handleCombatAttack = async () => {
-  if (combatActionInFlight.value) return
-  combatActionInFlight.value = true
-  try {
-    await sendMessage('/attack')
-  } finally {
-    combatActionInFlight.value = false
-  }
+  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/attack')
 }
 
 const handleCombatRun = async () => {
-  if (combatActionInFlight.value) return
-  combatActionInFlight.value = true
-  try {
-    await sendMessage('/run')
-  } finally {
-    combatActionInFlight.value = false
-  }
+  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/run')
 }
 
 const handleCombatConsume = async (name: string) => {
-  if (combatActionInFlight.value) return
-  combatActionInFlight.value = true
-  try {
-    await sendMessage(`/consume ${name}`)
-  } finally {
-    combatActionInFlight.value = false
-  }
+  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, `/consume ${name}`)
 }
 
 const handleCombatDebugWin = async () => {
@@ -898,130 +324,31 @@ const handleCombatDebugLoose = async () => {
 }
 
 const handleLootTake = async (item: any) => {
-  if (combatActionInFlight.value) return
-  const key = (item?.id || item?.name || '').toString().trim()
-  if (!key) return
-  combatActionInFlight.value = true
-  try {
-    await sendMessage(`/loot take ${key}`)
-  } finally {
-    combatActionInFlight.value = false
-  }
+  await gameActionService.runLootCommand(combatActionInFlight, sendMessage, 'take', item)
 }
 
 const handleLootLeave = async (item: any) => {
-  if (combatActionInFlight.value) return
-  const key = (item?.id || item?.name || '').toString().trim()
-  if (!key) return
-  combatActionInFlight.value = true
-  try {
-    await sendMessage(`/loot leave ${key}`)
-  } finally {
-    combatActionInFlight.value = false
-  }
+  await gameActionService.runLootCommand(combatActionInFlight, sendMessage, 'leave', item)
 }
 
 const handleLootDone = async () => {
-  if (combatActionInFlight.value) return
-  combatActionInFlight.value = true
-  isClosingCombat.value = true
-  try {
-    await sendMessage('/loot done')
-  } finally {
-    combatActionInFlight.value = false
-    // Ensure the guard resets eventually once the combat state is truly gone
-    if (!combat.value) {
-      isClosingCombat.value = false
+  await gameActionService.runLootDone(
+    combatActionInFlight,
+    sendMessage,
+    () => { isClosingCombat.value = true },
+    () => {
+      // Ensure the guard resets eventually once the combat state is truly gone
+      if (!combat.value) {
+        isClosingCombat.value = false
+      }
     }
-  }
+  )
 }
 
 watch(showCombatDialog, (visible) => {
   if (!visible) {
     combatActionInFlight.value = false
   }
-})
-
-const fetchGameSettings = async () => {
-  try {
-    const res = await fetch(`${BASE}/settings`, { headers: authHeaders() })
-    if (res.ok) {
-      const data = await res.json()
-      if (data.game_settings) gameSettings.value = data.game_settings
-    }
-  } catch (e) {
-    console.error('Failed to fetch game settings', e)
-  }
-}
-
-const resolveGameIdFromRouteId = async (routeId: string): Promise<string | null> => {
-  try {
-    const sessions = await api.listSessions()
-    const direct = sessions.find((s: any) => s.game_id === routeId)
-    if (direct) return routeId
-
-    const match = sessions.find((s: any) => s.template_id === routeId || s.adventure_id === routeId)
-    return match?.game_id || null
-  } catch (error) {
-    console.error('Failed to resolve route id to game session id', error)
-    return null
-  }
-}
-
-const ensureGameIdForRouteId = async (routeId: string): Promise<string | null> => {
-  const resolved = await resolveGameIdFromRouteId(routeId)
-  if (resolved) return resolved
-
-  // If no active session exists yet, routeId might be a template/adventure id.
-  // Try to start one and continue with the returned game id.
-  try {
-    const created = await api.startSessionForTemplate(routeId)
-    return created?.game_id || null
-  } catch {
-    return null
-  }
-}
-
-const connectWithRouteFallback = async (routeId: string) => {
-  await connect(routeId)
-  if (status.value !== 'error') return
-
-  const resolvedGameId = await ensureGameIdForRouteId(routeId)
-  if (!resolvedGameId || resolvedGameId === routeId) return
-
-  await router.replace({ name: 'game', params: { id: resolvedGameId } })
-}
-
-const handleGlobalKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
-    showSheet.value = false
-    showMap.value = false
-    showQuests.value = false
-    showWalkthrough.value = false
-    showDebug.value = false
-  }
-}
-
-onMounted(() => {
-  void (async () => {
-    await fetchGameSettings()
-    if (props.id) {
-      await connectWithRouteFallback(props.id)
-    }
-  })()
-  window.addEventListener('keydown', handleGlobalKeydown)
-})
-
-watch(() => props.id, (newId) => {
-  disconnect()
-  if (newId) {
-    void connectWithRouteFallback(newId)
-  }
-})
-
-onBeforeUnmount(() => {
-  disconnect()
-  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
@@ -1514,11 +841,6 @@ onBeforeUnmount(() => {
   cursor: crosshair !important;
 }
 
-.selection-mode aside, 
-.selection-mode .chat-log-container {
-  /* Subtle highlight for interactive areas in selection mode */
-  /* background: rgba(16, 185, 129, 0.02); */
-}
 </style>
 
 
