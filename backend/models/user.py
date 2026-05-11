@@ -1,4 +1,4 @@
-import uuid
+import uuid6
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, Boolean, String
@@ -10,7 +10,7 @@ from backend.models.base import Base, TimestampMixin
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
     username: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="user") # "admin" or "user"

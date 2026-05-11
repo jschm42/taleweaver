@@ -1,4 +1,4 @@
-import uuid
+import uuid6
 
 from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship, synonym
@@ -9,7 +9,7 @@ from backend.models.base import Base, TimestampMixin
 class SessionState(Base, TimestampMixin):
     __tablename__ = "session_states"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
     session_id = Column(String(36), ForeignKey("game_sessions.id"), nullable=False)
     
     # Denormalized fields for easier querying

@@ -1,4 +1,4 @@
-import uuid
+import uuid6
 
 from sqlalchemy import Column, ForeignKey, String, Text
 
@@ -11,7 +11,7 @@ class ChatMessage(Base, TimestampMixin):
     """
     __tablename__ = "chat_messages"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
     session_id = Column(String(36), ForeignKey("game_sessions.id"), nullable=False)
     
     # "user", "assistant", or "system"

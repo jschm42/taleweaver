@@ -1,4 +1,4 @@
-import uuid
+import uuid6
 
 from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import synonym
@@ -28,7 +28,7 @@ class WorldExit(Base, TimestampMixin):
     """
     __tablename__ = "world_exits"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
     template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True)
     session_id = Column(String(36), ForeignKey("game_sessions.id", ondelete="CASCADE"), nullable=True)
     

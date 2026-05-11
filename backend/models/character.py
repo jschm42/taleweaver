@@ -1,4 +1,4 @@
-import uuid
+import uuid6
 
 from sqlalchemy import JSON, Column, ForeignKey, Integer, String
 
@@ -11,7 +11,7 @@ class Character(Base, TimestampMixin):
     """
     __tablename__ = "characters"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     
     name = Column(String(30), nullable=False)

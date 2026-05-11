@@ -97,7 +97,8 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ## 3. Architecture & Concepts
 
 ### Tenant-Ready Strategy
-Although starting single-user, the database uses **UUIDv4** keys exclusively, paving the way for multi-tenancy with `O(1)` lookup complexity.
+Although starting single-user, the database uses UUID-based primary keys to simplify future tenant isolation, data portability, and cross-system ID generation.
+In SQLite (B-tree indexes), indexed lookups are typically `O(log n)`, not `O(1)`; if write-locality becomes a bottleneck at scale, time-ordered UUIDs (for example UUIDv7) are a valid optimization path.
 
 ### LLM Abstraction & Secure Key Management
 * **Adapter Pattern:** Using a higher-level LLM router (e.g., `litellm`) to map providers to a standardized interface.

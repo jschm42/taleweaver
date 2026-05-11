@@ -1,4 +1,4 @@
-import uuid
+import uuid6
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, ForeignKey, Integer, String
@@ -10,7 +10,7 @@ from backend.models.base import Base, TimestampMixin
 class Avatar(Base, TimestampMixin):
     __tablename__ = "avatars"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     template_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("adventure_templates.id"), nullable=True) # Linked for cleanup
     name: Mapped[str] = mapped_column(String(100), nullable=False)

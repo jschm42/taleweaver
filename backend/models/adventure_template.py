@@ -1,4 +1,4 @@
-import uuid
+import uuid6
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String
@@ -14,7 +14,7 @@ class GenerationCancelled(Exception):
 class AdventureTemplate(Base, TimestampMixin):
     __tablename__ = "adventure_templates"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
     owner_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(50), nullable=False)
     teaser: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)

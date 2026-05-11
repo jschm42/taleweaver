@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 aiosqlite
+uuid6
 pydantic
 pydantic-settings
 cryptography

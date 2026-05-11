@@ -7,7 +7,7 @@ Edges  = Directed exits between scenes.
 Stored as two JSON columns so the graph can be traversed and serialised
 to Mermaid.js notation in O(V + E) time.
 """
-import uuid
+import uuid6
 
 from sqlalchemy import JSON, Column, ForeignKey, String
 from sqlalchemy.orm import synonym
@@ -18,7 +18,7 @@ from backend.models.base import Base, TimestampMixin
 class WorldMap(Base, TimestampMixin):
     __tablename__ = "world_maps"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
     template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=False, unique=True)
 
     # {"scene_id": {"label": "...", "description": "..."}, ...}
