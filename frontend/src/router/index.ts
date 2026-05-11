@@ -75,7 +75,7 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // If we're not initialized yet, we don't know the auth state or if setup is needed.
   // We allow the navigation to proceed, and App.vue will handle the final redirection
   // once the bootstrap status is known.

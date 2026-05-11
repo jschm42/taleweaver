@@ -17,7 +17,8 @@ import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
 import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
 import AboutModal from '@/components/portal/AboutModal.vue'
-import { configState } from '@/store/config'
+// No unused import here
+
 
 const router = useRouter()
 const route = useRoute()
