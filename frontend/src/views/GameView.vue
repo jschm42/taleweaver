@@ -14,14 +14,14 @@ import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
 import GameOverScreen from '@/components/game/GameOverScreen.vue'
 import SuccessScreen from '@/components/game/SuccessScreen.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
-import StatBar from '@/components/game/StatBar.vue'
 import GameScenePanel from '@/components/game/GameScenePanel.vue'
 import GameNpcsPanel from '@/components/game/GameNpcsPanel.vue'
 import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
-import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
-import GameClockWidget from '@/components/game/GameClockWidget.vue'
+import GameViewHeader from '@/components/game/GameViewHeader.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
+import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
+import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
@@ -32,12 +32,11 @@ import { useGameInteractionState } from '@/composables/useGameInteractionState'
 import { useGameSessionLifecycle } from '@/composables/useGameSessionLifecycle'
 import { useGameCommandFlow } from '@/composables/useGameCommandFlow'
 import { refreshUser } from '@/store/auth'
-import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
+import { getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { type GameSettings } from '@/services/gameViewService'
 import { gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
-import { fixNewlines, hasNonZero } from '@/services/hoverEntityService'
 
 const props = defineProps<{
   id: string
@@ -368,41 +367,15 @@ watch(showCombatDialog, (visible) => {
       <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
     </div>
 
-    <!-- Header Navigation -->    <header class="bg-transparent px-4 md:px-8 pt-8 pb-4 flex flex-col lg:flex-row items-start gap-6 z-10 shrink-0 relative min-h-[110px]">
-      <!-- Left: back + Adventure Title -->
-      <div class="flex items-center gap-4 z-10 min-w-0 xl:w-72 shrink-0">
-        <button 
-          @click="goBack" 
-          class="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-all duration-300 backdrop-blur-md shadow-xl group shrink-0"
-          title="Return to Portal"
-        >
-          <i class="ra ra-back-arrow text-sm text-slate-100 group-hover:text-emerald-400 transition-colors"></i>
-          <span class="text-xxs font-black uppercase tracking-[0.2em] text-slate-100 group-hover:text-white transition-colors">Back</span>
-        </button>
-
-        <div class="flex flex-col min-w-0">
-          <h1 class="text-xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide whitespace-nowrap truncate" style="font-family: 'Acme', sans-serif;">
-            {{ sheet?.adventure_title || 'Chronicle' }}
-          </h1>
-          <div v-if="sheet?.adventure_version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 uppercase tracking-widest mt-1">
-            v{{ sheet.adventure_version }}
-          </div>
-        </div>
-      </div>
-
-      <!-- Center: Active Quest Tracker (Matches Chat Width) -->
-      <div class="flex-grow w-full lg:w-auto min-w-0 flex justify-center">
-        <GameQuestTracker :tracked-quest="trackedQuest" />
-      </div>
-
-      <!-- Right Area (Clock is now absolute to save space and align quest better) -->
-      <div class="absolute top-8 right-4 md:right-8 lg:mt-0 z-20">
-        <GameClockWidget :game-time="gameTime" :clock-tick="clockTick" />
-      </div>
-      <div v-if="sheet?.debug_mode" class="absolute top-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-1 bg-rose-600/80 backdrop-blur-md border border-rose-400/50 rounded-full text-[10px] font-black text-white uppercase tracking-[0.2em] animate-pulse shadow-lg">
-        Debug Protocol Active
-      </div>
-    </header>
+    <GameViewHeader
+      :title="sheet?.adventure_title"
+      :version="sheet?.adventure_version"
+      :tracked-quest="trackedQuest"
+      :game-time="gameTime"
+      :clock-tick="clockTick"
+      :debug-mode="!!sheet?.debug_mode"
+      @back="goBack"
+    />
 
 
     <div class="flex-grow min-h-0 flex overflow-hidden relative">
@@ -592,121 +565,15 @@ watch(showCombatDialog, (visible) => {
     />
 
     <!-- HOVER TOOLTIP -->
-    <Teleport to="body">
-      <Transition name="tooltip">
-        <div 
-          v-if="hoveredEntity" 
-          class="fixed z-[999] pointer-events-none"
-          :style="tooltipStyle"
-        >
-          <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
-            <!-- Image Area -->
-            <div v-if="hasRenderableImagePath(hoveredEntity.image_url) && !tooltipImageFailed" class="h-48 w-full relative">
-              <img :src="getImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" @error="onTooltipImageError" />
-              <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
-            </div>
-            <div v-else class="h-32 w-full relative bg-slate-950 border-b border-slate-800 flex items-center justify-center">
-              <i
-                :class="[
-                  'ra text-4xl',
-                  hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'ra-player text-cyan-400/80' : 'ra-vest text-amber-400/80'
-                ]"
-              ></i>
-              <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.12),transparent_65%)]"></div>
-            </div>
-
-            <!-- Content -->
-            <div class="p-4 bg-slate-900">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredEntity.name }}</span>
-                <span 
-                  class="text-xxs px-1.5 py-0.5 rounded border font-mono uppercase"
-                  :class="hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : (hoveredEntity.entity_type?.toUpperCase() === 'SCENE' ? 'border-indigo-500/50 text-indigo-400' : 'border-amber-500/50 text-amber-400')"
-                >
-                  {{ hoveredEntity.entity_type || 'OBJECT' }}
-                </span>
-              </div>
-              <p class="text-xs text-slate-400 leading-relaxed italic mb-3 whitespace-pre-wrap">{{ fixNewlines(hoveredEntity.description) }}</p>
-
-              <!-- NPC Stats -->
-              <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && sheet?.rule_enforcement_mode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
-                <StatBar v-if="hoveredEntity.hp != null" label="Health" :value="Number(hoveredEntity.hp)" :max="Number(hoveredEntity.max_hp || 100)" color="crimson" size="sm" />
-                <StatBar v-if="hoveredEntity.stamina != null" label="Stamina" :value="Number(hoveredEntity.stamina)" :max="Number(hoveredEntity.max_stamina || 100)" color="emerald" size="sm" />
-                <StatBar v-if="hoveredEntity.mana != null && sheet?.rule_enforcement_mode === 'rpg'" label="Mana" :value="Number(hoveredEntity.mana)" :max="Number(hoveredEntity.max_mana || 100)" color="sapphire" size="sm" />
-              </div>
-
-              <!-- NPC Inventory -->
-              <div v-if="hoveredEntity.entity_type?.toUpperCase() === 'NPC' && Array.isArray(hoveredEntity.inventory) && hoveredEntity.inventory.length > 0" class="mt-3 pt-3 border-t border-slate-800">
-                <div class="flex items-center gap-1.5 mb-2">
-                  <i class="ra ra-treasure-chest text-xxs text-slate-500"></i>
-                  <span class="text-xxs font-black uppercase tracking-widest text-slate-500">Possessions</span>
-                </div>
-                <div class="flex flex-wrap gap-1.5">
-                  <div 
-                    v-for="(item, iidx) in hoveredEntity.inventory" 
-                    :key="item?.id || iidx"
-                    class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-xxs text-slate-300 flex items-center gap-1.5"
-                  >
-                    <div v-if="typeof item === 'object' && item?.image_url" class="w-4 h-4 rounded overflow-hidden shrink-0 border border-slate-700">
-                      <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
-                    </div>
-                    <i v-else-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
-                    <i v-else class="ra ra-emerald text-[12px] text-amber-500/60"></i>
-                    {{ typeof item === 'object' ? item?.name : item }}
-                  </div>
-                </div>
-              </div>
-
-              <!-- Item Stats -->
-              <div v-if="(hoveredEntity.entity_type === 'OBJECT' || hoveredEntity.entity_type === 'ITEM') && sheet?.rule_enforcement_mode !== 'chat'" class="mt-3 pt-3 border-t border-slate-800">
-                <div class="grid grid-cols-2 gap-2 text-xxs uppercase font-bold tracking-wider">
-                  <!-- Preferred Slot -->
-                  <div v-if="hoveredEntity.slot" class="col-span-2 text-slate-500 lowercase italic font-medium">
-                    {{ hoveredEntity.slot.replace('_', ' ') }}
-                  </div>
-
-                  <template v-if="isConsumableHover">
-                    <div v-if="hasNonZero(hoveredEntity.hp_change)" class="text-red-400 flex justify-between">
-                      <span>HP</span>
-                      <span>{{ Number(hoveredEntity.hp_change) >= 0 ? '+' : '' }}{{ hoveredEntity.hp_change }}</span>
-                    </div>
-                    <div v-if="hasNonZero(hoveredEntity.mana_change)" class="text-blue-400 flex justify-between">
-                      <span>Mana</span>
-                      <span>{{ Number(hoveredEntity.mana_change) >= 0 ? '+' : '' }}{{ hoveredEntity.mana_change }}</span>
-                    </div>
-                    <div v-if="hasNonZero(hoveredEntity.stamina_change)" class="text-emerald-400 flex justify-between">
-                      <span>Stamina</span>
-                      <span>{{ Number(hoveredEntity.stamina_change) >= 0 ? '+' : '' }}{{ hoveredEntity.stamina_change }}</span>
-                    </div>
-                  </template>
-
-                  <template v-if="showsMechanics">
-                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_strength)" class="text-red-400 flex justify-between">
-                      <span>STR</span> <span>+{{ hoveredEntity.stat_modifier_strength }}</span>
-                    </div>
-                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_dexterity)" class="text-emerald-400 flex justify-between">
-                      <span>DEX</span> <span>+{{ hoveredEntity.stat_modifier_dexterity }}</span>
-                    </div>
-                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_intelligence)" class="text-blue-400 flex justify-between">
-                      <span>INT</span> <span>+{{ hoveredEntity.stat_modifier_intelligence }}</span>
-                    </div>
-                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_wisdom)" class="text-purple-400 flex justify-between">
-                      <span>WIS</span> <span>+{{ hoveredEntity.stat_modifier_wisdom }}</span>
-                    </div>
-                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_charisma)" class="text-pink-400 flex justify-between">
-                      <span>CHA</span> <span>+{{ hoveredEntity.stat_modifier_charisma }}</span>
-                    </div>
-                    <div v-if="hasNonZero(hoveredEntity.stat_modifier_armor_class)" class="text-amber-400 flex justify-between">
-                      <span>AC</span> <span>+{{ hoveredEntity.stat_modifier_armor_class }}</span>
-                    </div>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <GameHoverTooltip
+      :hovered-entity="hoveredEntity"
+      :tooltip-style="tooltipStyle"
+      :tooltip-image-failed="tooltipImageFailed"
+      :shows-mechanics="showsMechanics"
+      :is-consumable-hover="isConsumableHover"
+      :rule-mode="sheet?.rule_enforcement_mode"
+      @image-error="onTooltipImageError"
+    />
 
     <!-- CONTEXT MENU -->
     <Teleport to="body">
@@ -723,75 +590,14 @@ watch(showCombatDialog, (visible) => {
 
   
     <!-- TOAST NOTIFICATIONS -->
-    <Teleport to="body">
-      <div class="fixed bottom-8 right-8 z-[300] flex flex-col gap-3 pointer-events-none">
-        <TransitionGroup name="notif">
-          <div 
-            v-for="n in notifications" 
-            :key="n.id"
-            :class="[
-              'pointer-events-auto px-6 py-4 rounded-2xl border backdrop-blur-2xl shadow-2xl flex items-center gap-4 min-w-[320px] max-w-md animate-notif-in',
-              n.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 
-              n.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-              'bg-blue-500/10 border-blue-500/20 text-blue-400'
-            ]"
-          >
-            <i :class="[
-              'text-lg',
-              n.type === 'error' ? 'ra ra-cancel' : 
-              n.type === 'success' ? 'ra ra-circle' : 'ra ra-light-bulb'
-            ]"></i>
-            <div class="flex-grow">
-              <p class="text-xxs font-black uppercase tracking-widest opacity-50">{{ n.type }}</p>
-              <p class="text-xs font-bold leading-relaxed">{{ n.message }}</p>
-            </div>
-            <button @click="removeNotification(n.id)" class="opacity-50 hover:opacity-100 transition-opacity">
-              <i class="ra ra-cancel text-xs"></i>
-            </button>
-          </div>
-        </TransitionGroup>
-      </div>
-    </Teleport>
+    <GameNotificationsOverlay
+      :notifications="notifications"
+      @dismiss="removeNotification"
+    />
   </main>
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Acme&display=swap');
-@font-face {
-  font-family: 'OrbitronClock';
-  src: url('@/assets/fonts/Orbitron-VariableFont_wght.ttf') format('truetype');
-  font-weight: 100 900;
-  font-style: normal;
-}
-
-.game-clock .clock-time,
-.game-clock .clock-date {
-  font-family: 'OrbitronClock', monospace;
-}
-
-/* Brief amber pulse whenever in_game_time advances */
-.clock-tick span {
-  animation: clockPulse 0.6s ease-out;
-}
-
-@keyframes clockPulse {
-  0%   { color: #fbbf24; text-shadow: 0 0 12px rgba(251,191,36,0.8); }
-  100% { color: inherit;  text-shadow: none; }
-}
-
-/* Tooltip Animations */
-.tooltip-enter-active, .tooltip-leave-active { transition: opacity 0.2s, transform 0.2s; }
-.tooltip-enter-from, .tooltip-leave-to { opacity: 0; transform: scale(0.95) translateY(5px); }
-
-.animate-tooltip-in {
-  animation: toolTipIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes toolTipIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.9); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
 /* Sidebar Scrollbar */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
@@ -804,33 +610,6 @@ watch(showCombatDialog, (visible) => {
   display: inline-block;
   line-height: 1;
   vertical-align: middle;
-}
-
-/* Notification Animations */
-.notif-enter-active, .notif-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-.notif-enter-from { opacity: 0; transform: translateX(50px) scale(0.9); }
-.notif-leave-to { opacity: 0; transform: translateX(50px) scale(0.9); }
-
-@keyframes notifIn {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-.animate-notif-in {
-  animation: notifIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.quest-panel-header {
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
 }
 
 .selection-mode {
