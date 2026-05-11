@@ -1,7 +1,8 @@
 import uuid
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Column, ForeignKey, Integer, String
-from sqlalchemy.orm import synonym
+from sqlalchemy import JSON, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, synonym
 
 from backend.models.base import Base, TimestampMixin
 
@@ -9,37 +10,37 @@ from backend.models.base import Base, TimestampMixin
 class Avatar(Base, TimestampMixin):
     __tablename__ = "avatars"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=True) # Linked for cleanup
-    name = Column(String(100), nullable=False)
-    role = Column(String(100), nullable=True)
-    description = Column(String(1000), nullable=True)
-    profile_image = Column(String(255), nullable=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    template_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("adventure_templates.id"), nullable=True) # Linked for cleanup
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    profile_image: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     # Character Sheet values
-    hp = Column(Integer, default=200, nullable=False)
-    max_hp = Column(Integer, default=200, nullable=False)
-    stamina = Column(Integer, default=200, nullable=False)
-    max_stamina = Column(Integer, default=200, nullable=False)
-    mana = Column(Integer, default=200, nullable=False)
-    max_mana = Column(Integer, default=200, nullable=False)
-    exp = Column(Integer, default=0, nullable=False)
+    hp: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    max_hp: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    stamina: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    max_stamina: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    mana: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    max_mana: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
+    exp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
     # Core RPG Stats (1-99)
-    strength = Column(Integer, default=10, nullable=False)
-    intelligence = Column(Integer, default=10, nullable=False)
-    wisdom = Column(Integer, default=10, nullable=False)
-    dexterity = Column(Integer, default=10, nullable=False)
-    charisma = Column(Integer, default=10, nullable=False)
-    armor_class = Column(Integer, default=10, nullable=False)
+    strength: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    intelligence: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    wisdom: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    dexterity: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    charisma: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    armor_class: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     
     # JSON fields for flexible data structures
-    stats = Column(JSON, default=dict, nullable=False)
-    inventory = Column(JSON, default=list, nullable=False)
+    stats: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    inventory: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
     
     # Default equipment slots setup
-    equipment = Column(JSON, default=lambda: {
+    equipment: Mapped[Dict[str, Any]] = mapped_column(JSON, default=lambda: {
         "Head": None,
         "Chest": None,
         "Arms": None,
@@ -53,7 +54,7 @@ class Avatar(Base, TimestampMixin):
         "OffHand": None
     }, nullable=False)
     
-    status_effects = Column(JSON, default=list, nullable=False)
+    status_effects: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
 
     # Legacy alias for backward compatibility during migration rollout.
     adventure_id = synonym("template_id")

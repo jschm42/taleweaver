@@ -1,5 +1,7 @@
 from typing import Optional, Union
 from datetime import timedelta
+import time
+from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -17,6 +19,11 @@ from backend.core.database import get_db
 from backend.models.user import User
 
 router = APIRouter()
+
+# Simple in-memory rate limiting for auth
+_login_attempts = defaultdict(list)
+LOGIN_RATE_LIMIT = 5 # attempts
+LOGIN_WINDOW = 60 # seconds
 
 class Token(BaseModel):
     access_token: str
@@ -47,6 +54,19 @@ class BootstrapStatusResponse(BaseModel):
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     import logging
     logger = logging.getLogger(__name__)
+    
+    # Simple Rate Limiting
+    now = time.time()
+    client_id = form_data.username 
+    _login_attempts[client_id] = [t for t in _login_attempts[client_id] if now - t < LOGIN_WINDOW]
+    if len(_login_attempts[client_id]) >= LOGIN_RATE_LIMIT:
+        logger.warning(f"Rate limit exceeded for user: {form_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later."
+        )
+    _login_attempts[client_id].append(now)
+
     logger.info(f"Login attempt for username: '{form_data.username}'")
     
     result = await db.execute(select(User).filter(User.username == form_data.username))
@@ -142,4 +162,3 @@ async def get_bootstrap_status(db: AsyncSession = Depends(get_db)):
         has_admin=admin_result.scalars().first() is not None,
         has_users=user_result.first() is not None,
     )
-

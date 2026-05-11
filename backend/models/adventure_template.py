@@ -1,6 +1,8 @@
 import uuid
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models.base import Base, TimestampMixin
 
@@ -12,66 +14,64 @@ class GenerationCancelled(Exception):
 class AdventureTemplate(Base, TimestampMixin):
     __tablename__ = "adventure_templates"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    owner_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    title = Column(String(50), nullable=False)
-    teaser = Column(String(300), nullable=True)
-    version = Column(String(15), nullable=True)
-    language = Column(String(20), nullable=True)
-    origin_id = Column(String(50), nullable=True) # Stable ID for default/sample templates
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(50), nullable=False)
+    teaser: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    version: Mapped[Optional[str]] = mapped_column(String(15), nullable=True)
+    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    origin_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) # Stable ID for default/sample templates
 
+    image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
-    image_url = Column(String(255), nullable=True)
-    # context is now replaced by original_prompt below
+    # Configuration / Rules
+    strict_rules: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    rule_enforcement_mode: Mapped[str] = mapped_column(String(16), default="strict", nullable=False)
+    time_per_turn: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    pacing_minutes: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    clock_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    time_system: Mapped[str] = mapped_column(String(20), default="calendar", nullable=False)
+    time_config: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
-    # Configuration / Rules (Back to top-level for easier querying/migration)
-    strict_rules = Column(Boolean, default=True, nullable=False)
-    rule_enforcement_mode = Column(String(16), default="strict", nullable=False)
-    time_per_turn = Column(Integer, default=5, nullable=False)
-    pacing_minutes = Column(Integer, default=5, nullable=False)
-    clock_enabled = Column(Boolean, default=False, nullable=False)
-    time_system = Column(String(20), default="calendar", nullable=False)
-    time_config = Column(JSON, nullable=True)
-    
-    generate_scene_images = Column(Boolean, default=False, nullable=False)
-    generate_npc_images = Column(Boolean, default=False, nullable=False)
-    generate_item_images = Column(Boolean, default=False, nullable=False)
-    selected_image_styles = Column(JSON, nullable=True)
-    selected_tone = Column(JSON, nullable=True)
+    generate_scene_images: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    generate_npc_images: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    generate_item_images: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    selected_image_styles: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    selected_tone: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
-    game_over_rules = Column(JSON, nullable=True)
-    quests = Column(JSON, nullable=True)
-    is_completed = Column(Boolean, default=False, nullable=False)
+    game_over_rules: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    quests: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Status
-    is_ready = Column(Boolean, default=False)
-    creation_status = Column(String(100), nullable=True)
-    creation_error = Column(String(500), nullable=True)
+    is_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    creation_status: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    creation_error: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Metadata
-    original_manifest = Column(JSON, nullable=True)
+    original_manifest: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
     # Generation Constraints
-    min_scenes = Column(Integer, default=1, nullable=False)
-    max_scenes = Column(Integer, default=5, nullable=False)
+    min_scenes: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    max_scenes: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
 
     # New Concept Fields
-    plot = Column(String(5000), nullable=True)
-    rules = Column(String(5000), nullable=True)
-    intro_text = Column(String(20000), nullable=True)
-    walkthrough = Column(String(20000), nullable=True)
-    completed_condition = Column(String(2000), nullable=True)
-    gameover_condition = Column(String(2000), nullable=True)
-    tts_director_notes = Column(String(5000), nullable=True)
-    original_prompt = Column(String(20000), nullable=True)
-    starting_timestamp = Column(Integer, default=0, nullable=False) # Minutes from Day 1, 00:00
-    allow_dynamic_items = Column(Boolean, default=True, nullable=False)
+    plot: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
+    rules: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
+    intro_text: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
+    walkthrough: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
+    completed_condition: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    gameover_condition: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    tts_director_notes: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
+    original_prompt: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
+    starting_timestamp: Mapped[int] = mapped_column(Integer, default=0, nullable=False) # Minutes from Day 1, 00:00
+    allow_dynamic_items: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Award System
-    awards = Column(JSON, nullable=True)
-    award_generation_enabled = Column(Boolean, default=False, nullable=False)
-    min_awards = Column(Integer, default=3, nullable=False)
-    max_awards = Column(Integer, default=8, nullable=False)
+    awards: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    award_generation_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    min_awards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    max_awards: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     
     # Adventure Generator Mode
-    is_adventure_generator = Column(Boolean, default=False, nullable=False)
+    is_adventure_generator: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

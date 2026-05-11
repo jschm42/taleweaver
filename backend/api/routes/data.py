@@ -1,6 +1,7 @@
 from typing import Optional, Union
 import os
 import uuid
+import re
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from PIL import Image
@@ -28,6 +29,8 @@ async def upload_image(
     if type not in {"character", "adventure"}:
         raise HTTPException(status_code=400, detail="Invalid upload type")
 
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
     ext = _get_extension(file.filename)
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Unsupported file extension. Use jpg, png, or webp.")
@@ -37,8 +40,20 @@ async def upload_image(
         subfolder = "characters"
         target_dir = os.path.join(settings.DATA_DIR, subfolder)
     else:
-        subfolder = f"adventures/library/{adventure_id}" if adventure_id else "adventures/library"
+        if adventure_id:
+            # Security: Validate adventure_id to prevent path traversal
+            if not re.match(r"^[a-z0-9-]+$", adventure_id):
+                raise HTTPException(status_code=400, detail="Invalid adventure ID format")
+            subfolder = f"adventures/library/{adventure_id}"
+        else:
+            subfolder = "adventures/library"
         target_dir = os.path.join(settings.DATA_DIR, subfolder)
+    
+    # Final safety check: ensure target_dir is still within DATA_DIR
+    target_dir = os.path.abspath(target_dir)
+    data_dir_abs = os.path.abspath(settings.DATA_DIR)
+    if not target_dir.startswith(data_dir_abs):
+        raise HTTPException(status_code=400, detail="Invalid path traversal attempt")
     
     os.makedirs(target_dir, exist_ok=True)
 
@@ -68,4 +83,3 @@ async def upload_image(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
-

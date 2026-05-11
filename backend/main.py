@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
@@ -83,6 +85,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Security: Allowed hosts (prevent Host Header Injection)
+# In production, this should be set to the actual domain
+app.add_middleware(
+    TrustedHostMiddleware, 
+    allowed_hosts=["localhost", "127.0.0.1", "*.localhost", "0.0.0.0"]
+)
+
+# Performance: Gzip compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # Allow the Vue.js frontend (dev server) to reach the API
 app.add_middleware(
     CORSMiddleware,
@@ -91,9 +103,21 @@ app.add_middleware(
         f"http://127.0.0.1:{settings.FRONTEND_PORT}"
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
 )
+
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 app.include_router(config_api.router, prefix="/api")
 app.include_router(adventures.router, prefix="/api")
@@ -120,7 +144,13 @@ os.makedirs(os.path.join(settings.DATA_DIR, "presets", "adventures"), exist_ok=T
 os.makedirs("adventures", exist_ok=True)
 
 # Static data and assets
-app.mount("/data", StaticFiles(directory=settings.DATA_DIR), name="data")
+# Security: Do NOT mount the entire settings.DATA_DIR as it contains sensitive files like taleweaver.db
+# Instead, mount only the public subdirectories.
+public_data_dirs = ["characters", "adventures/library", "audio", "scratch/test_connection"]
+for d in public_data_dirs:
+    dir_path = os.path.join(settings.DATA_DIR, d)
+    os.makedirs(dir_path, exist_ok=True)
+    app.mount(f"/data/{d}", StaticFiles(directory=dir_path), name=f"data_{d.replace('/', '_')}")
 
 # Serve frontend if available (Production/Docker mode)
 if os.path.exists("frontend_dist"):
