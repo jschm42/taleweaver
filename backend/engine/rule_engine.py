@@ -337,24 +337,5 @@ class RuleEngine:
             
             avatar.inventory = new_inv
 
-        if event.spawned_items:
-            new_inv = list(avatar.inventory)
-            for item in event.spawned_items:
-                item_dict = item.model_dump(exclude_none=True)
-                
-                # Check for existing ID to perform replacement/update
-                found = False
-                if item.id:
-                    for i, existing in enumerate(new_inv):
-                        if existing.get("id") == item.id:
-                            new_inv[i] = item_dict
-                            found = True
-                            break
-                
-                if not found:
-                    new_inv.append(item_dict)
-            
-            avatar.inventory = new_inv
-
         return event.narrative_description
 

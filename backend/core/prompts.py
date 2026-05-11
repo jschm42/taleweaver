@@ -355,7 +355,7 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "If an existing item is modified (e.g. repaired, filled, renamed), use `updated_inventory_items`.\n"
     "- If an NPC moves to a different room, use `moved_entities` with `to_scene_id`.\n"
     "- If an NPC or object changes their physical spot (e.g. 'hiding under the table'), use `updated_entities` with `spatial_position`.\n"
-    "To create a new result from a combination, you can use `spawned_items`. "
+    "To create a new result from a combination that is added to the scene, use `spawned_items`. If the result goes directly to the player, use `new_inventory_items`. "
     "If resources are consumed or regained, use `hp_change`, `stamina_change`, or `mana_change`. "
     "If a detail should be remembered, add short facts to `remember_notes`. "
     "If a remembered detail is obsolete, list it in `forget_notes`. "

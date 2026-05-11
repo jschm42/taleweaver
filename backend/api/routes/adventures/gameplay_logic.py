@@ -2542,6 +2542,13 @@ class GameTurnManager:
                 states[eid]["is_hidden"] = True
                 state_dirty = True
         
+        if event.new_inventory_items:
+            for item in event.new_inventory_items:
+                if item.id:
+                    if item.id not in states: states[item.id] = {}
+                    states[item.id]["is_in_inventory"] = True
+                    state_dirty = True
+
         if event.spawned_items:
             for item in event.spawned_items:
                 await self._spawn_scene_item(item.model_dump(exclude_none=True))
