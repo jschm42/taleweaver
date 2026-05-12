@@ -7,6 +7,7 @@ const props = defineProps<{
   initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; goal: string; character: string }
   ruleEnforcementMode: string
   isSaving: boolean
+  adventureId?: string
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +23,29 @@ watch(() => props.initialForm, (newVal) => {
 
 function handleSave() {
   emit('save', { ...localForm.value })
+}
+
+import { entityService } from '@/services/entityService'
+const isGenerating = ref<Record<string, boolean>>({})
+
+async function handleGenerateTraits(field: 'goal' | 'character') {
+  if (!props.adventureId || !localForm.value.description) return
+  isGenerating.value[field] = true
+  try {
+    const result = await entityService.generateTraits(
+      props.adventureId,
+      localForm.value.name,
+      localForm.value.description,
+      props.context?.type || 'npc',
+      field
+    )
+    if (field === 'goal') localForm.value.goal = result.goal
+    if (field === 'character') localForm.value.character = result.character
+  } catch (error) {
+    console.error('Failed to generate traits:', error)
+  } finally {
+    isGenerating.value[field] = false
+  }
 }
 </script>
 
@@ -104,6 +128,15 @@ function handleSave() {
                     </span>
                   </div>
                   <textarea v-model="localForm.goal" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What drives the protagonist? (e.g. 'Seeks revenge for family's death')"></textarea>
+                  <button 
+                    v-if="localForm.description"
+                    @click="handleGenerateTraits('goal')" 
+                    :disabled="isGenerating['goal']"
+                    class="w-full py-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 rounded-xl text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['goal'] }"></i>
+                    <span>Quick-Gen Goal</span>
+                  </button>
                 </div>
                 <div class="space-y-3">
                   <div class="flex justify-between items-center">
@@ -113,6 +146,15 @@ function handleSave() {
                     </span>
                   </div>
                   <textarea v-model="localForm.character" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does the protagonist behave? (e.g. 'Sarcastic but loyal, prone to rash decisions')"></textarea>
+                  <button 
+                    v-if="localForm.description"
+                    @click="handleGenerateTraits('character')" 
+                    :disabled="isGenerating['character']"
+                    class="w-full py-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 rounded-xl text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['character'] }"></i>
+                    <span>Quick-Gen Traits</span>
+                  </button>
                 </div>
               </div>
               
@@ -125,6 +167,15 @@ function handleSave() {
                     </span>
                   </div>
                   <textarea v-model="localForm.goal" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What does this NPC want? (e.g. 'Wants to steal the player's gold')"></textarea>
+                  <button 
+                    v-if="localForm.description"
+                    @click="handleGenerateTraits('goal')" 
+                    :disabled="isGenerating['goal']"
+                    class="w-full py-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 rounded-xl text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['goal'] }"></i>
+                    <span>Quick-Gen Goal</span>
+                  </button>
                 </div>
                 <div class="space-y-3">
                   <div class="flex justify-between items-center">
@@ -134,6 +185,15 @@ function handleSave() {
                     </span>
                   </div>
                   <textarea v-model="localForm.character" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does this NPC behave? (e.g. 'Grumpy and stubborn')"></textarea>
+                  <button 
+                    v-if="localForm.description"
+                    @click="handleGenerateTraits('character')" 
+                    :disabled="isGenerating['character']"
+                    class="w-full py-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 rounded-xl text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['character'] }"></i>
+                    <span>Quick-Gen Traits</span>
+                  </button>
                 </div>
               </div>
 

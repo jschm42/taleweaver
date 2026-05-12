@@ -44,4 +44,22 @@ export const entityService = {
       throw new Error(data.detail || 'Failed to apply AI changes')
     }
   },
+
+  async generateTraits(adventureId: string, name: string, description: string, targetType: string, targetField?: 'goal' | 'character'): Promise<{ goal: string, character: string }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-traits`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        name,
+        description,
+        target_type: targetType,
+        target_field: targetField
+      }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to generate traits')
+    }
+    return await res.json()
+  },
 }

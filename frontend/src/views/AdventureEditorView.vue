@@ -724,6 +724,7 @@ const goBack = () => {
       :initial-form="editForm"
       :rule-enforcement-mode="form.rule_enforcement_mode"
       :is-saving="isSavingText"
+      :adventure-id="adventureId"
       @close="showEditModal = false"
       @save="saveEntityText"
     />
