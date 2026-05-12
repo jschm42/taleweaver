@@ -150,50 +150,61 @@ class WorldSceneSchema(BaseModel):
     model_config = {"extra": "forbid"}
 
 class WorldExitSchema(BaseModel):
-    from_scene_id: str
-    to_scene_id: str
+    from_scene_id: str = Field(..., description="The ID of the source scene.")
+    to_scene_id: str = Field(..., description="The ID of the destination scene.")
     label: str = Field(..., description="How to describe the transition, e.g., 'a narrow stone staircase'")
-    is_locked: bool = False
-    lock_description: Optional[str] = None
+    is_locked: bool = Field(..., description="Whether the path is initially blocked.")
+    lock_description: str = Field(..., description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.")
     
     model_config = {"extra": "forbid"}
 
-class WorldEntitySchema(BaseModel):
-    id: str = Field(..., description="Unique slug for the entity, e.g., MAD_ALCHEMIST")
-    type: str = Field(..., pattern="^(NPC|OBJECT)$")
+class WorldNPCSchema(BaseModel):
+    id: str = Field(..., description="Unique slug for the NPC, e.g., MAD_ALCHEMIST")
     name: str = Field(..., description="Human-readable name")
-    description: str = Field(..., description="Appearance and demeanor or physical characteristics.")
-    start_scene_id: str
+    description: str = Field(..., description="Appearance and demeanor or physical characteristics, max 400 characters.")
+    goal: str = Field(..., description="Concise description of the NPC's primary motivation or intention, max 200 characters.")
+    character: str = Field(..., description="Concise description of the NPC's personality, demeanor, or character traits, max 200 characters.")
+    start_scene_id: str = Field(..., description="The ID of the scene where the NPC starts.")
     spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'sitting in the armchair', 'hidden in a drawer'")
     
-    # Advanced Item Fields (only for type='OBJECT')
-    item_type: Optional[str] = Field(None, description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
-    wearable_slots: Optional[list[str]] = Field(None, description="If WEARABLE, which slots? e.g. ['Head'], ['Chest'], ['Hands'], ['Ring_1'], ['Ring_2']")
-    is_hidden: bool = Field(False, description="If True, the player must SEARCH or trigger an event to see this.")
-    is_portable: bool = Field(True, description="Whether the item can be picked up. False for STATIC objects.")
-    combination_ingredients: Optional[list[str]] = Field(None, description="Item IDs required to trigger a combination.")
-    reveals_item_id: Optional[str] = Field(None, description="Item slug revealed when combination occurs.")
+    npc_type: str = Field(..., description="One of: HUMANOID, ANIMAL, MONSTER, BEING")
+    movement_type: str = Field(..., description="One of: STATIONARY, MOVABLE")
+    hp: int = Field(..., description="Hitpoints (range 10-999)")
+    mana: int = Field(..., description="Mana (range 0-999)")
+    stamina: int = Field(..., description="Stamina (range 0-999)")
+    is_attackable: bool = Field(..., description="If False, the player cannot start a fight with this NPC.")
+    is_hidden: bool = Field(..., description="If True, the NPC is initially concealed.")
+    inventory: list[str] = Field(..., description="List of object IDs in this NPC's inventory. Use [] if empty.")
+    voice: str = Field(..., description="Specific TTS voice ID for this NPC, or empty for default.")
     
-    # NPC Specific Fields (only for type='NPC')
-    npc_type: Optional[str] = Field(None, description="One of: HUMANOID, ANIMAL, MONSTER, BEING")
-    movement_type: Optional[str] = Field(None, description="One of: STATIONARY, MOVABLE")
-    hp: Optional[int] = Field(None, description="Optional hitpoints")
-    mana: Optional[int] = Field(None, description="Optional mana")
-    stamina: Optional[int] = Field(None, description="Optional stamina")
-    is_attackable: bool = Field(True, description="If False, the player cannot start a fight with this NPC.")
+    model_config = {"extra": "forbid"}
 
-    # Stat Modifiers (for OBJECTS)
-    stat_modifier_strength: Optional[int] = None
-    stat_modifier_dexterity: Optional[int] = None
-    stat_modifier_intelligence: Optional[int] = None
-    stat_modifier_wisdom: Optional[int] = None
-    stat_modifier_charisma: Optional[int] = None
-    stat_modifier_armor_class: Optional[int] = None
-    hp_change: Optional[int] = Field(None, description="For CONSUMABLE objects: HP delta when consumed (positive or negative).")
-    stamina_change: Optional[int] = Field(None, description="For CONSUMABLE objects: Stamina delta when consumed (positive or negative).")
-    mana_change: Optional[int] = Field(None, description="For CONSUMABLE objects: Mana delta when consumed (positive or negative).")
+class WorldObjectSchema(BaseModel):
+    id: str = Field(..., description="Unique slug for the object, e.g., GOLDEN_KEY")
+    name: str = Field(..., description="Human-readable name")
+    description: str = Field(..., description="Physical characteristics and details.")
+    start_scene_id: str = Field(..., description="The ID of the scene where the object starts.")
+    spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'on the dusty shelf', 'under the rug'")
     
-    inventory: Optional[list[str]] = Field(None, description="List of object IDs to start in this NPC's or Object's inventory.")
+    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
+    wearable_slots: list[str] = Field(..., description="If WEARABLE, which slots? e.g. ['Head'], ['MainHand']. Use [] if none.")
+    is_hidden: bool = Field(..., description="If True, the player must SEARCH or trigger an event to see this.")
+    is_portable: bool = Field(..., description="Whether the item can be picked up. False for STATIC objects.")
+    combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. Use [] if none.")
+    reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Use empty string if none.")
+    
+    # Stat Modifiers
+    stat_modifier_strength: int = Field(..., description="Strength bonus. Use 0 if none.")
+    stat_modifier_dexterity: int = Field(..., description="Dexterity bonus. Use 0 if none.")
+    stat_modifier_intelligence: int = Field(..., description="Intelligence bonus. Use 0 if none.")
+    stat_modifier_wisdom: int = Field(..., description="Wisdom bonus. Use 0 if none.")
+    stat_modifier_charisma: int = Field(..., description="Charisma bonus. Use 0 if none.")
+    stat_modifier_armor_class: int = Field(..., description="Armor class bonus. Use 0 if none.")
+    hp_change: int = Field(..., description="HP restoration or damage when consumed. Use 0 if none.")
+    stamina_change: int = Field(..., description="Stamina restoration when consumed. Use 0 if none.")
+    mana_change: int = Field(..., description="Mana restoration when consumed. Use 0 if none.")
+    
+    inventory: list[str] = Field(..., description="List of object IDs inside this container object. Use [] if empty.")
     
     model_config = {"extra": "forbid"}
 
@@ -202,10 +213,10 @@ class QuestSchema(BaseModel):
     title: str = Field(..., description="Short, descriptive title")
     description: str = Field(..., description="Narrative description of what needs to be done")
     goal: str = Field(..., description="Technical condition for completion (for GM reference)")
-    impact: Optional[str] = Field(None, description="How this affects the world when completed")
-    exp_reward: int = Field(250, description="EXP awarded for completion (e.g., 50, 100, 250)")
-    is_main: bool = Field(True, description="True if this quest is required to finish the adventure")
-    status: str = Field("open", description="Current state: open, completed, failed")
+    impact: str = Field(..., description="How this affects the world when completed. Use empty string for standard quests.")
+    exp_reward: int = Field(..., description="EXP awarded for completion (e.g., 50, 100, 250)")
+    is_main: bool = Field(..., description="True if this quest is required to finish the adventure")
+    status: str = Field(..., description="Current state: open, completed, failed")
     
     model_config = {"extra": "forbid"}
 
@@ -213,46 +224,40 @@ class AwardTemplateSchema(BaseModel):
     key: str = Field(..., description="Unique identifier for the award, e.g., SLAYER_OF_RATS")
     title: str = Field(..., description="Visual name of the award")
     description: str = Field(..., description="Short description shown to the player")
-    tier: Literal["bronze", "silver", "gold"] = Field("bronze", description="The rarity/tier of the award")
+    tier: Literal["bronze", "silver", "gold"] = Field(..., description="The rarity/tier of the award: bronze, silver, or gold")
     requirement: str = Field(..., description="The specific rule/condition when the GM should grant this award")
     
     model_config = {"extra": "forbid"}
 
 class EquipmentSchema(BaseModel):
-    Head: Optional[str] = None
-    Chest: Optional[str] = None
-    Hands: Optional[str] = None
-    Legs: Optional[str] = None
-    Feet: Optional[str] = None
-    Neck: Optional[str] = None
-    Ring_1: Optional[str] = None
-    Ring_2: Optional[str] = None
-    MainHand: Optional[str] = None
-    OffHand: Optional[str] = None
+    Head: str = Field(..., description="Item ID for head slot or empty string")
+    Chest: str = Field(..., description="Item ID for chest slot or empty string")
+    Hands: str = Field(..., description="Item ID for hands slot or empty string")
+    Legs: str = Field(..., description="Item ID for legs slot or empty string")
+    Feet: str = Field(..., description="Item ID for feet slot or empty string")
+    Neck: str = Field(..., description="Item ID for neck slot or empty string")
+    Ring_1: str = Field(..., description="Item ID for ring 1 slot or empty string")
+    Ring_2: str = Field(..., description="Item ID for ring 2 slot or empty string")
+    MainHand: str = Field(..., description="Item ID for main hand slot or empty string")
+    OffHand: str = Field(..., description="Item ID for off hand slot or empty string")
     
     model_config = {"extra": "forbid"}
 
 class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
-    role: str = Field(..., description="The professional or narrative role of the player, e.g. 'Royal Chef', 'Exiled Alchemist'.")
-    description: str = Field(..., description="A detailed narrative description of the character's appearance and backstory.")
-    strength: int = Field(10, description="Base strength stat (1-99)")
-    dexterity: int = Field(10, description="Base dexterity stat (1-99)")
-    intelligence: int = Field(10, description="Base intelligence stat (1-99)")
-    wisdom: int = Field(10, description="Base wisdom stat (1-99)")
-    charisma: int = Field(10, description="Base charisma stat (1-99)")
-    armor_class: int = Field(10, description="Base armor class stat (1-99)")
-    starting_inventory: Optional[list[str]] = Field(None, description="List of object IDs to start in the player's pocket.")
-    starting_equipment: Optional[EquipmentSchema] = Field(None, description="Initial equipment setup.")
-    hp: int = Field(200, description="Base health points")
-    mana: int = Field(200, description="Base mana points")
-    stamina: int = Field(200, description="Base stamina points")
-    
-    model_config = {"extra": "forbid"}
-
-class TimeConfigSchema(BaseModel):
-    day_label: Optional[str] = Field(None, description="Label for the day unit, e.g. 'Day', 'Sol', 'Cycle'")
-    start_year_override: Optional[int] = Field(None, description="Override for the starting year in calendar mode")
+    role: str = Field(..., description="The professional or narrative role of the player.")
+    description: str = Field(..., description="Narrative description of appearance and backstory.")
+    strength: int = Field(..., description="Base strength stat (1-99)")
+    dexterity: int = Field(..., description="Base dexterity stat (1-99)")
+    intelligence: int = Field(..., description="Base intelligence stat (1-99)")
+    wisdom: int = Field(..., description="Base wisdom stat (1-99)")
+    charisma: int = Field(..., description="Base charisma stat (1-99)")
+    armor_class: int = Field(..., description="Base armor class stat (1-99)")
+    starting_inventory: list[str] = Field(..., description="List of object IDs in player's pocket. Use [] if none.")
+    starting_equipment: EquipmentSchema = Field(..., description="Initial equipment setup.")
+    hp: int = Field(..., description="Base health points (100-300)")
+    mana: int = Field(..., description="Base mana points (0-300)")
+    stamina: int = Field(..., description="Base stamina points (100-300)")
     
     model_config = {"extra": "forbid"}
 
@@ -262,27 +267,21 @@ class WorldManifesto(BaseModel):
     """
     protagonist: ProtagonistSchema
     teaser: str = Field(..., description="A short, atmospheric teaser text for the adventure, max 100 characters.")
-    language: str = Field("English", description="The target language for all generated content.")
+    language: str = Field(..., description="The target language for all generated content, e.g. 'English'.")
+    origin_id: str = Field(..., description="Stable ID for the adventure. Use empty string if not provided.")
     plot: str = Field(..., description="The main plotline, goals, and narrative arc of the adventure.")
     rules: str = Field(..., description="Special rules or mechanics specific to this adventure world.")
-    intro_text: Optional[str] = Field(None, description="Optional intro text shown once when a new session starts.")
+    intro_text: str = Field(..., description="Optional intro text shown once when a new session starts. Use empty string if none.")
     walkthrough: str = Field(..., description="A secret GM walkthrough/solution for the adventure.")
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
     tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]
-    npcs: list[WorldEntitySchema]
-    objects: list[WorldEntitySchema]
-    quests: list[QuestSchema] = Field(default_factory=list)
-    awards: list[AwardTemplateSchema] = Field(default_factory=list)
-    
-    # Optional Time Initialization
-    start_date: Optional[str] = Field(None, description="Initial in-game date, e.g. '2026-04-17'")
-    start_time: Optional[str] = Field(None, description="Initial in-game time, e.g. '08:00'")
-    time_system: Optional[str] = Field("calendar", description="One of: calendar, relative")
-    time_config: Optional[TimeConfigSchema] = Field(None, description="Detailed configuration for the time system.")
-    origin_id: Optional[str] = Field(None, description="A stable ID for this adventure template.")
+    npcs: list[WorldNPCSchema]
+    objects: list[WorldObjectSchema]
+    quests: list[QuestSchema] = Field(..., description="List of 3-5 quests. Use [] if none.")
+    awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
     
     model_config = {"extra": "forbid"}
 
@@ -943,6 +942,8 @@ class WorldGenerator:
                 entity_type="NPC",
                 name=n["name"],
                 description=n["description"],
+                goal=n.get("goal"),
+                character=n.get("character"),
                 current_scene_id=n.get("start_scene_id") or n.get("current_scene_id") or default_scene_id,
                 spatial_position=n.get("spatial_position"),
                 image_url=image_url,

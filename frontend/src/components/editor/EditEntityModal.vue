@@ -4,7 +4,7 @@ import { ref, watch } from 'vue'
 const props = defineProps<{
   show: boolean
   context: { type: string; id: string } | null
-  initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; voice: string }
+  initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; voice: string; goal: string; character: string }
   availableVoices: Array<{ name: string; gender?: string; description?: string }>
   ruleEnforcementMode: string
   isSaving: boolean
@@ -52,15 +52,36 @@ function handleSave() {
               <div v-if="['protagonist', 'npc'].includes(context.type) && ruleEnforcementMode !== 'chat'" class="grid grid-cols-3 gap-4">
                 <div class="space-y-2">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Health (HP)</label>
-                  <input v-model.number="localForm.hp" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-red-500/50 outline-none transition-all" />
+                  <input 
+                    v-model.number="localForm.hp" 
+                    type="number" 
+                    min="0"
+                    max="999"
+                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-red-500/50 outline-none transition-all"
+                    :class="{ 'border-red-500 text-red-500': localForm.hp < 0 || localForm.hp > 999 }"
+                  />
                 </div>
                 <div class="space-y-2">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Stamina (STM)</label>
-                  <input v-model.number="localForm.stamina" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-emerald-500/50 outline-none transition-all" />
+                  <input 
+                    v-model.number="localForm.stamina" 
+                    type="number" 
+                    min="0"
+                    max="999"
+                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-emerald-500/50 outline-none transition-all"
+                    :class="{ 'border-red-500 text-red-500': localForm.stamina < 0 || localForm.stamina > 999 }"
+                  />
                 </div>
                 <div v-if="ruleEnforcementMode === 'rpg'" class="space-y-2">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Mana (MAN)</label>
-                  <input v-model.number="localForm.mana" type="number" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-blue-500/50 outline-none transition-all" />
+                  <input 
+                    v-model.number="localForm.mana" 
+                    type="number" 
+                    min="0"
+                    max="999"
+                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-blue-500/50 outline-none transition-all"
+                    :class="{ 'border-red-500 text-red-500': localForm.mana < 0 || localForm.mana > 999 }"
+                  />
                 </div>
               </div>
               </div>
@@ -83,10 +104,36 @@ function handleSave() {
                 </select>
                 <p class="text-xs text-slate-500">Used for this NPC's direct dialogue in TTS. Empty keeps the global default voice.</p>
               </div>
+              
+              <div v-if="context.type === 'npc'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">NPC Goal / Motivation</label>
+                    <span :class="['text-xs font-bold tracking-widest', (localForm.goal || '').length > 200 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (localForm.goal || '').length }} / 200
+                    </span>
+                  </div>
+                  <textarea v-model="localForm.goal" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What does this NPC want? (e.g. 'Wants to steal the player's gold')"></textarea>
+                </div>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">NPC Character / Traits</label>
+                    <span :class="['text-xs font-bold tracking-widest', (localForm.character || '').length > 200 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (localForm.character || '').length }} / 200
+                    </span>
+                  </div>
+                  <textarea v-model="localForm.character" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does this NPC behave? (e.g. 'Grumpy and stubborn')"></textarea>
+                </div>
+              </div>
 
               <div class="space-y-3">
-                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ context.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }}</label>
-                <textarea v-model="localForm.description" rows="8" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"></textarea>
+                <div class="flex justify-between items-center">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ context.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }}</label>
+                  <span v-if="context.type === 'npc'" :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > 400 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ (localForm.description || '').length }} / 400
+                  </span>
+                </div>
+                <textarea v-model="localForm.description" :maxlength="context.type === 'npc' ? 400 : undefined" rows="8" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"></textarea>
               </div>
             </div>
 

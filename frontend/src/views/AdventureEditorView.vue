@@ -53,7 +53,7 @@ const isAIEditing = ref(false)
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
-const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, voice: '' })
+const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, voice: '', goal: '', character: '' })
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -337,22 +337,39 @@ async function fetchDebugInfo() {
   }
 }
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, voice?: string) {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, voice?: string, goal?: string, character?: string) {
   editEntityContext.value = { type, id }
   editForm.value = { 
     name: currentName || '', 
     description: fixNewlines(currentDesc || ''),
     teaser: fixNewlines(currentTeaser || ''),
-    hp: hp || 0,
-    stamina: stamina || 0,
-    mana: mana || 0,
-    voice: voice || ''
+    hp: hp ?? 0,
+    stamina: stamina ?? 0,
+    mana: mana ?? 0,
+    voice: voice || '',
+    goal: goal || '',
+    character: character || ''
   }
   showEditModal.value = true
 }
 
 async function saveEntityText(data: any) {
   if (!editEntityContext.value) return
+  
+  // Basic validation for stats
+  if (data.hp < 0 || data.hp > 999 || data.stamina < 0 || data.stamina > 999 || data.mana < 0 || data.mana > 999) {
+    addNotification('Stats must be between 0 and 999.', 'error')
+    return
+  }
+
+  // NPC Persona validation
+  if (editEntityContext.value.type === 'npc') {
+    if ((data.goal || '').length > 200 || (data.character || '').length > 200) {
+      addNotification('NPC motivation and traits must be under 200 characters.', 'error')
+      return
+    }
+  }
+
   isSavingText.value = true
   promptError.value = ''
   try {
@@ -366,6 +383,8 @@ async function saveEntityText(data: any) {
       hp: data.hp || undefined,
       stamina: data.stamina || undefined,
       mana: data.mana || undefined,
+      goal: editEntityContext.value.type === 'npc' ? data.goal : undefined,
+      character: editEntityContext.value.type === 'npc' ? data.character : undefined,
     })
     showEditModal.value = false
     editEntityContext.value = null

@@ -27,6 +27,8 @@ class EntityUpdateRequest(BaseModel):
     mana: Optional[int] = None
     stamina: Optional[int] = None
     voice: Optional[str] = None
+    goal: Optional[str] = None
+    character: Optional[str] = None
 
 class AIEditRequest(BaseModel):
     prompt: str
@@ -158,6 +160,9 @@ async def update_editor_entity(
             if payload.stamina is not None: 
                 ent.stamina = payload.stamina
                 ent.max_stamina = payload.stamina
+            if ent.entity_type == "NPC":
+                if payload.goal is not None: ent.goal = payload.goal
+                if payload.character is not None: ent.character = payload.character
             
     await db.commit()
     return {"status": "success"}

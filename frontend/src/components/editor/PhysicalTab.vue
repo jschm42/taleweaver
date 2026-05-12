@@ -369,7 +369,7 @@ function handlePacingInput(event: Event) {
                      <button @click="emit('open-regen-dialog', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
                      <button @click="emit('open-upload-picker', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
                     <button v-if="npc.image_url" @click="emit('download-asset', npc.image_url, `${npc.name || 'npc'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                     <button @click="emit('open-text-edit', 'npc', npc.id, npc.name, npc.description, '', npc.stats?.hp, npc.stats?.stamina, npc.stats?.mana, npc.voice)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
+                     <button @click="emit('open-text-edit', 'npc', npc.id, npc.name, npc.description, '', npc.hp, npc.stamina, npc.mana, npc.voice, npc.goal, npc.character)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
                   </div>
                 </div>
               </div>

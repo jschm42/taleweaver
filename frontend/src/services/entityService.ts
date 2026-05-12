@@ -10,6 +10,8 @@ export interface EntityEditData {
   hp?: number
   stamina?: number
   mana?: number
+  goal?: string
+  character?: string
 }
 
 /**

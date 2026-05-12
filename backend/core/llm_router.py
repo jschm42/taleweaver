@@ -99,6 +99,42 @@ class GameMasterLLM:
             return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
 
     @staticmethod
+    def _clean_json_string(content: str) -> str:
+        """
+        Extracts JSON/List from Markdown code blocks or strips leading/trailing junk.
+        """
+        content = content.strip()
+        
+        # Check for markdown code blocks first
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            # Check if there are at least two sets of backticks
+            parts = content.split("```")
+            if len(parts) >= 3:
+                content = parts[1]
+        
+        content = content.strip()
+        
+        # Further refine: find first [ or { and last ] or }
+        first_json_char = -1
+        for i, char in enumerate(content):
+            if char in ('{', '['):
+                first_json_char = i
+                break
+        
+        last_json_char = -1
+        for i, char in enumerate(reversed(content)):
+            if char in ('}', ']'):
+                last_json_char = len(content) - 1 - i
+                break
+                
+        if first_json_char != -1 and last_json_char != -1 and last_json_char > first_json_char:
+            return content[first_json_char : last_json_char + 1]
+            
+        return content
+
+    @staticmethod
     def _is_supported_bool_value(value: Any) -> bool:
         """Return True when the value is a supported persisted bool representation."""
         if isinstance(value, bool):
@@ -558,12 +594,14 @@ class GameMasterLLM:
         ]
         
         normalized_model = self._normalize_model(model)
-        # Gemini often fails with complex Pydantic schemas in strict mode (DFA state limit error)
-        # Fallback to standard JSON mode for Gemini models to ensure stability
+        # Gemini and Anthropic often fail with complex Pydantic schemas in strict tool-use mode
+        # Anthropic has a 24-optional-parameter limit in their grammar compiler.
+        # Fallback to standard JSON mode (prompt-injected schema) for these models.
         is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
+        is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
 
-        if is_gemini:
-            # Inject schema into prompt since we are bypassing strict enforcement
+        if is_gemini or is_anthropic:
+            # Inject schema into prompt since we are bypassing strict tool enforcement
             schema_json = json.dumps(response_model.model_json_schema(), indent=2)
             system_prompt += (
                 f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
@@ -576,7 +614,7 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "response_format": {"type": "json_object"} if is_gemini else response_model,
+            "response_format": {"type": "json_object"} if (is_gemini or is_anthropic) else response_model,
             "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)
@@ -644,6 +682,7 @@ class GameMasterLLM:
             raise ValueError("No content returned from LLM for complex task.")
             
         try:
+            content = self._clean_json_string(content)
             data = json.loads(content)
             if isinstance(data, list) and len(data) > 0:
                 logger.warning(f"LLM returned a list for {response_model.__name__}. Taking first element.")
@@ -781,6 +820,7 @@ class GameMasterLLM:
             raise ValueError("No content returned from LLM for complex task.")
             
         try:
+            content = self._clean_json_string(content)
             data = json.loads(content)
             return response_model(**data)
         except json.JSONDecodeError as exc:

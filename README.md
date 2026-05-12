@@ -58,7 +58,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Director's Cut:** The engine automatically parses vocal tags and director notes to build dramatic tension[cite: 1]. It is not just reading text; it is performing a high-budget audio drama.
 
 ### 🗺️ Visuals & Sensory Immersion
-* **Dynamic Cartography:** Automatic rendering of directed graph maps of your discovered scenes using Mermaid.js[cite: 1].
+* **Dynamic Cartography:** Automatic rendering of hand-drawn style directed graph maps of your discovered scenes using rough.js and dagre[cite: 1].
 * **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages[cite: 1].
 * **Cinematic Audio:** Immersive TTS support powered by Google Gemini 1.5 Flash and ElevenLabs for high-budget audio drama pacing[cite: 1].
 
@@ -82,10 +82,11 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 TaleWeaver is evolving rapidly. Here is what we are building next to push the boundaries of AI roleplaying:
 
 *   **Epic Campaigns (Endless Scale):** Breaking the boundaries of single adventures. We are building a system to link multiple `.adv` blueprints into massive, persistent campaigns with overarching plots and carrying over character progression.
-*   **Deep Immersion Overhaul:** Upgrading the event engine for more complex NPC behaviors, advanced item crafting, and dynamic world events that happen even when you stand still.
+*   **Deep Immersion Overhaul:** Upgrading the event engine for more complex NPC behaviors, advanced item crafting, and dynamic world events.
 *   **100% Local TTS:** Cutting the cord to cloud audio. We will integrate local Text-to-Speech models so your adventure remains fully offline and private, matching our local Ollama vision.
 *   **Voice Control & Speech-to-Text:** True hands-free roleplaying. Talk directly to the AI Gamemaster and NPCs using your microphone for the ultimate "holodeck" experience.
 *   **Experience & Growth:** Complete objectives to earn EXP and progress your character's journey.
+*   **Fully featured Wold-Editor. Edit every aspect of the generated world and adventures.
 
 ---
 
@@ -341,7 +342,7 @@ The backend monitors three specific directories relative to the project root:
 
 * **AI & LLM:** Image generation is powered by **FLUX.1 [schnell]** and **FLUX.2 [klein]** by [Black Forest Labs](https://blackforestlabs.ai/). Multi-provider LLM abstraction is handled via [LiteLLM](https://github.com/BerriAI/litellm).
 * **Voice & TTS:** Cinematic narration provided by **Google Gemini 1.5 Flash (TTS)** and **ElevenLabs**.
-* **Mapping:** Dynamic world maps are rendered using [Mermaid.js](https://mermaid.js.org/).
+* **Mapping:** Dynamic hand-drawn world maps are rendered using [rough.js](https://roughjs.com/) and [dagre](https://github.com/dagrejs/dagre).
 * **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets, and [DiceBear](https://www.dicebear.com/) for the procedural user avatars.
 * **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/) and system icons by [Lucide](https://lucide.dev/).
 * **Typography:** Retro pixel-art and fantasy aesthetics powered by the **Press Start 2P**, **Acme**, and **Orbitron** fonts from [Google Fonts](https://fonts.google.com/) (SIL Open Font License).

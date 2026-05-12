@@ -95,8 +95,10 @@ class MemoryManager:
 
                 stat_str = f" [{' '.join(stats)}]" if stats else ""
                 pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
+                goal_str = f" [Goal: {e.goal}]" if e.goal else ""
+                char_str = f" [Character: {e.character}]" if e.character else ""
                 hidden_str = " [HIDDEN]" if getattr(e, 'is_hidden', False) else ""
-                npcs.append(f"{e.name}{stat_str}{pos_str}{hidden_str}")
+                npcs.append(f"{e.name}{stat_str}{pos_str}{goal_str}{char_str}{hidden_str}")
 
             objects = []
             for e in entities:
@@ -143,7 +145,9 @@ class MemoryManager:
             desc = npc.description.strip()
             if desc.endswith("."):
                 desc = desc[:-1]
-            lines.append(f"- {npc.name}: {desc}. Location: {scene_label}{pos_str}{hidden_str}")
+            goal_str = f", Goal: {npc.goal}" if npc.goal else ""
+            char_str = f", Character: {npc.character}" if npc.character else ""
+            lines.append(f"- {npc.name}: {desc}. Location: {scene_label}{pos_str}{goal_str}{char_str}{hidden_str}")
 
         return "\n".join(lines) + "\n"
 
