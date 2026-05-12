@@ -4,7 +4,7 @@ import { authState } from '@/store/auth'
 import { usePortalData } from '@/composables/usePortalData'
 import { usePortalSectionRouting } from '@/composables/usePortalSectionRouting'
 import PortalSidebar from '@/components/portal/PortalSidebar.vue'
-import LlmWarningBanner from '@/components/portal/LlmWarningBanner.vue'
+import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import PortalLibraryToolbar from '@/components/portal/PortalLibraryToolbar.vue'
 import AdventureLibraryGrid from '@/components/portal/AdventureLibraryGrid.vue'
 import GameSessionsGrid from '@/components/portal/GameSessionsGrid.vue'
@@ -145,7 +145,7 @@ onUnmounted(() => {
       <!-- Scrollable Content -->
       <div class="flex-1 overflow-y-auto" :class="activeSection !== 'profile' ? 'p-10' : ''">
         
-        <LlmWarningBanner :active-section="activeSection" />
+        <SetupWarningBanner :active-section="activeSection" />
 
         <PortalLibraryToolbar
           v-if="activeSection !== 'profile'"

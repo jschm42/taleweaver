@@ -127,3 +127,4 @@ async def test_remove_status_effect_not_found(client: AsyncClient):
     resp = await client.delete(f"/api/avatars/{ids['avatar_id']}/status-effects/Burning")
     assert resp.status_code == 404
 
+

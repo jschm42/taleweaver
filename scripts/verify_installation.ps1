@@ -43,8 +43,10 @@ Write-Host "[*] Applying test fixes (hotpatching)..." -ForegroundColor Yellow
 
 # Fix conftest.py (missing yield)
 $conftest = Get-Content "tests/conftest.py" -Raw
-$conftest = $conftest -replace 'client\.headers\.update\(\{"Authorization": f"Bearer \{token\}"\}\)', "`$0`r`n    yield client"
-Set-Content "tests/conftest.py" $conftest
+if ($conftest -notmatch 'yield client') {
+    $conftest = $conftest -replace 'client\.headers\.update\(\{"Authorization": f"Bearer \{token\}"\}\)', "`$0`r`n    yield client"
+    Set-Content "tests/conftest.py" $conftest
+}
 
 # Fix templates.py (Ensure trailing slash exists - default on GitHub is '/')
 # No change needed if origin/main already has the slash.
