@@ -4,7 +4,7 @@
 </p>
 
 
-# TaleWeaver: Generative AI Roleplaying & Cinematic Audio Adventures
+# TaleWeaver: Generative AI Roleplaying
 
 > [!IMPORTANT]
 > **TaleWeaver is currently in active development.**
