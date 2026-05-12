@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -59,9 +59,8 @@ from backend.api.routes import (
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Manages application startup and shutdown lifecycle."""
-    # Startup: create DB tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Startup: Database schema is managed by Alembic. 
+    # Base.metadata.create_all is removed to prevent conflicts with migrations.
 
     # Note: We now use Alembic for all schema migrations. 
     # Manual apply_sqlite_compat_migrations() is deprecated and disabled to avoid conflicts.
@@ -157,14 +156,19 @@ os.makedirs(os.path.join(settings.DATA_DIR, "imports", "adventures"), exist_ok=T
 os.makedirs(os.path.join(settings.DATA_DIR, "presets", "adventures"), exist_ok=True)
 os.makedirs("adventures", exist_ok=True)
 
-# Static data and assets
-# Security: Do NOT mount the entire settings.DATA_DIR as it contains sensitive files like taleweaver.db
-# Instead, mount only the public subdirectories.
-public_data_dirs = ["characters", "adventures/library", "audio", "scratch/test_connection", "users"]
-for d in public_data_dirs:
-    dir_path = os.path.join(settings.DATA_DIR, d)
-    os.makedirs(dir_path, exist_ok=True)
-    app.mount(f"/data/{d}", StaticFiles(directory=dir_path), name=f"data_{d.replace('/', '_')}")
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
+
+class SafeStaticFiles(StaticFiles):
+    """Custom StaticFiles that blocks access to sensitive files like the database."""
+    async def get_response(self, path: str, scope) -> Response:
+        # Block database files
+        if path.lower().endswith((".db", ".db-shm", ".db-wal")):
+            raise StarletteHTTPException(status_code=403, detail="Access denied")
+        return await super().get_response(path, scope)
+
+# Mount the entire DATA_DIR under /data for robustness, with security filters
+app.mount("/data", SafeStaticFiles(directory=os.path.abspath(settings.DATA_DIR)), name="data")
 
 # Serve frontend if available (Production/Docker mode)
 if os.path.exists("frontend_dist"):

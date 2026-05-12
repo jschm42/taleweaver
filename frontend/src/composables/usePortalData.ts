@@ -227,9 +227,12 @@ export function usePortalData(): UsePortalDataResult {
     try {
       await api.deleteAdventure(templateToDelete.value.id)
       templates.value = templates.value.filter((entry) => entry.template_id !== templateToDelete.value?.id)
-      sessions.value = sessions.value.filter(
-        (entry) => (entry.template_id || entry.adventure_id) !== templateToDelete.value?.id,
-      )
+      sessions.value = sessions.value.map((entry) => {
+        if ((entry.template_id || entry.adventure_id) === templateToDelete.value?.id) {
+          return { ...entry, template_id: null, adventure_id: null }
+        }
+        return entry
+      })
       closeTemplateDeleteConfirm()
     } catch (error) {
       console.error('Error deleting template:', error)

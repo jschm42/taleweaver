@@ -1,6 +1,8 @@
+from __future__ import annotations
 import logging
 import os
 import shutil
+from typing import Any, Optional, Union
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -31,18 +33,18 @@ class UserCreateRequest(BaseModel):
     role: str = "user"
 
 class UserUpdateRequest(BaseModel):
-    username: str | None = None
-    role: str | None = None
-    password: str | None = None
-    bio: str | None = None
-    default_language: str | None = None
+    username: Optional[str] = None
+    role: Optional[str] = None
+    password: Optional[str] = None
+    bio: Optional[str] = None
+    default_language: Optional[str] = None
 
 class BioUpdateRequest(BaseModel):
     bio: str
 
 
 class ProfileImageGenerateRequest(BaseModel):
-    bio: str | None = None
+    bio: Optional[str] = None
 
 
 def _normalize_public_data_url(url: str) -> str:
@@ -53,7 +55,7 @@ def _normalize_public_data_url(url: str) -> str:
     return normalized
 
 
-def _resolve_provider_api_key(provider: str, api_keys_dict: dict[str, str] | None) -> str | None:
+def _resolve_provider_api_key(provider: str, api_keys_dict: Optional[dict[str, str]]) -> Optional[str]:
     provider_key = (provider or "").lower()
     env_key = settings.get_env_api_key(provider_key)
     if env_key:
@@ -196,7 +198,7 @@ async def generate_my_bio(current_user: User = USER_DEP, db: AsyncSession = DB_D
 
 @router.post("/users/me/profile-image/generate", response_model=UserResponse)
 async def generate_my_profile_image(
-    payload: ProfileImageGenerateRequest | None = None,
+    payload: Optional[ProfileImageGenerateRequest] = None,
     current_user: User = USER_DEP,
     db: AsyncSession = DB_DEP,
 ):
