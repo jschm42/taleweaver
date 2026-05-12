@@ -129,6 +129,23 @@ For a deeper look into the backend processes, check out the Mermaid diagrams in 
 * [Adventure Generation Workflow](docs/diagrams/adventure_generation.mermaid) ([Activity Diagram](docs/diagrams/adventure_generation_activity.mermaid))
 * [Game Session Loop Sequence](docs/diagrams/game_session_loop.mermaid) ([Activity Diagram](docs/diagrams/game_session_loop_activity.mermaid))
 
+### ⚡ Quick Setup (Automatic)
+
+The fastest way to set up TaleWeaver manually is to use the provided setup scripts. These scripts will automatically create a virtual environment, install all dependencies (backend & frontend), generate security keys in a `.env` file, and run database migrations.
+
+#### Windows (PowerShell)
+Open PowerShell as an administrator (if needed) in the project root and run:
+```powershell
+.\setup.ps1
+```
+
+#### Linux / macOS (Bash)
+Open a terminal in the project root and run:
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
 ### 🐳 Running with Docker (Recommended)
 
 The easiest way to get TaleWeaver up and running is using Docker. This method packages both the frontend and backend into a single container and handles all dependencies automatically.
@@ -223,6 +240,9 @@ The backend API will run on the port configured in `.env` (default: `http://loca
 The frontend will run on the port configured in `.env` (default: `http://localhost:5173`).
 
 #### Windows Quick Start (PowerShell)
+
+> [!TIP]
+> Use the automated `.\setup.ps1` script (described in the Quick Setup section) for a much faster and less error-prone installation!
 
 If you want a copy-paste setup for Windows PowerShell from the project root:
 
