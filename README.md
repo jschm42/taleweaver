@@ -62,10 +62,10 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages[cite: 1].
 * **Cinematic Audio:** Immersive TTS support powered by Google Gemini 1.5 Flash and ElevenLabs for high-budget audio drama pacing[cite: 1].
 
-### 🧠 Open & Local First (LLM Flexibility)
-* **Bring Your Own Model:** Seamlessly integrate high-tier cloud models (OpenAI, Anthropic, Gemini) via our LiteLLM adapter[cite: 1].
-* **Local Offline Play:** Experimental but heavily pushed support for local execution via **Ollama**. Generate worlds and images completely offline without paying a single cent for API calls[cite: 1].
-* **Tenant-Ready Architecture:** Built on SQLite with UUID-based primary keys, preparing the engine for easy scaling, data portability, and cross-system ID generation[cite: 1].
+### 🧠 Bring Your Own Model (BYOK) & Privacy First
+* **Cloud-Tier Intelligence:** Designed to harness the reasoning power of top-tier models (GPT-5, Claude 4.5, Gemini 3 Pro) via our LiteLLM adapter for flawless, complex world generation. You provide your own API key, meaning you have full control over your data and costs.
+* **Self-Hosted & Tenant-Ready:** Run the backend completely on your own hardware via Docker. Built on SQLite with UUID-based primary keys, your game progress and prompts remain local and private on your machine.
+* **Local Tinkering (Experimental):** While the core engine relies on high-tier models for complex JSON generation, we offer highly experimental support for local execution via **Ollama**[cite: 7]. Perfect for developers looking to push the boundaries of local inference, though not yet recommended for stable gameplay.
 
 ### Persistent Game Progress & Memory
 * **Memory Feature:** The AI remembers all previous conversations and actions of the player within an adventure.
