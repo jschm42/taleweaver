@@ -119,13 +119,24 @@ async def read_users_me(
         .distinct()
     )
     adventure_count = len(result.scalars().all())
+
+    # Auto-heal legacy malformed media URL values like /data/data/users/...
+    profile_image_url = current_user.profile_image_url
+    if profile_image_url:
+        normalized_profile_image_url = profile_image_url.replace("\\", "/")
+        while normalized_profile_image_url.startswith("/data/data/"):
+            normalized_profile_image_url = normalized_profile_image_url.replace("/data/data/", "/data/", 1)
+        if normalized_profile_image_url != profile_image_url:
+            current_user.profile_image_url = normalized_profile_image_url
+            await db.commit()
+            profile_image_url = normalized_profile_image_url
     
     # We convert the ORM object to a dict and add the extra field
     user_data = {
         "id": current_user.id,
         "username": current_user.username,
         "role": current_user.role,
-        "profile_image_url": current_user.profile_image_url,
+        "profile_image_url": profile_image_url,
         "bio": current_user.bio,
         "default_language": current_user.default_language,
         "earned_awards": current_user.earned_awards or [],

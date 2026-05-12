@@ -4,8 +4,12 @@
       <header class="profile-header">
         <div class="header-main">
           <div class="avatar-wrapper group">
-            <div class="avatar-container">
+            <div class="avatar-container relative">
               <img :src="userAvatar" class="user-avatar" alt="User" />
+              <!-- Generation Loading Spinner -->
+              <div v-if="isGeneratingAvatar" class="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full backdrop-blur-sm z-10">
+                <i class="ra ra-crystal-ball text-4xl text-white animate-spin"></i>
+              </div>
               <div class="avatar-overlay opacity-0 group-hover:opacity-100 transition-all duration-300">
                 <button @click="triggerAvatarUpload" class="avatar-action-btn" title="Upload Avatar">
                   <i class="ra ra-plain-dagger rotate-45"></i>
@@ -194,13 +198,22 @@ import AwardTile from './AwardTile.vue'
 
 const BASE = '/api'
 
+function normalizeProfileImageUrl(url: string): string {
+  let normalized = (url || '').replace(/\\\\/g, '/')
+  while (normalized.startsWith('/data/data/')) {
+    normalized = normalized.replace('/data/data/', '/data/')
+  }
+  return normalized
+}
+
 const user = computed(() => authState.user)
 const userAvatar = computed(() => {
   if (user.value?.profile_image_url) {
     const baseUrl = ''
-    return user.value.profile_image_url.startsWith('http') 
-      ? user.value.profile_image_url 
-      : `${baseUrl}${user.value.profile_image_url}`
+    const normalized = normalizeProfileImageUrl(user.value.profile_image_url)
+    return normalized.startsWith('http') 
+      ? normalized 
+      : `${baseUrl}${normalized}`
   }
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.value?.username || 'default'}`
 })
@@ -327,7 +340,13 @@ async function checkAvatarGenerationAvailability() {
     const settings = await api.getSettings()
     const t2i = (settings?.t2i_settings || {}) as any
     canGenerateProfileImage.value = !!(t2i.simple_model)
+    
+    // Log for debugging purposes
+    if (!t2i.simple_model) {
+      console.warn('Profile image generation disabled: No simple_model configured in T2I settings')
+    }
   } catch (err) {
+    console.error('Error checking avatar generation availability:', err)
     canGenerateProfileImage.value = false
   }
 }
@@ -354,11 +373,15 @@ async function onAvatarFileSelected(event: Event) {
       headers: { 'Authorization': `Bearer ${authState.token}` },
       body: formData
     })
-    if (!res.ok) throw new Error('Upload failed')
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.detail || `Upload failed with status ${res.status}`)
+    }
     await refreshUser()
     addNotification('New identity visual uploaded.', 'success')
   } catch (error: any) {
-    addNotification(error.message, 'error')
+    console.error('Profile image upload error:', error)
+    addNotification(error.message || 'Failed to upload profile image', 'error')
   } finally {
     target.value = ''
   }
@@ -375,11 +398,15 @@ async function generateAvatar() {
       },
       body: JSON.stringify({ bio: user.value?.bio })
     })
-    if (!res.ok) throw new Error('Generation failed')
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.detail || `Generation failed with status ${res.status}`)
+    }
     await refreshUser()
     addNotification('Aether has manifested your new form.', 'success')
   } catch (error: any) {
-    addNotification(error.message, 'error')
+    console.error('Profile image generation error:', error)
+    addNotification(error.message || 'Failed to generate profile image. Please check admin T2I settings.', 'error')
   } finally {
     isGeneratingAvatar.value = false
   }

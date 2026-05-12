@@ -160,7 +160,7 @@ os.makedirs("adventures", exist_ok=True)
 # Static data and assets
 # Security: Do NOT mount the entire settings.DATA_DIR as it contains sensitive files like taleweaver.db
 # Instead, mount only the public subdirectories.
-public_data_dirs = ["characters", "adventures/library", "audio", "scratch/test_connection"]
+public_data_dirs = ["characters", "adventures/library", "audio", "scratch/test_connection", "users"]
 for d in public_data_dirs:
     dir_path = os.path.join(settings.DATA_DIR, d)
     os.makedirs(dir_path, exist_ok=True)

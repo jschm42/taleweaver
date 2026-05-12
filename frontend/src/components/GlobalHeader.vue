@@ -7,12 +7,21 @@ import { configState } from '@/store/config'
 const router = useRouter()
 const isMenuOpen = ref(false)
 
+function normalizeProfileImageUrl(url: string): string {
+  let normalized = (url || '').replace(/\\\\/g, '/')
+  while (normalized.startsWith('/data/data/')) {
+    normalized = normalized.replace('/data/data/', '/data/')
+  }
+  return normalized
+}
+
 const userAvatar = computed(() => {
   const user = authState.user
   if (user?.profile_image_url) {
-    return user.profile_image_url.startsWith('http') 
-      ? user.profile_image_url 
-      : user.profile_image_url
+    const normalized = normalizeProfileImageUrl(user.profile_image_url)
+    return normalized.startsWith('http') 
+      ? normalized 
+      : normalized
   }
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username || 'default'}`
 })

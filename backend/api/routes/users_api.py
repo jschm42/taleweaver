@@ -1,4 +1,5 @@
 from typing import Optional, Union
+import logging
 import os
 import shutil
 from uuid import uuid4
@@ -15,6 +16,7 @@ from backend.core.database import get_db
 from backend.models.user import User
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class UserCreateRequest(BaseModel):
     username: str
@@ -34,6 +36,14 @@ class BioUpdateRequest(BaseModel):
 
 class ProfileImageGenerateRequest(BaseModel):
     bio: Optional[str] = None
+
+
+def _normalize_public_data_url(url: str) -> str:
+    """Normalize accidental duplicated /data prefixes in generated URLs."""
+    normalized = (url or "").replace("\\", "/")
+    while normalized.startswith("/data/data/"):
+        normalized = normalized.replace("/data/data/", "/data/", 1)
+    return normalized
 
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(admin: User = Depends(get_current_admin), db: AsyncSession = Depends(get_db)):
@@ -165,11 +175,13 @@ async def generate_my_profile_image(
     prompt_source = payload.bio if payload and payload.bio is not None else current_user.bio
     prompt = (prompt_source or "").strip() or "A fantasy roleplaying avatar"
         
-    target_dir = os.path.join(settings.DATA_DIR, "users")
+    # Use absolute path so MediaEngine doesn't prepend DATA_DIR again for relative values.
+    target_dir = os.path.abspath(os.path.join(settings.DATA_DIR, "users"))
     ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
     filename = f"{current_user.id}_{uuid4().hex[:8]}.{ext}"
     
     try:
+        logger.info(f"Starting profile image generation for user {current_user.id} with prompt: {prompt}")
         image_url = await MediaEngine.generate_image(
             prompt=prompt,
             model=model,
@@ -179,14 +191,21 @@ async def generate_my_profile_image(
             filename=filename,
             provider_options=t2i
         )
+        logger.info(f"Image generation completed. URL: {image_url}")
         
         if not image_url:
+            logger.error("Image generation failed to return a URL")
             raise HTTPException(status_code=500, detail="Image generation failed to return a URL")
             
-        current_user.profile_image_url = image_url
+        current_user.profile_image_url = _normalize_public_data_url(image_url)
+        logger.info(f"Updating user {current_user.id} profile image URL to: {image_url}")
         await db.commit()
         await db.refresh(current_user)
+        logger.info(f"User {current_user.id} profile updated successfully")
         return current_user
     except Exception as e:
+        import traceback
+        logger.error(f"Profile image generation failed for user {current_user.id}: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
 

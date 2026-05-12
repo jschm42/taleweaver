@@ -409,13 +409,20 @@ export const api = {
     return request(`/users/${userId}`, { method: 'DELETE' })
   },
 
-  uploadProfileImage(file: File): Promise<any> {
+  async uploadProfileImage(file: File): Promise<any> {
     const formData = new FormData()
     formData.append('file', file)
-    return request('/users/me/profile-image', {
-      method: 'POST',
-      body: formData
-    })
+    
+    try {
+      const response = await request('/users/me/profile-image', {
+        method: 'POST',
+        body: formData
+      })
+      return response
+    } catch (error) {
+      console.error('API uploadProfileImage error:', error)
+      throw error
+    }
   },
 
   updateMyBio(bio: string): Promise<any> {
@@ -429,9 +436,16 @@ export const api = {
     return request('/users/me/bio/generate', { method: 'POST' })
   },
 
-  generateMyProfileImage(bio?: string): Promise<any> {
+  async generateMyProfileImage(bio?: string): Promise<any> {
     const body = bio !== undefined ? JSON.stringify({ bio }) : undefined
-    return request('/users/me/profile-image/generate', { method: 'POST', body })
+    
+    try {
+      const response = await request('/users/me/profile-image/generate', { method: 'POST', body })
+      return response
+    } catch (error) {
+      console.error('API generateMyProfileImage error:', error)
+      throw error
+    }
   }
 }
 
