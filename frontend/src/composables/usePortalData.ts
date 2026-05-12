@@ -57,6 +57,7 @@ export interface UsePortalDataResult {
   activeConflict: Ref<any>
   closeConflictModal: () => void
   confirmConflictOverwrite: () => Promise<void>
+  dismissWarning: (templateId: string) => Promise<void>
 }
 
 function formatToneLabel(value?: unknown): string {
@@ -459,6 +460,20 @@ export function usePortalData(): UsePortalDataResult {
     await exportAdventureFile(adventureId, title, 'adv')
   }
 
+  /** Clears the creation_error (notice) for a specific template. */
+  async function dismissWarning(templateId: string) {
+    try {
+      await api.updateAdventureTemplate(templateId, { creation_error: null })
+      // Update local state immediately to avoid re-fetch if possible, 
+      // but fetchPortalData is safer for consistency.
+      templates.value = templates.value.map(t => 
+        t.template_id === templateId ? { ...t, creation_error: null } : t
+      )
+    } catch (error) {
+      console.error('Error dismissing warning:', error)
+    }
+  }
+
   /** Tracks a newly created adventure in pending state until completion. */
   function trackNewAdventure(adventureId: string, title: string) {
     trackPendingNewAdventure(adventureId, title, fetchPortalData)
@@ -518,5 +533,6 @@ export function usePortalData(): UsePortalDataResult {
     activeConflict,
     closeConflictModal,
     confirmConflictOverwrite,
+    dismissWarning,
   }
 }

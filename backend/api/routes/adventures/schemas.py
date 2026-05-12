@@ -254,6 +254,7 @@ class AdventureTemplateUpdate(BaseModel):
     completed_condition: Optional[str] = None
     gameover_condition: Optional[str] = None
     tts_director_notes: Optional[str] = None
+    creation_error: Optional[str] = None
 
 
 class TraitGenerationRequest(BaseModel):

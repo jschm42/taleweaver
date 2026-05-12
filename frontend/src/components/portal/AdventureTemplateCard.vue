@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
-import { MoreHorizontal } from 'lucide-vue-next'
+import { MoreHorizontal, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   template: AdventureTemplateSummary
@@ -13,6 +13,7 @@ const emit = defineEmits<{
   (e: 'exportAdz', templateId: string, title: string): void
   (e: 'exportAdv', templateId: string, title: string): void
   (e: 'delete', templateId: string, title: string): void
+  (e: 'dismissWarning', templateId: string): void
 }>()
 
 const isMenuOpen = ref(false)
@@ -66,6 +67,10 @@ function fixNewlines(text: string | null | undefined): string {
   return text.replace(/\\n/g, '\n')
 }
 
+function dismissWarning() {
+  emit('dismissWarning', props.template.template_id)
+}
+
 </script>
 
 <template>
@@ -97,6 +102,13 @@ function fixNewlines(text: string | null | undefined): string {
           <div class="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-500 text-xs uppercase tracking-widest font-black border border-amber-500/20 flex items-center gap-2 backdrop-blur-md shadow-lg shadow-amber-500/10 cursor-help">
             <i class="ra ra-warning text-sm"></i>
             <span>Visual Issues</span>
+            <button 
+              @click.stop="dismissWarning"
+              class="ml-1 p-0.5 hover:bg-amber-500/20 rounded-md transition-colors"
+              title="Meldung ausblenden"
+            >
+              <X class="w-3 h-3" />
+            </button>
           </div>
           <!-- Tooltip-style detail -->
           <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-amber-500/30 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/warn:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">

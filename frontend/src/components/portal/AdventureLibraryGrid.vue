@@ -22,6 +22,7 @@ defineEmits<{
   (e: 'export-adz', templateId: string, title: string): void
   (e: 'export-adv', templateId: string, title: string): void
   (e: 'delete', templateId: string, title: string): void
+  (e: 'dismiss-warning', templateId: string): void
 }>()
 </script>
 
@@ -58,6 +59,7 @@ defineEmits<{
       @export-adz="(id, title) => $emit('export-adz', id, title)"
       @export-adv="(id, title) => $emit('export-adv', id, title)"
       @delete="(id, title) => $emit('delete', id, title)"
+      @dismiss-warning="(id) => $emit('dismiss-warning', id)"
     />
   </div>
 </template>

@@ -69,6 +69,7 @@ const {
   activeConflict,
   closeConflictModal,
   confirmConflictOverwrite,
+  dismissWarning,
 } = usePortalData()
 
 watch(importInput, () => undefined)
@@ -178,6 +179,7 @@ onUnmounted(() => {
               @export-adz="exportAdventureAdz"
               @export-adv="exportAdventureAdv"
               @delete="confirmDeleteTemplate"
+              @dismiss-warning="dismissWarning"
             />
           </div>
 

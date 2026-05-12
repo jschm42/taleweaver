@@ -243,7 +243,7 @@ async def create_adventure(
                     )
                     has_world_data = bool(scene_count_res.scalar_one_or_none() or entity_count_res.scalar_one_or_none())
 
-                    if has_world_data and is_image_moderation_error(e):
+                    if is_image_moderation_error(e):
                         bg_adv.is_ready = True
                         bg_adv.creation_status = "Ready"
                         bg_adv.creation_error = (

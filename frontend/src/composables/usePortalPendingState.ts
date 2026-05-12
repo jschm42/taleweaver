@@ -155,7 +155,7 @@ export function usePortalPendingState(
           const statusText = data.status || 'Constructing world...'
           options?.onStatus?.(statusText)
 
-          if (isFailureStatus(statusText) || data.error) {
+          if (isFailureStatus(statusText) || (data.error && !data.error.startsWith('Notice:'))) {
             clearInterval(pollInterval)
             const detail = data.error || statusText || 'Generation failed.'
             options?.onFailure?.(detail)
