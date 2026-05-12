@@ -6,9 +6,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.routes.adventures.schemas import AdventureTemplateDebugResponse
+from backend.api.routes.adventures.schemas import AdventureTemplateDebugResponse, TraitGenerationRequest, TraitGenerationResponse
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.core.llm_router import GameMasterLLM
+from backend.core.prompts import TRAIT_GENERATION_SYSTEM_PROMPT, TRAIT_GENERATION_USER_PROMPT_TEMPLATE
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.user import User
@@ -165,4 +167,48 @@ async def update_editor_entity(
             
     await db.commit()
     return {"status": "success"}
+
+@router.post("/{template_id}/editor/generate-traits", response_model=TraitGenerationResponse)
+async def generate_entity_traits(
+    template_id: str,
+    payload: TraitGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates NPC/Protagonist goal and character traits based on description/bio."""
+    # Verify ownership
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+
+    llm_settings = current_user.llm_settings or {}
+    provider = llm_settings.get("small_model_provider") or "openai"
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+    
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+    
+    field_instruction = ""
+    if payload.target_field == "goal":
+        field_instruction = "IMPORTANT: Focus specifically on generating a compelling Goal/Motivation."
+    elif payload.target_field == "character":
+        field_instruction = "IMPORTANT: Focus specifically on generating evocative Personality/Traits."
+
+    base_prompt = TRAIT_GENERATION_USER_PROMPT_TEMPLATE.format(
+        name=payload.name,
+        description=payload.description,
+        adventure_theme=payload.adventure_theme or adv.original_prompt or 'Fantasy Adventure'
+    )
+    user_prompt = f"{base_prompt}\n{field_instruction}"
+    
+    try:
+        result = await gm.aexecute_complex_task(
+            system_prompt=TRAIT_GENERATION_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            response_model=TraitGenerationResponse,
+            model=model
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Failed to generate traits: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 

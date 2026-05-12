@@ -597,6 +597,12 @@ class WorldGenerator:
                 if manifest_dict.get("starting_timestamp") is not None:
                     adventure.starting_timestamp = manifest_dict["starting_timestamp"]  # type: ignore
                 
+                if manifest_dict.get("allow_dynamic_items") is not None:
+                    adventure.allow_dynamic_items = manifest_dict["allow_dynamic_items"]  # type: ignore
+
+                if manifest_dict.get("game_over_rules") is not None:
+                    adventure.game_over_rules = manifest_dict["game_over_rules"]  # type: ignore
+                
                 if manifest_dict.get("awards") is not None:
                     adventure.awards = manifest_dict["awards"]  # type: ignore
             
@@ -718,6 +724,8 @@ class WorldGenerator:
                     wisdom=prot.get("wisdom", 10),
                     charisma=prot.get("charisma", 10),
                     armor_class=prot.get("armor_class", 10),
+                    exp=prot.get("exp", 0),
+                    status_effects=prot.get("status_effects", []),
                     stats=prot.get("stats", {}),
                     inventory=[],
                     equipment={
@@ -748,6 +756,8 @@ class WorldGenerator:
                 avatar.wisdom = prot.get("wisdom", avatar.wisdom)
                 avatar.charisma = prot.get("charisma", avatar.charisma)
                 avatar.armor_class = prot.get("armor_class", avatar.armor_class)
+                avatar.exp = prot.get("exp", avatar.exp)
+                avatar.status_effects = prot.get("status_effects") or avatar.status_effects
                 
                 avatar.stats = prot.get("stats") or avatar.stats
                 

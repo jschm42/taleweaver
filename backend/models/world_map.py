@@ -19,7 +19,7 @@ class WorldMap(Base, TimestampMixin):
     __tablename__ = "world_maps"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid6.uuid7()))
-    template_id = Column(String(36), ForeignKey("adventure_templates.id"), nullable=False)
+    template_id = Column(String(36), ForeignKey("adventure_templates.id", ondelete="SET NULL"), nullable=True)
     session_id = Column(String(36), ForeignKey("game_sessions.id"), nullable=True, index=True)
 
     # {"scene_id": {"label": "...", "description": "..."}, ...}

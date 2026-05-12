@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 import zipfile
+from copy import deepcopy
 from typing import Any, Optional, Union
 
 from sqlalchemy import select
@@ -182,6 +183,10 @@ class AdventureTemplateImporter:
                     gameover_condition=adv_data.get("gameover_condition") or manifest_data.get("gameover_condition"),
                     tts_director_notes=adv_data.get("tts_director_notes") or manifest_data.get("tts_director_notes"),
                     starting_timestamp=adv_data.get("starting_timestamp") or manifest_data.get("starting_timestamp", 0),
+                    time_system=adv_data.get("time_system") or manifest_data.get("time_system", "calendar"),
+                    time_config=adv_data.get("time_config") or manifest_data.get("time_config"),
+                    game_over_rules=adv_data.get("game_over_rules") or manifest_data.get("game_over_rules"),
+                    allow_dynamic_items=adv_data.get("allow_dynamic_items", True) if "allow_dynamic_items" in adv_data else (manifest_data.get("allow_dynamic_items", True)),
                     is_adventure_generator=adv_data.get("is_adventure_generator", False) or manifest_data.get("is_adventure_generator", False),
                     is_ready=True,
                     creation_status="Ready",
@@ -227,6 +232,10 @@ class AdventureTemplateImporter:
                         "wisdom": prot.get("wisdom", 10) if prot else 10,
                         "charisma": prot.get("charisma", 10) if prot else 10,
                         "armor_class": prot.get("armor_class", 10) if prot else 10,
+                        "exp": prot.get("exp", 0) if prot else 0,
+                        "goal": prot.get("goal", "") if prot else "",
+                        "character": prot.get("character", "") if prot else "",
+                        "status_effects": prot.get("status_effects", []) if prot else [],
                         "stats": prot.get("stats", {}) if prot else {},
                         "starting_inventory": prot.get("starting_inventory", prot.get("inventory", [])) if prot else [],
                         "starting_equipment": prot.get("starting_equipment", prot.get("equipment", {})) if prot else {}
@@ -382,6 +391,9 @@ class AdventureTemplateImporter:
                     gameover_condition=old_adv.get("gameover_condition"),
                     tts_director_notes=old_adv.get("tts_director_notes"),
                     starting_timestamp=old_adv.get("starting_timestamp", 0),
+                    time_system=old_adv.get("time_system", "calendar"),
+                    time_config=old_adv.get("time_config"),
+                    allow_dynamic_items=old_adv.get("allow_dynamic_items", True),
                     language=old_adv.get("language") or data.get("language"),
                     origin_id=origin_id,
                     is_adventure_generator=old_adv.get("is_adventure_generator", False),
@@ -421,6 +433,9 @@ class AdventureTemplateImporter:
                         wisdom=old_avatar.get("wisdom", 10),
                         charisma=old_avatar.get("charisma", 10),
                         armor_class=old_avatar.get("armor_class", 10),
+                        exp=old_avatar.get("exp", 0),
+                        goal=old_avatar.get("goal", ""),
+                        character=old_avatar.get("character", ""),
                         stats=old_avatar["stats"], 
                         inventory=old_avatar["inventory"],
                         equipment=old_avatar["equipment"], 
@@ -440,12 +455,49 @@ class AdventureTemplateImporter:
                     db.add(new_sess)
                     await db.flush()
 
+                    restored_entity_states = old_state.get("entity_states", {})
+                    if not isinstance(restored_entity_states, dict):
+                        restored_entity_states = {}
+                    restored_entity_states = deepcopy(restored_entity_states)
+                    restored_entity_states.setdefault(
+                        "__manifest_snapshot__",
+                        {
+                            "adventure": {
+                                "id": new_template.id,
+                                "title": new_template.title,
+                                "version": new_template.version,
+                                "image_url": new_template.image_url,
+                                "strict_rules": new_template.strict_rules,
+                                "rule_enforcement_mode": new_template.rule_enforcement_mode,
+                                "time_per_turn": new_template.time_per_turn,
+                                "clock_enabled": new_template.clock_enabled,
+                                "time_system": new_template.time_system,
+                                "time_config": deepcopy(new_template.time_config or {}),
+                                "selected_tone": deepcopy(new_template.selected_tone or {}),
+                                "selected_image_styles": deepcopy(new_template.selected_image_styles or []),
+                                "quests": deepcopy(new_template.quests or []),
+                                "awards": deepcopy(new_template.awards or []),
+                                "plot": new_template.plot,
+                                "rules": new_template.rules,
+                                "intro_text": new_template.intro_text,
+                                "walkthrough": new_template.walkthrough,
+                                "completed_condition": new_template.completed_condition,
+                                "gameover_condition": new_template.gameover_condition,
+                                "tts_director_notes": new_template.tts_director_notes,
+                                "original_prompt": new_template.original_prompt,
+                                "allow_dynamic_items": new_template.allow_dynamic_items,
+                                "is_adventure_generator": new_template.is_adventure_generator,
+                            },
+                            "original_manifest": deepcopy(new_template.original_manifest or {}),
+                        },
+                    )
+
                     db.add(SessionState(
                         session_id=new_sess.id,
                         current_scene_id=old_state.get("scene_id") or old_state.get("current_scene_id") or "START",
                         in_game_time=old_state.get("in_game_time", 0),
                         inventory=old_state.get("inventory", []),
-                        entity_states=old_state.get("entity_states", {}),
+                        entity_states=restored_entity_states,
                         exit_states=old_state.get("exit_states", {}),
                         discovered_scenes=old_state.get("discovered_scenes", [])
                     ))
@@ -488,6 +540,9 @@ class AdventureTemplateImporter:
                     gameover_condition=adv_meta.get("gameover_condition") or manifest.get("gameover_condition"),
                     tts_director_notes=adv_meta.get("tts_director_notes") or manifest.get("tts_director_notes"),
                     starting_timestamp=adv_meta.get("starting_timestamp") or manifest.get("starting_timestamp", 0),
+                    time_system=adv_meta.get("time_system") or manifest.get("time_system", "calendar"),
+                    time_config=adv_meta.get("time_config") or manifest.get("time_config"),
+                    allow_dynamic_items=adv_meta.get("allow_dynamic_items", True) if "allow_dynamic_items" in adv_meta else (manifest.get("allow_dynamic_items", True)),
                     language=adv_meta.get("language") or manifest.get("language"),
                     origin_id=origin_id,
                     is_adventure_generator=adv_meta.get("is_adventure_generator", False),

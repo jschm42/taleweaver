@@ -99,6 +99,24 @@ async def test_create_adventure_creates_one_visible_session(client: AsyncClient)
     assert sessions[0]["game_id"] == ids["game_id"]
 
 
+async def test_post_chat_stream_includes_turn_correlation_id(client: AsyncClient):
+    """Chat stream responses expose a per-turn correlation id in header and SSE fields."""
+    ids = await _create_adventure(client, "Turn Correlation Quest")
+
+    resp = await client.post(
+        f"/api/adventures/{ids['game_id']}/chat",
+        json={"content": "look around"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    turn_id = resp.headers.get("x-taleweaver-turn-id")
+    assert turn_id
+
+    body = resp.text
+    assert f"id: {turn_id}" in body
+    assert "event:" in body
+
+
 async def test_create_adventure_with_heartbeat(client: AsyncClient):
     """Heartbeat settings are persisted when creating an adventure."""
     # Arrange
@@ -1045,7 +1063,7 @@ async def test_delete_adventure(client: AsyncClient):
     adv_id = ids["adventure_id"]
 
     del_resp = await client.delete(f"/api/adventures/{adv_id}")
-    assert del_resp.status_code == 204
+    assert del_resp.status_code == 200
 
     get_resp = await client.get(f"/api/adventures/{adv_id}")
     assert get_resp.status_code == 404
@@ -1055,6 +1073,27 @@ async def test_delete_adventure_not_found(client: AsyncClient):
     """Deleting a non-existent adventure returns 404."""
     resp = await client.delete("/api/adventures/00000000-0000-0000-0000-000000000000")
     assert resp.status_code == 404
+
+
+async def test_delete_adventure_keeps_existing_sessions(client: AsyncClient):
+    """Deleting a template must not remove or break already-started sessions."""
+    ids = await _create_adventure(client, "Session Survival Quest")
+    adv_id = ids["adventure_id"]
+
+    start_resp = await client.post(f"/api/adventures/{adv_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    started_game_id = start_resp.json()["game_id"]
+
+    del_resp = await client.delete(f"/api/adventures/{adv_id}")
+    assert del_resp.status_code == 200, del_resp.text
+
+    sessions_resp = await client.get("/api/adventures/sessions")
+    assert sessions_resp.status_code == 200, sessions_resp.text
+    sessions = sessions_resp.json()
+    assert any(s.get("game_id") == started_game_id for s in sessions)
+
+    chat_resp = await client.get(f"/api/adventures/{started_game_id}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
 
 
 # ---------------------------------------------------------------------------
@@ -1767,11 +1806,79 @@ async def test_start_session_route_creates_additional_session(client: AsyncClien
     data = resp.json()
     assert data["game_id"] != ids["game_id"]
     assert data["template_id"] == ids["adventure_id"]
+    started_game_id = data["game_id"]
 
     list_resp = await client.get("/api/adventures/sessions")
     assert list_resp.status_code == 200
     session_rows = [s for s in list_resp.json() if s["adventure_id"] == ids["adventure_id"]]
-    assert len(session_rows) >= 2
+    assert any(s["game_id"] == started_game_id for s in session_rows)
+    session_ids = [s["game_id"] for s in session_rows]
+    assert len(session_ids) == len(set(session_ids))
+
+
+async def test_start_session_persists_manifest_snapshot_copy(client: AsyncClient):
+    """Starting a session stores a manifest snapshot copy in SessionState.entity_states."""
+    ids = await _create_adventure(client, "Manifest Snapshot Quest")
+
+    start_resp = await client.post(f"/api/adventures/{ids['adventure_id']}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    async with TestSessionLocal() as session:
+        state_res = await session.execute(select(SessionState).where(SessionState.session_id == game_id))
+        state = state_res.scalars().first()
+        assert state is not None
+        assert isinstance(state.entity_states, dict)
+
+        snapshot = state.entity_states.get("__manifest_snapshot__")
+        assert isinstance(snapshot, dict)
+
+        adventure_snapshot = snapshot.get("adventure")
+        assert isinstance(adventure_snapshot, dict)
+        assert adventure_snapshot.get("id") == ids["adventure_id"]
+        assert adventure_snapshot.get("title") == "Manifest Snapshot Quest"
+
+        original_manifest_snapshot = snapshot.get("original_manifest")
+        assert isinstance(original_manifest_snapshot, dict)
+
+
+async def test_list_sessions_has_unique_game_ids(client: AsyncClient):
+    """Session list should never contain duplicate entries for the same game_id."""
+    ids = await _create_adventure(client, "Unique Session IDs Quest")
+
+    start_resp = await client.post(f"/api/adventures/{ids['adventure_id']}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+
+    list_resp = await client.get("/api/adventures/sessions")
+    assert list_resp.status_code == 200, list_resp.text
+
+    game_ids = [row.get("game_id") for row in list_resp.json() if row.get("game_id")]
+    assert len(game_ids) == len(set(game_ids))
+
+
+async def test_get_chat_history_uses_session_scene_without_result_reuse_error(client: AsyncClient):
+    """Chat history should not fail when scene image is loaded from a session-scoped world scene."""
+    ids = await _create_adventure(client, "Session Scene Query Quest")
+
+    start_resp = await client.post(f"/api/adventures/{ids['adventure_id']}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    async with TestSessionLocal() as session:
+        state_res = await session.execute(select(SessionState).where(SessionState.session_id == game_id))
+        state = state_res.scalars().first()
+        assert state is not None
+
+        # Force fallback to DB scene lookup path (instead of asset snapshot key).
+        entity_states = dict(state.entity_states or {})
+        asset_snapshot = dict(entity_states.get("__asset_snapshot__") or {})
+        asset_snapshot.pop(state.current_scene_id, None)
+        entity_states["__asset_snapshot__"] = asset_snapshot
+        state.entity_states = entity_states
+        await session.commit()
+
+    chat_resp = await client.get(f"/api/adventures/{game_id}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
 
 
 async def test_delete_single_session_keeps_template(client: AsyncClient):

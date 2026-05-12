@@ -111,10 +111,14 @@ async def list_sessions(
     """Returns all game sessions for the current user."""
     result = await db.execute(
         select(GameSession, SessionState, AdventureTemplate, WorldScene.label, Avatar.profile_image)
-        .join(SessionState, SessionState.session_id == GameSession.id)
+        .outerjoin(SessionState, SessionState.session_id == GameSession.id)
         .outerjoin(AdventureTemplate, GameSession.template_id == AdventureTemplate.id)
         .outerjoin(Avatar, Avatar.id == SessionState.avatar_id)
-        .outerjoin(WorldScene, (WorldScene.template_id == GameSession.template_id) & (WorldScene.id == SessionState.current_scene_id))
+        .outerjoin(
+            WorldScene,
+            (WorldScene.id == SessionState.current_scene_id)
+            & (WorldScene.session_id == GameSession.id),
+        )
         .where(GameSession.user_id == current_user.id)
     )
     rows = result.all()
@@ -125,16 +129,17 @@ async def list_sessions(
             game_id=g.id, template_id=g.template_id, adventure_id=g.template_id, avatar_id=g.avatar_id,
             profile_image=AdventureLogic.resolve_session_asset(s, "protagonist", avatar_profile_image),
             adventure_title=a.title if a else (g.adventure_title or "Unknown"),
-            adventure_version=a.version if a else None,
+            adventure_version=a.version if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("version"),
             image_url=AdventureLogic.resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
-            scene_id=s.current_scene_id, current_scene_name=scene_label or "Exploring...",
-            in_game_time=s.in_game_time,
+            scene_id=s.current_scene_id if s else "START", 
+            current_scene_name=scene_label or ("Exploring..." if s else "Archived"),
+            in_game_time=s.in_game_time if s else 0,
             is_ready=a.is_ready if a else True, creation_status=a.creation_status if a else "Ready",
-            creation_error=a.creation_error if a else None, selected_tone=a.selected_tone if a else None,
+            creation_error=a.creation_error if a else None, selected_tone=a.selected_tone if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("selected_tone"),
             progress=AdventureLogic.calculate_quest_progress(s.quests if s else (a.quests if a else None)),
             quest_count=len((s.quests if s else (a.quests if a else None)) or []),
             completed_quest_count=len([q for q in ((s.quests if s else (a.quests if a else None)) or []) if q.get("status") == "completed"]),
-            award_count=len((a.awards if a else None) or []),
+            award_count=len((a.awards if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("awards")) or []),
             earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if any(ea.get("key") == aw.get("key") and ea.get("template_id") == a.id for ea in user_earned_awards)]),
             created_at=g.created_at,
             status=g.status,
@@ -258,16 +263,20 @@ async def start_session_for_template(
     os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", new_session.id), exist_ok=True)
 
     # Create SessionState with narrative snapshot
+    manifest_snapshot = AdventureLogic.build_session_manifest_snapshot(adventure)
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
         current_scene_id=first_scene_id, in_game_time=0, quests=deepcopy(adventure.quests or []),
+        entity_states={AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot},
         start_datetime=AdventureLogic.resolve_start_datetime(adventure.original_manifest),
         plot=adventure.plot,
         rules=adventure.rules,
         walkthrough=adventure.walkthrough,
         completed_condition=adventure.completed_condition,
         gameover_condition=adventure.gameover_condition,
-        tts_director_notes=adventure.tts_director_notes
+        tts_director_notes=adventure.tts_director_notes,
+        selected_image_styles=deepcopy(adventure.selected_image_styles),
+        selected_tone=deepcopy(adventure.selected_tone)
     )
     db.add(new_state)
 
