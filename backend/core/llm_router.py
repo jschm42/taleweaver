@@ -599,8 +599,15 @@ class GameMasterLLM:
         # Fallback to standard JSON mode (prompt-injected schema) for these models.
         is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
         is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
+        is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
+        is_openrouter = self.provider == "openrouter" or self.api_key.startswith("sk-or-v1")
 
-        if is_gemini or is_anthropic:
+        # Many non-OpenAI providers (including DeepSeek on some platforms) do not support 
+        # complex Pydantic models in response_format (structured outputs).
+        # We fall back to standard JSON mode with prompt-injected schemas for these.
+        use_json_mode_fallback = is_gemini or is_anthropic or is_deepseek or is_openrouter
+
+        if use_json_mode_fallback:
             # Inject schema into prompt since we are bypassing strict tool enforcement
             schema_json = json.dumps(response_model.model_json_schema(), indent=2)
             system_prompt += (
@@ -614,7 +621,7 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "response_format": {"type": "json_object"} if (is_gemini or is_anthropic) else response_model,
+            "response_format": {"type": "json_object"} if use_json_mode_fallback else response_model,
             "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)
@@ -734,8 +741,13 @@ class GameMasterLLM:
         # for providers that support structured outputs (e.g. OpenAI).
         normalized_model = self._normalize_model(model)
         is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
+        is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
+        is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
+        is_openrouter = self.provider == "openrouter" or self.api_key.startswith("sk-or-v1")
 
-        if is_gemini:
+        use_json_mode_fallback = is_gemini or is_anthropic or is_deepseek or is_openrouter
+
+        if use_json_mode_fallback:
             # Inject schema into prompt since we are bypassing strict enforcement
             schema_json = json.dumps(response_model.model_json_schema(), indent=2)
             system_prompt += (
@@ -749,7 +761,7 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "response_format": {"type": "json_object"} if is_gemini else response_model,
+            "response_format": {"type": "json_object"} if use_json_mode_fallback else response_model,
             "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
         }
         self._apply_thinking_settings(kwargs)
