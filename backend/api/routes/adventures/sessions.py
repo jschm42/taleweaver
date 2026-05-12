@@ -117,10 +117,7 @@ async def list_sessions(
         .outerjoin(
             WorldScene,
             (WorldScene.id == SessionState.current_scene_id)
-            & (
-                (WorldScene.session_id == GameSession.id)
-                | ((WorldScene.template_id == GameSession.template_id) & (WorldScene.session_id.is_(None)))
-            ),
+            & (WorldScene.session_id == GameSession.id),
         )
         .where(GameSession.user_id == current_user.id)
     )

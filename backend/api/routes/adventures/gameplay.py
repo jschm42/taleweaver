@@ -1,5 +1,6 @@
 import logging
-from typing import Any, cast
+from typing import Any, AsyncGenerator, cast
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -24,7 +25,6 @@ from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldScene
-from backend.models.world_map import WorldMap
 
 router = APIRouter(tags=["Gameplay"])
 logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ async def get_chat_history(
         scene = scene_res.scalars().first()
         if not scene:
             scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
-        scene = scene_res.scalars().first()
+            scene = scene_res.scalars().first()
         scene_image = scene.image_url if scene else None
 
     pending_terminal_epilogue, input_locked = _terminal_flags_from_state(state)
@@ -144,15 +144,27 @@ async def post_chat_message(
     """Processes a user message and returns a streaming response."""
     try:
         manager = GameTurnManager(db, game_id, current_user)
+        turn_id = uuid4().hex
+
+        async def _stream_with_turn_id(source: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
+            async for chunk in source:
+                if isinstance(chunk, str) and chunk.startswith("event:"):
+                    yield f"id: {turn_id}\n{chunk}"
+                else:
+                    yield chunk
+
         return StreamingResponse(
-            manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
-            media_type="text/event-stream"
+            _stream_with_turn_id(
+                manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language)
+            ),
+            media_type="text/event-stream",
+            headers={"X-Taleweaver-Turn-Id": turn_id},
         )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to start chat turn for session %s", game_id)
-        raise HTTPException(status_code=500, detail="Unable to process this turn.")
+        raise HTTPException(status_code=500, detail="Unable to process this turn.") from exc
 
 
 @router.post("/{game_id}/terminal-epilogue", response_model=TerminalEpilogueResponse)

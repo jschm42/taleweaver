@@ -670,6 +670,31 @@ async def test_unknown_pass1_error_returns_generic_sse_error(setup_test_db, monk
         assert not any("socket exploded" in c.lower() or "trace details" in c.lower() for c in chunks)
 
 
+async def test_unknown_chat_progression_error_returns_generic_sse_error(setup_test_db, monkeypatch):
+    """Unknown pass-1 exceptions in chat-progression mode should not silently abort the SSE stream."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, _state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = False
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=RuntimeError("chat progression blew up internally"))
+        mock_llm_instance.stream_simple_task = AsyncMock()
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("respond please"):
+            chunks.append(chunk)
+
+        assert any("event: error" in c and "unexpected issue" in c.lower() for c in chunks)
+        assert not any("blew up internally" in c.lower() for c in chunks)
+
+
 async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkeypatch):
     """A retry phrase should recover the last request and proceed after confirmation."""
     from tests.conftest import TestSessionLocal

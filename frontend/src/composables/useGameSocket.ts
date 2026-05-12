@@ -243,16 +243,26 @@ export function useGameSocket(): UseGameSocket {
   async function sendMessage(content: string): Promise<void> {
     const isBusy = status.value === 'connecting' || status.value === 'loading'
     const wasGameOver = status.value === 'game_over'
-    if (wasGameOver || inputLocked.value || isBusy || !currentGameId) return
+    if (!currentGameId) return
+    if (isBusy) {
+      addNotification('The Game Master is still processing your last action.', 'info')
+      return
+    }
+    if (wasGameOver || inputLocked.value) {
+      addNotification('This session is finished. Start a new session to continue playing.', 'info')
+      return
+    }
 
     const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume']
     const isSilent = silentCommands.some(cmd => content.toLowerCase().startsWith(cmd))
 
     if (content && !isSilent) _pushMessage('user', content)
+    const preTurnMessageCount = messages.value.length
 
     status.value = 'connecting' 
     statusText.value = 'Considering...'
     let receivedFinalEvent = false
+    let receivedErrorEvent = false
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
 
@@ -267,6 +277,14 @@ export function useGameSocket(): UseGameSocket {
           language: language.value || undefined
         })
       })
+
+      const turnId = res.headers.get('x-taleweaver-turn-id') || ''
+      if (turnId) {
+        debugLogs.value.push({
+          timestamp: new Date().toLocaleTimeString(),
+          content: `Turn-ID: ${turnId}`
+        })
+      }
 
       if (res.status === 401 && authState.isAuthenticated) {
         window.dispatchEvent(new CustomEvent('auth-unauthorized'))
@@ -346,6 +364,7 @@ export function useGameSocket(): UseGameSocket {
               statusText.value = ''
             }
           } else if (event === 'error') {
+            receivedErrorEvent = true
             const detail = data.detail || 'An error occurred.'
             _pushMessage('system', detail)
             addNotification(detail, 'error')
@@ -356,7 +375,7 @@ export function useGameSocket(): UseGameSocket {
       }
 
       // Fallback for truncated streams without explicit final/error event.
-      if (!receivedFinalEvent && status.value === 'connecting') {
+      if (!receivedFinalEvent && !receivedErrorEvent && status.value === 'connecting') {
         const snapshot = await fetchSessionSnapshot(currentGameId)
         if (snapshot) {
           applySessionSnapshot(snapshot, false)
@@ -366,6 +385,15 @@ export function useGameSocket(): UseGameSocket {
         } else {
           status.value = 'connected'
         }
+
+        const postTurnMessages = messages.value.slice(preTurnMessageCount)
+        const hasTurnResponse = postTurnMessages.some(m => m.role === 'assistant' || m.role === 'system')
+        if (!hasTurnResponse) {
+          const fallbackMsg = 'The turn ended unexpectedly without a response. Please try your action again.'
+          _pushMessage('system', fallbackMsg)
+          addNotification(fallbackMsg, 'error')
+        }
+
         statusText.value = ''
       }
     } catch (err) {

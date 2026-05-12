@@ -591,8 +591,18 @@ class GameTurnManager:
             async for c in self._run_llm_cycle(msg, av, language=language):
                 yield c
         
-        async for chunk in _run_llm_cycle_with_lang(user_msg, auto_visualize):
-            yield chunk
+        try:
+            async for chunk in _run_llm_cycle_with_lang(user_msg, auto_visualize):
+                yield chunk
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            user_safe_error = _friendly_llm_error_message(exc)
+            if not user_safe_error:
+                logger.exception("[Turn %s] Turn pipeline aborted unexpectedly", self.game_id)
+                user_safe_error = _friendly_llm_unexpected_error_message()
+            yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
+            return
             
         turn_end = time.perf_counter()
         log_structured_event(
