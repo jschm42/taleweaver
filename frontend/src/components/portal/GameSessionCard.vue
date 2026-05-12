@@ -131,40 +131,40 @@ function runAction(action: 'resume' | 'delete'): void {
         </div>
       </div>
 
-      <!-- Progress Stats Single Row -->
-      <div class="flex items-end justify-between gap-6 pt-1">
+      <!-- Progress Stats -->
+      <div class="grid grid-cols-3 gap-4 pt-1">
         <!-- Quests -->
-        <div v-if="props.session.quest_count" class="flex-1 flex flex-col gap-2.5">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase tracking-widest text-slate-500">Quests</span>
-            <span class="text-xs font-bold text-slate-300">{{ props.session.completed_quest_count }}/{{ props.session.quest_count }}</span>
+        <div class="min-w-0 flex flex-col gap-2.5">
+          <div class="flex items-center justify-between gap-2 min-w-0">
+            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500 truncate">Quests</span>
+            <span class="text-[10px] font-bold text-slate-300 shrink-0">{{ props.session.completed_quest_count || 0 }}/{{ props.session.quest_count || 0 }}</span>
           </div>
           <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div 
               class="h-full bg-emerald-500 transition-all duration-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-              :style="{ width: `${(props.session.completed_quest_count || 0) / (props.session.quest_count || 1) * 100}%` }"
+              :style="{ width: `${((props.session.completed_quest_count || 0) / ((props.session.quest_count || 0) || 1)) * 100}%` }"
             ></div>
           </div>
         </div>
 
         <!-- Awards -->
-        <div v-if="props.session.award_count" class="flex-1 flex flex-col gap-2.5">
-          <div class="flex items-center justify-between">
-            <span class="text-xxs font-black uppercase tracking-widest text-slate-500">Awards</span>
-            <span class="text-xxs font-bold text-slate-300">{{ props.session.earned_award_count }}/{{ props.session.award_count }}</span>
+        <div class="min-w-0 flex flex-col gap-2.5">
+          <div class="flex items-center justify-between gap-2 min-w-0">
+            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500 truncate">Awards</span>
+            <span class="text-[10px] font-bold text-slate-300 shrink-0">{{ props.session.earned_award_count || 0 }}/{{ props.session.award_count || 0 }}</span>
           </div>
           <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div 
               class="h-full bg-amber-400 transition-all duration-500 shadow-[0_0_10px_rgba(251,191,36,0.3)]"
-              :style="{ width: `${(props.session.earned_award_count || 0) / (props.session.award_count || 1) * 100}%` }"
+              :style="{ width: `${((props.session.earned_award_count || 0) / ((props.session.award_count || 0) || 1)) * 100}%` }"
             ></div>
           </div>
         </div>
 
         <!-- Time Played -->
-        <div class="flex flex-col gap-1.5 items-end shrink-0">
-          <span class="text-xs font-black uppercase tracking-widest text-slate-500">Playtime</span>
-          <span class="text-sm font-black text-slate-200 tracking-widest">{{ props.session.in_game_time }} MIN</span>
+        <div class="min-w-0 flex flex-col gap-1.5 items-end text-right">
+          <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Playtime</span>
+          <span class="text-base font-black text-slate-200 tracking-wide leading-none truncate">{{ props.session.in_game_time || 0 }} MIN</span>
         </div>
       </div>
 
