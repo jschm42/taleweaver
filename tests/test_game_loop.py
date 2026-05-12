@@ -1450,6 +1450,7 @@ async def test_combat_enemy_without_dexterity_uses_baseline_hit_modifier(setup_t
 
         # Ensure player starts, then force player miss and enemy hit with deterministic rolls.
         monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
 
         def fake_roll_attack(attacker, _hit_stat, target_ac, _damage_dice):
             is_enemy = getattr(attacker, "name", "") == "Giant Rat"

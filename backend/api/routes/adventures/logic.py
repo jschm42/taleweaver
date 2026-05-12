@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 from datetime import datetime
 from typing import Any, Optional, Union
 
@@ -15,18 +16,19 @@ from backend.models.world_entity import WorldEntity, WorldScene
 from backend.models.world_map import WorldMap
 
 logger = logging.getLogger(__name__)
+SESSION_MANIFEST_SNAPSHOT_KEY = "__manifest_snapshot__"
 
 class AdventureLogic:
     """Class grouping core business logic and helper functions for Adventure management."""
+    SESSION_MANIFEST_SNAPSHOT_KEY = SESSION_MANIFEST_SNAPSHOT_KEY
 
     @staticmethod
-    async def get_or_create_map(db: AsyncSession, template_id: str, session_id: Optional[str] = None) -> WorldMap:
+    async def get_or_create_map(db: AsyncSession, template_id: Optional[str], session_id: Optional[str] = None) -> WorldMap:
         """Fetch or lazily create a WorldMap row for the given adventure session."""
-        query = select(WorldMap).where(WorldMap.template_id == template_id)
         if session_id:
-            query = query.where(WorldMap.session_id == session_id)
+            query = select(WorldMap).where(WorldMap.session_id == session_id)
         else:
-            query = query.where(WorldMap.session_id == None)
+            query = select(WorldMap).where(WorldMap.template_id == template_id, WorldMap.session_id == None)
 
         result = await db.execute(query)
         world_map = result.scalars().first()
@@ -36,6 +38,66 @@ class AdventureLogic:
             db.add(world_map)
             await db.flush()
         return world_map
+
+    @staticmethod
+    def build_session_manifest_snapshot(adventure: Optional[AdventureTemplate]) -> dict[str, Any]:
+        """Capture adventure metadata required to keep sessions playable after template deletion."""
+        if not adventure:
+            return {}
+        adventure_payload = {
+            "id": adventure.id,
+            "title": adventure.title,
+            "teaser": adventure.teaser,
+            "version": adventure.version,
+            "language": adventure.language,
+            "image_url": adventure.image_url,
+            "strict_rules": adventure.strict_rules,
+            "rule_enforcement_mode": adventure.rule_enforcement_mode,
+            "time_per_turn": adventure.time_per_turn,
+            "pacing_minutes": adventure.pacing_minutes,
+            "clock_enabled": adventure.clock_enabled,
+            "time_system": adventure.time_system,
+            "time_config": deepcopy(adventure.time_config or {}),
+            "selected_image_styles": deepcopy(adventure.selected_image_styles or []),
+            "selected_tone": deepcopy(adventure.selected_tone or {}),
+            "quests": deepcopy(adventure.quests or []),
+            "awards": deepcopy(adventure.awards or []),
+            "plot": adventure.plot,
+            "rules": adventure.rules,
+            "intro_text": adventure.intro_text,
+            "walkthrough": adventure.walkthrough,
+            "completed_condition": adventure.completed_condition,
+            "gameover_condition": adventure.gameover_condition,
+            "tts_director_notes": adventure.tts_director_notes,
+            "original_prompt": adventure.original_prompt,
+            "allow_dynamic_items": adventure.allow_dynamic_items,
+            "is_adventure_generator": adventure.is_adventure_generator,
+            "is_ready": True,
+            "creation_status": "Ready",
+        }
+        return {
+            "adventure": adventure_payload,
+            "original_manifest": deepcopy(adventure.original_manifest or {}),
+        }
+
+    @staticmethod
+    def extract_manifest_snapshot(state: SessionState) -> dict[str, Any]:
+        raw = state.entity_states or {}
+        if not isinstance(raw, dict):
+            return {}
+        snapshot = raw.get(SESSION_MANIFEST_SNAPSHOT_KEY)
+        return snapshot if isinstance(snapshot, dict) else {}
+
+    @staticmethod
+    def resolve_manifest_for_state(state: SessionState) -> dict[str, Any]:
+        snapshot = AdventureLogic.extract_manifest_snapshot(state)
+        manifest = snapshot.get("original_manifest")
+        if isinstance(manifest, dict) and manifest:
+            return manifest
+        adventure_meta = snapshot.get("adventure")
+        if isinstance(adventure_meta, dict):
+            return adventure_meta
+        return {}
 
     @staticmethod
     def calculate_quest_progress(quests: list[dict[str, Optional[Any]]]) -> int:
@@ -163,6 +225,9 @@ class AdventureLogic:
                 avatar_id=session_candidate.avatar_id,
                 current_scene_id=first_scene_id,
                 in_game_time=0,
+                entity_states={
+                    AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: AdventureLogic.build_session_manifest_snapshot(adventure)
+                } if adventure else {},
                 quests=adventure.quests if adventure else [],
                 plot=adventure.plot if adventure else None,
                 rules=adventure.rules if adventure else None,
@@ -179,43 +244,38 @@ class AdventureLogic:
 
     @staticmethod
     async def build_session_entities(db: AsyncSession, state: SessionState) -> list[dict[str, Any]]:
-      """Fetches and processes entities for the current session, filtering for the current scene."""
-      # Fetch all entities for this session to handle movement correctly
-      ent_res = await db.execute(
-          select(WorldEntity).where(
-              WorldEntity.session_id == state.session_id
-          )
-      )
-      base_entities = [{c.name: getattr(e, c.name) for c in e.__table__.columns} for e in ent_res.scalars().all()]
-      
-      session_overrides = state.entity_states or {}
-      entities = []
-      for ent in base_entities:
-          eid = ent.get("id")
-          
-          # Apply session overrides (HP, position, scene_id, etc.)
-          if eid in session_overrides:
-              ent.update(session_overrides[eid])
-          
-          # Filter for the CURRENT scene
-          if ent.get("current_scene_id") != state.current_scene_id:
-              continue
-          
-          # Filter out hidden or inventory items
-          if ent.get("is_hidden") or ent.get("is_in_inventory"):
-              continue
-              
-          entities.append(ent)
-      return entities
+        """Fetches and processes entities for the current session, filtering for the current scene."""
+        ent_res = await db.execute(
+            select(WorldEntity).where(WorldEntity.session_id == state.session_id)
+        )
+        base_entities = [
+            {c.name: getattr(e, c.name) for c in e.__table__.columns}
+            for e in ent_res.scalars().all()
+        ]
+
+        session_overrides = state.entity_states or {}
+        entities: list[dict[str, Any]] = []
+        for ent in base_entities:
+            eid = ent.get("id")
+            if eid in session_overrides:
+                ent.update(session_overrides[eid])
+            if ent.get("current_scene_id") != state.current_scene_id:
+                continue
+            if ent.get("is_hidden") or ent.get("is_in_inventory"):
+                continue
+            entities.append(ent)
+        return entities
 
     @staticmethod
     async def build_sheet_snapshot(avatar: Avatar, state: SessionState, db: AsyncSession) -> dict:
         """Builds a serialisable character-sheet snapshot."""
         adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == state.template_id))
         adventure = adv_res.scalars().first()
-        start_datetime = AdventureLogic.resolve_start_datetime(adventure.original_manifest if adventure else None, state=state)
+        session_snapshot = AdventureLogic.extract_manifest_snapshot(state)
+        session_manifest = AdventureLogic.resolve_manifest_for_state(state)
+        start_datetime = AdventureLogic.resolve_start_datetime(adventure.original_manifest if adventure else session_manifest, state=state)
         
-        if not start_datetime and adventure and adventure.clock_enabled:
+        if not start_datetime and ((adventure and adventure.clock_enabled) or bool((session_snapshot.get("adventure") or {}).get("clock_enabled"))):
             start_datetime = "2026-04-17T08:00:00"
 
         snapshot = AdventureLogic.extract_asset_snapshot(state)
@@ -312,10 +372,10 @@ class AdventureLogic:
             "adventure_version": adventure.version if adventure else None,
             "template_id": state.template_id, 
             "exp": avatar.exp,
-            "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else "rpg",
-            "adventure_tone": adventure.selected_tone if adventure else None,
-            "time_system": state.time_system or (adventure.time_system if adventure else "calendar"),
-            "time_config": state.time_config or (adventure.time_config if adventure else None),
+            "rule_enforcement_mode": adventure.rule_enforcement_mode if adventure else (session_snapshot.get("adventure") or {}).get("rule_enforcement_mode", "rpg"),
+            "adventure_tone": adventure.selected_tone if adventure else (session_snapshot.get("adventure") or {}).get("selected_tone"),
+            "time_system": state.time_system or (adventure.time_system if adventure else (session_snapshot.get("adventure") or {}).get("time_system", "calendar")),
+            "time_config": state.time_config or (adventure.time_config if adventure else (session_snapshot.get("adventure") or {}).get("time_config")),
             "is_debug_enabled": bool(state.is_debug_enabled),
             "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED)
         }
@@ -323,8 +383,13 @@ class AdventureLogic:
         return snapshot
 
     @staticmethod
-    async def get_all_scene_metadata(db: AsyncSession, template_id: str) -> dict:
-        scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+    async def get_all_scene_metadata(db: AsyncSession, template_id: Optional[str], session_id: Optional[str] = None) -> dict:
+        if session_id:
+            scene_res = await db.execute(select(WorldScene).where(WorldScene.session_id == session_id))
+        elif template_id:
+            scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+        else:
+            return {}
         metadata = {}
         for s in scene_res.scalars().all():
             metadata[MapEngine._safe_id(s.id)] = {
@@ -342,32 +407,47 @@ class AdventureLogic:
         Order is important to avoid FK violations.
         Also cleans up physical assets.
         """
-        from sqlalchemy import delete
+        from sqlalchemy import delete, update
 
         from backend.engine.media_engine import MediaEngine
         from backend.models.avatar import Avatar
         from backend.models.game_session import GameSession
-        from backend.models.session_state import SessionState
         from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
         from backend.models.world_map import WorldMap
 
-        # 1. Resolve and Delete Sessions & States
-        # We find sessions first to delete their states
-        session_query = select(GameSession.id).where(GameSession.template_id == template_id)
-        session_ids = (await db.execute(session_query)).scalars().all()
-        
-        if session_ids:
-            await db.execute(delete(SessionState).where(SessionState.session_id.in_(session_ids)))
-            await db.execute(delete(GameSession).where(GameSession.id.in_(session_ids)))
+        # 1. Preserve session playability by detaching session-owned rows from template refs.
+        session_avatar_query = select(GameSession.avatar_id).where(GameSession.template_id == template_id)
+        session_avatar_ids = (await db.execute(session_avatar_query)).scalars().all()
+        if session_avatar_ids:
+            await db.execute(
+                update(Avatar)
+                .where(Avatar.id.in_(session_avatar_ids))
+                .values(template_id=None)
+            )
 
-        # 2. Delete Avatars (linked to template)
-        await db.execute(delete(Avatar).where(Avatar.template_id == template_id))
+        try:
+            await db.execute(
+                update(WorldMap)
+                .where(WorldMap.template_id == template_id, WorldMap.session_id.is_not(None))
+                .values(template_id=None)
+            )
+        except Exception:
+            # Legacy DBs may still enforce NOT NULL on world_maps.template_id.
+            await db.execute(delete(WorldMap).where(WorldMap.template_id == template_id, WorldMap.session_id.is_not(None)))
+
+        # 2. Delete only template-owned avatars that are not used by any session.
+        await db.execute(
+            delete(Avatar).where(
+                Avatar.template_id == template_id,
+                ~Avatar.id.in_(select(GameSession.avatar_id)),
+            )
+        )
 
         # 3. Delete World Content
         await db.execute(delete(WorldExit).where(WorldExit.template_id == template_id))
         await db.execute(delete(WorldEntity).where(WorldEntity.template_id == template_id))
         await db.execute(delete(WorldScene).where(WorldScene.template_id == template_id))
-        await db.execute(delete(WorldMap).where(WorldMap.template_id == template_id))
+        await db.execute(delete(WorldMap).where(WorldMap.template_id == template_id, WorldMap.session_id.is_(None)))
 
         # 4. Finally delete the template itself
         await db.execute(delete(AdventureTemplate).where(AdventureTemplate.id == template_id))

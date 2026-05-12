@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 import zipfile
+from copy import deepcopy
 from typing import Any, Optional, Union
 
 from sqlalchemy import select
@@ -440,12 +441,49 @@ class AdventureTemplateImporter:
                     db.add(new_sess)
                     await db.flush()
 
+                    restored_entity_states = old_state.get("entity_states", {})
+                    if not isinstance(restored_entity_states, dict):
+                        restored_entity_states = {}
+                    restored_entity_states = deepcopy(restored_entity_states)
+                    restored_entity_states.setdefault(
+                        "__manifest_snapshot__",
+                        {
+                            "adventure": {
+                                "id": new_template.id,
+                                "title": new_template.title,
+                                "version": new_template.version,
+                                "image_url": new_template.image_url,
+                                "strict_rules": new_template.strict_rules,
+                                "rule_enforcement_mode": new_template.rule_enforcement_mode,
+                                "time_per_turn": new_template.time_per_turn,
+                                "clock_enabled": new_template.clock_enabled,
+                                "time_system": new_template.time_system,
+                                "time_config": deepcopy(new_template.time_config or {}),
+                                "selected_tone": deepcopy(new_template.selected_tone or {}),
+                                "selected_image_styles": deepcopy(new_template.selected_image_styles or []),
+                                "quests": deepcopy(new_template.quests or []),
+                                "awards": deepcopy(new_template.awards or []),
+                                "plot": new_template.plot,
+                                "rules": new_template.rules,
+                                "intro_text": new_template.intro_text,
+                                "walkthrough": new_template.walkthrough,
+                                "completed_condition": new_template.completed_condition,
+                                "gameover_condition": new_template.gameover_condition,
+                                "tts_director_notes": new_template.tts_director_notes,
+                                "original_prompt": new_template.original_prompt,
+                                "allow_dynamic_items": new_template.allow_dynamic_items,
+                                "is_adventure_generator": new_template.is_adventure_generator,
+                            },
+                            "original_manifest": deepcopy(new_template.original_manifest or {}),
+                        },
+                    )
+
                     db.add(SessionState(
                         session_id=new_sess.id,
                         current_scene_id=old_state.get("scene_id") or old_state.get("current_scene_id") or "START",
                         in_game_time=old_state.get("in_game_time", 0),
                         inventory=old_state.get("inventory", []),
-                        entity_states=old_state.get("entity_states", {}),
+                        entity_states=restored_entity_states,
                         exit_states=old_state.get("exit_states", {}),
                         discovered_scenes=old_state.get("discovered_scenes", [])
                     ))

@@ -1045,7 +1045,7 @@ async def test_delete_adventure(client: AsyncClient):
     adv_id = ids["adventure_id"]
 
     del_resp = await client.delete(f"/api/adventures/{adv_id}")
-    assert del_resp.status_code == 204
+    assert del_resp.status_code == 200
 
     get_resp = await client.get(f"/api/adventures/{adv_id}")
     assert get_resp.status_code == 404
@@ -1055,6 +1055,27 @@ async def test_delete_adventure_not_found(client: AsyncClient):
     """Deleting a non-existent adventure returns 404."""
     resp = await client.delete("/api/adventures/00000000-0000-0000-0000-000000000000")
     assert resp.status_code == 404
+
+
+async def test_delete_adventure_keeps_existing_sessions(client: AsyncClient):
+    """Deleting a template must not remove or break already-started sessions."""
+    ids = await _create_adventure(client, "Session Survival Quest")
+    adv_id = ids["adventure_id"]
+
+    start_resp = await client.post(f"/api/adventures/{adv_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    started_game_id = start_resp.json()["game_id"]
+
+    del_resp = await client.delete(f"/api/adventures/{adv_id}")
+    assert del_resp.status_code == 200, del_resp.text
+
+    sessions_resp = await client.get("/api/adventures/sessions")
+    assert sessions_resp.status_code == 200, sessions_resp.text
+    sessions = sessions_resp.json()
+    assert any(s.get("game_id") == started_game_id for s in sessions)
+
+    chat_resp = await client.get(f"/api/adventures/{started_game_id}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
 
 
 # ---------------------------------------------------------------------------

@@ -48,8 +48,14 @@ def _terminal_flags_from_state(state: SessionState) -> tuple[bool, bool]:
     input_locked = status == "game_over" and game_over_sent
     return pending_terminal_epilogue, input_locked
 
-async def _get_npc_metadata(template_id: str, db: AsyncSession) -> dict:
-    npc_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type.in_(["NPC", "npc"])))
+async def _get_npc_metadata(template_id: str | None, session_id: str | None, db: AsyncSession) -> dict:
+    if session_id:
+        npc_query = select(WorldEntity).where(WorldEntity.session_id == session_id, WorldEntity.entity_type.in_(["NPC", "npc"]))
+    elif template_id:
+        npc_query = select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type.in_(["NPC", "npc"]))
+    else:
+        return {}
+    npc_res = await db.execute(npc_query)
     metadata = {}
     for npc in npc_res.scalars().all():
         data = {
@@ -88,7 +94,10 @@ async def get_chat_history(
     
     scene_image = AdventureLogic.resolve_session_asset(state, state.current_scene_id)
     if not scene_image:
-        scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
+        scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.session_id == state.session_id))
+        scene = scene_res.scalars().first()
+        if not scene:
+            scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
         scene = scene_res.scalars().first()
         scene_image = scene.image_url if scene else None
 
@@ -100,13 +109,23 @@ async def get_chat_history(
         combat=AdventureLogic.get_combat_snapshot(state),
         mermaid=MapEngine.to_mermaid(world_map) if world_map else None,
         map_data=MapEngine.to_dict(world_map) if world_map else None,
-        nodes=await AdventureLogic.get_all_scene_metadata(db, state.template_id),
+        nodes=await AdventureLogic.get_all_scene_metadata(db, state.template_id, session_id=state.session_id),
         entities=entities,
-        npc_metadata=await _get_npc_metadata(state.template_id, db),
+        npc_metadata=await _get_npc_metadata(state.template_id, state.session_id, db),
         image_url=scene_image,
         adventure_image=AdventureLogic.resolve_session_asset(state, "cover", adventure.image_url if adventure else None),
         quests=state.quests,
-        awards=[{**aw, "is_earned": any(ea.get("key") == aw.get("key") and ea.get("template_id") == adventure.id for ea in (current_user.earned_awards or []))} for aw in (adventure.awards or [])],
+        awards=[
+            {
+                **aw,
+                "is_earned": any(
+                    ea.get("key") == aw.get("key")
+                    and ea.get("template_id") == (adventure.id if adventure else state.template_id)
+                    for ea in (current_user.earned_awards or [])
+                ),
+            }
+            for aw in ((adventure.awards if adventure else (AdventureLogic.extract_manifest_snapshot(state).get("adventure") or {}).get("awards")) or [])
+        ],
         is_completed=state.is_completed,
         game_over=state.session.status == "game_over" if state.session else False,
         game_completed=state.session.status == "completed" if state.session else False,
