@@ -1,19 +1,21 @@
 <p align="center">
   <img src="frontend/src/assets/svg/app-logo.svg" width="200" alt="TaleWeaver Logo">
-  <br><em><b>Adventure Portal</b> - Manage your stories and explore new worlds.</em>
+  <br><em>Weave Infinite Adventures.</em>
 </p>
 
 
-# TaleWeaver - AI Text Adventure World Generator
+# TaleWeaver: Generative AI Roleplaying & Cinematic Audio Adventures
 
 > [!IMPORTANT]
 > **TaleWeaver is currently in active development.**
-> As this is an early beta release, you may encounter unexpected behavior, bugs, or creative "hallucinations" from the AI Gamemaster. We are constantly refining the engine and **contributions, bug reports, and feedback are highly welcome!**
+> As an early beta release, you may encounter unexpected behavior or creative "hallucinations." We are constantly refining the engine. Contributions and feedback are highly welcome!
 
-Welcome to the AI Text Adventure RPG project! This is a next-generation browser-based text adventure RPG that combines the nostalgic feel of classic point-and-click and text adventures with the dynamic creativity of modern Large Language Models (LLMs).
+**Welcome to the future of interactive storytelling.** TaleWeaver is not just another text adventure. It is a next-generation, browser-based RPG driven entirely by an **omniscient AI Gamemaster**. By combining state-of-the-art Large Language Models with cinematic Text-to-Speech (TTS), TaleWeaver dynamically generates worlds, characters, and storylines on the fly - reacting to your every decision. 
+
+**With our immersive voice integration, playing TaleWeaver feels like directing and starring in your own playable audiobook.**
 
 > [!TIP]
-> **Roleplay for the best experience!** TaleWeaver works best when you fully immerse yourself in the role of the protagonist. Instead of just giving commands, try to describe your actions and thoughts in character. The AI Gamemaster will react much more dynamically and build a richer narrative if you "play along" with the story's themes and your character's traits.
+> **Put your headphones on and roleplay!** TaleWeaver works best when you immerse yourself. Don't just give commands—describe your actions, speak to NPCs, and let the AI Gamemaster narrate the consequences in breathtaking audio quality.
 
 ## 📸 Gallery
 
@@ -31,6 +33,61 @@ Welcome to the AI Text Adventure RPG project! This is a next-generation browser-
   <img src="docs/screenshots/gameplay.jpg" width="600" alt="Gamesession">
   <br><em><b>In-Game</b> - Immersive text adventure gameplay with dynamic AI interaction.</em>
 </p>
+
+## 1. The Vision
+
+Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background.
+
+## 2. Core Features
+
+### 🧠 The Omniscient AI Gamemaster
+* **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly"[cite: 1]. No two playthroughs are ever the same.
+* **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.[cite: 1].
+
+### 🎯 Quests & Meta-Progression
+* **Dynamic Objectives:** Follow main storylines or explore optional side quests. The AI Gamemaster evaluates your actions and dynamically updates your quest log[cite: 1, 6].
+* **Achievement System:** Unlock custom, AI-generated awards (Bronze, Silver, Gold) for exceptional problem-solving and out-of-the-box thinking.
+
+### ⚙️ Deep RPG Mechanics
+* **Strict Rule Enforcement:** While the narrative flows freely, a strict 2-pass RPG rulebook (Mechanics + Narrative) runs in the background[cite: 1, 6].
+* **State Management:** Manage Hitpoints, Stamina, and Mana, while reacting to plot-driven status effects (e.g., Poisoned, Blessed)[cite: 1].
+* **Loot & Inventory System:** Dedicated isolated inventory system with specific equipment slots (Head, Chest, Rings, etc.)[cite: 1].
+
+### 🎧 The Playable Audiobook (Cinematic Audio)
+* **Next-Gen Voice Acting:** Powered by **Google Gemini 1.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth.
+* **Director's Cut:** The engine automatically parses vocal tags and director notes to build dramatic tension[cite: 1]. It is not just reading text; it is performing a high-budget audio drama.
+
+### 🗺️ Visuals & Sensory Immersion
+* **Dynamic Cartography:** Automatic rendering of directed graph maps of your discovered scenes using Mermaid.js[cite: 1].
+* **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages[cite: 1].
+* **Cinematic Audio:** Immersive TTS support powered by Google Gemini 1.5 Flash and ElevenLabs for high-budget audio drama pacing[cite: 1].
+
+### 🧠 Open & Local First (LLM Flexibility)
+* **Bring Your Own Model:** Seamlessly integrate high-tier cloud models (OpenAI, Anthropic, Gemini) via our LiteLLM adapter[cite: 1].
+* **Local Offline Play:** Experimental but heavily pushed support for local execution via **Ollama**. Generate worlds and images completely offline without paying a single cent for API calls[cite: 1].
+* **Tenant-Ready Architecture:** Built on SQLite with UUID-based primary keys, preparing the engine for easy scaling, data portability, and cross-system ID generation[cite: 1].
+
+### Persistent Game Progress & Memory
+* **Memory Feature:** The AI remembers all previous conversations and actions of the player within an adventure.
+* **Persistence:** Progress is permanently stored in the database, allowing sessions to be paused and resumed at any time.
+
+### Media & Immersion
+* Optional AI-generated images to enhance the aesthetic.
+* **Import/Export:** Adventures can be backed up or shared.
+
+---
+
+## 🚀 Roadmap: What's Next?
+
+TaleWeaver is evolving rapidly. Here is what we are building next to push the boundaries of AI roleplaying:
+
+*   **Epic Campaigns (Endless Scale):** Breaking the boundaries of single adventures. We are building a system to link multiple `.adv` blueprints into massive, persistent campaigns with overarching plots and carrying over character progression.
+*   **Deep Immersion Overhaul:** Upgrading the event engine for more complex NPC behaviors, advanced item crafting, and dynamic world events that happen even when you stand still.
+*   **100% Local TTS:** Cutting the cord to cloud audio. We will integrate local Text-to-Speech models so your adventure remains fully offline and private, matching our local Ollama vision.
+*   **Voice Control & Speech-to-Text:** True hands-free roleplaying. Talk directly to the AI Gamemaster and NPCs using your microphone for the ultimate "holodeck" experience.
+*   **Experience & Growth:** Complete objectives to earn EXP and progress your character's journey.
+
+---
 
 ## 🚀 First Steps
 
@@ -58,53 +115,9 @@ For the best experience, we recommend using high-tier models, especially for **W
 Use providers with a good latency for the world generation to avoid long wait times. 
 Models like `Gemini 1.5 Flash` or `GPT-4o-mini` are excellent for quick chat responses but may occasionally struggle with the complex, deep JSON schemas required for generating entire worlds. If world generation fails repeatedly, try a more powerful "Pro" or "Sonnet" class model.
 
-## 1. The Vision
-
-Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background.
-
-## 2. Core Features
-
-### AI as Gamemaster & Content Generator
-* **Dynamic Generation:** Generation of complete text adventure RPGs (story plots, puzzles, explorable scenes) in any supported language.
-* **NPCs & Dialogues:** Creation and control of NPCs, including dynamic dialogues where the AI assumes the role of the NPC in the chat.
-* **Loot & Objects:** Placement of interactive objects and loot to improve character stats.
-* **Challenge Ratings:** Autonomous decision-making by the GM regarding the difficulty of a player's planned action by setting a dynamic "challenge rating" (Difficulty Class).
-* **Style & Tone Catalog:** Fully customizable world generation. Define your own visual styles and narrative tones in the Administration panel, complete with AI-generated previews.
-
-### Persistent Game Progress & Memory
-* **Memory Feature:** The AI remembers all previous conversations and actions of the player within an adventure.
-* **Persistence:** Progress is permanently stored in the database, allowing sessions to be paused and resumed at any time.
-
-### RPG Mechanics
-* **Character Sheets & In-Game Stats:** The protagonist's state (stats, inventory, equipment) is automatically initialized from the adventure template. The current state can be viewed in-game via a command or modal interface.
-* **Resource Bars:** Hitpoints (HP), Stamina, and Mana (starting at 200). The AI dynamically adjusts these. HP 0 usually means Game Over.
-* **Dynamic States (Status Effects):** Avatars can receive plot-dependent states (e.g., Tired, Poisoned, Enraged, Blessed) modifying base stats.
-* **Randomized Action Resolution (Skill Checks):** A virtual D20 roll for risky actions (D20 + stats >= Challenge Rating) executed efficiently in the backend.
-* **Individual Inventory System:** Isolated inventory for looting, dropping, and combining objects.
-* **Equipment Slots:** Dedicated slots for Head, Chest, Arms, Legs, Hands, Feet, Rings (2), and Amulet.
-  
-### 🐟 Bable Fish Multilingualism
-* **Multilingual Generation:** Generate entirely new adventures in your chosen language (German, Italian, French, etc.) from the start.
-* **In-Game Translation:** Switch languages dynamically during gameplay using the "Bable Fish" toggle to translate narration and NPC dialogue.
-* **User Preferences:** Set a global default language in your profile that follows you across all adventures and sessions.
-* **Voice & Narration (TTS):** Immersive audio experience powered by **Google Gemini 1.5 Flash (TTS)** and **ElevenLabs**. The AI Gamemaster narrates the story with cinematic quality, including support for vocal tags and director notes for dramatic pacing.
-
-### Hybrid Interaction
-* **Natural Language Chat:** Free text input for dialogues and complex actions.
-* **Slash Commands:** `/sheet`, `/pickup`, `/drop`, `/equip`, `/unequip`, `/push`, `/pull`, `/attack`, `/take`, `/combine`, `/examine`, `/map`.
-
-### Dynamic World Mapping
-* **Generated Maps:** Directed graphs of scenes, visualized via Mermaid.js (using the `/map` command).
-
-### Media & Immersion
-* Optional AI-generated images to enhance the aesthetic.
-* **Import/Export:** Adventures can be backed up or shared.
+---
 
 ## 3. Architecture & Concepts
-
-### Tenant-Ready Strategy
-Although starting single-user, the database uses UUID-based primary keys to simplify future tenant isolation, data portability, and cross-system ID generation.
-In SQLite (B-tree indexes), indexed lookups are typically `O(log n)`, not `O(1)`; if write-locality becomes a bottleneck at scale, time-ordered UUIDs (for example UUIDv7) are a valid optimization path.
 
 ### LLM Abstraction & Secure Key Management
 * **Adapter Pattern:** Using a higher-level LLM router (e.g., `litellm`) to map providers to a standardized interface.
