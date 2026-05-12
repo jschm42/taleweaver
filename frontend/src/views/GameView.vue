@@ -23,6 +23,7 @@ import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
+import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
@@ -384,6 +385,10 @@ watch(showCombatDialog, (visible) => {
       :debug-mode="!!sheet?.debug_mode"
       @back="goBack"
     />
+
+    <div class="px-12 pt-6">
+      <SetupWarningBanner />
+    </div>
 
 
     <div class="flex-grow min-h-0 flex overflow-hidden relative">

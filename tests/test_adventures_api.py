@@ -1900,3 +1900,5 @@ async def test_update_adventure_frontend_payload(client: AsyncClient):
         json=payload,
     )
     assert resp2.status_code == 200, resp2.text
+
+
