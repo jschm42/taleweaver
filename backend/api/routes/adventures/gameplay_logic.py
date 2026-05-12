@@ -130,6 +130,10 @@ def _friendly_llm_error_message(exc: Exception) -> Optional[str]:
     return None
 
 
+def _friendly_llm_unexpected_error_message() -> str:
+    return "The Game Master encountered an unexpected issue. Please try again."
+
+
 def _llm_error_type(exc: Exception) -> Optional[str]:
     if _is_token_limit_error(exc):
         return "token_limit"
@@ -1917,8 +1921,8 @@ class GameTurnManager:
             yield f"event: status\ndata: {json.dumps({'content': 'Validating rules...'})}\n\n"
             try:
                 llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
-            except ValueError as e:
-                yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+            except ValueError:
+                yield f"event: error\ndata: {json.dumps({'detail': 'Mechanics model configuration is invalid. Please check your settings and try again.'})}\n\n"
                 return
             
             mechanics_suffix = prompts.GM_MECHANICS_SUFFIX
@@ -1952,7 +1956,9 @@ class GameTurnManager:
                 if user_safe_error:
                     yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
                     return
-                raise
+                logger.exception("[Turn %s] [Pass 1] Mechanics call failed unexpectedly", self.game_id)
+                yield f"event: error\ndata: {json.dumps({'detail': _friendly_llm_unexpected_error_message()})}\n\n"
+                return
             pass1_duration = time.perf_counter() - pass1_start
             log_structured_event(
                 "gm.turn.pipeline.pass",

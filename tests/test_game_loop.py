@@ -607,6 +607,69 @@ async def test_rate_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch)
         assert not any("429" in c or "rate limit exceeded" in c.lower() for c in chunks)
 
 
+async def test_timeout_error_is_user_safe_in_chat(setup_test_db, monkeypatch):
+    """Timeout exceptions should be surfaced as a short user-safe message."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, _state = await _seed_game_context(db)
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=Exception("Request timeout while calling provider"))
+        mock_llm_instance.stream_simple_task = AsyncMock()
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("respond please"):
+            chunks.append(chunk)
+
+        assert any("event: error" in c and "took too long" in c.lower() for c in chunks)
+        assert not any("request timeout" in c.lower() for c in chunks)
+
+
+async def test_service_unavailable_error_is_user_safe_in_chat(setup_test_db, monkeypatch):
+    """Service unavailable exceptions should be surfaced as a short user-safe message."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, _state = await _seed_game_context(db)
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=Exception("503 Service Unavailable"))
+        mock_llm_instance.stream_simple_task = AsyncMock()
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("respond please"):
+            chunks.append(chunk)
+
+        assert any("event: error" in c and "temporarily unavailable" in c.lower() for c in chunks)
+        assert not any("503" in c for c in chunks)
+
+
+async def test_unknown_pass1_error_returns_generic_sse_error(setup_test_db, monkeypatch):
+    """Unknown pass-1 exceptions should not crash the stream or leak internals."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, _state = await _seed_game_context(db)
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=RuntimeError("database socket exploded with trace details"))
+        mock_llm_instance.stream_simple_task = AsyncMock()
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("respond please"):
+            chunks.append(chunk)
+
+        assert any("event: error" in c and "unexpected issue" in c.lower() for c in chunks)
+        assert not any("socket exploded" in c.lower() or "trace details" in c.lower() for c in chunks)
+
+
 async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkeypatch):
     """A retry phrase should recover the last request and proceed after confirmation."""
     from tests.conftest import TestSessionLocal

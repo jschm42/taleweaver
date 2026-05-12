@@ -115,6 +115,7 @@ For the best experience, we recommend using high-tier models, especially for **W
 > [!WARNING]
 Use providers with a good latency for the world generation to avoid long wait times. 
 Models like `Gemini 1.5 Flash` or `GPT-4o-mini` are excellent for quick chat responses but may occasionally struggle with the complex, deep JSON schemas required for generating entire worlds. If world generation fails repeatedly, try a more powerful "Pro" or "Sonnet" class model.
+> **Regarding Local Models (Ollama):** The `WorldManifesto` schema is highly complex and requires strict JSON outputs. Currently, most local models run via Ollama struggle to consistently produce valid schemas of this depth. Use cloud models for stable generation and local models only for experimental testing.
 
 ---
 
