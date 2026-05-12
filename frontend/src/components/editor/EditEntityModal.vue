@@ -4,11 +4,9 @@ import { ref, watch } from 'vue'
 const props = defineProps<{
   show: boolean
   context: { type: string; id: string } | null
-  initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; voice: string; goal: string; character: string }
-  availableVoices: Array<{ name: string; gender?: string; description?: string }>
+  initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; goal: string; character: string }
   ruleEnforcementMode: string
   isSaving: boolean
-  formatVoiceOption: (voice: any) => string
 }>()
 
 const emit = defineEmits<{
@@ -96,13 +94,26 @@ function handleSave() {
                 <textarea v-model="localForm.teaser" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="A short, catchy teaser for your adventure..."></textarea>
               </div>
 
-              <div v-if="context.type === 'npc'" class="space-y-3">
-                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Voice</label>
-                <select v-model="localForm.voice" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-3 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all shadow-inner">
-                  <option value="">Default narrator voice</option>
-                  <option v-for="voice in availableVoices" :key="voice.name" :value="voice.name">{{ formatVoiceOption(voice) }}</option>
-                </select>
-                <p class="text-xs text-slate-500">Used for this NPC's direct dialogue in TTS. Empty keeps the global default voice.</p>
+              <!-- Protagonist Motivation & Traits -->
+              <div v-if="context.type === 'protagonist'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Motivation / Goal</label>
+                    <span :class="['text-xs font-bold tracking-widest', (localForm.goal || '').length > 200 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (localForm.goal || '').length }} / 200
+                    </span>
+                  </div>
+                  <textarea v-model="localForm.goal" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What drives the protagonist? (e.g. 'Seeks revenge for family's death')"></textarea>
+                </div>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Personality / Traits</label>
+                    <span :class="['text-xs font-bold tracking-widest', (localForm.character || '').length > 200 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (localForm.character || '').length }} / 200
+                    </span>
+                  </div>
+                  <textarea v-model="localForm.character" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does the protagonist behave? (e.g. 'Sarcastic but loyal, prone to rash decisions')"></textarea>
+                </div>
               </div>
               
               <div v-if="context.type === 'npc'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -129,11 +140,11 @@ function handleSave() {
               <div class="space-y-3">
                 <div class="flex justify-between items-center">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ context.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }}</label>
-                  <span v-if="context.type === 'npc'" :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > 400 ? 'text-red-500' : 'text-emerald-500/50']">
+                  <span v-if="['npc', 'protagonist'].includes(context.type)" :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > 400 ? 'text-red-500' : 'text-emerald-500/50']">
                     {{ (localForm.description || '').length }} / 400
                   </span>
                 </div>
-                <textarea v-model="localForm.description" :maxlength="context.type === 'npc' ? 400 : undefined" rows="8" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"></textarea>
+                <textarea v-model="localForm.description" :maxlength="['npc', 'protagonist'].includes(context.type) ? 400 : undefined" rows="8" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"></textarea>
               </div>
             </div>
 

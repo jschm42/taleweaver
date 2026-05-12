@@ -26,7 +26,6 @@ class EntityUpdateRequest(BaseModel):
     hp: Optional[int] = None
     mana: Optional[int] = None
     stamina: Optional[int] = None
-    voice: Optional[str] = None
     goal: Optional[str] = None
     character: Optional[str] = None
 
@@ -128,6 +127,8 @@ async def update_editor_entity(
         if avatar:
             if payload.name is not None: avatar.name = payload.name
             if payload.description is not None: avatar.description = payload.description
+            if payload.goal is not None: avatar.goal = payload.goal
+            if payload.character is not None: avatar.character = payload.character
             if payload.hp is not None: 
                 avatar.hp = payload.hp
                 avatar.max_hp = payload.hp
@@ -149,8 +150,6 @@ async def update_editor_entity(
         if ent:
             if payload.name is not None: ent.name = payload.name
             if payload.description is not None: ent.description = payload.description
-            if payload.voice is not None and ent.entity_type == "NPC":
-                ent.voice = payload.voice or None
             if payload.hp is not None: 
                 ent.hp = payload.hp
                 ent.max_hp = payload.hp

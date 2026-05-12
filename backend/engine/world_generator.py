@@ -175,7 +175,6 @@ class WorldNPCSchema(BaseModel):
     is_attackable: bool = Field(..., description="If False, the player cannot start a fight with this NPC.")
     is_hidden: bool = Field(..., description="If True, the NPC is initially concealed.")
     inventory: list[str] = Field(..., description="List of object IDs in this NPC's inventory. Use [] if empty.")
-    voice: str = Field(..., description="Specific TTS voice ID for this NPC, or empty for default.")
     
     model_config = {"extra": "forbid"}
 
@@ -247,6 +246,8 @@ class ProtagonistSchema(BaseModel):
     name: str = Field(..., description="The name of the player character.")
     role: str = Field(..., description="The professional or narrative role of the player.")
     description: str = Field(..., description="Narrative description of appearance and backstory.")
+    goal: str = Field(..., description="The protagonist's primary motivation or personal driving goal, max 200 characters.")
+    character: str = Field(..., description="Concise description of the protagonist's personality, quirks, and character traits, max 200 characters.")
     strength: int = Field(..., description="Base strength stat (1-99)")
     dexterity: int = Field(..., description="Base dexterity stat (1-99)")
     intelligence: int = Field(..., description="Base intelligence stat (1-99)")
@@ -703,6 +704,8 @@ class WorldGenerator:
                     name=prot.get("name", "Hero"),
                     role=prot.get("role", "Protagonist"),
                     description=prot.get("description", ""),
+                    goal=prot.get("goal", ""),
+                    character=prot.get("character", ""),
                     hp=prot.get("hp", 200),
                     max_hp=prot.get("hp", 200),
                     stamina=prot.get("stamina", 200),
@@ -729,6 +732,8 @@ class WorldGenerator:
                 avatar.name = prot.get("name", avatar.name)
                 avatar.role = prot.get("role", avatar.role)
                 avatar.description = prot.get("description", avatar.description)
+                avatar.goal = prot.get("goal", avatar.goal)
+                avatar.character = prot.get("character", avatar.character)
                 avatar.hp = prot.get("hp", avatar.hp)
                 avatar.max_hp = prot.get("hp", avatar.max_hp)
                 avatar.stamina = prot.get("stamina", avatar.stamina)
@@ -955,7 +960,6 @@ class WorldGenerator:
                 max_mana=n.get("mana"),
                 stamina=n.get("stamina"),
                 max_stamina=n.get("stamina"),
-                voice=n.get("voice") if n.get("voice") in GOOGLE_TTS_VOICE_NAMES else None,
                 is_hidden=n.get("is_hidden", False),
                 is_attackable=n.get("is_attackable", True),
             ))

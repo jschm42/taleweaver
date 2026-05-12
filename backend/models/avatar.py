@@ -16,6 +16,8 @@ class Avatar(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    goal: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    character: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     profile_image: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     # Character Sheet values

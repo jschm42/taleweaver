@@ -53,7 +53,7 @@ const isAIEditing = ref(false)
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
-const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, voice: '', goal: '', character: '' })
+const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, goal: '', character: '' })
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -337,7 +337,7 @@ async function fetchDebugInfo() {
   }
 }
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, voice?: string, goal?: string, character?: string) {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string) {
   editEntityContext.value = { type, id }
   editForm.value = { 
     name: currentName || '', 
@@ -346,7 +346,6 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     hp: hp ?? 0,
     stamina: stamina ?? 0,
     mana: mana ?? 0,
-    voice: voice || '',
     goal: goal || '',
     character: character || ''
   }
@@ -362,10 +361,10 @@ async function saveEntityText(data: any) {
     return
   }
 
-  // NPC Persona validation
-  if (editEntityContext.value.type === 'npc') {
+  // Persona validation (NPC and Protagonist)
+  if (['npc', 'protagonist'].includes(editEntityContext.value.type)) {
     if ((data.goal || '').length > 200 || (data.character || '').length > 200) {
-      addNotification('NPC motivation and traits must be under 200 characters.', 'error')
+      addNotification('Motivation and traits must be under 200 characters.', 'error')
       return
     }
   }
@@ -379,12 +378,11 @@ async function saveEntityText(data: any) {
       name: data.name,
       teaser: editEntityContext.value.type === 'cover' ? data.teaser : undefined,
       description: data.description,
-      voice: editEntityContext.value.type === 'npc' ? data.voice || '' : undefined,
       hp: data.hp || undefined,
       stamina: data.stamina || undefined,
       mana: data.mana || undefined,
-      goal: editEntityContext.value.type === 'npc' ? data.goal : undefined,
-      character: editEntityContext.value.type === 'npc' ? data.character : undefined,
+      goal: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.goal : undefined,
+      character: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.character : undefined,
     })
     showEditModal.value = false
     editEntityContext.value = null
@@ -724,10 +722,8 @@ const goBack = () => {
       :show="showEditModal"
       :context="editEntityContext"
       :initial-form="editForm"
-      :available-voices="availableVoices"
       :rule-enforcement-mode="form.rule_enforcement_mode"
       :is-saving="isSavingText"
-      :format-voice-option="formatVoiceOption"
       @close="showEditModal = false"
       @save="saveEntityText"
     />
