@@ -6,6 +6,7 @@ import zipfile
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +14,7 @@ from backend.api.routes.adventures.schemas import ImportCheckItem, ImportCheckRe
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
-from backend.engine.adventure_importer import AdventureTemplateImporter
+from backend.engine.adventure_importer import AdventureTemplateImporter, AdventureConflictError
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 
@@ -147,23 +148,40 @@ async def import_adventure(
 @router.post("/import/adz")
 async def import_adventure_adz(
     file: UploadFile = File(...),
+    overwrite: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Import an adventure as a portable .adz (ZIP) bundle."""
     try:
         content = await file.read()
-        success = await AdventureTemplateImporter.import_adz(db, content, owner_id=current_user.id)
+        success = await AdventureTemplateImporter.import_adz(db, content, owner_id=current_user.id, overwrite=overwrite)
         if not success:
-            raise HTTPException(status_code=400, detail="Failed to import ADZ.")
+            raise HTTPException(status_code=400, detail="The ADZ file is invalid or could not be processed.")
         return {"status": "success", "message": "Adventure imported successfully."}
+    except AdventureConflictError as e:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": "Adventure already exists",
+                "conflict_info": {
+                    "title": e.title,
+                    "existing_version": e.existing_version,
+                    "new_version": e.new_version,
+                    "template_id": e.template_id
+                }
+            }
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("ADZ Import failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @router.post("/import/adv")
 async def import_adventure_adv(
     file: UploadFile = File(...),
+    overwrite: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -171,11 +189,26 @@ async def import_adventure_adv(
     try:
         content = await file.read()
         payload = json.loads(content.decode("utf-8"))
-        success = await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=current_user.id)
+        success = await AdventureTemplateImporter.import_adv_manifest(db, payload, owner_id=current_user.id, overwrite=overwrite)
         if not success:
-            raise HTTPException(status_code=400, detail="Failed to import ADV.")
+            raise HTTPException(status_code=400, detail="The ADV manifest is invalid.")
         return {"status": "success", "message": "Adventure imported successfully."}
+    except AdventureConflictError as e:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": "Adventure already exists",
+                "conflict_info": {
+                    "title": e.title,
+                    "existing_version": e.existing_version,
+                    "new_version": e.new_version,
+                    "template_id": e.template_id
+                }
+            }
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("ADV Import failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 

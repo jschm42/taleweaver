@@ -19,6 +19,7 @@ from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.models.world_map import WorldMap
 from backend.utils.text_utils import generate_session_id
 
 router = APIRouter(tags=["Sessions"])
@@ -335,6 +336,7 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
     await db.execute(delete(WorldEntity).where(WorldEntity.session_id == game_id))
     await db.execute(delete(WorldScene).where(WorldScene.session_id == game_id))
     await db.execute(delete(WorldExit).where(WorldExit.session_id == game_id))
+    await db.execute(delete(WorldMap).where(WorldMap.session_id == game_id))
 
     await db.delete(game_session)
 

@@ -47,6 +47,7 @@ DEFAULT_COMPLEX_MAX_TOKENS = 24576
 DEFAULT_GENERATOR_MAX_TOKENS = 32768
 _SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+_ALLOWED_CATALOG_TYPES = {"styles", "tones"}
 
 
 async def _resolve_global_settings_owner(db: AsyncSession, fallback_user: User) -> User:
@@ -127,7 +128,7 @@ def _route_error_response(operation: str, message: str, exc: Exception) -> dict[
 def _build_catalog_upload_path(catalog_type: str, target_id: str, original_filename: Optional[str]) -> str:
     """Create a validated file path for uploaded catalog images."""
     safe_catalog_type = _sanitize_path_component(catalog_type)
-    if not safe_catalog_type:
+    if safe_catalog_type not in _ALLOWED_CATALOG_TYPES:
         raise ValueError("Invalid catalog type.")
 
     catalog_dir = _safe_data_path("catalog", safe_catalog_type)
@@ -890,7 +891,7 @@ async def generate_catalog_image(
 
     try:
         catalog_type = _sanitize_path_component(payload.catalog_type)
-        if not catalog_type:
+        if catalog_type not in _ALLOWED_CATALOG_TYPES:
             return {"status": "error", "message": "Invalid catalog type."}
 
         catalog_dir = _safe_data_path("catalog", catalog_type)

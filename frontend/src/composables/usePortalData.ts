@@ -53,6 +53,10 @@ export interface UsePortalDataResult {
   startLoadingWords: () => void
   stopLoadingWords: () => void
   setLoadingState: (value: boolean) => void
+  showConflictModal: Ref<boolean>
+  activeConflict: Ref<any>
+  closeConflictModal: () => void
+  confirmConflictOverwrite: () => Promise<void>
 }
 
 function formatToneLabel(value?: unknown): string {
@@ -110,6 +114,10 @@ export function usePortalData(): UsePortalDataResult {
     closeImportExamplesConfirm,
     openImportWarning,
     closeImportWarning,
+    showConflictModal,
+    activeConflict,
+    openConflictModal,
+    closeConflictModal,
   } = usePortalModals()
 
   const {
@@ -138,10 +146,22 @@ export function usePortalData(): UsePortalDataResult {
   /** Loads templates and sessions and synchronizes pending generation state. */
   async function fetchPortalData() {
     try {
-      const [fetchedTemplates, fetchedSessions] = await Promise.all([
-        api.listAdventureTemplates(),
-        api.listSessions(),
-      ])
+      let fetchedTemplates: AdventureTemplateSummary[]
+      let fetchedSessions: GameSession[]
+      try {
+        ;[fetchedTemplates, fetchedSessions] = await Promise.all([
+          api.listAdventureTemplates(),
+          api.listSessions(),
+        ])
+      } catch {
+        // Single automatic retry after a brief delay to handle transient backend unavailability
+        // (e.g., the backend is briefly busy right after starting a generation task).
+        await new Promise<void>((resolve) => setTimeout(resolve, 1500))
+        ;[fetchedTemplates, fetchedSessions] = await Promise.all([
+          api.listAdventureTemplates(),
+          api.listSessions(),
+        ])
+      }
 
       templates.value = Array.isArray(fetchedTemplates)
         ? fetchedTemplates.map((entry) => ({
@@ -313,20 +333,72 @@ export function usePortalData(): UsePortalDataResult {
   async function executeFileImport(
     file: File,
     kind: ImportKind,
-    importFn: (input: File) => Promise<unknown>,
+    importFn: (input: File, overwrite?: boolean) => Promise<unknown>,
     fallbackError: string,
+    overwrite: boolean = false,
   ) {
     isImporting.value = true
-    const tempId = `${kind}-import-${Date.now()}`
-    addPendingImportCard(tempId, file.name)
+    const tempId = overwrite ? `overwrite-${kind}-${Date.now()}` : `${kind}-import-${Date.now()}`
+    
+    // Don't add a card if it's an overwrite attempt (the old card should be cleaned up or we are in a modal)
+    if (!overwrite) {
+      addPendingImportCard(tempId, file.name)
+    }
+
     try {
-      await importFn(file)
-      removePendingImportCard(tempId)
+      await importFn(file, overwrite)
+      if (!overwrite) {
+        removePendingImportCard(tempId)
+      }
       await fetchPortalData()
     } catch (error: any) {
-      updatePendingImportStatus(tempId, error?.message || fallbackError, true)
+      // Check for 409 Conflict
+      if (error?.message?.includes('API 409:')) {
+        // Try to parse the conflict info from the error message or assuming we have a way to get it
+        // Our request function puts the detail in error.message.
+        // We need to parse the JSON if possible.
+        try {
+          // Extract JSON part from error message if it's formatted like "API 409: {...}"
+          const jsonStr = error.message.replace('API 409: ', '')
+          const data = JSON.parse(jsonStr)
+          if (data.conflict_info) {
+            openConflictModal({
+              ...data.conflict_info,
+              file,
+              kind
+            })
+          }
+        } catch (e) {
+          console.error('Failed to parse conflict info:', e)
+        }
+        
+        // Remove the pending card if it was created
+        if (!overwrite) {
+          removePendingImportCard(tempId)
+        }
+      } else {
+        if (!overwrite) {
+          updatePendingImportStatus(tempId, error?.message || fallbackError, true)
+        } else {
+          errorMsg.value = error?.message || 'Overwrite failed'
+        }
+      }
     } finally {
       isImporting.value = false
+    }
+  }
+
+  /** Triggered by the ConflictModal when user confirms 'Replace' */
+  async function confirmConflictOverwrite() {
+    if (!activeConflict.value || !activeConflict.value.file) return
+    
+    const { file, kind } = activeConflict.value
+    closeConflictModal()
+    
+    if (kind === 'adz') {
+      await executeFileImport(file, 'adz', api.importAdz, 'ADZ overwrite failed', true)
+    } else if (kind === 'adv') {
+      await executeFileImport(file, 'adv', api.importAdv, 'ADV overwrite failed', true)
     }
   }
 
@@ -439,5 +511,9 @@ export function usePortalData(): UsePortalDataResult {
     startLoadingWords,
     stopLoadingWords,
     setLoadingState,
+    showConflictModal,
+    activeConflict,
+    closeConflictModal,
+    confirmConflictOverwrite,
   }
 }

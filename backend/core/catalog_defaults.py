@@ -100,10 +100,10 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "image_url": "/assets/catalog/styles/modern-shonen-anime_7417820f.jpg",
     },
     {
-        "id": "classical-heroic-comic",
+        "id": "classical-comic",
         "name": "Classical Comic",
         "description": "Bold outlines, dynamic Ben-Day dots, and vibrant primary colors typical of classic Silver Age comics.",
-        "instruction": "Classical comic book style, bold black ink outlines, Ben-Day dot shading, vibrant primary color palette, dynamic action composition, Silver Age comic aesthetic, dramatic shadows.",
+        "instruction": "Classical comic book style, bold black ink outlines, Ben-Day dot shading, vibrant primary color palette, dynamic action composition, Silver Age comic aesthetic, dramatic shadows. NO TEXT!",
         "image_url": "/assets/catalog/styles/classical-heroic-comic_8970c6ab.jpg",
     },
 ]

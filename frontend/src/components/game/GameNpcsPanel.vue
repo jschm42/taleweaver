@@ -58,10 +58,17 @@ const emit = defineEmits<{
           </div>
           <img
             v-if="ent.image_url && showImage(ent.image_url)"
-            :src="getImageUrl(ent.image_url)"
+            :src="getImageUrl(ent.image_url, { thumbnail: true })"
             class="w-full h-full object-cover object-top transition-all duration-500 group-hover:scale-110"
             :class="{ 'grayscale opacity-50': ent.hp === 0 }"
-            @error="emit('imageError', ent.image_url)"
+            @error="(e) => {
+              const target = e.target as HTMLImageElement
+              if (target.src.includes('_thumb')) {
+                target.src = getImageUrl(ent.image_url)
+              } else {
+                emit('imageError', ent.image_url!)
+              }
+            }"
           />
           <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50" :class="{ 'grayscale opacity-40': ent.hp === 0 }">
             <i :class="['ra text-2xl', getItemIcon('NPC'), 'text-cyan-500/40']"></i>

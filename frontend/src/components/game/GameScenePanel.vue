@@ -51,9 +51,16 @@ const hoverPayload = computed<any>(() => ({
       <div class="aspect-video w-full relative overflow-hidden bg-slate-900 flex items-center justify-center">
         <img
           v-if="sceneImage && showImage(sceneImage)"
-          :src="getImageUrl(sceneImage)"
+          :src="getImageUrl(sceneImage, { thumbnail: true })"
           class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-          @error="emit('imageError', sceneImage)"
+          @error="(e) => {
+            const target = e.target as HTMLImageElement
+            if (target.src.includes('_thumb')) {
+              target.src = getImageUrl(sceneImage)
+            } else {
+              emit('imageError', sceneImage!)
+            }
+          }"
         />
         <div v-else class="w-full h-full flex items-center justify-center bg-slate-800">
           <i :class="['ra text-7xl opacity-20', getItemIcon('SCENE'), 'text-indigo-400']"></i>

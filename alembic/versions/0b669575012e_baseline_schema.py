@@ -9,12 +9,13 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 
 from alembic import op
+from typing import Sequence, Union, Optional
 
 # revision identifiers, used by Alembic.
 revision: str = '0b669575012e'
-down_revision: str | Sequence[str] | None = None
-branch_labels: str | Sequence[str] | None = None
-depends_on: str | Sequence[str] | None = None
+down_revision: Optional[Union[str, Sequence[str]]] = None
+branch_labels: Optional[Union[str, Sequence[str]]] = None
+depends_on: Optional[Union[str, Sequence[str]]] = None
 
 
 def upgrade() -> None:

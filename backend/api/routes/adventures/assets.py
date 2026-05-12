@@ -25,6 +25,7 @@ router = APIRouter(prefix="/{template_id}/visuals", tags=["Assets"])
 logger = logging.getLogger(__name__)
 _SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+_ALLOWED_VISUAL_TARGET_TYPES = {"cover", "scene", "npc", "object", "protagonist"}
 
 
 def _slugify(value: str) -> str:
@@ -72,15 +73,19 @@ def _build_uploaded_visual_path(template_id: str, target_type: str, target_id: s
     if not safe_template_id:
         raise ValueError("Invalid adventure template identifier.")
 
+    safe_target_type = _sanitize_path_component(target_type)
+    if safe_target_type not in _ALLOWED_VISUAL_TARGET_TYPES:
+        raise ValueError("Invalid visual target type.")
+
     base_storage_path = _safe_data_path("adventures", "library", safe_template_id, "visuals")
     file_ext = _sanitize_image_extension(original_filename)
     safe_target_id = _slugify(target_id)
 
-    if target_type == "cover":
+    if safe_target_type == "cover":
         storage_path = base_storage_path
         filename = f"cover_{safe_target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
     else:
-        storage_path = _ensure_within_data_dir(os.path.join(base_storage_path, target_type))
+        storage_path = _ensure_within_data_dir(os.path.join(base_storage_path, safe_target_type))
         filename = f"{safe_target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
 
     os.makedirs(storage_path, exist_ok=True)

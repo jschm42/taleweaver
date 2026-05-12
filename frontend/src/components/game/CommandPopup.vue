@@ -11,6 +11,7 @@ interface Command {
 const props = defineProps<{
   query: string
   activeIndex: number
+  debugMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -38,8 +39,12 @@ const commands: Command[] = [
 
 const filteredCommands = computed(() => {
   const q = props.query.toLowerCase().replace('/', '')
-  if (!q) return commands
-  return commands.filter(c => c.label.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
+  let list = commands
+  if (!props.debugMode) {
+    list = list.filter(c => c.category !== 'debug')
+  }
+  if (!q) return list
+  return list.filter(c => c.label.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
 })
 
 const scrollContainer = ref<HTMLElement | null>(null)

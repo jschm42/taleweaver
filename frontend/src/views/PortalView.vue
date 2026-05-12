@@ -16,6 +16,7 @@ import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
 import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
 import AboutModal from '@/components/portal/AboutModal.vue'
+import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
 
 const { route, router, activeSection, pushSection } = usePortalSectionRouting()
 const showAboutModal = ref(false)
@@ -64,6 +65,10 @@ const {
   startLoadingWords,
   stopLoadingWords,
   setLoadingState,
+  showConflictModal,
+  activeConflict,
+  closeConflictModal,
+  confirmConflictOverwrite,
 } = usePortalData()
 
 watch(importInput, () => undefined)
@@ -104,7 +109,9 @@ onMounted(() => {
 
   if (newId) {
     trackNewAdventure(newId, newTitle)
-    router.replace({ name: 'portal', query: {} })
+    // Remove tracking params from URL but keep the section so the library stays visible
+    const { new_id: _a, new_title: _b, ...remainingQuery } = route.query
+    router.replace({ name: 'portal', query: remainingQuery })
   }
 })
 
@@ -237,6 +244,14 @@ onUnmounted(() => {
       <AboutModal
         :isOpen="showAboutModal"
         @close="showAboutModal = false"
+      />
+
+      <ImportConflictModal
+        v-if="showConflictModal"
+        :conflict="activeConflict"
+        :is-importing="isImporting"
+        @close="closeConflictModal"
+        @confirm="confirmConflictOverwrite"
       />
     </Teleport>
 

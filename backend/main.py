@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -23,7 +23,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _safe_join(base_dir: str, *parts: str) -> str | None:
+from typing import Optional
+def _safe_join(base_dir: str, *parts: str) -> Optional[str]:
     """Safely join path parts and ensure result stays inside base_dir."""
     base_abs = os.path.abspath(base_dir)
     candidate = os.path.abspath(os.path.join(base_abs, *parts))

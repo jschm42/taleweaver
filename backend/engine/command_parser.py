@@ -3,7 +3,7 @@ from backend.models.avatar import Avatar
 
 class CommandParser:
     @staticmethod
-    def parse_command(avatar: Avatar, command_text: str) -> str:
+    def parse_command(avatar: Avatar, command_text: str, debug_enabled: bool = False) -> str:
         """
         Parses direct slash commands and synchronously applies them to the Avatar.
         Examples: /equip Iron Sword, /drop Torch
@@ -17,7 +17,7 @@ class CommandParser:
         elif command == "/drop":
             return CommandParser._handle_drop(avatar, args)
         elif command == "/help":
-            return CommandParser._handle_help()
+            return CommandParser._handle_help(debug_enabled=debug_enabled)
         elif command == "/walkthrough":
             return "[TRIGGER_WALKTHROUGH_REVEAL]" if args.strip().lower() == "reveal" else "[TRIGGER_WALKTHROUGH]"
         elif command == "/hint":
@@ -30,6 +30,8 @@ class CommandParser:
             return f"[TRIGGER_TAKE_DIRECT] {args}"
         elif command == "/talk":
             return f"[TRIGGER_TALK] {args}"
+        elif command == "/say" or command == "/speak":
+            return f"[TRIGGER_SAY] {args}"
         elif command == "/inspect":
             return f"[TRIGGER_INSPECT] {args}"
         elif command == "/unequip":
@@ -44,29 +46,34 @@ class CommandParser:
         return f"Unknown command: {command}. Type /help for a list of commands."
 
     @staticmethod
-    def _handle_help() -> str:
-        return (
-            "**Available Commands:**\n"
-            "- `/help`: Show this list.\n"
-            "- `/map`: Toggle the world map.\n"
-            "- `/talk <target>`: Talk to an NPC.\n"
-            "- `/inspect <target>`: Inspect an NPC, object or the surroundings.\n"
-            "- `/attack <target>`: Start a fight with a specific NPC (by name or ID).\n"
-            "- `/equip <item>`: Equip an item from your inventory.\n"
-            "- `/drop <item>`: Drop an item into the current room.\n"
-            "- `/take <item>`: Pick up an item from the room.\n"
-            "- `/unequip <slot>`: Remove an item from a slot.\n"
-            "- `/consume <item>`: Use a consumable item.\n"
-            "- `/combine <item1> <item2>`: Attempt to combine two objects.\n"
-            "- `/use <item1> [on] <item2>`: Use/Combine objects.\n"
-            "- `/walkthrough`: Open the secret walkthrough panel.\n"
-            "- `/walkthrough reveal`: Reveal all steps for 200 XP.\n"
-            "- `/hint`: Buy one tactical hint for 50 XP.\n"
-            "- `/sheet`: Open your character sheet.\n"
-            "- `/debug walkthrough`: Reveal walkthrough without XP cost (debug).\n"
-            "- `/debug <cmd>`: Engine debug commands.\n\n"
-            "*Alternatively, just type your actions naturally!*"
-        )
+    def _handle_help(debug_enabled: bool = False) -> str:
+        lines = [
+            "**Available Commands:**",
+            "- `/help`: Show this list.",
+            "- `/map`: Toggle the world map.",
+            "- `/talk <target>`: Talk to an NPC.",
+            "- `/say <text>`: Say something out loud (wörtliche Rede).",
+            "- `/inspect <target>`: Inspect an NPC, object or the surroundings.",
+            "- `/attack <target>`: Start a fight with a specific NPC (by name or ID).",
+            "- `/equip <item>`: Equip an item from your inventory.",
+            "- `/drop <item>`: Drop an item into the current room.",
+            "- `/take <item>`: Pick up an item from the room.",
+            "- `/unequip <slot>`: Remove an item from a slot.",
+            "- `/consume <item>`: Use a consumable item.",
+            "- `/combine <item1> <item2>`: Attempt to combine two objects.",
+            "- `/use <item1> [on] <item2>`: Use/Combine objects.",
+            "- `/walkthrough`: Open the secret walkthrough panel.",
+            "- `/walkthrough reveal`: Reveal all steps for 200 XP.",
+            "- `/hint`: Buy one tactical hint for 50 XP.",
+            "- `/sheet`: Open your character sheet."
+        ]
+        
+        if debug_enabled:
+            lines.append("- `/debug walkthrough`: Reveal walkthrough without XP cost (debug).")
+            lines.append("- `/debug <cmd>`: Engine debug commands.")
+            
+        lines.append("\n*Alternatively, just type your actions naturally!*")
+        return "\n".join(lines)
 
     @staticmethod
     def _handle_equip(avatar: Avatar, item_name: str) -> str:

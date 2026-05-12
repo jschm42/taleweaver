@@ -95,13 +95,15 @@ class MemoryManager:
 
                 stat_str = f" [{' '.join(stats)}]" if stats else ""
                 pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
-                npcs.append(f"{e.name}{stat_str}{pos_str}")
+                hidden_str = " [HIDDEN]" if getattr(e, 'is_hidden', False) else ""
+                npcs.append(f"{e.name}{stat_str}{pos_str}{hidden_str}")
 
-            objects = [
-                f"{e.name} (Position: {e.spatial_position})" if e.spatial_position else e.name
-                for e in entities
-                if e.entity_type == "OBJECT"
-            ]
+            objects = []
+            for e in entities:
+                if e.entity_type == "OBJECT":
+                    pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
+                    hidden_str = " [HIDDEN]" if getattr(e, 'is_hidden', False) else ""
+                    objects.append(f"{e.name}{pos_str}{hidden_str}")
 
             if npcs:
                 prefix = "NPCS" if detail == "concise" else "PRESENT NPCs"
@@ -127,6 +129,23 @@ class MemoryManager:
                 location_context += "AVAILABLE EXITS:\n" + "\n".join(exit_list) + "\n"
 
         return location_context
+
+    @staticmethod
+    def _build_world_npcs_context(other_npcs: Optional[list] = None, scene_map: Optional[dict[str, str]] = None) -> str:
+        if not other_npcs:
+            return ""
+
+        lines = ["WORLD NPCS (INTERNAL GM META-INFORMATION - Do NOT reveal these locations or existence to the player unless justified):"]
+        for npc in other_npcs:
+            scene_label = scene_map.get(npc.current_scene_id, npc.current_scene_id) if scene_map else npc.current_scene_id
+            pos_str = f", Position: {npc.spatial_position}" if npc.spatial_position else ""
+            hidden_str = " [HIDDEN]" if getattr(npc, 'is_hidden', False) else ""
+            desc = npc.description.strip()
+            if desc.endswith("."):
+                desc = desc[:-1]
+            lines.append(f"- {npc.name}: {desc}. Location: {scene_label}{pos_str}{hidden_str}")
+
+        return "\n".join(lines) + "\n"
 
     @staticmethod
     def format_game_time(minutes: int, time_system: str = "calendar", time_config: Optional[dict] = None) -> str:
@@ -174,7 +193,9 @@ class MemoryManager:
         time_system: str = "calendar",
         time_config: Optional[dict] = None,
         is_adventure_generator: bool = False,
-        location_detail_level: str = "full"
+        location_detail_level: str = "full",
+        other_npcs: Optional[list] = None,
+        scene_map: Optional[dict[str, str]] = None
     ) -> str:
 
         """
@@ -204,6 +225,11 @@ class MemoryManager:
             exits=exits,
             detail_level=location_detail_level,
         )
+        
+        world_npcs_context = MemoryManager._build_world_npcs_context(
+            other_npcs=other_npcs,
+            scene_map=scene_map
+        )
 
         sheet_json = MemoryManager._compact_json(character_sheet)
         
@@ -216,6 +242,7 @@ class MemoryManager:
             world_context=world_context,
             time_str=time_str,
             location_context=location_context,
+            world_npcs_context=world_npcs_context,
             sheet_json=sheet_json
         )
         
@@ -243,7 +270,9 @@ class MemoryManager:
         time_system: str = "calendar",
         time_config: Optional[dict] = None,
         is_adventure_generator: bool = False,
-        location_detail_level: str = "full"
+        location_detail_level: str = "full",
+        other_npcs: Optional[list] = None,
+        scene_map: Optional[dict[str, str]] = None
     ) -> list[dict]:
 
         """
@@ -256,6 +285,8 @@ class MemoryManager:
             time_system=time_system, time_config=time_config,
             is_adventure_generator=is_adventure_generator,
             location_detail_level=location_detail_level,
+            other_npcs=other_npcs,
+            scene_map=scene_map
         )
 
         messages = [{"role": "system", "content": sys_prompt}]

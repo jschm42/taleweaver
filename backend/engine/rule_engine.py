@@ -149,9 +149,19 @@ class AdventureGeneratorToolIntent(BaseModel):
     remember_notes: Optional[list[str]] = None
     forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
+    new_status_effects: list[str] = []
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
+    
+    # World State Updates
+    new_scene_id: Optional[str] = None
+    exit_label: Optional[str] = None
+    moved_entities: Optional[list[EntityMovement]] = None
+    updated_entities: Optional[list[WorldEntityUpdate]] = None
+    deleted_entities: Optional[list[str]] = None
+    
+    extra_time_minutes: int = 0
 
     tool_results: Optional[ToolResults] = None
     narrative_description: str = ""
@@ -316,25 +326,6 @@ class RuleEngine:
             # Reassign for SQLAlchemy state tracking; serialize Pydantic models to dicts
             new_inv = list(avatar.inventory)
             for item in event.new_inventory_items:
-                item_dict = item.model_dump(exclude_none=True)
-                
-                # Check for existing ID to perform replacement/update
-                found = False
-                if item.id:
-                    for i, existing in enumerate(new_inv):
-                        if existing.get("id") == item.id:
-                            new_inv[i] = item_dict
-                            found = True
-                            break
-                
-                if not found:
-                    new_inv.append(item_dict)
-            
-            avatar.inventory = new_inv
-
-        if event.spawned_items:
-            new_inv = list(avatar.inventory)
-            for item in event.spawned_items:
                 item_dict = item.model_dump(exclude_none=True)
                 
                 # Check for existing ID to perform replacement/update

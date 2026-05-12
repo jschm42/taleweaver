@@ -113,8 +113,15 @@ function navigateHistory(direction: 'up' | 'down') {
 const filteredCommands = computed(() => {
   if (!inputText.value.startsWith('/')) return []
   const q = inputText.value.toLowerCase().slice(1)
-  if (!q) return commands
-  return commands.filter(c => c.label.toLowerCase().includes(q))
+  
+  const debugEnabled = !!props.sheet?.debug_mode
+  let list = commands
+  if (!debugEnabled) {
+    list = list.filter(c => !c.id.startsWith('/debug'))
+  }
+  
+  if (!q) return list
+  return list.filter(c => c.label.toLowerCase().includes(q))
 })
 
 watch(inputText, (newVal) => {
@@ -232,6 +239,15 @@ function handleKeydown(e: KeyboardEvent): void {
     return
   }
 
+  // Verbal Speech Shortcut (Tab)
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    if (!inputText.value.startsWith('/say ')) {
+      inputText.value = '/say ' + inputText.value
+    }
+    return
+  }
+
   if (showCommandPopup.value && filteredCommands.value.length > 0) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -309,6 +325,10 @@ function formatBolds(text: string) {
     const lowered = normalized.toLowerCase()
     for (const [key, value] of Object.entries(props.npcMetadata || {})) {
       if (String(key).toLowerCase() === lowered) {
+        return { key, data: value }
+      }
+      // Fallback: search by name property within the metadata object
+      if (value && typeof value === 'object' && value.name && String(value.name).toLowerCase() === lowered) {
         return { key, data: value }
       }
     }
@@ -756,6 +776,7 @@ onUnmounted(() => {
             v-if="showCommandPopup && filteredCommands.length > 0"
             :query="inputText"
             :active-index="commandPopupIndex"
+            :debug-mode="!!sheet?.debug_mode"
             @select="selectCommand"
             @close="showCommandPopup = false"
             @update:active-index="val => commandPopupIndex = val"
@@ -814,6 +835,12 @@ onUnmounted(() => {
 
       </div>
       
+      <!-- Verbal Speech Hint -->
+      <div class="mt-1 pl-11 flex items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity pointer-events-none select-none">
+         <span class="text-[9px] uppercase tracking-widest text-slate-400 font-black">Shortcut</span>
+         <kbd class="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded text-[9px] text-emerald-400 font-mono shadow-2xl">TAB</kbd>
+         <span class="text-[9px] uppercase tracking-widest text-slate-400 font-black">to insert /say (Verbal Speech)</span>
+      </div>
     </div>
   </div>
 </template>

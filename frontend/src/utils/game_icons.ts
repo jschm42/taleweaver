@@ -32,17 +32,21 @@ export const getTypeColor = (type?: string) => {
   }
 }
 
-export const getImageUrl = (path?: string | null) => {
+export const getImageUrl = (path?: string | null, options?: { thumbnail?: boolean }) => {
   if (!path) return ''
   if (isPlaceholderImagePath(path)) return ''
-  const cacheVersion = localStorage.getItem('tw_visual_cache_version') || '0'
-
-  if (path.startsWith('http')) {
-    const separator = path.includes('?') ? '&' : '?'
-    return `${path}${separator}v=${cacheVersion}`
+  
+  let finalPath = path
+  if (options?.thumbnail) {
+    const extIdx = path.lastIndexOf('.')
+    if (extIdx !== -1) {
+      finalPath = path.substring(0, extIdx) + '_thumb' + path.substring(extIdx)
+    }
   }
-  const separator = path.includes('?') ? '&' : '?'
-  return `${path}${separator}v=${cacheVersion}`
+
+  const cacheVersion = localStorage.getItem('tw_visual_cache_version') || '0'
+  const separator = finalPath.includes('?') ? '&' : '?'
+  return `${finalPath}${separator}v=${cacheVersion}`
 }
 
 export const isPlaceholderImagePath = (path?: string | null): boolean => {

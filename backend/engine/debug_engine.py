@@ -44,11 +44,20 @@ class DebugEngine:
         elif sub == "entities":
             res = await db.execute(select(WorldEntity).where(WorldEntity.current_scene_id == scene_id, WorldEntity.session_id == state.session_id))
             entities = res.scalars().all()
-            if not entities: return "--- DEBUG: No entities or objects found in this scene. ---"
+            
+            overrides = state.entity_states or {}
+            processed = []
+            for e in entities:
+                data = {c.name: getattr(e, c.name) for c in e.__table__.columns}
+                if e.id in overrides: data.update(overrides[e.id])
+                processed.append(data)
+
+            if not processed: return "--- DEBUG: No entities or objects found in this scene. ---"
             
             lines = [f"--- DEBUG: ENTITIES IN {scene_id} ---"]
-            for e in entities:
-                lines.append(f"- [{e.entity_type}] {e.name} (ID: {e.id}): {e.description[:50]}...")
+            for e in processed:
+                pos = f" @ {e.get('spatial_position')}" if e.get('spatial_position') else ""
+                lines.append(f"- [{e.get('entity_type')}] {e.get('name')} (ID: {e.get('id')}){pos}: {str(e.get('description', ''))[:50]}...")
             return "\n".join(lines)
 
         elif sub == "plot" or sub == "context":
@@ -69,6 +78,19 @@ class DebugEngine:
                 f"Total Scenes: {len(s_count.scalars().all())}\n"
                 f"Total Entities: {len(e_count.scalars().all())}\n"
                 f"Total Connections: {len(ex_count.scalars().all())}"
+            )
+            
+        elif sub == "session":
+            res = await db.execute(select(WorldScene).where(WorldScene.id == scene_id, WorldScene.session_id == state.session_id))
+            scene = res.scalars().first()
+            label = scene.label if scene else "Unknown"
+            
+            return (
+                f"--- DEBUG: SESSION STATE ---\n"
+                f"Session ID: {state.session_id}\n"
+                f"Current Scene: {label} (ID: {scene_id})\n"
+                f"In-Game Time: {state.in_game_time} minutes\n"
+                f"Debug Logging: {'ON' if state.is_debug_enabled else 'OFF'}"
             )
             
         elif sub == "log":
@@ -271,21 +293,52 @@ class DebugEngine:
 
         elif sub == "npcs":
             res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.entity_type == "NPC"))
-            npcs = res.scalars().all()
-            if not npcs: return "DEBUG: No NPCs found for this session."
+            npcs_db = res.scalars().all()
+            if not npcs_db: return "--- DEBUG: No NPCs found for this session. ---"
+            
+            overrides = state.entity_states or {}
+            npcs = []
+            for e in npcs_db:
+                data = {c.name: getattr(e, c.name) for c in e.__table__.columns}
+                if e.id in overrides: data.update(overrides[e.id])
+                npcs.append(data)
+            
+            res_scenes = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
+            scene_map = {s.id: s.label for s in res_scenes.scalars().all()}
+
             lines = ["--- DEBUG: ALL NPCs ---"]
             for n in npcs:
-                lines.append(f"- {n.name} (ID: {n.id}) @ {n.current_scene_id}")
+                curr_scene = n.get("current_scene_id")
+                loc_label = scene_map.get(curr_scene, curr_scene)
+                pos = f" ({n.get('spatial_position')})" if n.get('spatial_position') else ""
+                lines.append(f"- {n.get('name')} (ID: {n.get('id')}) @ {loc_label}{pos}")
             return "\n".join(lines)
 
         elif sub == "items":
             res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.entity_type == "OBJECT"))
-            items = res.scalars().all()
-            if not items: return "DEBUG: No items found for this session."
+            items_db = res.scalars().all()
+            if not items_db: return "--- DEBUG: No items found for this session. ---"
+            
+            overrides = state.entity_states or {}
+            items = []
+            for e in items_db:
+                data = {c.name: getattr(e, c.name) for c in e.__table__.columns}
+                if e.id in overrides: data.update(overrides[e.id])
+                items.append(data)
+            
+            res_scenes = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
+            scene_map = {s.id: s.label for s in res_scenes.scalars().all()}
+
             lines = ["--- DEBUG: ALL ITEMS ---"]
             for i in items:
-                loc = "Inventory" if i.is_in_inventory else f"Scene: {i.current_scene_id}"
-                lines.append(f"- {i.name} (ID: {i.id}) @ {loc}")
+                if i.get("is_in_inventory"):
+                    loc = "Inventory"
+                else:
+                    curr_scene = i.get("current_scene_id")
+                    loc_label = scene_map.get(curr_scene, curr_scene)
+                    pos = f" ({i.get('spatial_position')})" if i.get('spatial_position') else ""
+                    loc = f"Scene: {loc_label}{pos}"
+                lines.append(f"- {i.get('name')} (ID: {i.get('id')}) @ {loc}")
             return "\n".join(lines)
 
         elif sub == "exits":
@@ -303,24 +356,35 @@ class DebugEngine:
             scenes_res = await db.execute(select(WorldScene).where(WorldScene.session_id == state.session_id))
             exits_res = await db.execute(select(WorldExit).where(WorldExit.session_id == state.session_id))
             
-            scenes = scenes_res.scalars().all()
-            exits = exits_res.scalars().all()
+            scenes = list(scenes_res.scalars().all())
+            exits = list(exits_res.scalars().all())
+
+            # 2. Also fetch from template to be absolutely sure we have everything
+            if state.template_id:
+                t_scenes_res = await db.execute(select(WorldScene).where(WorldScene.template_id == state.template_id))
+                t_exits_res = await db.execute(select(WorldExit).where(WorldExit.template_id == state.template_id))
+                
+                # Add template scenes/exits if not already in the session list (by ID/label)
+                session_scene_ids = {s.id for s in scenes}
+                for ts in t_scenes_res.scalars().all():
+                    if ts.id not in session_scene_ids:
+                        scenes.append(ts)
+                
+                # For exits, we compare from/to/label to avoid duplicates
+                session_exits = {(e.from_scene_id, e.to_scene_id, e.label) for e in exits}
+                for te in t_exits_res.scalars().all():
+                    if (te.from_scene_id, te.to_scene_id, te.label) not in session_exits:
+                        exits.append(te)
             
-            # 2. Get or create the map
-            map_res = await db.execute(select(WorldMap).where(WorldMap.template_id == state.template_id))
-            world_map = map_res.scalars().first()
-            if not world_map:
-                world_map = WorldMap(template_id=state.template_id)
-                db.add(world_map)
-                await db.flush()
+            # 3. Get or create the map for this SPECIFIC session
+            from backend.api.routes.adventures.logic import AdventureLogic
+            world_map = await AdventureLogic.get_or_create_map(db, state.template_id, session_id=state.session_id)
             
-            # 3. Register everything
+            # 4. Register everything
             for s in scenes:
                 MapEngine.register_visit(world_map, s.id, label=s.label, description=s.description, image_url=s.image_url)
             
-            # 4. Restore the actual current position
-            # register_visit overwrites current_scene_id with the last one in the loop.
-            # We must set it back to the safe version of our actual current scene_id.
+            # 5. Restore the actual current position
             world_map.current_scene_id = MapEngine._safe_id(state.scene_id)
             
             for e in exits:
@@ -333,5 +397,5 @@ class DebugEngine:
             if len(parts) < 2: return "DEBUG ERROR: Usage: /debug gen_item [PROMPT]"
             return f"[TRIGGER_GEN_ITEM] {parts[1]}"
 
-        return "DEBUG USAGE: /debug [szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID | gen_item PROMPT]"
+        return "DEBUG USAGE: /debug [session | szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID | gen_item PROMPT]"
 

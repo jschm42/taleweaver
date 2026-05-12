@@ -5,8 +5,8 @@ export type PortalSection = 'templates' | 'sessions' | 'profile'
 
 function parsePortalSection(section: unknown): PortalSection {
   if (section === 'profile') return 'profile'
-  if (section === 'templates') return 'templates'
-  return 'sessions'
+  if (section === 'sessions') return 'sessions'
+  return 'templates'
 }
 
 export interface UsePortalSectionRoutingResult {
@@ -19,7 +19,7 @@ export interface UsePortalSectionRoutingResult {
 export function usePortalSectionRouting(): UsePortalSectionRoutingResult {
   const router = useRouter()
   const route = useRoute()
-  const activeSection = ref<PortalSection>('sessions')
+  const activeSection = ref<PortalSection>('templates')
 
   watch(
     () => route.query.section,

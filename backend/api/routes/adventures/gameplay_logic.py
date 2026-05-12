@@ -212,6 +212,7 @@ class GameTurnManager:
                 {
                     "id": entity.id,
                     "name": entity.name,
+                    "scene_id": entity.current_scene_id,
                     "position": entity.spatial_position,
                 }
             )
@@ -219,15 +220,49 @@ class GameTurnManager:
                 break
         return reduced_npcs
 
-    def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict]) -> str:
+    @staticmethod
+    def _build_chat_progression_scenes(adventure: AdventureTemplate) -> list[dict]:
+        reduced_scenes = []
+        for scene in (adventure.scenes or []):
+            reduced_scenes.append({
+                "id": scene.get("id"),
+                "label": scene.get("name") or scene.get("label")
+            })
+        return reduced_scenes
+
+    @staticmethod
+    def _build_chat_progression_exits(exits: list[WorldExit]) -> list[dict]:
+        reduced_exits = []
+        for ex in exits:
+            reduced_exits.append({
+                "to_scene_id": ex.to_scene_id,
+                "label": ex.label,
+                "is_locked": ex.is_locked
+            })
+        return reduced_exits
+
+    def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict], scenes: list[dict], exits: list[dict]) -> str:
         notes = self._get_gm_notes()
         if len(notes) > GM_NOTES_PROMPT_MAX_ITEMS:
             notes = notes[-GM_NOTES_PROMPT_MAX_ITEMS:]
+        
+        current_scene_label = "Unknown"
+        if self.state and self.state.current_scene_id:
+            # Try to find label from adventure or db
+            for s in (self.adventure.scenes or []):
+                if s.get("id") == self.state.current_scene_id:
+                    current_scene_label = s.get("name") or s.get("label")
+                    break
+
         return prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT.format(
             quests_json=self._compact_json(quests),
             awards_json=self._compact_json(awards),
             npcs_json=self._compact_json(npcs),
+            scenes_json=self._compact_json(scenes),
+            exits_json=self._compact_json(exits),
             notes_json=self._compact_json(notes),
+            current_scene_id=self.state.current_scene_id,
+            current_scene_label=current_scene_label,
         )
 
     def _get_gm_notes(self) -> list[str]:
@@ -341,7 +376,7 @@ class GameTurnManager:
             hp_change=intent.hp_change,
             stamina_change=intent.stamina_change,
             mana_change=intent.mana_change,
-            new_status_effects=[],
+            new_status_effects=intent.new_status_effects or [],
             new_inventory_items=intent.new_inventory_items or [],
             removed_inventory_item_ids=intent.removed_inventory_item_ids,
             updated_inventory_items=intent.updated_inventory_items or [],
@@ -354,6 +389,12 @@ class GameTurnManager:
             game_over=bool(intent.game_over),
             game_completed=bool(intent.game_completed),
             status_note=intent.status_note,
+            new_scene_id=intent.new_scene_id,
+            exit_label=intent.exit_label,
+            moved_entities=intent.moved_entities,
+            updated_entities=intent.updated_entities,
+            deleted_entities=intent.deleted_entities,
+            extra_time_minutes=intent.extra_time_minutes,
         )
 
     async def initialize(self) -> bool:
@@ -374,7 +415,7 @@ class GameTurnManager:
 
         # Lazy-register initial map visit
         try:
-            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
             # Use session_id to find the scene (snapshot)
             scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.session_id == self.game_id))
             cur_scene = scene_res.scalars().first()
@@ -435,6 +476,11 @@ class GameTurnManager:
                 return
             else:
                 logger.warning(f"[Turn {self.game_id}] Debug command ignored: TALEWEAVER_DEBUG_ENABLED is False.")
+                # If debug is disabled, treat it as an unknown command to the user
+                unknown_msg = "Unknown command: /debug. Type /help for a list of commands."
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=unknown_msg))
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': unknown_msg})}\n\n"
+                return
 
         # 1. Combat & Loot Handling (Active Phase)
         if self._has_combat_phase():
@@ -450,7 +496,7 @@ class GameTurnManager:
             
         is_rule_pass = False
         if user_msg.startswith("/"):
-            response = CommandParser.parse_command(self.avatar, user_msg)
+            response = CommandParser.parse_command(self.avatar, user_msg, debug_enabled=settings.TALEWEAVER_DEBUG_ENABLED)
             
             if response == "[RULE_PASS]":
                 is_rule_pass = True
@@ -458,6 +504,9 @@ class GameTurnManager:
                 yield f"event: status\ndata: {json.dumps({'content': 'The Game Master evaluates your situation...'})}\n\n"
             elif response.startswith("[TRIGGER_TALK]"):
                 user_msg = f"Talk to {response[14:].strip()}"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_SAY]"):
+                user_msg = f'Say out loud: "{response[13:].strip()}"'
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_INSPECT]"):
                 user_msg = f"Inspect {response[17:].strip()}"
@@ -584,9 +633,11 @@ class GameTurnManager:
         async for chunk in self._run_llm_cycle(instruction, self.avatar):
             yield chunk
 
-        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
         final_data = jsonable_encoder({
             'mermaid': MapEngine.to_mermaid(world_map),
+            'map_data': MapEngine.to_dict(world_map),
+            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'awards': self.adventure.awards,
@@ -599,10 +650,11 @@ class GameTurnManager:
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
-            map_res = await self.db.execute(select(WorldMap).where(WorldMap.template_id == self.state.template_id))
-            world_map = map_res.scalars().first()
+            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
             final_data = jsonable_encoder({
                 'mermaid': MapEngine.to_mermaid(world_map) if world_map else None,
+                'map_data': MapEngine.to_dict(world_map) if world_map else None,
+                'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id),
                 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
                 **self._build_terminal_flags_payload(),
             })
@@ -773,10 +825,14 @@ class GameTurnManager:
         if combat_snap and not combat_snap.get("active") and not combat_snap.get("loot_pending") and not combat_snap.get("outcome"):
             combat_snap = None
 
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
         final_data = jsonable_encoder({
+            'mermaid': MapEngine.to_mermaid(world_map),
+            'map_data': MapEngine.to_dict(world_map),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': combat_snap,
+            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id),
             **self._build_terminal_flags_payload(),
             'status_note': status_note or (self.state.session.status_note if self.state.session else None),
             'status': 'success'
@@ -1647,22 +1703,22 @@ class GameTurnManager:
         scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.session_id == self.game_id))
         current_scene = scene_res.scalars().first()
 
-        ent_res = await self.db.execute(select(WorldEntity).where(
+        # Fetch all entities in the session to handle global NPC awareness
+        all_ent_res = await self.db.execute(select(WorldEntity).where(
             WorldEntity.session_id == self.game_id, 
-            WorldEntity.current_scene_id == self.state.current_scene_id,
-            WorldEntity.is_hidden == False,
             WorldEntity.is_in_inventory == False
         ))
-        entities = ent_res.scalars().all()
+        all_entities = list(all_ent_res.scalars().all())
+
         exit_res = await self.db.execute(select(WorldExit).where(
             WorldExit.from_scene_id == self.state.current_scene_id,
             WorldExit.session_id == self.game_id
         ))
         exits = exit_res.scalars().all()
         
-        # Apply session overrides to entities so LLM sees current HP/state
+        # Apply session overrides to entities so LLM sees current HP/state/location
         overrides = self.state.entity_states or {}
-        for ent in entities:
+        for ent in all_entities:
             if ent.id in overrides:
                 ov = overrides[ent.id]
                 if "hp" in ov: ent.hp = ov["hp"]
@@ -1671,6 +1727,15 @@ class GameTurnManager:
                 if "spatial_position" in ov: ent.spatial_position = ov["spatial_position"]
                 if "name" in ov: ent.name = ov["name"]
                 if "description" in ov: ent.description = ov["description"]
+                if "current_scene_id" in ov: ent.current_scene_id = ov["current_scene_id"]
+
+        # Partition entities into "here" vs "elsewhere"
+        entities = [e for e in all_entities if e.current_scene_id == self.state.current_scene_id]
+        other_npcs = [e for e in all_entities if e.current_scene_id != self.state.current_scene_id and e.entity_type == "NPC"]
+
+        # Fetch scene labels for all scenes to provide human-readable locations for world NPCs
+        all_scenes_res = await self.db.execute(select(WorldScene).where(WorldScene.session_id == self.game_id))
+        scene_map = {s.id: s.label for s in all_scenes_res.scalars().all()}
         
         db_duration = time.perf_counter() - db_start
         logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
@@ -1692,6 +1757,8 @@ class GameTurnManager:
             time_config=self.state.time_config or self.adventure.time_config,
             is_adventure_generator=self.adventure.is_adventure_generator,
             location_detail_level="concise",
+            other_npcs=other_npcs,
+            scene_map=scene_map
         )[0]["content"]
 
         narration_system_prompt = MemoryManager.build_context(
@@ -1710,6 +1777,8 @@ class GameTurnManager:
             time_config=self.state.time_config or self.adventure.time_config,
             is_adventure_generator=self.adventure.is_adventure_generator,
             location_detail_level="full",
+            other_npcs=other_npcs,
+            scene_map=scene_map
         )[0]["content"]
         notes_prompt_block = self._build_gm_notes_prompt_block()
         mechanics_system_prompt += notes_prompt_block
@@ -2122,11 +2191,15 @@ class GameTurnManager:
             reduced_quests = self._build_chat_progression_quests()
             reduced_awards = self._build_chat_progression_awards(mechanics_awards)
             reduced_npcs = self._build_chat_progression_npcs(entities)
+            reduced_scenes = self._build_chat_progression_scenes(self.adventure)
+            reduced_exits = self._build_chat_progression_exits(exits)
 
             progression_prompt = self._build_chat_rule_pass_prompt(
                 quests=reduced_quests,
                 awards=reduced_awards,
                 npcs=reduced_npcs,
+                scenes=reduced_scenes,
+                exits=reduced_exits,
             )
 
             if language:
@@ -2384,7 +2457,11 @@ class GameTurnManager:
 
         await self.db.commit()
         
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
         final_data = jsonable_encoder({
+            'mermaid': MapEngine.to_mermaid(world_map),
+            'map_data': MapEngine.to_dict(world_map),
+            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
@@ -2471,7 +2548,7 @@ class GameTurnManager:
             
             # Map Update
             try:
-                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
                 # 1. Register exit between scenes
                 MapEngine.register_exit(world_map, old_scene_id, event.new_scene_id, exit_label=event.exit_label or "")
                 # 2. Register visit to the new scene
@@ -2495,8 +2572,13 @@ class GameTurnManager:
             for move in event.moved_entities:
                 eid = move.entity_id
                 if eid not in states: states[eid] = {}
-                if move.to_scene_id: states[eid]["current_scene_id"] = move.to_scene_id
-                if move.to_spatial_position: states[eid]["spatial_position"] = move.to_spatial_position
+                if move.to_scene_id: 
+                    states[eid]["current_scene_id"] = move.to_scene_id
+                    # If moving to a new scene, clear spatial position unless a new one is provided
+                    if not move.to_spatial_position:
+                        states[eid]["spatial_position"] = None
+                if move.to_spatial_position: 
+                    states[eid]["spatial_position"] = move.to_spatial_position
                 state_dirty = True
 
         if event.updated_entities:
@@ -2521,6 +2603,13 @@ class GameTurnManager:
                 states[eid]["is_hidden"] = True
                 state_dirty = True
         
+        if event.new_inventory_items:
+            for item in event.new_inventory_items:
+                if item.id:
+                    if item.id not in states: states[item.id] = {}
+                    states[item.id]["is_in_inventory"] = True
+                    state_dirty = True
+
         if event.spawned_items:
             for item in event.spawned_items:
                 await self._spawn_scene_item(item.model_dump(exclude_none=True))

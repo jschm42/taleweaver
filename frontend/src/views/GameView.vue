@@ -60,6 +60,7 @@ const {
   adventureImage,
   entities,
   mermaidData,
+  mapData,
   nodes,
   npcMetadata,
   currentSceneImage,
@@ -359,9 +360,16 @@ watch(showCombatDialog, (visible) => {
     <!-- Full-Width Adventure Background (Top Third) -->
     <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
       <img 
-        :src="getImageUrl(adventureImage)" 
+        :src="getImageUrl(adventureImage, { thumbnail: true })" 
         class="w-full h-full object-cover blur-sm brightness-[0.5]"
-        @error="adventureImage = null"
+        @error="(e) => {
+          const target = e.target as HTMLImageElement
+          if (target.src.includes('_thumb')) {
+            target.src = getImageUrl(adventureImage)
+          } else {
+            adventureImage = null
+          }
+        }"
       >
       <div class="absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/40 to-slate-950"></div>
       <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
@@ -495,7 +503,7 @@ watch(showCombatDialog, (visible) => {
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
     />
-    <MapModal :open="showMap" :mermaid-src="mermaidData" :nodes="nodes" @close="showMap = false" />
+    <MapModal :open="showMap" :map-data="mapData" :nodes="nodes" :is-debug="!!sheet?.debug_mode" @close="showMap = false" />
     <QuestsModal 
       :is-open="showQuests" 
       :quests="quests" 

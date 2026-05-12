@@ -60,17 +60,7 @@ async def _get_npc_metadata(template_id: str, db: AsyncSession) -> dict:
             "entity_type": "NPC",
         }
         metadata[npc.id] = data
-        metadata[npc.name] = data
     return metadata
-
-async def _enrich_map_nodes(template_id: str, nodes: dict, db: AsyncSession) -> dict:
-    scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
-    db_scenes = {s.id: s for s in scene_res.scalars().all()}
-    for node_id, node in nodes.items():
-        if node_id in db_scenes:
-            node["label"] = db_scenes[node_id].label
-            node["description"] = db_scenes[node_id].description
-    return nodes
 
 @router.get("/{game_id}/chat", response_model=ChatResponse)
 async def get_chat_history(
@@ -92,8 +82,7 @@ async def get_chat_history(
     chat_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id).order_by(ChatMessage.created_at.asc()))
     history = [{"role": m.role, "content": m.content} for m in chat_res.scalars().all()]
     
-    map_res = await db.execute(select(WorldMap).where(WorldMap.template_id == state.template_id))
-    world_map = map_res.scalars().first()
+    world_map = await AdventureLogic.get_or_create_map(db, state.template_id, session_id=state.session_id)
     
     entities = await AdventureLogic.build_session_entities(db, state)
     
@@ -110,7 +99,8 @@ async def get_chat_history(
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
         combat=AdventureLogic.get_combat_snapshot(state),
         mermaid=MapEngine.to_mermaid(world_map) if world_map else None,
-        nodes=await _enrich_map_nodes(state.template_id, world_map.nodes if world_map else {}, db),
+        map_data=MapEngine.to_dict(world_map) if world_map else None,
+        nodes=await AdventureLogic.get_all_scene_metadata(db, state.template_id),
         entities=entities,
         npc_metadata=await _get_npc_metadata(state.template_id, db),
         image_url=scene_image,
@@ -133,11 +123,17 @@ async def post_chat_message(
     current_user: User = Depends(get_current_user),
 ):
     """Processes a user message and returns a streaming response."""
-    manager = GameTurnManager(db, game_id, current_user)
-    return StreamingResponse(
-        manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
-        media_type="text/event-stream"
-    )
+    try:
+        manager = GameTurnManager(db, game_id, current_user)
+        return StreamingResponse(
+            manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language), 
+            media_type="text/event-stream"
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to start chat turn for session %s", game_id)
+        raise HTTPException(status_code=500, detail="Unable to process this turn.")
 
 
 @router.post("/{game_id}/terminal-epilogue", response_model=TerminalEpilogueResponse)
@@ -173,4 +169,3 @@ async def get_walkthrough(
         raise HTTPException(status_code=403, detail="The walkthrough is not revealed yet.")
 
     return {"walkthrough": state.walkthrough or "No walkthrough available for this adventure."}
-

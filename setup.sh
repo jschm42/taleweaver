@@ -33,10 +33,12 @@ echo "[*] Installing backend dependencies..."
 ./venv/bin/pip install --upgrade pip
 ./venv/bin/pip install -r requirements.txt
 
-# 4. Encryption Key
+# 4. Security Keys
 mkdir -p data
+ENV_CONTENT=$(cat .env)
 
-if ! grep -qE "ENCRYPTION_KEY=[a-zA-Z0-9\-_]{20,}" .env; then
+# ENCRYPTION_KEY
+if ! echo "$ENV_CONTENT" | grep -qE "ENCRYPTION_KEY=[a-zA-Z0-9\-_]{20,}"; then
     echo "[*] Generating ENCRYPTION_KEY..."
     KEY=$(./venv/bin/python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -45,8 +47,18 @@ if ! grep -qE "ENCRYPTION_KEY=[a-zA-Z0-9\-_]{20,}" .env; then
         sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$KEY/" .env
     fi
     echo "[+] ENCRYPTION_KEY added to .env"
-else
-    echo "[+] ENCRYPTION_KEY already exists in .env"
+fi
+
+# SECRET_KEY
+if ! echo "$ENV_CONTENT" | grep -qE "SECRET_KEY=[a-fA-F0-9]{64}"; then
+    echo "[*] Generating SECRET_KEY..."
+    SKEY=$(./venv/bin/python3 -c "import secrets; print(secrets.token_hex(32))")
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/SECRET_KEY=.*/SECRET_KEY=$SKEY/" .env
+    else
+        sed -i "s/SECRET_KEY=.*/SECRET_KEY=$SKEY/" .env
+    fi
+    echo "[+] SECRET_KEY added to .env"
 fi
 
 # 5. Database Setup (Migrations)

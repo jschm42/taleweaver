@@ -29,22 +29,31 @@ Write-Host "[*] Installing backend dependencies..." -ForegroundColor Yellow
 .\venv\Scripts\python.exe -m pip install --upgrade pip
 .\venv\Scripts\pip.exe install -r requirements.txt
 
-# 4. Encryption Key
+# 4. Security Keys
 if (-not (Test-Path "data")) {
     Write-Host "[*] Creating data directory..." -ForegroundColor Yellow
     New-Item -ItemType Directory -Path "data" | Out-Null
 }
 
 $envFile = Get-Content ".env" -Raw
+
+# ENCRYPTION_KEY
 if ($envFile -notmatch "ENCRYPTION_KEY=[a-zA-Z0-9\-_]{20,}") {
     Write-Host "[*] Generating ENCRYPTION_KEY..." -ForegroundColor Yellow
     $key = .\venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     $envFile = $envFile -replace "ENCRYPTION_KEY=.*", "ENCRYPTION_KEY=$key"
-    Set-Content ".env" $envFile
     Write-Host "[+] ENCRYPTION_KEY added to .env" -ForegroundColor Green
-} else {
-    Write-Host "[+] ENCRYPTION_KEY already exists in .env" -ForegroundColor Green
 }
+
+# SECRET_KEY
+if ($envFile -notmatch "SECRET_KEY=[a-fA-F0-9]{64}") {
+    Write-Host "[*] Generating SECRET_KEY..." -ForegroundColor Yellow
+    $skey = .\venv\Scripts\python.exe -c "import secrets; print(secrets.token_hex(32))"
+    $envFile = $envFile -replace "SECRET_KEY=.*", "SECRET_KEY=$skey"
+    Write-Host "[+] SECRET_KEY added to .env" -ForegroundColor Green
+}
+
+Set-Content ".env" $envFile
 
 # 5. Database Setup (Migrations)
 Write-Host "[*] Running database migrations..." -ForegroundColor Yellow
