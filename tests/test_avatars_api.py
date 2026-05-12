@@ -18,7 +18,7 @@ async def client(auth_client: AsyncClient) -> AsyncClient:
 
 async def _create_adventure(client: AsyncClient) -> dict:
     resp = await client.post(
-        "/api/adventures",
+        "/api/adventures/",
         json={"title": "Test", "avatar_name": "Warrior"},
     )
     assert resp.status_code == 201
@@ -126,3 +126,4 @@ async def test_remove_status_effect_not_found(client: AsyncClient):
 
     resp = await client.delete(f"/api/avatars/{ids['avatar_id']}/status-effects/Burning")
     assert resp.status_code == 404
+

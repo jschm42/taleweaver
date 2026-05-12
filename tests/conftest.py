@@ -77,8 +77,10 @@ async def auth_client(client: AsyncClient) -> AsyncClient:
 
     token = create_access_token({"sub": username})
     client.headers.update({"Authorization": f"Bearer {token}"})
+    yield client
 @pytest_asyncio.fixture
 async def db_session() -> AsyncSession:
     """Yields a database session from the test engine."""
     async with TestSessionLocal() as session:
         yield session
+
