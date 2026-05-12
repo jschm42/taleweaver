@@ -796,7 +796,7 @@ class WorldGenerator:
                     if image_url:
                         image_successes += 1
                 
-                if not image_url:
+                if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder
                     if not avatar.profile_image or not avatar.profile_image.startswith("/data/"):
                         image_url = await MediaEngine.generate_placeholder(
@@ -819,7 +819,7 @@ class WorldGenerator:
             seen_scene_ids.add(s["id"])
             
             image_url = (existing_images or {}).get(s["id"]) or s.get("image_url")
-            if not image_url:
+            if not image_url or image_url.startswith("assets/"):
                 if user and gen_scenes:
                     await _publish_generation_status_with_callback(
                         db,
@@ -854,7 +854,7 @@ class WorldGenerator:
                     if image_url:
                         image_successes += 1
                 
-                if not image_url:
+                if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder
                     image_url = await MediaEngine.generate_placeholder(
                         template_id, s["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "scenes"),
@@ -893,7 +893,7 @@ class WorldGenerator:
             seen_entity_ids.add(n["id"])
             
             image_url = (existing_images or {}).get(n["id"]) or n.get("image_url")
-            if not image_url:
+            if not image_url or image_url.startswith("assets/"):
                 if user and gen_npc:
                     await _publish_generation_status_with_callback(
                         db,
@@ -929,7 +929,7 @@ class WorldGenerator:
                     if image_url:
                         image_successes += 1
                 
-                if not image_url:
+                if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder for NPCs
                     image_url = await MediaEngine.generate_placeholder(
                         template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
@@ -1077,7 +1077,7 @@ class WorldGenerator:
             mana_change = _extract_numeric_effect(o, source_item, "mana_change", "restore_mana", "mana_restore", "mana")
             
             image_url = (existing_images or {}).get(o["id"]) or o.get("image_url")
-            if not image_url:
+            if not image_url or image_url.startswith("assets/"):
                 if user and gen_items:
                     await _publish_generation_status_with_callback(
                         db,
@@ -1110,7 +1110,7 @@ class WorldGenerator:
                     if image_url:
                         image_successes += 1
                 
-                if not image_url:
+                if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder for Items
                     image_url = await MediaEngine.generate_placeholder(
                         template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
