@@ -128,3 +128,4 @@ async def test_remove_status_effect_not_found(client: AsyncClient):
     assert resp.status_code == 404
 
 
+
