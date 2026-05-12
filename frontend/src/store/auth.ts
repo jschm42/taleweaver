@@ -8,6 +8,7 @@ export interface User {
   bio?: string | null
   default_language?: string | null
   earned_awards?: any[] | null
+  game_log?: any[] | null
   adventure_count?: number
 }
 
