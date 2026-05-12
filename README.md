@@ -15,7 +15,7 @@
 **With our immersive voice integration, playing TaleWeaver feels like directing and starring in your own playable audiobook.**
 
 > [!TIP]
-> **Put your headphones on and roleplay!** TaleWeaver works best when you immerse yourself. Don't just give commands—describe your actions, speak to NPCs, and let the AI Gamemaster narrate the consequences in breathtaking audio quality.
+> **Put your headphones on and roleplay!** TaleWeaver works best when you immerse yourself. Don't just give commands—describe your actions, speak to NPCs, and let the AI Gamemaster narrate the consequences.
 
 ## 📸 Gallery
 
