@@ -191,7 +191,7 @@ bash scripts/docker-update.sh
 If you prefer to run the components separately for development:
 
 #### System Requirements
-- **Python:** 3.12 (specified via `.python-version` file)
+- **Python:** 3.13 (specified via `.python-version` file)
 - **Node.js:** 18+ (for the Vue.js frontend MVP)
 - **Package Managers:** `pip` and `npm`
 - **Database:** SQLite (built-in, no separate server needed)
