@@ -124,6 +124,8 @@ async def test_save_llm_settings_with_ollama_url(client: AsyncClient):
         "generator_model_provider": "ollama",
         "generator_model": "llama3-70b",
         "generator_model_provider": "ollama",
+        "generator_model": "llama3-70b",
+        "generator_model_provider": "ollama",
         "preferred_provider": "ollama",
         "ollama_url": "http://localhost:11434",
     }
@@ -150,6 +152,8 @@ async def test_save_llm_settings_normalizes_openrouter_models(client: AsyncClien
         "small_model_provider": "openrouter",
         "complex_model": "openai/gpt-5.4",
         "complex_model_provider": "openrouter",
+        "generator_model": "anthropic/claude-3-opus",
+        "generator_model_provider": "openrouter",
         "generator_model": "anthropic/claude-3-opus",
         "generator_model_provider": "openrouter",
         "generator_model": "anthropic/claude-3-opus",
@@ -272,9 +276,13 @@ async def test_settings_are_global_for_all_users(client: AsyncClient):
         "generator_model_provider": "ollama",
         "generator_model": "llama3-70b",
         "generator_model_provider": "ollama",
+        "generator_model": "llama3-70b",
+        "generator_model_provider": "ollama",
         "complex_max_tokens": 4096,
         "complex_enable_thinking": False,
         "complex_max_thinking_tokens": 512,
+        "generator_model": "llama3.2",
+        "generator_model_provider": "ollama",
         "generator_model": "llama3.2",
         "generator_model_provider": "ollama",
         "generator_model": "llama3.2",
@@ -297,6 +305,7 @@ async def test_settings_are_global_for_all_users(client: AsyncClient):
     b_settings = await client.get("/api/settings", headers=headers_b)
     assert b_settings.status_code == 200
     assert b_settings.json()["llm_settings"]["small_model"] == "llama3.2"
+
 
 
 

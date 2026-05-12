@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { configState } from '@/store/config'
 import { authState } from '@/store/auth'
 import { usePortalData } from '@/composables/usePortalData'
 import { usePortalSectionRouting } from '@/composables/usePortalSectionRouting'
@@ -17,9 +18,12 @@ import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
 import AboutModal from '@/components/portal/AboutModal.vue'
 import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
+import SetupWarningModal from '@/components/portal/SetupWarningModal.vue'
 
 const { route, router, activeSection, pushSection } = usePortalSectionRouting()
 const showAboutModal = ref(false)
+const showSetupWarningModal = ref(false)
+const hasCheckedSetup = ref(false)
 
 const {
   templates,
@@ -115,6 +119,31 @@ onMounted(() => {
     router.replace({ name: 'portal', query: remainingQuery })
   }
 })
+
+watch(
+  () => configState.isLoaded,
+  (loaded) => {
+    if (loaded && !hasCheckedSetup.value) {
+      const isDismissed = localStorage.getItem('taleweaver_setup_warning_dismissed') === 'true'
+      const needsLlm = !configState.hasLlmConfig
+      const needsT2i = !configState.hasT2iConfig
+
+      // Show if critical (LLM) missing OR if T2i missing and not dismissed
+      if (needsLlm || (needsT2i && !isDismissed)) {
+        showSetupWarningModal.value = true
+      }
+      hasCheckedSetup.value = true
+    }
+  },
+  { immediate: true }
+)
+
+function dismissSetupWarning() {
+  showSetupWarningModal.value = false
+  if (configState.hasLlmConfig) {
+    localStorage.setItem('taleweaver_setup_warning_dismissed', 'true')
+  }
+}
 
 watch(
   () => authState.token,
@@ -254,6 +283,11 @@ onUnmounted(() => {
         :is-importing="isImporting"
         @close="closeConflictModal"
         @confirm="confirmConflictOverwrite"
+      />
+
+      <SetupWarningModal
+        :isOpen="showSetupWarningModal"
+        @close="dismissSetupWarning"
       />
     </Teleport>
 

@@ -8,7 +8,7 @@ defineProps<{
 </script>
 
 <template>
-  <div v-if="configState.isLoaded && (!configState.hasLlmConfig || !configState.hasT2iConfig) && activeSection !== 'profile'" 
+  <div v-if="configState.isLoaded && !configState.hasLlmConfig && activeSection !== 'profile'" 
        class="mb-8 p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col md:flex-row items-center justify-between gap-6 animate-pulse-subtle shadow-xl shadow-amber-500/5">
     <div class="flex items-center gap-5">
       <div class="w-14 h-14 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500 text-2xl shadow-lg shadow-amber-500/10">
@@ -19,15 +19,8 @@ defineProps<{
           Configuration Required
         </h3>
         <p class="text-slate-400 text-sm max-w-xl">
-          <template v-if="!configState.hasLlmConfig">
-            <span class="text-amber-400 font-bold">Intelligence is not configured!</span>
-            This is mandatory to generate or play adventures.
-          </template>
-          <template v-else-if="!configState.hasT2iConfig">
-            <span class="text-amber-400/80 font-bold">Intelligence is set, but Visuals are still missing.</span>
-            Image generation will not work until configured (optional).
-          </template>
-          <br />
+          <span class="text-amber-400 font-bold">Intelligence is not configured!</span>
+          This is mandatory to generate or play adventures.
           Please configure your AI providers in the administration settings to unlock the full experience.
         </p>
       </div>
