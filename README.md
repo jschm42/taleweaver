@@ -54,7 +54,7 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Loot & Inventory System:** Dedicated isolated inventory system with specific equipment slots (Head, Chest, Rings, etc.)[cite: 1].
 
 ### 🎧 The Playable Audiobook (Cinematic Audio)
-* **Next-Gen Voice Acting:** Powered by **Google Gemini 1.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth.
+* **Next-Gen Voice Acting:** Powered by **Google Gemini 3.1 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth.
 * **Director's Cut:** The engine automatically parses vocal tags and director notes to build dramatic tension[cite: 1]. It is not just reading text; it is performing a high-budget audio drama.
 
 ### 🗺️ Visuals & Sensory Immersion
