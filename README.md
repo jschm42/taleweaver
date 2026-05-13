@@ -100,7 +100,7 @@ To get started with your first adventure, follow these simple steps:
 4.  **Begin Journey**: Select your adventure and click **Begin Journey** to start playing! (Your hero's stats and appearance are automatically initialized from the adventure's protagonist definition).
 
 > [!TIP]
-> You can find several pre-made test adventures in the `/adventures` directory of this repository. Use the **Import** button in the **Library** to load them and start playing immediately!
+> You can find several pre-made test adventures in the `/adventures` directory of this repository. For even more content, check out our **[Community Adventure Repository](https://github.com/jschm42/taleweaver-adventures)**! Use the **Import** button in the **Library** to load them and start playing immediately!
 
 ## 🧠 LLM Recommendations
 
@@ -338,6 +338,12 @@ The backend monitors three specific directories relative to the project root:
 * The portal import action accepts both `.adv` and `.adz`:
 	* Use `.adv` when you only need the blueprint JSON.
 	* Use `.adz` when you also want to include packaged assets.
+
+### 🌍 Community Adventures
+Looking for more worlds to explore? We maintain a dedicated repository for community-created and curated adventure blueprints:
+👉 **[taleweaver-adventures](https://github.com/jschm42/taleweaver-adventures)**
+
+You can download `.adv` or `.adz` files from there and import them into your local TaleWeaver instance to start your journey instantly.
 
 ## 7. Credits & Assets
 
