@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # TaleWeaver Setup Script (Bash)
 # This script sets up the Python environment, database, and frontend dependencies.
 
@@ -41,7 +41,6 @@ fi
 
 # 4. Security Keys
 mkdir -p data
-ENV_CONTENT=$(cat .env)
 
 # Determine python command
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
@@ -50,28 +49,38 @@ else
     PYTHON_CMD="./venv/bin/python3"
 fi
 
+# Helper: set or append a key=value pair in .env
+# Usage: set_env_key KEY VALUE
+set_env_key() {
+    local key="$1"
+    local value="$2"
+    if grep -q "^${key}=" .env; then
+        # Key line exists – replace it (macOS needs empty string after -i)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s|^${key}=.*|${key}=${value}|" .env
+        else
+            sed -i "s|^${key}=.*|${key}=${value}|" .env
+        fi
+    else
+        # Key line missing entirely – append it
+        echo "${key}=${value}" >> .env
+    fi
+}
+
 # ENCRYPTION_KEY
-if ! echo "$ENV_CONTENT" | grep -qE "ENCRYPTION_KEY=[a-zA-Z0-9\-_]{20,}"; then
+if ! grep -qE "^ENCRYPTION_KEY=[a-zA-Z0-9+/=_-]{20,}" .env; then
     echo "[*] Generating ENCRYPTION_KEY..."
     KEY=$($PYTHON_CMD -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$KEY/" .env
-    else
-        sed -i "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$KEY/" .env
-    fi
-    echo "[+] ENCRYPTION_KEY added to .env"
+    set_env_key "ENCRYPTION_KEY" "$KEY"
+    echo "[+] ENCRYPTION_KEY written to .env"
 fi
 
 # SECRET_KEY
-if ! echo "$ENV_CONTENT" | grep -qE "SECRET_KEY=[a-fA-F0-9]{64}"; then
+if ! grep -qE "^SECRET_KEY=[a-fA-F0-9]{64}" .env; then
     echo "[*] Generating SECRET_KEY..."
     SKEY=$($PYTHON_CMD -c "import secrets; print(secrets.token_hex(32))")
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/SECRET_KEY=.*/SECRET_KEY=$SKEY/" .env
-    else
-        sed -i "s/SECRET_KEY=.*/SECRET_KEY=$SKEY/" .env
-    fi
-    echo "[+] SECRET_KEY added to .env"
+    set_env_key "SECRET_KEY" "$SKEY"
+    echo "[+] SECRET_KEY written to .env"
 fi
 
 # 5. Database Setup (Migrations)
