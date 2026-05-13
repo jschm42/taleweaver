@@ -97,11 +97,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Security: Allowed hosts (prevent Host Header Injection)
-# In production, this should be set to the actual domain
+# Security: Allowed hosts
+# Configured via ALLOWED_HOSTS in .env (default: "*" = allow all).
+# When running behind nginx (Docker), nginx is the security boundary.
+# For a public non-proxied deployment, set ALLOWED_HOSTS=yourdomain.com
 app.add_middleware(
-    TrustedHostMiddleware, 
-    allowed_hosts=["localhost", "127.0.0.1", "*.localhost", "0.0.0.0", "test", "testserver"]
+    TrustedHostMiddleware,
+    allowed_hosts=settings.allowed_hosts_list
 )
 
 # Performance: Gzip compression

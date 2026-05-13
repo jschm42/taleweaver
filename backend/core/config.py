@@ -55,7 +55,18 @@ class Settings(BaseSettings):
     FRONTEND_PORT: int = 5173
     LOG_LEVEL: str = "INFO"
     
-    # Storage configuration
+    # Comma-separated list of allowed host headers.
+    # Default "*" works for local dev and Docker-behind-nginx deployments.
+    # In a public non-proxied deployment set this to your actual domain,
+    # e.g. ALLOWED_HOSTS=myserver.example.com
+    ALLOWED_HOSTS: str = "*"
+
+    @property
+    def allowed_hosts_list(self) -> list[str]:
+        """Return ALLOWED_HOSTS as a list, splitting on commas."""
+        return [h.strip() for h in self.ALLOWED_HOSTS.split(",") if h.strip()]
+
+
     DATA_DIR: str = "data"
     
     VISUAL_TIMEOUT: int = 300
