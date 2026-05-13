@@ -28,6 +28,8 @@ COPY backend/ ./backend/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 COPY version.json .
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
 # Copy adventures (for automatic import)
 COPY adventures/ ./adventures/
@@ -42,5 +44,5 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 ENV DATA_DIR=data
 
-# Start application
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run migrations then start the application
+ENTRYPOINT ["./entrypoint.sh"]
