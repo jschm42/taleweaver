@@ -35,25 +35,38 @@ if (-not (Test-Path "data")) {
     New-Item -ItemType Directory -Path "data" | Out-Null
 }
 
+# Helper: set or append a key=value pair in .env
+# If the key line already exists it is replaced, otherwise appended.
+function Set-EnvKey {
+    param([string]$Key, [string]$Value)
+    $content = Get-Content ".env" -Raw
+    if ($content -match "(?m)^${Key}=") {
+        $content = $content -replace "(?m)^${Key}=.*", "${Key}=${Value}"
+    } else {
+        $content = $content.TrimEnd() + "`r`n${Key}=${Value}`r`n"
+    }
+    Set-Content ".env" $content -NoNewline
+}
+
 $envFile = Get-Content ".env" -Raw
 
 # ENCRYPTION_KEY
-if ($envFile -notmatch "ENCRYPTION_KEY=[a-zA-Z0-9\-_]{20,}") {
+if ($envFile -notmatch "(?m)^ENCRYPTION_KEY=[a-zA-Z0-9+/=_-]{20,}") {
     Write-Host "[*] Generating ENCRYPTION_KEY..." -ForegroundColor Yellow
     $key = .\venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-    $envFile = $envFile -replace "ENCRYPTION_KEY=.*", "ENCRYPTION_KEY=$key"
-    Write-Host "[+] ENCRYPTION_KEY added to .env" -ForegroundColor Green
+    Set-EnvKey "ENCRYPTION_KEY" $key
+    Write-Host "[+] ENCRYPTION_KEY written to .env" -ForegroundColor Green
 }
 
 # SECRET_KEY
-if ($envFile -notmatch "SECRET_KEY=[a-fA-F0-9]{64}") {
+$envFile = Get-Content ".env" -Raw
+if ($envFile -notmatch "(?m)^SECRET_KEY=[a-fA-F0-9]{64}") {
     Write-Host "[*] Generating SECRET_KEY..." -ForegroundColor Yellow
     $skey = .\venv\Scripts\python.exe -c "import secrets; print(secrets.token_hex(32))"
-    $envFile = $envFile -replace "SECRET_KEY=.*", "SECRET_KEY=$skey"
-    Write-Host "[+] SECRET_KEY added to .env" -ForegroundColor Green
+    Set-EnvKey "SECRET_KEY" $skey
+    Write-Host "[+] SECRET_KEY written to .env" -ForegroundColor Green
 }
 
-Set-Content ".env" $envFile
 
 # 5. Database Setup (Migrations)
 Write-Host "[*] Running database migrations..." -ForegroundColor Yellow
