@@ -3,8 +3,9 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Optional, Union
 
-from sqlalchemy import select
+from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.core.config import settings
 from backend.engine.map_engine import MapEngine
@@ -12,7 +13,7 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
-from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,9 @@ class AdventureLogic:
         }
 
     @staticmethod
-    def extract_manifest_snapshot(state: SessionState) -> dict[str, Any]:
+    def extract_manifest_snapshot(state: Optional[SessionState]) -> dict[str, Any]:
+        if not state:
+            return {}
         raw = state.entity_states or {}
         if not isinstance(raw, dict):
             return {}
@@ -110,7 +113,9 @@ class AdventureLogic:
         return int((completed / total) * 100)
 
     @staticmethod
-    def extract_asset_snapshot(state: SessionState) -> dict[str, Any]:
+    def extract_asset_snapshot(state: Optional[SessionState]) -> dict[str, Any]:
+        if not state:
+            return {}
         raw = state.entity_states or {}
         if not isinstance(raw, dict):
             return {}
@@ -118,7 +123,9 @@ class AdventureLogic:
         return snap if isinstance(snap, dict) else {}
 
     @staticmethod
-    def get_combat_snapshot(state: SessionState) -> dict[str, Optional[Any]]:
+    def get_combat_snapshot(state: Optional[SessionState]) -> dict[str, Optional[Any]]:
+        if not state:
+            return None
         raw = state.entity_states or {}
         if not isinstance(raw, dict):
             return None
@@ -128,7 +135,9 @@ class AdventureLogic:
         return combat
 
     @staticmethod
-    def resolve_session_asset(state: SessionState, key: str, fallback: Optional[str] = None) -> Optional[str]:
+    def resolve_session_asset(state: Optional[SessionState], key: str, fallback: Optional[str] = None) -> Optional[str]:
+        if not state:
+            return fallback
         snapshot = AdventureLogic.extract_asset_snapshot(state)
         value = snapshot.get(key)
         return value if isinstance(value, str) and value else fallback
@@ -138,10 +147,6 @@ class AdventureLogic:
         """Returns a usable ISO datetime string. Prioritizes session-specific state over manifest."""
         if state and state.start_datetime:
             return state.start_datetime
-        
-        # If relative time system is used, we don't necessarily need a start_datetime, 
-        # but for backward compatibility and internal logic, we might still want a base.
-        # However, if it's explicitly relative, we might return None or a dummy.
         
         target_manifest = manifest
         if not target_manifest:
@@ -153,11 +158,9 @@ class AdventureLogic:
         start_date = manifest.get("start_date")
         start_time = manifest.get("start_time")
         if not (isinstance(start_date, str) and start_date.strip() and isinstance(start_time, str) and start_time.strip()):
-            # Check for year override in time_config
             time_config = target_manifest.get("time_config") or {}
             year_override = time_config.get("start_year_override")
             if year_override:
-                # If we have a year override but no full date, we can construct a default date with that year
                 try:
                     dt = datetime(year=int(year_override), month=1, day=1, hour=8, minute=0)
                     return dt.isoformat()
@@ -173,7 +176,6 @@ class AdventureLogic:
     @staticmethod
     async def resolve_session_state(db: AsyncSession, session_or_template_id: str, user_id: Optional[str] = None) -> Optional[SessionState]:
         """Resolve a session state by session id first, then by template/adventure id."""
-        from sqlalchemy.orm import selectinload
         direct_res = await db.execute(
             select(SessionState)
             .options(selectinload(SessionState.session))
@@ -298,11 +300,8 @@ class AdventureLogic:
                 else:
                     continue
             item_copy = dict(item)
-            
-            # On-the-fly slot fixup for old data
             if not item_copy.get("slot"):
                 item_copy["slot"] = get_item_slot(item_copy.get("name", ""), item_copy.get("item_type", "PICKABLE"))
-                
             item_id = item_copy.get("id")
             if item_id in img_map and not item_copy.get("image_url"):
                 item_copy["image_url"] = img_map[item_id]
@@ -318,11 +317,8 @@ class AdventureLogic:
                         synced_equipment[slot] = item
                         continue
                 item_copy = dict(item)
-                
-                # On-the-fly slot fixup
                 if not item_copy.get("slot"):
                     item_copy["slot"] = get_item_slot(item_copy.get("name", ""), item_copy.get("item_type", "PICKABLE"))
-                
                 item_id = item_copy.get("id")
                 if item_id in img_map and not item_copy.get("image_url"):
                     item_copy["image_url"] = img_map[item_id]
@@ -332,8 +328,6 @@ class AdventureLogic:
                 
         scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.session_id == state.session_id))
         current_scene = scene_res.scalars().first()
-        
-        # Fallback to template if session snapshot not found (e.g. legacy session)
         if not current_scene:
             scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
             current_scene = scene_res.scalars().first()
@@ -341,7 +335,6 @@ class AdventureLogic:
         from backend.engine.stat_aggregator import calculate_total_stats
         total_stats = calculate_total_stats(avatar)
         
-        # Build base snapshot
         snapshot = {
             "name": avatar.name,
             "role": avatar.role,
@@ -353,7 +346,6 @@ class AdventureLogic:
             "max_stamina": avatar.max_stamina,
             "mana": avatar.mana,
             "max_mana": avatar.max_mana,
-            # Core Stats (calculated totals)
             "strength": total_stats.get("strength", avatar.strength),
             "dexterity": total_stats.get("dexterity", avatar.dexterity),
             "intelligence": total_stats.get("intelligence", avatar.intelligence),
@@ -379,7 +371,6 @@ class AdventureLogic:
             "is_debug_enabled": bool(state.is_debug_enabled),
             "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED)
         }
-        
         return snapshot
 
     @staticmethod
@@ -403,17 +394,14 @@ class AdventureLogic:
     @staticmethod
     async def delete_adventure(db: AsyncSession, template_id: str):
         """
-        Deletes an adventure template and all associated records explicitly.
-        Order is important to avoid FK violations.
-        Also cleans up physical assets.
+        Deletes an adventure template and all associated content.
+        Decouples game sessions so they remain playable.
         """
-        from sqlalchemy import delete, update
-
         from backend.engine.media_engine import MediaEngine
-        from backend.models.avatar import Avatar
-        from backend.models.game_session import GameSession
-        from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
-        from backend.models.world_map import WorldMap
+        
+        # Check for sessions BEFORE we do anything
+        session_count_res = await db.execute(select(GameSession.id).where(GameSession.template_id == template_id).limit(1))
+        has_sessions = session_count_res.scalars().first() is not None
 
         # 1. Preserve session playability by detaching session-owned rows from template refs.
         session_avatar_query = select(GameSession.avatar_id).where(GameSession.template_id == template_id)
@@ -425,15 +413,24 @@ class AdventureLogic:
                 .values(template_id=None)
             )
 
-        try:
-            await db.execute(
-                update(WorldMap)
-                .where(WorldMap.template_id == template_id, WorldMap.session_id.is_not(None))
-                .values(template_id=None)
-            )
-        except Exception:
-            # Legacy DBs may still enforce NOT NULL on world_maps.template_id.
-            await db.execute(delete(WorldMap).where(WorldMap.template_id == template_id, WorldMap.session_id.is_not(None)))
+        # Detach sessions and session states
+        await db.execute(
+            update(GameSession)
+            .where(GameSession.template_id == template_id)
+            .values(template_id=None)
+        )
+        await db.execute(
+            update(SessionState)
+            .where(SessionState.template_id == template_id)
+            .values(template_id=None)
+        )
+
+        # Detach session maps
+        await db.execute(
+            update(WorldMap)
+            .where(WorldMap.template_id == template_id, WorldMap.session_id.is_not(None))
+            .values(template_id=None)
+        )
 
         # 2. Delete only template-owned avatars that are not used by any session.
         await db.execute(
@@ -453,7 +450,9 @@ class AdventureLogic:
         await db.execute(delete(AdventureTemplate).where(AdventureTemplate.id == template_id))
         
         await db.commit()
-
-        # 5. Cleanup Files
-        await MediaEngine.cleanup_adventure_assets(template_id)
-
+        
+        # 5. Cleanup Files (ONLY if no sessions exist for this template)
+        if not has_sessions:
+            await MediaEngine.cleanup_adventure_assets(template_id)
+        else:
+            logger.info("Skipping asset cleanup for adventure %s because sessions exist.", template_id)

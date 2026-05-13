@@ -111,7 +111,7 @@ async def list_sessions(
     """Returns all game sessions for the current user."""
     result = await db.execute(
         select(GameSession, SessionState, AdventureTemplate, WorldScene.label, Avatar.profile_image)
-        .join(SessionState, SessionState.session_id == GameSession.id)
+        .outerjoin(SessionState, SessionState.session_id == GameSession.id)
         .outerjoin(AdventureTemplate, GameSession.template_id == AdventureTemplate.id)
         .outerjoin(Avatar, Avatar.id == SessionState.avatar_id)
         .outerjoin(
@@ -131,8 +131,9 @@ async def list_sessions(
             adventure_title=a.title if a else (g.adventure_title or "Unknown"),
             adventure_version=a.version if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("version"),
             image_url=AdventureLogic.resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
-            scene_id=s.current_scene_id, current_scene_name=scene_label or "Exploring...",
-            in_game_time=s.in_game_time,
+            scene_id=s.current_scene_id if s else "START", 
+            current_scene_name=scene_label or ("Exploring..." if s else "Archived"),
+            in_game_time=s.in_game_time if s else 0,
             is_ready=a.is_ready if a else True, creation_status=a.creation_status if a else "Ready",
             creation_error=a.creation_error if a else None, selected_tone=a.selected_tone if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("selected_tone"),
             progress=AdventureLogic.calculate_quest_progress(s.quests if s else (a.quests if a else None)),

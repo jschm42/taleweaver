@@ -390,3 +390,20 @@ IMAGE_PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE = (
     "Asset Description: {description}\n\n"
     "Please generate a detailed, safe, and atmospheric image generation prompt for this asset."
 )
+
+# --- Trait Generation ---
+
+TRAIT_GENERATION_SYSTEM_PROMPT = (
+    "You are a creative character designer for RPGs. Your goal is to generate "
+    "concise and evocative 'Goal/Motivation' and 'Character/Traits' based on a character's description.\n\n"
+    "JSON STRUCTURE:\n"
+    "Respond with a single JSON object containing:\n"
+    "- 'goal': A short string describing what drives the character (max 200 chars).\n"
+    "- 'character': A short string describing personality and behavior (max 200 chars)."
+)
+
+TRAIT_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Character Name: {name}\n"
+    "Biography/Description: {description}\n"
+    "Adventure Theme: {adventure_theme}\n"
+)

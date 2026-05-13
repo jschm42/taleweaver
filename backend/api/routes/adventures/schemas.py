@@ -255,3 +255,15 @@ class AdventureTemplateUpdate(BaseModel):
     gameover_condition: Optional[str] = None
     tts_director_notes: Optional[str] = None
 
+
+class TraitGenerationRequest(BaseModel):
+    target_type: Literal["npc", "protagonist"]
+    name: str
+    description: str
+    adventure_theme: Optional[str] = None
+    target_field: Optional[Literal["goal", "character"]] = None
+
+class TraitGenerationResponse(BaseModel):
+    goal: str
+    character: str
+
