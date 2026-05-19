@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Optional, Union
 
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -141,6 +141,21 @@ class AdventureLogic:
         snapshot = AdventureLogic.extract_asset_snapshot(state)
         value = snapshot.get(key)
         return value if isinstance(value, str) and value else fallback
+
+    @staticmethod
+    async def resolve_scene_image(db: AsyncSession, state: SessionState, scene_id: str) -> Optional[str]:
+        """Resolves the image for a scene, prioritizing session overrides then template defaults."""
+        # 1. Try session override (e.g. generated image)
+        img = AdventureLogic.resolve_session_asset(state, scene_id)
+        if img:
+            return img
+            
+        # 2. Try WorldScene table (template default)
+        res = await db.execute(select(WorldScene.image_url).where(
+            WorldScene.id == scene_id,
+            or_(WorldScene.session_id == state.session_id, WorldScene.template_id == state.template_id)
+        ))
+        return res.scalars().first()
 
     @staticmethod
     def resolve_start_datetime(manifest: dict[str, Optional[Any]], state: Optional[SessionState] = None) -> Optional[str]:
@@ -389,6 +404,27 @@ class AdventureLogic:
                 "description": s.description,
                 "image_url": s.image_url
             }
+        return metadata
+
+    @staticmethod
+    async def get_npc_metadata(db: AsyncSession, template_id: Optional[str], session_id: Optional[str] = None) -> dict:
+        if session_id:
+            npc_query = select(WorldEntity).where(WorldEntity.session_id == session_id, WorldEntity.entity_type.in_(["NPC", "npc"]))
+        elif template_id:
+            npc_query = select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type.in_(["NPC", "npc"]))
+        else:
+            return {}
+        npc_res = await db.execute(npc_query)
+        metadata = {}
+        for npc in npc_res.scalars().all():
+            data = {
+                "name": npc.name,
+                "description": npc.description,
+                "image_url": npc.image_url,
+                "voice": npc.voice,
+                "entity_type": "NPC",
+            }
+            metadata[npc.id] = data
         return metadata
 
     @staticmethod

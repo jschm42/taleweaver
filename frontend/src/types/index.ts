@@ -234,7 +234,7 @@ export type WsIncoming =
   | { role: 'assistant' | 'system'; content: string }
   | { type: 'sheet_update'; data: CharacterSheet }
   | { type: 'game_over'; reason: string }
-  | { type: 'map_update'; mermaid?: string; map_data?: WorldMapData }
+  | { type: 'map_update'; map_data?: WorldMapData }
   | { type: 'image_update'; url: string }
 
 export interface Award {

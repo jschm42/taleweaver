@@ -1,12 +1,12 @@
 from __future__ import annotations
 from typing import Optional, Union
 """
-MapEngine — manages the scene graph and converts it to Mermaid.js notation.
+MapEngine — manages the scene graph.
 
 Responsibilities:
   * register_visit  — Upsert the current scene node (idempotent).
   * register_exit   — Add a directed edge between two scenes (deduplicates).
-  * to_mermaid      — Serialise the graph in Mermaid flowchart syntax O(V+E).
+  * augment_map_data — Add adjacent unvisited scenes as placeholders.
 """
 
 import logging
@@ -20,7 +20,7 @@ class MapEngine:
     @staticmethod
     def _safe_id(raw: str) -> str:
         """
-        Convert an arbitrary scene_id string to a Mermaid-safe node identifier.
+        Convert an arbitrary scene_id string to a safe node identifier.
         Replaces spaces and hyphens with underscores; strips other specials.
         """
         return "".join(c if (c.isalnum() or c == "_") else "_" for c in raw.replace("-", "_")).upper()
@@ -47,7 +47,7 @@ class MapEngine:
         # Reassign to a new dict so SQLAlchemy detects the mutation.
         nodes: dict = dict(world_map.nodes or {})
         
-        # Use safe ID for keys to ensure consistency with Mermaid diagram IDs
+        # Use safe ID for keys to ensure consistency
         sid = MapEngine._safe_id(scene_id)
 
         if sid not in nodes:
@@ -121,70 +121,61 @@ class MapEngine:
         flag_modified(world_map, "edges")
 
     @staticmethod
-    def to_mermaid(world_map, direction: str = "LR") -> str:
+    def augment_map_data(map_dict: dict, exits: list, current_scene_id: str) -> dict:
         """
-        Serializes the WorldMap into a Mermaid.js flowchart string.
-        """
-        if not world_map or not world_map.nodes:
-            return ""
-
-        nodes = world_map.nodes
-        edges = world_map.edges or []
-        current = world_map.current_scene_id
-
-        lines: list[str] = [f"flowchart {direction}"]
+        Adds adjacent unvisited scenes as placeholder nodes to the map dictionary.
         
-        # Track IDs to ensure they are added to the graph even if they have no edges
-        all_scene_ids = set(nodes.keys())
-        for edge in edges:
-            all_scene_ids.add(MapEngine._safe_id(edge["from"]))
-            all_scene_ids.add(MapEngine._safe_id(edge["to"]))
+        Args:
+            map_dict: The serialized map dictionary (nodes, edges, current_scene_id).
+            exits: List of WorldExit objects for the current session/template.
+            current_scene_id: The raw ID of the current scene.
+        """
+        if not current_scene_id:
+            return map_dict
 
-        # 1. Add Nodes with styles
-        for scene_id in sorted(all_scene_ids):
-            node_data = nodes.get(scene_id, {})
-            label = node_data.get("label", scene_id)
-            safe_id = MapEngine._safe_id(scene_id)
-            
-            if scene_id == current:
-                lines.append(f'  {safe_id}["{label} 📍"]:::current')
-            else:
-                lines.append(f'  {safe_id}["{label}"]:::visited')
-
-        # 2. Add Edges (Connections)
-        locked_indices = []
-        for idx, edge in enumerate(edges):
-            src_raw = edge["from"]
-            dst_raw = edge["to"]
-            src = MapEngine._safe_id(src_raw)
-            dst = MapEngine._safe_id(dst_raw)
-            
-            # Skip self-loops in rendering
-            if src == dst:
+        nodes = map_dict.get("nodes", {})
+        edges = map_dict.get("edges", [])
+        
+        # Find all exits starting from the current scene
+        # We need to handle both raw IDs and safe IDs if they differ
+        current_safe_id = MapEngine._safe_id(current_scene_id)
+        
+        for ex in exits:
+            # Check if this exit starts from our current scene
+            # We compare raw IDs because WorldExit stores raw IDs
+            if ex.from_scene_id != current_scene_id:
                 continue
-
-            is_locked = edge.get("is_locked", False)
+                
+            target_raw_id = ex.to_scene_id
+            target_safe_id = MapEngine._safe_id(target_raw_id)
             
-            lbl = edge.get("label", "").replace('"', "'")
-            if is_locked:
-                lbl = f"🔒 {lbl}".strip()
-                locked_indices.append(idx)
-                # Dotted line for locked passages
-                connection = "-.->"
-            else:
-                connection = "-->"
+            # If the target node is not yet in our visited nodes, add it as unknown
+            if target_safe_id not in nodes:
+                nodes[target_safe_id] = {
+                    "id": target_raw_id,
+                    "label": "?",
+                    "description": "An unexplored area...",
+                    "is_unknown": True
+                }
+                
+                # Also add the edge if it doesn't exist in the map_dict yet
+                edge_exists = any(
+                    MapEngine._safe_id(e["from"]) == current_safe_id and 
+                    MapEngine._safe_id(e["to"]) == target_safe_id 
+                    for e in edges
+                )
+                
+                if not edge_exists:
+                    edges.append({
+                        "from": current_scene_id,
+                        "to": target_raw_id,
+                        "label": ex.label or "",
+                        "is_locked": ex.is_locked
+                    })
 
-            if lbl:
-                lines.append(f'  {src} {connection}|"{lbl}"| {dst}')
-            else:
-                lines.append(f"  {src} {connection} {dst}")
-
-        # Mermaid classDef tags to be styled in the frontend/themeCSS.
-        lines.append("  classDef current stroke-width:4px;")
-        lines.append("  classDef visited opacity:1.0;")
-        lines.append("  classDef unvisited stroke-dasharray: 2 2;")
-
-        return "\n".join(lines)
+        map_dict["nodes"] = nodes
+        map_dict["edges"] = edges
+        return map_dict
 
     @staticmethod
     def to_dict(world_map) -> dict:
@@ -199,13 +190,3 @@ class MapEngine:
             "edges": world_map.edges or [],
             "current_scene_id": world_map.current_scene_id
         }
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def _safe_id(raw: str) -> str:
-    """
-    Convert an arbitrary scene_id string to a Mermaid-safe node identifier.
-    Replaces spaces and hyphens with underscores; strips other specials.
-    """
-    return "".join(c if (c.isalnum() or c == "_") else "_" for c in raw.replace("-", "_"))

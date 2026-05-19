@@ -5,7 +5,7 @@ Nodes  = Scenes the player has visited (keyed by scene_id string).
 Edges  = Directed exits between scenes.
 
 Stored as two JSON columns so the graph can be traversed and serialised
-to Mermaid.js notation in O(V + E) time.
+to raw JSON for the frontend.
 """
 import uuid6
 

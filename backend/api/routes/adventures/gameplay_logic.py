@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -48,6 +48,7 @@ from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.user import User
+from backend.models.world_map import WorldMap
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
@@ -688,11 +689,9 @@ class GameTurnManager:
         async for chunk in self._run_llm_cycle(instruction, self.avatar):
             yield chunk
 
-        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
+        map_payload = await self._build_map_payload()
         final_data = jsonable_encoder({
-            'mermaid': MapEngine.to_mermaid(world_map),
-            'map_data': MapEngine.to_dict(world_map),
-            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id, session_id=self.game_id),
+            **map_payload,
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'awards': self.adventure.awards,
@@ -705,11 +704,9 @@ class GameTurnManager:
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
-            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
+            map_payload = await self._build_map_payload()
             final_data = jsonable_encoder({
-                'mermaid': MapEngine.to_mermaid(world_map) if world_map else None,
-                'map_data': MapEngine.to_dict(world_map) if world_map else None,
-                'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id, session_id=self.game_id),
+                **map_payload,
                 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
                 **self._build_terminal_flags_payload(),
             })
@@ -904,14 +901,12 @@ class GameTurnManager:
         if combat_snap and not combat_snap.get("active") and not combat_snap.get("loot_pending") and not combat_snap.get("outcome"):
             combat_snap = None
 
-        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
+        map_payload = await self._build_map_payload()
         final_data = jsonable_encoder({
-            'mermaid': MapEngine.to_mermaid(world_map),
-            'map_data': MapEngine.to_dict(world_map),
+            **map_payload,
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': combat_snap,
-            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id, session_id=self.game_id),
             **self._build_terminal_flags_payload(),
             'status_note': status_note or (self.state.session.status_note if self.state.session else None),
             'status': 'success'
@@ -2540,7 +2535,16 @@ class GameTurnManager:
                         match = next((e for e in all_entities if e.id == eid), None)
                     if match:
                         ent_name = match.name
-                    target_label = scene_map.get(move.to_scene_id, move.to_scene_id)
+                    target_label = move.to_scene_id
+                    scene_res = await self.db.execute(
+                        select(WorldScene).where(
+                            WorldScene.id == move.to_scene_id,
+                            WorldScene.session_id == self.game_id
+                        )
+                    )
+                    scene_obj = scene_res.scalars().first()
+                    if scene_obj:
+                        target_label = scene_obj.label
                     msg = f"{ent_name} moved to {target_label}."
                     self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
@@ -2600,18 +2604,80 @@ class GameTurnManager:
 
         await self.db.commit()
         
-        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
+        map_payload = await self._build_map_payload()
+        
+        # Fetch adventure for cover image fallback
+        adv_res = await self.db.execute(select(AdventureTemplate).where(AdventureTemplate.id == self.state.template_id))
+        adventure = adv_res.scalars().first()
+
         final_data = jsonable_encoder({
-            'mermaid': MapEngine.to_mermaid(world_map),
-            'map_data': MapEngine.to_dict(world_map),
-            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id, session_id=self.game_id),
+            'map_data': map_payload,
+            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id, session_id=self.state.session_id),
+            'npc_metadata': await AdventureLogic.get_npc_metadata(self.db, self.state.template_id, session_id=self.state.session_id),
+            'image_url': await AdventureLogic.resolve_scene_image(self.db, self.state, self.state.current_scene_id),
+            'adventure_image': AdventureLogic.resolve_session_asset(self.state, "cover", adventure.image_url if adventure else None),
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db), 
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
+            'quests': self.state.quests,
+            'awards': await self._build_awards_payload(adventure),
             **self._build_terminal_flags_payload(),
             'status': 'success'
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+
+    async def _build_map_payload(self) -> dict:
+        """Helper to build the augmented map payload for the frontend."""
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.state.session_id)
+        if not world_map:
+            return {"nodes": {}, "edges": [], "current_scene_id": None}
+
+        map_dict = MapEngine.to_dict(world_map)
+        
+        # Augment with adjacent unvisited scenes
+        if world_map.current_scene_id:
+            # Find the raw ID for the current scene (stored in metadata)
+            current_node = world_map.nodes.get(world_map.current_scene_id)
+            raw_current_id = current_node.get("id") if current_node else None
+            
+            if raw_current_id:
+                # Fetch exits for this session or template
+                exit_query = select(WorldExit).where(
+                    or_(
+                        WorldExit.session_id == self.state.session_id,
+                        WorldExit.template_id == self.state.template_id
+                    )
+                )
+                exits_res = await self.db.execute(exit_query)
+                exits = list(exits_res.scalars().all())
+                
+                map_dict = MapEngine.augment_map_data(map_dict, exits, raw_current_id)
+
+        return map_dict
+
+    async def _build_awards_payload(self, adventure: Optional[AdventureTemplate]) -> list[dict]:
+        """Helper to build the awards payload with earned status."""
+        if not self.user_id:
+            return []
+            
+        user_res = await self.db.execute(select(User).where(User.id == self.user_id))
+        user = user_res.scalars().first()
+        if not user:
+            return []
+
+        awards_list = (adventure.awards if adventure else (AdventureLogic.extract_manifest_snapshot(self.state).get("adventure") or {}).get("awards")) or []
+        
+        return [
+            {
+                **aw,
+                "is_earned": any(
+                    ea.get("key") == aw.get("key")
+                    and ea.get("template_id") == (adventure.id if adventure else self.state.template_id)
+                    for ea in (user.earned_awards or [])
+                ),
+            }
+            for aw in awards_list
+        ]
 
     async def _apply_game_event(self, event: GameEvent) -> list[str]:
         """Applies technical mutations from a GameEvent to the database and session state. Returns messages for the UI."""

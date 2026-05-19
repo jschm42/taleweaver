@@ -9,7 +9,7 @@
  *
  * Emits: close
  */
-import { watch, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { watch, ref, nextTick, onMounted, onBeforeUnmount, computed } from 'vue'
 import rough from 'roughjs'
 import dagre from 'dagre'
 import mapSvg from '@/assets/svg/fantasy-rpg-map.svg'
@@ -45,6 +45,32 @@ const offset = ref({ x: 0, y: 0 })
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
 
+const mysteriousSayings = [
+  "The shadows here seem to whisper secrets...",
+  "A path into the unknown. Dare you enter?",
+  "Something waits in the darkness.",
+  "The air grows cold as you look this way.",
+  "A mystery yet to be solved.",
+  "Beyond this point, the map is blank.",
+  "Curiosity killed the cat, but satisfaction brought it back.",
+  "What lies ahead? Only one way to find out.",
+  "The fog of war hides many things.",
+  "A place where legends are born... or forgotten."
+]
+
+const mysteriousSaying = computed(() => {
+  if (!hoveredNode.value?.is_unknown && hoveredNode.value?.label !== '?') return ''
+  // Use the node ID as a seed for a stable random saying per node
+  const id = hoveredNode.value.id || 'unknown'
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash) + id.charCodeAt(i)
+    hash |= 0 // Convert to 32bit integer
+  }
+  const index = Math.abs(hash) % mysteriousSayings.length
+  return mysteriousSayings[index]
+})
+
 function resetView() {
   zoom.value = 1
   offset.value = { x: 0, y: 0 }
@@ -79,42 +105,26 @@ function calculateLayout() {
   const firstId = visitedIdsList[0] 
   
   const visitedIds = new Set(visitedIdsList)
-  const discoveredIds = new Set<string>()
   
   // Ensure current scene is always treated as visited/shown
   const currentId = props.mapData.current_scene_id
   if (currentId) visitedIds.add(currentId)
 
-  // Find nodes that are connected to visited nodes (discovered nodes)
-  props.mapData.edges.forEach(edge => {
-    const fromId = safeId(edge.from)
-    const toId = safeId(edge.to)
-    if (visitedIds.has(fromId) || visitedIds.has(toId)) {
-      if (visitedIds.has(fromId)) discoveredIds.add(toId)
-      if (visitedIds.has(toId)) discoveredIds.add(fromId)
-    }
-  })
-
   // 2. Add nodes to graph
-  // Show visited nodes (override template if needed)
+  // Show all nodes provided by the backend (visited + augmented unknown)
   visitedIds.forEach(id => {
-    const node = props.nodes[id] || props.mapData!.nodes[id]
+    const sessionNode = props.mapData!.nodes[id]
+    const isUnknown = !!sessionNode?.is_unknown
+    const node = isUnknown ? sessionNode : (props.nodes[id] || sessionNode)
+    
     const isStart = id === firstId
+    
     g.setNode(id, { 
-      label: node?.label || id, 
+      label: isUnknown ? '?' : (node?.label || id), 
       width: 160, 
       height: 70,
       rank: isStart ? 0 : undefined
     })
-  })
-
-  // Show discovered (but not visited) nodes
-  discoveredIds.forEach(id => {
-    if (!visitedIds.has(id)) {
-      // Try to find label in props.nodes (template metadata)
-      const metadata = props.nodes[id]
-      g.setNode(id, { label: metadata?.label || id, width: 160, height: 70 })
-    }
   })
 
   // 3. Add edges (Normalize IDs!)
@@ -215,6 +225,14 @@ async function renderMap() {
     fillStyle: 'none' as const
   }
 
+  const unknownNodeOptions = {
+    ...nodeOptions,
+    stroke: '#000000',
+    fill: '#000000',
+    fillStyle: 'solid' as const,
+    roughness: 0.5
+  }
+
   const currentNodeOptions = {
     ...nodeOptions,
     stroke: '#c9a84c',
@@ -290,20 +308,30 @@ async function renderMap() {
     nodeBounds.value[id] = { x, y, w, h }
 
     const nodeData = props.mapData?.nodes[id]
-    const isVisited = !!nodeData
-    const options = isCurrent ? currentNodeOptions : (isVisited ? nodeOptions : discoveredNodeOptions)
+    const isVisited = !!nodeData && !nodeData.is_unknown
+    const isUnknown = !!nodeData?.is_unknown
+    
+    let options = nodeOptions
+    if (isCurrent) {
+      options = currentNodeOptions
+    } else if (isUnknown) {
+      options = unknownNodeOptions
+    } else if (!isVisited) {
+      options = discoveredNodeOptions
+    }
     
     rc.rectangle(x, y, w, h, options)
 
     // Text Label
     ctx.font = isCurrent ? 'bold 15px Acme, sans-serif' : '14px Acme, sans-serif'
-    ctx.fillStyle = isVisited ? '#f5e6c8' : '#8b7a5e'
+    ctx.fillStyle = isUnknown ? '#ffffff' : (isVisited ? '#f5e6c8' : '#8b7a5e')
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    const label = isCurrent ? `${node.label} 📍` : node.label
+    
+    const label = isUnknown ? '?' : (isCurrent ? `${node.label} 📍` : node.label)
     
     const words = label.split(' ')
-    if (words.length > 3 && label.length > 20) {
+    if (words.length > 3 && label.length > 20 && !isUnknown) {
       const mid = Math.floor(words.length / 2)
       const line1 = words.slice(0, mid).join(' ')
       const line2 = words.slice(mid).join(' ')
@@ -382,8 +410,15 @@ function handleMouseMove(e: MouseEvent) {
     hoveredNodeId.value = foundNodeId
     if (foundNodeId) {
       const nodeData = props.mapData?.nodes[foundNodeId]
-      const originalId = nodeData?.id || foundNodeId
-      hoveredNode.value = props.nodes[originalId] || nodeData
+      
+      // If it's an unknown node, we MUST use the placeholder data to avoid revealing template details
+      if (nodeData?.is_unknown || nodeData?.label === '?') {
+        hoveredNode.value = { ...nodeData, is_unknown: true }
+      } else {
+        const originalId = safeId(nodeData?.id || foundNodeId)
+        hoveredNode.value = props.nodes[originalId] || nodeData
+      }
+      
       tooltipPos.value = { x: e.clientX, y: e.clientY }
     } else {
       hoveredNode.value = null
@@ -562,26 +597,40 @@ onMounted(() => {
                   :style="{ left: (tooltipPos.x + 20) + 'px', top: (tooltipPos.y - 40) + 'px' }"
                 >
                   <div class="w-72 bg-slate-900/95 border border-slate-700 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
-                    <!-- Image Area -->
-                    <div v-if="hoveredNode.image_url" class="h-40 w-full relative">
-                      <img :src="hoveredNode.image_url" class="absolute inset-0 w-full h-full object-cover" />
-                      <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
-                    </div>
-
-                    <!-- Content -->
-                    <div class="p-5 bg-slate-900">
-                      <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label || hoveredNode.id }}</span>
-                        <div class="flex gap-1.5">
-                          <span class="text-xxs px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
-                            Room
-                          </span>
-                        </div>
+                    <!-- Unknown Node Content -->
+                    <div v-if="hoveredNode.is_unknown || hoveredNode.label === '?'" class="p-8 bg-black flex flex-col items-center text-center">
+                      <div class="w-16 h-16 rounded-full border-2 border-slate-800 flex items-center justify-center mb-4 animate-pulse">
+                        <span class="text-4xl font-black text-slate-600">?</span>
                       </div>
-                      <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-4">
-                        {{ (hoveredNode.description && hoveredNode.description.trim()) ? hoveredNode.description : 'Explore closer to learn more about this area...' }}
+                      <h3 class="text-lg font-bold text-white mb-2 uppercase tracking-widest">Terra Incognita</h3>
+                      <p class="text-sm text-slate-400 italic leading-relaxed">
+                        "{{ mysteriousSaying }}"
                       </p>
                     </div>
+
+                    <!-- Known Node Content -->
+                    <template v-else>
+                      <!-- Image Area -->
+                      <div v-if="hoveredNode.image_url" class="h-40 w-full relative">
+                        <img :src="hoveredNode.image_url" class="absolute inset-0 w-full h-full object-cover" />
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+                      </div>
+
+                      <!-- Content -->
+                      <div class="p-5 bg-slate-900">
+                        <div class="flex items-center justify-between mb-2">
+                          <span class="text-sm font-bold text-white uppercase tracking-wider">{{ hoveredNode.label || hoveredNode.id }}</span>
+                          <div class="flex gap-1.5">
+                            <span class="text-xxs px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 font-mono uppercase">
+                              Room
+                            </span>
+                          </div>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-4">
+                          {{ (hoveredNode.description && hoveredNode.description.trim()) ? hoveredNode.description : 'Explore closer to learn more about this area...' }}
+                        </p>
+                      </div>
+                    </template>
                   </div>
                 </div>
               </Transition>

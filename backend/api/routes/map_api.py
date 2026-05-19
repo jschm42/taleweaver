@@ -3,7 +3,6 @@ from typing import Optional, Union
 REST endpoints for the World Map.
 
 GET  /api/adventures/{template_id}/map          — returns raw graph JSON
-GET  /api/adventures/{template_id}/map/mermaid  — returns Mermaid diagram string
 POST /api/adventures/{template_id}/map/visit    — register a scene visit (internal / debug)
 POST /api/adventures/{template_id}/map/exit     — register an exit between scenes
 """
@@ -11,7 +10,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.logic import AdventureLogic
@@ -19,6 +18,7 @@ from backend.core.database import get_db
 from backend.engine.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_map import WorldMap
+from backend.models.world_entity import WorldExit
 
 router = APIRouter(tags=["WorldMap"])
 logger = logging.getLogger(__name__)
@@ -53,25 +53,28 @@ async def get_map(template_id: str, session_id: Optional[str] = None, db: AsyncS
     if not world_map:
         return {"nodes": {}, "edges": [], "current_scene_id": None}
 
-    return MapEngine.to_dict(world_map)
+    map_dict = MapEngine.to_dict(world_map)
+    
+    # Augment with adjacent unvisited scenes
+    if world_map.current_scene_id:
+        # Find the raw ID for the current scene (stored in metadata)
+        current_node = world_map.nodes.get(world_map.current_scene_id)
+        raw_current_id = current_node.get("id") if current_node else None
+        
+        if raw_current_id:
+            # Fetch exits for this session or template
+            exit_query = select(WorldExit).where(
+                or_(
+                    WorldExit.session_id == session_id,
+                    WorldExit.template_id == template_id
+                )
+            )
+            exits_res = await db.execute(exit_query)
+            exits = list(exits_res.scalars().all())
+            
+            map_dict = MapEngine.augment_map_data(map_dict, exits, raw_current_id)
 
-
-@router.get("/adventures/{template_id}/map/mermaid")
-async def get_mermaid(template_id: str, session_id: Optional[str] = None, db: AsyncSession = Depends(get_db)) -> dict:
-    """Return the scene graph serialised as a Mermaid.js flowchart string and node metadata."""
-    world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
-    if not world_map or not world_map.nodes:
-        # Return a minimal Mermaid diagram that shows an empty state.
-        return {
-            "mermaid": 'flowchart LR\n  START["No map data yet..."]',
-            "nodes": {}
-        }
-
-    return {
-        "mermaid": MapEngine.to_mermaid(world_map),
-        "map_data": MapEngine.to_dict(world_map),
-        "nodes": world_map.nodes
-    }
+    return map_dict
 
 
 @router.post("/adventures/{template_id}/map/visit", status_code=200)

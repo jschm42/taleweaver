@@ -72,7 +72,7 @@ const currentYear = new Date().getFullYear()
               </div>
               <div class="space-y-1">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mapping</p>
-                <p class="text-[11px] text-slate-300">Mermaid.js</p>
+                <p class="text-[11px] text-slate-300">Rough.js, Dagre</p>
               </div>
               <div class="space-y-1">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Frameworks</p>

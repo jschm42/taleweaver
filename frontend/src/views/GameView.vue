@@ -61,7 +61,6 @@ const {
   gameOverReason,
   adventureImage,
   entities,
-  mermaidData,
   mapData,
   nodes,
   npcMetadata,

@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
@@ -25,7 +25,7 @@ from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.world_entity import WorldEntity, WorldScene, WorldExit
 
 router = APIRouter(tags=["Gameplay"])
 logger = logging.getLogger(__name__)
@@ -49,26 +49,6 @@ def _terminal_flags_from_state(state: SessionState) -> tuple[bool, bool]:
     input_locked = status == "game_over" and game_over_sent
     return pending_terminal_epilogue, input_locked
 
-async def _get_npc_metadata(template_id: str | None, session_id: str | None, db: AsyncSession) -> dict:
-    if session_id:
-        npc_query = select(WorldEntity).where(WorldEntity.session_id == session_id, WorldEntity.entity_type.in_(["NPC", "npc"]))
-    elif template_id:
-        npc_query = select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.entity_type.in_(["NPC", "npc"]))
-    else:
-        return {}
-    npc_res = await db.execute(npc_query)
-    metadata = {}
-    for npc in npc_res.scalars().all():
-        data = {
-            "name": npc.name,
-            "description": npc.description,
-            "image_url": npc.image_url,
-            "voice": npc.voice,
-            "entity_type": "NPC",
-        }
-        metadata[npc.id] = data
-    return metadata
-
 @router.get("/{game_id}/chat", response_model=ChatResponse)
 async def get_chat_history(
     game_id: str,
@@ -90,29 +70,37 @@ async def get_chat_history(
     history = [{"role": m.role, "content": m.content} for m in chat_res.scalars().all()]
     
     world_map = await AdventureLogic.get_or_create_map(db, state.template_id, session_id=state.session_id)
+    map_dict = MapEngine.to_dict(world_map) if world_map else None
     
+    # Augment with adjacent unvisited scenes
+    if world_map and world_map.current_scene_id:
+        current_node = world_map.nodes.get(world_map.current_scene_id)
+        raw_current_id = current_node.get("id") if current_node else None
+        
+        if raw_current_id:
+            exit_query = select(WorldExit).where(
+                or_(
+                    WorldExit.session_id == state.session_id,
+                    WorldExit.template_id == state.template_id
+                )
+            )
+            exits_res = await db.execute(exit_query)
+            exits = list(exits_res.scalars().all())
+            map_dict = MapEngine.augment_map_data(map_dict, exits, raw_current_id)
+
     entities = await AdventureLogic.build_session_entities(db, state)
     
-    scene_image = AdventureLogic.resolve_session_asset(state, state.current_scene_id)
-    if not scene_image:
-        scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.session_id == state.session_id))
-        scene = scene_res.scalars().first()
-        if not scene:
-            scene_res = await db.execute(select(WorldScene).where(WorldScene.id == state.current_scene_id, WorldScene.template_id == state.template_id))
-            scene = scene_res.scalars().first()
-        scene_image = scene.image_url if scene else None
-
+    scene_image = await AdventureLogic.resolve_scene_image(db, state, state.current_scene_id)
     pending_terminal_epilogue, input_locked = _terminal_flags_from_state(state)
 
     return ChatResponse(
         messages=history,
         sheet=await AdventureLogic.build_sheet_snapshot(avatar, state, db),
         combat=AdventureLogic.get_combat_snapshot(state),
-        mermaid=MapEngine.to_mermaid(world_map) if world_map else None,
-        map_data=MapEngine.to_dict(world_map) if world_map else None,
+        map_data=map_dict,
         nodes=await AdventureLogic.get_all_scene_metadata(db, state.template_id, session_id=state.session_id),
         entities=entities,
-        npc_metadata=await _get_npc_metadata(state.template_id, state.session_id, db),
+        npc_metadata=await AdventureLogic.get_npc_metadata(db, state.template_id, session_id=state.session_id),
         image_url=scene_image,
         adventure_image=AdventureLogic.resolve_session_asset(state, "cover", adventure.image_url if adventure else None),
         quests=state.quests,
