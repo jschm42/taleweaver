@@ -21,19 +21,20 @@ const handleBack = () => {
 </script>
 
 <template>
-  <header class="bg-transparent px-4 md:px-8 pt-8 pb-4 flex flex-col lg:flex-row items-start gap-6 z-10 shrink-0 relative min-h-[110px]">
-    <div class="flex items-center gap-4 z-10 min-w-0 xl:w-72 shrink-0">
+  <header class="bg-transparent px-4 md:px-8 pt-8 pb-4 flex flex-col lg:flex-row items-start justify-between gap-6 z-10 shrink-0 relative min-h-[110px]">
+    <div class="flex flex-col items-start gap-2 z-10 min-w-0 shrink-0 lg:w-1/4">
       <button
         @click="handleBack"
-        class="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-all duration-300 backdrop-blur-md shadow-xl group shrink-0"
+        class="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-all duration-300 backdrop-blur-md shadow-xl group shrink-0"
         title="Return to Portal"
       >
-        <i class="ra ra-back-arrow text-sm text-slate-100 group-hover:text-emerald-400 transition-colors"></i>
-        <span class="text-xxs font-black uppercase tracking-[0.2em] text-slate-100 group-hover:text-white transition-colors">Back</span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 text-slate-100 group-hover:text-emerald-400 transition-colors">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+        </svg>
       </button>
 
       <div class="flex flex-col min-w-0">
-        <h1 class="text-xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide whitespace-nowrap truncate adventure-title">
+        <h1 class="text-xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide adventure-title">
           {{ props.title || 'Chronicle' }}
         </h1>
         <div v-if="props.version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 uppercase tracking-widest mt-1">
@@ -42,11 +43,11 @@ const handleBack = () => {
       </div>
     </div>
 
-    <div class="flex-grow w-full lg:w-auto min-w-0 flex justify-center">
+    <div class="flex-grow w-full lg:w-2/4 min-w-0 flex justify-center">
       <GameQuestTracker :tracked-quest="props.trackedQuest" />
     </div>
 
-    <div class="absolute top-8 right-4 md:right-8 lg:mt-0 z-20">
+    <div class="z-20 shrink-0 lg:w-1/4 flex justify-end">
       <GameClockWidget :game-time="props.gameTime" :clock-tick="props.clockTick" />
     </div>
 

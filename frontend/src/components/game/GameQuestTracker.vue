@@ -5,7 +5,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div class="w-full mx-auto px-4">
+  <div class="w-full max-w-2xl mx-auto px-4">
     <transition name="fade">
       <div v-if="props.trackedQuest" class="animate-fade-in pointer-events-none w-full">
         <div :class="['quest-panel-header glassmorphism flex items-start gap-3 md:gap-4 px-3 py-2 md:px-5 md:py-4 rounded-xl md:rounded-2xl border border-white/5 pointer-events-auto shadow-2xl', props.trackedQuest.status === 'completed' ? 'opacity-60' : '']">

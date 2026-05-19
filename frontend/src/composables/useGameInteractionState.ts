@@ -31,19 +31,26 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
 
   const tooltipStyle = computed(() => {
     if (!hoveredEntity.value) return {}
-    const x = mousePos.value.x + 20
-    const y = mousePos.value.y
-    const threshold = window.innerHeight * 0.6
+    const TOOLTIP_WIDTH = 384 // w-96 = 24rem = 384px
+    const OFFSET = 20
+    const mx = mousePos.value.x
+    const my = mousePos.value.y
+    const threshold = window.innerHeight * 0.5
+
+    // Flip left if tooltip would overflow right edge
+    const x = mx + OFFSET + TOOLTIP_WIDTH > window.innerWidth
+      ? mx - TOOLTIP_WIDTH - OFFSET
+      : mx + OFFSET
 
     const style: Record<string, string> = {
-      left: `${x}px`,
+      left: `${Math.max(8, x)}px`,
     }
 
-    if (y > threshold) {
-      style.bottom = `${window.innerHeight - y + 10}px`
+    if (my > threshold) {
+      style.bottom = `${window.innerHeight - my + 10}px`
       style.top = 'auto'
     } else {
-      style.top = `${y + 10}px`
+      style.top = `${my + 10}px`
       style.bottom = 'auto'
     }
     return style
@@ -61,7 +68,7 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     const metadata = npcMetadata.value[name]
     if (metadata) {
       tooltipImageFailed.value = false
-      hoveredEntity.value = normalizeHoverEntity(metadata)
+      hoveredEntity.value = normalizeHoverEntity({ ...metadata, entity_type: 'NPC' })
       mousePos.value = { x: event.clientX, y: event.clientY }
     }
   }

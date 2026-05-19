@@ -158,19 +158,12 @@ const onClose = () => {
                       <p class="text-xs text-slate-300 leading-relaxed italic font-serif opacity-90 whitespace-pre-line">{{ sheet.description || 'No detailed records found.' }}</p>
                     </div>
                   </div>
-                  <div class="identity-header -mt-1.5">
+                  <div class="identity-header -mt-1.5 flex-grow">
                     <h3 class="text-xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">{{ sheet.name || 'Unnamed' }}</h3>
                     <div class="flex items-center gap-3 mt-2">
                       <div class="text-xs font-black text-amber-500 uppercase tracking-[0.4em]">{{ sheet.role || 'Adventurer' }}</div>
                       <div v-if="sheet.adventure_version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 uppercase tracking-widest pt-0.5">v{{ sheet.adventure_version }}</div>
                     </div>
-                  </div>
-
-                  <!-- Bio Block -->
-                  <div v-if="sheet.description" class="hidden lg:block flex-grow max-w-[65%] border-l border-slate-800 pl-8 -mt-1.5">
-                    <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-5 font-serif">
-                      {{ sheet.description }}
-                    </p>
                   </div>
                 </div>
 

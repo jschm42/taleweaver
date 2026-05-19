@@ -29,12 +29,14 @@ const handleImageError = () => {
         class="fixed z-[999] pointer-events-none"
         :style="props.tooltipStyle"
       >
-        <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
-          <div v-if="hasRenderableImagePath(props.hoveredEntity.image_url) && !props.tooltipImageFailed" class="h-48 w-full relative">
+        <div class="w-96 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
+
+          <!-- Image (NPC only) -->
+          <div v-if="hasRenderableImagePath(props.hoveredEntity.image_url) && !props.tooltipImageFailed" class="h-56 w-full relative shrink-0">
             <img :src="getImageUrl(props.hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" @error="handleImageError" />
-            <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent"></div>
           </div>
-          <div v-else class="h-32 w-full relative bg-slate-950 border-b border-slate-800 flex items-center justify-center">
+          <div v-else class="h-20 w-full relative bg-slate-950 border-b border-slate-800 flex items-center justify-center shrink-0">
             <i
               :class="[
                 'ra text-4xl',
@@ -44,44 +46,53 @@ const handleImageError = () => {
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.12),transparent_65%)]"></div>
           </div>
 
+          <!-- NPC: two-column layout below image -->
+          <template v-if="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC'">
+            <div class="flex gap-0 min-h-0">
+              <!-- Left: Name + Type + Stats -->
+              <div class="flex flex-col p-3 gap-2 w-[52%] shrink-0 border-r border-slate-800">
+                <div class="text-xs font-black text-white uppercase tracking-wider leading-tight">{{ props.hoveredEntity.name }}</div>
+                <div class="flex flex-col gap-1">
+                  <StatBar v-if="props.hoveredEntity.hp != null" label="HP" :value="Number(props.hoveredEntity.hp)" :max="Number(props.hoveredEntity.max_hp || 100)" color="crimson" size="sm" />
+                  <StatBar v-if="props.hoveredEntity.stamina != null" label="STA" :value="Number(props.hoveredEntity.stamina)" :max="Number(props.hoveredEntity.max_stamina || 100)" color="emerald" size="sm" />
+                  <StatBar v-if="props.hoveredEntity.mana != null && props.ruleMode === 'rpg'" label="MP" :value="Number(props.hoveredEntity.mana)" :max="Number(props.hoveredEntity.max_mana || 100)" color="sapphire" size="sm" />
+                </div>
+                <!-- Possessions -->
+                <div v-if="Array.isArray(props.hoveredEntity.inventory) && props.hoveredEntity.inventory.length > 0" class="pt-1 border-t border-slate-800">
+                  <div class="text-xxs font-black uppercase tracking-widest text-slate-500 mb-1">Items</div>
+                  <div class="flex flex-wrap gap-1">
+                    <div
+                      v-for="(item, iidx) in props.hoveredEntity.inventory.slice(0, 4)"
+                      :key="item?.id || iidx"
+                      class="px-1.5 py-0.5 rounded bg-slate-950/60 border border-slate-800 text-xxs text-slate-300 flex items-center gap-1"
+                    >
+                      <i :class="['ra text-[10px]', getItemIcon(typeof item === 'object' ? item?.item_type || 'PICKABLE' : 'PICKABLE'), 'text-amber-500/60']"></i>
+                      {{ typeof item === 'object' ? item?.name : item }}
+                    </div>
+                    <div v-if="props.hoveredEntity.inventory.length > 4" class="text-xxs text-slate-600 self-center">+{{ props.hoveredEntity.inventory.length - 4 }}</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Right: Description -->
+              <div class="p-3 flex-1 min-w-0">
+                <p class="text-[13px] text-slate-400 leading-relaxed italic line-clamp-8">{{ fixNewlines(props.hoveredEntity.description) }}</p>
+              </div>
+            </div>
+          </template>
+
+          <!-- Non-NPC: original single-column layout -->
+          <template v-else>
           <div class="p-4 bg-slate-900">
             <div class="flex items-center justify-between mb-1">
               <span class="text-sm font-bold text-white uppercase tracking-wider">{{ props.hoveredEntity.name }}</span>
               <span
                 class="text-xxs px-1.5 py-0.5 rounded border font-mono uppercase"
-                :class="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'border-cyan-500/50 text-cyan-400' : (props.hoveredEntity.entity_type?.toUpperCase() === 'SCENE' ? 'border-indigo-500/50 text-indigo-400' : 'border-amber-500/50 text-amber-400')"
+                :class="props.hoveredEntity.entity_type?.toUpperCase() === 'SCENE' ? 'border-indigo-500/50 text-indigo-400' : 'border-amber-500/50 text-amber-400'"
               >
                 {{ props.hoveredEntity.entity_type || 'OBJECT' }}
               </span>
             </div>
-            <p class="text-xs text-slate-400 leading-relaxed italic mb-3 whitespace-pre-wrap">{{ fixNewlines(props.hoveredEntity.description) }}</p>
-
-            <div v-if="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' && props.ruleMode !== 'chat'" class="flex flex-col gap-1 mt-3 pt-3 border-t border-slate-800">
-              <StatBar v-if="props.hoveredEntity.hp != null" label="Health" :value="Number(props.hoveredEntity.hp)" :max="Number(props.hoveredEntity.max_hp || 100)" color="crimson" size="sm" />
-              <StatBar v-if="props.hoveredEntity.stamina != null" label="Stamina" :value="Number(props.hoveredEntity.stamina)" :max="Number(props.hoveredEntity.max_stamina || 100)" color="emerald" size="sm" />
-              <StatBar v-if="props.hoveredEntity.mana != null && props.ruleMode === 'rpg'" label="Mana" :value="Number(props.hoveredEntity.mana)" :max="Number(props.hoveredEntity.max_mana || 100)" color="sapphire" size="sm" />
-            </div>
-
-            <div v-if="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' && Array.isArray(props.hoveredEntity.inventory) && props.hoveredEntity.inventory.length > 0" class="mt-3 pt-3 border-t border-slate-800">
-              <div class="flex items-center gap-1.5 mb-2">
-                <i class="ra ra-treasure-chest text-xxs text-slate-500"></i>
-                <span class="text-xxs font-black uppercase tracking-widest text-slate-500">Possessions</span>
-              </div>
-              <div class="flex flex-wrap gap-1.5">
-                <div
-                  v-for="(item, iidx) in props.hoveredEntity.inventory"
-                  :key="item?.id || iidx"
-                  class="px-2 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-xxs text-slate-300 flex items-center gap-1.5"
-                >
-                  <div v-if="typeof item === 'object' && item?.image_url" class="w-4 h-4 rounded overflow-hidden shrink-0 border border-slate-700">
-                    <img :src="getImageUrl(item.image_url)" class="w-full h-full object-cover" />
-                  </div>
-                  <i v-else-if="typeof item === 'object'" :class="['ra text-[12px]', getItemIcon(item?.item_type || 'PICKABLE'), 'text-amber-500/60']"></i>
-                  <i v-else class="ra ra-emerald text-[12px] text-amber-500/60"></i>
-                  {{ typeof item === 'object' ? item?.name : item }}
-                </div>
-              </div>
-            </div>
+            <p class="text-xs text-slate-400 leading-relaxed italic mb-3 line-clamp-5">{{ fixNewlines(props.hoveredEntity.description) }}</p>
 
             <div v-if="(props.hoveredEntity.entity_type === 'OBJECT' || props.hoveredEntity.entity_type === 'ITEM') && props.ruleMode !== 'chat'" class="mt-3 pt-3 border-t border-slate-800">
               <div class="grid grid-cols-2 gap-2 text-xxs uppercase font-bold tracking-wider">
@@ -127,6 +138,8 @@ const handleImageError = () => {
               </div>
             </div>
           </div>
+          </template>
+
         </div>
       </div>
     </Transition>
