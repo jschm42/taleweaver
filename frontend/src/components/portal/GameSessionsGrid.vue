@@ -9,6 +9,7 @@ defineProps<{
 defineEmits<{
   (e: 'resume', gameId: string): void
   (e: 'delete', gameId: string, title: string): void
+  (e: 'copy', gameId: string): void
   (e: 'switch-to-templates'): void
 }>()
 </script>
@@ -37,6 +38,7 @@ defineEmits<{
         :session="entry"
         @resume="(id) => $emit('resume', id)"
         @delete="(id, title) => $emit('delete', id, title)"
+        @copy="(id) => $emit('copy', id)"
       />
     </div>
   </div>

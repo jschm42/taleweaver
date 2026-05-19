@@ -188,6 +188,7 @@ async def list_sessions(
             created_at=g.created_at,
             status=g.status,
             status_note=g.status_note,
+            copied_from_id=g.copied_from_id,
         )
         for g, s, a, scene_label, avatar_profile_image in rows
     ]
@@ -471,4 +472,212 @@ async def check_session_item_integrity(
         "issue_count": len(issues),
         "issues": issues,
     }
+
+
+@router.post("/sessions/{game_id}/copy", status_code=201)
+async def copy_session(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Creates a full duplicate/copy of an existing session."""
+    # 1. Fetch original session
+    session_res = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    original_session = session_res.scalars().first()
+    if not original_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    # 2. Fetch original avatar
+    avatar_res = await db.execute(select(Avatar).where(Avatar.id == original_session.avatar_id))
+    original_avatar = avatar_res.scalars().first()
+    if not original_avatar:
+        raise HTTPException(status_code=404, detail="Session avatar not found.")
+
+    # 3. Clone Avatar
+    cloned_avatar = Avatar(
+        user_id=current_user.id,
+        template_id=original_avatar.template_id,
+        name=original_avatar.name,
+        role=original_avatar.role,
+        description=original_avatar.description,
+        profile_image=original_avatar.profile_image,
+        hp=original_avatar.hp,
+        max_hp=original_avatar.max_hp,
+        stamina=original_avatar.stamina,
+        max_stamina=original_avatar.max_stamina,
+        mana=original_avatar.mana,
+        max_mana=original_avatar.max_mana,
+        strength=original_avatar.strength,
+        dexterity=original_avatar.dexterity,
+        intelligence=original_avatar.intelligence,
+        wisdom=original_avatar.wisdom,
+        charisma=original_avatar.charisma,
+        armor_class=original_avatar.armor_class,
+        stats=deepcopy(original_avatar.stats or {}),
+        inventory=deepcopy(original_avatar.inventory or []),
+        equipment=deepcopy(original_avatar.equipment or {}),
+        status_effects=deepcopy(original_avatar.status_effects or []),
+    )
+    db.add(cloned_avatar)
+    await db.flush()
+
+    # 4. Create cloned GameSession
+    orig_title = original_session.adventure_title or "Unknown Adventure"
+    if orig_title.startswith("Kopie von "):
+        new_title = orig_title
+    else:
+        new_title = f"Kopie von {orig_title}"
+
+    copied_session = GameSession(
+        id=generate_session_id(original_session.adventure_title or original_session.template_id or "copy"),
+        user_id=current_user.id,
+        avatar_id=cloned_avatar.id,
+        template_id=original_session.template_id,
+        adventure_title=new_title,
+        adventure_image_url=original_session.adventure_image_url,
+        status=original_session.status,
+        status_note=original_session.status_note,
+        copied_from_id=original_session.id,
+    )
+    db.add(copied_session)
+    await db.flush()
+
+    # Create session-bound folder
+    os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", copied_session.id), exist_ok=True)
+
+    # 5. Clone SessionState
+    state_res = await db.execute(select(SessionState).where(SessionState.session_id == original_session.id))
+    original_state = state_res.scalars().first()
+    if original_state:
+        cloned_state = SessionState(
+            session_id=copied_session.id,
+            user_id=current_user.id,
+            template_id=original_state.template_id,
+            avatar_id=cloned_avatar.id,
+            current_scene_id=original_state.current_scene_id,
+            in_game_time=original_state.in_game_time,
+            time_system=original_state.time_system,
+            time_config=deepcopy(original_state.time_config),
+            inventory=deepcopy(original_state.inventory),
+            entity_states=deepcopy(original_state.entity_states),
+            exit_states=deepcopy(original_state.exit_states),
+            discovered_scenes=deepcopy(original_state.discovered_scenes),
+            quests=deepcopy(original_state.quests),
+            start_datetime=original_state.start_datetime,
+            plot=original_state.plot,
+            rules=original_state.rules,
+            walkthrough=original_state.walkthrough,
+            completed_condition=original_state.completed_condition,
+            gameover_condition=original_state.gameover_condition,
+            tts_director_notes=original_state.tts_director_notes,
+            selected_image_styles=deepcopy(original_state.selected_image_styles),
+            selected_tone=deepcopy(original_state.selected_tone),
+            is_completed=original_state.is_completed,
+            is_debug_enabled=original_state.is_debug_enabled,
+            is_walkthrough_revealed=original_state.is_walkthrough_revealed,
+            allow_dynamic_items=original_state.allow_dynamic_items,
+        )
+        db.add(cloned_state)
+
+    # 6. Clone ChatMessage
+    messages_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == original_session.id))
+    original_messages = messages_res.scalars().all()
+    for msg in original_messages:
+        cloned_msg = ChatMessage(
+            session_id=copied_session.id,
+            role=msg.role,
+            content=msg.content
+        )
+        db.add(cloned_msg)
+
+    # 7. Clone WorldScene
+    scenes_res = await db.execute(select(WorldScene).where(WorldScene.session_id == original_session.id))
+    original_scenes = scenes_res.scalars().all()
+    for s in original_scenes:
+        cloned_scene = WorldScene(
+            id=s.id,
+            session_id=copied_session.id,
+            template_id=None,
+            label=s.label,
+            description=s.description,
+            image_url=s.image_url
+        )
+        db.add(cloned_scene)
+
+    # 8. Clone WorldExit
+    exits_res = await db.execute(select(WorldExit).where(WorldExit.session_id == original_session.id))
+    original_exits = exits_res.scalars().all()
+    for e in original_exits:
+        cloned_exit = WorldExit(
+            session_id=copied_session.id,
+            template_id=None,
+            from_scene_id=e.from_scene_id,
+            to_scene_id=e.to_scene_id,
+            label=e.label,
+            is_locked=e.is_locked,
+            lock_description=e.lock_description
+        )
+        db.add(cloned_exit)
+
+    # 9. Clone WorldEntity
+    entities_res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == original_session.id))
+    original_entities = entities_res.scalars().all()
+    for ent in original_entities:
+        cloned_ent = WorldEntity(
+            id=ent.id,
+            session_id=copied_session.id,
+            template_id=None,
+            entity_type=ent.entity_type,
+            name=ent.name,
+            description=ent.description,
+            current_scene_id=ent.current_scene_id,
+            spatial_position=ent.spatial_position,
+            image_url=ent.image_url,
+            item_type=ent.item_type,
+            wearable_slots=ent.wearable_slots,
+            is_in_inventory=ent.is_in_inventory,
+            is_hidden=ent.is_hidden,
+            is_portable=ent.is_portable,
+            combination_ingredients=ent.combination_ingredients,
+            reveals_item_id=ent.reveals_item_id,
+            is_final_state=ent.is_final_state,
+            state_comment=ent.state_comment,
+            npc_type=ent.npc_type,
+            movement_type=ent.movement_type,
+            hp=ent.hp,
+            max_hp=ent.max_hp,
+            mana=ent.mana,
+            max_mana=ent.max_mana,
+            stamina=ent.stamina,
+            max_stamina=ent.max_stamina,
+            stat_modifier_strength=ent.stat_modifier_strength,
+            stat_modifier_dexterity=ent.stat_modifier_dexterity,
+            stat_modifier_intelligence=ent.stat_modifier_intelligence,
+            stat_modifier_wisdom=ent.stat_modifier_wisdom,
+            stat_modifier_charisma=ent.stat_modifier_charisma,
+            stat_modifier_armor_class=ent.stat_modifier_armor_class,
+            inventory=deepcopy(ent.inventory),
+            metadata_json=deepcopy(ent.metadata_json),
+            voice=ent.voice
+        )
+        db.add(cloned_ent)
+
+    # 10. Clone WorldMap
+    map_res = await db.execute(select(WorldMap).where(WorldMap.session_id == original_session.id))
+    original_map = map_res.scalars().first()
+    if original_map:
+        cloned_map = WorldMap(
+            template_id=original_map.template_id,
+            session_id=copied_session.id,
+            nodes=deepcopy(original_map.nodes),
+            edges=deepcopy(original_map.edges),
+            current_scene_id=original_map.current_scene_id
+        )
+        db.add(cloned_map)
+
+    await db.commit()
+    return {"game_id": copied_session.id, "template_id": copied_session.template_id, "avatar_id": cloned_avatar.id}
+
 

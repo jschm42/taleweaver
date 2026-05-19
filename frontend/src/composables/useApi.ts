@@ -192,6 +192,11 @@ export const api = {
     return request(`/adventures/sessions/${gameId}`, { method: 'DELETE' })
   },
 
+  /** Creates a copy of an existing session. */
+  copySession(gameId: string): Promise<{ game_id: string }> {
+    return request(`/adventures/sessions/${gameId}/copy`, { method: 'POST' })
+  },
+
   /** Pauses a session via template-scoped route. */
   pauseSession(templateId: string): Promise<{ status: string; game_id: string }> {
     return request(`/adventures/${templateId}/pause`, { method: 'POST' })

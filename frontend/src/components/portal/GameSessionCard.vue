@@ -10,6 +10,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'resume', gameId: string): void
   (e: 'delete', gameId: string, title: string): void
+  (e: 'copy', gameId: string): void
 }>()
 
 const isMenuOpen = ref(false)
@@ -34,11 +35,13 @@ function formatDate(dateStr?: string): string {
   })
 }
 
-function runAction(action: 'resume' | 'delete'): void {
+function runAction(action: 'resume' | 'delete' | 'copy'): void {
   if (action === 'resume') {
     emit('resume', props.session.game_id)
-  } else {
+  } else if (action === 'delete') {
     emit('delete', props.session.game_id, props.session.adventure_title)
+  } else if (action === 'copy') {
+    emit('copy', props.session.game_id)
   }
   closeMenu()
 }
@@ -101,6 +104,12 @@ function runAction(action: 'resume' | 'delete'): void {
           v-if="isMenuOpen"
           class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
         >
+          <button
+            class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+            @click="runAction('copy')"
+          >
+            Copy Session
+          </button>
           <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
           <button
             class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
@@ -115,9 +124,12 @@ function runAction(action: 'resume' | 'delete'): void {
     <!-- Content Area -->
     <div class="p-6 flex flex-col gap-6">
       <div class="min-w-0">
-        <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight">
-          {{ props.session.adventure_title }}
-          <span v-if="props.session.adventure_version" class="ml-2 text-[10px] font-mono font-bold text-slate-500 opacity-60">v{{ props.session.adventure_version }}</span>
+        <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight flex items-center gap-2">
+          <span class="truncate">{{ props.session.adventure_title }}</span>
+          <span v-if="props.session.copied_from_id" class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider shrink-0">
+            Copy
+          </span>
+          <span v-if="props.session.adventure_version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 shrink-0">v{{ props.session.adventure_version }}</span>
         </h3>
         <div class="flex flex-col gap-1.5 mt-3">
           <p class="text-sm text-slate-400 flex items-center gap-2 font-bold uppercase tracking-[0.15em]">
@@ -126,7 +138,7 @@ function runAction(action: 'resume' | 'delete'): void {
           </p>
           <p class="text-xs text-slate-500 flex items-center gap-2 font-black uppercase tracking-widest">
             <Clock class="w-3 h-3 opacity-50" />
-            Started: {{ formatDate(props.session.created_at) }}
+            {{ props.session.copied_from_id ? 'Copied:' : 'Started:' }} {{ formatDate(props.session.created_at) }}
           </p>
         </div>
       </div>

@@ -143,6 +143,7 @@ class GameSessionResponse(BaseModel):
     created_at: Optional[datetime] = None
     status: str = "active"
     status_note: Optional[str] = None
+    copied_from_id: Optional[str] = None
 
     @field_validator("selected_tone", mode="before")
     @classmethod

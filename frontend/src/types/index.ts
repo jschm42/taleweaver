@@ -138,6 +138,7 @@ export interface GameSession {
   created_at?: string
   status?: 'active' | 'archived' | 'completed' | 'game_over' | null
   status_note?: string | null
+  copied_from_id?: string | null
 }
 
 export interface AdventureTemplateSummary {

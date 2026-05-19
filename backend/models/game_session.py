@@ -20,6 +20,8 @@ class GameSession(Base, TimestampMixin):
     
     status = Column(String(20), default="active", nullable=False) # active, archived, completed, game_over
     status_note = Column(String(500), nullable=True)
+    copied_from_id = Column(String(36), ForeignKey("game_sessions.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     state = relationship("SessionState", back_populates="session", uselist=False, cascade="all, delete-orphan")
+

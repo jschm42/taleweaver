@@ -49,6 +49,7 @@ const {
   startSessionForTemplate,
   confirmDeleteSession,
   executeDeleteSession,
+  copySession,
   confirmDeleteTemplate,
   executeDeleteTemplate,
   closeTemplateDeleteConfirm,
@@ -219,6 +220,7 @@ onUnmounted(() => {
               :sessions="sessions"
               @resume="playSession"
               @delete="confirmDeleteSession"
+              @copy="copySession"
               @switch-to-templates="activeSection = 'templates'"
             />
           </div>

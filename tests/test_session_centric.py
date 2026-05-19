@@ -7,6 +7,8 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.chat import ChatMessage
+from backend.models.game_session import GameSession
 
 pytestmark = pytest.mark.asyncio
 
@@ -102,3 +104,70 @@ async def test_session_stat_cloning(auth_client, setup_test_db):
         assert sess_npc.hp == 500
         assert sess_npc.stamina == 300
         assert sess_npc.mana == 100
+
+
+async def test_session_copying(auth_client, setup_test_db):
+    """Verifies that duplicating a session clones all entities and metadata correctly."""
+    from tests.conftest import TestSessionLocal
+    from backend.api.routes.adventures.sessions import copy_session
+    
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        
+        # 1. Create a Template
+        adv = AdventureTemplate(
+            id="template-copy",
+            owner_id=user.id,
+            title="Copy Source Template",
+            plot="Copy Plot",
+            is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+        
+        # 2. Start Session
+        result = await start_session_for_template("template-copy", db, user)
+        session_id = result["game_id"]
+        
+        # 3. Add custom world scenes / entities to session
+        scene = WorldScene(id="CUSTOM_SCENE", session_id=session_id, label="Custom Label", description="Custom Desc")
+        db.add(scene)
+        
+        entity = WorldEntity(id="CUSTOM_NPC", session_id=session_id, entity_type="NPC", name="Custom NPC", description="Custom NPC Desc", current_scene_id="CUSTOM_SCENE")
+        db.add(entity)
+        
+        msg = ChatMessage(session_id=session_id, role="user", content="Hello, world")
+        db.add(msg)
+        
+        await db.commit()
+        
+        # 4. Copy Session
+        copy_res = await copy_session(session_id, db, user)
+        new_session_id = copy_res["game_id"]
+        
+        # 5. Verify cloned entities
+        copied_sess_res = await db.execute(select(GameSession).where(GameSession.id == new_session_id))
+        copied_sess = copied_sess_res.scalars().first()
+        assert copied_sess is not None
+        assert copied_sess.copied_from_id == session_id
+        assert copied_sess.adventure_title == "Kopie von Copy Source Template"
+        
+        # Verify Scenes cloned
+        scenes_res = await db.execute(select(WorldScene).where(WorldScene.session_id == new_session_id))
+        copied_scenes = scenes_res.scalars().all()
+        assert len(copied_scenes) > 0
+        assert any(s.id == "CUSTOM_SCENE" and s.label == "Custom Label" for s in copied_scenes)
+        
+        # Verify Entities cloned
+        entities_res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == new_session_id))
+        copied_entities = entities_res.scalars().all()
+        assert len(copied_entities) > 0
+        assert any(e.id == "CUSTOM_NPC" and e.name == "Custom NPC" for e in copied_entities)
+
+        # Verify Messages cloned
+        messages_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == new_session_id))
+        copied_messages = messages_res.scalars().all()
+        assert len(copied_messages) > 0
+        assert any(m.role == "user" and m.content == "Hello, world" for m in copied_messages)
+

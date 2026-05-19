@@ -32,6 +32,7 @@ export interface UsePortalDataResult {
   startSessionForTemplate: (templateId: string, onStarted: (gameId: string) => void | Promise<void>) => Promise<void>
   confirmDeleteSession: (gameId: string, title: string) => void
   executeDeleteSession: () => Promise<void>
+  copySession: (gameId: string) => Promise<void>
   confirmDeleteTemplate: (templateId: string, title: string) => void
   executeDeleteTemplate: () => Promise<void>
   closeTemplateDeleteConfirm: () => void
@@ -218,6 +219,19 @@ export function usePortalData(): UsePortalDataResult {
       errorMsg.value = error?.message || 'Session could not be deleted.'
     } finally {
       isDeletingSession.value = false
+    }
+  }
+
+  /** Duplicates an existing game session. */
+  async function copySession(gameId: string) {
+    isLoading.value = true
+    try {
+      await api.copySession(gameId)
+      await fetchPortalData()
+    } catch (error: any) {
+      errorMsg.value = error?.message || 'Session could not be copied.'
+    } finally {
+      isLoading.value = false
     }
   }
 
@@ -553,6 +567,7 @@ export function usePortalData(): UsePortalDataResult {
     startSessionForTemplate,
     confirmDeleteSession,
     executeDeleteSession,
+    copySession,
     confirmDeleteTemplate,
     executeDeleteTemplate,
     closeTemplateDeleteConfirm,
