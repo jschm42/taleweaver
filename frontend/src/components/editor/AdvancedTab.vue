@@ -69,15 +69,15 @@ const emit = defineEmits<{
             type="button"
             @click="emit('update:dynamic-items', !form.allow_dynamic_items)"
             :class="[
-              'relative inline-flex h-7 w-13 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
-              form.allow_dynamic_items ? 'bg-violet-600' : 'bg-slate-700'
+              'w-14 h-8 rounded-full transition-all relative flex items-center px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
+              form.allow_dynamic_items ? 'bg-violet-600' : 'bg-slate-800'
             ]"
             :aria-pressed="form.allow_dynamic_items"
           >
-            <span
+            <div
               :class="[
-                'inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200',
-                form.allow_dynamic_items ? 'translate-x-7' : 'translate-x-1'
+                'w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300',
+                form.allow_dynamic_items ? 'translate-x-6' : 'translate-x-0'
               ]"
             />
           </button>

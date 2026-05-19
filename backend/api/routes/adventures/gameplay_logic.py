@@ -221,6 +221,7 @@ class GameTurnManager:
                     "name": entity.name,
                     "scene_id": entity.current_scene_id,
                     "position": entity.spatial_position,
+                    "inventory": entity.inventory or [],
                 }
             )
             if len(reduced_npcs) >= GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS:
@@ -260,7 +261,7 @@ class GameTurnManager:
                     current_scene_label = scene.get("label") or "Unknown"
                     break
 
-        return prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT.format(
+        prompt = prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT.format(
             quests_json=self._compact_json(quests),
             awards_json=self._compact_json(awards),
             npcs_json=self._compact_json(npcs),
@@ -270,6 +271,18 @@ class GameTurnManager:
             current_scene_id=self.state.current_scene_id,
             current_scene_label=current_scene_label,
         )
+
+        if self.adventure and self.adventure.allow_dynamic_items:
+            prompt += (
+                "\n\nDYNAMIC ITEMS IS ENABLED:\n"
+                "- You are allowed to create/generate brand new items on-the-fly if contextually appropriate using `new_inventory_items` or `spawned_items`."
+            )
+        else:
+            prompt += (
+                "\n\nDYNAMIC ITEMS IS DISABLED:\n"
+                "- CRITICAL: You are NOT allowed to create/generate brand new items on-the-fly. You must ONLY move/use pre-defined items that already exist in the world or in NPC inventories."
+            )
+        return prompt
 
     def _get_gm_notes(self) -> list[str]:
         exit_states = self.state.exit_states or {}
@@ -1486,6 +1499,7 @@ class GameTurnManager:
         raw_id = str(item.get("id") or "")
         
         # If it's an existing entity in this session, just move it back to the scene
+        existing_ent = None
         if raw_id:
             ent_res = await self.db.execute(
                 select(WorldEntity).where(
@@ -1494,17 +1508,35 @@ class GameTurnManager:
                 )
             )
             existing_ent = ent_res.scalars().first()
-            if existing_ent:
-                existing_ent.current_scene_id = self.state.current_scene_id
-                existing_ent.is_in_inventory = False
-                
-                # Also clear override in session state
-                states = dict(self.state.entity_states or {})
-                if raw_id in states:
-                    states[raw_id]["is_in_inventory"] = False
-                    self.state.entity_states = states
-                    flag_modified(self.state, "entity_states")
-                return
+
+        # Fallback: match by name (case-insensitive) to preserve pre-configured items (like keys)
+        if not existing_ent and name:
+            ent_res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == self.game_id,
+                    WorldEntity.entity_type == "OBJECT"
+                )
+            )
+            all_objs = ent_res.scalars().all()
+            for obj in all_objs:
+                if (obj.name or "").strip().lower() == name.strip().lower():
+                    existing_ent = obj
+                    raw_id = obj.id
+                    break
+
+        if existing_ent:
+            existing_ent.current_scene_id = self.state.current_scene_id
+            existing_ent.is_in_inventory = False
+            
+            # Also update override in session state
+            states = dict(self.state.entity_states or {})
+            if raw_id not in states:
+                states[raw_id] = {}
+            states[raw_id]["is_in_inventory"] = False
+            states[raw_id]["current_scene_id"] = self.state.current_scene_id
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
+            return
 
         # Otherwise create a new one (e.g. for loot or generated items)
         if not raw_id:
@@ -1845,6 +1877,12 @@ class GameTurnManager:
                     ent.description = ov["description"]
                 if "current_scene_id" in ov:
                     ent.current_scene_id = ov["current_scene_id"]
+                if "is_hidden" in ov:
+                    ent.is_hidden = ov["is_hidden"]
+                if "is_attackable" in ov:
+                    ent.is_attackable = ov["is_attackable"]
+                if "inventory" in ov:
+                    ent.inventory = ov["inventory"]
 
         # Partition entities into "here" vs "elsewhere"
         entities = [e for e in all_entities if e.current_scene_id == self.state.current_scene_id]
@@ -2043,11 +2081,15 @@ class GameTurnManager:
             if self.adventure.rule_enforcement_mode == "story":
                 mechanics_suffix = prompts.GM_STORY_MECHANICS_SUFFIX
             
-            dynamic_instr = ""
             if self.adventure.allow_dynamic_items:
                 dynamic_instr = (
-                    "- To add an item directly to the player (even if it's not in the pre-generated world), use `new_inventory_items`. You can create new items on-the-fly.\n"
-                    "- To place a new item in the current scene (e.g., something the player finds but hasn't taken yet), use `spawned_items`.\n"
+                    "- To add an item directly to the player, use `new_inventory_items`. You are allowed to create/generate brand new items on-the-fly if contextually appropriate.\n"
+                    "- To place a new item in the current scene, use `spawned_items`. You are allowed to create/generate brand new items on-the-fly.\n"
+                )
+            else:
+                dynamic_instr = (
+                    "- To add an existing pre-defined item to the player, use `new_inventory_items`. CRITICAL: You are NOT allowed to create/generate new items on-the-fly. Only move/use existing items defined in the world or NPC inventories.\n"
+                    "- To place an existing pre-defined item in the current scene, use `spawned_items`. CRITICAL: You are NOT allowed to create/generate new items on-the-fly. Only move/use existing items defined in the world or NPC inventories.\n"
                 )
 
             mechanics_prompt = mechanics_system_prompt + "\n\n" + mechanics_suffix.format(
@@ -2989,6 +3031,59 @@ class GameTurnManager:
                     )
             except Exception as e:
                 logger.error(f"Manual map exit update failed: {e}")
+
+        # Auto-cleanup: remove items from NPC inventories if they are now in the scene or player inventory
+        player_item_ids = {
+            item.get("id")
+            for item in (self.avatar.inventory or [])
+            if isinstance(item, dict) and item.get("id")
+        }
+        obj_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.entity_type == "OBJECT"
+            )
+        )
+        all_objs = obj_res.scalars().all()
+        spawned_or_player_ids = set(player_item_ids)
+        for obj in all_objs:
+            is_in_inv = states.get(obj.id, {}).get("is_in_inventory", obj.is_in_inventory)
+            if not is_in_inv:
+                spawned_or_player_ids.add(obj.id)
+            elif is_in_inv:
+                spawned_or_player_ids.add(obj.id)
+
+        npc_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.entity_type == "NPC"
+            )
+        )
+        all_npcs = npc_res.scalars().all()
+        for npc in all_npcs:
+            npc_inv = states.get(npc.id, {}).get("inventory", npc.inventory)
+            if npc_inv and isinstance(npc_inv, list):
+                cleaned_inv = []
+                npc_inv_modified = False
+                for item in npc_inv:
+                    if isinstance(item, dict):
+                        item_id = item.get("id")
+                        if item_id and item_id in spawned_or_player_ids:
+                            logger.info(
+                                "[Turn %s] Removing item %s from NPC %s inventory during auto-sync cleanup.",
+                                self.game_id,
+                                item_id,
+                                npc.id
+                            )
+                            npc_inv_modified = True
+                            continue
+                    cleaned_inv.append(item)
+                
+                if npc_inv_modified:
+                    if npc.id not in states:
+                        states[npc.id] = {}
+                    states[npc.id]["inventory"] = cleaned_inv
+                    state_dirty = True
 
         if state_dirty:
             self.state.entity_states = states

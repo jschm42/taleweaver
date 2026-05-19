@@ -98,7 +98,21 @@ class MemoryManager:
                 goal_str = f" [Goal: {e.goal}]" if e.goal else ""
                 char_str = f" [Character: {e.character}]" if e.character else ""
                 hidden_str = " [HIDDEN]" if getattr(e, 'is_hidden', False) else ""
-                npcs.append(f"{e.name}{stat_str}{pos_str}{goal_str}{char_str}{hidden_str}")
+                inv_str = ""
+                if e.inventory:
+                    items_list = []
+                    for item in e.inventory:
+                        if isinstance(item, dict):
+                            item_name = item.get("name")
+                            item_id = item.get("id")
+                            if item_name and item_id:
+                                items_list.append(f"{item_name} (ID: {item_id})")
+                            elif item_name:
+                                items_list.append(item_name)
+                    if items_list:
+                        inv_str = f" [Inventory: {', '.join(items_list)}]"
+
+                npcs.append(f"{e.name}{stat_str}{pos_str}{goal_str}{char_str}{hidden_str}{inv_str}")
 
             objects = []
             for e in entities:
@@ -147,7 +161,21 @@ class MemoryManager:
                 desc = desc[:-1]
             goal_str = f", Goal: {npc.goal}" if npc.goal else ""
             char_str = f", Character: {npc.character}" if npc.character else ""
-            lines.append(f"- {npc.name}: {desc}. Location: {scene_label}{pos_str}{goal_str}{char_str}{hidden_str}")
+            inv_str = ""
+            if npc.inventory:
+                items_list = []
+                for item in npc.inventory:
+                    if isinstance(item, dict):
+                        item_name = item.get("name")
+                        item_id = item.get("id")
+                        if item_name and item_id:
+                            items_list.append(f"{item_name} (ID: {item_id})")
+                        elif item_name:
+                            items_list.append(item_name)
+                if items_list:
+                    inv_str = f", Inventory: {', '.join(items_list)}"
+
+            lines.append(f"- {npc.name}: {desc}. Location: {scene_label}{pos_str}{goal_str}{char_str}{hidden_str}{inv_str}")
 
         return "\n".join(lines) + "\n"
 
