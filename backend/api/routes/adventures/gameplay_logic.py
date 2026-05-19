@@ -1340,17 +1340,27 @@ class GameTurnManager:
             new_inventory.append(inv_item)
         self.avatar.inventory = new_inventory
 
-        changes = []
-        if hp_delta:
-            changes.append(f"HP {hp_delta:+d}")
-        if mana_delta:
-            changes.append(f"Mana {mana_delta:+d}")
-        if stamina_delta:
-            changes.append(f"Stamina {stamina_delta:+d}")
+        gained = []
+        lost = []
+        if hp_delta > 0: gained.append(f"+{hp_delta} HP")
+        elif hp_delta < 0: lost.append(f"{hp_delta} HP")
+        
+        if mana_delta > 0: gained.append(f"+{mana_delta} Mana")
+        elif mana_delta < 0: lost.append(f"{mana_delta} Mana")
+        
+        if stamina_delta > 0: gained.append(f"+{stamina_delta} Stamina")
+        elif stamina_delta < 0: lost.append(f"{stamina_delta} Stamina")
 
-        if changes:
-            return f"{self.avatar.name} uses {item.get('name', item_name)} ({', '.join(changes)})."
-        return f"{self.avatar.name} uses {item.get('name', item_name)}."
+        msg = f"{self.avatar.name} uses {item.get('name', item_name)}."
+        stat_parts = []
+        if gained:
+            stat_parts.append(f"You gain: {', '.join(gained)}.")
+        if lost:
+            stat_parts.append(f"You lose: {', '.join(lost)}.")
+            
+        if stat_parts:
+            return f"{msg} {' '.join(stat_parts)}"
+        return msg
 
     async def _maybe_trigger_special_event(self, combat: dict[str, Any]) -> str | None:
         if random.random() > 0.25:
@@ -2688,6 +2698,13 @@ class GameTurnManager:
                 # Use session snapshot for scene data
                 scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == event.new_scene_id, WorldScene.session_id == self.game_id))
                 new_scene_db = scene_res.scalars().first()
+                
+                # Add system message for scene change
+                scene_name = new_scene_db.label if new_scene_db else (event.scene_label or "a new location")
+                msg = f"📍 You have entered: {scene_name}"
+                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                system_messages.append(msg)
+
                 MapEngine.register_visit(
                     world_map, 
                     event.new_scene_id, 
