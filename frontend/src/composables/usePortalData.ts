@@ -58,6 +58,13 @@ export interface UsePortalDataResult {
   closeConflictModal: () => void
   confirmConflictOverwrite: () => Promise<void>
   dismissWarning: (templateId: string) => Promise<void>
+  exportProgressState: Ref<{
+    isOpen: boolean
+    adventureTitle: string
+    format: 'adz' | 'adv'
+    progress: number
+    errorMsg?: string
+  }>
 }
 
 function formatToneLabel(value?: unknown): string {
@@ -138,6 +145,19 @@ export function usePortalData(): UsePortalDataResult {
 
   const isImporting = ref(false)
   const errorMsg = ref('')
+  const exportProgressState = ref<{
+    isOpen: boolean
+    adventureTitle: string
+    format: 'adz' | 'adv'
+    progress: number
+    errorMsg?: string
+  }>({
+    isOpen: false,
+    adventureTitle: '',
+    format: 'adz',
+    progress: 0,
+    errorMsg: undefined,
+  })
   const isSeeding = ref(false)
   const isDeleting = ref(false)
   const isDeletingSession = ref(false)
@@ -433,6 +453,23 @@ export function usePortalData(): UsePortalDataResult {
   }
 
   async function exportAdventureFile(adventureId: string, title: string, format: ImportKind) {
+    exportProgressState.value = {
+      isOpen: true,
+      adventureTitle: title,
+      format,
+      progress: 0,
+      errorMsg: undefined,
+    }
+
+    let progressInterval: number | null = null
+
+    progressInterval = window.setInterval(() => {
+      if (exportProgressState.value.progress < 90) {
+        const step = Math.floor(Math.random() * 5) + 3
+        exportProgressState.value.progress = Math.min(90, exportProgressState.value.progress + step)
+      }
+    }, 150)
+
     try {
       const blob =
         format === 'adz'
@@ -441,6 +478,11 @@ export function usePortalData(): UsePortalDataResult {
               type: 'application/json',
             })
 
+      if (progressInterval) {
+        clearInterval(progressInterval)
+      }
+      exportProgressState.value.progress = 100
+
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
@@ -448,7 +490,10 @@ export function usePortalData(): UsePortalDataResult {
       anchor.click()
       URL.revokeObjectURL(url)
     } catch (error: any) {
-      errorMsg.value = error?.message || `${format.toUpperCase()} export failed`
+      if (progressInterval) {
+        clearInterval(progressInterval)
+      }
+      exportProgressState.value.errorMsg = error?.message || `${format.toUpperCase()} export failed`
     }
   }
 
@@ -534,5 +579,6 @@ export function usePortalData(): UsePortalDataResult {
     closeConflictModal,
     confirmConflictOverwrite,
     dismissWarning,
+    exportProgressState,
   }
 }

@@ -72,10 +72,52 @@ def _backfill_item_from_entity(item: dict, entity: WorldEntity) -> dict:
     return merged
 
 
+def _reconstruct_item_dict_from_entity(entity: WorldEntity) -> dict:
+    from backend.engine.item_logic import get_item_slot
+    guessed_slot = get_item_slot(entity.name, entity.item_type or "PICKABLE")
+    slots = entity.wearable_slots
+    if isinstance(slots, list) and len(slots) > 0:
+        item_slot = slots[0]
+    elif isinstance(slots, str):
+        item_slot = slots
+    else:
+        item_slot = guessed_slot
+
+    metadata = entity.metadata_json or {}
+    effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
+
+    def get_val(*candidates):
+        for candidate in candidates:
+            val = _to_int_or_none(candidate)
+            if val is not None:
+                return val
+        return None
+
+    return {
+        "id": entity.id,
+        "name": entity.name,
+        "description": entity.description,
+        "image_url": entity.image_url,
+        "item_type": entity.item_type or "PICKABLE",
+        "slot": item_slot,
+        "stat_modifier_strength": get_val(entity.stat_modifier_strength, metadata.get("stat_modifier_strength")),
+        "stat_modifier_dexterity": get_val(entity.stat_modifier_dexterity, metadata.get("stat_modifier_dexterity"), metadata.get("stat_modifier_agility")),
+        "stat_modifier_intelligence": get_val(entity.stat_modifier_intelligence, metadata.get("stat_modifier_intelligence")),
+        "stat_modifier_wisdom": get_val(entity.stat_modifier_wisdom, metadata.get("stat_modifier_wisdom")),
+        "stat_modifier_charisma": get_val(entity.stat_modifier_charisma, metadata.get("stat_modifier_charisma")),
+        "stat_modifier_armor_class": get_val(entity.stat_modifier_armor_class, metadata.get("stat_modifier_armor_class")),
+        "hp_change": get_val(metadata.get("hp_change"), metadata.get("health_change"), effects.get("hp"), effects.get("health")),
+        "stamina_change": get_val(metadata.get("stamina_change"), effects.get("stamina"), effects.get("energy")),
+        "mana_change": get_val(metadata.get("mana_change"), effects.get("mana")),
+    }
+
+
 def _backfill_avatar_items_from_template_entities(avatar: Avatar, entities_by_id: dict[str, WorldEntity]) -> None:
     inventory = []
     for item in (avatar.inventory or []):
-        if isinstance(item, dict) and item.get("id") in entities_by_id:
+        if isinstance(item, str) and item in entities_by_id:
+            inventory.append(_reconstruct_item_dict_from_entity(entities_by_id[item]))
+        elif isinstance(item, dict) and item.get("id") in entities_by_id:
             inventory.append(_backfill_item_from_entity(item, entities_by_id[item["id"]]))
         else:
             inventory.append(item)
@@ -83,7 +125,9 @@ def _backfill_avatar_items_from_template_entities(avatar: Avatar, entities_by_id
 
     equipment = {}
     for slot, item in (avatar.equipment or {}).items():
-        if isinstance(item, dict) and item.get("id") in entities_by_id:
+        if isinstance(item, str) and item in entities_by_id:
+            equipment[slot] = _reconstruct_item_dict_from_entity(entities_by_id[item])
+        elif isinstance(item, dict) and item.get("id") in entities_by_id:
             equipment[slot] = _backfill_item_from_entity(item, entities_by_id[item["id"]])
         else:
             equipment[slot] = item

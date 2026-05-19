@@ -232,6 +232,12 @@ python -m alembic upgrade head
 
 # Start the FastAPI server (uses BACKEND_PORT from .env)
 python -m backend.main
+
+
+#### ⚡ Start the Backend Server (Uvicorn)
+Start the FastAPI application with automatic reloading on change:
+
+uvicorn backend.main:app --reload --port 8000
 ```
 
 Important: Run this command from the project root. Running it from inside the backend directory causes import errors like ModuleNotFoundError: No module named backend.

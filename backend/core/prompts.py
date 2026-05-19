@@ -153,6 +153,10 @@ GAME_MASTER_SYSTEM_PROMPT_TEMPLATE = (
     "or `start_datetime_override` (ISO string to shift the entire calendar).\n"
     "WORLD NPC SECRECY: The 'WORLD NPCS' list is purely for your internal state management (Meta-Information). "
     "Do NOT reveal the locations or existence of these NPCs to the player unless it is narratively justified (e.g., the player sees them, or another character mentions their whereabouts).\n\n"
+    "RESPONSE LENGTH: Keep responses concise and action-oriented. "
+    "For standard actions, use 2-4 sentences. Reserve longer descriptions (1-2 paragraphs) ONLY for new locations or dramatic turning points. "
+    "Prioritize NPC dialogue — let characters speak with direct quotes to build tension and personality. "
+    "Avoid repeating information the player already knows. Show, don't tell.\n\n"
     "FORMATTING RULES:\n"
     "1. DIALOGUE: Always start NPC dialogue on a NEW LINE. Use the format: Character Name: \"...\" (no markdown bold)\n"
     "2. LINE BREAKS: Use double line breaks between narrative prose and dialogue or major shifts in focus.\n"
@@ -265,15 +269,18 @@ Instruction for the GM when the player asks for more details (look/search/examin
 """
 
 GM_NARRATION_SNAPPY_SUFFIX = (
-    "Keep the response snappy and punchy (1 short paragraph). "
-    "Move the action forward without excessive flowery prose."
+    "Keep the response SHORT and punchy — 2-4 sentences MAX for routine actions. "
+    "Favor direct NPC dialogue (let characters speak!) over lengthy narrative descriptions. "
+    "Move the action forward without flowery prose or unnecessary exposition. "
+    "Show, don't tell. More speech, less narration."
 )
 """
 Default instruction for standard interactions to keep the game moving.
 """
 
 GM_NARRATION_MANDATORY_FORMATTING = (
-    "Do not mention numbers, IDs, or system terms. 1-3 paragraphs based on the context above.\n\n"
+    "Do not mention numbers, IDs, or system terms. "
+    "1-2 short paragraphs max for standard actions. Up to 3 paragraphs ONLY for new scenes or major events.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     "Use the format: Character Name: \"Dialogue\" (no markdown bold). "
     "Separate narrative prose from speech with a blank line."

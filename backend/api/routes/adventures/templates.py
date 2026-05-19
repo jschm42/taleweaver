@@ -196,11 +196,19 @@ async def create_adventure(
     # 4. Trigger background generation
     async def run_gen():
         # We need a fresh session for background task to avoid closure issues
-        async with AsyncSessionLocal() as bg_db:
+        import backend.core.database as core_database
+        async with core_database.AsyncSessionLocal() as bg_db:
             try:
                 # Refresh user in new session
                 user_res = await bg_db.execute(select(User).where(User.id == current_user.id))
                 bg_user = user_res.scalars().first()
+                
+                # Set intermediate status
+                adv_res = await bg_db.execute(select(AdventureTemplate).where(AdventureTemplate.id == new_id))
+                bg_adv = adv_res.scalars().first()
+                if bg_adv:
+                    bg_adv.creation_status = "Generating world structure"
+                    await bg_db.commit()
                 
                 await WorldGenerator.generate_world(
                     db=bg_db,
@@ -230,7 +238,7 @@ async def create_adventure(
                     bg_adv.creation_status = "Ready"
                     await bg_db.commit()
             except Exception as e:
-                logger.error(f"Background generation failed for {new_id}: {e}")
+                logger.exception(f"Background generation failed for {new_id}: {e}")
                 # Record error in template
                 adv_res = await bg_db.execute(select(AdventureTemplate).where(AdventureTemplate.id == new_id))
                 bg_adv = adv_res.scalars().first()
@@ -379,6 +387,164 @@ async def delete_adventure(
     
     await AdventureLogic.delete_adventure(db, template_id)
     return {"status": "deleted", "template_id": template_id}
+
+@router.get("/{template_id}/export/manifest")
+async def export_adventure_manifest(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports the raw/original manifest stored in the template with minor backfills if needed."""
+    from copy import deepcopy
+    from typing import Any
+    from backend.models.world_entity import WorldEntity
+
+    result = await db.execute(
+        select(AdventureTemplate).where(
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
+        )
+    )
+    adventure = result.scalars().first()
+    if not adventure or not adventure.original_manifest:
+        raise HTTPException(status_code=404, detail="Original manifest not found.")
+
+    manifest = deepcopy(adventure.original_manifest)
+
+    # Backfill basic metadata if not present in the original manifest
+    if "version" not in manifest:
+        manifest["version"] = adventure.version or "1.0"
+    if "id" not in manifest:
+        manifest["id"] = adventure.id
+    if "title" not in manifest:
+        manifest["title"] = adventure.title
+    if "time_per_turn" not in manifest:
+        manifest["time_per_turn"] = adventure.time_per_turn
+    if "generate_npc_images" not in manifest:
+        manifest["generate_npc_images"] = adventure.generate_npc_images or False
+    if "generate_item_images" not in manifest:
+        manifest["generate_item_images"] = adventure.generate_item_images or False
+    if "automatic_cover_generation" not in manifest:
+        manifest["automatic_cover_generation"] = False
+
+    # Backfill start_scene_id for items/objects from WorldEntity table if missing in original manifest,
+    # but only if the scene ID exists in the original manifest's scenes.
+
+    # Extract items from legacy protagonist format and normalize to ID references
+    protagonist = manifest.get("protagonist")
+    if isinstance(protagonist, dict):
+        objects = manifest.setdefault("objects", [])
+        
+        def add_object_if_new(obj_dict):
+            if not obj_dict or not obj_dict.get("id"): return
+            # Normalize to OBJECT entity_type if missing
+            obj_copy = dict(obj_dict)
+            if "entity_type" not in obj_copy:
+                obj_copy["entity_type"] = "OBJECT"
+            if not any(o.get("id") == obj_copy["id"] for o in objects):
+                objects.append(obj_copy)
+
+        inv = protagonist.get("starting_inventory", [])
+        cleaned_inv = []
+        for item in inv:
+            if isinstance(item, dict):
+                add_object_if_new(item)
+                cleaned_inv.append(item.get("id"))
+            else:
+                cleaned_inv.append(item)
+        if "starting_inventory" in protagonist:
+            protagonist["starting_inventory"] = cleaned_inv
+
+        equip = protagonist.get("starting_equipment", {})
+        cleaned_equip = {}
+        for slot, item in equip.items():
+            if isinstance(item, dict):
+                add_object_if_new(item)
+                cleaned_equip[slot] = item.get("id")
+            else:
+                cleaned_equip[slot] = item
+                
+        # Clean up legacy root-level equipment slots
+        legacy_slots = ["Head", "Neck", "Chest", "Back", "Hands", "Waist", "Legs", "Feet", "MainHand", "OffHand", "Fingers", "Trinket"]
+        for slot in legacy_slots:
+            if slot in protagonist:
+                item = protagonist[slot]
+                if isinstance(item, dict):
+                    add_object_if_new(item)
+                    protagonist[slot] = item.get("id")
+                    cleaned_equip[slot] = item.get("id")
+                else:
+                    cleaned_equip[slot] = item
+                # Remove from root to keep it clean if desired, or just replace with ID.
+                # Since the user sees it at root and it should be references, replacing with ID is fine.
+                protagonist.pop(slot, None) # Let's move it entirely to starting_equipment
+
+        # Collect objects in scene
+        items_in_scene = set()
+        for obj in objects:
+            scene_id = obj.get("current_scene_id") or obj.get("start_scene_id")
+            if scene_id and scene_id != "INVENTORY":
+                items_in_scene.add(obj.get("id"))
+
+        # Priority Deduplication: Scene > Inventory > Equipped
+        final_inv = []
+        for item_id in cleaned_inv:
+            if not item_id: continue
+            if item_id in items_in_scene: continue
+            if item_id not in final_inv:
+                final_inv.append(item_id)
+        
+        final_equip = {}
+        for slot, item_id in cleaned_equip.items():
+            if not item_id: continue
+            if item_id in items_in_scene: continue
+            if item_id in final_inv: continue
+            if item_id in final_equip.values(): continue
+            final_equip[slot] = item_id
+
+        protagonist["starting_inventory"] = final_inv
+        
+        if final_equip:
+            protagonist["starting_equipment"] = final_equip
+        else:
+            protagonist.pop("starting_equipment", None)
+
+    entity_res = await db.execute(
+        select(WorldEntity.id, WorldEntity.current_scene_id)
+        .where(WorldEntity.template_id == template_id)
+    )
+    entity_scene_map = {row.id: row.current_scene_id for row in entity_res.all() if row.id}
+    valid_scene_ids = {
+        s.get("id") for s in manifest.get("scenes", []) if isinstance(s, dict) and s.get("id")
+    }
+
+    def _ensure_item_locations(items: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+        if not items:
+            return items
+
+        normalized_items: list[dict[str, Any]] = []
+        for item in items:
+            item_copy = dict(item)
+            item_id = item_copy.get("id")
+            if not item_copy.get("start_scene_id") and item_id in entity_scene_map:
+                scene_id = entity_scene_map[item_id]
+                if scene_id in valid_scene_ids:
+                    item_copy["start_scene_id"] = scene_id
+            normalized_items.append(item_copy)
+        return normalized_items
+
+    items_res = _ensure_item_locations(manifest.get("items"))
+    if items_res is not None:
+        manifest["items"] = items_res
+    elif "items" in manifest:
+        manifest.pop("items")
+
+    objects_res = _ensure_item_locations(manifest.get("objects"))
+    if objects_res is not None:
+        manifest["objects"] = objects_res
+    elif "objects" in manifest:
+        manifest.pop("objects")
+
+    return manifest
 
 @router.get("/{template_id}/export/adv")
 async def export_adventure_adv(

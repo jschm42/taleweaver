@@ -40,6 +40,20 @@ class CreateAdventureTemplatePayload(BaseModel):
     max_awards: int = 8
     is_adventure_generator: bool = False
 
+    @field_validator("selected_tone", mode="before")
+    @classmethod
+    def parse_legacy_tone(cls, v):
+        if isinstance(v, str):
+            return {"id": v, "name": v.capitalize()}
+        return v
+
+    @field_validator("selected_image_styles", mode="before")
+    @classmethod
+    def parse_legacy_styles(cls, v):
+        if isinstance(v, list) and len(v) > 0 and isinstance(v[0], str):
+            return [{"id": s, "name": s.capitalize()} for s in v]
+        return v
+
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventureTemplatePayload':
         if self.max_scenes < self.min_scenes:
@@ -56,6 +70,7 @@ class AdventureTemplateResponse(BaseModel):
     origin_id: Optional[str] = None
 
     rule_enforcement_mode: str
+    strict_rules: bool = True
     time_per_turn: int
     pacing_minutes: int
     clock_enabled: bool
@@ -255,6 +270,20 @@ class AdventureTemplateUpdate(BaseModel):
     gameover_condition: Optional[str] = None
     tts_director_notes: Optional[str] = None
     creation_error: Optional[str] = None
+
+    @field_validator("selected_tone", mode="before")
+    @classmethod
+    def parse_legacy_tone(cls, v):
+        if isinstance(v, str):
+            return {"id": v, "name": v.capitalize()}
+        return v
+
+    @field_validator("selected_image_styles", mode="before")
+    @classmethod
+    def parse_legacy_styles(cls, v):
+        if isinstance(v, list) and len(v) > 0 and isinstance(v[0], str):
+            return [{"id": s, "name": s.capitalize()} for s in v]
+        return v
 
 
 class TraitGenerationRequest(BaseModel):

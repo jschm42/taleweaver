@@ -16,16 +16,63 @@ from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
-from backend.core.style_catalog import resolve_style_instruction
+from backend.core.style_catalog import resolve_style_instruction, resolve_tone_instruction
 from backend.engine.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
+from typing import Any
 
 router = APIRouter(prefix="/{template_id}/visuals", tags=["Assets"])
 logger = logging.getLogger(__name__)
 _SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 _ALLOWED_VISUAL_TARGET_TYPES = {"cover", "scene", "npc", "object", "protagonist"}
+
+
+def _build_visual_prompt(
+    target_type: str,
+    target_obj: Any,
+    custom_prompt: Optional[str],
+    *,
+    style_instruction: Optional[str] = None,
+    tone_instruction: Optional[str] = None,
+) -> str:
+    if custom_prompt and custom_prompt.strip():
+        return custom_prompt.strip()
+
+    prompt_suffix = ""
+    if style_instruction:
+        prompt_suffix += f" Style constraints: {style_instruction}."
+    if tone_instruction:
+        prompt_suffix += f" Narrative tone reference: {tone_instruction}."
+
+    def get_attr(obj, attr, default=""):
+        if isinstance(obj, dict):
+            return obj.get(attr) or default
+        return getattr(obj, attr, None) or default
+
+    if target_type == "protagonist":
+        name = get_attr(target_obj, "name", "The protagonist")
+        role = get_attr(target_obj, "role", "adventurer")
+        description = get_attr(target_obj, "description", "A distinctive fantasy hero.")
+        return f"Portrait of character {name}, {role}. {description}. Game character art style.{prompt_suffix}"
+
+    if target_type == "scene":
+        label = get_attr(target_obj, "label") or get_attr(target_obj, "name") or "Scene"
+        description = get_attr(target_obj, "description")
+        return f"Atmospheric background: {label}. {description}. RPG visual novel style, high detail.{prompt_suffix}"
+
+    if target_type == "npc":
+        name = get_attr(target_obj, "name", "NPC")
+        description = get_attr(target_obj, "description", "A distinctive non-player character.")
+        return f"Portrait of NPC {name}. {description}. Character portrait, high detail.{prompt_suffix}"
+
+    if target_type == "object":
+        name = get_attr(target_obj, "name", "Object")
+        description = get_attr(target_obj, "description", "A detailed fantasy object.")
+        return f"Detailed illustration of object {name}. {description}. Fantasy item concept art, isolated and clearly readable.{prompt_suffix}"
+
+    raise HTTPException(status_code=400, detail="Unsupported visual target type.")
 
 
 def _slugify(value: str) -> str:
@@ -122,6 +169,12 @@ async def regenerate_visual(
         current_user.image_styles_catalog,
     )
 
+    # Resolve Tone Instruction
+    tone_instruction = resolve_tone_instruction(
+        adv.selected_tone,
+        current_user.tone_catalog,
+    )
+
     try:
         if payload.target_type == "cover":
             image_url = await asyncio.wait_for(
@@ -139,10 +192,17 @@ async def regenerate_visual(
             avatar = av_res.scalars().first()
             if not avatar: raise HTTPException(status_code=404, detail="Protagonist not found")
             
+            prompt = _build_visual_prompt(
+                payload.target_type,
+                avatar,
+                payload.prompt,
+                style_instruction=style_instruction,
+                tone_instruction=tone_instruction,
+            )
             image_url = await asyncio.wait_for(
                 MediaEngine.generate_entity_image(
-                    prompt=payload.prompt or avatar.description or "",
-                    adventure_id=template_id, entity_id="protagonist", entity_type="NPC",
+                    prompt=prompt,
+                    adventure_id=template_id, entity_id=avatar.id, entity_type="PROTAGONIST",
                     user_config=user_config, api_keys=api_keys,
                     style_instruction=style_instruction
                 ),
@@ -155,9 +215,16 @@ async def regenerate_visual(
             scene = res.scalars().first()
             if not scene: raise HTTPException(status_code=404, detail="Scene not found")
             
+            prompt = _build_visual_prompt(
+                payload.target_type,
+                scene,
+                payload.prompt,
+                style_instruction=style_instruction,
+                tone_instruction=tone_instruction,
+            )
             image_url = await asyncio.wait_for(
                 MediaEngine.generate_scene_image(
-                    prompt=payload.prompt or scene.description or "",
+                    prompt=prompt,
                     adventure_id=template_id, user_config=user_config, api_keys=api_keys,
                     style_instruction=style_instruction
                 ),
@@ -170,9 +237,16 @@ async def regenerate_visual(
             entity = res.scalars().first()
             if not entity: raise HTTPException(status_code=404, detail="Entity not found")
             
+            prompt = _build_visual_prompt(
+                payload.target_type,
+                entity,
+                payload.prompt,
+                style_instruction=style_instruction,
+                tone_instruction=tone_instruction,
+            )
             image_url = await asyncio.wait_for(
                 MediaEngine.generate_entity_image(
-                    prompt=payload.prompt or entity.description or "",
+                    prompt=prompt,
                     adventure_id=template_id, entity_id=entity.id, entity_type=payload.target_type.upper(),
                     user_config=user_config, api_keys=api_keys,
                     style_instruction=style_instruction

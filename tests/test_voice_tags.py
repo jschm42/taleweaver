@@ -16,15 +16,16 @@ import pytest
 # ---------------------------------------------------------------------------
 
 def test_gm_narration_formatting_contains_voice_tag_guidance():
-    """GM_NARRATION_MANDATORY_FORMATTING must document voice-tag usage."""
-    from backend.core.prompts import GM_NARRATION_MANDATORY_FORMATTING
+    """get_vocal_direction_prompt must document voice-tag usage."""
+    from backend.core.prompts import get_vocal_direction_prompt
 
-    assert "[excited]" in GM_NARRATION_MANDATORY_FORMATTING
-    assert "[whispers]" in GM_NARRATION_MANDATORY_FORMATTING
-    assert "[shouting]" in GM_NARRATION_MANDATORY_FORMATTING
-    assert "ENGLISH" in GM_NARRATION_MANDATORY_FORMATTING
-    assert "new paragraph" in GM_NARRATION_MANDATORY_FORMATTING.lower()
-    assert "Do not nest tags" in GM_NARRATION_MANDATORY_FORMATTING
+    prompt = get_vocal_direction_prompt()
+    assert "[excited]" in prompt
+    assert "[whispers]" in prompt
+    assert "[shouting]" in prompt
+    assert "ENGLISH" in prompt
+    assert "new paragraph" in prompt.lower()
+    assert "Do not nest tags" in prompt
 
 
 # ---------------------------------------------------------------------------

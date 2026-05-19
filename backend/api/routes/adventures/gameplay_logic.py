@@ -2468,6 +2468,24 @@ class GameTurnManager:
                             self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
                             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
+            # 2b. NPC/Entity movement to different scenes
+            if game_event.moved_entities:
+                for move in game_event.moved_entities:
+                    if not move.to_scene_id:
+                        continue
+                    eid = move.entity_id
+                    ent_name = "Someone"
+                    # Try local entities first, then all entities
+                    match = next((e for e in entities if e.id == eid), None)
+                    if not match:
+                        match = next((e for e in all_entities if e.id == eid), None)
+                    if match:
+                        ent_name = match.name
+                    target_label = scene_map.get(move.to_scene_id, move.to_scene_id)
+                    msg = f"{ent_name} moved to {target_label}."
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
             # 3. Items
             if game_event.new_inventory_items:
                 for item in game_event.new_inventory_items:
@@ -2644,6 +2662,32 @@ class GameTurnManager:
                     # If moving to a new scene, clear spatial position unless a new one is provided
                     if not move.to_spatial_position:
                         states[eid]["spatial_position"] = None
+                    
+                    # Emit system message for NPC movement
+                    ent_name = eid
+                    ent_res = await self.db.execute(
+                        select(WorldEntity).where(
+                            WorldEntity.id == eid,
+                            WorldEntity.session_id == self.game_id
+                        )
+                    )
+                    ent_obj = ent_res.scalars().first()
+                    if ent_obj:
+                        ent_name = ent_obj.name
+                    scene_label = move.to_scene_id
+                    scene_res = await self.db.execute(
+                        select(WorldScene).where(
+                            WorldScene.id == move.to_scene_id,
+                            WorldScene.session_id == self.game_id
+                        )
+                    )
+                    scene_obj = scene_res.scalars().first()
+                    if scene_obj:
+                        scene_label = scene_obj.label
+                    msg = f"{ent_name} moved to {scene_label}."
+                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                    system_messages.append(msg)
+                    
                 if move.to_spatial_position: 
                     states[eid]["spatial_position"] = move.to_spatial_position
                 state_dirty = True

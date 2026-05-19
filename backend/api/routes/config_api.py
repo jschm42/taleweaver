@@ -453,8 +453,8 @@ class SettingsPayload(BaseModel):
     complex_enable_thinking: bool = False
     complex_max_thinking_tokens: int = 1024
     
-    generator_model: str
-    generator_model_provider: str
+    generator_model: Optional[str] = ""
+    generator_model_provider: Optional[str] = "openai"
     generator_max_tokens: int = DEFAULT_GENERATOR_MAX_TOKENS
     generator_enable_thinking: bool = False
     generator_max_thinking_tokens: int = 1024

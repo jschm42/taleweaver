@@ -117,28 +117,6 @@ async def test_post_chat_stream_includes_turn_correlation_id(client: AsyncClient
     assert "event:" in body
 
 
-async def test_create_adventure_with_heartbeat(client: AsyncClient):
-    """Heartbeat settings are persisted when creating an adventure."""
-    # Arrange
-    payload = {
-        "title": "Timed Quest",
-        "avatar_name": "Ranger",
-        "heartbeat_enabled": True,
-        "heartbeat_interval": 30,
-    }
-
-    # Act
-    resp = await client.post("/api/adventures/", json=payload)
-    data = resp.json()
-
-    # Assert
-    assert resp.status_code == 201
-    adv_resp = await client.get(f"/api/adventures/{data['adventure_id']}")
-    adv = adv_resp.json()
-    assert adv["heartbeat_enabled"] is True
-    assert adv["heartbeat_interval"] == 30
-
-
 async def test_create_adventure_with_rule_mode_and_style_tone(client: AsyncClient):
     """New generation controls should be persisted on adventure creation."""
     payload = {
@@ -163,8 +141,8 @@ async def test_create_adventure_with_rule_mode_and_style_tone(client: AsyncClien
     assert adv["strict_rules"] is True
     assert adv["clock_enabled"] is True
     assert adv["pacing_minutes"] == 12
-    assert adv["selected_tone"] == "horror"
-    assert "dark-fantasy-painting" in adv["selected_image_styles"]
+    assert adv["selected_tone"]["id"] == "horror"
+    assert any(style["id"] == "dark-fantasy-painting" for style in adv["selected_image_styles"])
 
 
 async def test_create_adventure_preserves_advanced_manifest_fields(client: AsyncClient):
@@ -226,20 +204,26 @@ async def test_create_adventure_persists_generation_status_before_world_gen(clie
 
     async def fake_generate_world(
         db,
-        _user,
-        adventure_id,
+        user=None,
+        template_id=None,
+        adventure_id=None,
         *_args,
         **_kwargs,
     ):
-        _ = (_args, _kwargs)
-        adventure = await db.get(Adventure, adventure_id)
+        adv_id = template_id or adventure_id
+        print(f"DEBUG: fake_generate_world called with adv_id={adv_id}")
+        from sqlalchemy import select
+        res = await db.execute(select(Adventure))
+        all_advs = res.scalars().all()
+        print(f"DEBUG: all adventures in DB: {[a.id for a in all_advs]}")
+        adventure = await db.get(Adventure, adv_id)
         assert adventure is not None
         captured["status"] = adventure.creation_status or ""
 
         db.add(
             WorldScene(
                 id="START",
-                adventure_id=adventure_id,
+                adventure_id=adv_id,
                 label="Starting Room",
                 description="A minimal scene created by the test double.",
                 image_url=None,
@@ -247,7 +231,7 @@ async def test_create_adventure_persists_generation_status_before_world_gen(clie
         )
         await db.commit()
 
-    monkeypatch.setattr("backend.api.routes.adventures.WorldGenerator.generate_world", fake_generate_world)
+    monkeypatch.setattr("backend.api.routes.adventures.templates.WorldGenerator.generate_world", fake_generate_world)
 
     resp = await client.post(
         "/api/adventures/",
@@ -512,6 +496,10 @@ async def test_terminal_epilogue_game_over_locks_input(client: AsyncClient, monk
 
 async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, monkeypatch):
     """Regenerating the protagonist uses the default prompt when none is provided."""
+    async def fake_generate_world(*args, **kwargs):
+        pass
+    monkeypatch.setattr("backend.api.routes.adventures.templates.WorldGenerator.generate_world", fake_generate_world)
+
     ids = await _create_adventure(client, "Regenerate Quest")
 
     async with TestSessionLocal() as session:
@@ -522,13 +510,13 @@ async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, 
 
     captured: dict[str, str] = {}
 
-    async def fake_generate_entity_image(prompt, _adventure_id, entity_id, entity_type, _user_config, _api_keys):
+    async def fake_generate_entity_image(prompt, adventure_id=None, entity_id=None, entity_type=None, user_config=None, api_keys=None, **kwargs):
         captured["prompt"] = prompt
         captured["entity_id"] = entity_id
         captured["entity_type"] = entity_type
         return "/data/adventures/generated/protagonist.png"
 
-    monkeypatch.setattr("backend.api.routes.adventures.MediaEngine.generate_entity_image", fake_generate_entity_image)
+    monkeypatch.setattr("backend.api.routes.adventures.assets.MediaEngine.generate_entity_image", fake_generate_entity_image)
 
     resp = await client.post(
         f"/api/adventures/{ids['adventure_id']}/visuals/regenerate",
@@ -549,6 +537,10 @@ async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, 
 
 async def test_regenerate_visual_injects_style_and_tone(client: AsyncClient, monkeypatch):
     """Visual prompt generation should include selected style and tone instructions."""
+    async def fake_generate_world(*args, **kwargs):
+        pass
+    monkeypatch.setattr("backend.api.routes.adventures.templates.WorldGenerator.generate_world", fake_generate_world)
+
     ids = await _create_adventure(client, "Styled Prompt Quest")
 
     async with TestSessionLocal() as session:
@@ -560,13 +552,13 @@ async def test_regenerate_visual_injects_style_and_tone(client: AsyncClient, mon
 
     captured: dict[str, str] = {}
 
-    async def fake_generate_entity_image(prompt, _adventure_id, entity_id, entity_type, _user_config, _api_keys):
+    async def fake_generate_entity_image(prompt, adventure_id=None, entity_id=None, entity_type=None, user_config=None, api_keys=None, **kwargs):
         captured["prompt"] = prompt
         captured["entity_id"] = entity_id
         captured["entity_type"] = entity_type
         return "/data/adventures/generated/protagonist-tone-style.png"
 
-    monkeypatch.setattr("backend.api.routes.adventures.MediaEngine.generate_entity_image", fake_generate_entity_image)
+    monkeypatch.setattr("backend.api.routes.adventures.assets.MediaEngine.generate_entity_image", fake_generate_entity_image)
 
     resp = await client.post(
         f"/api/adventures/{ids['adventure_id']}/visuals/regenerate",
@@ -579,6 +571,10 @@ async def test_regenerate_visual_injects_style_and_tone(client: AsyncClient, mon
 
 async def test_regenerate_visual_uses_custom_prompt_for_scene(client: AsyncClient, monkeypatch):
     """A custom prompt overrides the default prompt when regenerating a scene image."""
+    async def fake_generate_world(*args, **kwargs):
+        pass
+    monkeypatch.setattr("backend.api.routes.adventures.templates.WorldGenerator.generate_world", fake_generate_world)
+
     ids = await _create_adventure(client, "Scene Prompt Quest")
 
     async with TestSessionLocal() as session:
@@ -598,11 +594,11 @@ async def test_regenerate_visual_uses_custom_prompt_for_scene(client: AsyncClien
 
     captured: dict[str, str] = {}
 
-    async def fake_generate_scene_image(prompt, _adventure_id, _user_config, _api_keys):
+    async def fake_generate_scene_image(prompt, adventure_id=None, user_config=None, api_keys=None, **kwargs):
         captured["prompt"] = prompt
         return "/data/adventures/generated/scene.png"
 
-    monkeypatch.setattr("backend.api.routes.adventures.MediaEngine.generate_scene_image", fake_generate_scene_image)
+    monkeypatch.setattr("backend.api.routes.adventures.assets.MediaEngine.generate_scene_image", fake_generate_scene_image)
 
     resp = await client.post(
         f"/api/adventures/{ids['adventure_id']}/visuals/regenerate",
@@ -628,13 +624,13 @@ async def test_regenerate_visual_updates_cover_image(client: AsyncClient, monkey
 
     captured: dict[str, str] = {}
 
-    async def fake_generate_adventure_cover(title, context, adventure_id, **_kwargs):
+    async def fake_generate_adventure_cover(title=None, original_prompt=None, adventure_id=None, **kwargs):
         captured["title"] = title
-        captured["context"] = context
+        captured["context"] = original_prompt or kwargs.get("context")
         captured["adventure_id"] = adventure_id
         return "/data/adventures/generated/cover.png"
 
-    monkeypatch.setattr("backend.api.routes.adventures.MediaEngine.generate_adventure_cover", fake_generate_adventure_cover)
+    monkeypatch.setattr("backend.api.routes.adventures.assets.MediaEngine.generate_adventure_cover", fake_generate_adventure_cover)
 
     resp = await client.post(
         f"/api/adventures/{ids['adventure_id']}/visuals/regenerate",
@@ -1250,7 +1246,6 @@ async def test_import_adv_file_keeps_quests_npcs_and_initial_scene(client: Async
             "time_per_turn": 5,
             "pacing_minutes": 5,
             "clock_enabled": False,
-            "heartbeat_enabled": False,
             "generate_scene_images": False,
             "generate_npc_images": False,
             "generate_item_images": False,

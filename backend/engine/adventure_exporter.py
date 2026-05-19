@@ -63,6 +63,116 @@ class AdventureExporter:
         avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
         avatar = avatar_res.scalars().first()
 
+        # Clean up / migrate legacy templates on the fly:
+        # If avatar inventory/equipment contains dictionaries, convert them to IDs 
+        # and ensure a WorldEntity of type OBJECT exists.
+        if avatar:
+            modified = False
+            
+            async def ensure_world_entity_exists(item_dict: dict):
+                entity_id = item_dict.get("id")
+                if not entity_id:
+                    return
+                # Check if it already exists in the DB
+                existing = await db.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.template_id == template_id,
+                        WorldEntity.entity_type == "OBJECT",
+                        WorldEntity.id == entity_id
+                    )
+                )
+                if not existing.scalars().first():
+                    # Create WorldEntity in the DB
+                    from backend.engine.item_logic import get_item_slot
+                    guessed_slot = get_item_slot(item_dict.get("name", ""), item_dict.get("item_type", "PICKABLE"))
+                    item_slot = item_dict.get("slot") or guessed_slot
+                    
+                    db.add(
+                        WorldEntity(
+                            id=entity_id,
+                            template_id=template_id,
+                            entity_type="OBJECT",
+                            name=item_dict.get("name", "Unknown Item"),
+                            description=item_dict.get("description", ""),
+                            current_scene_id="INVENTORY",
+                            image_url=item_dict.get("image_url"),
+                            item_type=item_dict.get("item_type", "PICKABLE"),
+                            wearable_slots=[item_slot] if item_slot else None,
+                            is_in_inventory=True,
+                            is_portable=True,
+                            stat_modifier_strength=item_dict.get("stat_modifier_strength"),
+                            stat_modifier_dexterity=item_dict.get("stat_modifier_dexterity"),
+                            stat_modifier_intelligence=item_dict.get("stat_modifier_intelligence"),
+                            stat_modifier_wisdom=item_dict.get("stat_modifier_wisdom"),
+                            stat_modifier_charisma=item_dict.get("stat_modifier_charisma"),
+                            stat_modifier_armor_class=item_dict.get("stat_modifier_armor_class"),
+                            metadata_json={
+                                "hp_change": item_dict.get("hp_change"),
+                                "stamina_change": item_dict.get("stamina_change"),
+                                "mana_change": item_dict.get("mana_change"),
+                            }
+                        )
+                    )
+
+            cleaned_inventory = []
+            for item in (avatar.inventory or []):
+                if isinstance(item, dict):
+                    await ensure_world_entity_exists(item)
+                    cleaned_inventory.append(item.get("id"))
+                else:
+                    cleaned_inventory.append(item)
+            
+            cleaned_equipment = {}
+            for slot, item in (avatar.equipment or {}).items():
+                if isinstance(item, dict):
+                    await ensure_world_entity_exists(item)
+                    cleaned_equipment[slot] = item.get("id")
+                else:
+                    cleaned_equipment[slot] = item
+
+            # Priority deduplication: Scene > Inventory > Equipped
+            items_in_scene = set()
+            for ent in entities:
+                if ent.entity_type == "OBJECT" and ent.current_scene_id and ent.current_scene_id != "INVENTORY":
+                    items_in_scene.add(ent.id)
+
+            final_inventory = []
+            for item_id in cleaned_inventory:
+                if not item_id: continue
+                if item_id in items_in_scene:
+                    modified = True
+                    continue
+                if item_id not in final_inventory:
+                    final_inventory.append(item_id)
+                else:
+                    modified = True
+
+            final_equipment = {}
+            for slot, item_id in cleaned_equipment.items():
+                if not item_id: continue
+                if item_id in items_in_scene:
+                    modified = True
+                    continue
+                if item_id in final_inventory:
+                    modified = True
+                    continue
+                if item_id in final_equipment.values():
+                    modified = True
+                    continue
+                final_equipment[slot] = item_id
+
+            if final_inventory != (avatar.inventory or []) or final_equipment != (avatar.equipment or {}):
+                modified = True
+
+            if modified:
+                avatar.inventory = final_inventory
+                avatar.equipment = final_equipment
+                db.add(avatar)
+                await db.flush()
+                # Re-fetch entities to make sure the newly added ones are included in the entities list
+                entity_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+                entities = entity_res.scalars().all()
+
         # 2. Serialize to Dictionary
         def to_dict(obj):
             if not obj: return None
@@ -132,8 +242,12 @@ class AdventureExporter:
                 "armor_class": avatar.armor_class if avatar else 10,
                 "stats": avatar.stats if avatar else {},
                 "status_effects": avatar.status_effects if avatar else [],
-                "starting_inventory": avatar.inventory if avatar else [],
-                "starting_equipment": avatar.equipment if avatar else {},
+                "starting_inventory": [(item if isinstance(item, str) else item.get("id")) for item in avatar.inventory if item] if avatar and avatar.inventory else [],
+                "starting_equipment": {
+                    slot: (item if isinstance(item, str) else item.get("id"))
+                    for slot, item in avatar.equipment.items()
+                    if item
+                } if avatar and avatar.equipment else {},
             },
             
             "scenes": [to_dict(s) for s in scenes],

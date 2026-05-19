@@ -20,9 +20,15 @@ from backend.models.user import User
 # In-memory test database
 # ---------------------------------------------------------------------------
 
+from sqlalchemy.pool import StaticPool
+
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+test_engine = create_async_engine(
+    TEST_DATABASE_URL,
+    echo=False,
+    poolclass=StaticPool,
+)
 TestSessionLocal = async_sessionmaker(
     bind=test_engine,
     class_=AsyncSession,
@@ -71,6 +77,22 @@ async def auth_client(client: AsyncClient) -> AsyncClient:
             username=username,
             hashed_password=get_password_hash("test_password"),
             role="admin",
+            llm_settings={
+                "small_model": "llama3.2",
+                "small_model_provider": "ollama",
+                "complex_model": "qwen2.5",
+                "complex_model_provider": "ollama",
+                "generator_model": "qwen2.5",
+                "generator_model_provider": "ollama",
+                "preferred_provider": "ollama",
+                "ollama_url": "http://localhost:11434",
+            },
+            t2i_settings={
+                "simple_model": "sdxl",
+                "simple_model_provider": "local",
+                "advanced_model": "sdxl",
+                "advanced_model_provider": "local",
+            }
         )
         session.add(user)
         await session.commit()

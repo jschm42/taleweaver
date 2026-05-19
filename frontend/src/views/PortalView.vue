@@ -19,6 +19,7 @@ import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
 import AboutModal from '@/components/portal/AboutModal.vue'
 import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
 import SetupWarningModal from '@/components/portal/SetupWarningModal.vue'
+import ExportProgressModal from '@/components/portal/ExportProgressModal.vue'
 
 const { route, router, activeSection, pushSection } = usePortalSectionRouting()
 const showAboutModal = ref(false)
@@ -74,6 +75,7 @@ const {
   closeConflictModal,
   confirmConflictOverwrite,
   dismissWarning,
+  exportProgressState,
 } = usePortalData()
 
 watch(importInput, () => undefined)
@@ -288,6 +290,15 @@ onUnmounted(() => {
       <SetupWarningModal
         :isOpen="showSetupWarningModal"
         @close="dismissSetupWarning"
+      />
+
+      <ExportProgressModal
+        v-if="exportProgressState.isOpen"
+        :adventure-title="exportProgressState.adventureTitle"
+        :format="exportProgressState.format"
+        :progress="exportProgressState.progress"
+        :error-msg="exportProgressState.errorMsg"
+        @close="exportProgressState.isOpen = false"
       />
     </Teleport>
 

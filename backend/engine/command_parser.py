@@ -1,6 +1,68 @@
 from backend.models.avatar import Avatar
 
 
+# Canonical stat names for display
+_STAT_DISPLAY_NAMES = {
+    "strength": "Strength",
+    "dexterity": "Dexterity",
+    "intelligence": "Intelligence",
+    "wisdom": "Wisdom",
+    "charisma": "Charisma",
+    "armor_class": "Armor Class",
+    "hp": "HP",
+    "stamina": "Stamina",
+    "mana": "Mana",
+}
+
+
+def _extract_item_stat_modifiers(item: dict) -> dict[str, int]:
+    """
+    Extracts all stat modifiers from an item dict.
+    Supports both legacy 'stat_modifiers' dict and flat 'stat_modifier_*' fields.
+    Returns a dict like {"strength": 5, "dexterity": -2}.
+    """
+    mods: dict[str, int] = {}
+    if not item or not isinstance(item, dict):
+        return mods
+
+    # Legacy nested dict
+    if "stat_modifiers" in item and isinstance(item["stat_modifiers"], dict):
+        for stat, value in item["stat_modifiers"].items():
+            if isinstance(value, (int, float)) and value != 0:
+                mods[stat.lower()] = int(value)
+
+    # Flat fields (stat_modifier_strength, etc.)
+    for stat_key in _STAT_DISPLAY_NAMES:
+        flat_key = f"stat_modifier_{stat_key}"
+        val = item.get(flat_key)
+        if val is not None and isinstance(val, (int, float)) and int(val) != 0:
+            mods[stat_key] = int(val)
+
+    return mods
+
+
+def _format_stat_change_message(gained: dict[str, int], lost: dict[str, int]) -> str:
+    """
+    Builds a human-readable stat change suffix.
+    Example: "You gain: +5 Strength, +2 Stamina. You lose: -3 Dexterity."
+    """
+    parts: list[str] = []
+
+    if gained:
+        items = ", ".join(
+            f"+{v} {_STAT_DISPLAY_NAMES.get(k, k.title())}" for k, v in gained.items()
+        )
+        parts.append(f"You gain: {items}.")
+
+    if lost:
+        items = ", ".join(
+            f"{v} {_STAT_DISPLAY_NAMES.get(k, k.title())}" for k, v in lost.items()
+        )
+        parts.append(f"You lose: {items}.")
+
+    return " ".join(parts)
+
+
 class CommandParser:
     @staticmethod
     def parse_command(avatar: Avatar, command_text: str, debug_enabled: bool = False) -> str:
@@ -152,7 +214,24 @@ class CommandParser:
         avatar.equipment = new_equipment
         avatar.inventory = new_inventory
 
-        return response_msg + f"Equipped {item_to_equip.get('name')} in slot {slot}."
+        # Compute net stat change (new item minus old item)
+        new_mods = _extract_item_stat_modifiers(item_to_equip)
+        old_mods = _extract_item_stat_modifiers(currently_equipped) if currently_equipped else {}
+        all_stats = set(new_mods.keys()) | set(old_mods.keys())
+        gained: dict[str, int] = {}
+        lost: dict[str, int] = {}
+        for stat in all_stats:
+            delta = new_mods.get(stat, 0) - old_mods.get(stat, 0)
+            if delta > 0:
+                gained[stat] = delta
+            elif delta < 0:
+                lost[stat] = delta
+        stat_msg = _format_stat_change_message(gained, lost)
+
+        result = response_msg + f"Equipped {item_to_equip.get('name')} in slot {slot}."
+        if stat_msg:
+            result += f" {stat_msg}"
+        return result
 
     @staticmethod
     def _handle_drop(avatar: Avatar, item_name: str) -> str:
@@ -200,7 +279,16 @@ class CommandParser:
         avatar.equipment = new_equipment
         avatar.inventory = new_inventory
         
-        return f"Unequipped {currently_equipped.get('name')} from {match}."
+        # Compute stat losses from the removed item
+        removed_mods = _extract_item_stat_modifiers(currently_equipped)
+        lost = {k: -v for k, v in removed_mods.items() if v > 0}
+        gained = {k: -v for k, v in removed_mods.items() if v < 0}
+        stat_msg = _format_stat_change_message(gained, lost)
+        
+        result = f"Unequipped {currently_equipped.get('name')} from {match}."
+        if stat_msg:
+            result += f" {stat_msg}"
+        return result
 
     @staticmethod
     def _handle_consume(avatar: Avatar, item_name: str) -> str:

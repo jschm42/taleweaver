@@ -456,6 +456,37 @@ function displayMessageContent(msg: ChatMessage): string {
   return fixNewlines(content)
 }
 
+/**
+ * Colorizes stat names and their +/- modifiers in system messages to match
+ * the character sheet's stat theme colors.
+ */
+function colorizeStatNames(text: string): string {
+  const statColors: Record<string, string> = {
+    'Strength':    'color: #f59e0b',  // amber
+    'Dexterity':   'color: #06b6d4',  // cyan
+    'Intelligence':'color: #8b5cf6',  // violet
+    'Wisdom':      'color: #3b82f6',  // blue
+    'Charisma':    'color: #ec4899',  // pink
+    'Armor Class': 'color: #94a3b8',  // slate
+    'HP':          'color: #e11d48',  // crimson/red
+    'Stamina':     'color: #10b981',  // emerald/green
+    'Mana':        'color: #2563eb',  // sapphire/blue
+  }
+
+  // Match patterns like "+5 Strength" or "-3 Dexterity" or just "Strength"
+  for (const [stat, style] of Object.entries(statColors)) {
+    // With numeric modifier: "+5 Strength" or "-3 Strength"
+    const modifierPattern = new RegExp(`([+-]\\d+)\\s+(${stat})`, 'g')
+    text = text.replace(modifierPattern, (_match, num: string, name: string) => {
+      const numVal = parseInt(num)
+      const numStyle = numVal > 0 ? 'color: #4ade80; font-weight: 700' : 'color: #f87171; font-weight: 700'
+      return `<span style="${numStyle}">${num}</span> <span style="${style}; font-weight: 700">${name}</span>`
+    })
+  }
+
+  return text
+}
+
 const lastUserMessage = computed(() => {
   const userMsgs = props.messages.filter(m => m.role === 'user')
   return userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].content : null
@@ -643,7 +674,7 @@ onUnmounted(() => {
           ]"
         >
           <template v-for="(part, pIdx) in parseContent(displayMessageContent(msg))" :key="pIdx">
-            <span v-if="part.type === 'text'" v-html="formatBolds(formatVoiceTags(normalizeLineBreaks(part.value)))"></span>
+            <span v-if="part.type === 'text'" v-html="msg.role === 'system' ? colorizeStatNames(formatBolds(formatVoiceTags(normalizeLineBreaks(part.value)))) : formatBolds(formatVoiceTags(normalizeLineBreaks(part.value)))"></span>
             <div v-else-if="part.type === 'image'" class="my-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
               <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />
               <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-xxs text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>

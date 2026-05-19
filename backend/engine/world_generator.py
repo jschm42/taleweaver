@@ -993,7 +993,23 @@ class WorldGenerator:
             adventure.origin_id = manifest_dict.get("origin_id", "")  # type: ignore
             adventure.is_adventure_generator = manifest_dict.get("is_adventure_generator", False)  # type: ignore
             adventure.original_manifest = manifest_dict  # type: ignore
-        objects = manifest_dict.get("objects", [])
+        # Merge starting inventory & equipment definitions into the objects list if defined inline.
+        objects = list(manifest_dict.get("objects", []))
+        seen_object_ids = {o.get("id") for o in objects if isinstance(o, dict) and "id" in o}
+        
+        prot = manifest_dict.get("protagonist", {})
+        if prot:
+            for item in (prot.get("starting_inventory") or []):
+                if isinstance(item, dict) and "id" in item:
+                    if item["id"] not in seen_object_ids:
+                        objects.append(item)
+                        seen_object_ids.add(item["id"])
+            for slot, item in (prot.get("starting_equipment") or {}).items():
+                if isinstance(item, dict) and "id" in item:
+                    if item["id"] not in seen_object_ids:
+                        objects.append(item)
+                        seen_object_ids.add(item["id"])
+
         total_objects = len(objects)
         
         def _inventory_item_id(entry: Any) -> Optional[str]:
@@ -1182,11 +1198,11 @@ class WorldGenerator:
             if avatar and is_in_avatar_inv:
                 if is_starting_inv:
                     # SQLAlchemy mutability: re-assign the list
-                    avatar.inventory = list(avatar.inventory) + [item_data]  # type: ignore
+                    avatar.inventory = list(avatar.inventory) + [o["id"]]  # type: ignore
                 if starting_slot:
                     # SQLAlchemy mutability: re-assign the dict
                     new_equip = dict(avatar.equipment)
-                    new_equip[starting_slot] = item_data
+                    new_equip[starting_slot] = o["id"]
                     avatar.equipment = new_equip  # type: ignore
 
             db.add(

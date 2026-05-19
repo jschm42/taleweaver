@@ -600,7 +600,7 @@ class GameMasterLLM:
         is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
         is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
         is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
-        is_openrouter = self.provider == "openrouter" or self.api_key.startswith("sk-or-v1")
+        is_openrouter = self.provider == "openrouter" or (self.api_key and self.api_key.startswith("sk-or-v1"))
 
         # Many non-OpenAI providers (including DeepSeek on some platforms) do not support 
         # complex Pydantic models in response_format (structured outputs).
@@ -743,7 +743,7 @@ class GameMasterLLM:
         is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
         is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
         is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
-        is_openrouter = self.provider == "openrouter" or self.api_key.startswith("sk-or-v1")
+        is_openrouter = self.provider == "openrouter" or (self.api_key and self.api_key.startswith("sk-or-v1"))
 
         use_json_mode_fallback = is_gemini or is_anthropic or is_deepseek or is_openrouter
 

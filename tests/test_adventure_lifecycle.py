@@ -45,7 +45,8 @@ async def _seed_adventure(db: AsyncSession, user_id: str) -> str:
         description="A hero for testing.",
         profile_image="/data/adventures/test-adv-123/hero.jpg",
         stats={"str": 15},
-        inventory=["SWORD_1"]
+        inventory=[{"id": "POTION_1", "name": "Test Potion"}],
+        equipment={"MainHand": {"id": "SWORD_1", "name": "Test Sword"}}
     )
     db.add(avatar)
     
@@ -75,10 +76,21 @@ async def _seed_adventure(db: AsyncSession, user_id: str) -> str:
         entity_type="OBJECT",
         name="Test Sword",
         description="A sword for testing.",
-        current_scene_id="SCENE_1",
+        current_scene_id="INVENTORY",
         item_type="WEAPON"
     )
     db.add(obj)
+    
+    obj2 = WorldEntity(
+        id="POTION_1",
+        template_id=adv.id,
+        entity_type="OBJECT",
+        name="Test Potion",
+        description="A potion for testing.",
+        current_scene_id="INVENTORY",
+        item_type="CONSUMABLE"
+    )
+    db.add(obj2)
     
     await db.commit()
     return adv.id
@@ -138,6 +150,8 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
             assert manifest["adventure"]["starting_timestamp"] == 480
             assert manifest["protagonist"]["name"] == "Test Hero"
             assert manifest["protagonist"]["profile_image"] == "assets/hero.jpg"
+            assert manifest["protagonist"]["starting_inventory"] == ["POTION_1"]
+            assert manifest["protagonist"]["starting_equipment"]["MainHand"] == "SWORD_1"
             assert len(manifest["scenes"]) == 1
             assert manifest["scenes"][0]["image_url"] == "assets/scene1.jpg"
 
