@@ -161,6 +161,49 @@ class GameTurnManager:
         self.stop_requested = False
         self.turn_language: str | None = None
 
+    async def _unhide_entities_in_text(self, text: str) -> None:
+        """Scan text for entity ID tokens like 'ID: TALKING_RAT' and set their
+        session override `is_hidden` to False so they appear in the scene.
+        """
+        if not text:
+            return
+        ids = set(re.findall(r"ID:\s*([A-Z0-9_]+)", text or ""))
+        if not ids or not self.state:
+            return
+        states = dict(self.state.entity_states or {})
+        changed = False
+        for eid in ids:
+            if eid not in states:
+                states[eid] = {}
+            if states[eid].get("is_hidden") is not False:
+                states[eid]["is_hidden"] = False
+                changed = True
+        if changed:
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
+            try:
+                await self.db.commit()
+            except Exception:
+                # Don't let unhide failures break the turn; log and continue
+                logger.exception("Failed to commit entity unhide changes")
+
+    async def _save_chat_message(self, role: str, content: str) -> ChatMessage:
+        """Persist a ChatMessage and run post-save processing (unhide referenced entities).
+        Returns the created ChatMessage instance.
+        """
+        cm = ChatMessage(session_id=self.state.session_id, role=role, content=content)
+        self.db.add(cm)
+        try:
+            await self.db.flush()
+        except Exception:
+            logger.exception("Failed to flush ChatMessage to DB")
+        # Attempt to unhide any referenced entities inside the message text
+        try:
+            await self._unhide_entities_in_text(content)
+        except Exception:
+            logger.exception("Failed to unhide entities for message")
+        return cm
+
     @staticmethod
     def _compact_json(payload: object) -> str:
         return json.dumps(payload, separators=(",", ":"))
@@ -538,7 +581,7 @@ class GameTurnManager:
                 logger.warning(f"[Turn {self.game_id}] Debug command ignored: TALEWEAVER_DEBUG_ENABLED is False and in-game debug is OFF.")
                 # If debug is disabled, treat it as an unknown command to the user
                 unknown_msg = "Unknown command: /debug. Type /help for a list of commands."
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=unknown_msg))
+                await self._save_chat_message("system", unknown_msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': unknown_msg})}\n\n"
                 return
 
@@ -601,7 +644,7 @@ class GameTurnManager:
         is_silent = any(actual_user_input.lower().startswith(cmd) for cmd in silent_commands)
 
         if actual_user_input and not is_silent:
-            self.db.add(ChatMessage(session_id=self.state.session_id, role="user", content=actual_user_input))
+            await self._save_chat_message("user", actual_user_input)
             await self.db.flush()
 
         # 3. LLM Processing (Pass 1 & Pass 2)
@@ -878,13 +921,13 @@ class GameTurnManager:
         if response.startswith("[TRIGGER_CONSUME]"):
             item_name = response.replace("[TRIGGER_CONSUME]", "").strip()
             action_msg = self._consume_item_now(item_name)
-            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=action_msg))
+            await self._save_chat_message("system", action_msg)
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': action_msg})}\n\n"
             response = action_msg # Allow it to fall through to persist and yield final state
 
         # PERSIST AND YIELD RESPONSE (For all commands including equip/unequip)
         if response and not response.startswith("[TRIGGER_"):
-            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=response))
+            await self._save_chat_message("system", response)
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': response})}\n\n"
 
         await self.db.commit()
@@ -1053,8 +1096,8 @@ class GameTurnManager:
                 yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
 
         response_text = response_text.strip()
-        if response_text:
-            self.db.add(ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text))
+            if response_text:
+                await self._save_chat_message("assistant", response_text)
             # Only append to combat log if combat is still present in the state
             # Otherwise we'd accidentally resurrect a cleared combat state
             if self._read_combat_state():
@@ -2155,7 +2198,7 @@ class GameTurnManager:
                     if decision == "without_images":
                         pending_request.generate_scene_images = False
                         msg = "SYSTEM: Image generation disabled by user confirmation. Continuing with text-only world generation."
-                        self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                        await self._save_chat_message("system", msg)
                         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
                     game_event = AdventureGeneratorToolIntent(
@@ -2253,7 +2296,7 @@ class GameTurnManager:
                         f"🎲 **{req.stat.upper()} CHECK**: {res.reason}\n"
                         f"Roll: {res.roll} + {res.modifier} = **{res.total}** (vs DC {res.dc}) -> **{success_label}**"
                     )
-                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=roll_msg))
+                    await self._save_chat_message("system", roll_msg)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': roll_msg})}\n\n"
                 
                 game_event.skill_check_results = results
@@ -2334,7 +2377,7 @@ class GameTurnManager:
                             hp=new_hp
                         ))
                     
-                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=roll_msg))
+                    await self._save_chat_message("system", roll_msg)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': roll_msg})}\n\n"
                 
                 game_event.attack_results = attack_results
@@ -2429,7 +2472,7 @@ class GameTurnManager:
                     "SYSTEM: Before I start generation, please confirm image mode: "
                     "reply with 'yes with images', 'yes without images', or 'cancel'."
                 )
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=confirmation_msg))
+                await self._save_chat_message("system", confirmation_msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': confirmation_msg})}\n\n"
                 game_event.requested_adventure_generation = None
                 game_event.narrative_description = "The Architect pauses at the threshold, awaiting your confirmation."
@@ -2614,19 +2657,19 @@ class GameTurnManager:
             if game_event.hp_change != 0:
                 verb = "gain" if game_event.hp_change > 0 else "lose"
                 msg = f"You {verb} {abs(game_event.hp_change)} HP."
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             
             if game_event.stamina_change != 0:
                 verb = "gain" if game_event.stamina_change > 0 else "lose"
                 msg = f"You {verb} {abs(game_event.stamina_change)} Stamina."
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
             if game_event.mana_change != 0:
                 verb = "gain" if game_event.mana_change > 0 else "lose"
                 msg = f"You {verb} {abs(game_event.mana_change)} Mana."
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
             # 2. NPC/Entity changes
@@ -2645,7 +2688,7 @@ class GameTurnManager:
                         if diff != 0:
                             verb = "healed for" if diff > 0 else "takes"
                             msg = f"{ent_name} {verb} {abs(diff)} damage." if diff < 0 else f"{ent_name} {verb} {diff} HP."
-                            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                            await self._save_chat_message("system", msg)
                             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
                     if update.stamina is not None and match and match.stamina is not None:
@@ -2653,7 +2696,7 @@ class GameTurnManager:
                         if diff != 0:
                             verb = "gains" if diff > 0 else "loses"
                             msg = f"{ent_name} {verb} {abs(diff)} Stamina."
-                            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                            await self._save_chat_message("system", msg)
                             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
                     if update.mana is not None and match and match.mana is not None:
@@ -2661,7 +2704,7 @@ class GameTurnManager:
                         if diff != 0:
                             verb = "gains" if diff > 0 else "loses"
                             msg = f"{ent_name} {verb} {abs(diff)} Mana."
-                            self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                            await self._save_chat_message("system", msg)
                             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
             # 2b. NPC/Entity movement to different scenes
@@ -2688,7 +2731,7 @@ class GameTurnManager:
                     if scene_obj:
                         target_label = scene_obj.label
                     msg = f"{ent_name} moved to {target_label}."
-                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                    await self._save_chat_message("system", msg)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
             # 3. Items
@@ -2700,7 +2743,7 @@ class GameTurnManager:
                         continue
                         
                     msg_text = f"Added {item.name} to your inventory."
-                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                    await self._save_chat_message("system", msg_text)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
             if game_event.updated_inventory_items:
@@ -2715,13 +2758,13 @@ class GameTurnManager:
                     if update.name and update.name != old_name:
                         msg_text = f"Your {old_name} is now a {update.name}."
                         
-                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                    await self._save_chat_message("system", msg_text)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
             if game_event.spawned_items:
                 for item in game_event.spawned_items:
                     msg_text = f"Added {item.name} to your inventory."
-                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                    await self._save_chat_message("system", msg_text)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
             if game_event.removed_inventory_item_ids:
@@ -2741,7 +2784,7 @@ class GameTurnManager:
                             item_name = target_ent.name
                     
                     msg_text = f"Removed {item_name} from your inventory."
-                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg_text))
+                    await self._save_chat_message("system", msg_text)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
         await self.db.commit()
@@ -2908,7 +2951,7 @@ class GameTurnManager:
         if event.new_status_effects:
             for effect in event.new_status_effects:
                 msg = f"✨ You are now: {effect}"
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                await self._save_chat_message("system", msg)
                 system_messages.append(msg)
 
         RuleEngine.apply_event(self.avatar, event)
@@ -2932,7 +2975,7 @@ class GameTurnManager:
                 # Add system message for scene change
                 scene_name = new_scene_db.label if new_scene_db else (event.scene_label or "a new location")
                 msg = f"📍 You have entered: {scene_name}"
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                await self._save_chat_message("system", msg)
                 system_messages.append(msg)
 
                 MapEngine.register_visit(
@@ -2981,7 +3024,7 @@ class GameTurnManager:
                     if scene_obj:
                         scene_label = scene_obj.label
                     msg = f"{ent_name} moved to {scene_label}."
-                    self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                    await self._save_chat_message("system", msg)
                     system_messages.append(msg)
                     
                 if move.to_spatial_position: 
@@ -3092,7 +3135,7 @@ class GameTurnManager:
                 )
                 award_title = aw.get("title") or key
                 msg = f"🏆 Award Achievement: {award_title}"
-                self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=msg))
+                await self._save_chat_message("system", msg)
                 system_messages.append(msg)
                 modified = True
 
@@ -3228,7 +3271,7 @@ class GameTurnManager:
         stream_callback: Callable[[str], Awaitable[None] | None] = None,
     ) -> None:
         """Persist a system message and optionally stream it via callback."""
-        self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=message))
+        await self._save_chat_message("system", message)
         await self.db.flush()
         if stream_callback:
             await stream_callback(message)
@@ -3545,7 +3588,7 @@ class GameTurnManager:
 
         epilogue_text = await self._generate_terminal_epilogue_text(language=language)
         if epilogue_text:
-            self.db.add(ChatMessage(session_id=self.state.session_id, role="assistant", content=epilogue_text))
+            await self._save_chat_message("assistant", epilogue_text)
 
         self._set_terminal_epilogue_sent(self.state.session.status, sent=True)
         await self.db.commit()

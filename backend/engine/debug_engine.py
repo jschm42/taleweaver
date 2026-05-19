@@ -258,6 +258,48 @@ class DebugEngine:
             flag_modified(state, "entity_states")
             return f"DEBUG: Entity '{target.name}' (ID: {target.id}) restored to {final_hp} HP."
 
+        elif sub == "unhide":
+            # Usage: /debug unhide <ENTITY_ID|NAME|all>
+            parts = args.split(" ")
+            if len(parts) < 2:
+                return "DEBUG ERROR: Usage: /debug unhide [ENTITY_ID|NAME|all]"
+            target = " ".join(parts[1:]).strip()
+
+            # If user asked for all, unhide every entity in the session
+            if target.lower() == "all":
+                res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id))
+                ents = res.scalars().all()
+                if not ents:
+                    return "DEBUG: No entities found in this session."
+                states = dict(state.entity_states or {})
+                for e in ents:
+                    if e.id not in states:
+                        states[e.id] = {}
+                    states[e.id]["is_hidden"] = False
+                state.entity_states = states
+                flag_modified(state, "entity_states")
+                await db.commit()
+                return f"DEBUG: Unhid {len(ents)} entities in this session."
+
+            # Otherwise find specific entity by id or name
+            res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id))
+            ents = res.scalars().all()
+            found = None
+            for e in ents:
+                if e.id == target or (isinstance(e.name, str) and e.name.lower() == target.lower()):
+                    found = e
+                    break
+            if not found:
+                return f"DEBUG: Entity '{target}' not found in this session."
+            states = dict(state.entity_states or {})
+            if found.id not in states:
+                states[found.id] = {}
+            states[found.id]["is_hidden"] = False
+            state.entity_states = states
+            flag_modified(state, "entity_states")
+            await db.commit()
+            return f"DEBUG: Entity '{found.name}' (ID: {found.id}) is now visible."
+
         elif sub == "open_exit":
             parts = args.split(" ")
             if len(parts) < 2: return "DEBUG ERROR: Usage: /debug open_exit [EXIT_ID]"
