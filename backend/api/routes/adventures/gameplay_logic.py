@@ -2657,14 +2657,9 @@ class GameTurnManager:
 
     async def _build_awards_payload(self, adventure: Optional[AdventureTemplate]) -> list[dict]:
         """Helper to build the awards payload with earned status."""
-        if not self.user_id:
+        if not self.user:
             return []
             
-        user_res = await self.db.execute(select(User).where(User.id == self.user_id))
-        user = user_res.scalars().first()
-        if not user:
-            return []
-
         awards_list = (adventure.awards if adventure else (AdventureLogic.extract_manifest_snapshot(self.state).get("adventure") or {}).get("awards")) or []
         
         return [
@@ -2673,7 +2668,7 @@ class GameTurnManager:
                 "is_earned": any(
                     ea.get("key") == aw.get("key")
                     and ea.get("template_id") == (adventure.id if adventure else self.state.template_id)
-                    for ea in (user.earned_awards or [])
+                    for ea in (self.user.earned_awards or [])
                 ),
             }
             for aw in awards_list
