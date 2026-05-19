@@ -762,6 +762,29 @@ class GameTurnManager:
             else:
                 response = f"You do not have enough XP for a hint ({self.avatar.exp}/{WALKTHROUGH_HINT_COST})."
 
+        if response.startswith("[TRIGGER_DROP]"):
+            item_name = response[14:].strip()
+            if not item_name:
+                response = "Usage: /drop <item name>"
+            else:
+                # Find item in inventory
+                item_idx = -1
+                for idx, item in enumerate(self.avatar.inventory or []):
+                    if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
+                        item_idx = idx
+                        break
+                
+                if item_idx == -1:
+                    response = f"You don't have '{item_name}' in your inventory."
+                else:
+                    new_inventory = list(self.avatar.inventory)
+                    dropped_item = new_inventory.pop(item_idx)
+                    self.avatar.inventory = new_inventory
+                    
+                    # Spawn in scene
+                    await self._spawn_scene_item(dropped_item)
+                    response = f"You dropped {dropped_item.get('name')}."
+
         if response.startswith("[TRIGGER_CONSUME]"):
             item_name = response.replace("[TRIGGER_CONSUME]", "").strip()
             action_msg = self._consume_item_now(item_name)
@@ -1455,7 +1478,33 @@ class GameTurnManager:
 
     async def _spawn_scene_item(self, item: dict[str, Any]) -> None:
         name = str(item.get("name") or "Unknown Loot")
-        raw_id = str(item.get("id") or f"LOOT_{uuid.uuid4().hex[:8]}")
+        raw_id = str(item.get("id") or "")
+        
+        # If it's an existing entity in this session, just move it back to the scene
+        if raw_id:
+            ent_res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == self.game_id,
+                    WorldEntity.id == raw_id
+                )
+            )
+            existing_ent = ent_res.scalars().first()
+            if existing_ent:
+                existing_ent.current_scene_id = self.state.current_scene_id
+                existing_ent.is_in_inventory = False
+                
+                # Also clear override in session state
+                states = dict(self.state.entity_states or {})
+                if raw_id in states:
+                    states[raw_id]["is_in_inventory"] = False
+                    self.state.entity_states = states
+                    flag_modified(self.state, "entity_states")
+                return
+
+        # Otherwise create a new one (e.g. for loot or generated items)
+        if not raw_id:
+            raw_id = f"LOOT_{uuid.uuid4().hex[:8]}"
+            
         safe_id = re.sub(r"[^A-Za-z0-9_\-]", "_", raw_id)[:50]
         if not safe_id:
             safe_id = f"LOOT_{uuid.uuid4().hex[:8]}"

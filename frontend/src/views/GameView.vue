@@ -45,6 +45,7 @@ const props = defineProps<{
 
 const router = useRouter()
 const showSheet = ref(false)
+const sheetDirty = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
 const showDebugLog = ref(false)
@@ -274,12 +275,16 @@ const {
   handleChatNpcHover,
   onTooltipImageError,
   openContextMenu,
+  openInventoryContextMenu,
   handleMenuSelect,
 } = useGameInteractionState({
   isActionInputBlocked,
   ruleMode: computed(() => sheet.value?.rule_enforcement_mode),
   npcMetadata,
   handlePlayerInput,
+  onAction: () => {
+    if (showSheet.value) sheetDirty.value = true
+  }
 })
 
 const handleUnlockVoice = () => {
@@ -288,18 +293,22 @@ const handleUnlockVoice = () => {
 }
 
 const handleEquipFromSheet = async (name: string) => {
+  sheetDirty.value = true
   await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/equip ${name}`)
 }
 
 const handleUnequipFromSheet = async (slot: string) => {
+  sheetDirty.value = true
   await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/unequip ${slot}`)
 }
 
 const handleConsumeFromSheet = async (name: string) => {
+  sheetDirty.value = true
   await gameActionService.sendIfUnlocked(isActionInputBlocked.value, sendMessage, `/consume ${name}`)
 }
 
 const handleSheetChanged = async () => {
+  sheetDirty.value = false
   if (!gameActionService.shouldRunRulePass(isActionInputBlocked.value, sheet.value?.rule_enforcement_mode)) return
   await sendMessage('/rule-pass')
 }
@@ -500,13 +509,14 @@ watch(showCombatDialog, (visible) => {
       :open="showSheet" 
       :sheet="sheet" 
       :is-debug="!!sheet?.debug_mode"
-      @close="showSheet = false" 
+      @close="() => { showSheet = false; if (sheetDirty) handleSheetChanged(); }" 
       @equip="handleEquipFromSheet"
       @unequip="handleUnequipFromSheet"
       @consume="handleConsumeFromSheet"
       @changed="handleSheetChanged"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
+      @item-contextmenu="(item, event) => openInventoryContextMenu(item, event)"
     />
     <MapModal :open="showMap" :map-data="mapData" :nodes="nodes" :is-debug="!!sheet?.debug_mode" @close="showMap = false" />
     <QuestsModal 

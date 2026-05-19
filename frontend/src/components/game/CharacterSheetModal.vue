@@ -18,6 +18,7 @@ const emit = defineEmits<{
   unequip: [slot: string]
   consume: [name: string]
   changed: []
+  itemContextmenu: [item: any, event: MouseEvent]
 }>()
 
 
@@ -105,6 +106,12 @@ const handleInventoryClick = (item: any) => {
   }
 }
 
+const isInteractable = (item: any) => {
+  if (!item) return false
+  const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
+  return isEquippable || item.item_type === 'CONSUMABLE'
+}
+
 const handleUnequip = (slot: string) => {
   stateChanged.value = true
   emit('unequip', slot)
@@ -186,6 +193,7 @@ const onClose = () => {
                       class="w-14 h-14 md:w-16 md:h-16 rounded-2xl border-2 flex items-center justify-center transition-all relative shadow-xl backdrop-blur-md"
                       :class="equipment[slot] ? 'bg-slate-900 border-amber-500/50 shadow-amber-500/20 scale-110 z-10 cursor-pointer' : 'bg-slate-950/40 border-slate-800 hover:border-slate-600'"
                       @click="equipment[slot] && handleUnequip(slot)"
+                      @contextmenu.prevent="equipment[slot] && emit('itemContextmenu', { ...equipment[slot], equipped_slot: slot, entity_type: 'ITEM' }, $event)"
                     >
                       <!-- Slot Label Tooltip -->
                       <div class="absolute -top-7 left-1/2 -translate-x-1/2 text-xxs font-black uppercase tracking-widest text-slate-400 opacity-0 group-hover/slot:opacity-100 transition-opacity bg-slate-800 px-2 py-0.5 rounded border border-slate-700 z-20 shadow-xl whitespace-nowrap pointer-events-none">
@@ -244,11 +252,15 @@ const onClose = () => {
                       <div 
                         v-for="idx in 24" 
                         :key="idx"
-                        class="aspect-square rounded-2xl border-2 flex items-center justify-center transition-all relative group cursor-pointer"
-                        :class="inventoryList[idx-1] ? 'bg-slate-950 border-slate-700/50 hover:border-emerald-500/50 hover:bg-slate-900/60' : 'bg-slate-800/20 border-slate-800/60 border-dashed'"
+                        class="aspect-square rounded-2xl border-2 flex items-center justify-center transition-all relative group"
+                        :class="[
+                          inventoryList[idx-1] ? 'bg-slate-950 border-slate-700/50 hover:border-emerald-500/50 hover:bg-slate-900/60' : 'bg-slate-800/20 border-slate-800/60 border-dashed',
+                          inventoryList[idx-1] ? (isInteractable(inventoryList[idx-1]) ? 'cursor-pointer' : 'cursor-help') : ''
+                        ]"
                         @click="inventoryList[idx-1] && handleInventoryClick(inventoryList[idx-1])"
                         @mouseenter="inventoryList[idx-1] && emit('itemHover', { ...inventoryList[idx-1], entity_type: 'ITEM' }, $event)"
                         @mouseleave="emit('itemLeave')"
+                        @contextmenu.prevent="inventoryList[idx-1] && emit('itemContextmenu', { ...inventoryList[idx-1], entity_type: 'ITEM' }, $event)"
                       >
                         <template v-if="inventoryList[idx-1]">
                           <div v-if="showImage(inventoryList[idx-1].image_url)" class="w-full h-full p-2">

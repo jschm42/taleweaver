@@ -77,7 +77,7 @@ class CommandParser:
         if command == "/equip":
             return CommandParser._handle_equip(avatar, args)
         elif command == "/drop":
-            return CommandParser._handle_drop(avatar, args)
+            return f"[TRIGGER_DROP] {args}"
         elif command == "/help":
             return CommandParser._handle_help(debug_enabled=debug_enabled)
         elif command == "/walkthrough":
@@ -233,27 +233,6 @@ class CommandParser:
             result += f" {stat_msg}"
         return result
 
-    @staticmethod
-    def _handle_drop(avatar: Avatar, item_name: str) -> str:
-        if not item_name:
-            return "Usage: /drop <item name>"
-
-        # Find item
-        item_idx = -1
-        for idx, item in enumerate(avatar.inventory):
-            if isinstance(item, dict) and item.get("name", "").lower() == item_name.lower():
-                item_idx = idx
-                break
-
-        if item_idx == -1:
-            return f"You don't have '{item_name}' in your inventory."
-
-        new_inventory = list(avatar.inventory)
-        dropped_item = new_inventory.pop(item_idx)
-        avatar.inventory = new_inventory
-        
-        return f"You dropped {dropped_item.get('name')}."
-    
     @staticmethod
     def _handle_unequip(avatar: Avatar, slot_name: str) -> str:
         if not slot_name:

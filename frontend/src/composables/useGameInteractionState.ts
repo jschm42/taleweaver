@@ -14,6 +14,7 @@ type UseGameInteractionStateOptions = {
   ruleMode: Ref<string | undefined>
   npcMetadata: Ref<Record<string, any>>
   handlePlayerInput: (content: string) => Promise<void>
+  onAction?: () => void
 }
 
 export function useGameInteractionState(options: UseGameInteractionStateOptions) {
@@ -22,6 +23,7 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     ruleMode,
     npcMetadata,
     handlePlayerInput,
+    onAction,
   } = options
 
   const hoveredEntity = ref<any>(null)
@@ -93,10 +95,27 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     hoveredEntity.value = null
   }
 
+  const openInventoryContextMenu = (item: any, event: MouseEvent) => {
+    if (isActionInputBlocked.value) return
+
+    const menu = gameCommandService.buildInventoryContextMenu(item, ruleMode.value)
+    if (!menu) return
+
+    contextMenu.value = {
+      x: event.clientX,
+      y: event.clientY,
+      items: menu.items,
+      title: menu.title,
+    }
+
+    hoveredEntity.value = null
+  }
+
   const handleMenuSelect = async (item: any) => {
     if (isActionInputBlocked.value) return
     const action = item.action
     contextMenu.value = null
+    if (onAction) onAction()
     await handlePlayerInput(action)
   }
 
@@ -115,6 +134,7 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     handleChatNpcHover,
     onTooltipImageError,
     openContextMenu,
+    openInventoryContextMenu,
     handleMenuSelect,
   }
 }

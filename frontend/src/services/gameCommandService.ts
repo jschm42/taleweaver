@@ -114,4 +114,27 @@ export const gameCommandService = {
     if (items.length === 0) return null
     return { title, items }
   },
+
+  buildInventoryContextMenu(item: any, _ruleMode?: string): ContextMenuModel | null {
+    const items: ContextMenuItem[] = []
+    const title = item?.name || 'Item'
+
+    const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
+    const isEquipped = !!item.equipped_slot
+
+    if (isEquippable) {
+      if (isEquipped) {
+        items.push({ label: 'Unequip', action: `/unequip ${item.equipped_slot}`, icon: 'ra ra-hand', color: 'text-amber-400' })
+      } else {
+        items.push({ label: 'Equip', action: `/equip ${item.name}`, icon: 'ra ra-vest', color: 'text-emerald-400' })
+      }
+    } else if (item.item_type === 'CONSUMABLE') {
+      items.push({ label: 'Consume', action: `/consume ${item.name}`, icon: 'ra ra-flask', color: 'text-emerald-400' })
+    }
+
+    items.push({ label: 'Drop', action: `/drop ${item.name}`, icon: 'ra ra-bottom-right', color: 'text-red-400' })
+    items.push({ label: 'Inspect', action: `/inspect ${item.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+
+    return items.length > 0 ? { title, items } : null
+  },
 }

@@ -700,7 +700,8 @@ onUnmounted(() => {
             v-for="itemId in msg.itemIds" 
             :key="itemId"
             v-show="entities.find(e => e.id === itemId)"
-            class="item-card flex flex-col w-56 bg-slate-800/80 border border-slate-700/50 rounded-xl overflow-hidden shadow-xl backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-500/30 cursor-help"
+            class="item-card flex flex-col w-56 bg-slate-800/80 border border-slate-700/50 rounded-xl overflow-hidden shadow-xl backdrop-blur-sm transition-all hover:scale-[1.02] hover:border-emerald-500/30"
+            :class="entities.find(e => e.id === itemId)?.is_portable !== false ? 'cursor-pointer' : 'cursor-help'"
             @click="emit('itemClick', entities.find(e => e.id === itemId))"
             @contextmenu.prevent="emit('itemContextmenu', entities.find(e => e.id === itemId), $event)"
           >

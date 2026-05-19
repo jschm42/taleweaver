@@ -101,6 +101,12 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
       return
     }
 
+    if (normalized.startsWith('/inspect')) {
+      showSheet.value = false
+      showMap.value = false
+      showQuests.value = false
+    }
+
     if (isCombatActive.value && !gameCommandService.isAllowedCombatCommand(content)) {
       return
     }
