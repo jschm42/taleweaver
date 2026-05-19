@@ -661,6 +661,25 @@ onUnmounted(() => {
             <i class="ra ra-microphone text-xs"></i>
             <span>Speak</span>
           </button>
+
+          <!-- Download Button -->
+          <button 
+            v-if="msg.role === 'assistant' && configState.isTtsEnabled"
+            @click="audioService.download(msg.content, {
+              sceneDescription: props.currentSceneDescription,
+              adventureId: props.sheet?.template_id,
+              sessionId: props.gameId,
+              title: props.sheet?.adventure_title,
+              sceneName: props.sheet?.current_scene,
+              tone: props.sheet?.adventure_tone,
+              npcMetadata: props.npcMetadata,
+            })"
+            class="p-1.5 px-3 text-[10px] font-black uppercase tracking-widest bg-slate-800/80 border border-slate-700/50 rounded-xl text-slate-400 hover:bg-cyan-500/20 hover:text-cyan-400 transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
+            title="Download as WAV"
+          >
+            <i class="ra ra-download text-xs"></i>
+            <span>WAV</span>
+          </button>
         </div>
 
         <!-- Content -->

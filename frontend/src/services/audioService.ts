@@ -405,6 +405,88 @@ class AudioService {
     return this.speakQueueTail
   }
 
+  /**
+   * Generates a TTS audio file and triggers a browser download.
+   */
+  public async download(text: unknown, options: SpeakOptions = {}): Promise<void> {
+    const normalizedText = this.normalizeText(text)
+    if (!normalizedText) return
+    const ttsText = this.normalizeDialoguePrefixes(normalizedText)
+
+    const {
+      sceneDescription,
+      adventureId,
+      sessionId,
+      title,
+      sceneName,
+      tone,
+      npcMetadata,
+    } = options
+
+    const normalizedSceneDescription = this.normalizeOptionalText(sceneDescription)
+    const normalizedAdventureId = this.normalizeOptionalText(adventureId)
+    const normalizedSessionId = this.normalizeOptionalText(sessionId)
+    const normalizedTitle = this.normalizeOptionalText(title)
+    const normalizedSceneName = this.normalizeOptionalText(sceneName)
+    const normalizedTone = this.normalizeOptionalText(tone)
+
+    this.isGenerating.value = true
+    this.currentlyGeneratingContent.value = normalizedText
+
+    try {
+      // For download, we try to get the whole block as one segment if possible.
+      // We use buildFallbackSegments with useChunking=false to get a single request.
+      const segments = this.buildFallbackSegments(ttsText, false)
+      const requests = this.buildSegmentRequests(segments, npcMetadata)
+
+      if (requests.length === 0) return
+
+      for (let i = 0; i < requests.length; i++) {
+        const request = requests[i]
+        await this.waitForTtsRequestSlot()
+        
+        const { audio_url } = await api.generateTTS({
+          text: request.requestText,
+          scene_description: normalizedSceneDescription,
+          adventure_id: normalizedAdventureId,
+          session_id: normalizedSessionId,
+          title: normalizedTitle,
+          scene_name: normalizedSceneName,
+          tone: normalizedTone,
+          voice_override: request.voiceOverride,
+        })
+
+        const blob = await this.fetchAudioBlob(audio_url)
+        const url = window.URL.createObjectURL(blob)
+        
+        const a = document.createElement('a')
+        a.href = url
+        
+        // Generate a descriptive filename
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        const safeTitle = (normalizedTitle || 'adventure').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+        const safeScene = (normalizedSceneName || 'scene').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+        
+        a.download = `taleweaver_${safeTitle}_${safeScene}_${timestamp}.wav`
+        
+        document.body.appendChild(a)
+        a.click()
+        
+        // Cleanup
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
+        }, 100)
+      }
+    } catch (err) {
+      console.error('[AudioService] Download failed', err)
+      this.setPlaybackError(err)
+    } finally {
+      this.isGenerating.value = false
+      this.currentlyGeneratingContent.value = null
+    }
+  }
+
   async speak(text: unknown, options: SpeakOptions = {}) {
     const normalizedText = this.normalizeText(text)
     if (!normalizedText) return
