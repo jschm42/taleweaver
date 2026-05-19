@@ -1096,8 +1096,8 @@ class GameTurnManager:
                 yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
 
         response_text = response_text.strip()
-            if response_text:
-                await self._save_chat_message("assistant", response_text)
+        if response_text:
+            await self._save_chat_message("assistant", response_text)
             # Only append to combat log if combat is still present in the state
             # Otherwise we'd accidentally resurrect a cleared combat state
             if self._read_combat_state():
