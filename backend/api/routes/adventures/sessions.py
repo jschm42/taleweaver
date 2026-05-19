@@ -408,6 +408,41 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
     return {"status": "deleted", "game_id": game_id}
 
 
+@router.delete("/sessions/{game_id}/messages/{message_id}", status_code=200)
+async def delete_chat_message(
+    game_id: str,
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deletes a single chat message from the session history in debug mode."""
+    session_res = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    game_session = session_res.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    state_res = await db.execute(
+        select(SessionState).where(SessionState.session_id == game_id)
+    )
+    state = state_res.scalars().first()
+    is_debug = settings.TALEWEAVER_DEBUG_ENABLED or (state and state.is_debug_enabled)
+    if not is_debug:
+        raise HTTPException(status_code=403, detail="Not in debug mode.")
+
+    msg_res = await db.execute(
+        select(ChatMessage).where((ChatMessage.id == message_id) & (ChatMessage.session_id == game_id))
+    )
+    message = msg_res.scalars().first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found.")
+
+    await db.delete(message)
+    await db.commit()
+    return {"status": "deleted", "message_id": message_id}
+
+
 @router.get("/sessions/{game_id}/integrity/items", status_code=200)
 async def check_session_item_integrity(
     game_id: str,
@@ -681,3 +716,125 @@ async def copy_session(
     return {"game_id": copied_session.id, "template_id": copied_session.template_id, "avatar_id": cloned_avatar.id}
 
 
+# ---------------------------------------------------------------------------
+# /{template_id}/state  (adventure-scoped convenience routes used by the UI)
+# ---------------------------------------------------------------------------
+
+@router.get("/{template_id}/state")
+async def get_adventure_state(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Returns a lightweight snapshot of the most-recent active session state for a template."""
+    state_res = await db.execute(
+        select(SessionState)
+        .join(GameSession, GameSession.id == SessionState.session_id)
+        .where(
+            GameSession.template_id == template_id,
+            GameSession.user_id == current_user.id,
+            GameSession.status == "active",
+        )
+        .order_by(GameSession.created_at.desc())
+        .limit(1)
+    )
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="No active session found for this adventure.")
+
+    return {
+        "scene_id": state.current_scene_id,
+        "in_game_time": state.in_game_time or 0,
+        "is_paused": False,
+        "session_id": state.session_id,
+    }
+
+
+@router.patch("/{template_id}/state")
+async def update_adventure_state(
+    template_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Patches the most-recent active session state for a template (e.g. scene_id, in_game_time)."""
+    state_res = await db.execute(
+        select(SessionState)
+        .join(GameSession, GameSession.id == SessionState.session_id)
+        .where(
+            GameSession.template_id == template_id,
+            GameSession.user_id == current_user.id,
+            GameSession.status == "active",
+        )
+        .order_by(GameSession.created_at.desc())
+        .limit(1)
+    )
+    state = state_res.scalars().first()
+    if not state:
+        raise HTTPException(status_code=404, detail="No active session found for this adventure.")
+
+    if "scene_id" in payload:
+        state.current_scene_id = payload["scene_id"]
+    if "in_game_time" in payload:
+        state.in_game_time = payload["in_game_time"]
+
+    await db.commit()
+    await db.refresh(state)
+
+    game_session_res = await db.execute(
+        select(GameSession).where(GameSession.id == state.session_id)
+    )
+    game_session = game_session_res.scalars().first()
+
+    return {
+        "scene_id": state.current_scene_id,
+        "in_game_time": state.in_game_time or 0,
+        "is_paused": bool(game_session and game_session.status == "paused"),
+        "session_id": state.session_id,
+    }
+
+
+@router.post("/{template_id}/pause")
+async def pause_adventure(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Pauses the most-recent active session for a template."""
+    session_res = await db.execute(
+        select(GameSession).where(
+            GameSession.template_id == template_id,
+            GameSession.user_id == current_user.id,
+            GameSession.status == "active",
+        ).order_by(GameSession.created_at.desc()).limit(1)
+    )
+    game_session = session_res.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="No active session found for this adventure.")
+
+    game_session.status = "paused"
+    await db.commit()
+    return {"status": "paused", "game_id": game_session.id}
+
+
+@router.post("/{template_id}/resume")
+async def resume_adventure(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Resumes the most-recently paused session for a template."""
+    session_res = await db.execute(
+        select(GameSession).where(
+            GameSession.template_id == template_id,
+            GameSession.user_id == current_user.id,
+            GameSession.status == "paused",
+        ).order_by(GameSession.created_at.desc()).limit(1)
+    )
+    game_session = session_res.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="No paused session found for this adventure.")
+
+    game_session.status = "active"
+    await db.commit()
+    return {"status": "active", "game_id": game_session.id}

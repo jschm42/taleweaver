@@ -40,6 +40,7 @@ export interface UseGameSocket {
   sendMessage: (content: string) => Promise<void>
   createTerminalEpilogue: () => Promise<void>
   revealIllustration: (name: string, url: string) => void
+  deleteMessage: (messageId: string) => Promise<void>
 }
 
 let gameSocketSingleton: UseGameSocket | null = null
@@ -338,7 +339,20 @@ export function useGameSocket(): UseGameSocket {
             })
           } else if (event === 'system') {
             const role = data.role || 'system'
+            // If the backend included a user_msg_id (debug command flow), attach it to the
+            // optimistically-pushed user message so the delete button becomes available.
+            if (data.user_msg_id) {
+              for (let i = messages.value.length - 1; i >= 0; i--) {
+                const m = messages.value[i] as any
+                if (m.role === 'user' && !m.id) { m.id = data.user_msg_id; break }
+              }
+            }
             _pushMessage(role, data.content, undefined, data.is_debug)
+            // Attach the system message DB id (if provided) so it can be deleted.
+            if (data.id) {
+              const lastMsg = messages.value[messages.value.length - 1]
+              if (lastMsg) (lastMsg as any).id = data.id
+            }
           } else if (event === 'chunk') {
             let lastMsg = messages.value[messages.value.length - 1]
             if (!lastMsg || lastMsg.role !== 'assistant' || (lastMsg as any).is_debug) {
@@ -368,6 +382,13 @@ export function useGameSocket(): UseGameSocket {
             status.value = 'connected'
             statusText.value = ''
           }
+        }
+      }
+
+      if (receivedFinalEvent) {
+        const snapshot = await fetchSessionSnapshot(currentGameId)
+        if (snapshot && Array.isArray(snapshot.messages)) {
+          messages.value = snapshot.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
         }
       }
 
@@ -432,6 +453,26 @@ export function useGameSocket(): UseGameSocket {
     }
   }
 
+  async function deleteMessage(messageId: string): Promise<void> {
+    if (!currentGameId || !messageId) return
+    try {
+      const res = await fetch(`${BASE}/adventures/sessions/${currentGameId}/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: authHeaders(false)
+      })
+      if (res.ok) {
+        messages.value = messages.value.filter(m => (m as any).id !== messageId)
+        addNotification('Message deleted.', 'success')
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        addNotification(errData.detail || 'Failed to delete message.', 'error')
+      }
+    } catch (err) {
+      console.error('[Session] Delete message error:', err)
+      addNotification('Failed to delete message.', 'error')
+    }
+  }
+
   gameSocketSingleton = {
     messages,
     sheet,
@@ -460,6 +501,7 @@ export function useGameSocket(): UseGameSocket {
     disconnect,
     sendMessage,
     createTerminalEpilogue,
+    deleteMessage,
     revealIllustration: (name: string, url: string) => {
       _pushMessage('system', `**Illustration Revealed:** ${name}\n\n![${name}](${url})`)
     }

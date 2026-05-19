@@ -16,11 +16,11 @@ from PIL import Image
 from sqlalchemy import delete, select
 
 from backend.engine.debug_engine import DebugEngine
-from backend.models.adventure import Adventure
+from backend.models.adventure_template import AdventureTemplate as Adventure
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
-from backend.models.game_state import GameState
+from backend.models.session_state import SessionState as GameState
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldScene
@@ -782,22 +782,22 @@ async def test_reset_adventure_preserves_existing_image_assets(client: AsyncClie
             "objects": [],
         }
 
-        state_res = await session.execute(select(GameState).where(GameState.adventure_id == ids["adventure_id"]))
+        state_res = await session.execute(select(SessionState).where(SessionState.template_id == ids["adventure_id"]))
         state = state_res.scalars().first()
         assert state is not None
-        state.scene_id = "HALL"
+        state.current_scene_id = "HALL"
 
         avatar = await session.get(Avatar, ids["avatar_id"])
         assert avatar is not None
         avatar.profile_image = protagonist_img
 
-        await session.execute(delete(WorldScene).where(WorldScene.adventure_id == ids["adventure_id"]))
-        await session.execute(delete(WorldEntity).where(WorldEntity.adventure_id == ids["adventure_id"]))
+        await session.execute(delete(WorldScene).where(WorldScene.template_id == ids["adventure_id"]))
+        await session.execute(delete(WorldEntity).where(WorldEntity.template_id == ids["adventure_id"]))
 
         session.add(
             WorldScene(
                 id="HALL",
-                adventure_id=ids["adventure_id"],
+                template_id=ids["adventure_id"],
                 label="Hall",
                 description="A simple corridor",
                 image_url=scene_img,
@@ -806,7 +806,7 @@ async def test_reset_adventure_preserves_existing_image_assets(client: AsyncClie
         session.add(
             WorldEntity(
                 id="GUIDE",
-                adventure_id=ids["adventure_id"],
+                template_id=ids["adventure_id"],
                 entity_type="NPC",
                 name="Guide",
                 description="Shows the way",
@@ -826,7 +826,7 @@ async def test_reset_adventure_preserves_existing_image_assets(client: AsyncClie
 
         hall_scene_res = await session.execute(
             select(WorldScene).where(
-                WorldScene.adventure_id == ids["adventure_id"],
+                WorldScene.template_id == ids["adventure_id"],
                 WorldScene.id == "HALL",
             )
         )
@@ -836,7 +836,7 @@ async def test_reset_adventure_preserves_existing_image_assets(client: AsyncClie
 
         guide_res = await session.execute(
             select(WorldEntity).where(
-                WorldEntity.adventure_id == ids["adventure_id"],
+                WorldEntity.template_id == ids["adventure_id"],
                 WorldEntity.id == "GUIDE",
             )
         )

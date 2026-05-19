@@ -222,3 +222,81 @@ async def test_generated_item_ids_are_deduplicated_against_session(setup_test_db
         entities = res.scalars().all()
         assert len(entities) == 1
         assert entities[0].name == "Ancient Key"
+
+
+async def test_debug_commands_toggle_and_drops(setup_test_db, monkeypatch):
+    """Verifies that debug commands toggle flags and cause NPCs to drop items."""
+    from tests.conftest import TestSessionLocal
+    from backend.core.config import settings
+    monkeypatch.setattr(settings, "TALEWEAVER_DEBUG_ENABLED", False)
+    
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        
+        # Verify initial states
+        assert not state.is_debug_enabled
+        assert state.allow_dynamic_items
+        
+        # 1. Test /debug on
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("/debug on"):
+            pass
+        await db.refresh(state)
+        assert state.is_debug_enabled
+        
+        # 2. Test /debug item dynamic off
+        async for _ in manager.process_turn("/debug item dynamic off"):
+            pass
+        await db.refresh(state)
+        assert not state.allow_dynamic_items
+        
+        # 3. Test /debug item dynamic on
+        async for _ in manager.process_turn("/debug item dynamic on"):
+            pass
+        await db.refresh(state)
+        assert state.allow_dynamic_items
+        
+        # 4. Test /debug npc drop_items
+        # First, seed an NPC with inventory items in the current scene
+        npc = WorldEntity(
+            id="NPC_MARGE",
+            session_id=state.session_id,
+            entity_type="NPC",
+            name="Marge",
+            description="A friendly chef.",
+            current_scene_id=state.current_scene_id,
+            inventory=[
+                {"id": "KITCHEN_KEY", "name": "Kitchen Key", "item_type": "KEY"}
+            ]
+        )
+        db.add(npc)
+        await db.commit()
+        
+        # Run /debug npc drop_items
+        async for _ in manager.process_turn("/debug npc drop_items"):
+            pass
+            
+        # Verify NPC inventory is cleared in DB
+        await db.refresh(npc)
+        assert npc.inventory == []
+        
+        # Verify NPC inventory override is cleared in session state
+        await db.refresh(state)
+        assert state.entity_states.get("NPC_MARGE", {}).get("inventory") == []
+        
+        # Verify item was spawned in the current scene
+        res = await db.execute(select(WorldEntity).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.id == "KITCHEN_KEY"
+        ))
+        key_ent = res.scalars().first()
+        assert key_ent is not None
+        assert not key_ent.is_in_inventory
+        assert key_ent.current_scene_id == state.current_scene_id
+
+        # 5. Test /debug off
+        async for _ in manager.process_turn("/debug off"):
+            pass
+        await db.refresh(state)
+        assert not state.is_debug_enabled
+

@@ -1001,7 +1001,7 @@ class MediaEngine:
                 # Scenes use random generation with subtle blur
                 strategy = OrganicGradientStrategy(theme=color_theme)
                 width, height = 1200, 800
-            elif cat in ["NPC", "CHARACTER", "ITEM", "AVATAR"]:
+            elif cat in ["NPC", "CHARACTER", "AVATAR"] or cat == "ITEM" or cat.startswith("ITEM_"):
                 # NPCs, Items, and Avatars (Protagonist) use the classic SVG system with margins
                 return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
             else:

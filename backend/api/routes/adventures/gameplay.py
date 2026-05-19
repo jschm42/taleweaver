@@ -67,7 +67,7 @@ async def get_chat_history(
     avatar = cv_res.scalars().first()
 
     chat_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id).order_by(ChatMessage.created_at.asc()))
-    history = [{"role": m.role, "content": m.content} for m in chat_res.scalars().all()]
+    history = [{"id": m.id, "role": m.role, "content": m.content} for m in chat_res.scalars().all()]
     
     world_map = await AdventureLogic.get_or_create_map(db, state.template_id, session_id=state.session_id)
     map_dict = MapEngine.to_dict(world_map) if world_map else None

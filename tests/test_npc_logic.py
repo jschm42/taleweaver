@@ -224,13 +224,13 @@ async def test_npc_inventory_sync_and_name_fallback_spawning(setup_test_db, monk
         assert reduced_npcs[0]["inventory"] == [{"id": "KITCHEN_KEY", "name": "Kitchen Key", "item_type": "KEY"}]
 
         # Verify _build_chat_rule_pass_prompt appends allow_dynamic_items instructions
-        adv.allow_dynamic_items = False
+        state.allow_dynamic_items = False
         await db.commit()
         prompt_disabled = manager._build_chat_rule_pass_prompt([], [], reduced_npcs, [], [])
         assert "DYNAMIC ITEMS IS DISABLED" in prompt_disabled
         assert "You must ONLY move/use pre-defined items" in prompt_disabled
 
-        adv.allow_dynamic_items = True
+        state.allow_dynamic_items = True
         await db.commit()
         prompt_enabled = manager._build_chat_rule_pass_prompt([], [], reduced_npcs, [], [])
         assert "DYNAMIC ITEMS IS ENABLED" in prompt_enabled

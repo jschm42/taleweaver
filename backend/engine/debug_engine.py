@@ -105,6 +105,33 @@ class DebugEngine:
                     state.is_debug_enabled = False
                     return "[DEBUG_LOG_OFF] Technical logging disabled."
 
+        elif sub == "on":
+            state.is_debug_enabled = True
+            return "[DEBUG_LOG_ON] Technical logging enabled. You will now see GameEvent outcomes in chat."
+
+        elif sub == "off":
+            state.is_debug_enabled = False
+            return "[DEBUG_LOG_OFF] Technical logging disabled."
+
+        elif sub == "npc":
+            parts = args.split(" ")
+            if len(parts) >= 2 and parts[1].lower() == "drop_items":
+                return "[TRIGGER_NPC_DROP_ITEMS]"
+            return "DEBUG ERROR: Usage: /debug npc drop_items"
+
+        elif sub == "item":
+            parts = args.split(" ")
+            if len(parts) >= 3 and parts[1].lower() == "dynamic":
+                cmd = parts[2].lower()
+                if cmd == "on":
+                    state.allow_dynamic_items = True
+                    return "[DEBUG_DYNAMIC_ITEMS_ON] Dynamic item generation enabled for this session."
+                elif cmd == "off":
+                    state.allow_dynamic_items = False
+                    return "[DEBUG_DYNAMIC_ITEMS_OFF] Dynamic item generation disabled for this session."
+            return "DEBUG ERROR: Usage: /debug item dynamic [on/off]"
+
+
         elif sub in {"award", "awards"}:
             # Grant all awards of the current adventure to the player instantly.
             if adventure is None or user is None:
@@ -397,5 +424,5 @@ class DebugEngine:
             if len(parts) < 2: return "DEBUG ERROR: Usage: /debug gen_item [PROMPT]"
             return f"[TRIGGER_GEN_ITEM] {parts[1]}"
 
-        return "DEBUG USAGE: /debug [session | szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID | gen_item PROMPT]"
+        return "DEBUG USAGE: /debug [on/off | npc drop_items | item dynamic on/off | session | szene | heal | scenes | npcs | items | exits | plot | context | map | reveal_map | log on/off | walkthrough | engine | award(s) | game_won | game_over | quest_finished | claim_awards | delete_item X | kill NPC | open_exit ID | gen_item PROMPT]"
 

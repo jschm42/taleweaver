@@ -384,7 +384,7 @@ class AdventureLogic:
             "time_system": state.time_system or (adventure.time_system if adventure else (session_snapshot.get("adventure") or {}).get("time_system", "calendar")),
             "time_config": state.time_config or (adventure.time_config if adventure else (session_snapshot.get("adventure") or {}).get("time_config")),
             "is_debug_enabled": bool(state.is_debug_enabled),
-            "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED)
+            "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled)
         }
         return snapshot
 

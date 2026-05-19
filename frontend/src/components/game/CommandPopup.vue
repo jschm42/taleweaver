@@ -35,6 +35,11 @@ const commands: Command[] = [
   { id: '/debug walkthrough', label: '/debug walkthrough', description: 'Reveal walkthrough for free', category: 'debug' },
   { id: '/debug log on', label: '/debug log on', description: 'Enable technical debug logs', category: 'debug' },
   { id: '/debug log off', label: '/debug log off', description: 'Disable technical debug logs', category: 'debug' },
+  { id: '/debug on', label: '/debug on', description: 'Enable in-game debug commands & logs', category: 'debug' },
+  { id: '/debug off', label: '/debug off', description: 'Disable in-game debug commands & logs', category: 'debug' },
+  { id: '/debug npc drop_items', label: '/debug npc drop_items', description: 'Force all scene NPCs to drop all items', category: 'debug' },
+  { id: '/debug item dynamic on', label: '/debug item dynamic on', description: 'Allow GM to generate items dynamically', category: 'debug' },
+  { id: '/debug item dynamic off', label: '/debug item dynamic off', description: 'Restrict GM to pre-defined items only', category: 'debug' },
 ]
 
 const filteredCommands = computed(() => {

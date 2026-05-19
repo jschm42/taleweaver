@@ -270,6 +270,12 @@ class AdventureTemplateUpdate(BaseModel):
     gameover_condition: Optional[str] = None
     tts_director_notes: Optional[str] = None
     creation_error: Optional[str] = None
+    strict_rules: Optional[bool] = None
+    game_over_rules: Optional[dict[str, Any]] = None
+    selected_style_id: Optional[str] = None
+    selected_tone_id: Optional[str] = None
+    time_system: Optional[str] = None
+    allow_dynamic_items: Optional[bool] = None
 
     @field_validator("selected_tone", mode="before")
     @classmethod

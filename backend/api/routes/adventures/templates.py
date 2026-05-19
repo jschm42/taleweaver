@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 import os
 
@@ -191,6 +192,25 @@ async def create_adventure(
     # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
     os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", session.id), exist_ok=True)
 
+    # Create the initial SessionState so adventure-scoped routes (/state etc.) work immediately.
+    asset_snapshot = {
+        "cover": None,
+        "protagonist": None,
+    }
+    initial_state = SessionState(
+        session_id=session.id,
+        user_id=current_user.id,
+        template_id=new_id,
+        avatar_id=avatar.id,
+        current_scene_id="START",
+        in_game_time=0,
+        entity_states={
+            AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: {},
+            "__asset_snapshot__": asset_snapshot,
+        },
+    )
+    db.add(initial_state)
+
     await db.commit()
     
     # 4. Trigger background generation
@@ -273,6 +293,102 @@ async def create_adventure(
         "avatar_id": avatar.id
     }
 
+@router.post("/{template_id}/reset")
+async def reset_adventure(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Rebuilds the template world data from original_manifest, preserving existing image URLs."""
+    from sqlalchemy import delete as sa_delete
+
+    result = await db.execute(
+        select(AdventureTemplate).where(
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
+        )
+    )
+    adv = result.scalars().first()
+    if not adv:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
+    if not adv.original_manifest:
+        raise HTTPException(status_code=400, detail="No original manifest to reset from.")
+
+    manifest = adv.original_manifest
+
+    # Collect existing image URLs so they survive the reset.
+    existing_scene_images: dict[str, str | None] = {}
+    existing_entity_images: dict[str, str | None] = {}
+
+    scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+    for s in scene_res.scalars().all():
+        existing_scene_images[s.id] = s.image_url
+
+    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+    for e in entity_res.scalars().all():
+        existing_entity_images[e.id] = e.image_url
+
+    # Wipe old template-level world data.
+    await db.execute(sa_delete(WorldScene).where(WorldScene.template_id == template_id))
+    await db.execute(sa_delete(WorldEntity).where(WorldEntity.template_id == template_id))
+
+    # Rebuild scenes from manifest.
+    for scene_def in manifest.get("scenes", []):
+        scene_id = scene_def.get("id")
+        if not scene_id:
+            continue
+        db.add(WorldScene(
+            id=scene_id,
+            template_id=template_id,
+            label=scene_def.get("name") or scene_def.get("label") or scene_id,
+            description=scene_def.get("description", ""),
+            image_url=existing_scene_images.get(scene_id),
+        ))
+
+    # Rebuild NPCs from manifest.
+    for npc_def in manifest.get("npcs", []):
+        npc_id = npc_def.get("id")
+        if not npc_id:
+            continue
+        db.add(WorldEntity(
+            id=npc_id,
+            template_id=template_id,
+            entity_type="NPC",
+            name=npc_def.get("name", ""),
+            description=npc_def.get("description", ""),
+            current_scene_id=npc_def.get("start_scene_id"),
+            image_url=existing_entity_images.get(npc_id),
+        ))
+
+    # Rebuild objects from manifest.
+    for obj_def in manifest.get("objects", []):
+        obj_id = obj_def.get("id")
+        if not obj_id:
+            continue
+        db.add(WorldEntity(
+            id=obj_id,
+            template_id=template_id,
+            entity_type="OBJECT",
+            name=obj_def.get("name", ""),
+            description=obj_def.get("description", ""),
+            current_scene_id=obj_def.get("start_scene_id"),
+            image_url=existing_entity_images.get(obj_id),
+        ))
+
+    # Restore protagonist image from manifest protagonist data.
+    prot_def = manifest.get("protagonist", {})
+    if prot_def:
+        av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+        avatar = av_res.scalars().first()
+        if avatar:
+            # Restore static fields; preserve generated profile_image.
+            avatar.name = prot_def.get("name") or avatar.name
+            avatar.role = prot_def.get("role") or avatar.role
+            avatar.description = prot_def.get("description") or avatar.description
+
+    await db.commit()
+    return {"status": "reset", "template_id": template_id}
+
+
 @router.patch("/{template_id}", response_model=AdventureTemplateResponse)
 async def update_adventure(
     template_id: str,
@@ -292,8 +408,8 @@ async def update_adventure(
     for field, value in update_data.items():
         setattr(adv, field, value)
 
-    # Sync strict_rules internally if mode changed
-    if "rule_enforcement_mode" in update_data:
+    # Sync strict_rules internally if mode changed (but not if strict_rules was patched directly)
+    if "rule_enforcement_mode" in update_data and "strict_rules" not in update_data:
         adv.strict_rules = (update_data["rule_enforcement_mode"] != "chat")
 
     # Sync to active sessions if narrative fields changed

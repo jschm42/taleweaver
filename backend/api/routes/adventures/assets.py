@@ -349,15 +349,53 @@ async def upload_visual(
     current_user: User = Depends(get_current_user),
 ):
     """Manually upload a visual asset."""
+    from io import BytesIO
+
+    import PIL.Image as PILImage
+
     from backend.models.avatar import Avatar
     from backend.models.world_entity import WorldEntity, WorldScene
-    
+
     adv = await db.get(AdventureTemplate, template_id)
     if not adv or adv.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Adventure template not found")
 
+    # Per-type upload constraints (mirrored from frontend visualService.ts).
+    _UPLOAD_LIMITS: dict[str, dict] = {
+        "cover":       {"max_width": 2048, "max_height": 1024, "max_bytes": 4 * 1024 * 1024},
+        "protagonist": {"max_width": 1024, "max_height": 1280, "max_bytes": 2 * 1024 * 1024},
+        "scene":       {"max_width": 1600, "max_height": 900,  "max_bytes": 3 * 1024 * 1024},
+        "npc":         {"max_width": 1024, "max_height": 1280, "max_bytes": 2 * 1024 * 1024},
+        "object":      {"max_width": 1024, "max_height": 1024, "max_bytes": 2 * 1024 * 1024},
+    }
+    limits = _UPLOAD_LIMITS.get(target_type, {"max_width": 2048, "max_height": 2048, "max_bytes": 4 * 1024 * 1024})
+
     try:
         content = await file.read()
+
+        # --- Byte-size guard ---
+        if len(content) > limits["max_bytes"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Max file size for this asset is {limits['max_bytes'] // (1024 * 1024)} MB.",
+            )
+
+        # --- Dimension guard ---
+        try:
+            img = PILImage.open(BytesIO(content))
+            width, height = img.size
+        except Exception:
+            raise HTTPException(status_code=400, detail="Could not read image dimensions.")
+
+        if width > limits["max_width"] or height > limits["max_height"]:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Max size for this asset is {limits['max_width']}×{limits['max_height']} px. "
+                    f"Uploaded image is {width}×{height} px."
+                ),
+            )
+
         full_path = _build_uploaded_visual_path(template_id, target_type, target_id, file.filename)
         with open(full_path, "wb") as f:
             f.write(content)
@@ -380,6 +418,8 @@ async def upload_visual(
             
         await db.commit()
         return {"status": "uploaded", "target_type": target_type, "image_url": relative_url}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("Failed to upload visual for %s", template_id)
         raise HTTPException(status_code=500, detail="Visual upload failed.") from exc

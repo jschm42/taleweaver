@@ -272,7 +272,7 @@ class GameTurnManager:
             current_scene_label=current_scene_label,
         )
 
-        if self.adventure and self.adventure.allow_dynamic_items:
+        if self.state.allow_dynamic_items:
             prompt += (
                 "\n\nDYNAMIC ITEMS IS ENABLED:\n"
                 "- You are allowed to create/generate brand new items on-the-fly if contextually appropriate using `new_inventory_items` or `spawned_items`."
@@ -527,12 +527,15 @@ class GameTurnManager:
 
         # Unified logic for /debug and / (slash) commands
         if user_msg.startswith("/debug"):
-            if settings.TALEWEAVER_DEBUG_ENABLED:
+            cmd_args = user_msg[7:].strip().lower()
+            is_on_cmd = cmd_args == "on" or cmd_args.startswith("log on")
+            
+            if settings.TALEWEAVER_DEBUG_ENABLED or self.state.is_debug_enabled or is_on_cmd:
                 async for chunk in self._handle_debug(user_msg):
                     yield chunk
                 return
             else:
-                logger.warning(f"[Turn {self.game_id}] Debug command ignored: TALEWEAVER_DEBUG_ENABLED is False.")
+                logger.warning(f"[Turn {self.game_id}] Debug command ignored: TALEWEAVER_DEBUG_ENABLED is False and in-game debug is OFF.")
                 # If debug is disabled, treat it as an unknown command to the user
                 unknown_msg = "Unknown command: /debug. Type /help for a list of commands."
                 self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=unknown_msg))
@@ -553,7 +556,7 @@ class GameTurnManager:
             
         is_rule_pass = False
         if user_msg.startswith("/"):
-            response = CommandParser.parse_command(self.avatar, user_msg, debug_enabled=settings.TALEWEAVER_DEBUG_ENABLED)
+            response = CommandParser.parse_command(self.avatar, user_msg, debug_enabled=(settings.TALEWEAVER_DEBUG_ENABLED or bool(self.state.is_debug_enabled)))
             
             if response == "[RULE_PASS]":
                 is_rule_pass = True
@@ -652,6 +655,10 @@ class GameTurnManager:
             async for chunk in self._handle_debug_gen_item(prompt):
                 yield chunk
             return
+        elif debug_info.startswith("[TRIGGER_NPC_DROP_ITEMS]"):
+            dropped_info = await self._debug_drop_npc_items()
+            debug_info = f"DEBUG: {dropped_info}"
+
         
         # New: Combat Debug Commands
         elif cmd_args == "win_fight":
@@ -690,10 +697,36 @@ class GameTurnManager:
                 self._set_combat_state(combat)
                 debug_info = "DEBUG: Combat forced to DEFEAT."
 
-        # Send debug info as a system message so it appears in chat
-        self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=debug_info))
+        if debug_info.startswith("[DEBUG_LOG_OFF]"):
+            await self.db.commit()
+            map_payload = await self._build_map_payload()
+            final_data = jsonable_encoder({
+                **map_payload,
+                'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+                'combat': AdventureLogic.get_combat_snapshot(self.state),
+                'awards': self.adventure.awards if self.adventure else [],
+                'game_over_reason': self.state.session.status_note if self.state.session else None,
+                **self._build_terminal_flags_payload(),
+                'status': 'success'
+            })
+            yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+            return
+
+        # Save the user's /debug command to DB so it can be deleted in debug mode.
+        user_chat_msg = ChatMessage(session_id=self.state.session_id, role="user", content=user_msg)
+        self.db.add(user_chat_msg)
+        await self.db.flush()
+        user_msg_id = str(user_chat_msg.id)
+
+        # Send debug info as a system message so it appears in chat.
+        # Include both IDs so the frontend can attach them for deletion.
+        system_chat_msg = ChatMessage(session_id=self.state.session_id, role="system", content=debug_info)
+        self.db.add(system_chat_msg)
+        await self.db.flush()
+        system_msg_id = str(system_chat_msg.id)
+
         await self.db.commit()
-        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': debug_info, 'is_debug': True})}\n\n"
+        yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': debug_info, 'is_debug': True, 'id': system_msg_id, 'user_msg_id': user_msg_id})}\n\n"
 
     async def _handle_debug_gen_item(self, prompt: str) -> AsyncGenerator[str, None]:
         """Debug helper to force-generate an item based on a prompt."""
@@ -713,6 +746,53 @@ class GameTurnManager:
             'status': 'success'
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+
+    async def _debug_drop_npc_items(self) -> str:
+        # Find all NPCs in the current scene
+        res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.entity_type == "NPC",
+                WorldEntity.current_scene_id == self.state.current_scene_id
+            )
+        )
+        npcs = res.scalars().all()
+        if not npcs:
+            return "No NPCs found in the current scene."
+
+        overrides = self.state.entity_states or {}
+        dropped_items_summary = []
+
+        for npc in npcs:
+            # Determine NPC's current inventory
+            npc_inv = overrides.get(npc.id, {}).get("inventory")
+            if npc_inv is None:
+                npc_inv = npc.inventory or []
+
+            if not npc_inv:
+                continue
+
+            # Drop each item in scene
+            for item in npc_inv:
+                await self._spawn_scene_item(item)
+                dropped_items_summary.append(f"{item.get('name') or 'Item'} (from {npc.name})")
+
+            # Clear NPC's inventory in DB
+            npc.inventory = []
+            self.db.add(npc)
+
+            # Clear NPC's inventory in session state overrides
+            states = dict(self.state.entity_states or {})
+            if npc.id not in states:
+                states[npc.id] = {}
+            states[npc.id]["inventory"] = []
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
+
+        if not dropped_items_summary:
+            return "No items to drop from NPCs in the current scene."
+
+        return f"Dropped NPC items: {', '.join(dropped_items_summary)}"
 
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
         # Handle /map specifically (doesn't use CommandParser)
@@ -1554,6 +1634,26 @@ class GameTurnManager:
             safe_id = f"{base_id[: max(1, 50 - len(suffix))]}{suffix}"
             counter += 1
 
+        # Generate high-quality placeholder if image_url is missing
+        image_url = item.get("image_url")
+        if not image_url:
+            try:
+                from backend.engine.media_engine import MediaEngine
+                from backend.core.config import settings
+                import os
+                
+                item_type = item.get("item_type") or "PICKABLE"
+                target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", self.adventure.id, "entities")
+                image_url = await MediaEngine.generate_placeholder(
+                    adventure_id=self.adventure.id,
+                    entity_id=safe_id,
+                    target_dir=target_dir,
+                    category=f"ITEM_{item_type.upper()}"
+                )
+            except Exception as e:
+                logger.error("Failed to generate spawned item placeholder: %s", e)
+                image_url = None
+
         entity = WorldEntity(
             id=safe_id,
             session_id=self.game_id,
@@ -1563,7 +1663,7 @@ class GameTurnManager:
             description=str(item.get("description") or f"Loot from battle: {name}"),
             current_scene_id=self.state.current_scene_id,
             spatial_position=item.get("spatial_position") or "on the ground",
-            image_url=item.get("image_url"),
+            image_url=image_url,
             item_type=item.get("item_type") or "PICKABLE",
             wearable_slots=item.get("wearable_slots"),
             is_in_inventory=False,
@@ -2081,7 +2181,7 @@ class GameTurnManager:
             if self.adventure.rule_enforcement_mode == "story":
                 mechanics_suffix = prompts.GM_STORY_MECHANICS_SUFFIX
             
-            if self.adventure.allow_dynamic_items:
+            if self.state.allow_dynamic_items:
                 dynamic_instr = (
                     "- To add an item directly to the player, use `new_inventory_items`. You are allowed to create/generate brand new items on-the-fly if contextually appropriate.\n"
                     "- To place a new item in the current scene, use `spawned_items`. You are allowed to create/generate brand new items on-the-fly.\n"
@@ -2732,25 +2832,52 @@ class GameTurnManager:
         if event.new_inventory_items:
             filtered_inventory_items = []
             for item in event.new_inventory_items:
+                if not item.image_url:
+                    try:
+                        from backend.engine.media_engine import MediaEngine
+                        from backend.core.config import settings
+                        import os
+                        import re
+                        import uuid
+                        
+                        item_type = item.item_type or "PICKABLE"
+                        safe_id = re.sub(r"[^A-Za-z0-9_\-]", "_", item.id or f"LOOT_{uuid.uuid4().hex[:8]}")[:50]
+                        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", self.adventure.id, "entities")
+                        item.image_url = await MediaEngine.generate_placeholder(
+                            adventure_id=self.adventure.id,
+                            entity_id=safe_id,
+                            target_dir=target_dir,
+                            category=f"ITEM_{item_type.upper()}"
+                        )
+                    except Exception as e:
+                        logger.error("Failed to generate new inventory item placeholder: %s", e)
+
                 if item.id and item.id in existing_item_ids:
                     # Check if it's a true duplicate (same name)
                     match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None)
-                    if match and match.get("name") == item.name:
+                    if match:
+                        if match.get("name") == item.name:
+                            logger.info(
+                                "[Turn %s] Skipping true duplicate inventory item id: %s",
+                                self.game_id,
+                                item.id,
+                            )
+                            continue
+                        else:
+                            logger.info(
+                                "[Turn %s] Permitting implied update for item id %s (Name: %s -> %s)",
+                                self.game_id,
+                                item.id,
+                                match.get("name"),
+                                item.name
+                            )
+                    else:
                         logger.info(
-                            "[Turn %s] Skipping true duplicate inventory item id: %s",
+                            "[Turn %s] Skipping duplicate inventory item id %s (exists in session but not in inventory)",
                             self.game_id,
                             item.id,
                         )
                         continue
-                    else:
-                        logger.info(
-                            "[Turn %s] Permitting implied update for item id %s (Name: %s -> %s)",
-                            self.game_id,
-                            item.id,
-                            match.get("name") if match else "unknown",
-                            item.name
-                        )
-                        # We allow it to pass to RuleEngine which will handle the replacement
                 
                 filtered_inventory_items.append(item)
                 if item.id:
@@ -3049,8 +3176,10 @@ class GameTurnManager:
         for obj in all_objs:
             is_in_inv = states.get(obj.id, {}).get("is_in_inventory", obj.is_in_inventory)
             if not is_in_inv:
-                spawned_or_player_ids.add(obj.id)
-            elif is_in_inv:
+                # Only add objects that are in the scene (not in any inventory).
+                # Objects with is_in_inventory=True may belong to NPC inventories and
+                # must NOT be added here, otherwise the cleanup loop below would
+                # incorrectly strip them from every NPC's inventory.
                 spawned_or_player_ids.add(obj.id)
 
         npc_res = await self.db.execute(

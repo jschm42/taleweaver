@@ -131,6 +131,9 @@ class CommandParser:
         ]
         
         if debug_enabled:
+            lines.append("- `/debug on/off`: Toggle in-game debug mode.")
+            lines.append("- `/debug npc drop_items`: Force NPCs in scene to drop all items.")
+            lines.append("- `/debug item dynamic on/off`: Toggle dynamic item creation by GM.")
             lines.append("- `/debug walkthrough`: Reveal walkthrough without XP cost (debug).")
             lines.append("- `/debug <cmd>`: Engine debug commands.")
             

@@ -5,9 +5,12 @@ Uses an in-memory SQLite database so tests are fully isolated and
 never touch the production database. All LLM calls are mocked to
 avoid API costs and network latency.
 """
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from unittest.mock import AsyncMock
 
 import backend.core.database as core_database
 from backend.core.auth import create_access_token, get_password_hash
@@ -53,6 +56,52 @@ async def setup_test_db():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     core_database.AsyncSessionLocal = original_session_local
+
+
+@pytest.fixture(autouse=True)
+def stub_world_generator(monkeypatch):
+    """Global stub for WorldGenerator.generate_world.
+
+    Prevents live Ollama/LLM calls for every test that triggers background
+    adventure generation.  The stub creates a minimal START scene and marks
+    the template as ready so that all downstream assertions (is_ready, status,
+    scene existence) still pass.
+
+    Individual tests that need different generation behaviour should call
+    ``monkeypatch.setattr`` *inside* the test body – monkeypatch patches
+    applied within a test override this fixture's patch.
+    """
+    from backend.models.adventure_template import AdventureTemplate
+    from backend.models.world_entity import WorldScene
+
+    async def _fake_generate_world(db, user=None, template_id=None, adventure_id=None, *args, **kwargs):
+        adv_id = template_id or adventure_id
+        if not adv_id:
+            return
+
+        # Create a minimal START scene so session-start logic has a scene to clone.
+        existing = await db.get(WorldScene, "START")
+        if not existing:
+            db.add(WorldScene(
+                id="START",
+                template_id=adv_id,
+                label="Starting Room",
+                description="A minimal scene created by the test stub.",
+                image_url=None,
+            ))
+
+        # Mark template as ready.
+        adv = await db.get(AdventureTemplate, adv_id)
+        if adv:
+            adv.is_ready = True
+            adv.creation_status = "Ready"
+
+        await db.commit()
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.templates.WorldGenerator.generate_world",
+        _fake_generate_world,
+    )
 
 
 @pytest_asyncio.fixture

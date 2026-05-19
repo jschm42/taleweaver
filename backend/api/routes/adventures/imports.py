@@ -133,17 +133,106 @@ async def reimport_defaults(
     await AdventureTemplateImporter.import_from_directory(db, defaults_dir, owner_id=current_user.id, delete_after=False)
     return {"status": "success", "message": "Default adventures re-imported successfully."}
 
-@router.post("/import")
+@router.post("/import", status_code=201)
 async def import_adventure(
     payload: dict[str, Any],
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Import an adventure from a manifest URL or local path."""
-    source_url = payload.get("url")
-    if not source_url:
-        raise HTTPException(status_code=400, detail="Import URL is required.")
-    return {"status": "success", "message": f"Imported from {source_url}"}
+    """Import an adventure from a direct ADV JSON payload body."""
+    try:
+        result = await AdventureTemplateImporter.import_adv_manifest(
+            db, payload, owner_id=current_user.id, overwrite=False
+        )
+        if not result:
+            raise HTTPException(status_code=400, detail="The ADV manifest is invalid or could not be processed.")
+        # Resolve the created template
+        res = await db.execute(
+            select(AdventureTemplate).where(AdventureTemplate.owner_id == current_user.id)
+            .order_by(AdventureTemplate.created_at.desc()).limit(1)
+        )
+        adv = res.scalars().first()
+        adventure_id = adv.id if adv else None
+        # Export session export URL
+        return {
+            "status": "imported",
+            "type": "ADVENTURE",
+            "adventure_id": adventure_id,
+        }
+    except AdventureConflictError as e:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": "Adventure already exists",
+                "conflict_info": {
+                    "title": e.title,
+                    "existing_version": e.existing_version,
+                    "new_version": e.new_version,
+                    "template_id": e.template_id,
+                },
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Import failed")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+
+@router.post("/import/session-bundle")
+async def import_session_bundle(
+    payload: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Import a full SESSION_BUNDLE from a JSON payload."""
+    try:
+        adv_data = payload.get("adventure") or {}
+        # Build a minimal ADV manifest from the bundle's adventure block
+        adv_manifest = dict(adv_data)
+        adv_manifest.setdefault("title", adv_data.get("title", "Imported Bundle"))
+        adv_manifest["scenes"] = payload.get("scenes", [])
+        adv_manifest["exits"] = payload.get("exits", [])
+        adv_manifest["npcs"] = [
+            e for e in payload.get("entities", []) if e.get("entity_type") == "NPC"
+        ]
+        adv_manifest["objects"] = [
+            e for e in payload.get("entities", []) if e.get("entity_type") == "OBJECT"
+        ]
+        result = await AdventureTemplateImporter.import_adv_manifest(
+            db, adv_manifest, owner_id=current_user.id, overwrite=False
+        )
+        if not result:
+            raise HTTPException(status_code=400, detail="The session bundle is invalid or could not be processed.")
+        res = await db.execute(
+            select(AdventureTemplate).where(AdventureTemplate.owner_id == current_user.id)
+            .order_by(AdventureTemplate.created_at.desc()).limit(1)
+        )
+        adv = res.scalars().first()
+        adventure_id = adv.id if adv else None
+        return {
+            "status": "imported",
+            "type": "SESSION",
+            "adventure_id": adventure_id,
+        }
+    except AdventureConflictError as e:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": "Adventure already exists",
+                "conflict_info": {
+                    "title": e.title,
+                    "existing_version": e.existing_version,
+                    "new_version": e.new_version,
+                    "template_id": e.template_id,
+                },
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Session bundle import failed")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @router.post("/import/adz")
 async def import_adventure_adz(

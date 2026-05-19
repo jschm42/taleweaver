@@ -149,9 +149,45 @@ class SVGPlaceholderGenerator:
         if cat in ["NPC", "AVATAR", "CHARACTER"]:
             # Nutze das ra-pawn Icon für NPCs und Protagonisten (Avatare)
             return self._generate_ra_pawn(color="#555555")
-        elif cat == "ITEM":
-            # Nutze den Lederbeutel als Standard für Items
-            return self._load_svg_asset("medieval-leather-pouch.svg", color_override="#555555")
+        elif cat.startswith("ITEM"):
+            # Check for specific item types
+            if "WEAPON" in cat:
+                return f'<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">{self._generate_gradient_defs()}<rect width="100%" height="100%" fill="url(#bgGradient)"/><g transform="translate(0, 0)">' \
+                       f'<line x1="256" y1="400" x2="256" y2="112" stroke="#ffffff" stroke-width="24" stroke-linecap="round"/>' \
+                       f'<line x1="176" y1="320" x2="336" y2="320" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>' \
+                       f'<line x1="256" y1="320" x2="256" y2="400" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>' \
+                       f'</g></svg>'
+            elif "KEY" in cat:
+                return f'<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">{self._generate_gradient_defs()}<rect width="100%" height="100%" fill="url(#bgGradient)"/><g transform="translate(0, 0)">' \
+                       f'<circle cx="256" cy="160" r="50" stroke="#ffffff" stroke-width="20" fill="none"/>' \
+                       f'<line x1="256" y1="210" x2="256" y2="400" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>' \
+                       f'<line x1="256" y1="310" x2="310" y2="310" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>' \
+                       f'<line x1="256" y1="370" x2="310" y2="370" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>' \
+                       f'</g></svg>'
+            elif "CONSUMABLE" in cat or "POTION" in cat:
+                return f'<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">{self._generate_gradient_defs()}<rect width="100%" height="100%" fill="url(#bgGradient)"/><g transform="translate(0, 0)">' \
+                       f'<circle cx="256" cy="320" r="100" stroke="#ffffff" stroke-width="20" fill="none"/>' \
+                       f'<rect x="220" y="140" width="72" height="80" stroke="#ffffff" stroke-width="20" fill="none" rx="8"/>' \
+                       f'<line x1="256" y1="220" x2="256" y2="320" stroke="#ffffff" stroke-width="12" stroke-dasharray="8 8"/>' \
+                       f'</g></svg>'
+            elif "READABLE" in cat or "BOOK" in cat or "SCROLL" in cat:
+                return f'<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">{self._generate_gradient_defs()}<rect width="100%" height="100%" fill="url(#bgGradient)"/><g transform="translate(0, 0)">' \
+                       f'<rect x="140" y="110" width="232" height="292" stroke="#ffffff" stroke-width="20" fill="none" rx="12"/>' \
+                       f'<line x1="256" y1="110" x2="256" y2="402" stroke="#ffffff" stroke-width="12"/>' \
+                       f'<line x1="170" y1="180" x2="230" y2="180" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>' \
+                       f'<line x1="170" y1="240" x2="230" y2="240" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>' \
+                       f'<line x1="170" y1="300" x2="230" y2="300" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>' \
+                       f'<line x1="282" y1="180" x2="342" y2="180" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>' \
+                       f'<line x1="282" y1="240" x2="342" y2="240" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>' \
+                       f'<line x1="282" y1="300" x2="342" y2="300" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>' \
+                       f'</g></svg>'
+            elif "WEARABLE" in cat or "ARMOR" in cat or "SHIELD" in cat or "HELM" in cat:
+                return f'<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">{self._generate_gradient_defs()}<rect width="100%" height="100%" fill="url(#bgGradient)"/><g transform="translate(0, 0)">' \
+                       f'<path d="M 140,140 L 372,140 L 372,256 C 372,340 310,400 256,430 C 202,400 140,340 140,256 Z" stroke="#ffffff" stroke-width="20" fill="none" stroke-linejoin="round"/>' \
+                       f'</g></svg>'
+            else:
+                # Nutze den Lederbeutel als Standard für Items
+                return self._load_svg_asset("medieval-leather-pouch.svg", color_override="#555555")
             
         return self._generate_fallback_svg()
 

@@ -5,7 +5,7 @@ import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
 import CommandPopup from '@/components/game/CommandPopup.vue'
 import GameActionBar from '@/components/game/GameActionBar.vue'
-import type { ConnectionStatus } from '@/composables/useGameSocket'
+import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 
@@ -29,6 +29,8 @@ const props = defineProps<{
   gameId?: string
   currentSceneDescription?: string
 }>()
+
+const { deleteMessage } = useGameSocket()
 
 const emit = defineEmits<{
   send: [content: string]
@@ -679,6 +681,19 @@ onUnmounted(() => {
           >
             <i class="ra ra-download text-xs"></i>
             <span>WAV</span>
+          </button>
+
+          <!-- Delete Message Button (Debug Mode Only) -->
+          <button 
+            v-if="props.sheet?.debug_mode && (msg as any).id"
+            @click="deleteMessage((msg as any).id)"
+            class="p-1.5 px-3 text-[10px] font-black uppercase tracking-widest bg-slate-800/80 border border-slate-700/50 rounded-xl text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
+            title="Delete this message (Debug)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Delete</span>
           </button>
         </div>
 
