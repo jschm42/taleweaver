@@ -49,21 +49,11 @@ function update(field: string, value: any) {
           class="px-4 py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1"
           :class="modelValue.rule_enforcement_mode === mode ? 'border-aether-primary bg-aether-primary/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/10'"
         >
-          <span class="text-xxs font-black uppercase tracking-widest">{{ mode === 'rpg' ? 'RPG (EXPERIMENTAL)' : mode }}</span>
+          <span class="text-xxs font-black uppercase tracking-widest">{{ mode === 'rpg' ? 'RPG' : mode }}</span>
         </button>
       </div>
       <p class="text-xxs text-white/30 uppercase tracking-widest text-center">{{ ruleModeHelp }}</p>
       
-      <!-- Experimental Warning -->
-      <div v-if="modelValue.rule_enforcement_mode === 'rpg'" class="mt-4 p-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-4">
-        <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
-          <AlertTriangle class="w-5 h-5" />
-        </div>
-        <div>
-          <h4 class="text-amber-500 font-black uppercase tracking-widest text-xxs mb-1">Experimental System</h4>
-          <p class="text-slate-400 text-xxs leading-relaxed">The RPG mode is currently under heavy development. Deterministic mechanics like combat, attribute checks, and automatic world updates may behave unexpectedly. Use with caution!</p>
-        </div>
-      </div>
     </div>
 
     <!-- World Pacing & Time -->
