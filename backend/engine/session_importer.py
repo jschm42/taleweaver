@@ -242,6 +242,7 @@ class SessionImporter:
                         wearable_slots=ent.get("wearable_slots"),
                         is_in_inventory=ent.get("is_in_inventory", False),
                         is_hidden=ent.get("is_hidden", False),
+                        reveal_rule=ent.get("reveal_rule"),
                         is_portable=ent.get("is_portable", True),
                         combination_ingredients=ent.get("combination_ingredients"),
                         reveals_item_id=ent.get("reveals_item_id"),

@@ -843,20 +843,35 @@ class GameTurnManager:
             return None
 
         target_hint = (target_hint or "").strip()
+        states = self.state.entity_states or {}
+
+        # Filter out NPCs that are defeated in session state (permanent)
+        def _is_npc_defeated(npc: WorldEntity) -> bool:
+            npc_state = states.get(npc.id, {}) or {}
+            if npc_state.get("is_defeated"):
+                return True
+            # Also respect is_hidden override from entity_states
+            if npc_state.get("is_hidden"):
+                return True
+            return False
+
+        eligible_npcs = [npc for npc in npcs if not _is_npc_defeated(npc)]
+        if not eligible_npcs:
+            return None
+
         if target_hint:
             low = target_hint.lower()
-            for npc in npcs:
+            for npc in eligible_npcs:
                 if npc.id.lower() == low or npc.name.lower() == low:
                     return npc
 
-        states = self.state.entity_states or {}
-        for npc in npcs:
+        for npc in eligible_npcs:
             hp = (states.get(npc.id, {}) or {}).get("hp")
             if hp is None:
                 hp = npc.hp
             if hp is None or hp > 0:
                 return npc
-        return npcs[0]
+        return eligible_npcs[0]
 
     def _entity_stat(self, ent: WorldEntity, stat_key: str, fallback: int = 0) -> int:
         states = self.state.entity_states or {}
@@ -995,8 +1010,17 @@ class GameTurnManager:
                 yield chunk
             return
 
-        # Check if NPC is attackable
+        # Check if NPC is already defeated (permanent state)
         states = self.state.entity_states or {}
+        is_defeated = (states.get(target.id, {}) or {}).get("is_defeated", False)
+        if is_defeated:
+            msg = f"{target.name} has already been defeated."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
+
+        # Check if NPC is attackable
         is_attackable = (states.get(target.id, {}) or {}).get("is_attackable")
         if is_attackable is None:
             is_attackable = target.is_attackable
@@ -1831,6 +1855,9 @@ class GameTurnManager:
             if enemy_id not in states:
                 states[enemy_id] = {}
             states[enemy_id]["inventory"] = []
+            # Mark NPC as permanently defeated so they cannot be re-engaged
+            states[enemy_id]["is_defeated"] = True
+            states[enemy_id]["is_attackable"] = False
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
             self._append_combat_log(combat, combat["status_note"], "outcome")
@@ -1850,6 +1877,18 @@ class GameTurnManager:
                 combat["active"] = False
                 combat["outcome"] = "victory"
                 combat["status_note"] = f"{enemy_ent.name} flees in panic! You won the battle."
+                # Mark NPC as permanently defeated (fled = no re-engagement)
+                states = dict(self.state.entity_states or {})
+                if enemy_id not in states:
+                    states[enemy_id] = {}
+                states[enemy_id]["is_defeated"] = True
+                states[enemy_id]["is_attackable"] = False
+                self.state.entity_states = states
+                flag_modified(self.state, "entity_states")
+                # Spawn any remaining NPC inventory items to the scene automatically
+                flee_loot = list(enemy.get("inventory") or enemy_ent.inventory or [])
+                for flee_item in flee_loot:
+                    await self._spawn_scene_item(flee_item)
                 self._append_combat_log(combat, combat["status_note"], "outcome")
                 self._set_combat_state(combat)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': combat['status_note']})}\n\n"
@@ -1897,24 +1936,38 @@ class GameTurnManager:
         for ent in all_entities:
             if ent.id in overrides:
                 ov = overrides[ent.id]
-                if "hp" in ov:
-                    ent.hp = ov["hp"]
-                if "mana" in ov:
-                    ent.mana = ov["mana"]
-                if "stamina" in ov:
-                    ent.stamina = ov["stamina"]
-                if "spatial_position" in ov:
-                    ent.spatial_position = ov["spatial_position"]
-                if "name" in ov:
-                    ent.name = ov["name"]
-                if "description" in ov:
-                    ent.description = ov["description"]
-                if "current_scene_id" in ov:
-                    ent.current_scene_id = ov["current_scene_id"]
+                if "hp" in ov:               ent.hp = ov["hp"]
+                if "mana" in ov:             ent.mana = ov["mana"]
+                if "stamina" in ov:          ent.stamina = ov["stamina"]
+                if "spatial_position" in ov: ent.spatial_position = ov["spatial_position"]
+                if "name" in ov:             ent.name = ov["name"]
+                if "description" in ov:      ent.description = ov["description"]
+                if "current_scene_id" in ov: ent.current_scene_id = ov["current_scene_id"]
+                # Bug fix: apply is_hidden and is_in_inventory overrides so LLM sees correct visibility
+                if "is_hidden" in ov:        ent.is_hidden = ov["is_hidden"]
+                if "is_in_inventory" in ov:  ent.is_in_inventory = ov["is_in_inventory"]
+                # Mark defeated NPCs with a dynamic attribute for the memory manager
+                ent.is_defeated = bool(ov.get("is_defeated", False))
 
-        # Partition entities into "here" vs "elsewhere"
-        entities = [e for e in all_entities if e.current_scene_id == self.state.current_scene_id]
-        other_npcs = [e for e in all_entities if e.current_scene_id != self.state.current_scene_id and e.entity_type == "NPC"]
+        # Partition entities into "here" vs "elsewhere".
+        # Hidden entities and items-in-inventory are excluded from the active scene list
+        # passed to the LLM, but collected separately as hidden_entities for the GM-only block.
+        scene_entities_all = [
+            e for e in all_entities
+            if e.current_scene_id == self.state.current_scene_id
+            and not getattr(e, 'is_in_inventory', False)
+        ]
+        # Visible entities: not hidden
+        entities = [e for e in scene_entities_all if not getattr(e, 'is_hidden', False)]
+        # Hidden entities: only hidden ones — shown in GM-only context block
+        hidden_entities = [e for e in scene_entities_all if getattr(e, 'is_hidden', False)]
+
+        other_npcs = [
+            e for e in all_entities
+            if e.current_scene_id != self.state.current_scene_id
+            and e.entity_type == "NPC"
+            and not getattr(e, 'is_hidden', False)
+        ]
 
         # Fetch scene labels for all scenes to provide human-readable locations for world NPCs
         all_scenes_res = await self.db.execute(select(WorldScene).where(WorldScene.session_id == self.game_id))
@@ -1942,7 +1995,8 @@ class GameTurnManager:
             is_adventure_generator=self.adventure.is_adventure_generator,
             location_detail_level="concise",
             other_npcs=other_npcs,
-            scene_map=scene_map
+            scene_map=scene_map,
+            hidden_entities=hidden_entities,
         )[0]["content"]
 
         narration_system_prompt = MemoryManager.build_context(
@@ -1962,7 +2016,8 @@ class GameTurnManager:
             is_adventure_generator=self.adventure.is_adventure_generator,
             location_detail_level="full",
             other_npcs=other_npcs,
-            scene_map=scene_map
+            scene_map=scene_map,
+            hidden_entities=hidden_entities,
         )[0]["content"]
         notes_prompt_block = self._build_gm_notes_prompt_block()
         mechanics_system_prompt += notes_prompt_block
@@ -2906,6 +2961,8 @@ class GameTurnManager:
                     states[eid]["stamina"] = update.stamina
                 if update.is_attackable is not None:
                     states[eid]["is_attackable"] = update.is_attackable
+                if update.is_defeated is not None:
+                    states[eid]["is_defeated"] = update.is_defeated
                 if update.inventory is not None: 
                     states[eid]["inventory"] = [i.model_dump(exclude_none=True) for i in update.inventory]
                 state_dirty = True
