@@ -170,6 +170,7 @@ async def list_sessions(
             & (WorldScene.session_id == GameSession.id),
         )
         .where(GameSession.user_id == current_user.id)
+        .distinct()
     )
     rows = result.all()
     user_earned_awards = current_user.earned_awards or []
@@ -215,7 +216,12 @@ async def start_session_for_template(
         raise HTTPException(status_code=403, detail="You do not have access to this adventure yet.")
 
     # 1. Resolve Avatar (Template-based or fresh manifest-based)
-    av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+    av_res = await db.execute(
+        select(Avatar)
+        .where(Avatar.template_id == template_id)
+        .order_by(Avatar.created_at.asc())
+        .limit(1)
+    )
     template_avatar = av_res.scalars().first()
     
     if template_avatar:
@@ -284,6 +290,7 @@ async def start_session_for_template(
     entity_rows = await db.execute(
         select(WorldEntity).where(
             WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
             WorldEntity.entity_type == "OBJECT",
         )
     )
@@ -294,7 +301,15 @@ async def start_session_for_template(
     db.add(avatar)
     await db.flush()
 
-    scene_res = await db.execute(select(WorldScene.id).where(WorldScene.template_id == template_id).order_by(WorldScene.id.asc()).limit(1))
+    scene_res = await db.execute(
+        select(WorldScene.id)
+        .where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+        )
+        .order_by(WorldScene.id.asc())
+        .limit(1)
+    )
     first_scene_id = scene_res.scalar_one_or_none() or "START"
 
     new_session = GameSession(
@@ -316,7 +331,12 @@ async def start_session_for_template(
     manifest_snapshot = AdventureLogic.build_session_manifest_snapshot(adventure)
 
     # Build entity image mapping from template entities for asset snapshot
-    ent_rows = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+    ent_rows = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+        )
+    )
     template_entities = ent_rows.scalars().all()
     entity_images = {e.id: e.image_url for e in template_entities if getattr(e, "id", None)}
 
@@ -351,7 +371,12 @@ async def start_session_for_template(
     
     # --- DEEP CLONE WORLD DATA ---
     # 1. Clone Scenes
-    scenes_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+    scenes_res = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+        )
+    )
     scenes = scenes_res.scalars().all()
     for s in scenes:
         new_s = WorldScene(
@@ -361,7 +386,12 @@ async def start_session_for_template(
         db.add(new_s)
     
     # 2. Clone Exits
-    exits_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id))
+    exits_res = await db.execute(
+        select(WorldExit).where(
+            WorldExit.template_id == template_id,
+            WorldExit.session_id.is_(None),
+        )
+    )
     exits = exits_res.scalars().all()
     for e in exits:
         new_e = WorldExit(
@@ -372,7 +402,12 @@ async def start_session_for_template(
         db.add(new_e)
         
     # 3. Clone Entities
-    entities_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+    entities_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+        )
+    )
     entities = entities_res.scalars().all()
     for ent in entities:
         new_ent = WorldEntity(

@@ -19,6 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.turn_helpers import (
+    TurnCombatStateHelper,
+    TurnProgressionBuilder,
+    TurnSessionStateHelper,
+)
+from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
 from backend.core import prompts
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
@@ -26,7 +32,6 @@ from backend.core.llm_router import GameMasterLLM
 from backend.engine.command_parser import CommandParser
 from backend.engine.debug_engine import DebugEngine
 from backend.engine.map_engine import MapEngine
-from backend.engine.memory_manager import MemoryManager
 from backend.engine.quest_manager import QuestManager
 from backend.engine.adventure_generator_service import AdventureGeneratorService
 from backend.engine.rule_engine import (
@@ -159,176 +164,69 @@ class GameTurnManager:
         self.avatar: Avatar | None = None
         self.stop_requested = False
         self.turn_language: str | None = None
+        self._progression = TurnProgressionBuilder(
+            self,
+            gm_notes_prompt_max_items=GM_NOTES_PROMPT_MAX_ITEMS,
+            gm_chat_rule_pass_npcs_max_items=GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS,
+            gm_chat_prompt_template=prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT,
+        )
+        self._session_helper = TurnSessionStateHelper(
+            self,
+            gm_notes_state_key=GM_NOTES_STATE_KEY,
+            gm_notes_max_items=GM_NOTES_MAX_ITEMS,
+            terminal_epilogue_state_key=TERMINAL_EPILOGUE_STATE_KEY,
+        )
+        self._combat_state_helper = TurnCombatStateHelper(self)
+        self._llm_context_builder = TurnLlmContextBuilder(self)
 
     @staticmethod
     def _compact_json(payload: object) -> str:
-        return json.dumps(payload, separators=(",", ":"))
+        return TurnProgressionBuilder.compact_json(payload)
 
     def _build_mechanics_awards(self) -> list[dict]:
-        awards = list(self.adventure.awards or [])
-        earned_awards = list(self.user.earned_awards or [])
-        earned_keys = {
-            entry.get("key")
-            for entry in earned_awards
-            if entry.get("key") and (entry.get("template_id") == self.adventure.id or entry.get("adventure_id") == self.adventure.id)
-        }
-        return [a for a in awards if not a.get("key") or a.get("key") not in earned_keys]
+        return self._progression.build_mechanics_awards()
 
     def _build_chat_progression_quests(self) -> list[dict]:
-        reduced_quests = []
-        for quest in list(self.state.quests or []):
-            status = quest.get("status")
-            if status == "completed":
-                continue
-            if not quest.get("id"):
-                continue
-            reduced_quests.append(
-                {
-                    "id": quest.get("id"),
-                    "title": quest.get("title"),
-                    "status": status,
-                    "is_main": bool(quest.get("is_main")),
-                }
-            )
-        return reduced_quests
+        return self._progression.build_chat_progression_quests()
 
     @staticmethod
     def _build_chat_progression_awards(unearned_awards: list[dict]) -> list[dict]:
-        reduced_awards = []
-        for award in unearned_awards:
-            key = award.get("key")
-            if not key:
-                continue
-            reduced_awards.append(
-                {
-                    "key": key,
-                    "title": award.get("title"),
-                    "tier": award.get("tier"),
-                }
-            )
-        return reduced_awards
+        return TurnProgressionBuilder.build_chat_progression_awards(unearned_awards)
 
-    @staticmethod
-    def _build_chat_progression_npcs(entities: list[WorldEntity]) -> list[dict]:
-        reduced_npcs = []
-        for entity in entities:
-            if (entity.entity_type or "").upper() != "NPC":
-                continue
-            reduced_npcs.append(
-                {
-                    "id": entity.id,
-                    "name": entity.name,
-                    "scene_id": entity.current_scene_id,
-                    "position": entity.spatial_position,
-                }
-            )
-            if len(reduced_npcs) >= GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS:
-                break
-        return reduced_npcs
+    def _build_chat_progression_npcs(self, entities: list[WorldEntity]) -> list[dict]:
+        return self._progression.build_chat_progression_npcs(entities)
 
     @staticmethod
     def _build_chat_progression_scenes(session_scenes: list[WorldScene]) -> list[dict]:
-        reduced_scenes = []
-        for scene in (session_scenes or []):
-            reduced_scenes.append({
-                "id": scene.id,
-                "label": scene.label,
-            })
-        return reduced_scenes
+        return TurnProgressionBuilder.build_chat_progression_scenes(session_scenes)
 
     @staticmethod
     def _build_chat_progression_exits(exits: list[WorldExit]) -> list[dict]:
-        reduced_exits = []
-        for ex in exits:
-            reduced_exits.append({
-                "to_scene_id": ex.to_scene_id,
-                "label": ex.label,
-                "is_locked": ex.is_locked
-            })
-        return reduced_exits
+        return TurnProgressionBuilder.build_chat_progression_exits(exits)
 
     def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict], scenes: list[dict], exits: list[dict]) -> str:
-        notes = self._get_gm_notes()
-        if len(notes) > GM_NOTES_PROMPT_MAX_ITEMS:
-            notes = notes[-GM_NOTES_PROMPT_MAX_ITEMS:]
-        
-        current_scene_label = "Unknown"
-        if self.state and self.state.current_scene_id:
-            for scene in scenes:
-                if scene.get("id") == self.state.current_scene_id:
-                    current_scene_label = scene.get("label") or "Unknown"
-                    break
-
-        return prompts.GM_CHAT_MINIMAL_RULE_PASS_PROMPT.format(
-            quests_json=self._compact_json(quests),
-            awards_json=self._compact_json(awards),
-            npcs_json=self._compact_json(npcs),
-            scenes_json=self._compact_json(scenes),
-            exits_json=self._compact_json(exits),
-            notes_json=self._compact_json(notes),
-            current_scene_id=self.state.current_scene_id,
-            current_scene_label=current_scene_label,
-        )
+        return self._progression.build_chat_rule_pass_prompt(quests, awards, npcs, scenes, exits)
 
     def _get_gm_notes(self) -> list[str]:
-        exit_states = self.state.exit_states or {}
-        notes = exit_states.get(GM_NOTES_STATE_KEY)
-        if not isinstance(notes, list):
-            return []
-        return [str(n).strip() for n in notes if str(n).strip()]
+        return self._session_helper.get_gm_notes()
 
     def _get_terminal_epilogue_state(self) -> dict[str, bool]:
-        exit_states = self.state.exit_states or {}
-        epilogue_state = exit_states.get(TERMINAL_EPILOGUE_STATE_KEY) or {}
-        if not isinstance(epilogue_state, dict):
-            epilogue_state = {}
-        return {
-            "completed_sent": bool(epilogue_state.get("completed_sent")),
-            "game_over_sent": bool(epilogue_state.get("game_over_sent")),
-        }
+        return self._session_helper.get_terminal_epilogue_state()
 
     def _terminal_status_flags(self) -> tuple[bool, bool]:
-        if not self.state or not self.state.session:
-            return False, False
-        status = self.state.session.status
-        epilogue_state = self._get_terminal_epilogue_state()
-        pending = (status == "completed" and not epilogue_state["completed_sent"]) or (
-            status == "game_over" and not epilogue_state["game_over_sent"]
-        )
-        input_locked = status == "game_over" and epilogue_state["game_over_sent"]
-        return pending, input_locked
+        return self._session_helper.terminal_status_flags()
 
     def _is_terminal_epilogue_pending(self) -> bool:
-        pending, _ = self._terminal_status_flags()
-        return pending
+        return self._session_helper.is_terminal_epilogue_pending()
 
     def _is_input_locked(self) -> bool:
-        _, locked = self._terminal_status_flags()
-        return locked
+        return self._session_helper.is_input_locked()
 
     def _set_terminal_epilogue_sent(self, status: str, sent: bool = True) -> None:
-        if not self.state:
-            return
-        epilogue_state = self._get_terminal_epilogue_state()
-        if status == "completed":
-            epilogue_state["completed_sent"] = sent
-        elif status == "game_over":
-            epilogue_state["game_over_sent"] = sent
-
-        exit_states = dict(self.state.exit_states or {})
-        exit_states[TERMINAL_EPILOGUE_STATE_KEY] = epilogue_state
-        self.state.exit_states = exit_states
-        flag_modified(self.state, "exit_states")
+        self._session_helper.set_terminal_epilogue_sent(status, sent)
 
     def _build_terminal_flags_payload(self) -> dict[str, Any]:
-        pending, input_locked = self._terminal_status_flags()
-        return {
-            "game_over": (self.state.session.status == "game_over") if self.state and self.state.session else False,
-            "game_completed": (self.state.session.status == "completed") if self.state and self.state.session else False,
-            "status_note": self.state.session.status_note if self.state and self.state.session else None,
-            "input_locked": input_locked,
-            "pending_terminal_epilogue": pending,
-        }
+        return self._session_helper.build_terminal_flags_payload()
 
     def _apply_gm_notes_update(
         self,
@@ -336,71 +234,14 @@ class GameTurnManager:
         forget_notes: list[str] | None,
         clear_notes: bool,
     ) -> None:
-        existing = self._get_gm_notes()
-        if clear_notes:
-            existing = []
-
-        forget_set = {
-            str(note).strip().lower()
-            for note in (forget_notes or [])
-            if str(note).strip()
-        }
-        if forget_set:
-            existing = [n for n in existing if n.strip().lower() not in forget_set]
-
-        for note in (remember_notes or []):
-            normalized = str(note).strip()
-            if not normalized:
-                continue
-            if any(n.strip().lower() == normalized.lower() for n in existing):
-                continue
-            existing.append(normalized)
-
-        if len(existing) > GM_NOTES_MAX_ITEMS:
-            existing = existing[-GM_NOTES_MAX_ITEMS:]
-
-        exit_states = dict(self.state.exit_states or {})
-        if existing:
-            exit_states[GM_NOTES_STATE_KEY] = existing
-        else:
-            exit_states.pop(GM_NOTES_STATE_KEY, None)
-        self.state.exit_states = exit_states
-        flag_modified(self.state, "exit_states")
+        self._session_helper.apply_gm_notes_update(remember_notes, forget_notes, clear_notes)
 
     def _build_gm_notes_prompt_block(self) -> str:
-        notes = self._get_gm_notes()
-        if not notes:
-            return "\n\nSESSION NOTES:\n- none"
-        lines = "\n".join(f"- {note}" for note in notes)
-        return "\n\nSESSION NOTES:\n" + lines
+        return self._session_helper.build_gm_notes_prompt_block()
 
     @staticmethod
     def _build_progression_event(intent: AdventureGeneratorToolIntent) -> GameEvent:
-        return GameEvent(
-            narrative_description=intent.narrative_description or "",
-            hp_change=intent.hp_change,
-            stamina_change=intent.stamina_change,
-            mana_change=intent.mana_change,
-            new_status_effects=intent.new_status_effects or [],
-            new_inventory_items=intent.new_inventory_items or [],
-            removed_inventory_item_ids=intent.removed_inventory_item_ids,
-            updated_inventory_items=intent.updated_inventory_items or [],
-            spawned_items=intent.spawned_items,
-            completed_quest_ids=intent.completed_quest_ids,
-            earned_award_keys=intent.earned_award_keys,
-            remember_notes=intent.remember_notes,
-            forget_notes=intent.forget_notes,
-            clear_notes=bool(intent.clear_notes),
-            game_over=bool(intent.game_over),
-            game_completed=bool(intent.game_completed),
-            status_note=intent.status_note,
-            new_scene_id=intent.new_scene_id,
-            exit_label=intent.exit_label,
-            moved_entities=intent.moved_entities,
-            updated_entities=intent.updated_entities,
-            deleted_entities=intent.deleted_entities,
-            extra_time_minutes=intent.extra_time_minutes,
-        )
+        return TurnProgressionBuilder.build_progression_event(intent)
 
     async def initialize(self) -> bool:
         """Loads all necessary context for the turn."""
@@ -849,28 +690,16 @@ class GameTurnManager:
         self.stop_requested = True # Stop after direct slash response
 
     def _read_combat_state(self) -> dict[str, Any]:
-        states = self.state.entity_states or {}
-        combat = states.get("__combat__")
-        if isinstance(combat, dict):
-            return combat
-        return {}
+        return self._combat_state_helper.read_combat_state()
 
     def _is_combat_active(self) -> bool:
-        combat = self._read_combat_state()
-        return bool(combat.get("active"))
+        return self._combat_state_helper.is_combat_active()
 
     def _has_combat_phase(self) -> bool:
-        combat = self._read_combat_state()
-        return bool(combat.get("active") or combat.get("loot_pending") or combat.get("outcome"))
+        return self._combat_state_helper.has_combat_phase()
 
     def _set_combat_state(self, combat: dict[str, Any]) -> None:
-        # Sync to both locations to ensure compatibility across the engine
-        states = dict(self.state.entity_states or {})
-        states["__combat__"] = combat
-        self.state.entity_states = states
-        # Also set the dynamic attribute used by some snapshots
-        self.state.combat_json = combat
-        flag_modified(self.state, "entity_states")
+        self._combat_state_helper.set_combat_state(combat)
 
     async def _find_fight_target(self, target_hint: str) -> WorldEntity | None:
         ent_res = await self.db.execute(
@@ -975,14 +804,7 @@ class GameTurnManager:
         return "1d6"
 
     def _append_combat_log(self, combat: dict[str, Any], text: str, entry_type: str = "log") -> None:
-        logs = list(combat.get("log") or [])
-        logs.append({
-            "round": combat.get("round", 1),
-            "type": entry_type,
-            "text": text,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
-        combat["log"] = logs[-80:]
+        self._combat_state_helper.append_combat_log(combat, text, entry_type)
 
     async def _emit_combat_final(self, status_note: str | None = None) -> AsyncGenerator[str, None]:
         await self.db.commit()
@@ -2060,195 +1882,19 @@ class GameTurnManager:
     async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: str | None = None) -> AsyncGenerator[str, None]:
         _ = auto_visualize
         cycle_start = time.perf_counter()
-        # Load Context and LLM Settings
-        db_start = time.perf_counter()
-        hist_res = await self.db.execute(select(ChatMessage).where(ChatMessage.session_id == self.state.session_id).order_by(ChatMessage.created_at.asc()))
-        history = [{"role": m.role, "content": m.content} for m in hist_res.scalars().all()]
-        
-        # Fetch dynamic scene context (entities and exits) from the session snapshot
-        scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.session_id == self.game_id))
-        current_scene = scene_res.scalars().first()
-
-        # Fetch all entities in the session to handle global NPC awareness
-        all_ent_res = await self.db.execute(select(WorldEntity).where(
-            WorldEntity.session_id == self.game_id, 
-            WorldEntity.is_in_inventory.is_(False)
-        ))
-        all_entities = list(all_ent_res.scalars().all())
-
-        exit_res = await self.db.execute(select(WorldExit).where(
-            WorldExit.from_scene_id == self.state.current_scene_id,
-            WorldExit.session_id == self.game_id
-        ))
-        exits = exit_res.scalars().all()
-        
-        # Apply session overrides to entities so LLM sees current HP/state/location
-        overrides = self.state.entity_states or {}
-        for ent in all_entities:
-            if ent.id in overrides:
-                ov = overrides[ent.id]
-                if "hp" in ov:               ent.hp = ov["hp"]
-                if "mana" in ov:             ent.mana = ov["mana"]
-                if "stamina" in ov:          ent.stamina = ov["stamina"]
-                if "spatial_position" in ov: ent.spatial_position = ov["spatial_position"]
-                if "name" in ov:             ent.name = ov["name"]
-                if "description" in ov:      ent.description = ov["description"]
-                if "current_scene_id" in ov: ent.current_scene_id = ov["current_scene_id"]
-                # Bug fix: apply is_hidden and is_in_inventory overrides so LLM sees correct visibility
-                if "is_hidden" in ov:        ent.is_hidden = ov["is_hidden"]
-                if "is_in_inventory" in ov:  ent.is_in_inventory = ov["is_in_inventory"]
-                # Mark defeated NPCs with a dynamic attribute for the memory manager
-                ent.is_defeated = bool(ov.get("is_defeated", False))
-
-        # Partition entities into "here" vs "elsewhere".
-        # Hidden entities and items-in-inventory are excluded from the active scene list
-        # passed to the LLM, but collected separately as hidden_entities for the GM-only block.
-        scene_entities_all = [
-            e for e in all_entities
-            if e.current_scene_id == self.state.current_scene_id
-            and not getattr(e, 'is_in_inventory', False)
-        ]
-        # Visible entities: not hidden
-        entities = [e for e in scene_entities_all if not getattr(e, 'is_hidden', False)]
-        # Hidden entities: only hidden ones — shown in GM-only context block
-        hidden_entities = [e for e in scene_entities_all if getattr(e, 'is_hidden', False)]
-
-        other_npcs = [
-            e for e in all_entities
-            if e.current_scene_id != self.state.current_scene_id
-            and e.entity_type == "NPC"
-            and not getattr(e, 'is_hidden', False)
-        ]
-
-        # Fetch scene labels for all scenes to provide human-readable locations for world NPCs
-        all_scenes_res = await self.db.execute(select(WorldScene).where(WorldScene.session_id == self.game_id))
-        all_scenes = list(all_scenes_res.scalars().all())
-        scene_map = {s.id: s.label for s in all_scenes}
-        
-        db_duration = time.perf_counter() - db_start
-        logger.debug(f"[Turn {self.game_id}] LLM Context DB prep took {db_duration:.4f}s")
-
-        # Build prompts using MemoryManager with session-local plot/rules
-        mechanics_system_prompt = MemoryManager.build_context(
-            self.avatar, self.adventure.original_prompt or "", history, 
-            current_scene=current_scene,
-            entities=entities,
-            exits=exits,
-            in_game_time=self.state.in_game_time,
-            awards=self.adventure.awards,
-            plot=self.state.plot or self.adventure.plot,
-            rules=self.state.rules or self.adventure.rules,
-            walkthrough=self.state.walkthrough or self.adventure.walkthrough,
-            completed_condition=self.state.completed_condition or self.adventure.completed_condition,
-            gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition,
-            time_system=self.state.time_system or self.adventure.time_system or "calendar",
-            time_config=self.state.time_config or self.adventure.time_config,
-            is_adventure_generator=self.adventure.is_adventure_generator,
-            location_detail_level="concise",
-            other_npcs=other_npcs,
-            scene_map=scene_map,
-            hidden_entities=hidden_entities,
-        )[0]["content"]
-
-        narration_system_prompt = MemoryManager.build_context(
-            self.avatar, self.adventure.original_prompt or "", history,
-            current_scene=current_scene,
-            entities=entities,
-            exits=exits,
-            in_game_time=self.state.in_game_time,
-            awards=self.adventure.awards,
-            plot=self.state.plot or self.adventure.plot,
-            rules=self.state.rules or self.adventure.rules,
-            walkthrough=self.state.walkthrough or self.adventure.walkthrough,
-            completed_condition=self.state.completed_condition or self.adventure.completed_condition,
-            gameover_condition=self.state.gameover_condition or self.adventure.gameover_condition,
-            time_system=self.state.time_system or self.adventure.time_system or "calendar",
-            time_config=self.state.time_config or self.adventure.time_config,
-            is_adventure_generator=self.adventure.is_adventure_generator,
-            location_detail_level="full",
-            other_npcs=other_npcs,
-            scene_map=scene_map,
-            hidden_entities=hidden_entities,
-        )[0]["content"]
-        notes_prompt_block = self._build_gm_notes_prompt_block()
-        mechanics_system_prompt += notes_prompt_block
-        narration_system_prompt += notes_prompt_block
-        mechanics_awards = self._build_mechanics_awards()
-        mechanics_prompt_chars = len(mechanics_system_prompt or "")
-        narration_prompt_chars = len(narration_system_prompt or "")
-        prompt_delta_chars = narration_prompt_chars - mechanics_prompt_chars
-        prompt_reduction_pct = round((prompt_delta_chars / narration_prompt_chars) * 100, 2) if narration_prompt_chars else 0.0
-
-        log_structured_event(
-            "gm.turn.pipeline.context",
-            adventure_id=self.adventure.id,
-            game_id=self.game_id,
-            operation="chat_turn",
-            phase="context",
-            db_prep_ms=round(db_duration * 1000, 2),
-            history_count=len(history),
-            history_chars=sum(len(m.get("content") or "") for m in history),
-            mechanics_system_prompt_chars=mechanics_prompt_chars,
-            narration_system_prompt_chars=narration_prompt_chars,
-            prompt_delta_chars=prompt_delta_chars,
-            prompt_reduction_pct=prompt_reduction_pct,
-            entities_count=len(entities),
-            exits_count=len(exits),
-            mechanics_awards_count=len(mechanics_awards),
-            strict_rules=bool(self.adventure.strict_rules),
-            is_adventure_generator=bool(self.adventure.is_adventure_generator),
-        )
-
-
-        # Bable Fish / Translation logic
-        if language:
-            logger.info(f"[Turn {self.game_id}] Bable Fish Active: Target Language = {language}")
-            translation_instruction = (
-                f"\n\n--- BABLE FISH TRANSLATION PROTOCOL ---\n"
-                f"TARGET LANGUAGE: {language.upper()}\n"
-                f"INSTRUCTION: You MUST translate ALL your output (narration, dialogue, descriptions) into {language}. "
-                f"Do NOT respond in English or the original world language if it differs. "
-                f"Note: The chat history may contain messages in various languages due to previous Bable Fish settings. "
-                f"IGNORE those languages and strictly use {language} for the current turn. "
-                f"The player has activated their Bable Fish, so everything they hear/see must be in {language}."
-                f"\n----------------------------------------\n"
-            )
-            mechanics_system_prompt += translation_instruction
-            narration_system_prompt += translation_instruction
-
-        # Override for technical state evaluation (e.g. closing character sheet)
-        if user_msg == "[EVALUATE STATE]":
-            mechanics_system_prompt += (
-                "\n\nIMPORTANT: The player just synchronized their character sheet or world state (e.g., closing a menu). "
-                "This is a TECHNICAL turn. Respond only if something meaningful changed (e.g., equipment effects). "
-                "Do NOT list available actions, do NOT provide suggestions, and do NOT use meta-formatting like '---' or 'You can:'. "
-                "Keep the narrative flow natural if you speak at all."
-            )
-            narration_system_prompt += (
-                "\n\nIMPORTANT: The player just synchronized their character sheet or world state (e.g., closing a menu). "
-                "This is a TECHNICAL turn. Respond only if something meaningful changed (e.g., equipment effects). "
-                "Do NOT list available actions, do NOT provide suggestions, and do NOT use meta-formatting like '---' or 'You can:'. "
-                "Keep the narrative flow natural if you speak at all."
-            )
-        
-        llm_settings = self.user.llm_settings or {}
-        
-        # Robust provider resolution (identical to original adventures.py)
-        small_model_provider = (
-            llm_settings.get("small_model_provider")
-            or llm_settings.get("complex_model_provider")
-            or llm_settings.get("preferred_provider")
-            or "openai"
-        )
-        complex_model_provider = (
-            llm_settings.get("complex_model_provider")
-            or llm_settings.get("small_model_provider")
-            or llm_settings.get("preferred_provider")
-            or "openai"
-        )
-        
-        small_model = llm_settings.get("small_model") or "gpt-4o-mini"
-        complex_model = llm_settings.get("complex_model") or "gpt-4o"
+        ctx = await self._llm_context_builder.build_context(user_msg=user_msg, language=language)
+        history = ctx.history
+        entities = ctx.entities
+        all_entities = ctx.all_entities
+        exits = ctx.exits
+        all_scenes = ctx.all_scenes
+        mechanics_system_prompt = ctx.mechanics_system_prompt
+        narration_system_prompt = ctx.narration_system_prompt
+        mechanics_awards = ctx.mechanics_awards
+        small_model_provider = ctx.small_model_provider
+        complex_model_provider = ctx.complex_model_provider
+        small_model = ctx.small_model
+        complex_model = ctx.complex_model
 
         game_event = None
         pre_inventory_ids = set()
