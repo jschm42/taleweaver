@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-vue-next'
 defineProps<{
   adventure: any
   adventureId: string
+  coverSourceName: string
   activeTab: string
 }>()
 
@@ -31,13 +32,16 @@ const emit = defineEmits<{
           <span class="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-400 uppercase tracking-widest">Editor</span>
         </div>
         <p class="text-xs text-slate-500 font-mono uppercase tracking-tighter">Instance: {{ adventureId }}</p>
+        <p v-if="coverSourceName" class="text-[11px] text-amber-300 font-bold uppercase tracking-widest mt-1">
+          Cover of: {{ coverSourceName }}
+        </p>
       </div>
     </div>
     
     <div class="flex items-center gap-6">
       <nav class="flex bg-black/40 rounded-xl p-1 border border-white/5 backdrop-blur-md shadow-inner">
         <button 
-          v-for="tab in (['physical', 'plot', 'rebuild', 'advanced'] as const)" 
+          v-for="tab in (['physical', 'plot', 'advanced'] as const)" 
           :key="tab"
           @click="emit('update:activeTab', tab)"
           :class="[

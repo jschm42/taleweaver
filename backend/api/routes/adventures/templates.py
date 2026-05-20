@@ -70,6 +70,8 @@ async def list_templates(
             current_scene_name=(scene_label if scene_label else None),
             origin_id=template.origin_id,
             is_adventure_generator=template.is_adventure_generator,
+            cover_source_adventure_id=template.cover_source_adventure_id,
+            cover_source_adventure_name=template.cover_source_adventure_name,
         ))
     return response
 
@@ -134,6 +136,26 @@ async def create_adventure(
 
     chat_mode = (payload.rule_enforcement_mode or "rpg") == "chat"
 
+    source_template = None
+    cover_source_manifest = None
+    cover_source_adventure_id_value = None
+    if payload.cover_source_adventure_id:
+        source_res = await db.execute(
+            select(AdventureTemplate).where(
+                AdventureTemplate.id == payload.cover_source_adventure_id,
+                AdventureTemplate.owner_id == current_user.id,
+            )
+        )
+        source_template = source_res.scalars().first()
+        if not source_template:
+            raise HTTPException(status_code=404, detail="Cover source adventure not found.")
+        cover_source_adventure_id_value = source_template.id
+        cover_source_manifest = deepcopy(source_template.original_manifest or {})
+
+    cover_source_name = payload.cover_source_adventure_name
+    if source_template and not cover_source_name:
+        cover_source_name = source_template.title
+
     adv = AdventureTemplate(
         id=new_id,
         owner_id=current_user.id,
@@ -161,7 +183,11 @@ async def create_adventure(
         version=payload.version,
         language=payload.language,
         intro_text=payload.intro_text,
-        is_adventure_generator=payload.is_adventure_generator
+        is_adventure_generator=payload.is_adventure_generator,
+        cover_source_adventure_id=(source_template.id if source_template else None),
+        cover_source_adventure_name=cover_source_name,
+        cover_similarity_percent=max(0, min(100, int(payload.cover_similarity_percent or 0))),
+        allow_reuse_source_assets=bool(payload.allow_reuse_source_assets),
     )
     db.add(adv)
     
@@ -267,7 +293,12 @@ async def create_adventure(
                     min_awards=payload.min_awards,
                     max_awards=payload.max_awards,
                     selected_image_styles=adv.selected_image_styles,
-                    language=payload.language
+                    language=payload.language,
+                    cover_source_manifest=cover_source_manifest,
+                    cover_source_adventure_id=cover_source_adventure_id_value,
+                    cover_source_adventure_name=(cover_source_name if source_template else None),
+                    cover_similarity_percent=max(0, min(100, int(payload.cover_similarity_percent or 0))),
+                    allow_reuse_source_assets=bool(payload.allow_reuse_source_assets),
                 )
 
                 # Finalize template
@@ -649,6 +680,14 @@ async def export_adventure_manifest(
         manifest["generate_item_images"] = adventure.generate_item_images or False
     if "automatic_cover_generation" not in manifest:
         manifest["automatic_cover_generation"] = False
+    if "cover_source_adventure_id" not in manifest:
+        manifest["cover_source_adventure_id"] = adventure.cover_source_adventure_id
+    if "cover_source_adventure_name" not in manifest:
+        manifest["cover_source_adventure_name"] = adventure.cover_source_adventure_name
+    if "cover_similarity_percent" not in manifest:
+        manifest["cover_similarity_percent"] = adventure.cover_similarity_percent
+    if "allow_reuse_source_assets" not in manifest:
+        manifest["allow_reuse_source_assets"] = adventure.allow_reuse_source_assets
 
     # Backfill start_scene_id for items/objects from WorldEntity table if missing in original manifest,
     # but only if the scene ID exists in the original manifest's scenes.

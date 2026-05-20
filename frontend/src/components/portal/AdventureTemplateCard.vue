@@ -9,6 +9,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'startSession', templateId: string): void
+  (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
   (e: 'exportAdz', templateId: string, title: string): void
   (e: 'exportAdv', templateId: string, title: string): void
@@ -37,8 +38,9 @@ onUnmounted(() => {
   window.removeEventListener('mousedown', handleClickOutside)
 })
 
-function runAction(action: 'edit' | 'adz' | 'adv' | 'delete'): void {
-  if (action === 'edit') emit('edit', props.template.template_id)
+function runAction(action: 'cover' | 'edit' | 'adz' | 'adv' | 'delete'): void {
+  if (action === 'cover') emit('cover', props.template.template_id)
+  else if (action === 'edit') emit('edit', props.template.template_id)
   else if (action === 'adz') emit('exportAdz', props.template.template_id, props.template.title)
   else if (action === 'adv') emit('exportAdv', props.template.template_id, props.template.title)
   else if (action === 'delete') emit('delete', props.template.template_id, props.template.title)
@@ -143,6 +145,12 @@ function dismissWarning() {
             v-if="isMenuOpen"
             class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
           >
+            <button
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
+              @click="runAction('cover')"
+            >
+              Cover
+            </button>
             <button
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
               @click="runAction('edit')"

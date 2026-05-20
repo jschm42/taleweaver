@@ -25,6 +25,10 @@ export interface Adventure {
   is_adventure_generator?: boolean
   creation_error?: string
   image_url?: string
+  cover_source_adventure_id?: string | null
+  cover_source_adventure_name?: string | null
+  cover_similarity_percent?: number
+  allow_reuse_source_assets?: boolean
 }
 
 export interface AdventureFormData {
@@ -48,6 +52,10 @@ export interface AdventureFormData {
   selected_style_id: string
   selected_tone_id: string
   is_adventure_generator: boolean
+  cover_source_adventure_id?: string
+  cover_source_adventure_name?: string
+  cover_similarity_percent?: number
+  allow_reuse_source_assets?: boolean
 }
 
 export interface CatalogData {

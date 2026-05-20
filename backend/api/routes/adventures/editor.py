@@ -32,10 +32,6 @@ class EntityUpdateRequest(BaseModel):
     goal: Optional[str] = None
     character: Optional[str] = None
 
-class AIEditRequest(BaseModel):
-    prompt: str
-    auto_visualize: bool = True
-
 def _serialize_model(obj):
     if not obj: return None
     data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
@@ -72,13 +68,28 @@ async def _build_adventure_editor_assets(template_id: str, db: AsyncSession) -> 
     if not adventure:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found")
         
-    scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+    scene_res = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+        )
+    )
     scenes = scene_res.scalars().all()
     
-    exit_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id))
+    exit_res = await db.execute(
+        select(WorldExit).where(
+            WorldExit.template_id == template_id,
+            WorldExit.session_id.is_(None),
+        )
+    )
     exits = exit_res.scalars().all()
     
-    entity_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+    entity_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+        )
+    )
     entities = entity_res.scalars().all()
 
     avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))

@@ -18,6 +18,7 @@ defineEmits<{
   (e: 'remove-failed-pending', adventureId: string, kind: 'creation' | 'import'): void
   (e: 'cancel-pending', adventureId: string): void
   (e: 'start-session', templateId: string): void
+  (e: 'cover', templateId: string): void
   (e: 'edit', templateId: string): void
   (e: 'export-adz', templateId: string, title: string): void
   (e: 'export-adv', templateId: string, title: string): void
@@ -55,6 +56,7 @@ defineEmits<{
       :key="entry.template_id"
       :template="entry"
       @start-session="(id) => $emit('start-session', id)"
+      @cover="(id) => $emit('cover', id)"
       @edit="(id) => $emit('edit', id)"
       @export-adz="(id, title) => $emit('export-adz', id, title)"
       @export-adv="(id, title) => $emit('export-adv', id, title)"

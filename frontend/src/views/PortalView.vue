@@ -110,6 +110,10 @@ function openCreateModal() {
   router.push({ name: 'adventure-create' })
 }
 
+function openCoverCreate(templateId: string) {
+  router.push({ name: 'adventure-create', query: { cover_from: templateId } })
+}
+
 onMounted(() => {
   if (authState.token) {
     void fetchPortalData()
@@ -214,6 +218,7 @@ onUnmounted(() => {
               @remove-failed-pending="removeFailedPendingCard"
               @cancel-pending="cancelAdventure"
               @start-session="startSession"
+              @cover="openCoverCreate"
               @edit="editAdventure"
               @export-adz="exportAdventureAdz"
               @export-adv="exportAdventureAdv"

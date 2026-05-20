@@ -30,21 +30,6 @@ export const entityService = {
     }
   },
 
-  async runAIEdit(adventureId: string, prompt: string, autoVisualize: boolean): Promise<void> {
-    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/ai-edit`, {
-      method: 'POST',
-      headers: authHeaders(true),
-      body: JSON.stringify({
-        prompt,
-        auto_visualize: autoVisualize,
-      }),
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.detail || 'Failed to apply AI changes')
-    }
-  },
-
   async generateTraits(adventureId: string, name: string, description: string, targetType: string, targetField?: 'goal' | 'character'): Promise<{ goal: string, character: string }> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-traits`, {
       method: 'POST',

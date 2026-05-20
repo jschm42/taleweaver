@@ -159,6 +159,8 @@ export interface AdventureTemplateSummary {
   is_paused?: boolean
   scene_id?: string | null
   current_scene_name?: string | null
+  cover_source_adventure_id?: string | null
+  cover_source_adventure_name?: string | null
 }
 
 /** Payload for creating a new adventure. */
@@ -189,6 +191,10 @@ export interface CreateAdventurePayload {
   min_awards?: number
   max_awards?: number
   allow_dynamic_items?: boolean
+  cover_source_adventure_id?: string
+  cover_source_adventure_name?: string
+  cover_similarity_percent?: number
+  allow_reuse_source_assets?: boolean
 }
 
 export interface CatalogTile {

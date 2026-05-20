@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { configState, refreshConfig } from '@/store/config'
 import { authState } from '@/store/auth'
@@ -15,6 +15,7 @@ import AdventureAssetSettings from '@/components/create-adventure/AdventureAsset
 import AdventureCatalogSelector from '@/components/create-adventure/AdventureCatalogSelector.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 type RuleMode = 'rpg' | 'story' | 'chat'
 
@@ -37,7 +38,17 @@ const form = ref({
   min_awards: 3,
   max_awards: 8,
   language: '',
+  cover_similarity_percent: 70,
+  allow_reuse_source_assets: true,
 })
+
+const sourceAdventure = ref<any | null>(null)
+const isLoadingCoverSource = ref(false)
+const coverSourceId = computed(() => {
+  const raw = route.query.cover_from
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : ''
+})
+const isCoverMode = computed(() => !!coverSourceId.value)
 
 const imageStyles = ref<CatalogTile[]>([])
 const tones = ref<CatalogTile[]>([])
@@ -81,6 +92,10 @@ async function handleCreate() {
     errorMsg.value = 'Title is required.'
     return
   }
+  if (isCoverMode.value && !sourceAdventure.value) {
+    errorMsg.value = 'Cover source adventure could not be loaded.'
+    return
+  }
 
   isGenerating.value = true
   errorMsg.value = ''
@@ -95,7 +110,11 @@ async function handleCreate() {
     original_prompt: form.value.storyIdea.trim(),
     time_per_turn: form.value.pacing_minutes,
     selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
-    selected_tone: form.value.selected_tone_id ? fullToneObj : null
+    selected_tone: form.value.selected_tone_id ? fullToneObj : null,
+    cover_source_adventure_id: isCoverMode.value ? coverSourceId.value : undefined,
+    cover_source_adventure_name: isCoverMode.value ? (sourceAdventure.value?.title || undefined) : undefined,
+    cover_similarity_percent: isCoverMode.value ? form.value.cover_similarity_percent : undefined,
+    allow_reuse_source_assets: isCoverMode.value ? form.value.allow_reuse_source_assets : undefined,
   }
 
   try {
@@ -110,10 +129,36 @@ async function handleCreate() {
   }
 }
 
+async function loadCoverSource() {
+  if (!isCoverMode.value) {
+    sourceAdventure.value = null
+    return
+  }
+
+  isLoadingCoverSource.value = true
+  try {
+    const source = await api.getAdventure(coverSourceId.value)
+    sourceAdventure.value = source
+
+    if (!form.value.title.trim()) {
+      form.value.title = `(Cover) ${source.title || 'Adventure'}`
+    }
+    if (!form.value.storyIdea.trim()) {
+      form.value.storyIdea = source.original_prompt || source.plot || source.teaser || ''
+    }
+  } catch (error: any) {
+    sourceAdventure.value = null
+    errorMsg.value = error?.message || 'Failed to load source adventure for cover mode.'
+  } finally {
+    isLoadingCoverSource.value = false
+  }
+}
+
 onMounted(() => {
   void refreshConfig()
   void loadCatalogs()
   initializeLanguage()
+  void loadCoverSource()
 })
 </script>
 
@@ -139,6 +184,39 @@ onMounted(() => {
         <!-- Configuration Panel (Left) -->
         <div class="flex flex-col h-full space-y-8">
           <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 space-y-8 overflow-y-auto">
+            <section v-if="isCoverMode" class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 space-y-4">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Cover Source</p>
+                <h3 class="text-lg font-black text-white mt-1">
+                  {{ isLoadingCoverSource ? 'Loading source adventure...' : (sourceAdventure?.title || 'Unknown source') }}
+                </h3>
+                <p class="text-xs text-slate-300 mt-2 leading-relaxed whitespace-pre-wrap">
+                  {{ sourceAdventure?.teaser || sourceAdventure?.original_prompt || sourceAdventure?.plot || 'No source description available.' }}
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs font-black uppercase tracking-widest text-slate-200">Similarity</label>
+                  <span class="text-xs font-black text-amber-300">{{ form.cover_similarity_percent }}%</span>
+                </div>
+                <input
+                  v-model.number="form.cover_similarity_percent"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  class="w-full accent-amber-400"
+                />
+                <p class="text-[11px] text-slate-400">0% = freely inspired, 100% = very close to original.</p>
+              </div>
+
+              <label class="flex items-center justify-between gap-4 p-3 rounded-xl border border-white/10 bg-black/20">
+                <span class="text-xs font-bold text-slate-200">Allow to use old assets if they fit the new story.</span>
+                <input v-model="form.allow_reuse_source_assets" type="checkbox" class="h-4 w-4" />
+              </label>
+            </section>
+
             <AdventureBasicInfo 
               v-model="form"
             />

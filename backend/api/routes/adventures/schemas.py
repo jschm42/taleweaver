@@ -39,6 +39,10 @@ class CreateAdventureTemplatePayload(BaseModel):
     min_awards: int = 3
     max_awards: int = 8
     is_adventure_generator: bool = False
+    cover_source_adventure_id: Optional[str] = None
+    cover_source_adventure_name: Optional[str] = None
+    cover_similarity_percent: int = 70
+    allow_reuse_source_assets: bool = True
 
     @field_validator("selected_tone", mode="before")
     @classmethod
@@ -53,6 +57,11 @@ class CreateAdventureTemplatePayload(BaseModel):
         if isinstance(v, list) and len(v) > 0 and isinstance(v[0], str):
             return [{"id": s, "name": s.capitalize()} for s in v]
         return v
+
+    @field_validator("cover_similarity_percent")
+    @classmethod
+    def validate_cover_similarity(cls, value: int) -> int:
+        return max(0, min(100, int(value)))
 
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventureTemplatePayload':
@@ -86,6 +95,10 @@ class AdventureTemplateResponse(BaseModel):
     creation_error: Optional[str] = None
     image_url: Optional[str] = None
     is_adventure_generator: bool = False
+    cover_source_adventure_id: Optional[str] = None
+    cover_source_adventure_name: Optional[str] = None
+    cover_similarity_percent: int = 70
+    allow_reuse_source_assets: bool = True
     min_scenes: int = 1
     max_scenes: int = 5
 
@@ -173,6 +186,8 @@ class AdventureTemplateSummaryResponse(BaseModel):
     current_scene_name: Optional[str] = None
     origin_id: Optional[str] = None
     is_adventure_generator: bool = False
+    cover_source_adventure_id: Optional[str] = None
+    cover_source_adventure_name: Optional[str] = None
 
     @field_validator("selected_tone", mode="before")
     @classmethod

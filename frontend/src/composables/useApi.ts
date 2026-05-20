@@ -222,6 +222,11 @@ export const api = {
     return request('/adventures/', { method: 'POST', body: JSON.stringify(payload) })
   },
 
+  /** Returns a single adventure template details by ID. */
+  getAdventure(templateId: string): Promise<any> {
+    return request(`/adventures/${templateId}`)
+  },
+
   /** Import an adventure JSON payload (parsed .adv) and open creation flow on the server. */
   importAdventure(payload: AdventureImportPayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
     return request('/adventures/import', { method: 'POST', body: JSON.stringify(payload) })

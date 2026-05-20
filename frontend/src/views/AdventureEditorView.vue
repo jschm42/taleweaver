@@ -13,7 +13,6 @@ import { notificationService } from '@/services/notificationService'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
 import PhysicalTab from '@/components/editor/PhysicalTab.vue'
 import PlotTab from '@/components/editor/PlotTab.vue'
-import RebuildTab from '@/components/editor/RebuildTab.vue'
 import AdvancedTab from '@/components/editor/AdvancedTab.vue'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
 import NotificationToast from '@/components/editor/NotificationToast.vue'
@@ -45,11 +44,6 @@ const ASSET_BASE = ''
 const isQuickGenerating = ref<Record<string, boolean>>({})
 const isBatchGenerating = ref<Record<string, boolean>>({})
 
-// Editor State
-const aiEditPrompt = ref('')
-const aiAutoVisualize = ref(true)
-const isAIEditing = ref(false)
-
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
@@ -62,7 +56,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'physical' | 'plot' | 'rebuild' | 'advanced'>('physical')
+const activeTab = ref<'physical' | 'plot' | 'advanced'>('physical')
 
 const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
 const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
@@ -396,23 +390,6 @@ async function saveEntityText(data: any) {
   }
 }
 
-async function runAIEdit() {
-  if (!aiEditPrompt.value) return
-  isAIEditing.value = true
-  promptError.value = ''
-  try {
-    await entityService.runAIEdit(props.adventureId, aiEditPrompt.value, aiAutoVisualize.value)
-    aiEditPrompt.value = ''
-    await fetchDebugInfo()
-    addNotification('AI weaver has reshaped reality.', 'success')
-  } catch (error: any) {
-    promptError.value = error.message
-    addNotification(error.message, 'error')
-  } finally {
-    isAIEditing.value = false
-  }
-}
-
 async function saveChanges() {
   isSaving.value = true
   errorMsg.value = ''
@@ -604,6 +581,7 @@ const goBack = () => {
     <EditorHeader 
       :adventure="adventure" 
       :adventure-id="adventureId" 
+      :cover-source-name="adventure?.cover_source_adventure_name || ''"
       :active-tab="activeTab"
       @go-back="goBack"
       @update:active-tab="activeTab = $event"
@@ -670,14 +648,6 @@ const goBack = () => {
           @save-field="saveField"
           @cancel-edit="cancelEditing"
           @save-changes="saveChanges"
-        />
-
-        <RebuildTab 
-          v-if="activeTab === 'rebuild'"
-          v-model:ai-edit-prompt="aiEditPrompt"
-          v-model:ai-auto-visualize="aiAutoVisualize"
-          :is-ai-editing="isAIEditing"
-          @run-ai-edit="runAIEdit"
         />
 
         <AdvancedTab 

@@ -57,6 +57,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
     "TTS DIRECTION:\n"
     "- Generate 'tts_director_notes' that define the vocal style (tone, pace, emphasis) for the narrator to match the adventure's theme.\n\n"
+    "{cover_guidance}"
     "{voice_assignment_requirement}"
     "{quest_requirement}"
     "{award_requirement}"

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
@@ -140,12 +141,14 @@ def _uses_ollama_t2i(user: Optional[User]) -> bool:
     t2i_settings = user.t2i_settings or {}
     return (t2i_settings.get("provider") or "").lower() == "ollama"
 
+
 # --- Schemas for Structured LLM Output ---
 
 class WorldSceneSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the scene, e.g., CASTLE_GATES")
     name: str = Field(..., description="Human-readable name")
     description: str = Field(..., description="Atmospheric and detailed description of the location.")
+    source_asset_id: Optional[str] = Field(None, description="Optional source scene ID to reuse an old cover asset image.")
     
     model_config = {"extra": "forbid"}
 
@@ -174,6 +177,7 @@ class WorldNPCSchema(BaseModel):
     stamina: int = Field(..., description="Stamina (range 50-100)")
     is_attackable: bool = Field(..., description="If False, the player cannot start a fight with this NPC.")
     is_hidden: bool = Field(..., description="If True, the NPC is initially concealed.")
+    source_asset_id: Optional[str] = Field(None, description="Optional source NPC ID to reuse an old portrait image.")
     reveal_rule: str = Field(
         ...,
         description=(
@@ -220,6 +224,7 @@ class WorldObjectSchema(BaseModel):
     mana_change: int = Field(..., description="Mana restoration when consumed. Use 0 if none.")
     
     inventory: list[str] = Field(..., description="List of object IDs inside this container object. Use [] if empty.")
+    source_asset_id: Optional[str] = Field(None, description="Optional source object ID to reuse an old item image.")
     
     model_config = {"extra": "forbid"}
 
@@ -275,6 +280,7 @@ class ProtagonistSchema(BaseModel):
     hp: int = Field(..., description="Base health points (60-120)")
     mana: int = Field(..., description="Base mana points (0-300)")
     stamina: int = Field(..., description="Base stamina points (60-100)")
+    source_asset_id: Optional[str] = Field(None, description="Optional source protagonist ID to reuse an old portrait image.")
     
     model_config = {"extra": "forbid"}
 
@@ -299,6 +305,11 @@ class WorldManifesto(BaseModel):
     objects: list[WorldObjectSchema]
     quests: list[QuestSchema] = Field(..., description="List of 3-5 quests. Use [] if none.")
     awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
+    cover_source_adventure_id: Optional[str] = None
+    cover_source_adventure_name: Optional[str] = None
+    cover_similarity_percent: int = 70
+    allow_reuse_source_assets: bool = True
+    cover_source_asset_id: Optional[str] = None
     
     model_config = {"extra": "forbid"}
 
@@ -325,6 +336,11 @@ class WorldGenerator:
         selected_image_styles: Optional[list[str]] = None,
         selected_tone: Optional[str] = None,
         language: Optional[str] = None,
+        cover_source_manifest: Optional[dict[str, Any]] = None,
+        cover_source_adventure_id: Optional[str] = None,
+        cover_source_adventure_name: Optional[str] = None,
+        cover_similarity_percent: int = 70,
+        allow_reuse_source_assets: bool = True,
         status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
 
     ) -> None:
@@ -371,6 +387,9 @@ class WorldGenerator:
             generate_npc_images=generate_npc_images,
             generate_item_images=generate_item_images,
             context_length=len(original_prompt or ""),
+            has_cover_source=bool(cover_source_adventure_id),
+            cover_similarity_percent=max(0, min(100, int(cover_similarity_percent or 0))),
+            allow_reuse_source_assets=bool(allow_reuse_source_assets),
         )
         
         system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
@@ -392,6 +411,29 @@ class WorldGenerator:
         else:
             award_requirement = "\n\nAWARD SYSTEM:\n- Do not generate any awards for this adventure."
 
+        cover_guidance = ""
+        if cover_source_manifest:
+            source_title = cover_source_adventure_name or cover_source_manifest.get("title") or "Unknown Source Adventure"
+            source_description = (
+                cover_source_manifest.get("teaser")
+                or cover_source_manifest.get("original_prompt")
+                or cover_source_manifest.get("plot")
+                or ""
+            )
+            similarity = max(0, min(100, int(cover_similarity_percent or 0)))
+            source_manifest_json = json.dumps(cover_source_manifest, ensure_ascii=True)
+            cover_guidance = (
+                "\n\nCOVER MODE:\n"
+                f"- Create this as a cover of '{source_title}'.\n"
+                f"- Requested similarity: {similarity}% (0 = freely inspired, 100 = very close).\n"
+                f"- Source summary: {source_description}\n"
+                f"- Old asset reuse allowed: {'yes' if allow_reuse_source_assets else 'no'}.\n"
+                "- You receive the full source manifest below; use all relevant content to preserve style, structure, and motifs at the requested similarity level.\n"
+                "- If you intentionally want to reuse old visual assets, set `source_asset_id` on protagonist/scenes/npcs/objects entries to the chosen source IDs.\n"
+                "- If you want to reuse the old cover image, set `cover_source_asset_id` to `COVER`.\n"
+                f"- Full source manifest JSON: {source_manifest_json}\n"
+            )
+
         user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(
             title=title, 
             original_prompt=original_prompt, 
@@ -402,6 +444,7 @@ class WorldGenerator:
                 automatic_npc_voice_assignment,
                 available_voice_list,
             ),
+            cover_guidance=cover_guidance,
             quest_requirement=quest_requirement,
             award_requirement=award_requirement
         )
@@ -476,16 +519,63 @@ class WorldGenerator:
                     adventure.original_manifest = manifesto.model_dump()  # type: ignore
             await db.commit()
             
+        cover_source_assets = None
+        if allow_reuse_source_assets and cover_source_adventure_id:
+            from backend.models.avatar import Avatar
+
+            src_adv = await db.get(AdventureTemplate, cover_source_adventure_id)
+            if src_adv:
+                src_avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == cover_source_adventure_id))
+                src_avatar = src_avatar_res.scalars().first()
+
+                src_scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == cover_source_adventure_id))
+                src_scenes = src_scene_res.scalars().all()
+
+                src_entity_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == cover_source_adventure_id))
+                src_entities = src_entity_res.scalars().all()
+                src_scenes = [scene for scene in src_scenes if getattr(scene, "session_id", None) is None]
+                src_entities = [ent for ent in src_entities if getattr(ent, "session_id", None) is None]
+
+                cover_source_assets = {
+                    "cover": src_adv.image_url,
+                    "protagonist": {
+                        "id": "PROTAGONIST",
+                        "name": (src_avatar.name if src_avatar else ""),
+                        "image_url": (src_avatar.profile_image if src_avatar else None),
+                    },
+                    "scenes": [
+                        {"id": scene.id, "name": scene.label, "image_url": scene.image_url}
+                        for scene in src_scenes
+                    ],
+                    "npcs": [
+                        {"id": ent.id, "name": ent.name, "image_url": ent.image_url}
+                        for ent in src_entities
+                        if ent.entity_type == "NPC"
+                    ],
+                    "objects": [
+                        {"id": ent.id, "name": ent.name, "image_url": ent.image_url}
+                        for ent in src_entities
+                        if ent.entity_type == "OBJECT"
+                    ],
+                }
+
+        manifest_dict = manifesto.model_dump()
+        manifest_dict["cover_source_adventure_id"] = cover_source_adventure_id
+        manifest_dict["cover_source_adventure_name"] = cover_source_adventure_name
+        manifest_dict["cover_similarity_percent"] = max(0, min(100, int(cover_similarity_percent or 0)))
+        manifest_dict["allow_reuse_source_assets"] = bool(allow_reuse_source_assets)
+
         await WorldGenerator.apply_manifest(
             db, 
             template_id, 
-            manifesto.model_dump(), 
+            manifest_dict,
             user=user if (generate_npc_images or generate_item_images or generate_scene_images) else None,
             gen_npc=generate_npc_images,
             gen_items=generate_item_images,
             gen_scenes=generate_scene_images,
             gen_protagonist_image=generate_scene_images,
             selected_image_styles=selected_image_styles,
+            source_assets=cover_source_assets,
             status_callback=status_callback,
         )
         log_structured_event(
@@ -509,6 +599,7 @@ class WorldGenerator:
         gen_scenes: bool = False,
         gen_protagonist_image: bool = False,
         existing_images: Optional[dict] = None,
+        source_assets: Optional[dict[str, Any]] = None,
         selected_image_styles: Optional[list[str]] = None,
         status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
     ) -> None:
@@ -527,6 +618,41 @@ class WorldGenerator:
         # Resolve Style Instructions
         if selected_image_styles is None and adventure:
             selected_image_styles = adventure.selected_image_styles
+
+        def _resolve_source_asset_image(
+            entity_type: str,
+            source_asset_id: Optional[str] = None,
+        ) -> Optional[str]:
+            if not source_assets:
+                return None
+
+            # Reuse must be explicit. Do not infer by matching IDs/names,
+            # otherwise cover generations can become accidental 1:1 duplicates.
+            if not source_asset_id:
+                return None
+
+            if entity_type == "cover":
+                return source_assets.get("cover")
+
+            if entity_type == "protagonist":
+                protagonist_asset = source_assets.get("protagonist") or {}
+                if source_asset_id == "PROTAGONIST" and protagonist_asset.get("image_url"):
+                    return protagonist_asset.get("image_url")
+                return None
+
+            bucket_key = {"scene": "scenes", "npc": "npcs", "object": "objects"}.get(entity_type)
+            if not bucket_key:
+                return None
+
+            bucket = source_assets.get(bucket_key) or []
+            if not isinstance(bucket, list):
+                return None
+
+            for asset in bucket:
+                if asset.get("id") == source_asset_id and asset.get("image_url"):
+                    return asset.get("image_url")
+
+            return None
 
         style_instruction = resolve_style_instruction(
             selected_image_styles,
@@ -670,15 +796,22 @@ class WorldGenerator:
                     status_callback=status_callback,
                 )
                 try:
-                    image_attempts += 1
-                    cover_url = await MediaEngine.generate_adventure_cover(
-                        title=adventure.title,
-                        original_prompt=adventure.teaser or adventure.original_prompt,
-                        adventure_id=template_id,
-                        user_config={"t2i_settings": user.t2i_settings},
-                        api_keys=dict(user.encrypted_api_keys or {}),  # type: ignore
-                        style_instruction=style_instruction
-                    )
+                    requested_cover_source_id = manifest_dict.get("cover_source_asset_id")
+                    reused_cover_url = None
+                    if requested_cover_source_id == "COVER":
+                        reused_cover_url = _resolve_source_asset_image("cover", requested_cover_source_id)
+                    if reused_cover_url:
+                        cover_url = reused_cover_url
+                    else:
+                        image_attempts += 1
+                        cover_url = await MediaEngine.generate_adventure_cover(
+                            title=adventure.title,
+                            original_prompt=adventure.teaser or adventure.original_prompt,
+                            adventure_id=template_id,
+                            user_config={"t2i_settings": user.t2i_settings},
+                            api_keys=dict(user.encrypted_api_keys or {}),  # type: ignore
+                            style_instruction=style_instruction
+                        )
                     if cover_url:
                         image_successes += 1
                         adventure.image_url = cover_url  # type: ignore
@@ -788,7 +921,11 @@ class WorldGenerator:
                 }
 
             # Unified Portrait Logic
-            image_url = (existing_images or {}).get("PROTAGONIST") or prot.get("profile_image")
+            image_url = (
+                (existing_images or {}).get("PROTAGONIST")
+                or _resolve_source_asset_image("protagonist", prot.get("source_asset_id"))
+                or prot.get("profile_image")
+            )
             if not image_url or image_url.startswith("assets/"): # If it's a relative path from manifest, it should have been in existing_images
                 if user and gen_protagonist_image:
                     await _publish_generation_status_with_callback(
@@ -849,7 +986,11 @@ class WorldGenerator:
                 continue
             seen_scene_ids.add(s["id"])
             
-            image_url = (existing_images or {}).get(s["id"]) or s.get("image_url")
+            image_url = (
+                (existing_images or {}).get(s["id"])
+                or _resolve_source_asset_image("scene", s.get("source_asset_id"))
+                or s.get("image_url")
+            )
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_scenes:
                     await _publish_generation_status_with_callback(
@@ -923,7 +1064,11 @@ class WorldGenerator:
                 continue
             seen_entity_ids.add(n["id"])
             
-            image_url = (existing_images or {}).get(n["id"]) or n.get("image_url")
+            image_url = (
+                (existing_images or {}).get(n["id"])
+                or _resolve_source_asset_image("npc", n.get("source_asset_id"))
+                or n.get("image_url")
+            )
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_npc:
                     await _publish_generation_status_with_callback(
@@ -1123,7 +1268,11 @@ class WorldGenerator:
             stamina_change = _extract_numeric_effect(o, source_item, "stamina_change", "restore_stamina", "stamina_restore", "stamina", "energy")
             mana_change = _extract_numeric_effect(o, source_item, "mana_change", "restore_mana", "mana_restore", "mana")
             
-            image_url = (existing_images or {}).get(o["id"]) or o.get("image_url")
+            image_url = (
+                (existing_images or {}).get(o["id"])
+                or _resolve_source_asset_image("object", o.get("source_asset_id"))
+                or o.get("image_url")
+            )
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_items:
                     await _publish_generation_status_with_callback(

@@ -145,6 +145,41 @@ async def test_create_adventure_with_rule_mode_and_style_tone(client: AsyncClien
     assert any(style["id"] == "dark-fantasy-painting" for style in adv["selected_image_styles"])
 
 
+async def test_create_cover_adventure_persists_source_metadata(client: AsyncClient):
+    """Cover create payloads persist source adventure linkage and export it in manifest responses."""
+    source = await _create_adventure(client, "Source Quest")
+
+    payload = {
+        "title": "(Cover) Source Quest",
+        "avatar_name": "Cover Hero",
+        "cover_source_adventure_id": source["adventure_id"],
+        "cover_similarity_percent": 82,
+        "allow_reuse_source_assets": False,
+    }
+
+    create_resp = await client.post("/api/adventures/", json=payload)
+    assert create_resp.status_code == 201, create_resp.text
+    cover_id = create_resp.json()["adventure_id"]
+
+    adv_resp = await client.get(f"/api/adventures/{cover_id}")
+    assert adv_resp.status_code == 200, adv_resp.text
+    adv_data = adv_resp.json()
+
+    assert adv_data["cover_source_adventure_id"] == source["adventure_id"]
+    assert adv_data["cover_source_adventure_name"] == "Source Quest"
+    assert adv_data["cover_similarity_percent"] == 82
+    assert adv_data["allow_reuse_source_assets"] is False
+
+    export_adv_resp = await client.get(f"/api/adventures/{cover_id}/export/adv")
+    assert export_adv_resp.status_code == 200, export_adv_resp.text
+    export_adv_data = export_adv_resp.json()
+    adventure_meta = export_adv_data.get("adventure") or {}
+    assert adventure_meta.get("cover_source_adventure_id") == source["adventure_id"]
+    assert adventure_meta.get("cover_source_adventure_name") == "Source Quest"
+    assert adventure_meta.get("cover_similarity_percent") == 82
+    assert adventure_meta.get("allow_reuse_source_assets") is False
+
+
 async def test_create_adventure_preserves_advanced_manifest_fields(client: AsyncClient):
     """Advanced create payloads preserve time pacing and start datetime metadata."""
     payload = {
