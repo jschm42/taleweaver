@@ -11,8 +11,14 @@ import { notificationService } from '@/services/notificationService'
 
 // Components
 import EditorHeader from '@/components/editor/EditorHeader.vue'
-import PhysicalTab from '@/components/editor/PhysicalTab.vue'
-import PlotTab from '@/components/editor/PlotTab.vue'
+import WorldTab from '@/components/editor/WorldTab.vue'
+import ItemsTab from '@/components/editor/ItemsTab.vue'
+import VisualsTab from '@/components/editor/VisualsTab.vue'
+import ToneTab from '@/components/editor/ToneTab.vue'
+import InhabitantsTab from '@/components/editor/InhabitantsTab.vue'
+import ScenesTab from '@/components/editor/ScenesTab.vue'
+import QuestTab from '@/components/editor/QuestTab.vue'
+import AwardsTab from '@/components/editor/AwardsTab.vue'
 import AdvancedTab from '@/components/editor/AdvancedTab.vue'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
 import NotificationToast from '@/components/editor/NotificationToast.vue'
@@ -56,7 +62,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'physical' | 'plot' | 'advanced'>('physical')
+const activeTab = ref<'world' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'quest' | 'awards' | 'tone' | 'advanced'>('world')
 
 const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
 const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
@@ -101,6 +107,18 @@ if (typeof window !== 'undefined') {
 const imageStylesCatalog = ref<any[]>([])
 const toneCatalog = ref<any[]>([])
 const availableVoices = ref<Array<{ name: string; gender?: string; description?: string }>>([])
+
+const editorTabs = [
+  { key: 'world', label: 'World' },
+  { key: 'items', label: 'Items' },
+  { key: 'visuals', label: 'Visuals' },
+  { key: 'inhabitants', label: 'Inhabitants' },
+  { key: 'scenes', label: 'Scenes' },
+  { key: 'quest', label: 'Quest' },
+  { key: 'awards', label: 'Awards' },
+  { key: 'tone', label: 'Tone' },
+  { key: 'advanced', label: 'Advanced' },
+] as const
 
 // Use notification service
 const notifications = notificationService.all
@@ -582,9 +600,7 @@ const goBack = () => {
       :adventure="adventure" 
       :adventure-id="adventureId" 
       :cover-source-name="adventure?.cover_source_adventure_name || ''"
-      :active-tab="activeTab"
       @go-back="goBack"
-      @update:active-tab="activeTab = $event"
     />
 
     <main class="flex-grow p-6 max-w-[1400px] mx-auto w-full relative z-10 pb-16">
@@ -596,68 +612,169 @@ const goBack = () => {
         <p class="text-xs font-bold text-emerald-500 uppercase tracking-[0.3em]">Loading Chronicles...</p>
       </div>
       
-      <div v-else class="space-y-10">
-        <PhysicalTab 
-          v-if="activeTab === 'physical'"
-          :form="form"
-          :adventure="adventure"
-          :debug-data="debugData"
-          :image-styles-catalog="imageStylesCatalog"
-          :editing-field="editingField"
-          :temp-value="tempValue"
-          :is-saving="isSaving"
-          :is-batch-generating="isBatchGenerating"
-          :is-quick-generating="isQuickGenerating"
-          :active-menu-id="activeMenuId"
-          :editor-npcs="editorNpcs"
-          :editor-scenes="editorScenes"
-          :editor-objects="editorObjects"
-          :rule-enforcement-mode="form.rule_enforcement_mode"
-          @update:temp-value="tempValue = $event"
-          @update:pacing="form.time_per_turn = $event"
-          @update:style="form.selected_style_id = $event"
-          @start-edit="startEditing"
-          @save-field="saveField"
-          @cancel-edit="cancelEditing"
-          @save-changes="saveChanges"
-          @quick-regen="quickRegenerateVisual"
-          @regen-all="regenerateAll"
-          @open-regen-dialog="openRegenerateDialog"
-          @open-upload-picker="openUploadPicker"
-          @download-asset="downloadVisualAsset"
-          @open-text-edit="openTextEdit"
-          @toggle-menu="toggleMenu"
-          @handle-hover="handleHover"
-          @clear-hover="clearHover"
-          @clear-creation-error="clearCreationError"
-        />
+      <div v-else class="space-y-6">
+        <nav class="lg:hidden flex gap-2 overflow-x-auto pb-2">
+          <button
+            v-for="tab in editorTabs"
+            :key="tab.key"
+            @click="activeTab = tab.key"
+            :class="[
+              'shrink-0 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-[0.15em] transition-all border',
+              activeTab === tab.key
+                ? 'bg-emerald-600/80 border-emerald-500 text-white'
+                : 'bg-slate-900/50 border-white/10 text-slate-400 hover:text-slate-200'
+            ]"
+          >
+            {{ tab.label }}
+          </button>
+        </nav>
 
-        <PlotTab 
-          v-if="activeTab === 'plot'"
-          :form="form"
-          :adventure="adventure"
-          :tone-catalog="toneCatalog"
-          :editing-field="editingField"
-          :temp-value="tempValue"
-          :is-saving="isSaving"
-          :fix-newlines="fixNewlines"
-          @update:temp-value="tempValue = $event"
-          @update:tone="form.selected_tone_id = $event"
-          @update:mode="form.rule_enforcement_mode = $event as any"
-          @start-edit="startEditing"
-          @save-field="saveField"
-          @cancel-edit="cancelEditing"
-          @save-changes="saveChanges"
-        />
+        <div class="lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-6">
+          <aside class="hidden lg:block">
+            <div class="sticky top-24 bg-slate-900/40 border border-white/5 rounded-2xl p-3 backdrop-blur-md">
+              <div class="space-y-1">
+                <button
+                  v-for="tab in editorTabs"
+                  :key="tab.key"
+                  @click="activeTab = tab.key"
+                  :class="[
+                    'w-full text-left px-3 py-2 rounded-xl text-xs font-black uppercase tracking-[0.18em] transition-all',
+                    activeTab === tab.key
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  ]"
+                >
+                  {{ tab.label }}
+                </button>
+              </div>
+            </div>
+          </aside>
 
-        <AdvancedTab 
-          v-if="activeTab === 'advanced'"
-          :form="form"
-          @update:generator="form.is_adventure_generator = $event; saveChanges()"
-          @update:dynamic-items="form.allow_dynamic_items = $event; saveChanges()"
-          @show-debug="showDebug = true"
-          @save-changes="saveChanges"
-        />
+          <div class="space-y-10 min-w-0">
+            <WorldTab
+              v-if="activeTab === 'world'"
+              :form="form"
+              :adventure="adventure"
+              :debug-data="debugData"
+              :editing-field="editingField"
+              :temp-value="tempValue"
+              :is-saving="isSaving"
+              :is-batch-generating="isBatchGenerating"
+              :is-quick-generating="isQuickGenerating"
+              :active-menu-id="activeMenuId"
+              :fix-newlines="fixNewlines"
+              @quick-regen="quickRegenerateVisual"
+              @open-regen-dialog="openRegenerateDialog"
+              @open-upload-picker="openUploadPicker"
+              @download-asset="downloadVisualAsset"
+              @open-text-edit="openTextEdit"
+              @toggle-menu="toggleMenu"
+              @start-edit="startEditing"
+              @save-field="saveField"
+              @cancel-edit="cancelEditing"
+              @update:temp-value="tempValue = $event"
+              @update:pacing="form.time_per_turn = $event"
+              @update:mode="form.rule_enforcement_mode = $event as any"
+              @save-changes="saveChanges"
+            />
+
+            <ItemsTab 
+              v-if="activeTab === 'items'"
+              :editor-objects="editorObjects"
+              :is-batch-generating="isBatchGenerating"
+              :is-quick-generating="isQuickGenerating"
+              :active-menu-id="activeMenuId"
+              :rule-enforcement-mode="form.rule_enforcement_mode"
+              @quick-regen="quickRegenerateVisual"
+              @regen-all="regenerateAll"
+              @open-regen-dialog="openRegenerateDialog"
+              @open-upload-picker="openUploadPicker"
+              @download-asset="downloadVisualAsset"
+              @open-text-edit="openTextEdit"
+              @toggle-menu="toggleMenu"
+              @handle-hover="handleHover"
+              @clear-hover="clearHover"
+            />
+
+            <InhabitantsTab
+              v-if="activeTab === 'inhabitants'"
+              :form="form"
+              :adventure="adventure"
+              :debug-data="debugData"
+              :is-batch-generating="isBatchGenerating"
+              :is-quick-generating="isQuickGenerating"
+              :active-menu-id="activeMenuId"
+              :editor-npcs="editorNpcs"
+              :rule-enforcement-mode="form.rule_enforcement_mode"
+              @quick-regen="quickRegenerateVisual"
+              @regen-all="regenerateAll"
+              @open-regen-dialog="openRegenerateDialog"
+              @open-upload-picker="openUploadPicker"
+              @download-asset="downloadVisualAsset"
+              @open-text-edit="openTextEdit"
+              @toggle-menu="toggleMenu"
+              @handle-hover="handleHover"
+              @clear-hover="clearHover"
+            />
+
+            <ScenesTab
+              v-if="activeTab === 'scenes'"
+              :editor-scenes="editorScenes"
+              :debug-data="debugData"
+              :is-batch-generating="isBatchGenerating"
+              :is-quick-generating="isQuickGenerating"
+              :active-menu-id="activeMenuId"
+              @quick-regen="quickRegenerateVisual"
+              @regen-all="regenerateAll"
+              @open-regen-dialog="openRegenerateDialog"
+              @open-upload-picker="openUploadPicker"
+              @download-asset="downloadVisualAsset"
+              @open-text-edit="openTextEdit"
+              @toggle-menu="toggleMenu"
+              @handle-hover="handleHover"
+              @clear-hover="clearHover"
+            />
+
+            <QuestTab
+              v-if="activeTab === 'quest'"
+              :adventure="adventure"
+            />
+
+            <AwardsTab
+              v-if="activeTab === 'awards'"
+              :adventure="adventure"
+            />
+
+            <VisualsTab
+              v-if="activeTab === 'visuals'"
+              :form="form"
+              :adventure="adventure"
+              :image-styles-catalog="imageStylesCatalog"
+              @update:style="form.selected_style_id = $event"
+              @save-changes="saveChanges"
+            />
+
+            <ToneTab
+              v-if="activeTab === 'tone'"
+              :form="form"
+              :adventure="adventure"
+              :debug-data="debugData"
+              :tone-catalog="toneCatalog"
+              :is-saving="isSaving"
+              @update:tone="form.selected_tone_id = $event"
+              @save-changes="saveChanges"
+            />
+
+            <AdvancedTab 
+              v-if="activeTab === 'advanced'"
+              :form="form"
+              @update:generator="form.is_adventure_generator = $event; saveChanges()"
+              @update:dynamic-items="form.allow_dynamic_items = $event; saveChanges()"
+              @show-debug="showDebug = true"
+              @save-changes="saveChanges"
+            />
+          </div>
+        </div>
       </div>
     </main>
 

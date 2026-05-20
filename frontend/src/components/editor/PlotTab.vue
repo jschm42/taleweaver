@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { AlertTriangle } from 'lucide-vue-next'
 
 defineProps<{
   form: any
   adventure: any
-  toneCatalog: any[]
   editingField: string | null
   tempValue: string
   isSaving: boolean
@@ -17,7 +15,6 @@ const emit = defineEmits<{
   (e: 'save-field'): void
   (e: 'cancel-edit'): void
   (e: 'update:tempValue', val: string): void
-  (e: 'update:tone', val: string): void
   (e: 'update:mode', val: 'rpg' | 'story' | 'chat'): void
 }>()
 </script>
@@ -49,38 +46,12 @@ const emit = defineEmits<{
                  form.rule_enforcement_mode === mode ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
                ]"
              >
-               {{ mode === 'rpg' ? 'RPG (Exp)' : mode }}
+               {{ mode === 'rpg' ? 'RPG' : mode }}
              </button>
-           </div>
-           <div v-if="form.rule_enforcement_mode === 'rpg'" class="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-4">
-              <AlertTriangle class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-              <p class="text-slate-400 text-[10px] leading-relaxed uppercase font-bold tracking-tight">
-                <span class="text-amber-500 font-black">Warning:</span> Experimental mode. Combat and attribute checks may behave unexpectedly.
-              </p>
            </div>
          </div>
 
-         <!-- Narrative Tone -->
-         <div class="space-y-4">
-           <div class="flex justify-between items-center">
-              <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Narrative Tone</label>
-              <button v-if="form.selected_tone_id !== (adventure?.selected_tone || '')" @click="emit('save-changes')" class="text-xs font-bold text-emerald-500 uppercase tracking-widest hover:text-emerald-400 transition-colors">Apply Tone</button>
-           </div>
-           <div class="grid grid-cols-2 gap-3">
-              <button 
-                v-for="tone in toneCatalog" 
-                :key="tone.id" 
-                @click="emit('update:tone', tone.id)"
-                class="relative h-14 rounded-xl overflow-hidden border-2 transition-all group"
-                :class="form.selected_tone_id === tone.id ? 'border-emerald-500 ring-4 ring-emerald-500/20' : 'border-transparent hover:border-white/10'"
-              >
-                 <img :src="tone.image_url" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                 <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex items-center justify-center group-hover:bg-slate-900/40 transition-colors">
-                   <span class="text-[10px] font-black text-white uppercase tracking-[0.2em]">{{ tone.name }}</span>
-                 </div>
-              </button>
-           </div>
-         </div>
+         
       </div>
 
       <div class="flex flex-col gap-10">

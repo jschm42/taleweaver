@@ -5,17 +5,15 @@ defineProps<{
   adventure: any
   adventureId: string
   coverSourceName: string
-  activeTab: string
 }>()
 
 const emit = defineEmits<{
   (e: 'go-back'): void
-  (e: 'update:activeTab', tab: any): void
 }>()
 </script>
 
 <template>
-  <header class="bg-slate-900/40 border-b border-white/5 px-8 py-3 flex justify-between items-center backdrop-blur-2xl sticky top-0 z-40 shadow-2xl">
+  <header class="bg-slate-900/40 border-b border-white/5 px-8 py-3 flex items-center backdrop-blur-2xl sticky top-0 z-40 shadow-2xl">
     <div class="flex items-center gap-6">
       <button 
         @click="emit('go-back')" 
@@ -38,20 +36,5 @@ const emit = defineEmits<{
       </div>
     </div>
     
-    <div class="flex items-center gap-6">
-      <nav class="flex bg-black/40 rounded-xl p-1 border border-white/5 backdrop-blur-md shadow-inner">
-        <button 
-          v-for="tab in (['physical', 'plot', 'advanced'] as const)" 
-          :key="tab"
-          @click="emit('update:activeTab', tab)"
-          :class="[
-            'px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] rounded-lg transition-all duration-300',
-            activeTab === tab ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
-          ]"
-        >
-          {{ tab }}
-        </button>
-      </nav>
-    </div>
   </header>
 </template>
