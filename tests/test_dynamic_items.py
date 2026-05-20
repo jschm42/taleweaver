@@ -224,6 +224,67 @@ async def test_generated_item_ids_are_deduplicated_against_session(setup_test_db
         assert entities[0].name == "Ancient Key"
 
 
+async def test_identical_consumable_is_cloned_with_visual(setup_test_db, monkeypatch):
+    """Identical consumables should be cloned with a new id and keep the original visual."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        avatar.inventory = [
+            {
+                "id": "HEALTH_POTION",
+                "name": "Health Potion",
+                "description": "A small healing potion.",
+                "item_type": "CONSUMABLE",
+                "hp_change": 25,
+                "image_url": "generated/health-potion.webp",
+            }
+        ]
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="You found another identical potion.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[
+                InventoryItem(
+                    id="HEALTH_POTION",
+                    name="Health Potion",
+                    description="A small healing potion.",
+                    item_type="CONSUMABLE",
+                    hp_change=25,
+                )
+            ],
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You stash the second potion."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("I pick up another health potion"):
+            pass
+
+        await db.refresh(avatar)
+        potions = [
+            it for it in (avatar.inventory or [])
+            if isinstance(it, dict) and it.get("name") == "Health Potion" and it.get("item_type") == "CONSUMABLE"
+        ]
+        assert len(potions) == 2
+
+        potion_ids = {it.get("id") for it in potions}
+        assert "HEALTH_POTION" in potion_ids
+        assert any(str(pid).startswith("HEALTH_POTION_COPY_") for pid in potion_ids if pid)
+        assert all(it.get("image_url") == "generated/health-potion.webp" for it in potions)
+
+
 async def test_debug_commands_toggle_and_drops(setup_test_db, monkeypatch):
     """Verifies that debug commands toggle flags and cause NPCs to drop items."""
     from tests.conftest import TestSessionLocal

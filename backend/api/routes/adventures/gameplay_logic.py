@@ -2801,6 +2801,18 @@ class GameTurnManager:
         """Applies technical mutations from a GameEvent to the database and session state. Returns messages for the UI."""
         system_messages: list[str] = []
         existing_item_ids = await self._collect_existing_item_ids()
+
+        def _is_consumable(item: Any) -> bool:
+            return str(getattr(item, "item_type", "") or "").upper() == "CONSUMABLE"
+
+        def _allocate_copied_item_id(source_id: str | None) -> str:
+            base = re.sub(r"[^A-Za-z0-9_\-]", "_", source_id or "CONSUMABLE")[:40] or "CONSUMABLE"
+            counter = 1
+            candidate = f"{base}_COPY_{counter}"
+            while candidate in existing_item_ids:
+                counter += 1
+                candidate = f"{base}_COPY_{counter}"
+            return candidate
         
         # If we are removing items in this event, they don't count as "existing" for duplicate checks
         # if the LLM wants to replace them with an updated version using the same ID.
@@ -2813,12 +2825,25 @@ class GameTurnManager:
         if event.new_inventory_items:
             filtered_inventory_items = []
             for item in event.new_inventory_items:
+                match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None) if item.id else None
+
+                if item.id and item.id in existing_item_ids and _is_consumable(item):
+                    if not item.image_url and isinstance(match, dict) and match.get("image_url"):
+                        item.image_url = match.get("image_url")
+                    source_id = item.id
+                    item.id = _allocate_copied_item_id(source_id)
+                    logger.info(
+                        "[Turn %s] Cloning duplicate consumable %s as %s",
+                        self.game_id,
+                        source_id,
+                        item.id,
+                    )
+
                 if not item.image_url:
                     try:
                         from backend.engine.media_engine import MediaEngine
                         from backend.core.config import settings
                         import os
-                        import re
                         import uuid
                         
                         item_type = item.item_type or "PICKABLE"
@@ -2835,7 +2860,6 @@ class GameTurnManager:
 
                 if item.id and item.id in existing_item_ids:
                     # Check if it's a true duplicate (same name)
-                    match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None)
                     if match:
                         if match.get("name") == item.name:
                             logger.info(
@@ -2868,11 +2892,23 @@ class GameTurnManager:
         if event.spawned_items:
             filtered_spawned_items = []
             for item in event.spawned_items:
+                match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None) if item.id else None
                 # Allow if it's a replacement for an item being removed
                 is_replacement = event.removed_inventory_item_ids and item.id in event.removed_inventory_item_ids
+                if item.id and item.id in existing_item_ids and not is_replacement and _is_consumable(item):
+                    if not item.image_url and isinstance(match, dict) and match.get("image_url"):
+                        item.image_url = match.get("image_url")
+                    source_id = item.id
+                    item.id = _allocate_copied_item_id(source_id)
+                    logger.info(
+                        "[Turn %s] Cloning duplicate spawned consumable %s as %s",
+                        self.game_id,
+                        source_id,
+                        item.id,
+                    )
+
                 if item.id and item.id in existing_item_ids and not is_replacement:
                      # Check if it's a true duplicate (same name)
-                    match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None)
                     if match and match.get("name") == item.name:
                         logger.info(
                             "[Turn %s] Skipping true duplicate spawned item id: %s",
