@@ -169,9 +169,9 @@ class WorldNPCSchema(BaseModel):
     
     npc_type: str = Field(..., description="One of: HUMANOID, ANIMAL, MONSTER, BEING")
     movement_type: str = Field(..., description="One of: STATIONARY, MOVABLE")
-    hp: int = Field(..., description="Hitpoints (range 10-999)")
+    hp: int = Field(..., description="Hitpoints (range 10-100)")
     mana: int = Field(..., description="Mana (range 0-999)")
-    stamina: int = Field(..., description="Stamina (range 0-999)")
+    stamina: int = Field(..., description="Stamina (range 50-100)")
     is_attackable: bool = Field(..., description="If False, the player cannot start a fight with this NPC.")
     is_hidden: bool = Field(..., description="If True, the NPC is initially concealed.")
     inventory: list[str] = Field(..., description="List of object IDs in this NPC's inventory. Use [] if empty.")
@@ -256,9 +256,9 @@ class ProtagonistSchema(BaseModel):
     armor_class: int = Field(..., description="Base armor class stat (1-99)")
     starting_inventory: list[str] = Field(..., description="List of object IDs in player's pocket. Use [] if none.")
     starting_equipment: EquipmentSchema = Field(..., description="Initial equipment setup.")
-    hp: int = Field(..., description="Base health points (100-300)")
+    hp: int = Field(..., description="Base health points (60-120)")
     mana: int = Field(..., description="Base mana points (0-300)")
-    stamina: int = Field(..., description="Base stamina points (100-300)")
+    stamina: int = Field(..., description="Base stamina points (60-100)")
     
     model_config = {"extra": "forbid"}
 

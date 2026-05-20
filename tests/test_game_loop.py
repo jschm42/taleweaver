@@ -1713,3 +1713,112 @@ async def test_combat_exit_loot_done_triggers_gm_narrative_pass(setup_test_db, m
         res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id, ChatMessage.role == "assistant"))
         assistant_msgs = [m.content for m in res.scalars().all()]
         assert any("Silence returns" in msg for msg in assistant_msgs)
+
+
+async def test_combat_npc_stamina_logic_active(setup_test_db, monkeypatch):
+    """Verifies that if the NPC has max_stamina > 0, stamina consumption and exhausted resting are enforced."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, npc = await _seed_combat_npc(db)
+        npc.stamina = 20
+        npc.max_stamina = 20
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Force player to act first, and player misses so fight continues
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
+        
+        # Player and enemy attack miss
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 2,
+                "hit_modifier": 0,
+                "hit_total": 2,
+                "target_ac": 18,
+                "is_hit": False,
+                "damage_total": 0,
+                "damage_dice_total": 0,
+                "damage_rolls": [],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d6",
+            },
+        )
+
+        # Start combat
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        # 1st Attack: Player attacks (and misses). Then Enemy attacks.
+        # This enemy attack should consume 20 stamina, bringing enemy stamina down to 0.
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert combat.get("enemy", {}).get("stamina") == 0
+
+        # 2nd Attack: Player attacks (and misses) again.
+        # Now the enemy has 0 stamina (< 20 required). Enemy must rest to recover +40 stamina (capped at max 20).
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert combat.get("enemy", {}).get("stamina") == 20
+        logs = combat.get("log") or []
+        assert any("is exhausted and rests to recover stamina" in entry.get("text", "") for entry in logs)
+
+
+async def test_combat_npc_stamina_logic_inactive(setup_test_db, monkeypatch):
+    """Verifies that if the NPC has max_stamina == 0 or None, stamina logic is bypassed and they attack normally without depletion."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, npc = await _seed_combat_npc(db)
+        npc.stamina = 0
+        npc.max_stamina = 0
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Force player to act first, and player misses so fight continues
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
+        
+        # Player and enemy attack miss
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 2,
+                "hit_modifier": 0,
+                "hit_total": 2,
+                "target_ac": 18,
+                "is_hit": False,
+                "damage_total": 0,
+                "damage_dice_total": 0,
+                "damage_rolls": [],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d6",
+            },
+        )
+
+        # Start combat
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        # Player attacks. Then Enemy attacks.
+        # Enemy has max_stamina = 0, so they attack without stamina check, remaining at 0 stamina.
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert combat.get("enemy", {}).get("stamina") == 0
+        logs = combat.get("log") or []
+        # Enemy should not rest/be exhausted
+        assert not any("is exhausted and rests to recover stamina" in entry.get("text", "") for entry in logs)
+

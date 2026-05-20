@@ -1036,6 +1036,8 @@ class GameTurnManager:
                 "image_url": self.avatar.profile_image,
                 "hp": self.avatar.hp,
                 "max_hp": self.avatar.max_hp,
+                "stamina": self.avatar.stamina,
+                "max_stamina": self.avatar.max_stamina,
                 "ac": int(player_stats.get("armor_class", self.avatar.armor_class)),
             },
             "enemy": {
@@ -1044,6 +1046,8 @@ class GameTurnManager:
                 "image_url": target.image_url,
                 "hp": enemy_hp,
                 "max_hp": enemy_max_hp,
+                "stamina": self._entity_stat(target, "stamina", 0),
+                "max_stamina": self._entity_stat(target, "max_stamina", 0),
                 "dexterity_mod": enemy_dex,
                 "armor_mod": enemy_ac_mod,
                 "inventory": list(target.inventory or []),
@@ -1110,6 +1114,8 @@ class GameTurnManager:
         player["image_url"] = self.avatar.profile_image
         player["hp"] = int(self.avatar.hp or 0)
         player["max_hp"] = int(self.avatar.max_hp or RESOURCE_CAP)
+        player["stamina"] = int(self.avatar.stamina or 0)
+        player["max_stamina"] = int(self.avatar.max_stamina or RESOURCE_CAP)
         player["ac"] = int(player_stats.get("armor_class", self.avatar.armor_class))
         combat["player"] = player
 
@@ -1423,6 +1429,47 @@ class GameTurnManager:
         player_stats = calculate_total_stats(self.avatar)
         player_ac = int(player_stats.get("armor_class", self.avatar.armor_class))
 
+        enemy_stamina = self._entity_stat(enemy_ent, "stamina", 0)
+        enemy_max_stamina = self._entity_stat(enemy_ent, "max_stamina", 0)
+
+        # Enforce stamina logic if NPC has stamina configured
+        if enemy_max_stamina > 0:
+            # Check if enemy is out of stamina
+            if enemy_stamina < 20:
+                # Enemy rests
+                enemy_stamina = min(enemy_max_stamina, enemy_stamina + 40)
+                
+                # Save enemy state
+                combat["enemy"]["stamina"] = enemy_stamina
+                states = dict(self.state.entity_states or {})
+                if enemy_id not in states:
+                    states[enemy_id] = {}
+                states[enemy_id]["stamina"] = enemy_stamina
+                self.state.entity_states = states
+                flag_modified(self.state, "entity_states")
+
+                text = f"{enemy_ent.name} is exhausted and rests to recover stamina (+40 Stamina)."
+                self._sync_combat_player_snapshot(combat)
+                self._append_combat_log(combat, text, "enemy_action")
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': text})}\n\n"
+
+                # Transition turn back to player
+                combat["turn"] = "player"
+                combat["round"] = int(combat.get("round", 1)) + 1
+                self._append_combat_log(combat, f"Round {combat['round']}: {self.avatar.name}'s turn.", "turn")
+                self._set_combat_state(combat)
+                return
+
+            # Consume stamina for attacking
+            enemy_stamina = max(0, enemy_stamina - 20)
+            combat["enemy"]["stamina"] = enemy_stamina
+            states = dict(self.state.entity_states or {})
+            if enemy_id not in states:
+                states[enemy_id] = {}
+            states[enemy_id]["stamina"] = enemy_stamina
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
+
         enemy_avatar = Avatar(
             name=enemy_ent.name,
             hp=enemy_hp,
@@ -1441,8 +1488,9 @@ class GameTurnManager:
             self.avatar.hp = max(0, self.avatar.hp - roll["damage_total"])
             dmg_bonus = int(roll.get("damage_bonus") or 0)
             dmg_bonus_str = f" + {dmg_bonus}" if dmg_bonus > 0 else (f" - {abs(dmg_bonus)}" if dmg_bonus < 0 else "")
+            hit_status = "CRITICAL HIT" if roll.get("is_crit") else "HIT"
             text = (
-                f"{enemy_ent.name} ATTACK ROLL: {roll['hit_roll']} + {roll['hit_modifier']} = {roll['hit_total']} vs AC {player_ac} -> HIT | "
+                f"{enemy_ent.name} ATTACK ROLL: {roll['hit_roll']} + {roll['hit_modifier']} = {roll['hit_total']} vs AC {player_ac} -> {hit_status} | "
                 f"DMG {roll['damage_dice_str']} ({' + '.join(str(r) for r in roll['damage_rolls'])}"
                 f"{dmg_bonus_str})"
                 f" = {roll['damage_total']}"
@@ -1700,19 +1748,37 @@ class GameTurnManager:
 
         action_msg = None
         if cmd == "attack" or cmd == "/attack" or cmd == "a" or cmd.startswith("attack ") or cmd.startswith("/attack "):
+            if self.avatar.stamina < 20:
+                msg = f"Not enough stamina to attack! You have {self.avatar.stamina} stamina, but attacks require 20. Use Rest to recover."
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                async for chunk in self._emit_combat_final(msg):
+                    yield chunk
+                return
+            
+            # Deduct stamina
+            self.avatar.stamina = max(0, self.avatar.stamina - 20)
+            self._sync_combat_player_snapshot(combat)
+            
+            # Roll attack
             roll = roll_attack(self.avatar, "dexterity", enemy_ac, self._player_damage_dice())
+            hit_status = "CRITICAL HIT" if roll.get("is_crit") else "HIT"
             if roll["is_hit"]:
                 enemy_hp = max(0, enemy_hp - roll["damage_total"])
                 dmg_bonus = int(roll.get("damage_bonus") or 0)
                 dmg_bonus_str = f" + {dmg_bonus}" if dmg_bonus > 0 else (f" - {abs(dmg_bonus)}" if dmg_bonus < 0 else "")
                 action_msg = (
-                    f"{self.avatar.name} ATTACK ROLL: {roll['hit_roll']} + {roll['hit_modifier']} = {roll['hit_total']} vs AC {enemy_ac} -> HIT | "
+                    f"{self.avatar.name} ATTACK ROLL: {roll['hit_roll']} + {roll['hit_modifier']} = {roll['hit_total']} vs AC {enemy_ac} -> {hit_status} | "
                     f"DMG {roll['damage_dice_str']} ({' + '.join(str(r) for r in roll['damage_rolls'])}"
                     f"{dmg_bonus_str})"
                     f" = {roll['damage_total']}"
                 )
             else:
                 action_msg = f"{self.avatar.name} ATTACK ROLL: {roll['hit_roll']} + {roll['hit_modifier']} = {roll['hit_total']} vs AC {enemy_ac} -> MISS"
+            self._append_combat_log(combat, action_msg, "player_action")
+        elif cmd in {"rest", "/rest", "wait", "/wait", "recover", "/recover", "skip", "/skip"}:
+            self.avatar.stamina = min(self.avatar.max_stamina or 100, self.avatar.stamina + 40)
+            self._sync_combat_player_snapshot(combat)
+            action_msg = f"{self.avatar.name} rests to recover stamina (+40 Stamina)."
             self._append_combat_log(combat, action_msg, "player_action")
         elif cmd in {"run", "/run", "r"}:
             player_stats = calculate_total_stats(self.avatar)
@@ -1738,7 +1804,7 @@ class GameTurnManager:
             self._sync_combat_player_snapshot(combat)
             self._append_combat_log(combat, action_msg, "consume")
         else:
-            msg = "Combat active. Valid actions: Attack, Run, or /consume <item>."
+            msg = "Combat active. Valid actions: Attack, Run, Rest, or /consume <item>."
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             async for chunk in self._emit_combat_final(msg):
                 yield chunk

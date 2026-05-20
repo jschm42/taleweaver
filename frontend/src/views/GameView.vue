@@ -343,6 +343,10 @@ const handleCombatConsume = async (name: string) => {
   await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, `/consume ${name}`)
 }
 
+const handleCombatRest = async () => {
+  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/rest')
+}
+
 const handleCombatDebugWin = async () => {
   await sendMessage('/debug win_fight')
 }
@@ -603,6 +607,7 @@ watch(showCombatDialog, (visible) => {
       :is-debug="!!sheet?.debug_mode"
       @attack="handleCombatAttack"
       @run="handleCombatRun"
+      @rest="handleCombatRest"
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"
