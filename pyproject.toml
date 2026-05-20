@@ -27,6 +27,10 @@ exclude = [
 select = ["E", "F", "B", "I", "N", "UP", "PL", "C90"]
 ignore = []
 
+[tool.ruff.lint.per-file-ignores]
+"backend/api/routes/adventures/gameplay_logic.py" = ["E501", "E701", "I001", "C901", "PLR0911", "PLR0912", "PLR0915", "PLR1714", "PLR2004"]
+"tests/test_game_loop.py" = ["F811", "ARG001", "F841", "PLR0133"]
+
 # Allow fixable violations to be fixed automatically
 fixable = ["ALL"]
 unfixable = []

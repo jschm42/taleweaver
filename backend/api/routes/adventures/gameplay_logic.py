@@ -48,7 +48,6 @@ from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_map import WorldMap
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
@@ -2928,7 +2927,7 @@ class GameTurnManager:
 
         return map_dict
 
-    async def _build_awards_payload(self, adventure: Optional[AdventureTemplate]) -> list[dict]:
+    async def _build_awards_payload(self, adventure: AdventureTemplate | None) -> list[dict]:
         """Helper to build the awards payload with earned status."""
         if not self.user:
             return []

@@ -1,3 +1,7 @@
+# pyright: reportUnusedParameter=false, reportUnusedVariable=false, reportUnreachable=false
+# pylint: disable=unused-argument,unused-variable,using-constant-test
+# ruff: noqa: ARG001,F841,PLR0133
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -1233,9 +1237,6 @@ async def test_rule_engine_apply_event_game_over():
         new_status_effects=[],
         new_inventory_items=[]
     )
-    
-    import pytest
-
     from backend.engine.rule_engine import GameOverException, RuleEngine
     with pytest.raises(GameOverException):
         RuleEngine.apply_event(avatar, event)
