@@ -45,7 +45,25 @@ const parsedLogs = computed(() => logs.value.map((entry) => ({
 })))
 const lootItems = computed(() => props.combat?.loot_items || [])
 const isLootPhase = computed(() => !!props.combat?.loot_pending)
-const activeTurn = computed(() => props.combat?.turn || 'player')
+const currentAnimationStartIndex = ref(0)
+const activeTurn = computed(() => {
+  // If we are currently revealing new logs sequentially, sync the turn glow
+  // with the source of the most recently revealed log of this turn.
+  if (visibleLogCount.value < parsedLogs.value.length) {
+    for (let i = visibleLogCount.value - 1; i >= currentAnimationStartIndex.value; i--) {
+      const log = parsedLogs.value[i]
+      if (log) {
+        if (log.source === 'YOU') return 'player'
+        if (log.source === 'ENEMY') return 'enemy'
+      }
+    }
+  }
+
+  if (props.evaluating) {
+    return 'enemy'
+  }
+  return props.combat?.turn || 'player'
+})
 const playerImageFailed = ref(false)
 const enemyImageFailed = ref(false)
 const visibleLogCount = ref(0)
@@ -107,6 +125,7 @@ function resetAnimatedState(): void {
   lastSeenLogLength.value = 0
   initializedLogView.value = false
   damageFx.value = []
+  currentAnimationStartIndex.value = 0
 }
 
 function makeLogKey(entry: any, idx: number): string {
@@ -233,6 +252,7 @@ watch(
 
     clearTimeoutList(revealTimeouts)
     const startIndex = lastSeenLogLength.value
+    currentAnimationStartIndex.value = startIndex
     lastSeenLogLength.value = nextLength
     revealNewLogs(startIndex, nextLength)
   },
