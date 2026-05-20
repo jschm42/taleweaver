@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   adventureTitle: string
-  format: 'adz' | 'adv'
+  format: 'adz' | 'adv' | 'ads'
   progress: number
   errorMsg?: string
 }>()
@@ -16,8 +16,8 @@ const statusText = computed(() => {
   if (props.errorMsg) return 'Export Failed'
   if (props.progress === 100) return 'Export Completed!'
   if (props.progress > 80) return 'Finalizing assets...'
-  if (props.progress > 40) return 'Downloading packages...'
-  return 'Cleaning database & packing files...'
+  if (props.progress > 40) return props.format === 'ads' ? 'Downloading session archive...' : 'Downloading packages...'
+  return props.format === 'ads' ? 'Preparing game state & files...' : 'Cleaning database & packing files...'
 })
 
 const isDone = computed(() => props.progress === 100)
@@ -44,7 +44,7 @@ const isDone = computed(() => props.progress === 100)
         </div>
         <div>
           <h3 class="text-lg font-black text-white font-display uppercase tracking-wider">
-            Export Adventure
+            Export {{ props.format === 'ads' ? 'Session' : 'Adventure' }}
           </h3>
           <p class="text-xs text-slate-400 mt-0.5">
             Format: <span class="font-bold text-aether-primary uppercase">{{ props.format }}</span>
@@ -55,7 +55,7 @@ const isDone = computed(() => props.progress === 100)
       <!-- Content -->
       <div class="px-6 py-6 flex flex-col gap-5">
         <div class="text-sm text-slate-300">
-          Adventure: <span class="font-bold text-white">"{{ props.adventureTitle }}"</span>
+          {{ props.format === 'ads' ? 'Session' : 'Adventure' }}: <span class="font-bold text-white">"{{ props.adventureTitle }}"</span>
         </div>
 
         <div v-if="props.errorMsg" class="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs break-words">

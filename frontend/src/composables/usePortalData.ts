@@ -61,10 +61,16 @@ export interface UsePortalDataResult {
   exportProgressState: Ref<{
     isOpen: boolean
     adventureTitle: string
-    format: 'adz' | 'adv'
+    format: 'adz' | 'adv' | 'ads'
     progress: number
     errorMsg?: string
   }>
+  editNoteSessionId: Ref<string | null>
+  editNoteValue: Ref<string>
+  isSavingNote: Ref<boolean>
+  openEditNote: (gameId: string, currentNote: string) => void
+  saveSessionNote: (note: string) => Promise<void>
+  exportSessionAds: (gameId: string, title: string) => Promise<void>
 }
 
 function formatToneLabel(value?: unknown): string {
@@ -148,7 +154,7 @@ export function usePortalData(): UsePortalDataResult {
   const exportProgressState = ref<{
     isOpen: boolean
     adventureTitle: string
-    format: 'adz' | 'adv'
+    format: 'adz' | 'adv' | 'ads'
     progress: number
     errorMsg?: string
   }>({
@@ -426,15 +432,15 @@ export function usePortalData(): UsePortalDataResult {
     }
   }
 
-  /** Parses selected import file and routes to ADV or ADZ import handler. */
+  /** Parses selected import file and routes to ADV, ADZ or ADS import handler. */
   async function onImportFileSelected(event: Event) {
     const target = event.target as HTMLInputElement
     if (!target.files || target.files.length === 0) return
     const file = target.files[0]
 
     const lower = file.name.toLowerCase()
-    if (!lower.endsWith('.adz') && !lower.endsWith('.adv')) {
-      errorMsg.value = 'Only .adv and .adz are supported as import formats.'
+    if (!lower.endsWith('.adz') && !lower.endsWith('.adv') && !lower.endsWith('.ads')) {
+      errorMsg.value = 'Only .adv, .adz, and .ads are supported as import formats.'
       target.value = ''
       return
     }
@@ -442,8 +448,10 @@ export function usePortalData(): UsePortalDataResult {
     try {
       if (lower.endsWith('.adz')) {
         await executeFileImport(file, 'adz', api.importAdz, 'ADZ import failed')
-      } else {
+      } else if (lower.endsWith('.adv')) {
         await executeFileImport(file, 'adv', api.importAdv, 'ADV import failed')
+      } else if (lower.endsWith('.ads')) {
+        await executeSessionImport(file)
       }
     } catch (error: any) {
       errorMsg.value = error?.message || 'Import failed.'
@@ -512,10 +520,91 @@ export function usePortalData(): UsePortalDataResult {
       // Update local state immediately to avoid re-fetch if possible, 
       // but fetchPortalData is safer for consistency.
       templates.value = templates.value.map(t => 
-        t.template_id === templateId ? { ...t, creation_error: null } : t
+          t.template_id === templateId ? { ...t, creation_error: null } : t
       )
     } catch (error) {
       console.error('Error dismissing warning:', error)
+    }
+  }
+
+  async function executeSessionImport(file: File) {
+    isImporting.value = true
+    try {
+      await api.importSession(file)
+      await fetchPortalData()
+    } catch (error: any) {
+      errorMsg.value = error?.message || 'Session import failed.'
+    } finally {
+      isImporting.value = false
+    }
+  }
+
+  const editNoteSessionId = ref<string | null>(null)
+  const editNoteValue = ref('')
+  const isSavingNote = ref(false)
+
+  function openEditNote(gameId: string, currentNote: string) {
+    editNoteSessionId.value = gameId
+    editNoteValue.value = currentNote
+  }
+
+  async function saveSessionNote(note: string) {
+    if (!editNoteSessionId.value) return
+    isSavingNote.value = true
+    try {
+      const updated = await api.updateSession(editNoteSessionId.value, { status_note: note })
+      sessions.value = sessions.value.map((s) => {
+        if (s.game_id === editNoteSessionId.value) {
+          return { ...s, status_note: updated.status_note }
+        }
+        return s
+      })
+      editNoteSessionId.value = null
+      editNoteValue.value = ''
+    } catch (error: any) {
+      errorMsg.value = error?.message || 'Failed to save note'
+    } finally {
+      isSavingNote.value = false
+    }
+  }
+
+  async function exportSessionAds(gameId: string, title: string) {
+    exportProgressState.value = {
+      isOpen: true,
+      adventureTitle: title,
+      format: 'ads',
+      progress: 0,
+      errorMsg: undefined,
+    }
+
+    let progressInterval: number | null = null
+
+    progressInterval = window.setInterval(() => {
+      if (exportProgressState.value.progress < 90) {
+        const step = Math.floor(Math.random() * 5) + 3
+        exportProgressState.value.progress = Math.min(90, exportProgressState.value.progress + step)
+      }
+    }, 150)
+
+    try {
+      const blob = await api.downloadSessionAds(gameId)
+
+      if (progressInterval) {
+        clearInterval(progressInterval)
+      }
+      exportProgressState.value.progress = 100
+
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = makeSafeFilename(title, 'ads')
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (error: any) {
+      if (progressInterval) {
+        clearInterval(progressInterval)
+      }
+      exportProgressState.value.errorMsg = error?.message || 'Session export failed'
     }
   }
 
@@ -580,5 +669,11 @@ export function usePortalData(): UsePortalDataResult {
     confirmConflictOverwrite,
     dismissWarning,
     exportProgressState,
+    editNoteSessionId,
+    editNoteValue,
+    isSavingNote,
+    openEditNote,
+    saveSessionNote,
+    exportSessionAds,
   }
 }

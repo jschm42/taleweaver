@@ -16,6 +16,7 @@ import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
 import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
 import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
+import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
 import AboutModal from '@/components/portal/AboutModal.vue'
 import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
 import SetupWarningModal from '@/components/portal/SetupWarningModal.vue'
@@ -76,6 +77,12 @@ const {
   confirmConflictOverwrite,
   dismissWarning,
   exportProgressState,
+  editNoteSessionId,
+  editNoteValue,
+  isSavingNote,
+  openEditNote,
+  saveSessionNote,
+  exportSessionAds,
 } = usePortalData()
 
 watch(importInput, () => undefined)
@@ -219,6 +226,8 @@ onUnmounted(() => {
               :sessions="sessions"
               @resume="playSession"
               @delete="confirmDeleteSession"
+              @edit-note="openEditNote"
+              @export="(id) => exportSessionAds(id, sessions.find(s => s.game_id === id)?.adventure_title || 'session')"
               @switch-to-templates="activeSection = 'templates'"
             />
           </div>
@@ -237,7 +246,7 @@ onUnmounted(() => {
       type="file"
       ref="importInput"
       style="display: none"
-      accept=".adv,.adz"
+      accept=".adv,.adz,.ads"
       @change="onImportFileSelected"
     />
 
@@ -263,6 +272,14 @@ onUnmounted(() => {
         :is-deleting="isDeletingSession"
         @close="closeSessionDeleteConfirm"
         @confirm="executeDeleteSession"
+      />
+
+      <SessionNoteModal
+        v-if="editNoteSessionId"
+        :initial-note="editNoteValue"
+        :is-saving="isSavingNote"
+        @close="editNoteSessionId = null"
+        @save="saveSessionNote"
       />
 
       <ImportWarningModal

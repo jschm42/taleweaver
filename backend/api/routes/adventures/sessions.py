@@ -3,12 +3,16 @@ import os
 from copy import deepcopy
 from typing import Any, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.schemas import GameSessionResponse
+from backend.schemas.session import GameSessionUpdate
+from backend.engine.session_exporter import SessionExporter
+from backend.engine.session_importer import SessionImporter
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
@@ -471,4 +475,131 @@ async def check_session_item_integrity(
         "issue_count": len(issues),
         "issues": issues,
     }
+
+
+async def _get_session_response(db: AsyncSession, game_id: str, current_user_id: str) -> GameSessionResponse:
+    # Query single session with joins
+    result = await db.execute(
+        select(GameSession, SessionState, AdventureTemplate, WorldScene.label, Avatar.profile_image)
+        .outerjoin(SessionState, SessionState.session_id == GameSession.id)
+        .outerjoin(AdventureTemplate, GameSession.template_id == AdventureTemplate.id)
+        .outerjoin(Avatar, Avatar.id == SessionState.avatar_id)
+        .outerjoin(
+            WorldScene,
+            (WorldScene.id == SessionState.current_scene_id)
+            & (WorldScene.session_id == GameSession.id),
+        )
+        .where((GameSession.id == game_id) & (GameSession.user_id == current_user_id))
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found.")
+        
+    g, s, a, scene_label, avatar_profile_image = row
+    
+    # We can fetch earned awards here
+    from backend.models.user import User
+    user_res = await db.execute(select(User).where(User.id == current_user_id))
+    current_user = user_res.scalar_one()
+    user_earned_awards = current_user.earned_awards or []
+    
+    return GameSessionResponse(
+        game_id=g.id,
+        template_id=g.template_id,
+        adventure_id=g.template_id,
+        avatar_id=g.avatar_id,
+        profile_image=AdventureLogic.resolve_session_asset(s, "protagonist", avatar_profile_image),
+        adventure_title=a.title if a else (g.adventure_title or "Unknown"),
+        adventure_version=a.version if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("version"),
+        image_url=AdventureLogic.resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
+        scene_id=s.current_scene_id if s else "START", 
+        current_scene_name=scene_label or ("Exploring..." if s else "Archived"),
+        in_game_time=s.in_game_time if s else 0,
+        is_ready=a.is_ready if a else True,
+        creation_status=a.creation_status if a else "Ready",
+        creation_error=a.creation_error if a else None,
+        selected_tone=a.selected_tone if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("selected_tone"),
+        progress=AdventureLogic.calculate_quest_progress(s.quests if s else (a.quests if a else None)),
+        quest_count=len((s.quests if s else (a.quests if a else None)) or []),
+        completed_quest_count=len([q for q in ((s.quests if s else (a.quests if a else None)) or []) if q.get("status") == "completed"]),
+        award_count=len((a.awards if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("awards")) or []),
+        earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if any(ea.get("key") == aw.get("key") and ea.get("template_id") == a.id for ea in user_earned_awards)]),
+        created_at=g.created_at,
+        status=g.status,
+        status_note=g.status_note,
+    )
+
+
+@router.patch("/sessions/{game_id}", response_model=GameSessionResponse)
+async def update_session(
+    game_id: str,
+    payload: GameSessionUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    game_session = result.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if payload.status is not None:
+        game_session.status = payload.status
+    if payload.status_note is not None:
+        game_session.status_note = payload.status_note
+
+    await db.commit()
+
+    return await _get_session_response(db, game_id, current_user.id)
+
+
+@router.get("/sessions/{game_id}/export")
+async def export_session_ads(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports the session as a portable .ads (ZIP) bundle including assets."""
+    import io
+    try:
+        # Verify ownership
+        result = await db.execute(
+            select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+        )
+        if not result.scalars().first():
+            raise HTTPException(status_code=404, detail="Session not found.")
+            
+        zip_data = await SessionExporter.export_ads(db, game_id)
+        return StreamingResponse(
+            io.BytesIO(zip_data),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=session_{game_id}.ads"}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("ADS Export failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/import")
+async def import_session_ads(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Import a game session from a portable .ads (ZIP) file."""
+    try:
+        content = await file.read()
+        new_session_id = await SessionImporter.import_ads(db, content, owner_id=current_user.id)
+        if not new_session_id:
+            raise HTTPException(status_code=400, detail="The ADS file is invalid or could not be processed.")
+        return {"status": "success", "game_id": new_session_id, "message": "Session imported successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("ADS Import failed")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
 

@@ -29,6 +29,7 @@ export interface UseGameSocket {
   isCompleted: Ref<boolean>
   language: Ref<string>
   statusText: Ref<string>
+  statusNote: Ref<string>
   inputLocked: Ref<boolean>
   pendingTerminalEpilogue: Ref<boolean>
   debugLogs: Ref<{ timestamp: string, content: string }[]>
@@ -68,6 +69,7 @@ export function useGameSocket(): UseGameSocket {
   const isCompleted = ref(false)
   const language = ref<string>(localStorage.getItem('tw_bable_fish_lang') || '')
   const statusText = ref('')
+  const statusNote = ref('')
   const inputLocked = ref(false)
   const pendingTerminalEpilogue = ref(false)
   const debugLogs = ref<{ timestamp: string, content: string }[]>([])
@@ -158,6 +160,7 @@ export function useGameSocket(): UseGameSocket {
     }
 
     if (data.status_note !== undefined) {
+      statusNote.value = data.status_note || ''
       gameOverReason.value = data.status_note || ''
     }
 
@@ -450,6 +453,7 @@ export function useGameSocket(): UseGameSocket {
     isCompleted,
     language,
     statusText,
+    statusNote,
     inputLocked,
     pendingTerminalEpilogue,
     debugLogs,

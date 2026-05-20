@@ -24,6 +24,8 @@ import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
+import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
+import { api } from '@/composables/useApi'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
@@ -49,6 +51,22 @@ const sheetDirty = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
 const showDebugLog = ref(false)
+const showNoteModal = ref(false)
+const isSavingNote = ref(false)
+
+const saveSessionNote = async (note: string) => {
+  isSavingNote.value = true
+  try {
+    await api.updateSession(props.id, { status_note: note })
+    statusNote.value = note
+    addNotification('Session note updated.', 'success')
+    showNoteModal.value = false
+  } catch (err) {
+    addNotification('Failed to update session note.', 'error')
+  } finally {
+    isSavingNote.value = false
+  }
+}
 const { notifications, removeNotification, addNotification } = useNotifications()
 const gameSettings = ref<GameSettings>({
   clock_24h: false,
@@ -59,6 +77,7 @@ const {
   status,
   messages,
   gameOverReason,
+  statusNote,
   adventureImage,
   entities,
   mapData,
@@ -392,6 +411,7 @@ watch(showCombatDialog, (visible) => {
       :clock-tick="clockTick"
       :debug-mode="!!sheet?.debug_mode"
       @back="goBack"
+      @edit-note="showNoteModal = true"
     />
 
     <div class="px-12 pt-6">
@@ -535,6 +555,13 @@ watch(showCombatDialog, (visible) => {
       @hint="buyHint"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
+    />
+    <SessionNoteModal
+      v-if="showNoteModal"
+      :initial-note="statusNote || ''"
+      :is-saving="isSavingNote"
+      @close="showNoteModal = false"
+      @save="saveSessionNote"
     />
     <SuccessScreen 
       :show="showSuccess" 

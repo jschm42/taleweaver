@@ -10,6 +10,8 @@ defineEmits<{
   (e: 'resume', gameId: string): void
   (e: 'delete', gameId: string, title: string): void
   (e: 'switch-to-templates'): void
+  (e: 'edit-note', gameId: string, currentNote: string): void
+  (e: 'export', gameId: string): void
 }>()
 </script>
 
@@ -37,6 +39,8 @@ defineEmits<{
         :session="entry"
         @resume="(id) => $emit('resume', id)"
         @delete="(id, title) => $emit('delete', id, title)"
+        @edit-note="(id, note) => $emit('edit-note', id, note)"
+        @export="(id) => $emit('export', id)"
       />
     </div>
   </div>

@@ -32,12 +32,14 @@ class GameSessionBase(BaseModel):
     avatar_id: str
     template_id: str
     status: str = "active"
+    status_note: Optional[str] = None
 
 class GameSessionCreate(GameSessionBase):
     pass
 
 class GameSessionUpdate(BaseModel):
     status: Optional[str] = None
+    status_note: Optional[str] = None
 
 class GameSession(GameSessionBase):
     id: str
