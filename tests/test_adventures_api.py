@@ -13,7 +13,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from PIL import Image
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from backend.engine.debug_engine import DebugEngine
 from backend.models.adventure_template import AdventureTemplate as Adventure
@@ -1919,6 +1919,107 @@ async def test_started_session_persists_asset_snapshot(client: AsyncClient):
         assert state is not None
         assert isinstance(state.entity_states, dict)
         assert "__asset_snapshot__" in state.entity_states
+
+
+async def test_start_session_ignores_session_bound_template_rows(client: AsyncClient):
+    """Starting a session must clone only template baseline world rows (session_id IS NULL)."""
+    ids = await _create_adventure(client, "Session Baseline Isolation Quest")
+    template_id = ids["adventure_id"]
+
+    first_start = await client.post(f"/api/adventures/{template_id}/sessions/start")
+    assert first_start.status_code == 201, first_start.text
+    first_game_id = first_start.json()["game_id"]
+
+    async with TestSessionLocal() as db:
+        base_scene_count_res = await db.execute(
+            select(func.count(WorldScene.pk)).where(
+                WorldScene.template_id == template_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+        baseline_scene_count = int(base_scene_count_res.scalar_one())
+
+        base_entity_count_res = await db.execute(
+            select(func.count(WorldEntity.pk)).where(
+                WorldEntity.template_id == template_id,
+                WorldEntity.session_id.is_(None),
+            )
+        )
+        baseline_entity_count = int(base_entity_count_res.scalar_one())
+
+        # Simulate polluted data from imported/legacy session rows carrying template_id.
+        db.add(
+            WorldScene(
+                id="POLLUTED_SCENE",
+                template_id=template_id,
+                session_id=first_game_id,
+                label="Polluted Scene",
+                description="Should never be treated as template baseline.",
+                image_url=None,
+            )
+        )
+        db.add(
+            WorldEntity(
+                id="POLLUTED_ITEM",
+                template_id=template_id,
+                session_id=first_game_id,
+                entity_type="OBJECT",
+                name="Polluted Item",
+                description="Must not be cloned into a new session.",
+                current_scene_id="POLLUTED_SCENE",
+                spatial_position="on the floor",
+                image_url=None,
+                item_type="PICKABLE",
+                wearable_slots=[],
+                is_in_inventory=False,
+                is_hidden=False,
+                is_portable=True,
+                combination_ingredients=[],
+                reveals_item_id=None,
+                is_final_state=False,
+                state_comment=None,
+                npc_type=None,
+                movement_type=None,
+                hp=None,
+                max_hp=None,
+                mana=None,
+                max_mana=None,
+                stamina=None,
+                max_stamina=None,
+                stat_modifier_strength=None,
+                stat_modifier_dexterity=None,
+                stat_modifier_intelligence=None,
+                stat_modifier_wisdom=None,
+                stat_modifier_charisma=None,
+                stat_modifier_armor_class=None,
+                inventory=[],
+                metadata_json={},
+            )
+        )
+        await db.commit()
+
+    second_start = await client.post(f"/api/adventures/{template_id}/sessions/start")
+    assert second_start.status_code == 201, second_start.text
+    second_game_id = second_start.json()["game_id"]
+
+    async with TestSessionLocal() as db:
+        session_scene_count_res = await db.execute(
+            select(func.count(WorldScene.pk)).where(WorldScene.session_id == second_game_id)
+        )
+        second_scene_count = int(session_scene_count_res.scalar_one())
+
+        session_entity_count_res = await db.execute(
+            select(func.count(WorldEntity.pk)).where(WorldEntity.session_id == second_game_id)
+        )
+        second_entity_count = int(session_entity_count_res.scalar_one())
+
+        assert second_scene_count == baseline_scene_count
+        assert second_entity_count == baseline_entity_count
+
+    list_resp = await client.get("/api/adventures/sessions")
+    assert list_resp.status_code == 200, list_resp.text
+    game_ids = [row["game_id"] for row in list_resp.json()]
+    assert len(game_ids) == len(set(game_ids))
 
 
 async def test_started_sessions_keep_snapshot_images_after_template_avatar_edit(client: AsyncClient):

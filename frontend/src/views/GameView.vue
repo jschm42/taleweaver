@@ -20,10 +20,13 @@ import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
 import GameViewHeader from '@/components/game/GameViewHeader.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
+import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
+import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
+import { api } from '@/composables/useApi'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
@@ -49,6 +52,22 @@ const sheetDirty = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
 const showDebugLog = ref(false)
+const showNoteModal = ref(false)
+const isSavingNote = ref(false)
+
+const saveSessionNote = async (note: string) => {
+  isSavingNote.value = true
+  try {
+    await api.updateSession(props.id, { status_note: note })
+    statusNote.value = note
+    addNotification('Session note updated.', 'success')
+    showNoteModal.value = false
+  } catch (err) {
+    addNotification('Failed to update session note.', 'error')
+  } finally {
+    isSavingNote.value = false
+  }
+}
 const { notifications, removeNotification, addNotification } = useNotifications()
 const gameSettings = ref<GameSettings>({
   clock_24h: false,
@@ -59,6 +78,7 @@ const {
   status,
   messages,
   gameOverReason,
+  statusNote,
   adventureImage,
   entities,
   mapData,
@@ -162,6 +182,7 @@ const npcs = computed(() => {
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
+const lootPopupItems = computed(() => (combat.value?.loot_items || []) as any[])
 const isCombatActive = computed(() => !!combat.value?.active)
 const showCombatDialog = computed(() => {
   if (isClosingCombat.value) return false
@@ -169,15 +190,33 @@ const showCombatDialog = computed(() => {
 })
 const combatActionInFlight = ref(false)
 const isClosingCombat = ref(false)
+const showLootPopup = ref(false)
+const lootPopupShownForCombat = ref(false)
 const isCombatEvaluating = computed(() => combatActionInFlight.value)
 const showsMechanics = computed(() => {
   const mode = (sheet.value as any)?.rule_enforcement_mode as string | undefined
   return mode === 'rpg' || mode === 'story' || mode === 'strict'
 })
 
-watch(combat, (newCombat) => {
+watch(combat, (newCombat, oldCombat) => {
   if (!newCombat) {
     isClosingCombat.value = false
+    showLootPopup.value = false
+    lootPopupShownForCombat.value = false
+    return
+  }
+
+  const hadLootPhase = !!oldCombat?.loot_pending
+  const enteredLootPhase = !!newCombat.loot_pending && !hadLootPhase
+  const hasLootItems = (newCombat.loot_items || []).length > 0
+  if (enteredLootPhase && hasLootItems && !lootPopupShownForCombat.value) {
+    showLootPopup.value = true
+    lootPopupShownForCombat.value = true
+  }
+
+  if (!newCombat.loot_pending) {
+    showLootPopup.value = false
+    lootPopupShownForCombat.value = false
   }
 })
 
@@ -324,6 +363,10 @@ const handleCombatConsume = async (name: string) => {
   await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, `/consume ${name}`)
 }
 
+const handleCombatRest = async () => {
+  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/rest')
+}
+
 const handleCombatDebugWin = async () => {
   await sendMessage('/debug win_fight')
 }
@@ -344,7 +387,10 @@ const handleLootDone = async () => {
   await gameActionService.runLootDone(
     combatActionInFlight,
     sendMessage,
-    () => { isClosingCombat.value = true },
+    () => {
+      showLootPopup.value = false
+      isClosingCombat.value = true
+    },
     () => {
       // Ensure the guard resets eventually once the combat state is truly gone
       if (!combat.value) {
@@ -352,6 +398,10 @@ const handleLootDone = async () => {
       }
     }
   )
+}
+
+const closeLootPopup = () => {
+  showLootPopup.value = false
 }
 
 watch(showCombatDialog, (visible) => {
@@ -392,6 +442,7 @@ watch(showCombatDialog, (visible) => {
       :clock-tick="clockTick"
       :debug-mode="!!sheet?.debug_mode"
       @back="goBack"
+      @edit-note="showNoteModal = true"
     />
 
     <div class="px-12 pt-6">
@@ -536,6 +587,13 @@ watch(showCombatDialog, (visible) => {
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
     />
+    <SessionNoteModal
+      v-if="showNoteModal"
+      :initial-note="statusNote || ''"
+      :is-saving="isSavingNote"
+      @close="showNoteModal = false"
+      @save="saveSessionNote"
+    />
     <SuccessScreen 
       :show="showSuccess" 
       :total-exp="sheet?.exp || 0" 
@@ -576,6 +634,7 @@ watch(showCombatDialog, (visible) => {
       :is-debug="!!sheet?.debug_mode"
       @attack="handleCombatAttack"
       @run="handleCombatRun"
+      @rest="handleCombatRest"
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"
@@ -584,6 +643,16 @@ watch(showCombatDialog, (visible) => {
       @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"
       @entity-leave="hoveredEntity = null"
+    />
+
+    <CombatLootPopup
+      :open="showLootPopup && !!combat?.loot_pending"
+      :items="lootPopupItems"
+      :busy="combatActionInFlight"
+      @close="closeLootPopup"
+      @confirm="handleLootDone"
+      @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
+      @item-leave="hoveredEntity = null"
     />
 
     <!-- HOVER TOOLTIP -->

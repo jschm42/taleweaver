@@ -37,8 +37,8 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "The protagonist must also have a 'goal' (primary motivation, max 200 chars) and 'character' (personality traits, max 200 chars).\n"
     "These help the GM understand how the player character thinks and acts.\n\n"
     "STATS & RESOURCES:\n"
-    "For NPCs, always assign 'hp', 'stamina', and 'mana' (integers, e.g., 100). Default to 0 if not relevant.\n"
-    "For Protagonist, range is 100-300.\n\n"
+    "For NPCs, always assign 'hp' (range 40-100) and 'stamina' (range 50-100). Default to 0 if not relevant.\n"
+    "For Protagonist, hp range is 60-120, stamina range is 60-100.\n\n"
     "AWARD & QUEST GENERATION:\n"
     "Generate 3-5 Awards and 3-5 Quests matching the story context."
 )

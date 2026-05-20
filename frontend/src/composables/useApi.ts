@@ -451,6 +451,29 @@ export const api = {
       console.error('API generateMyProfileImage error:', error)
       throw error
     }
+  },
+
+  /** Updates a session note or status. */
+  updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null }): Promise<GameSession> {
+    return request(`/adventures/sessions/${gameId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  /** Downloads the session as ADS (ZIP) bundle. */
+  downloadSessionAds(gameId: string): Promise<Blob> {
+    return requestBlob(`/adventures/sessions/${gameId}/export`)
+  },
+
+  /** Imports a session from ADS ZIP file. */
+  async importSession(file: File): Promise<{ status: string; game_id: string; message: string }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request('/adventures/sessions/import', {
+      method: 'POST',
+      body: formData,
+    })
   }
 }
 

@@ -52,6 +52,7 @@ class WorldEntityUpdate(BaseModel):
     description: Optional[str] = None
     spatial_position: Optional[str] = None
     is_hidden: Optional[bool] = None
+    is_defeated: Optional[bool] = None  # Marks NPC as permanently inert after defeat
     hp: Optional[int] = None
     max_hp: Optional[int] = None
     mana: Optional[int] = None

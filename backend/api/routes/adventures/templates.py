@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 import os
+from copy import deepcopy
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -192,24 +193,43 @@ async def create_adventure(
     # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
     os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", session.id), exist_ok=True)
 
-    # Create the initial SessionState so adventure-scoped routes (/state etc.) work immediately.
+    # Create an initial SessionState (GameState alias) to capture template snapshot and asset mapping for newly created session.
+    manifest_snapshot = AdventureLogic.build_session_manifest_snapshot(adv)
+
+    # Build entity image map from any existing template entities
+    ent_rows = await db.execute(select(WorldEntity).where(WorldEntity.template_id == new_id))
+    template_entities = ent_rows.scalars().all()
+    entity_images = {e.id: e.image_url for e in template_entities if getattr(e, "id", None)}
+
     asset_snapshot = {
-        "cover": None,
-        "protagonist": None,
+        "cover": adv.image_url,
+        "protagonist": avatar.profile_image,
+        "entity_images": entity_images,
     }
-    initial_state = SessionState(
+
+    new_state = SessionState(
         session_id=session.id,
         user_id=current_user.id,
         template_id=new_id,
         avatar_id=avatar.id,
         current_scene_id="START",
         in_game_time=0,
+        quests=deepcopy(adv.quests or []),
         entity_states={
-            AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: {},
+            AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot,
             "__asset_snapshot__": asset_snapshot,
         },
+        start_datetime=AdventureLogic.resolve_start_datetime(adv.original_manifest),
+        plot=adv.plot,
+        rules=adv.rules,
+        walkthrough=adv.walkthrough,
+        completed_condition=adv.completed_condition,
+        gameover_condition=adv.gameover_condition,
+        tts_director_notes=adv.tts_director_notes,
+        selected_image_styles=deepcopy(adv.selected_image_styles),
+        selected_tone=deepcopy(adv.selected_tone),
     )
-    db.add(initial_state)
+    db.add(new_state)
 
     await db.commit()
     
@@ -451,6 +471,94 @@ async def get_adventure_status(
         "is_ready": adv.is_ready,
         "error": adv.creation_error
     }
+
+
+@router.get("/{template_id}/state")
+async def get_adventure_state(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns the current runtime state for the latest session of this template for the user."""
+    state = await AdventureLogic.resolve_session_state(db, template_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session state not found.")
+
+    is_paused = False
+    if state.session and getattr(state.session, "status", None):
+        is_paused = state.session.status == "paused"
+
+    return {
+        "scene_id": state.current_scene_id,
+        "in_game_time": state.in_game_time,
+        "is_paused": is_paused,
+    }
+
+
+@router.patch("/{template_id}/state")
+async def patch_adventure_state(
+    template_id: str,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Patch mutable fields on the active session state (e.g. scene_id)."""
+    state = await AdventureLogic.resolve_session_state(db, template_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session state not found.")
+
+    updated = False
+    if "scene_id" in payload:
+        state.current_scene_id = payload.get("scene_id")
+        updated = True
+    if "in_game_time" in payload:
+        try:
+            state.in_game_time = int(payload.get("in_game_time"))
+            updated = True
+        except Exception:
+            pass
+
+    if updated:
+        await db.commit()
+
+    return {
+        "scene_id": state.current_scene_id,
+        "in_game_time": state.in_game_time,
+    }
+
+
+@router.post("/{template_id}/pause")
+async def pause_adventure(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Pause the most recent session for this user/template."""
+    res = await db.execute(select(GameSession).where(GameSession.template_id == template_id).order_by(GameSession.updated_at.desc()))
+    session = next(iter(res.scalars().all()), None)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    session.status = "paused"
+    await db.commit()
+    return {"status": "paused"}
+
+
+@router.post("/{template_id}/resume")
+async def resume_adventure(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Resume a paused session for this user/template."""
+    res = await db.execute(select(GameSession).where(GameSession.template_id == template_id).order_by(GameSession.updated_at.desc()))
+    session = next(iter(res.scalars().all()), None)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    session.status = "active"
+    await db.commit()
+    return {"status": "active"}
 
 @router.post("/{template_id}/cancel")
 async def cancel_adventure_generation(
@@ -701,4 +809,32 @@ async def export_adventure_adz(
     except Exception as e:
         logger.exception("ADZ Export failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{template_id}/export/session")
+async def export_adventure_session(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports a minimal session payload for the template (useful for import/preview)."""
+    # Find template-level avatar if present
+    av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+    avatar = av_res.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found for template.")
+
+    avatar_payload = {
+        "name": avatar.name,
+        "role": avatar.role,
+        "description": avatar.description,
+        "profile_image": avatar.profile_image,
+        "hp": avatar.hp,
+        "stamina": avatar.stamina,
+        "mana": avatar.mana,
+        "inventory": avatar.inventory or [],
+        "equipment": avatar.equipment or {},
+    }
+
+    return {"avatar": avatar_payload}
 

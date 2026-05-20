@@ -1,3 +1,7 @@
+# pyright: reportUnusedParameter=false, reportUnusedVariable=false, reportUnreachable=false
+# pylint: disable=unused-argument,unused-variable,using-constant-test
+# ruff: noqa: ARG001,F841,PLR0133
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -1233,9 +1237,6 @@ async def test_rule_engine_apply_event_game_over():
         new_status_effects=[],
         new_inventory_items=[]
     )
-    
-    import pytest
-
     from backend.engine.rule_engine import GameOverException, RuleEngine
     with pytest.raises(GameOverException):
         RuleEngine.apply_event(avatar, event)
@@ -1372,6 +1373,174 @@ async def test_combat_loot_take_moves_item_to_inventory(setup_test_db, monkeypat
 
         await db.refresh(avatar)
         assert any((item or {}).get("id") == "RAT_TOOTH" for item in (avatar.inventory or []))
+
+
+async def test_combat_loot_done_spawns_visible_scene_loot_with_stale_overrides(setup_test_db, monkeypatch):
+    from backend.api.routes.adventures.logic import AdventureLogic
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)
+
+        # Simulate a stale override that previously hid an item in inventory.
+        overrides = dict(state.entity_states or {})
+        overrides["RAT_TOOTH"] = {
+            "is_in_inventory": True,
+            "current_scene_id": "INVENTORY",
+        }
+        state.entity_states = overrides
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 20,
+                "hit_modifier": 5,
+                "hit_total": 25,
+                "target_ac": 11,
+                "is_hit": True,
+                "damage_total": 99,
+                "damage_dice_total": 99,
+                "damage_rolls": [99],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d8",
+            },
+        )
+
+        async for _ in manager.process_turn("/attack"):
+            pass
+        async for _ in manager.process_turn("/loot done"):
+            pass
+
+        await db.refresh(state)
+        entity_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == state.session_id,
+                WorldEntity.id == "RAT_TOOTH",
+            )
+        )
+        scene_item = entity_res.scalars().first()
+        assert scene_item is not None
+        assert scene_item.current_scene_id == state.current_scene_id
+        assert scene_item.is_in_inventory is False
+
+        visible_entities = await AdventureLogic.build_session_entities(db, state)
+        assert any(ent.get("id") == "RAT_TOOTH" for ent in visible_entities)
+
+
+async def test_debug_win_fight_uses_loot_phase_mechanism(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        manager = GameTurnManager(db, state.session_id, user)
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+        async for _ in manager.process_turn("/debug win_fight"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__")
+        assert combat is not None
+        assert combat.get("active") is False
+        assert combat.get("outcome") == "victory"
+        assert combat.get("loot_pending") is True
+        assert any((item or {}).get("id") == "RAT_TOOTH" for item in (combat.get("loot_items") or []))
+
+
+async def test_combat_loot_done_emits_dropped_items_system_message(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        manager = GameTurnManager(db, state.session_id, user)
+
+        mock_llm_instance = MagicMock()
+
+        async def mock_stream(*_args, **_kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The battlefield quiets."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 20,
+                "hit_modifier": 5,
+                "hit_total": 25,
+                "target_ac": 11,
+                "is_hit": True,
+                "damage_total": 99,
+                "damage_dice_total": 99,
+                "damage_rolls": [99],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d8",
+            },
+        )
+
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        chunks: list[str] = []
+        async for chunk in manager.process_turn("/loot done"):
+            chunks.append(chunk)
+
+        system_chunks = [c for c in chunks if "event: system" in c]
+        assert any("Loot dropped to the scene:" in c for c in system_chunks)
+        assert any("- Rat Tooth" in c for c in system_chunks)
+
+
+async def test_talk_to_defeated_npc_is_rejected_except_inspect(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, npc = await _seed_combat_npc(db)
+        overrides = dict(state.entity_states or {})
+        overrides[npc.id] = {"is_defeated": True, "hp": 0}
+        state.entity_states = overrides
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        chunks: list[str] = []
+        async for chunk in manager.process_turn("/talk Giant Rat"):
+            chunks.append(chunk)
+
+        system_chunks = [c for c in chunks if "event: system" in c]
+        assert any("Only inspect is available" in c for c in system_chunks)
+
+
+async def test_take_on_defeated_npc_is_rejected_except_inspect(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, npc = await _seed_combat_npc(db)
+        overrides = dict(state.entity_states or {})
+        overrides[npc.id] = {"is_defeated": True, "hp": 0}
+        state.entity_states = overrides
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        chunks: list[str] = []
+        async for chunk in manager.process_turn("/take Giant Rat"):
+            chunks.append(chunk)
+
+        system_chunks = [c for c in chunks if "event: system" in c]
+        assert any("Only inspect is available" in c for c in system_chunks)
 
 
 async def test_combat_auto_triggers_from_gm_requested_attacks(setup_test_db, monkeypatch):
@@ -1713,3 +1882,112 @@ async def test_combat_exit_loot_done_triggers_gm_narrative_pass(setup_test_db, m
         res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id, ChatMessage.role == "assistant"))
         assistant_msgs = [m.content for m in res.scalars().all()]
         assert any("Silence returns" in msg for msg in assistant_msgs)
+
+
+async def test_combat_npc_stamina_logic_active(setup_test_db, monkeypatch):
+    """Verifies that if the NPC has max_stamina > 0, stamina consumption and exhausted resting are enforced."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, npc = await _seed_combat_npc(db)
+        npc.stamina = 20
+        npc.max_stamina = 20
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Force player to act first, and player misses so fight continues
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
+        
+        # Player and enemy attack miss
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 2,
+                "hit_modifier": 0,
+                "hit_total": 2,
+                "target_ac": 18,
+                "is_hit": False,
+                "damage_total": 0,
+                "damage_dice_total": 0,
+                "damage_rolls": [],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d6",
+            },
+        )
+
+        # Start combat
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        # 1st Attack: Player attacks (and misses). Then Enemy attacks.
+        # This enemy attack should consume 20 stamina, bringing enemy stamina down to 0.
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert combat.get("enemy", {}).get("stamina") == 0
+
+        # 2nd Attack: Player attacks (and misses) again.
+        # Now the enemy has 0 stamina (< 20 required). Enemy must rest to recover +40 stamina (capped at max 20).
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert combat.get("enemy", {}).get("stamina") == 20
+        logs = combat.get("log") or []
+        assert any("is exhausted and rests to recover stamina" in entry.get("text", "") for entry in logs)
+
+
+async def test_combat_npc_stamina_logic_inactive(setup_test_db, monkeypatch):
+    """Verifies that if the NPC has max_stamina == 0 or None, stamina logic is bypassed and they attack normally without depletion."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state, npc = await _seed_combat_npc(db)
+        npc.stamina = 0
+        npc.max_stamina = 0
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Force player to act first, and player misses so fight continues
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
+        
+        # Player and enemy attack miss
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 2,
+                "hit_modifier": 0,
+                "hit_total": 2,
+                "target_ac": 18,
+                "is_hit": False,
+                "damage_total": 0,
+                "damage_dice_total": 0,
+                "damage_rolls": [],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d6",
+            },
+        )
+
+        # Start combat
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        # Player attacks. Then Enemy attacks.
+        # Enemy has max_stamina = 0, so they attack without stamina check, remaining at 0 stamina.
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert combat.get("enemy", {}).get("stamina") == 0
+        logs = combat.get("log") or []
+        # Enemy should not rest/be exhausted
+        assert not any("is exhausted and rests to recover stamina" in entry.get("text", "") for entry in logs)
+

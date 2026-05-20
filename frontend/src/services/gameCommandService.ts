@@ -58,6 +58,11 @@ export const gameCommandService = {
       return { command: null, errorMessage: null }
     }
 
+    const isDefeatedNpc = entity?.entity_type === 'NPC' && (entity?.is_defeated === true || entity?.hp === 0)
+    if (isDefeatedNpc && actionId !== 'inspect') {
+      return { command: null, errorMessage: 'This enemy is defeated. Only inspect is available.' }
+    }
+
     switch (actionId) {
       case 'talk':
         return { command: `/talk ${targetName}`, errorMessage: null }
@@ -95,10 +100,13 @@ export const gameCommandService = {
       items.push({ label: 'Dance', action: 'Start dancing', icon: 'ra ra-double-team', color: 'text-orange-400' })
     } else if (entity?.entity_type === 'NPC') {
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
-      if (ruleMode === 'rpg' && entity?.is_attackable !== false) {
-        items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
+      const isDefeatedNpc = entity?.is_defeated === true || entity?.hp === 0
+      if (!isDefeatedNpc) {
+        if (ruleMode === 'rpg' && entity?.is_attackable !== false) {
+          items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
+        }
+        items.push({ label: 'Chat', action: `/talk ${entity.name}`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
       }
-      items.push({ label: 'Chat', action: `/talk ${entity.name}`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
     } else if (entity?.entity_type === 'SCENE') {
       items.push({ label: 'Look around', action: 'Look around', icon: 'ra ra-eye', color: 'text-indigo-400' })
       items.push({ label: 'Search', action: 'Search the area', icon: 'ra ra-magnifying-glass', color: 'text-emerald-400' })

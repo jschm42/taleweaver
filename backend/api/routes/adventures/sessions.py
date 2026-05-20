@@ -3,12 +3,16 @@ import os
 from copy import deepcopy
 from typing import Any, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.schemas import GameSessionResponse
+from backend.schemas.session import GameSessionUpdate
+from backend.engine.session_exporter import SessionExporter
+from backend.engine.session_importer import SessionImporter
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
@@ -18,7 +22,9 @@ from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
+from sqlalchemy import delete
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.models.game_state import GameState
 from backend.models.world_map import WorldMap
 from backend.utils.text_utils import generate_session_id
 
@@ -164,6 +170,7 @@ async def list_sessions(
             & (WorldScene.session_id == GameSession.id),
         )
         .where(GameSession.user_id == current_user.id)
+        .distinct()
     )
     rows = result.all()
     user_earned_awards = current_user.earned_awards or []
@@ -210,7 +217,12 @@ async def start_session_for_template(
         raise HTTPException(status_code=403, detail="You do not have access to this adventure yet.")
 
     # 1. Resolve Avatar (Template-based or fresh manifest-based)
-    av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+    av_res = await db.execute(
+        select(Avatar)
+        .where(Avatar.template_id == template_id)
+        .order_by(Avatar.created_at.asc())
+        .limit(1)
+    )
     template_avatar = av_res.scalars().first()
     
     if template_avatar:
@@ -279,6 +291,7 @@ async def start_session_for_template(
     entity_rows = await db.execute(
         select(WorldEntity).where(
             WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
             WorldEntity.entity_type == "OBJECT",
         )
     )
@@ -289,7 +302,15 @@ async def start_session_for_template(
     db.add(avatar)
     await db.flush()
 
-    scene_res = await db.execute(select(WorldScene.id).where(WorldScene.template_id == template_id).order_by(WorldScene.id.asc()).limit(1))
+    scene_res = await db.execute(
+        select(WorldScene.id)
+        .where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+        )
+        .order_by(WorldScene.id.asc())
+        .limit(1)
+    )
     first_scene_id = scene_res.scalar_one_or_none() or "START"
 
     new_session = GameSession(
@@ -307,12 +328,32 @@ async def start_session_for_template(
     # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
     os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", new_session.id), exist_ok=True)
 
-    # Create SessionState with narrative snapshot
+    # Create SessionState with narrative and asset snapshot
     manifest_snapshot = AdventureLogic.build_session_manifest_snapshot(adventure)
+
+    # Build entity image mapping from template entities for asset snapshot
+    ent_rows = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+        )
+    )
+    template_entities = ent_rows.scalars().all()
+    entity_images = {e.id: e.image_url for e in template_entities if getattr(e, "id", None)}
+
+    asset_snapshot = {
+        "cover": adventure.image_url,
+        "protagonist": avatar.profile_image,
+        "entity_images": entity_images,
+    }
+
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
         current_scene_id=first_scene_id, in_game_time=0, quests=deepcopy(adventure.quests or []),
-        entity_states={AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot},
+        entity_states={
+            AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot,
+            "__asset_snapshot__": asset_snapshot,
+        },
         start_datetime=AdventureLogic.resolve_start_datetime(adventure.original_manifest),
         plot=adventure.plot,
         rules=adventure.rules,
@@ -331,7 +372,12 @@ async def start_session_for_template(
     
     # --- DEEP CLONE WORLD DATA ---
     # 1. Clone Scenes
-    scenes_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id))
+    scenes_res = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+        )
+    )
     scenes = scenes_res.scalars().all()
     for s in scenes:
         new_s = WorldScene(
@@ -341,7 +387,12 @@ async def start_session_for_template(
         db.add(new_s)
     
     # 2. Clone Exits
-    exits_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id))
+    exits_res = await db.execute(
+        select(WorldExit).where(
+            WorldExit.template_id == template_id,
+            WorldExit.session_id.is_(None),
+        )
+    )
     exits = exits_res.scalars().all()
     for e in exits:
         new_e = WorldExit(
@@ -352,7 +403,12 @@ async def start_session_for_template(
         db.add(new_e)
         
     # 3. Clone Entities
-    entities_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+    entities_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+        )
+    )
     entities = entities_res.scalars().all()
     for ent in entities:
         new_ent = WorldEntity(
@@ -374,6 +430,25 @@ async def start_session_for_template(
 
     await db.commit()
     return {"game_id": new_session.id, "template_id": template_id, "avatar_id": avatar.id}
+
+
+@router.post("/{template_id}/reset")
+async def reset_adventure(template_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Resets a template into a fresh state while preserving any already-generated image URLs on the template/world data."""
+    # Verify ownership
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Adventure template not found.")
+
+    # Remove session-bound rows and leave template-level images intact.
+    # Only delete rows that belong to active sessions (session_id IS NOT NULL).
+    await db.execute(delete(GameSession).where(GameSession.template_id == template_id))
+    await db.execute(delete(SessionState).where(SessionState.template_id == template_id))
+    await db.execute(delete(WorldEntity).where((WorldEntity.template_id == template_id) & (WorldEntity.session_id != None)))
+    await db.execute(delete(WorldScene).where((WorldScene.template_id == template_id) & (WorldScene.session_id != None)))
+    await db.execute(delete(WorldExit).where((WorldExit.template_id == template_id) & (WorldExit.session_id != None)))
+    await db.commit()
+    return {"status": "success"}
 
 @router.delete("/sessions/{game_id}", status_code=200)
 async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -838,3 +913,129 @@ async def resume_adventure(
     game_session.status = "active"
     await db.commit()
     return {"status": "active", "game_id": game_session.id}
+
+
+async def _get_session_response(db: AsyncSession, game_id: str, current_user_id: str) -> GameSessionResponse:
+    # Query single session with joins
+    result = await db.execute(
+        select(GameSession, SessionState, AdventureTemplate, WorldScene.label, Avatar.profile_image)
+        .outerjoin(SessionState, SessionState.session_id == GameSession.id)
+        .outerjoin(AdventureTemplate, GameSession.template_id == AdventureTemplate.id)
+        .outerjoin(Avatar, Avatar.id == SessionState.avatar_id)
+        .outerjoin(
+            WorldScene,
+            (WorldScene.id == SessionState.current_scene_id)
+            & (WorldScene.session_id == GameSession.id),
+        )
+        .where((GameSession.id == game_id) & (GameSession.user_id == current_user_id))
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found.")
+        
+    g, s, a, scene_label, avatar_profile_image = row
+    
+    # We can fetch earned awards here
+    user_res = await db.execute(select(User).where(User.id == current_user_id))
+    current_user = user_res.scalar_one()
+    user_earned_awards = current_user.earned_awards or []
+    
+    return GameSessionResponse(
+        game_id=g.id,
+        template_id=g.template_id,
+        adventure_id=g.template_id,
+        avatar_id=g.avatar_id,
+        profile_image=AdventureLogic.resolve_session_asset(s, "protagonist", avatar_profile_image),
+        adventure_title=a.title if a else (g.adventure_title or "Unknown"),
+        adventure_version=a.version if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("version"),
+        image_url=AdventureLogic.resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
+        scene_id=s.current_scene_id if s else "START", 
+        current_scene_name=scene_label or ("Exploring..." if s else "Archived"),
+        in_game_time=s.in_game_time if s else 0,
+        is_ready=a.is_ready if a else True,
+        creation_status=a.creation_status if a else "Ready",
+        creation_error=a.creation_error if a else None,
+        selected_tone=a.selected_tone if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("selected_tone"),
+        progress=AdventureLogic.calculate_quest_progress(s.quests if s else (a.quests if a else None)),
+        quest_count=len((s.quests if s else (a.quests if a else None)) or []),
+        completed_quest_count=len([q for q in ((s.quests if s else (a.quests if a else None)) or []) if q.get("status") == "completed"]),
+        award_count=len((a.awards if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("awards")) or []),
+        earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if any(ea.get("key") == aw.get("key") and ea.get("template_id") == a.id for ea in user_earned_awards)]),
+        created_at=g.created_at,
+        status=g.status,
+        status_note=g.status_note,
+        copied_from_id=g.copied_from_id,
+    )
+
+
+@router.patch("/sessions/{game_id}", response_model=GameSessionResponse)
+async def update_session(
+    game_id: str,
+    payload: GameSessionUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    game_session = result.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if payload.status is not None:
+        game_session.status = payload.status
+    if payload.status_note is not None:
+        game_session.status_note = payload.status_note
+
+    await db.commit()
+
+    return await _get_session_response(db, game_id, current_user.id)
+
+
+@router.get("/sessions/{game_id}/export")
+async def export_session_ads(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exports the session as a portable .ads (ZIP) bundle including assets."""
+    import io
+    try:
+        # Verify ownership
+        result = await db.execute(
+            select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+        )
+        if not result.scalars().first():
+            raise HTTPException(status_code=404, detail="Session not found.")
+            
+        zip_data = await SessionExporter.export_ads(db, game_id)
+        return StreamingResponse(
+            io.BytesIO(zip_data),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=session_{game_id}.ads"}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("ADS Export failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sessions/import")
+async def import_session_ads(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Import a game session from a portable .ads (ZIP) file."""
+    try:
+        content = await file.read()
+        new_session_id = await SessionImporter.import_ads(db, content, owner_id=current_user.id)
+        if not new_session_id:
+            raise HTTPException(status_code=400, detail="The ADS file is invalid or could not be processed.")
+        return {"status": "success", "game_id": new_session_id, "message": "Session imported successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("ADS Import failed")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")

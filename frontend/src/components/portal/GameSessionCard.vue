@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { GameSession } from '@/types'
-import { MoreHorizontal, Clock } from 'lucide-vue-next'
+import { MoreHorizontal, Clock, FileText, Download } from 'lucide-vue-next'
 
 const props = defineProps<{
   session: GameSession
@@ -11,9 +11,12 @@ const emit = defineEmits<{
   (e: 'resume', gameId: string): void
   (e: 'delete', gameId: string, title: string): void
   (e: 'copy', gameId: string): void
+  (e: 'edit-note', gameId: string, currentNote: string): void
+  (e: 'export', gameId: string): void
 }>()
 
 const isMenuOpen = ref(false)
+const isNotePopupOpen = ref(false)
 
 function toggleMenu(): void {
   isMenuOpen.value = !isMenuOpen.value
@@ -35,13 +38,17 @@ function formatDate(dateStr?: string): string {
   })
 }
 
-function runAction(action: 'resume' | 'delete' | 'copy'): void {
+function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'): void {
   if (action === 'resume') {
     emit('resume', props.session.game_id)
   } else if (action === 'delete') {
     emit('delete', props.session.game_id, props.session.adventure_title)
   } else if (action === 'copy') {
     emit('copy', props.session.game_id)
+  } else if (action === 'edit-note') {
+    emit('edit-note', props.session.game_id, props.session.status_note || '')
+  } else if (action === 'export') {
+    emit('export', props.session.game_id)
   }
   closeMenu()
 }
@@ -89,34 +96,74 @@ function runAction(action: 'resume' | 'delete' | 'copy'): void {
         </span>
       </div>
 
-      <!-- Action Dots -->
-      <div class="absolute top-3 right-3 z-20">
+      <!-- Action Dots & Note Icon -->
+      <div class="absolute top-3 right-3 z-20 flex gap-2">
         <button
-          @click.stop="toggleMenu"
-          class="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all flex items-center justify-center"
-          title="Session actions"
+          v-if="props.session.status_note"
+          @click.stop="isNotePopupOpen = !isNotePopupOpen"
+          class="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-amber-400 hover:bg-black/60 transition-all flex items-center justify-center relative"
+          title="Show note"
         >
-          <MoreHorizontal class="w-5 h-5" />
+          <FileText class="w-4 h-4" />
+          
+          <div v-if="isNotePopupOpen" class="fixed inset-0 z-20" @click.stop="isNotePopupOpen = false"></div>
+          <div
+            v-if="isNotePopupOpen"
+            @click.stop
+            class="absolute right-0 top-10 z-30 w-64 p-4 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.8)] text-slate-300 backdrop-blur-xl text-left normal-case font-normal"
+          >
+            <div class="text-xs font-black uppercase tracking-widest text-amber-400 mb-2 flex items-center gap-1.5 border-b border-white/10 pb-1.5">
+              <FileText class="w-3.5 h-3.5" />
+              Session Note
+            </div>
+            <p class="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto pr-1">
+              {{ props.session.status_note }}
+            </p>
+          </div>
         </button>
 
-        <div v-if="isMenuOpen" class="fixed inset-0 z-20" @click="closeMenu"></div>
-        <div
-          v-if="isMenuOpen"
-          class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
-        >
+        <div class="relative">
           <button
-            class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
-            @click="runAction('copy')"
+            @click.stop="toggleMenu"
+            class="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all flex items-center justify-center"
+            title="Session actions"
           >
-            Copy Session
+            <MoreHorizontal class="w-5 h-5" />
           </button>
-          <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
-          <button
-            class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
-            @click="runAction('delete')"
+
+          <div v-if="isMenuOpen" class="fixed inset-0 z-20" @click="closeMenu"></div>
+          <div
+            v-if="isMenuOpen"
+            class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
           >
-            Delete Session
-          </button>
+            <button
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-300 hover:text-white hover:bg-white/5"
+              @click="runAction('copy')"
+            >
+              Copy Session
+            </button>
+            <button
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2"
+              @click="runAction('edit-note')"
+            >
+              <FileText class="w-4 h-4 text-amber-400/80" />
+              Edit Note
+            </button>
+            <button
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2"
+              @click="runAction('export')"
+            >
+              <Download class="w-4 h-4 text-emerald-400/80" />
+              Export ADS
+            </button>
+            <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
+            <button
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+              @click="runAction('delete')"
+            >
+              Delete Session
+            </button>
+          </div>
         </div>
       </div>
     </div>

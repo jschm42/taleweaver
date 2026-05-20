@@ -111,8 +111,8 @@ class MemoryManager:
                                 items_list.append(item_name)
                     if items_list:
                         inv_str = f" [Inventory: {', '.join(items_list)}]"
-
-                npcs.append(f"{e.name}{stat_str}{pos_str}{goal_str}{char_str}{hidden_str}{inv_str}")
+                defeated_str = " [DEFEATED]" if getattr(e, 'is_defeated', False) else ""
+                npcs.append(f"{e.name}{stat_str}{pos_str}{goal_str}{char_str}{hidden_str}{defeated_str}{inv_str}")
 
             objects = []
             for e in entities:
@@ -145,6 +145,36 @@ class MemoryManager:
                 location_context += "AVAILABLE EXITS:\n" + "\n".join(exit_list) + "\n"
 
         return location_context
+
+    @staticmethod
+    def _build_hidden_entities_context(hidden_entities: Optional[list] = None) -> str:
+        """
+        Builds a GM-only context block for hidden NPCs/objects in the current scene,
+        including their reveal rules so the GM knows when to make them visible.
+        """
+        if not hidden_entities:
+            return ""
+
+        lines = [
+            "HIDDEN ENTITIES IN CURRENT SCENE (GM EYES ONLY — Do NOT reveal their existence to the player unless the reveal condition is met):"
+        ]
+        for e in hidden_entities:
+            pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
+            reveal_rule = getattr(e, 'reveal_rule', None) or ""
+            entity_type = getattr(e, 'entity_type', 'ENTITY')
+            if reveal_rule:
+                rule_str = f" | Reveal condition: \"{reveal_rule}\""
+            elif entity_type == "NPC":
+                rule_str = " | Reveal condition: (default) reveal when the protagonist searches the scene OR when this NPC starts speaking"
+            else:
+                rule_str = " | Reveal condition: (default) reveal when the protagonist searches the scene"
+            lines.append(f"- [{entity_type}] {e.name}{pos_str}{rule_str}")
+
+        lines.append(
+            "REVEAL MECHANIC: To reveal an entity, include it in 'updated_entities' with is_hidden=false. "
+            "This makes it visible to the player in the next turn."
+        )
+        return "\n".join(lines) + "\n"
 
     @staticmethod
     def _build_world_npcs_context(other_npcs: Optional[list] = None, scene_map: Optional[dict[str, str]] = None) -> str:
@@ -227,7 +257,8 @@ class MemoryManager:
         is_adventure_generator: bool = False,
         location_detail_level: str = "full",
         other_npcs: Optional[list] = None,
-        scene_map: Optional[dict[str, str]] = None
+        scene_map: Optional[dict[str, str]] = None,
+        hidden_entities: Optional[list] = None,
     ) -> str:
 
         """
@@ -263,6 +294,10 @@ class MemoryManager:
             scene_map=scene_map
         )
 
+        hidden_entities_context = MemoryManager._build_hidden_entities_context(
+            hidden_entities=hidden_entities
+        )
+
         sheet_json = MemoryManager._compact_json(character_sheet)
         
         system_instruction = prompts.GAME_MASTER_SYSTEM_PROMPT_TEMPLATE.format(
@@ -277,6 +312,9 @@ class MemoryManager:
             world_npcs_context=world_npcs_context,
             sheet_json=sheet_json
         )
+
+        if hidden_entities_context:
+            system_instruction += "\n" + hidden_entities_context
         
         if is_adventure_generator:
             system_instruction += prompts.ADVENTURE_GENERATOR_INSTRUCTIONS
@@ -304,7 +342,8 @@ class MemoryManager:
         is_adventure_generator: bool = False,
         location_detail_level: str = "full",
         other_npcs: Optional[list] = None,
-        scene_map: Optional[dict[str, str]] = None
+        scene_map: Optional[dict[str, str]] = None,
+        hidden_entities: Optional[list] = None,
     ) -> list[dict]:
 
         """
@@ -318,7 +357,8 @@ class MemoryManager:
             is_adventure_generator=is_adventure_generator,
             location_detail_level=location_detail_level,
             other_npcs=other_npcs,
-            scene_map=scene_map
+            scene_map=scene_map,
+            hidden_entities=hidden_entities,
         )
 
         messages = [{"role": "system", "content": sys_prompt}]

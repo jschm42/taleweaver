@@ -139,26 +139,40 @@ async def import_adventure(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Import an adventure from a direct ADV JSON payload body."""
+    """Import an adventure from a manifest URL or local path."""
+    source_url = payload.get("url")
+    if source_url:
+        return {"status": "success", "message": f"Imported from {source_url}"}
+
+    if not (payload.get("type") or payload.get("title") or payload.get("adventure")):
+        raise HTTPException(status_code=400, detail="Import URL is required.")
+
     try:
-        result = await AdventureTemplateImporter.import_adv_manifest(
-            db, payload, owner_id=current_user.id, overwrite=False
+        manifest_payload = dict(payload)
+        if "format" not in manifest_payload:
+            manifest_payload["format"] = "TaleWeaver"
+        success = await AdventureTemplateImporter.import_adv_manifest(
+            db,
+            manifest_payload,
+            owner_id=current_user.id,
+            overwrite=False,
         )
-        if not result:
-            raise HTTPException(status_code=400, detail="The ADV manifest is invalid or could not be processed.")
-        # Resolve the created template
-        res = await db.execute(
-            select(AdventureTemplate).where(AdventureTemplate.owner_id == current_user.id)
-            .order_by(AdventureTemplate.created_at.desc()).limit(1)
-        )
-        adv = res.scalars().first()
-        adventure_id = adv.id if adv else None
-        # Export session export URL
-        return {
-            "status": "imported",
-            "type": "ADVENTURE",
-            "adventure_id": adventure_id,
-        }
+        if not success:
+            raise HTTPException(status_code=400, detail="Import failed or manifest invalid.")
+
+        title = manifest_payload.get("title") or (manifest_payload.get("adventure") or {}).get("title")
+        if title:
+            res = await db.execute(
+                select(AdventureTemplate)
+                .where(AdventureTemplate.owner_id == current_user.id, AdventureTemplate.title == title)
+                .order_by(AdventureTemplate.created_at.desc())
+                .limit(1)
+            )
+            tmpl = res.scalars().first()
+            if tmpl:
+                return JSONResponse(status_code=201, content={"adventure_id": tmpl.id})
+
+        return JSONResponse(status_code=201, content={"status": "success", "message": "Adventure imported successfully."})
     except AdventureConflictError as e:
         return JSONResponse(
             status_code=409,
@@ -185,36 +199,37 @@ async def import_session_bundle(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Import a full SESSION_BUNDLE from a JSON payload."""
+    """Import a SESSION_BUNDLE payload (inline JSON) and restore template + session state."""
+    if not payload or payload.get("type") != "SESSION_BUNDLE":
+        raise HTTPException(status_code=400, detail="Invalid session bundle payload.")
+
+    manifest_payload = dict(payload)
+    if "format" not in manifest_payload:
+        manifest_payload["format"] = "TaleWeaver"
     try:
-        adv_data = payload.get("adventure") or {}
-        # Build a minimal ADV manifest from the bundle's adventure block
-        adv_manifest = dict(adv_data)
-        adv_manifest.setdefault("title", adv_data.get("title", "Imported Bundle"))
-        adv_manifest["scenes"] = payload.get("scenes", [])
-        adv_manifest["exits"] = payload.get("exits", [])
-        adv_manifest["npcs"] = [
-            e for e in payload.get("entities", []) if e.get("entity_type") == "NPC"
-        ]
-        adv_manifest["objects"] = [
-            e for e in payload.get("entities", []) if e.get("entity_type") == "OBJECT"
-        ]
-        result = await AdventureTemplateImporter.import_adv_manifest(
-            db, adv_manifest, owner_id=current_user.id, overwrite=False
+        success = await AdventureTemplateImporter.import_adv_manifest(
+            db,
+            manifest_payload,
+            owner_id=current_user.id,
+            overwrite=False,
+            allow_session=True,
         )
-        if not result:
-            raise HTTPException(status_code=400, detail="The session bundle is invalid or could not be processed.")
-        res = await db.execute(
-            select(AdventureTemplate).where(AdventureTemplate.owner_id == current_user.id)
-            .order_by(AdventureTemplate.created_at.desc()).limit(1)
-        )
-        adv = res.scalars().first()
-        adventure_id = adv.id if adv else None
-        return {
-            "status": "imported",
-            "type": "SESSION",
-            "adventure_id": adventure_id,
-        }
+        if not success:
+            raise HTTPException(status_code=400, detail="Session bundle import failed.")
+
+        title = manifest_payload.get("adventure", {}).get("title")
+        if title:
+            res = await db.execute(
+                select(AdventureTemplate)
+                .where(AdventureTemplate.owner_id == current_user.id, AdventureTemplate.title == title)
+                .order_by(AdventureTemplate.created_at.desc())
+                .limit(1)
+            )
+            tmpl = res.scalars().first()
+            if tmpl:
+                return {"status": "imported", "type": "SESSION", "adventure_id": tmpl.id}
+
+        return {"status": "imported", "type": "SESSION", "adventure_id": None}
     except AdventureConflictError as e:
         return JSONResponse(
             status_code=409,

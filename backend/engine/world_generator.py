@@ -169,11 +169,19 @@ class WorldNPCSchema(BaseModel):
     
     npc_type: str = Field(..., description="One of: HUMANOID, ANIMAL, MONSTER, BEING")
     movement_type: str = Field(..., description="One of: STATIONARY, MOVABLE")
-    hp: int = Field(..., description="Hitpoints (range 10-999)")
+    hp: int = Field(..., description="Hitpoints (range 10-100)")
     mana: int = Field(..., description="Mana (range 0-999)")
-    stamina: int = Field(..., description="Stamina (range 0-999)")
+    stamina: int = Field(..., description="Stamina (range 50-100)")
     is_attackable: bool = Field(..., description="If False, the player cannot start a fight with this NPC.")
     is_hidden: bool = Field(..., description="If True, the NPC is initially concealed.")
+    reveal_rule: str = Field(
+        ...,
+        description=(
+            "If is_hidden=True: the condition that reveals this NPC. "
+            "E.g. 'If the prot searches under the table', 'If the prot picks up BRASS_KEY', or 'If the NPC speaks'. "
+            "Use empty string if not hidden."
+        )
+    )
     inventory: list[str] = Field(..., description="List of object IDs in this NPC's inventory. Use [] if empty.")
     
     model_config = {"extra": "forbid"}
@@ -188,6 +196,14 @@ class WorldObjectSchema(BaseModel):
     item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
     wearable_slots: list[str] = Field(..., description="If WEARABLE, which slots? e.g. ['Head'], ['MainHand']. Use [] if none.")
     is_hidden: bool = Field(..., description="If True, the player must SEARCH or trigger an event to see this.")
+    reveal_rule: str = Field(
+        ...,
+        description=(
+            "If is_hidden=True: the condition that reveals this object. "
+            "E.g. 'If the prot searches the desk', 'If the prot picks up IRON_KEY'. "
+            "Use empty string if not hidden."
+        )
+    )
     is_portable: bool = Field(..., description="Whether the item can be picked up. False for STATIC objects.")
     combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. Use [] if none.")
     reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Use empty string if none.")
@@ -256,9 +272,9 @@ class ProtagonistSchema(BaseModel):
     armor_class: int = Field(..., description="Base armor class stat (1-99)")
     starting_inventory: list[str] = Field(..., description="List of object IDs in player's pocket. Use [] if none.")
     starting_equipment: EquipmentSchema = Field(..., description="Initial equipment setup.")
-    hp: int = Field(..., description="Base health points (100-300)")
+    hp: int = Field(..., description="Base health points (60-120)")
     mana: int = Field(..., description="Base mana points (0-300)")
-    stamina: int = Field(..., description="Base stamina points (100-300)")
+    stamina: int = Field(..., description="Base stamina points (60-100)")
     
     model_config = {"extra": "forbid"}
 
@@ -971,6 +987,7 @@ class WorldGenerator:
                 stamina=n.get("stamina"),
                 max_stamina=n.get("stamina"),
                 is_hidden=n.get("is_hidden", False),
+                reveal_rule=n.get("reveal_rule") or None,
                 is_attackable=n.get("is_attackable", True),
             ))
             
@@ -1218,6 +1235,7 @@ class WorldGenerator:
                     item_type=o.get("item_type", "PICKABLE"),
                     wearable_slots=o.get("wearable_slots"),
                     is_hidden=o.get("is_hidden", False),
+                    reveal_rule=o.get("reveal_rule") or None,
                     is_in_inventory=is_in_avatar_inv or is_in_npc_inv,
                     is_portable=o.get("is_portable", o.get("item_type") != "STATIC"),
                     combination_ingredients=o.get("combination_ingredients"),

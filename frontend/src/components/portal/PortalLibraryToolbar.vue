@@ -46,6 +46,15 @@ const emit = defineEmits<{
           Restore Defaults
         </button>
       </div>
+      <div v-else-if="props.activeSection === 'sessions'" class="flex gap-2">
+        <button
+          class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2"
+          @click="emit('import')"
+        >
+          <i class="ra ra-download"></i>
+          Import Session
+        </button>
+      </div>
     </div>
   </div>
 </template>

@@ -11,6 +11,8 @@ defineEmits<{
   (e: 'delete', gameId: string, title: string): void
   (e: 'copy', gameId: string): void
   (e: 'switch-to-templates'): void
+  (e: 'edit-note', gameId: string, currentNote: string): void
+  (e: 'export', gameId: string): void
 }>()
 </script>
 
@@ -39,6 +41,8 @@ defineEmits<{
         @resume="(id) => $emit('resume', id)"
         @delete="(id, title) => $emit('delete', id, title)"
         @copy="(id) => $emit('copy', id)"
+        @edit-note="(id, note) => $emit('edit-note', id, note)"
+        @export="(id) => $emit('export', id)"
       />
     </div>
   </div>
