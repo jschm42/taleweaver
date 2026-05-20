@@ -189,7 +189,11 @@ class AdventureTemplateImporter:
                     allow_dynamic_items=adv_data.get("allow_dynamic_items", True) if "allow_dynamic_items" in adv_data else (manifest_data.get("allow_dynamic_items", True)),
                     cover_source_adventure_id=adv_data.get("cover_source_adventure_id") or manifest_data.get("cover_source_adventure_id"),
                     cover_source_adventure_name=adv_data.get("cover_source_adventure_name") or manifest_data.get("cover_source_adventure_name"),
-                    cover_similarity_percent=adv_data.get("cover_similarity_percent") or manifest_data.get("cover_similarity_percent", 70),
+                    cover_similarity_percent=(
+                        adv_data.get("cover_similarity_percent")
+                        if "cover_similarity_percent" in adv_data
+                        else manifest_data.get("cover_similarity_percent", 50)
+                    ),
                     allow_reuse_source_assets=adv_data.get("allow_reuse_source_assets", True) if "allow_reuse_source_assets" in adv_data else manifest_data.get("allow_reuse_source_assets", True),
                     is_adventure_generator=adv_data.get("is_adventure_generator", False) or manifest_data.get("is_adventure_generator", False),
                     is_ready=True,
@@ -400,7 +404,7 @@ class AdventureTemplateImporter:
                     allow_dynamic_items=old_adv.get("allow_dynamic_items", True),
                     cover_source_adventure_id=old_adv.get("cover_source_adventure_id"),
                     cover_source_adventure_name=old_adv.get("cover_source_adventure_name"),
-                    cover_similarity_percent=old_adv.get("cover_similarity_percent", 70),
+                    cover_similarity_percent=old_adv.get("cover_similarity_percent", 50),
                     allow_reuse_source_assets=old_adv.get("allow_reuse_source_assets", True),
                     language=old_adv.get("language") or data.get("language"),
                     origin_id=origin_id,
@@ -553,7 +557,11 @@ class AdventureTemplateImporter:
                     allow_dynamic_items=adv_meta.get("allow_dynamic_items", True) if "allow_dynamic_items" in adv_meta else (manifest.get("allow_dynamic_items", True)),
                     cover_source_adventure_id=adv_meta.get("cover_source_adventure_id") or manifest.get("cover_source_adventure_id"),
                     cover_source_adventure_name=adv_meta.get("cover_source_adventure_name") or manifest.get("cover_source_adventure_name"),
-                    cover_similarity_percent=adv_meta.get("cover_similarity_percent") or manifest.get("cover_similarity_percent", 70),
+                    cover_similarity_percent=(
+                        adv_meta.get("cover_similarity_percent")
+                        if "cover_similarity_percent" in adv_meta
+                        else manifest.get("cover_similarity_percent", 50)
+                    ),
                     allow_reuse_source_assets=adv_meta.get("allow_reuse_source_assets", True) if "allow_reuse_source_assets" in adv_meta else manifest.get("allow_reuse_source_assets", True),
                     language=adv_meta.get("language") or manifest.get("language"),
                     origin_id=origin_id,

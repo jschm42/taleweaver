@@ -41,7 +41,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     is_adventure_generator: bool = False
     cover_source_adventure_id: Optional[str] = None
     cover_source_adventure_name: Optional[str] = None
-    cover_similarity_percent: int = 70
+    cover_similarity_percent: int = 50
     allow_reuse_source_assets: bool = True
 
     @field_validator("selected_tone", mode="before")
@@ -97,7 +97,7 @@ class AdventureTemplateResponse(BaseModel):
     is_adventure_generator: bool = False
     cover_source_adventure_id: Optional[str] = None
     cover_source_adventure_name: Optional[str] = None
-    cover_similarity_percent: int = 70
+    cover_similarity_percent: int = 50
     allow_reuse_source_assets: bool = True
     min_scenes: int = 1
     max_scenes: int = 5

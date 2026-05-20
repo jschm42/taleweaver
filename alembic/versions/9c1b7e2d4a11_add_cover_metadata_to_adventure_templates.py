@@ -36,7 +36,7 @@ def upgrade() -> None:
     if "cover_similarity_percent" not in existing_columns:
         op.add_column(
             "adventure_templates",
-            sa.Column("cover_similarity_percent", sa.Integer(), nullable=False, server_default="70"),
+            sa.Column("cover_similarity_percent", sa.Integer(), nullable=False, server_default="50"),
         )
 
     if "allow_reuse_source_assets" not in existing_columns:

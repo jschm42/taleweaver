@@ -23,7 +23,7 @@ class AdventureTemplate(Base, TimestampMixin):
     origin_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) # Stable ID for default/sample templates
     cover_source_adventure_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     cover_source_adventure_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    cover_similarity_percent: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    cover_similarity_percent: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     allow_reuse_source_assets: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

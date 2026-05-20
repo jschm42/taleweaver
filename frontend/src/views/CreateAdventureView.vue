@@ -38,7 +38,7 @@ const form = ref({
   min_awards: 3,
   max_awards: 8,
   language: '',
-  cover_similarity_percent: 70,
+  cover_similarity_percent: 50,
   allow_reuse_source_assets: true,
 })
 

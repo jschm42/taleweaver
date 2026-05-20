@@ -307,7 +307,7 @@ class WorldManifesto(BaseModel):
     awards: list[AwardTemplateSchema] = Field(..., description="List of 3-5 awards. Use [] if none.")
     cover_source_adventure_id: Optional[str] = None
     cover_source_adventure_name: Optional[str] = None
-    cover_similarity_percent: int = 70
+    cover_similarity_percent: int = 50
     allow_reuse_source_assets: bool = True
     cover_source_asset_id: Optional[str] = None
     
@@ -339,7 +339,7 @@ class WorldGenerator:
         cover_source_manifest: Optional[dict[str, Any]] = None,
         cover_source_adventure_id: Optional[str] = None,
         cover_source_adventure_name: Optional[str] = None,
-        cover_similarity_percent: int = 70,
+        cover_similarity_percent: int = 50,
         allow_reuse_source_assets: bool = True,
         status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
 
