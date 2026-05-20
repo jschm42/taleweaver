@@ -33,10 +33,22 @@ const handleImageError = () => {
 
           <!-- Image (NPC only) -->
           <div v-if="hasRenderableImagePath(props.hoveredEntity.image_url) && !props.tooltipImageFailed" class="h-56 w-full relative shrink-0">
+            <div
+              v-if="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' && (props.hoveredEntity.is_defeated || props.hoveredEntity.hp === 0)"
+              class="absolute -right-8 top-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.12em] py-1 w-28 text-center rotate-45 shadow-lg z-20"
+            >
+              Defeated
+            </div>
             <img :src="getImageUrl(props.hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-top" @error="handleImageError" />
             <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent"></div>
           </div>
           <div v-else class="h-20 w-full relative bg-slate-950 border-b border-slate-800 flex items-center justify-center shrink-0">
+            <div
+              v-if="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' && (props.hoveredEntity.is_defeated || props.hoveredEntity.hp === 0)"
+              class="absolute -right-8 top-2 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.12em] py-0.5 w-24 text-center rotate-45 shadow-lg z-20"
+            >
+              Defeated
+            </div>
             <i
               :class="[
                 'ra text-4xl',

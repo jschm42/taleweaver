@@ -21,6 +21,19 @@ from backend.engine.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from typing import Any
+from io import BytesIO
+from PIL import Image
+
+# Mirror frontend visual limits here so server-side validation matches client hints
+_VISUAL_UPLOAD_LIMITS = {
+    "cover": {"maxWidth": 2048, "maxHeight": 1024, "maxBytes": 4 * 1024 * 1024},
+    "protagonist": {"maxWidth": 1024, "maxHeight": 1280, "maxBytes": 2 * 1024 * 1024},
+    "scene": {"maxWidth": 1600, "maxHeight": 900, "maxBytes": 3 * 1024 * 1024},
+    "npc": {"maxWidth": 1024, "maxHeight": 1280, "maxBytes": 2 * 1024 * 1024},
+    "object": {"maxWidth": 1024, "maxHeight": 1024, "maxBytes": 2 * 1024 * 1024},
+}
+
+_ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 router = APIRouter(prefix="/{template_id}/visuals", tags=["Assets"])
 logger = logging.getLogger(__name__)
@@ -358,10 +371,33 @@ async def upload_visual(
 
     try:
         content = await file.read()
+
+        # Validate mime type
+        if file.content_type and file.content_type not in _ALLOWED_MIME_TYPES:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Please use PNG, JPEG, or WEBP.")
+
+        limits = _VISUAL_UPLOAD_LIMITS.get(target_type)
+        if not limits:
+            raise HTTPException(status_code=400, detail="Invalid visual target type.")
+
+        # Validate raw file bytes size first
+        if limits and len(content) > int(limits["maxBytes"]):
+            raise HTTPException(status_code=400, detail=f"Max file size for this asset: {limits['maxBytes']} bytes.")
+
+        # Validate image dimensions
+        try:
+            img = Image.open(BytesIO(content))
+            width, height = img.size
+        except Exception:
+            raise HTTPException(status_code=400, detail="Failed to parse image file.")
+
+        if width > int(limits["maxWidth"]) or height > int(limits["maxHeight"]):
+            raise HTTPException(status_code=400, detail=f"Max size for this asset: {limits['maxWidth']}x{limits['maxHeight']}.")
+
         full_path = _build_uploaded_visual_path(template_id, target_type, target_id, file.filename)
         with open(full_path, "wb") as f:
             f.write(content)
-            
+
         rel_path = os.path.relpath(full_path, settings.DATA_DIR).replace("\\", "/")
         relative_url = f"/data/{rel_path}"
         
@@ -380,6 +416,8 @@ async def upload_visual(
             
         await db.commit()
         return {"status": "uploaded", "target_type": target_type, "image_url": relative_url}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("Failed to upload visual for %s", template_id)
         raise HTTPException(status_code=500, detail="Visual upload failed.") from exc

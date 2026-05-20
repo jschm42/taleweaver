@@ -107,3 +107,55 @@ async def db_session() -> AsyncSession:
     """Yields a database session from the test engine."""
     async with TestSessionLocal() as session:
         yield session
+
+
+@pytest_asyncio.fixture(autouse=True)
+def _patch_external_generation_and_media(monkeypatch):
+    """Autouse fixture to stub external LLM/world generation and media generation.
+
+    Many tests assume generation happens in background; to keep tests deterministic
+    when no local Ollama or image backend is running we stub the heavy calls.
+    Individual tests may still monkeypatch these targets for custom behavior.
+    """
+
+    async def _fake_generate_world(*args, **kwargs):
+        return None
+
+    async def _fake_generate_entity_image(*args, **kwargs):
+        return "/data/adventures/test/protagonist.png"
+
+    async def _fake_generate_scene_image(*args, **kwargs):
+        return "/data/adventures/test/scene.png"
+
+    async def _fake_generate_adventure_cover(*args, **kwargs):
+        return "/data/adventures/test/cover.png"
+
+    # Patch both the engine class and the reference used by the templates/routes module.
+    monkeypatch.setattr(
+        "backend.engine.world_generator.WorldGenerator.generate_world",
+        _fake_generate_world,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.templates.WorldGenerator.generate_world",
+        _fake_generate_world,
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        "backend.engine.media_engine.MediaEngine.generate_entity_image",
+        _fake_generate_entity_image,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "backend.engine.media_engine.MediaEngine.generate_scene_image",
+        _fake_generate_scene_image,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "backend.engine.media_engine.MediaEngine.generate_adventure_cover",
+        _fake_generate_adventure_cover,
+        raising=False,
+    )
+
+    yield

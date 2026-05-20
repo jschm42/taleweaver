@@ -547,7 +547,15 @@ class GameTurnManager:
                 user_msg = "[EVALUATE STATE]"
                 yield f"event: status\ndata: {json.dumps({'content': 'The Game Master evaluates your situation...'})}\n\n"
             elif response.startswith("[TRIGGER_TALK]"):
-                user_msg = f"Talk to {response[14:].strip()}"
+                talk_target = response[14:].strip()
+                talk_npc = await self._find_scene_npc_by_hint(talk_target)
+                if talk_npc and self._is_npc_defeated(talk_npc):
+                    msg = f"{talk_npc.name} is defeated. Only inspect is available."
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                    async for chunk in self._emit_combat_final(msg):
+                        yield chunk
+                    return
+                user_msg = f"Talk to {talk_target}"
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_SAY]"):
                 user_msg = f'Say out loud: "{response[13:].strip()}"'
@@ -556,7 +564,15 @@ class GameTurnManager:
                 user_msg = f"Inspect {response[17:].strip()}"
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_TAKE]"):
-                user_msg = f"Take {response[14:].strip()}"
+                take_target = response[14:].strip()
+                take_npc = await self._find_scene_npc_by_hint(take_target)
+                if take_npc and self._is_npc_defeated(take_npc):
+                    msg = f"{take_npc.name} is defeated. Only inspect is available."
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                    async for chunk in self._emit_combat_final(msg):
+                        yield chunk
+                    return
+                user_msg = f"Take {take_target}"
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_COMBINE]"):
                 user_msg = f"Use {response[17:].strip()}"
@@ -648,19 +664,39 @@ class GameTurnManager:
                 combat["outcome"] = "victory"
                 combat["enemy"]["hp"] = 0
                 combat["status_note"] = "Combat won via debug command."
-                
-                # Sync back to world entity state
+
+                # Mirror normal victory behavior so debug wins can be used for loot testing.
                 enemy_id = combat["enemy"]["id"]
+                enemy_res = await self.db.execute(
+                    select(WorldEntity).where(
+                        WorldEntity.id == enemy_id,
+                        WorldEntity.session_id == self.game_id,
+                    )
+                )
+                enemy_ent = enemy_res.scalars().first()
+
+                loot_items = await self._normalize_loot_items(
+                    list(combat.get("enemy", {}).get("inventory") or (enemy_ent.inventory if enemy_ent else []) or [])
+                )
+                combat["loot_pending"] = bool(loot_items)
+                combat["loot_items"] = loot_items
+
                 states = dict(self.state.entity_states or {})
                 if enemy_id not in states:
                     states[enemy_id] = {}
                 states[enemy_id]["hp"] = 0
+                states[enemy_id]["inventory"] = []
+                states[enemy_id]["is_defeated"] = True
+                states[enemy_id]["is_attackable"] = False
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
-                
+
                 self._append_combat_log(combat, combat["status_note"], "outcome")
+                if loot_items:
+                    loot_msg = "Victory! Loot available. Use /loot take <item>, /loot leave <item>, /loot done"
+                    self._append_combat_log(combat, loot_msg, "loot")
                 self._set_combat_state(combat)
-                debug_info = "DEBUG: Combat forced to VICTORY."
+                debug_info = "DEBUG: Combat forced to VICTORY (loot phase enabled)."
         
         elif cmd_args == "loose_fight":
             combat = self._read_combat_state()
@@ -681,6 +717,15 @@ class GameTurnManager:
         self.db.add(ChatMessage(session_id=self.state.session_id, role="system", content=debug_info))
         await self.db.commit()
         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': debug_info, 'is_debug': True})}\n\n"
+
+        final_data = jsonable_encoder({
+            'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+            'entities': await AdventureLogic.build_session_entities(self.db, self.state),
+            'combat': AdventureLogic.get_combat_snapshot(self.state),
+            **self._build_terminal_flags_payload(),
+            'status': 'success',
+        })
+        yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
 
     async def _handle_debug_gen_item(self, prompt: str) -> AsyncGenerator[str, None]:
         """Debug helper to force-generate an item based on a prompt."""
@@ -872,6 +917,37 @@ class GameTurnManager:
             if hp is None or hp > 0:
                 return npc
         return eligible_npcs[0]
+
+    async def _find_scene_npc_by_hint(self, target_hint: str) -> WorldEntity | None:
+        target_hint = (target_hint or "").strip()
+        if not target_hint:
+            return None
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.current_scene_id == self.state.current_scene_id,
+                WorldEntity.entity_type.in_(["NPC", "npc"]),
+                WorldEntity.is_hidden.is_(False),
+                WorldEntity.is_in_inventory.is_(False),
+            )
+        )
+        npcs = ent_res.scalars().all()
+        low = target_hint.lower()
+        for npc in npcs:
+            if npc.id.lower() == low or npc.name.lower() == low:
+                return npc
+        return None
+
+    def _is_npc_defeated(self, npc: WorldEntity) -> bool:
+        states = self.state.entity_states or {}
+        npc_state = (states.get(npc.id, {}) or {})
+        if npc_state.get("is_defeated"):
+            return True
+        hp = npc_state.get("hp")
+        if hp is None:
+            hp = npc.hp
+        return isinstance(hp, int) and hp <= 0
 
     def _entity_stat(self, ent: WorldEntity, stat_key: str, fallback: int = 0) -> int:
         states = self.state.entity_states or {}
@@ -1074,7 +1150,7 @@ class GameTurnManager:
                 "max_stamina": self._entity_stat(target, "max_stamina", 0),
                 "dexterity_mod": enemy_dex,
                 "armor_mod": enemy_ac_mod,
-                "inventory": list(target.inventory or []),
+                "inventory": await self._normalize_loot_items(list(target.inventory or [])),
             },
             "loot_pending": False,
             "loot_items": [],
@@ -1569,11 +1645,13 @@ class GameTurnManager:
             if existing_ent:
                 existing_ent.current_scene_id = self.state.current_scene_id
                 existing_ent.is_in_inventory = False
-                
-                # Also clear override in session state
+
+                # Keep session overrides in sync so snapshot filtering cannot hide dropped loot.
                 states = dict(self.state.entity_states or {})
                 if raw_id in states:
                     states[raw_id]["is_in_inventory"] = False
+                    states[raw_id]["current_scene_id"] = self.state.current_scene_id
+                    states[raw_id]["is_hidden"] = False
                     self.state.entity_states = states
                     flag_modified(self.state, "entity_states")
                 return
@@ -1593,6 +1671,15 @@ class GameTurnManager:
             suffix = f"_{counter}"
             safe_id = f"{base_id[: max(1, 50 - len(suffix))]}{suffix}"
             counter += 1
+
+        # If an override already exists for this id, force it into scene-visible state.
+        states = dict(self.state.entity_states or {})
+        if safe_id in states:
+            states[safe_id]["is_in_inventory"] = False
+            states[safe_id]["current_scene_id"] = self.state.current_scene_id
+            states[safe_id]["is_hidden"] = False
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
 
         entity = WorldEntity(
             id=safe_id,
@@ -1645,6 +1732,65 @@ class GameTurnManager:
         existing_ids.update({row.id for row in res.all() if row.id})
         return existing_ids
 
+    async def _normalize_loot_items(self, items: list[Any]) -> list[dict[str, Any]]:
+        """Normalize various loot representations into dicts with at least `id` and `name`.
+
+        Items can be:
+        - dicts already containing item data
+        - strings that reference a WorldEntity id (template or session)
+        - other types (ignored)
+        """
+        normalized: list[dict[str, Any]] = []
+        if not items:
+            return normalized
+
+        for it in items:
+            # If already a dict, ensure it has id/name
+            if isinstance(it, dict):
+                entry = dict(it)
+                if not entry.get("id") and entry.get("name"):
+                    # generate a synthetic id when missing
+                    entry["id"] = f"LOOT_{uuid.uuid4().hex[:8]}"
+                normalized.append(entry)
+                continue
+
+            # If it's a string, try to resolve WorldEntity by id
+            if isinstance(it, str) and it.strip():
+                ent_id = it.strip()
+                ent_res = await self.db.execute(
+                    select(WorldEntity).where(
+                        (WorldEntity.session_id == self.game_id) & (WorldEntity.id == ent_id)
+                    )
+                )
+                ent = ent_res.scalars().first()
+
+                # If not found in session, try template entities for this adventure
+                if not ent and self.state and self.state.template_id:
+                    ent_res = await self.db.execute(
+                        select(WorldEntity).where(
+                            (WorldEntity.template_id == self.state.template_id) & (WorldEntity.id == ent_id)
+                        )
+                    )
+                    ent = ent_res.scalars().first()
+
+                if ent:
+                    normalized.append({
+                        "id": ent.id,
+                        "name": ent.name,
+                        "description": ent.description,
+                        "image_url": ent.image_url,
+                        "item_type": ent.item_type,
+                        "wearable_slots": ent.wearable_slots,
+                        **(ent.metadata_json or {}),
+                    })
+                else:
+                    # Unknown reference, keep minimal info
+                    normalized.append({"id": ent_id, "name": ent_id})
+                continue
+
+            # Fallback: ignore unknown types
+        return normalized
+
     async def _resolve_loot_command(self, user_msg: str, combat: dict[str, Any]) -> str | None:
         low = user_msg.lower().strip()
         if not low.startswith("/loot"):
@@ -1685,7 +1831,8 @@ class GameTurnManager:
             return f"{dropped.get('name', 'Item')} dropped to the current scene."
 
         if action == "done":
-            for item in loot_items:
+            dropped_items = list(loot_items)
+            for item in dropped_items:
                 await self._spawn_scene_item(item)
             combat["loot_items"] = []
             combat["loot_pending"] = False
@@ -1703,8 +1850,13 @@ class GameTurnManager:
                 await self.db.commit()
             else:
                 self._set_combat_state(combat)
-                
-            return "Combat finished."
+
+            if dropped_items:
+                dropped_names = [str(item.get("name") or item.get("id") or "Unknown Item") for item in dropped_items]
+                dropped_list = "\n".join(f"- {name}" for name in dropped_names)
+                return f"Loot dropped to the scene:\n{dropped_list}"
+
+            return "Combat finished. No loot remained to drop."
 
         return "Loot commands: /loot take <item>, /loot leave <item>, /loot done"
 
@@ -1850,7 +2002,7 @@ class GameTurnManager:
             combat["outcome"] = "victory"
             combat["status_note"] = f"{enemy_ent.name} is defeated."
             combat["loot_pending"] = True
-            combat["loot_items"] = list(enemy.get("inventory") or enemy_ent.inventory or [])
+            combat["loot_items"] = await self._normalize_loot_items(list(enemy.get("inventory") or enemy_ent.inventory or []))
             states = dict(self.state.entity_states or {})
             if enemy_id not in states:
                 states[enemy_id] = {}
@@ -1886,7 +2038,7 @@ class GameTurnManager:
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
                 # Spawn any remaining NPC inventory items to the scene automatically
-                flee_loot = list(enemy.get("inventory") or enemy_ent.inventory or [])
+                flee_loot = await self._normalize_loot_items(list(enemy.get("inventory") or enemy_ent.inventory or []))
                 for flee_item in flee_loot:
                     await self._spawn_scene_item(flee_item)
                 self._append_combat_log(combat, combat["status_note"], "outcome")

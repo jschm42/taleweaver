@@ -13,6 +13,7 @@ from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import TRAIT_GENERATION_SYSTEM_PROMPT, TRAIT_GENERATION_USER_PROMPT_TEMPLATE
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
+from backend.api.routes.adventures.sessions import _backfill_avatar_items_from_template_entities
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -82,6 +83,12 @@ async def _build_adventure_editor_assets(template_id: str, db: AsyncSession) -> 
 
     avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
     avatar = avatar_res.scalars().first()
+
+    # Backfill avatar inventory/equipment dicts from template entities so debug view shows full item data.
+    if avatar:
+        entities_by_id = {ent.id: ent for ent in entities if getattr(ent, 'id', None)}
+        if entities_by_id:
+            _backfill_avatar_items_from_template_entities(avatar, entities_by_id)
 
     db_scenes = [_serialize_model(s) for s in scenes]
     db_npcs = [_serialize_model(ent) for ent in entities if _is_npc_entity(ent)]

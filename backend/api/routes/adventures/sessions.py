@@ -22,7 +22,9 @@ from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
+from sqlalchemy import delete
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.models.game_state import GameState
 from backend.models.world_map import WorldMap
 from backend.utils.text_utils import generate_session_id
 
@@ -310,12 +312,27 @@ async def start_session_for_template(
     # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
     os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", new_session.id), exist_ok=True)
 
-    # Create SessionState with narrative snapshot
+    # Create SessionState with narrative and asset snapshot
     manifest_snapshot = AdventureLogic.build_session_manifest_snapshot(adventure)
+
+    # Build entity image mapping from template entities for asset snapshot
+    ent_rows = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
+    template_entities = ent_rows.scalars().all()
+    entity_images = {e.id: e.image_url for e in template_entities if getattr(e, "id", None)}
+
+    asset_snapshot = {
+        "cover": adventure.image_url,
+        "protagonist": avatar.profile_image,
+        "entity_images": entity_images,
+    }
+
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
         current_scene_id=first_scene_id, in_game_time=0, quests=deepcopy(adventure.quests or []),
-        entity_states={AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot},
+        entity_states={
+            AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot,
+            "__asset_snapshot__": asset_snapshot,
+        },
         start_datetime=AdventureLogic.resolve_start_datetime(adventure.original_manifest),
         plot=adventure.plot,
         rules=adventure.rules,
@@ -377,6 +394,25 @@ async def start_session_for_template(
 
     await db.commit()
     return {"game_id": new_session.id, "template_id": template_id, "avatar_id": avatar.id}
+
+
+@router.post("/{template_id}/reset")
+async def reset_adventure(template_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Resets a template into a fresh state while preserving any already-generated image URLs on the template/world data."""
+    # Verify ownership
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Adventure template not found.")
+
+    # Remove session-bound rows and leave template-level images intact.
+    # Only delete rows that belong to active sessions (session_id IS NOT NULL).
+    await db.execute(delete(GameSession).where(GameSession.template_id == template_id))
+    await db.execute(delete(SessionState).where(SessionState.template_id == template_id))
+    await db.execute(delete(WorldEntity).where((WorldEntity.template_id == template_id) & (WorldEntity.session_id != None)))
+    await db.execute(delete(WorldScene).where((WorldScene.template_id == template_id) & (WorldScene.session_id != None)))
+    await db.execute(delete(WorldExit).where((WorldExit.template_id == template_id) & (WorldExit.session_id != None)))
+    await db.commit()
+    return {"status": "success"}
 
 @router.delete("/sessions/{game_id}", status_code=200)
 async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):

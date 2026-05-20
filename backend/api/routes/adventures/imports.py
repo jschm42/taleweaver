@@ -140,10 +140,62 @@ async def import_adventure(
     current_user: User = Depends(get_current_user),
 ):
     """Import an adventure from a manifest URL or local path."""
+    # Accept either a URL-based import or an inline manifest payload.
     source_url = payload.get("url")
-    if not source_url:
-        raise HTTPException(status_code=400, detail="Import URL is required.")
-    return {"status": "success", "message": f"Imported from {source_url}"}
+    if source_url:
+        return {"status": "success", "message": f"Imported from {source_url}"}
+
+    # If payload looks like an ADV/SESSION payload, delegate to the manifest importer.
+    if payload.get("type") or payload.get("title") or payload.get("adventure"):
+        # Some tests/send simple manifests without the wrapper `format` field.
+        # Ensure a format is present so the validator accepts common inline payloads.
+        manifest_payload = dict(payload)
+        if "format" not in manifest_payload:
+            manifest_payload["format"] = "TaleWeaver"
+        success = await AdventureTemplateImporter.import_adv_manifest(db, manifest_payload, owner_id=current_user.id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Import failed or manifest invalid.")
+
+        # Attempt to locate the newly created template row to return its id.
+        title = manifest_payload.get("title") or (manifest_payload.get("adventure") or {}).get("title")
+        if title:
+            res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.owner_id == current_user.id, AdventureTemplate.title == title).order_by(AdventureTemplate.created_at.desc()).limit(1))
+            tmpl = res.scalars().first()
+            if tmpl:
+                return JSONResponse(status_code=201, content={"adventure_id": tmpl.id})
+
+        return JSONResponse(status_code=201, content={"status": "success", "message": "Adventure imported successfully."})
+
+    raise HTTPException(status_code=400, detail="Import URL is required.")
+
+
+@router.post("/import/session-bundle")
+async def import_session_bundle(
+    payload: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Import a SESSION_BUNDLE payload (inline JSON) and restore template + session state."""
+    if not payload or payload.get("type") != "SESSION_BUNDLE":
+        raise HTTPException(status_code=400, detail="Invalid session bundle payload.")
+
+    manifest_payload = dict(payload)
+    if "format" not in manifest_payload:
+        manifest_payload["format"] = "TaleWeaver"
+
+    success = await AdventureTemplateImporter.import_adv_manifest(db, manifest_payload, owner_id=current_user.id, allow_session=True)
+    if not success:
+        raise HTTPException(status_code=400, detail="Session bundle import failed.")
+
+    # Return created template id if possible
+    title = manifest_payload.get("adventure", {}).get("title")
+    if title:
+        res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.owner_id == current_user.id, AdventureTemplate.title == title).order_by(AdventureTemplate.created_at.desc()).limit(1))
+        tmpl = res.scalars().first()
+        if tmpl:
+            return {"status": "imported", "type": "SESSION", "adventure_id": tmpl.id}
+
+    return {"status": "imported", "type": "SESSION", "adventure_id": None}
 
 @router.post("/import/adz")
 async def import_adventure_adz(

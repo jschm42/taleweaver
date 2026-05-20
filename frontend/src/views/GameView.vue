@@ -20,6 +20,7 @@ import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
 import GameViewHeader from '@/components/game/GameViewHeader.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
+import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
@@ -181,6 +182,7 @@ const npcs = computed(() => {
 const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
+const lootPopupItems = computed(() => (combat.value?.loot_items || []) as any[])
 const isCombatActive = computed(() => !!combat.value?.active)
 const showCombatDialog = computed(() => {
   if (isClosingCombat.value) return false
@@ -188,15 +190,33 @@ const showCombatDialog = computed(() => {
 })
 const combatActionInFlight = ref(false)
 const isClosingCombat = ref(false)
+const showLootPopup = ref(false)
+const lootPopupShownForCombat = ref(false)
 const isCombatEvaluating = computed(() => combatActionInFlight.value)
 const showsMechanics = computed(() => {
   const mode = (sheet.value as any)?.rule_enforcement_mode as string | undefined
   return mode === 'rpg' || mode === 'story' || mode === 'strict'
 })
 
-watch(combat, (newCombat) => {
+watch(combat, (newCombat, oldCombat) => {
   if (!newCombat) {
     isClosingCombat.value = false
+    showLootPopup.value = false
+    lootPopupShownForCombat.value = false
+    return
+  }
+
+  const hadLootPhase = !!oldCombat?.loot_pending
+  const enteredLootPhase = !!newCombat.loot_pending && !hadLootPhase
+  const hasLootItems = (newCombat.loot_items || []).length > 0
+  if (enteredLootPhase && hasLootItems && !lootPopupShownForCombat.value) {
+    showLootPopup.value = true
+    lootPopupShownForCombat.value = true
+  }
+
+  if (!newCombat.loot_pending) {
+    showLootPopup.value = false
+    lootPopupShownForCombat.value = false
   }
 })
 
@@ -367,7 +387,10 @@ const handleLootDone = async () => {
   await gameActionService.runLootDone(
     combatActionInFlight,
     sendMessage,
-    () => { isClosingCombat.value = true },
+    () => {
+      showLootPopup.value = false
+      isClosingCombat.value = true
+    },
     () => {
       // Ensure the guard resets eventually once the combat state is truly gone
       if (!combat.value) {
@@ -375,6 +398,10 @@ const handleLootDone = async () => {
       }
     }
   )
+}
+
+const closeLootPopup = () => {
+  showLootPopup.value = false
 }
 
 watch(showCombatDialog, (visible) => {
@@ -616,6 +643,16 @@ watch(showCombatDialog, (visible) => {
       @debug-loose="handleCombatDebugLoose"
       @entity-hover="(entity, event) => handleHover(entity, event)"
       @entity-leave="hoveredEntity = null"
+    />
+
+    <CombatLootPopup
+      :open="showLootPopup && !!combat?.loot_pending"
+      :items="lootPopupItems"
+      :busy="combatActionInFlight"
+      @close="closeLootPopup"
+      @confirm="handleLootDone"
+      @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
+      @item-leave="hoveredEntity = null"
     />
 
     <!-- HOVER TOOLTIP -->
