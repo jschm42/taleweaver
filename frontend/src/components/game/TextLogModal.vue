@@ -47,9 +47,14 @@ const handleSpeakTextLog = () => {
 
         <div class="relative z-10 w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-3xl border border-slate-700 bg-slate-950 shadow-2xl flex flex-col">
           <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-            <div class="min-w-0">
-              <h3 class="text-lg font-black uppercase tracking-wide text-amber-100 truncate">{{ title }}</h3>
-              <p class="text-[10px] uppercase tracking-[0.2em] text-amber-400/80 mt-1">{{ formatLabel(format) }}</p>
+            <div class="min-w-0 flex items-start gap-3">
+              <div v-if="imageUrl" class="w-10 h-10 rounded-lg overflow-hidden border border-slate-800 bg-slate-900/80 shrink-0">
+                <img :src="imageUrl" class="w-full h-full object-contain" />
+              </div>
+              <div class="min-w-0">
+                <h3 class="text-lg font-black uppercase tracking-wide text-amber-100 truncate">{{ title }}</h3>
+                <p class="text-[10px] uppercase tracking-[0.2em] text-amber-400/80 mt-1">{{ formatLabel(format) }}</p>
+              </div>
             </div>
             <div class="flex items-center gap-2">
               <button
@@ -81,12 +86,8 @@ const handleSpeakTextLog = () => {
           </div>
 
           <div class="overflow-y-auto p-6 space-y-4">
-            <div v-if="imageUrl" class="w-full h-44 rounded-2xl overflow-hidden border border-slate-800">
-              <img :src="imageUrl" class="w-full h-full object-cover" />
-            </div>
-
             <div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
-              <p class="text-sm text-amber-50/90 leading-relaxed whitespace-pre-wrap">{{ content || 'No text content found.' }}</p>
+              <p class="text-xl md:text-2xl text-amber-50/90 leading-relaxed whitespace-pre-wrap">{{ content || 'No text content found.' }}</p>
             </div>
           </div>
         </div>
