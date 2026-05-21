@@ -12,6 +12,7 @@ export interface EntityEditData {
   mana?: number
   goal?: string
   character?: string
+  is_killable?: boolean
 }
 
 /**

@@ -424,6 +424,8 @@ async def start_session_for_template(
             stat_modifier_strength=ent.stat_modifier_strength, stat_modifier_dexterity=ent.stat_modifier_dexterity,
             stat_modifier_intelligence=ent.stat_modifier_intelligence, stat_modifier_wisdom=ent.stat_modifier_wisdom,
             stat_modifier_charisma=ent.stat_modifier_charisma, stat_modifier_armor_class=ent.stat_modifier_armor_class,
+            is_attackable=ent.is_attackable,
+            is_killable=ent.is_killable,
             inventory=deepcopy(ent.inventory), metadata_json=deepcopy(ent.metadata_json)
         )
         db.add(new_ent)
@@ -768,6 +770,8 @@ async def copy_session(
             stat_modifier_wisdom=ent.stat_modifier_wisdom,
             stat_modifier_charisma=ent.stat_modifier_charisma,
             stat_modifier_armor_class=ent.stat_modifier_armor_class,
+            is_attackable=ent.is_attackable,
+            is_killable=ent.is_killable,
             inventory=deepcopy(ent.inventory),
             metadata_json=deepcopy(ent.metadata_json),
             voice=ent.voice

@@ -59,6 +59,7 @@ class WorldEntityUpdate(BaseModel):
     stamina: Optional[int] = None
     stat_modifier_armor_class: Optional[int] = None
     is_attackable: Optional[bool] = None
+    is_killable: Optional[bool] = None
     inventory: Optional[list[InventoryItem]] = None
 
 class AttackRequest(BaseModel):

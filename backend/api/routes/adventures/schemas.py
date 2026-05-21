@@ -38,6 +38,8 @@ class CreateAdventureTemplatePayload(BaseModel):
     award_generation_enabled: bool = False
     min_awards: int = 3
     max_awards: int = 8
+    can_damage_npcs: bool = True
+    npcs_can_damage_protagonist: bool = True
     is_adventure_generator: bool = False
     cover_source_adventure_id: Optional[str] = None
     cover_source_adventure_name: Optional[str] = None
@@ -101,6 +103,8 @@ class AdventureTemplateResponse(BaseModel):
     allow_reuse_source_assets: bool = True
     min_scenes: int = 1
     max_scenes: int = 5
+    can_damage_npcs: bool = True
+    npcs_can_damage_protagonist: bool = True
 
 
     @field_validator("selected_tone", mode="before")
@@ -291,6 +295,8 @@ class AdventureTemplateUpdate(BaseModel):
     selected_tone_id: Optional[str] = None
     time_system: Optional[str] = None
     allow_dynamic_items: Optional[bool] = None
+    can_damage_npcs: Optional[bool] = None
+    npcs_can_damage_protagonist: Optional[bool] = None
 
     @field_validator("selected_tone", mode="before")
     @classmethod

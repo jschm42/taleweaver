@@ -31,6 +31,7 @@ class EntityUpdateRequest(BaseModel):
     stamina: Optional[int] = None
     goal: Optional[str] = None
     character: Optional[str] = None
+    is_killable: Optional[bool] = None
 
 def _serialize_model(obj):
     if not obj: return None
@@ -182,6 +183,7 @@ async def update_editor_entity(
             if ent.entity_type == "NPC":
                 if payload.goal is not None: ent.goal = payload.goal
                 if payload.character is not None: ent.character = payload.character
+                if payload.is_killable is not None: ent.is_killable = payload.is_killable
             
     await db.commit()
     return {"status": "success"}

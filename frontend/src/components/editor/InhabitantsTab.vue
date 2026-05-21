@@ -134,6 +134,11 @@ function buildVisualImageUrl(imagePath?: string | null) {
                 <template v-if="npc.stats.hp !== undefined">
                   <div class="flex items-center gap-1 text-[8px] font-black text-red-500 bg-red-500/10 px-1 py-0.5 rounded border border-red-500/20"><i class="ra ra-heart"></i> {{ npc.stats.hp }}</div>
                 </template>
+                <div class="flex items-center gap-1 text-[8px] font-black px-1 py-0.5 rounded border"
+                     :class="npc.is_killable === false ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'">
+                  <i class="ra" :class="npc.is_killable === false ? 'ra-shield' : 'ra-crossed-swords'"></i>
+                  {{ npc.is_killable === false ? 'IMMORTAL' : 'KILLABLE' }}
+                </div>
               </div>
               <div v-if="npc.inventory && npc.inventory.length > 0" class="flex flex-wrap gap-1 mt-2">
                 <div v-for="item in npc.inventory.slice(0, 4)" :key="item.id" class="w-4 h-4 rounded-sm overflow-hidden border border-white/10 bg-black/40">
@@ -160,7 +165,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
               <button @click="emit('open-regen-dialog', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
               <button @click="emit('open-upload-picker', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
               <button v-if="npc.image_url" @click="emit('download-asset', npc.image_url, `${npc.name || 'npc'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-              <button @click="emit('open-text-edit', 'npc', npc.id, npc.name, npc.description, '', npc.hp, npc.stamina, npc.mana, npc.goal, npc.character)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
+              <button @click="emit('open-text-edit', 'npc', npc.id, npc.name, npc.description, '', npc.hp, npc.stamina, npc.mana, npc.goal, npc.character, npc.is_killable)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
             </div>
           </div>
         </div>

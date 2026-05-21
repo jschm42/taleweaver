@@ -4,7 +4,7 @@ import { ref, watch } from 'vue'
 const props = defineProps<{
   show: boolean
   context: { type: string; id: string } | null
-  initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; goal: string; character: string }
+  initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; goal: string; character: string; is_killable: boolean }
   ruleEnforcementMode: string
   isSaving: boolean
   adventureId?: string
@@ -193,6 +193,22 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                   >
                     <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['character'] }"></i>
                     <span>Quick-Gen Traits</span>
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="context.type === 'npc'" class="p-4 bg-black/30 border border-white/10 rounded-2xl">
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1 pr-4">
+                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">NPC Can Be Killed</p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If disabled, the NPC can still fight but is never permanently defeated.</p>
+                  </div>
+                  <button
+                    type="button"
+                    @click="localForm.is_killable = !localForm.is_killable"
+                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_killable ? 'bg-emerald-600' : 'bg-slate-700']"
+                  >
+                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_killable ? 'translate-x-6' : 'translate-x-0']"></div>
                   </button>
                 </div>
               </div>

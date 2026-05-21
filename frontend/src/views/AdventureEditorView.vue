@@ -53,7 +53,7 @@ const isBatchGenerating = ref<Record<string, boolean>>({})
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
-const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, goal: '', character: '' })
+const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, goal: '', character: '', is_killable: true })
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -216,6 +216,8 @@ const form = ref({
   max_scenes: 5,
   awards: [] as any[],
   allow_dynamic_items: true,
+  can_damage_npcs: true,
+  npcs_can_damage_protagonist: true,
   plot: '',
   rules: '',
   intro_text: '',
@@ -305,6 +307,8 @@ async function fetchAdventure() {
     form.value.awards = data.awards || []
     form.value.allow_dynamic_items = data.allow_dynamic_items ?? true
     form.value.plot = data.plot || ''
+    form.value.can_damage_npcs = data.can_damage_npcs ?? true
+    form.value.npcs_can_damage_protagonist = data.npcs_can_damage_protagonist ?? true
     form.value.rules = data.rules || ''
     form.value.intro_text = data.intro_text || ''
     form.value.walkthrough = data.walkthrough || ''
@@ -349,7 +353,7 @@ async function fetchDebugInfo() {
   }
 }
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string) {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
   editEntityContext.value = { type, id }
   editForm.value = { 
     name: currentName || '', 
@@ -359,7 +363,8 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     stamina: stamina ?? 0,
     mana: mana ?? 0,
     goal: goal || '',
-    character: character || ''
+    character: character || '',
+    is_killable: isKillable ?? true,
   }
   showEditModal.value = true
 }
@@ -395,6 +400,7 @@ async function saveEntityText(data: any) {
       mana: data.mana || undefined,
       goal: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.goal : undefined,
       character: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.character : undefined,
+      is_killable: editEntityContext.value.type === 'npc' ? data.is_killable : undefined,
     })
     showEditModal.value = false
     editEntityContext.value = null
@@ -770,6 +776,8 @@ const goBack = () => {
               :form="form"
               @update:generator="form.is_adventure_generator = $event; saveChanges()"
               @update:dynamic-items="form.allow_dynamic_items = $event; saveChanges()"
+              @update:can-damage-npcs="form.can_damage_npcs = $event; saveChanges()"
+              @update:npcs-can-damage-protagonist="form.npcs_can_damage_protagonist = $event; saveChanges()"
               @show-debug="showDebug = true"
               @save-changes="saveChanges"
             />

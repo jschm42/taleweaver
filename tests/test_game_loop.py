@@ -1297,6 +1297,23 @@ async def test_combat_start_creates_state(setup_test_db):
         assert any("event: final" in c for c in chunks)
 
 
+async def test_combat_start_blocked_when_npc_damage_disabled(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        adv.can_damage_npcs = False
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert combat.get("active") is not True
+
+
 async def test_combat_attack_defeat_enables_loot_phase(setup_test_db, monkeypatch):
     from tests.conftest import TestSessionLocal
 
@@ -1335,6 +1352,68 @@ async def test_combat_attack_defeat_enables_loot_phase(setup_test_db, monkeypatc
         assert combat.get("outcome") == "victory"
         assert combat.get("loot_pending") is True
         assert len(combat.get("loot_items") or []) == 1
+
+
+async def test_non_killable_npc_not_marked_permanently_defeated(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, npc = await _seed_combat_npc(db)
+        npc.is_killable = False
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 19,
+                "hit_modifier": 5,
+                "hit_total": 24,
+                "target_ac": 11,
+                "is_hit": True,
+                "damage_total": 60,
+                "damage_dice_total": 60,
+                "damage_rolls": [60],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d8",
+            },
+        )
+
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        npc_state = ((state.entity_states or {}).get("RAT_ENEMY") or {})
+        assert npc_state.get("is_defeated") is not True
+        assert npc_state.get("is_attackable") is not False
+
+
+async def test_enemy_turn_no_damage_when_npc_damage_to_protagonist_disabled(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state, _npc = await _seed_combat_npc(db)
+        adv.npcs_can_damage_protagonist = False
+        avatar.hp = 100
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Ensure player starts combat and enemy turn resolves deterministically.
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+        async for _ in manager.process_turn("/rest"):
+            pass
+
+        await db.refresh(avatar)
+        assert avatar.hp == 100
 
 
 async def test_combat_loot_take_moves_item_to_inventory(setup_test_db, monkeypatch):

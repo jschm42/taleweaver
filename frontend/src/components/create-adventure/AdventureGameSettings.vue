@@ -14,6 +14,8 @@ const props = defineProps<{
     award_generation_enabled: boolean
     min_awards: number
     max_awards: number
+    can_damage_npcs: boolean
+    npcs_can_damage_protagonist: boolean
   }
 }>()
 
@@ -122,6 +124,44 @@ function update(field: string, value: any) {
             @input="update('max_scenes', Number(($event.target as HTMLInputElement).value))"
             :min="modelValue.min_scenes" max="20" class="w-full accent-blue-500" 
           />
+        </div>
+      </div>
+    </div>
+
+    <!-- Combat Permissions -->
+    <div class="p-6 bg-rose-500/5 border border-rose-500/10 rounded-2xl space-y-6">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400">
+          <AlertTriangle class="w-5 h-5" />
+        </div>
+        <span class="text-xs font-black text-white/80 uppercase tracking-widest">Combat Permissions</span>
+      </div>
+
+      <div class="space-y-4">
+        <div class="flex items-center justify-between p-3 rounded-xl border border-white/10 bg-black/20">
+          <div class="space-y-1 pr-4">
+            <p class="text-xs font-black text-white/80 uppercase tracking-widest">Protagonist Can Damage NPCs</p>
+            <p class="text-[10px] text-white/40 uppercase tracking-wider">If disabled, no player attack can deal HP damage to NPCs.</p>
+          </div>
+          <div 
+            @click="update('can_damage_npcs', !modelValue.can_damage_npcs)"
+            :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.can_damage_npcs ? 'bg-rose-500' : 'bg-slate-700']"
+          >
+            <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.can_damage_npcs ? 'left-6' : 'left-1']"></div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between p-3 rounded-xl border border-white/10 bg-black/20">
+          <div class="space-y-1 pr-4">
+            <p class="text-xs font-black text-white/80 uppercase tracking-widest">NPCs Can Damage Protagonist</p>
+            <p class="text-[10px] text-white/40 uppercase tracking-wider">If disabled, enemy turns still happen but cannot reduce player HP.</p>
+          </div>
+          <div 
+            @click="update('npcs_can_damage_protagonist', !modelValue.npcs_can_damage_protagonist)"
+            :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.npcs_can_damage_protagonist ? 'bg-rose-500' : 'bg-slate-700']"
+          >
+            <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.npcs_can_damage_protagonist ? 'left-6' : 'left-1']"></div>
+          </div>
         </div>
       </div>
     </div>

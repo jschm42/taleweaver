@@ -266,6 +266,7 @@ class SessionImporter:
                         stat_modifier_charisma=ent.get("stat_modifier_charisma"),
                         stat_modifier_armor_class=ent.get("stat_modifier_armor_class"),
                         is_attackable=ent.get("is_attackable", True),
+                        is_killable=ent.get("is_killable", True),
                         inventory=ent.get("inventory", []),
                         metadata_json=ent.get("metadata_json", {}),
                     )

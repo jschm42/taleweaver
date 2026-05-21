@@ -191,6 +191,8 @@ export interface CreateAdventurePayload {
   min_awards?: number
   max_awards?: number
   allow_dynamic_items?: boolean
+  can_damage_npcs?: boolean
+  npcs_can_damage_protagonist?: boolean
   cover_source_adventure_id?: string
   cover_source_adventure_name?: string
   cover_similarity_percent?: number

@@ -217,6 +217,8 @@ class AdventureExporter:
                 "time_config": adv.time_config,
                 "game_over_rules": adv.game_over_rules,
                 "allow_dynamic_items": adv.allow_dynamic_items,
+                "can_damage_npcs": adv.can_damage_npcs,
+                "npcs_can_damage_protagonist": adv.npcs_can_damage_protagonist,
                 "cover_source_adventure_id": adv.cover_source_adventure_id,
                 "cover_source_adventure_name": adv.cover_source_adventure_name,
                 "cover_similarity_percent": adv.cover_similarity_percent,

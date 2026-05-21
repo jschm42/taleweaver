@@ -34,6 +34,8 @@ const form = ref({
   selected_tone_id: '',
   min_scenes: 3,
   max_scenes: 6,
+  can_damage_npcs: true,
+  npcs_can_damage_protagonist: true,
   award_generation_enabled: true,
   min_awards: 3,
   max_awards: 8,

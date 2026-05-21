@@ -13,6 +13,8 @@ export interface Adventure {
   max_scenes: number
   awards?: any[]
   allow_dynamic_items: boolean
+  can_damage_npcs: boolean
+  npcs_can_damage_protagonist: boolean
   plot?: string
   rules?: string
   intro_text?: string
@@ -42,6 +44,8 @@ export interface AdventureFormData {
   max_scenes: number
   awards: any[]
   allow_dynamic_items: boolean
+  can_damage_npcs: boolean
+  npcs_can_damage_protagonist: boolean
   plot: string
   rules: string
   intro_text: string

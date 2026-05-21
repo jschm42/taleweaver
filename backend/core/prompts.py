@@ -38,6 +38,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "These help the GM understand how the player character thinks and acts.\n\n"
     "STATS & RESOURCES:\n"
     "For NPCs, always assign 'hp' (range 40-100) and 'stamina' (range 50-100). Default to 0 if not relevant.\n"
+    "For NPCs, include both booleans: 'is_attackable' and 'is_killable'.\n"
     "For Protagonist, hp range is 60-120, stamina range is 60-100.\n\n"
     "AWARD & QUEST GENERATION:\n"
     "Generate 3-5 Awards and 3-5 Quests matching the story context."
@@ -53,6 +54,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "Narrative Tone: {selected_tone}\n\n"
     "WORLD SIZE REQUIREMENTS:\n"
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
+    "- Set top-level combat flags exactly as requested: can_damage_npcs={can_damage_npcs}, npcs_can_damage_protagonist={npcs_can_damage_protagonist}.\n"
 
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
     "TTS DIRECTION:\n"

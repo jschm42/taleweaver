@@ -359,6 +359,8 @@ class GameTurnManager:
                     tts_director_notes=snapshot_adventure.get("tts_director_notes") or self.state.tts_director_notes,
                     original_prompt=snapshot_adventure.get("original_prompt") or "",
                     allow_dynamic_items=bool(snapshot_adventure.get("allow_dynamic_items", True)),
+                    can_damage_npcs=bool(snapshot_adventure.get("can_damage_npcs", True)),
+                    npcs_can_damage_protagonist=bool(snapshot_adventure.get("npcs_can_damage_protagonist", True)),
                     is_adventure_generator=bool(snapshot_adventure.get("is_adventure_generator", False)),
                     original_manifest=snapshot_manifest,
                 )
@@ -604,8 +606,10 @@ class GameTurnManager:
                     states[enemy_id] = {}
                 states[enemy_id]["hp"] = 0
                 states[enemy_id]["inventory"] = []
-                states[enemy_id]["is_defeated"] = True
-                states[enemy_id]["is_attackable"] = False
+                enemy_is_killable = (states[enemy_id].get("is_killable") if "is_killable" in states[enemy_id] else enemy_ent.is_killable if enemy_ent else True)
+                if enemy_is_killable:
+                    states[enemy_id]["is_defeated"] = True
+                    states[enemy_id]["is_attackable"] = False
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
 
@@ -938,6 +942,13 @@ class GameTurnManager:
             return ent_val
         return fallback
 
+    def _is_npc_killable(self, npc: WorldEntity) -> bool:
+        states = self.state.entity_states or {}
+        override = (states.get(npc.id, {}) or {}).get("is_killable")
+        if isinstance(override, bool):
+            return override
+        return bool(getattr(npc, "is_killable", True))
+
     def _player_damage_dice(self) -> str:
         eq = self.avatar.equipment or {}
         main_hand = eq.get("MainHand")
@@ -1034,6 +1045,13 @@ class GameTurnManager:
     async def _handle_fight_start(self, user_msg: str) -> AsyncGenerator[str, None]:
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
             msg = "Turn-based combat is only available in RPG mode."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
+
+        if not bool(getattr(self.adventure, "can_damage_npcs", True)):
+            msg = "Combat is disabled for this adventure: the protagonist cannot damage NPCs."
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             async for chunk in self._emit_combat_final(msg):
                 yield chunk
@@ -1152,6 +1170,8 @@ class GameTurnManager:
         if self._is_combat_active() or self._has_combat_phase():
             return False
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
+            return False
+        if not bool(getattr(self.adventure, "can_damage_npcs", True)):
             return False
         if not game_event.requested_attacks:
             return False
@@ -1440,6 +1460,10 @@ class GameTurnManager:
             return None
 
         enemy_name = combat.get("enemy", {}).get("name", "Enemy")
+        if not bool(getattr(self.adventure, "npcs_can_damage_protagonist", True)):
+            text = f"Special Event: {enemy_name} shifts the pressure of battle, but no direct damage is dealt."
+            self._append_combat_log(combat, text, "special")
+            return text
         event_data = await self._request_llm_combat_special_event(combat)
 
         # Safe fallback if LLM is unavailable or returns invalid payload.
@@ -1555,6 +1579,18 @@ class GameTurnManager:
             equipment={},
             inventory=[]
         )
+
+        if not bool(getattr(self.adventure, "npcs_can_damage_protagonist", True)):
+            text = f"{enemy_ent.name} attacks, but this adventure disables NPC damage to the protagonist."
+            self._sync_combat_player_snapshot(combat)
+            self._append_combat_log(combat, text, "enemy_action")
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': text})}\n\n"
+            combat["turn"] = "player"
+            combat["round"] = int(combat.get("round", 1)) + 1
+            self._append_combat_log(combat, f"Round {combat['round']}: {self.avatar.name}'s turn.", "turn")
+            self._set_combat_state(combat)
+            return
+
         roll = roll_attack(enemy_avatar, "dexterity", player_ac, self._enemy_damage_dice(enemy_ent))
         if roll["is_hit"]:
             self.avatar.hp = max(0, self.avatar.hp - roll["damage_total"])
@@ -1945,6 +1981,13 @@ class GameTurnManager:
             return
 
         action_msg = None
+        if (cmd == "attack" or cmd == "/attack" or cmd == "a" or cmd.startswith("attack ") or cmd.startswith("/attack ")) and not bool(getattr(self.adventure, "can_damage_npcs", True)):
+            msg = "The protagonist cannot damage NPCs in this adventure. Use Run, Rest, or /consume."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
+
         if cmd == "attack" or cmd == "/attack" or cmd == "a" or cmd.startswith("attack ") or cmd.startswith("/attack "):
             if self.avatar.stamina < 20:
                 msg = f"Not enough stamina to attack! You have {self.avatar.stamina} stamina, but attacks require 20. Use Rest to recover."
@@ -2029,9 +2072,10 @@ class GameTurnManager:
             if enemy_id not in states:
                 states[enemy_id] = {}
             states[enemy_id]["inventory"] = []
-            # Mark NPC as permanently defeated so they cannot be re-engaged
-            states[enemy_id]["is_defeated"] = True
-            states[enemy_id]["is_attackable"] = False
+            if self._is_npc_killable(enemy_ent):
+                # Mark NPC as permanently defeated so they cannot be re-engaged
+                states[enemy_id]["is_defeated"] = True
+                states[enemy_id]["is_attackable"] = False
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
             self._append_combat_log(combat, combat["status_note"], "outcome")
@@ -2055,8 +2099,9 @@ class GameTurnManager:
                 states = dict(self.state.entity_states or {})
                 if enemy_id not in states:
                     states[enemy_id] = {}
-                states[enemy_id]["is_defeated"] = True
-                states[enemy_id]["is_attackable"] = False
+                if self._is_npc_killable(enemy_ent):
+                    states[enemy_id]["is_defeated"] = True
+                    states[enemy_id]["is_attackable"] = False
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
                 # Spawn any remaining NPC inventory items to the scene automatically
@@ -3026,6 +3071,8 @@ class GameTurnManager:
                     states[eid]["stamina"] = update.stamina
                 if update.is_attackable is not None:
                     states[eid]["is_attackable"] = update.is_attackable
+                if update.is_killable is not None:
+                    states[eid]["is_killable"] = update.is_killable
                 if update.is_defeated is not None:
                     states[eid]["is_defeated"] = update.is_defeated
                 if update.inventory is not None: 

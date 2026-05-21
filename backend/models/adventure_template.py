@@ -70,6 +70,8 @@ class AdventureTemplate(Base, TimestampMixin):
     original_prompt: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
     starting_timestamp: Mapped[int] = mapped_column(Integer, default=0, nullable=False) # Minutes from Day 1, 00:00
     allow_dynamic_items: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    can_damage_npcs: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    npcs_can_damage_protagonist: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Award System
     awards: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)

@@ -176,6 +176,7 @@ class WorldNPCSchema(BaseModel):
     mana: int = Field(..., description="Mana (range 0-999)")
     stamina: int = Field(..., description="Stamina (range 50-100)")
     is_attackable: bool = Field(..., description="If False, the player cannot start a fight with this NPC.")
+    is_killable: bool = Field(..., description="If False, this NPC can be defeated but cannot be permanently killed.")
     is_hidden: bool = Field(..., description="If True, the NPC is initially concealed.")
     source_asset_id: Optional[str] = Field(None, description="Optional source NPC ID to reuse an old portrait image.")
     reveal_rule: str = Field(
@@ -299,6 +300,8 @@ class WorldManifesto(BaseModel):
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
     tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
+    can_damage_npcs: bool = Field(..., description="Global flag: whether the protagonist can damage NPCs.")
+    npcs_can_damage_protagonist: bool = Field(..., description="Global flag: whether NPCs can damage the protagonist.")
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]
     npcs: list[WorldNPCSchema]
@@ -333,6 +336,8 @@ class WorldGenerator:
         award_generation_enabled: bool = True,
         min_awards: int = 3,
         max_awards: int = 5,
+        can_damage_npcs: bool = True,
+        npcs_can_damage_protagonist: bool = True,
         selected_image_styles: Optional[list[str]] = None,
         selected_tone: Optional[str] = None,
         language: Optional[str] = None,
@@ -440,6 +445,8 @@ class WorldGenerator:
             selected_tone=selected_tone or "Standard RPG",
             min_scenes=min_scenes, 
             max_scenes=max_scenes,
+            can_damage_npcs="true" if can_damage_npcs else "false",
+            npcs_can_damage_protagonist="true" if npcs_can_damage_protagonist else "false",
             voice_assignment_requirement=_build_voice_assignment_requirement(
                 automatic_npc_voice_assignment,
                 available_voice_list,
@@ -741,6 +748,12 @@ class WorldGenerator:
                 
                 if manifest_dict.get("allow_dynamic_items") is not None:
                     adventure.allow_dynamic_items = manifest_dict["allow_dynamic_items"]  # type: ignore
+
+                if manifest_dict.get("can_damage_npcs") is not None:
+                    adventure.can_damage_npcs = manifest_dict["can_damage_npcs"]  # type: ignore
+
+                if manifest_dict.get("npcs_can_damage_protagonist") is not None:
+                    adventure.npcs_can_damage_protagonist = manifest_dict["npcs_can_damage_protagonist"]  # type: ignore
 
                 if manifest_dict.get("game_over_rules") is not None:
                     adventure.game_over_rules = manifest_dict["game_over_rules"]  # type: ignore
@@ -1134,6 +1147,7 @@ class WorldGenerator:
                 is_hidden=n.get("is_hidden", False),
                 reveal_rule=n.get("reveal_rule") or None,
                 is_attackable=n.get("is_attackable", True),
+                is_killable=n.get("is_killable", True),
             ))
             
             # Commit after each NPC to save progress and release locks during long generations
@@ -1154,6 +1168,8 @@ class WorldGenerator:
             adventure.is_ready = False  # type: ignore
             adventure.origin_id = manifest_dict.get("origin_id", "")  # type: ignore
             adventure.is_adventure_generator = manifest_dict.get("is_adventure_generator", False)  # type: ignore
+            adventure.can_damage_npcs = manifest_dict.get("can_damage_npcs", True)  # type: ignore
+            adventure.npcs_can_damage_protagonist = manifest_dict.get("npcs_can_damage_protagonist", True)  # type: ignore
             adventure.original_manifest = manifest_dict  # type: ignore
         # Merge starting inventory & equipment definitions into the objects list if defined inline.
         objects = list(manifest_dict.get("objects", []))
