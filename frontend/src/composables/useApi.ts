@@ -214,6 +214,11 @@ export const api = {
     return request(`/adventures/${templateId}/reset`, { method: 'POST' })
   },
 
+  /** Marks one readable text log as read within a session. */
+  markTextLogRead(gameId: string, entityId: string): Promise<{ status: string; entity_id: string; is_read: boolean }> {
+    return request(`/adventures/${gameId}/text-logs/${encodeURIComponent(entityId)}/read`, { method: 'POST' })
+  },
+
   /** @deprecated Use listSessions() instead. */
   listGameSessions(): Promise<GameSession[]> {
     return request<GameSession[]>('/adventures/')

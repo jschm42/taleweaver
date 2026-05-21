@@ -67,6 +67,7 @@ const editForm = ref({
   is_portable: true,
   unlock_rule: '',
   inventory_json: '[]',
+  text_log_content: '',
 })
 
 const adventure = ref<any>(null)
@@ -300,7 +301,14 @@ const editorObjects = computed<any[]>(() => {
   const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
   const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
   const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
-  return mergeUniqueById(source, inferred)
+  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() !== 'READABLE')
+})
+
+const editorTextLogs = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
+  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() === 'READABLE')
 })
 
 async function fetchAdventure() {
@@ -369,7 +377,7 @@ async function fetchDebugInfo() {
 
 function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
   const selectedObject = type === 'object'
-    ? (editorObjects.value || []).find((entry: any) => String(entry.id) === String(id))
+    ? ([...(editorObjects.value || []), ...(editorTextLogs.value || [])]).find((entry: any) => String(entry.id) === String(id))
     : null
 
   editEntityContext.value = { type, id }
@@ -387,6 +395,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     is_portable: selectedObject?.is_portable !== false,
     unlock_rule: selectedObject?.unlock_rule || '',
     inventory_json: JSON.stringify(selectedObject?.inventory || [], null, 2),
+    text_log_content: fixNewlines(selectedObject?.metadata_json?.text_log_content || ''),
   }
   showEditModal.value = true
 }
@@ -408,6 +417,11 @@ async function saveEntityText(data: any) {
     }
   }
 
+  if (editEntityContext.value.type === 'object' && (data.text_log_content || '').length > 500) {
+    addNotification('Text logs must be 500 characters or less.', 'error')
+    return
+  }
+
   isSavingText.value = true
   promptError.value = ''
   try {
@@ -427,6 +441,7 @@ async function saveEntityText(data: any) {
       is_portable: editEntityContext.value.type === 'object' ? data.is_portable : undefined,
       unlock_rule: editEntityContext.value.type === 'object' ? data.unlock_rule : undefined,
       inventory: editEntityContext.value.type === 'object' ? data.inventory : undefined,
+      text_log_content: editEntityContext.value.type === 'object' ? data.text_log_content : undefined,
     })
     showEditModal.value = false
     editEntityContext.value = null
@@ -713,6 +728,7 @@ const goBack = () => {
             <ItemsTab 
               v-if="activeTab === 'items'"
               :editor-objects="editorObjects"
+              :editor-text-logs="editorTextLogs"
               :is-batch-generating="isBatchGenerating"
               :is-quick-generating="isQuickGenerating"
               :active-menu-id="activeMenuId"

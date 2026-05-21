@@ -21,6 +21,7 @@ export type ContextMenuModel = {
 }
 
 const OPEN_CONTAINER_PREFIX = '[OPEN_CONTAINER] '
+const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -119,6 +120,9 @@ export const gameCommandService = {
       items.push({ label: 'Search', action: 'Search the area', icon: 'ra ra-magnifying-glass', color: 'text-emerald-400' })
     } else if (entity?.entity_type === 'OBJECT' || entity?.entity_type === 'ITEM') {
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+      if (String(entity?.item_type || '').toUpperCase() === 'READABLE') {
+        items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${entity.id || entity.name}`, icon: 'ra ra-book', color: 'text-amber-300' })
+      }
       if (isContainerEntity(entity)) {
         items.push({ label: 'Open', action: `${OPEN_CONTAINER_PREFIX}${entity.id || entity.name}`, icon: 'ra ra-treasure-chest', color: 'text-emerald-400' })
       }
@@ -152,6 +156,10 @@ export const gameCommandService = {
 
     if (isContainerEntity(item)) {
       items.push({ label: 'Open', action: `${OPEN_CONTAINER_PREFIX}${item.id || item.name}`, icon: 'ra ra-treasure-chest', color: 'text-emerald-400' })
+    }
+
+    if (String(item?.item_type || '').toUpperCase() === 'READABLE') {
+      items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${item.id || item.name}`, icon: 'ra ra-book', color: 'text-amber-300' })
     }
 
     items.push({ label: 'Drop', action: `/drop ${item.name}`, icon: 'ra ra-bottom-right', color: 'text-red-400' })

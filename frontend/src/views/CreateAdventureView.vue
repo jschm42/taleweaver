@@ -40,6 +40,8 @@ const form = ref({
   max_quests: 5,
   container_generation_enabled: true,
   max_containers: 8,
+  text_log_generation_enabled: true,
+  max_text_logs: 8,
   can_damage_npcs: true,
   npcs_can_damage_protagonist: true,
   award_generation_enabled: true,

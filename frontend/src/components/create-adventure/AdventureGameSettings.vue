@@ -18,6 +18,8 @@ const props = defineProps<{
     max_quests: number
     container_generation_enabled: boolean
     max_containers: number
+    text_log_generation_enabled: boolean
+    max_text_logs: number
     award_generation_enabled: boolean
     min_awards: number
     max_awards: number
@@ -222,6 +224,40 @@ function update(field: string, value: any) {
           min="0"
           max="30"
           class="w-full accent-amber-500"
+        />
+      </div>
+    </div>
+
+    <!-- Text Log Generation -->
+    <div class="p-6 bg-cyan-500/5 border border-cyan-500/10 rounded-2xl space-y-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+            <MapPin class="w-5 h-5" />
+          </div>
+          <span class="text-xs font-black text-white/80 uppercase tracking-widest">Text Log Generation</span>
+        </div>
+        <InfoPopoverButton title="Text Log Generation" :text="CREATE_ADVENTURE_HELP_TEXTS.textLogGeneration" />
+        <div
+          @click="update('text_log_generation_enabled', !modelValue.text_log_generation_enabled)"
+          :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.text_log_generation_enabled ? 'bg-cyan-500' : 'bg-slate-700']"
+        >
+          <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.text_log_generation_enabled ? 'left-6' : 'left-1']"></div>
+        </div>
+      </div>
+
+      <div v-if="modelValue.text_log_generation_enabled" class="space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Text Logs</label>
+          <span class="text-xs font-mono text-cyan-300">{{ modelValue.max_text_logs }}</span>
+        </div>
+        <input
+          type="range"
+          :value="modelValue.max_text_logs"
+          @input="update('max_text_logs', Number(($event.target as HTMLInputElement).value))"
+          min="0"
+          max="30"
+          class="w-full accent-cyan-500"
         />
       </div>
     </div>

@@ -31,6 +31,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "NPC 'description' (bio) MUST be max 400 characters.\n"
     "NPC 'goal' (motivation) and 'character' (traits) fields MUST be concise (max 200 characters each).\n"
     "For OBJECTS, assign a specific 'item_type': CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE.\n"
+    "If an OBJECT has item_type READABLE, include text_log_content (max 500 characters) and text_log_format (DOCUMENT, SCROLL, BOOK, SIGN).\n"
     "For NPCs, assign an 'npc_type': HUMANOID, ANIMAL, MONSTER, BEING.\n"
     "Every NPC MUST also have a 'goal' and a 'character' description (both strings).\n\n"
     "PROTAGONIST:\n"
@@ -63,6 +64,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "{voice_assignment_requirement}"
     "{quest_requirement}"
     "{award_requirement}"
+    "{text_log_requirement}"
 )
 """
 Template for the user message that kicks off world generation.

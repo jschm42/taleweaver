@@ -189,3 +189,40 @@ async def get_walkthrough(
         raise HTTPException(status_code=403, detail="The walkthrough is not revealed yet.")
 
     return {"walkthrough": state.walkthrough or "No walkthrough available for this adventure."}
+
+
+@router.post("/{game_id}/text-logs/{entity_id}/read")
+async def mark_text_log_read(
+    game_id: str,
+    entity_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Marks a READABLE object as read in session-scoped state overrides."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.id == entity_id,
+        )
+    )
+    entity = ent_res.scalars().first()
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found in this session.")
+
+    if entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "READABLE":
+        raise HTTPException(status_code=400, detail="Entity is not a readable text log.")
+
+    entity_states = dict(state.entity_states or {})
+    current_entry = entity_states.get(entity.id)
+    override_entry = dict(current_entry) if isinstance(current_entry, dict) else {}
+    override_entry["is_read"] = True
+    entity_states[entity.id] = override_entry
+
+    state.entity_states = entity_states
+    await db.commit()
+
+    return {"status": "ok", "entity_id": entity.id, "is_read": True}

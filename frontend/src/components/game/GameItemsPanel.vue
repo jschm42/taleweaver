@@ -5,9 +5,14 @@ interface Entity {
   id: string
   name: string
   item_type?: string | null
-   image_url?: string | null
-   is_portable?: boolean
- }
+  image_url?: string | null
+  is_portable?: boolean
+  is_read?: boolean
+  [key: string]: unknown
+}
+
+const isReadable = (entity: Entity) => String(entity.item_type || '').toUpperCase() === 'READABLE'
+const isRead = (entity: Entity) => Boolean(entity.is_read)
 
 defineProps<{
   items: Entity[]
@@ -46,6 +51,10 @@ const emit = defineEmits<{
         @click="emit('click', ent)"
         @contextmenu.prevent="emit('contextmenu', ent, $event)"
       >
+        <div v-if="isReadable(ent)" class="absolute top-1.5 left-1.5 z-20 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border"
+             :class="isRead(ent) ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-200 border-amber-500/30'">
+          {{ isRead(ent) ? 'READ' : 'NOTE' }}
+        </div>
         <div class="w-12 h-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0 mb-2">
           <img
             v-if="ent.image_url && showImage(ent.image_url)"

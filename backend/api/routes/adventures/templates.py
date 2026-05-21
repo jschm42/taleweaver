@@ -356,6 +356,8 @@ async def create_adventure(
                     max_scenes=payload.max_scenes,
                     container_generation_enabled=payload.container_generation_enabled,
                     max_containers=max(0, min(30, int(payload.max_containers))),
+                    text_log_generation_enabled=bool(payload.text_log_generation_enabled),
+                    max_text_logs=max(0, min(30, int(payload.max_text_logs))),
                     quest_generation_enabled=(not chat_mode) and bool(payload.quest_generation_enabled),
                     min_quests=max(1, min(20, int(payload.min_quests))),
                     max_quests=max(1, min(20, int(payload.max_quests))),

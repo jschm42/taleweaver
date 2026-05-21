@@ -182,6 +182,8 @@ export interface CreateAdventurePayload {
   max_scenes?: number
   container_generation_enabled?: boolean
   max_containers?: number
+  text_log_generation_enabled?: boolean
+  max_text_logs?: number
   clock_enabled?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean

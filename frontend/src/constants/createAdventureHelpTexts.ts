@@ -11,6 +11,8 @@ export const CREATE_ADVENTURE_HELP_TEXTS = {
     'Toggle automatic quest generation. Min and max define how many quests are produced (up to 20).',
   containerGeneration:
     'Allows generation of container objects that can hold nested items. Max Containers limits how many may appear.',
+  textLogGeneration:
+    'Allows generation of readable text logs (documents, scrolls, books, signs). Max Text Logs limits how many can be created; each log text is capped at 500 characters.',
   combatPermissions:
     'Controls whether damage is possible between protagonist and NPCs. Disable for safer or story-first adventures.',
   awards:

@@ -18,6 +18,7 @@ const props = defineProps<{
     is_portable: boolean
     unlock_rule: string
     inventory_json: string
+    text_log_content: string
   }
   ruleEnforcementMode: string
   isSaving: boolean
@@ -277,6 +278,16 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Contained Items (JSON Array)</label>
                   <textarea v-model="localForm.inventory_json" rows="4" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-amber-500/50 outline-none transition-all" placeholder='["ITEM_KEY", {"id":"ITEM_MAP","name":"Old Map","item_type":"PICKABLE"}]'></textarea>
                   <p class="text-[10px] text-slate-500 uppercase tracking-wider">Supports item IDs and inline item objects.</p>
+                </div>
+
+                <div v-if="String(localForm.item_type || '').toUpperCase() === 'READABLE'" class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Text Log Content</label>
+                    <span :class="['text-xs font-bold tracking-widest', (localForm.text_log_content || '').length > 500 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (localForm.text_log_content || '').length }} / 500
+                    </span>
+                  </div>
+                  <textarea v-model="localForm.text_log_content" maxlength="500" rows="5" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all" placeholder="Readable note text shown to the player."></textarea>
                 </div>
               </div>
 

@@ -226,6 +226,8 @@ class WorldObjectSchema(BaseModel):
     mana_change: int = Field(..., description="Mana restoration when consumed. Use 0 if none.")
     
     inventory: list[str] = Field(..., description="List of object IDs inside this container object. Use [] if empty.")
+    text_log_content: str = Field("", description="Only for READABLE objects: visible text content, max 500 characters. Use empty string for non-readable items.")
+    text_log_format: str = Field("", description="Only for READABLE objects: one of DOCUMENT, SCROLL, BOOK, SIGN. Use empty string for non-readable items.")
     source_asset_id: Optional[str] = Field(None, description="Optional source object ID to reuse an old item image.")
     
     model_config = {"extra": "forbid"}
@@ -335,6 +337,8 @@ class WorldGenerator:
         max_scenes: int = 5,
         container_generation_enabled: bool = True,
         max_containers: int = 8,
+        text_log_generation_enabled: bool = True,
+        max_text_logs: int = 8,
         quest_generation_enabled: bool = True,
         min_quests: int = 3,
         max_quests: int = 5,
@@ -439,6 +443,20 @@ class WorldGenerator:
                 "- Do not generate any objects with item_type CONTAINER."
             )
 
+        clamped_max_text_logs = max(0, min(30, int(max_text_logs)))
+        if text_log_generation_enabled and clamped_max_text_logs > 0:
+            text_log_requirement = (
+                "\n\nTEXT LOGS (READABLE OBJECTS):\n"
+                f"- You may generate READABLE objects, but never more than {clamped_max_text_logs}.\n"
+                "- For every READABLE object, provide `text_log_content` with at most 500 characters and `text_log_format` as DOCUMENT, SCROLL, BOOK, or SIGN.\n"
+                "- Keep text_log_content practical: hints, story fragments, warnings, clues."
+            )
+        else:
+            text_log_requirement = (
+                "\n\nTEXT LOGS (READABLE OBJECTS):\n"
+                "- Do not generate any READABLE objects."
+            )
+
         cover_guidance = ""
         if cover_source_manifest:
             source_title = cover_source_adventure_name or cover_source_manifest.get("title") or "Unknown Source Adventure"
@@ -476,7 +494,8 @@ class WorldGenerator:
             ),
             cover_guidance=cover_guidance,
             quest_requirement=quest_requirement,
-            award_requirement=award_requirement
+            award_requirement=award_requirement,
+            text_log_requirement=text_log_requirement,
         )
         user_prompt += container_requirement
 
@@ -513,6 +532,8 @@ class WorldGenerator:
                 "automatic_npc_voice_assignment": automatic_npc_voice_assignment,
                 "container_generation_enabled": container_generation_enabled,
                 "max_containers": clamped_max_containers,
+                "text_log_generation_enabled": text_log_generation_enabled,
+                "max_text_logs": clamped_max_text_logs,
                 "quest_generation_enabled": quest_generation_enabled,
                 "min_quests": clamped_min_quests,
                 "max_quests": clamped_max_quests,
@@ -614,6 +635,33 @@ class WorldGenerator:
                 obj["item_type"] = "PICKABLE"
                 obj["inventory"] = []
                 obj["unlock_rule"] = ""
+
+        readable_indices = [
+            idx for idx, obj in enumerate(objects)
+            if isinstance(obj, dict) and str(obj.get("item_type", "")).upper() == "READABLE"
+        ]
+        if not text_log_generation_enabled:
+            for idx in readable_indices:
+                obj = objects[idx]
+                obj["item_type"] = "PICKABLE"
+                obj["text_log_content"] = ""
+                obj["text_log_format"] = ""
+        else:
+            if len(readable_indices) > clamped_max_text_logs:
+                for idx in readable_indices[clamped_max_text_logs:]:
+                    obj = objects[idx]
+                    obj["item_type"] = "PICKABLE"
+                    obj["text_log_content"] = ""
+                    obj["text_log_format"] = ""
+
+            for idx in readable_indices[:clamped_max_text_logs]:
+                obj = objects[idx]
+                raw_content = str(obj.get("text_log_content") or "").strip()
+                obj["text_log_content"] = raw_content[:500]
+                text_log_format = str(obj.get("text_log_format") or "DOCUMENT").strip().upper()
+                if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+                    text_log_format = "DOCUMENT"
+                obj["text_log_format"] = text_log_format
 
         manifest_dict["cover_source_adventure_id"] = cover_source_adventure_id
         manifest_dict["cover_source_adventure_name"] = cover_source_adventure_name
@@ -1393,6 +1441,8 @@ class WorldGenerator:
                 "image_url": image_url,
                 "item_type": o.get("item_type", "PICKABLE"),
                 "slot": item_slot,
+                "text_log_content": str(o.get("text_log_content") or "").strip()[:500],
+                "text_log_format": str(o.get("text_log_format") or "").strip().upper() or None,
                 "stat_modifier_strength": stat_strength,
                 "stat_modifier_dexterity": stat_dexterity,
                 "stat_modifier_intelligence": stat_intelligence,
@@ -1424,6 +1474,14 @@ class WorldGenerator:
                 metadata_json["stat_modifier_charisma"] = stat_charisma
             if stat_armor_class is not None:
                 metadata_json["stat_modifier_armor_class"] = stat_armor_class
+
+            if str(o.get("item_type") or "").upper() == "READABLE":
+                text_log_content = str(o.get("text_log_content") or "").strip()[:500]
+                text_log_format = str(o.get("text_log_format") or "DOCUMENT").strip().upper()
+                if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+                    text_log_format = "DOCUMENT"
+                metadata_json["text_log_content"] = text_log_content
+                metadata_json["text_log_format"] = text_log_format
 
             if avatar and is_in_avatar_inv:
                 if is_starting_inv:

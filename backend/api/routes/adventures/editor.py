@@ -36,6 +36,7 @@ class EntityUpdateRequest(BaseModel):
     is_portable: Optional[bool] = None
     unlock_rule: Optional[str] = None
     inventory: Optional[list] = None
+    text_log_content: Optional[str] = None
 
 def _serialize_model(obj):
     if not obj: return None
@@ -197,6 +198,12 @@ async def update_editor_entity(
                     ent.unlock_rule = payload.unlock_rule or None
                 if payload.inventory is not None:
                     ent.inventory = payload.inventory
+                if payload.text_log_content is not None:
+                    if len(payload.text_log_content) > 500:
+                        raise HTTPException(status_code=400, detail="text_log_content must be at most 500 characters.")
+                    metadata_json = dict(ent.metadata_json or {})
+                    metadata_json["text_log_content"] = payload.text_log_content.strip()
+                    ent.metadata_json = metadata_json
             
     await db.commit()
     return {"status": "success"}

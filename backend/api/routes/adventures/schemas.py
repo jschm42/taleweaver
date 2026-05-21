@@ -40,6 +40,8 @@ class CreateAdventureTemplatePayload(BaseModel):
     max_quests: int = 5
     container_generation_enabled: bool = True
     max_containers: int = 8
+    text_log_generation_enabled: bool = True
+    max_text_logs: int = 8
     award_generation_enabled: bool = False
     min_awards: int = 3
     max_awards: int = 8
@@ -83,6 +85,11 @@ class CreateAdventureTemplatePayload(BaseModel):
     @field_validator("max_containers")
     @classmethod
     def validate_max_containers(cls, value: int) -> int:
+        return max(0, min(30, int(value)))
+
+    @field_validator("max_text_logs")
+    @classmethod
+    def validate_max_text_logs(cls, value: int) -> int:
         return max(0, min(30, int(value)))
 
     @field_validator("min_quests")

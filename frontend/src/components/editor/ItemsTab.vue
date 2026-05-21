@@ -3,6 +3,7 @@ import { getItemIcon } from '@/utils/game_icons'
 
 defineProps<{
   editorObjects: any[]
+  editorTextLogs: any[]
   isBatchGenerating: Record<string, boolean>
   isQuickGenerating: Record<string, boolean>
   activeMenuId: string | null
@@ -23,7 +24,39 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <section v-if="editorObjects.length" class="space-y-6 animate-page-in">
+  <section v-if="editorTextLogs.length || editorObjects.length" class="space-y-8 animate-page-in">
+    <div v-if="editorTextLogs.length" class="space-y-6">
+      <div class="flex items-center justify-between">
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Text Logs ({{ editorTextLogs.length }})</h3>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+        <div v-for="obj in editorTextLogs" :key="'txt_' + obj.id" @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: (obj.metadata_json?.text_log_content || obj.description), image_url: obj.image_url, type: 'TEXT_LOG', stats: {} }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-square bg-slate-900 border border-cyan-500/20 rounded-xl shadow-lg transition-all overflow-visible">
+          <div class="absolute inset-0 rounded-xl overflow-hidden">
+            <img v-if="obj.image_url" :src="obj.image_url" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
+            <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
+            <div class="absolute bottom-0 left-0 right-0 p-2">
+              <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
+              <div class="text-[9px] text-cyan-200/80 uppercase tracking-widest mt-1">{{ (obj.metadata_json?.text_log_format || 'DOCUMENT') }}</div>
+            </div>
+          </div>
+          <div class="absolute top-1.5 right-1.5 z-40">
+            <button @click="emit('toggle-menu', obj.id, $event)" class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-cyan-500 transition-all shadow-lg group/dots">
+              <div class="flex flex-col gap-0.5">
+                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+              </div>
+            </button>
+            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+              <button @click="emit('open-text-edit', 'object', obj.id, obj.name, (obj.metadata_json?.text_log_content || obj.description || ''))" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="editorObjects.length" class="space-y-6">
     <div class="flex items-center justify-between">
       <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Mystical Objects ({{ editorObjects.length }})</h3>
       <button @click="emit('regen-all', 'object')" :disabled="isBatchGenerating['object']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
@@ -63,6 +96,7 @@ const emit = defineEmits<{
           </div>
         </div>
       </div>
+    </div>
     </div>
   </section>
 </template>

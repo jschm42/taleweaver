@@ -17,6 +17,7 @@ export interface EntityEditData {
   is_portable?: boolean
   unlock_rule?: string
   inventory?: any[]
+  text_log_content?: string
 }
 
 /**
