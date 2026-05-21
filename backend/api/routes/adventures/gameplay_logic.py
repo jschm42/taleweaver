@@ -829,17 +829,15 @@ class GameTurnManager:
             else:
                 scene_container, inventory_container, _ = await self._resolve_container_target(container_hint)
                 container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
-                container_unlock_rule = (getattr(scene_container, "unlock_rule", None) if scene_container else inventory_container.get("unlock_rule") if inventory_container else None)
-                container_inventory = await self._get_container_inventory(scene_container, inventory_container)
                 if not container_name:
                     response = f"No container named '{container_hint}' was found."
-                elif container_unlock_rule:
-                    response = (
-                        f"{container_name} is locked. Hint: {container_unlock_rule} "
-                        f"(You can still inspect its contents in this version.)"
-                    )
                 else:
-                    response = f"{container_name} contains {len(container_inventory)} item(s)."
+                    is_locked = self._is_container_locked(scene_container, inventory_container)
+                    if is_locked:
+                        response = f"{container_name} is locked."
+                    else:
+                        container_inventory = await self._get_container_inventory(scene_container, inventory_container)
+                        response = f"{container_name} contains {len(container_inventory)} item(s)."
 
         if response.startswith("[TRIGGER_CONTAINER_TAKE_ALL]"):
             container_hint = response.replace("[TRIGGER_CONTAINER_TAKE_ALL]", "").strip()
@@ -851,18 +849,22 @@ class GameTurnManager:
                 if not container_name:
                     response = f"No container named '{container_hint}' was found."
                 else:
-                    raw_items = await self._get_container_inventory(scene_container, inventory_container)
-                    normalized_items = await self._normalize_container_items(raw_items)
-                    if not normalized_items:
-                        response = f"{container_name} is empty."
+                    is_locked = self._is_container_locked(scene_container, inventory_container)
+                    if is_locked:
+                        response = f"{container_name} is locked."
                     else:
-                        new_inventory = list(self.avatar.inventory or [])
-                        for item in normalized_items:
-                            new_inventory.append(item)
-                            await self._move_container_item_to_inventory(item)
-                        self.avatar.inventory = new_inventory
-                        await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
-                        response = f"You take all {len(normalized_items)} item(s) from {container_name}."
+                        raw_items = await self._get_container_inventory(scene_container, inventory_container)
+                        normalized_items = await self._normalize_container_items(raw_items)
+                        if not normalized_items:
+                            response = f"{container_name} is empty."
+                        else:
+                            new_inventory = list(self.avatar.inventory or [])
+                            for item in normalized_items:
+                                new_inventory.append(item)
+                                await self._move_container_item_to_inventory(item)
+                            self.avatar.inventory = new_inventory
+                            await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
+                            response = f"You take all {len(normalized_items)} item(s) from {container_name}."
 
         if response.startswith("[TRIGGER_CONTAINER_DROP_SCENE]"):
             container_hint = response.replace("[TRIGGER_CONTAINER_DROP_SCENE]", "").strip()
@@ -874,17 +876,21 @@ class GameTurnManager:
                 if not container_name:
                     response = f"No container named '{container_hint}' was found."
                 else:
-                    raw_items = await self._get_container_inventory(scene_container, inventory_container)
-                    normalized_items = await self._normalize_container_items(raw_items)
-                    if not normalized_items:
-                        response = f"{container_name} is empty."
+                    is_locked = self._is_container_locked(scene_container, inventory_container)
+                    if is_locked:
+                        response = f"{container_name} is locked."
                     else:
-                        for item in normalized_items:
-                            moved = await self._move_container_item_to_scene(item)
-                            if not moved:
-                                await self._spawn_scene_item(item)
-                        await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
-                        response = f"You drop {len(normalized_items)} item(s) from {container_name} into the scene."
+                        raw_items = await self._get_container_inventory(scene_container, inventory_container)
+                        normalized_items = await self._normalize_container_items(raw_items)
+                        if not normalized_items:
+                            response = f"{container_name} is empty."
+                        else:
+                            for item in normalized_items:
+                                moved = await self._move_container_item_to_scene(item)
+                                if not moved:
+                                    await self._spawn_scene_item(item)
+                            await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
+                            response = f"You drop {len(normalized_items)} item(s) from {container_name} into the scene."
 
         if response.startswith("[TRIGGER_CONSUME]"):
             item_name = response.replace("[TRIGGER_CONSUME]", "").strip()
@@ -911,6 +917,28 @@ class GameTurnManager:
     @staticmethod
     def _is_container_item(item: Any) -> bool:
         return isinstance(item, dict) and str(item.get("item_type") or "").upper() == "CONTAINER"
+
+    def _is_container_locked(self, scene_container: WorldEntity | None, inventory_container: dict[str, Any] | None) -> bool:
+        states = self.state.entity_states or {}
+
+        if scene_container:
+            state_locked = (states.get(scene_container.id) or {}).get("locked")
+            if isinstance(state_locked, bool):
+                return state_locked
+            return bool(getattr(scene_container, "unlock_rule", None))
+
+        if inventory_container:
+            inv_id = str(inventory_container.get("id") or "").strip()
+            if inv_id:
+                state_locked = (states.get(inv_id) or {}).get("locked")
+                if isinstance(state_locked, bool):
+                    return state_locked
+            item_locked = inventory_container.get("locked")
+            if isinstance(item_locked, bool):
+                return item_locked
+            return bool(inventory_container.get("unlock_rule"))
+
+        return False
 
     async def _resolve_container_target(self, hint: str) -> tuple[WorldEntity | None, dict[str, Any] | None, int | None]:
         normalized_hint = (hint or "").strip().lower()
@@ -3310,6 +3338,8 @@ class GameTurnManager:
                     states[eid]["is_killable"] = update.is_killable
                 if update.is_defeated is not None:
                     states[eid]["is_defeated"] = update.is_defeated
+                if update.locked is not None:
+                    states[eid]["locked"] = update.locked
                 if update.inventory is not None: 
                     states[eid]["inventory"] = [i.model_dump(exclude_none=True) for i in update.inventory]
                 state_dirty = True

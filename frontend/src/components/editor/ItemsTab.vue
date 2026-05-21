@@ -21,6 +21,12 @@ const emit = defineEmits<{
   (e: 'handle-hover', entity: any, event: MouseEvent): void
   (e: 'clear-hover'): void
 }>()
+
+const isContainerLocked = (obj: any): boolean => {
+  if (String(obj?.item_type || '').toUpperCase() !== 'CONTAINER') return false
+  if (typeof obj?.locked === 'boolean') return obj.locked
+  return String(obj?.unlock_rule || '').trim().length > 0
+}
 </script>
 
 <template>
@@ -70,6 +76,7 @@ const emit = defineEmits<{
           <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
             <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
           </div>
+          <div v-if="isContainerLocked(obj)" class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100 z-10">LOCKED</div>
           <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
           <div class="absolute bottom-0 left-0 right-0 p-2">
             <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>

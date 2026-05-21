@@ -69,7 +69,6 @@ const activeTextLog = ref<{
 const activeContainer = ref<{
   id: string
   name: string
-  unlockRule?: string | null
   items: any[]
 } | null>(null)
 
@@ -192,6 +191,14 @@ const isContainerEntity = (entity: any): boolean => {
   return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
 }
 
+const isContainerLocked = (container: any): boolean => {
+  if (!isContainerEntity(container)) return false
+  if (typeof container?.locked === 'boolean') {
+    return container.locked
+  }
+  return String(container?.unlock_rule || '').trim().length > 0
+}
+
 const isReadableEntity = (entity: any): boolean => {
   if (!entity) return false
   return String(entity.item_type || '').toUpperCase() === 'READABLE'
@@ -256,28 +263,36 @@ const normalizeContainerItems = (rawItems: any[]): any[] => {
   return result
 }
 
-const openContainerFromEntity = (entity: any) => {
-  if (!isContainerEntity(entity)) return
+const openContainerFromEntity = (entity: any): boolean => {
+  if (!isContainerEntity(entity)) return false
+  if (isContainerLocked(entity)) {
+    addNotification(`${entity?.name || 'Container'} is locked.`, 'info')
+    return false
+  }
 
   activeContainer.value = {
     id: String(entity.id || entity.name || '').trim(),
     name: String(entity.name || entity.id || 'Container'),
-    unlockRule: entity.unlock_rule || null,
     items: normalizeContainerItems(entity.inventory || []),
   }
   showContainerModal.value = true
+  return true
 }
 
-const openContainerFromInventoryItem = (item: any) => {
-  if (!isContainerEntity(item)) return
+const openContainerFromInventoryItem = (item: any): boolean => {
+  if (!isContainerEntity(item)) return false
+  if (isContainerLocked(item)) {
+    addNotification(`${item?.name || 'Container'} is locked.`, 'info')
+    return false
+  }
 
   activeContainer.value = {
     id: String(item.id || item.name || '').trim(),
     name: String(item.name || item.id || 'Container'),
-    unlockRule: item.unlock_rule || null,
     items: normalizeContainerItems(item.inventory || []),
   }
   showContainerModal.value = true
+  return true
 }
 
 const openContainerByHint = (hint: string): boolean => {
@@ -292,8 +307,7 @@ const openContainerByHint = (hint: string): boolean => {
   })
 
   if (sceneContainer) {
-    openContainerFromEntity(sceneContainer)
-    return true
+    return openContainerFromEntity(sceneContainer)
   }
 
   const inventoryContainer = (inventoryItems.value || []).find((entry: any) => {
@@ -304,8 +318,7 @@ const openContainerByHint = (hint: string): boolean => {
   })
 
   if (inventoryContainer) {
-    openContainerFromInventoryItem(inventoryContainer)
-    return true
+    return openContainerFromInventoryItem(inventoryContainer)
   }
 
   return false
@@ -885,7 +898,6 @@ watch(showCombatDialog, (visible) => {
     <ContainerModal
       :open="showContainerModal"
       :title="activeContainer?.name || 'Container'"
-      :unlock-rule="activeContainer?.unlockRule"
       :items="activeContainer?.items || []"
       :busy="containerBusy"
       @close="closeContainerModal"

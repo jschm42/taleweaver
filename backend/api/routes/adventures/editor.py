@@ -35,6 +35,7 @@ class EntityUpdateRequest(BaseModel):
     item_type: Optional[str] = None
     is_portable: Optional[bool] = None
     unlock_rule: Optional[str] = None
+    locked: Optional[bool] = None
     inventory: Optional[list] = None
     text_log_content: Optional[str] = None
 
@@ -59,6 +60,11 @@ def _serialize_model(obj):
             if obj.stat_modifier_charisma: stats["CHA"] = obj.stat_modifier_charisma
             if obj.stat_modifier_armor_class: stats["AC"] = obj.stat_modifier_armor_class
             data["stats"] = stats
+            metadata_json = dict(obj.metadata_json or {})
+            if isinstance(metadata_json.get("locked"), bool):
+                data["locked"] = metadata_json.get("locked")
+            else:
+                data["locked"] = bool(obj.unlock_rule)
     return data
 
 def _is_npc_entity(ent):
@@ -196,6 +202,10 @@ async def update_editor_entity(
                     ent.is_portable = bool(payload.is_portable)
                 if payload.unlock_rule is not None:
                     ent.unlock_rule = payload.unlock_rule or None
+                if payload.locked is not None:
+                    metadata_json = dict(ent.metadata_json or {})
+                    metadata_json["locked"] = bool(payload.locked)
+                    ent.metadata_json = metadata_json
                 if payload.inventory is not None:
                     ent.inventory = payload.inventory
                 if payload.text_log_content is not None:

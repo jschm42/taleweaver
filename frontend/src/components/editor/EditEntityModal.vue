@@ -17,6 +17,7 @@ const props = defineProps<{
     item_type: string
     is_portable: boolean
     unlock_rule: string
+    locked: boolean
     inventory_json: string
     text_log_content: string
   }
@@ -272,6 +273,22 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                 <div class="space-y-2">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Unlock Rule (Optional)</label>
                   <input v-model="localForm.unlock_rule" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all" placeholder="e.g. Requires brass key or lockpick" />
+                </div>
+
+                <div v-if="String(localForm.item_type || '').toUpperCase() === 'CONTAINER'" class="p-3 bg-black/20 border border-white/10 rounded-xl">
+                  <div class="flex items-center justify-between">
+                    <div class="space-y-1 pr-4">
+                      <p class="text-xs font-black text-slate-200 uppercase tracking-widest">Locked State</p>
+                      <p class="text-[10px] text-slate-500 uppercase tracking-tighter">Player can only open this container when locked is off.</p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="localForm.locked = !localForm.locked"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.locked ? 'bg-amber-600' : 'bg-emerald-600']"
+                    >
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.locked ? 'translate-x-0' : 'translate-x-6']"></div>
+                    </button>
+                  </div>
                 </div>
 
                 <div v-if="String(localForm.item_type || '').toUpperCase() === 'CONTAINER'" class="space-y-2">

@@ -60,6 +60,7 @@ class WorldEntityUpdate(BaseModel):
     stat_modifier_armor_class: Optional[int] = None
     is_attackable: Optional[bool] = None
     is_killable: Optional[bool] = None
+    locked: Optional[bool] = None
     inventory: Optional[list[InventoryItem]] = None
 
 class AttackRequest(BaseModel):

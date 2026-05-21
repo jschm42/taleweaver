@@ -66,6 +66,7 @@ const editForm = ref({
   item_type: 'PICKABLE',
   is_portable: true,
   unlock_rule: '',
+  locked: false,
   inventory_json: '[]',
   text_log_content: '',
 })
@@ -394,6 +395,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     item_type: selectedObject?.item_type || 'PICKABLE',
     is_portable: selectedObject?.is_portable !== false,
     unlock_rule: selectedObject?.unlock_rule || '',
+    locked: selectedObject?.locked === true,
     inventory_json: JSON.stringify(selectedObject?.inventory || [], null, 2),
     text_log_content: fixNewlines(selectedObject?.metadata_json?.text_log_content || ''),
   }
@@ -440,6 +442,7 @@ async function saveEntityText(data: any) {
       item_type: editEntityContext.value.type === 'object' ? data.item_type : undefined,
       is_portable: editEntityContext.value.type === 'object' ? data.is_portable : undefined,
       unlock_rule: editEntityContext.value.type === 'object' ? data.unlock_rule : undefined,
+      locked: editEntityContext.value.type === 'object' ? data.locked : undefined,
       inventory: editEntityContext.value.type === 'object' ? data.inventory : undefined,
       text_log_content: editEntityContext.value.type === 'object' ? data.text_log_content : undefined,
     })

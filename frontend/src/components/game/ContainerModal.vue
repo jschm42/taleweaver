@@ -5,7 +5,6 @@ import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 const props = defineProps<{
   open: boolean
   title: string
-  unlockRule?: string | null
   items: any[]
   busy?: boolean
 }>()
@@ -47,11 +46,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
             <button class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" @click="emit('close')">
               <i class="ra ra-cancel"></i>
             </button>
-          </div>
-
-          <div v-if="unlockRule" class="mx-6 mt-5 px-4 py-3 rounded-xl border border-amber-400/25 bg-amber-400/10 text-amber-100 text-xs leading-relaxed">
-            <span class="font-black uppercase tracking-widest text-amber-300 mr-2">Unlock Rule:</span>
-            <span>{{ unlockRule }}</span>
           </div>
 
           <div class="p-6">
