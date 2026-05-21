@@ -14,18 +14,10 @@ PUZZLE_JSON_ENFORCEMENT_BLOCK = (
 )
 
 PUZZLE_DESIGN_PATTERNS_BLOCK = (
-    "PUZZLE BEST PRACTICE DESIGN PATTERNS:\n"
-    "A1 Combination Crafting: Place two discoverable items (e.g. BROKEN_GEAR + GOLDEN_SPINDLE) and bind result via `combination_ingredients` -> `reveals_item_id=CHRONOS_KEY`.\n"
-    "A2 Equipment Slot Gate: Require a WEARABLE item to be equipped in a specific slot (e.g. `wearable_slots=[Head]`) to bypass an illusion or trigger progression.\n"
-    "A3 Static Object Reveal: Use a non-portable world object (`is_portable=false`) as ritual trigger that reveals a hidden item through `reveals_item_id`.\n"
-    "B1 Spatial Scavenger Clue: Put exact location hints in READABLE logs and enforce precise placement via `spatial_position` in a different scene.\n"
-    "B2 Multi-Zone Lock: Gate a key exit with `is_locked=true` and describe multi-scene switch conditions in `lock_description` to force exploration/backtracking.\n"
-    "C1 Stat Gate Challenge: Build an obstacle (e.g. bent grate) that needs temporary stat boosts from item modifiers (e.g. `stat_modifier_strength`) before success is possible.\n"
-    "C2 Pacifist Trade Route: A MONSTER blocks progress but accepts a specific CONSUMABLE; solve through item discovery and handover, not mandatory combat.\n"
-    "C3 Hidden NPC Discovery: Set `is_hidden=true` plus a clear `reveal_rule`; scene text/audio should hint presence before reveal action.\n"
-    "D1 Turn-Time Pressure: Use strict time cost (`time_per_turn` + `extra_time_minutes`) so puzzle failure has real consequences (e.g. flooding room, HP loss).\n"
-    "D2 Audio Password Puzzle: Assign an NPC `voice` and hide a phonetic clue in spoken dialogue/song so careful listening yields the unlock phrase/code.\n"
-    "Each generated adventure should include multiple puzzle categories (inventory, environment, roleplay, time/audio) instead of repeating one puzzle style.\n"
+    "PUZZLE DESIGN PRIORITIES:\n"
+    "- Include varied puzzle types (combination, spatial clue, social/roleplay, optional time pressure).\n"
+    "- Prefer deterministic state bindings (`combination_ingredients`, `reveals_item_id`, `is_locked`, `lock_description`, `reveal_rule`).\n"
+    "- Encourage at least one optional alternate solution path where plausible.\n"
 )
 
 # --- World Generation Prompts ---
@@ -34,20 +26,10 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "You are a master world-builder for a Role Playing Game. Your task is to generate a coherent, "
     "interconnected game world based on a provided Story Idea.\n\n"
     "JSON STRUCTURE REQUIREMENTS (CRITICAL):\n"
-    "Your response must be a single JSON object with the following top-level fields:\n"
-    "- 'protagonist': A single object defining the player character.\n"
-    "- 'scenes': A flat list of all locations/rooms in the world.\n"
-    "- 'exits': A flat list of all connections between scenes.\n"
-    "- 'npcs': A flat list of all characters in the world. Use 'start_scene_id' to place them.\n"
-    "- 'objects': A flat list of all interactable items/objects. Use 'start_scene_id' to place them.\n"
-    "- 'quests': A flat list of narrative goals.\n"
-    "- 'awards': A flat list of achievements.\n"
-    "- 'language': The target language for all generated content.\n"
-    "- 'teaser', 'plot', 'rules', 'walkthrough', 'completed_condition', 'gameover_condition', 'intro_text', 'origin_id': Descriptive top-level strings.\n"
-    "- 'tts_director_notes': Style instructions for the narrator.\n\n"
+    "Return one JSON object (no markdown, no wrapper list).\n"
+    "Required top-level keys: protagonist, scenes, exits, npcs, objects, quests, awards, language, teaser, plot, rules, walkthrough, completed_condition, gameover_condition, intro_text, origin_id, tts_director_notes.\n\n"
     "MANDATORY FIELDS & DEFAULTS:\n"
-    "EVERY field in the schema is MANDATORY. If a field is not applicable (e.g., an NPC has no inventory, or an object has no stat modifiers), "
-    "you MUST still provide the field with a default value: empty string \"\", empty list [], or 0 for numbers.\n\n"
+    "Every required schema field must be present. If not applicable, use defaults: empty string \"\", empty list [], false for booleans, and 0 for numbers.\n\n"
     "NPC & OBJECT SPATIAL LOGIC:\n"
     "Every NPC and Object must have a 'spatial_position' relative to items in the room.\n"
     "NPC 'description' (bio) MUST be max 400 characters.\n"
@@ -64,7 +46,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "For NPCs, include both booleans: 'is_attackable' and 'is_killable'.\n"
     "For Protagonist, hp range is 60-120, stamina range is 60-100.\n\n"
     "AWARD & QUEST GENERATION:\n"
-    "Generate 3-5 Awards and 3-5 Quests matching the story context.\n\n"
+    "Generate varied quests and awards that match the story context.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
     + PUZZLE_DESIGN_PATTERNS_BLOCK
 )

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { configState } from '@/store/config'
+import { audioService } from '@/services/audioService'
+
 const props = defineProps<{
   open: boolean
   title: string
@@ -17,6 +21,22 @@ const formatLabel = (value: string) => {
   if (['DOCUMENT', 'SCROLL', 'BOOK', 'SIGN'].includes(normalized)) return normalized
   return 'DOCUMENT'
 }
+
+const canSpeak = computed(() => configState.isTtsEnabled && String(props.content || '').trim().length > 0)
+
+const handleSpeakTextLog = () => {
+  if (!canSpeak.value) return
+
+  if (audioService.isPlaying.value) {
+    audioService.stop()
+    return
+  }
+
+  audioService.unlock()
+  void audioService.speak(props.content, {
+    title: props.title,
+  })
+}
 </script>
 
 <template>
@@ -31,15 +51,33 @@ const formatLabel = (value: string) => {
               <h3 class="text-lg font-black uppercase tracking-wide text-amber-100 truncate">{{ title }}</h3>
               <p class="text-[10px] uppercase tracking-[0.2em] text-amber-400/80 mt-1">{{ formatLabel(format) }}</p>
             </div>
-            <button
-              class="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              @click="emit('close')"
-              title="Close"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="configState.isTtsEnabled"
+                :disabled="!canSpeak || audioService.isGenerating.value"
+                class="px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2"
+                :class="[
+                  canSpeak && !audioService.isGenerating.value
+                    ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20 hover:text-cyan-100'
+                    : 'border-slate-700 bg-slate-900/70 text-slate-500 cursor-not-allowed'
+                ]"
+                @click="handleSpeakTextLog"
+                :title="audioService.isPlaying.value ? 'Stop reading' : 'Read text log aloud'"
+              >
+                <i :class="audioService.isPlaying.value ? 'ra ra-audio-spectrum' : 'ra ra-microphone'"></i>
+                <span>{{ audioService.isPlaying.value ? 'Stop' : 'Read' }}</span>
+              </button>
+
+              <button
+                class="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                @click="emit('close')"
+                title="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div class="overflow-y-auto p-6 space-y-4">

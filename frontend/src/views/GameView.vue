@@ -232,7 +232,12 @@ const isReadableEntity = (entity: any): boolean => {
 
 const extractTextLogPayload = (entity: any) => {
   const metadata = (entity?.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
-  const content = String(entity?.text_log_content || metadata.text_log_content || '').trim().slice(0, 500)
+  const content = String(
+    entity?.text_log_content ||
+    metadata.text_log_content ||
+    entity?.description ||
+    ''
+  ).trim().slice(0, 500)
   const format = String(entity?.text_log_format || metadata.text_log_format || 'DOCUMENT').trim().toUpperCase()
   return {
     id: String(entity?.id || ''),

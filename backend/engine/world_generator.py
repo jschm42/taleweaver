@@ -468,17 +468,33 @@ class WorldGenerator:
                 or ""
             )
             similarity = max(0, min(100, int(cover_similarity_percent or 0)))
-            source_manifest_json = json.dumps(cover_source_manifest, ensure_ascii=True)
+            source_scene_ids = [
+                s.get("id")
+                for s in (cover_source_manifest.get("scenes") or [])
+                if isinstance(s, dict) and s.get("id")
+            ][:12]
+            source_npc_ids = [
+                n.get("id")
+                for n in (cover_source_manifest.get("npcs") or [])
+                if isinstance(n, dict) and n.get("id")
+            ][:12]
+            source_object_ids = [
+                o.get("id")
+                for o in (cover_source_manifest.get("objects") or [])
+                if isinstance(o, dict) and o.get("id")
+            ][:24]
             cover_guidance = (
                 "\n\nCOVER MODE:\n"
                 f"- Create this as a cover of '{source_title}'.\n"
                 f"- Requested similarity: {similarity}% (0 = freely inspired, 100 = very close).\n"
-                f"- Source summary: {source_description}\n"
+                f"- Source summary: {source_description[:800]}\n"
                 f"- Old asset reuse allowed: {'yes' if allow_reuse_source_assets else 'no'}.\n"
-                "- You receive the full source manifest below; use all relevant content to preserve style, structure, and motifs at the requested similarity level.\n"
+                "- Use the source IDs below to preserve motifs and mapping where useful.\n"
                 "- If you intentionally want to reuse old visual assets, set `source_asset_id` on protagonist/scenes/npcs/objects entries to the chosen source IDs.\n"
                 "- If you want to reuse the old cover image, set `cover_source_asset_id` to `COVER`.\n"
-                f"- Full source manifest JSON: {source_manifest_json}\n"
+                f"- Source scene IDs (sample): {source_scene_ids}\n"
+                f"- Source NPC IDs (sample): {source_npc_ids}\n"
+                f"- Source object IDs (sample): {source_object_ids}\n"
             )
 
         user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(
@@ -1081,7 +1097,7 @@ class WorldGenerator:
                     if not avatar.profile_image or not avatar.profile_image.startswith("/data/"):
                         image_url = await MediaEngine.generate_placeholder(
                             template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", "library", template_id),
-                            category="AVATAR"
+                            category="SCENE"
                         )
                     else:
                         image_url = avatar.profile_image

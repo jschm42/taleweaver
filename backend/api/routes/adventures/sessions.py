@@ -53,6 +53,16 @@ def _to_int_or_none(value):
 def _backfill_item_from_entity(item: dict, entity: WorldEntity) -> dict:
     merged = dict(item)
     metadata = entity.metadata_json or {}
+    item_type = str(entity.item_type or merged.get("item_type") or "").upper()
+
+    # Preserve metadata for item-specific frontend behavior (e.g. READABLE text logs, container locks).
+    if isinstance(merged.get("metadata_json"), dict):
+        merged_metadata = dict(merged.get("metadata_json") or {})
+        for key, value in metadata.items():
+            merged_metadata.setdefault(key, value)
+        merged["metadata_json"] = merged_metadata
+    else:
+        merged["metadata_json"] = dict(metadata)
 
     def fill(key: str, *candidates):
         if merged.get(key) is not None:
@@ -75,6 +85,15 @@ def _backfill_item_from_entity(item: dict, entity: WorldEntity) -> dict:
     fill("stamina_change", metadata.get("stamina_change"), effects.get("stamina"), effects.get("energy"))
     fill("mana_change", metadata.get("mana_change"), effects.get("mana"))
 
+    if item_type == "READABLE":
+        if not merged.get("text_log_content"):
+            merged["text_log_content"] = str(metadata.get("text_log_content") or "").strip()[:500]
+        if not merged.get("text_log_format"):
+            text_log_format = str(metadata.get("text_log_format") or "DOCUMENT").strip().upper()
+            if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+                text_log_format = "DOCUMENT"
+            merged["text_log_format"] = text_log_format
+
     return merged
 
 
@@ -91,6 +110,12 @@ def _reconstruct_item_dict_from_entity(entity: WorldEntity) -> dict:
 
     metadata = entity.metadata_json or {}
     effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
+    item_type = entity.item_type or "PICKABLE"
+
+    text_log_content = str(metadata.get("text_log_content") or "").strip()[:500]
+    text_log_format = str(metadata.get("text_log_format") or "DOCUMENT").strip().upper()
+    if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+        text_log_format = "DOCUMENT"
 
     def get_val(*candidates):
         for candidate in candidates:
@@ -104,8 +129,11 @@ def _reconstruct_item_dict_from_entity(entity: WorldEntity) -> dict:
         "name": entity.name,
         "description": entity.description,
         "image_url": entity.image_url,
-        "item_type": entity.item_type or "PICKABLE",
+        "item_type": item_type,
         "slot": item_slot,
+        "metadata_json": dict(metadata),
+        "text_log_content": text_log_content if str(item_type).upper() == "READABLE" else "",
+        "text_log_format": text_log_format if str(item_type).upper() == "READABLE" else "",
         "stat_modifier_strength": get_val(entity.stat_modifier_strength, metadata.get("stat_modifier_strength")),
         "stat_modifier_dexterity": get_val(entity.stat_modifier_dexterity, metadata.get("stat_modifier_dexterity"), metadata.get("stat_modifier_agility")),
         "stat_modifier_intelligence": get_val(entity.stat_modifier_intelligence, metadata.get("stat_modifier_intelligence")),

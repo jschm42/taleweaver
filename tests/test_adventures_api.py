@@ -1802,6 +1802,84 @@ async def test_import_adv_preserves_consumable_effects_in_avatar_inventory(clien
     assert integrity["issue_count"] == 0
 
 
+async def test_chat_snapshot_inventory_readable_uses_text_log_content(client: AsyncClient):
+    """Session chat payload should include READABLE inventory text from metadata_json."""
+    adv_payload = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADV Readable Inventory Snapshot",
+            "context": "Readable text log payload check",
+            "strict_rules": True,
+        },
+        "protagonist": {
+            "name": "Reader Hero",
+            "role": "Technician",
+            "description": "Carries a datapad",
+            "starting_inventory": [
+                {
+                    "id": "DATAPAD",
+                    "name": "Dienstliches Datapad",
+                    "description": "Ein robustes Tablet mit gesprungenem Display.",
+                    "item_type": "READABLE",
+                }
+            ],
+            "starting_equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ROOM_A", "name": "Room A", "description": "First room"},
+        ],
+        "exits": [],
+        "npcs": [],
+        "objects": [
+            {
+                "id": "DATAPAD",
+                "name": "Dienstliches Datapad",
+                "description": "Ein robustes Tablet mit gesprungenem Display.",
+                "start_scene_id": "ROOM_A",
+                "item_type": "READABLE",
+                "text_log_content": "ACHTUNG: Zugangscode 7391. Frequenz 733.3 kHz aktiv.",
+                "text_log_format": "DOCUMENT",
+            }
+        ],
+    }
+
+    file_bytes = json.dumps(adv_payload).encode("utf-8")
+    resp = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("import_readable_inventory_snapshot.adv", file_bytes, "application/json")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("status") == "success"
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    template_row = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADV Readable Inventory Snapshot"),
+        None,
+    )
+    assert template_row is not None
+
+    start_resp = await client.post(f"/api/adventures/{template_row['template_id']}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    chat_resp = await client.get(f"/api/adventures/{game_id}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
+    payload = chat_resp.json()
+
+    inventory = ((payload.get("sheet") or {}).get("inventory") or [])
+    datapad = next((item for item in inventory if item.get("id") == "DATAPAD"), None)
+    assert datapad is not None
+    assert datapad.get("item_type") == "READABLE"
+    assert datapad.get("text_log_content") == "ACHTUNG: Zugangscode 7391. Frequenz 733.3 kHz aktiv."
+    assert datapad.get("text_log_format") == "DOCUMENT"
+    assert isinstance(datapad.get("metadata_json"), dict)
+    assert datapad.get("metadata_json", {}).get("text_log_content") == "ACHTUNG: Zugangscode 7391. Frequenz 733.3 kHz aktiv."
+
+
 async def test_export_adv_reimport_keeps_item_stats(client: AsyncClient):
     """Stats on objects should survive an ADV export and re-import cycle."""
     source_payload = {
