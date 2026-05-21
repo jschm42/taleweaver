@@ -336,6 +336,8 @@ class WorldGenerator:
         container_generation_enabled: bool = True,
         max_containers: int = 8,
         quest_generation_enabled: bool = True,
+        min_quests: int = 3,
+        max_quests: int = 5,
         award_generation_enabled: bool = True,
         min_awards: int = 3,
         max_awards: int = 5,
@@ -408,8 +410,13 @@ class WorldGenerator:
             system_prompt += "\n\nQUEST GENERATION OVERRIDE: Do not generate any quests for this adventure."
 
         quest_requirement = ""
+        clamped_min_quests = max(1, min(20, int(min_quests)))
+        clamped_max_quests = max(clamped_min_quests, min(20, int(max_quests)))
         if quest_generation_enabled:
-            quest_requirement = "\n- Generate 1-2 Main Quests and 2-3 Side Quests that fit the narrative context."
+            quest_requirement = (
+                f"\n- Generate between {clamped_min_quests} and {clamped_max_quests} total quests that fit the narrative context."
+                " Mix main and side quests naturally."
+            )
         else:
             quest_requirement = "\n- Do not generate any quests for this adventure."
         
@@ -506,6 +513,9 @@ class WorldGenerator:
                 "automatic_npc_voice_assignment": automatic_npc_voice_assignment,
                 "container_generation_enabled": container_generation_enabled,
                 "max_containers": clamped_max_containers,
+                "quest_generation_enabled": quest_generation_enabled,
+                "min_quests": clamped_min_quests,
+                "max_quests": clamped_max_quests,
             },
         )
 

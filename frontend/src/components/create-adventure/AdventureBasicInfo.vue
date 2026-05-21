@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next'
+import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 defineProps<{
   modelValue: {
@@ -16,6 +18,14 @@ defineEmits<{
 
 <template>
   <div class="space-y-8">
+    <div class="flex items-center justify-between">
+      <h3 class="text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Story Foundation</h3>
+      <InfoPopoverButton
+        title="Story Foundation"
+        :text="CREATE_ADVENTURE_HELP_TEXTS.storyFoundation"
+      />
+    </div>
+
     <!-- Basic Info -->
     <div class="space-y-6">
       <div>

@@ -6,6 +6,7 @@ import { configState, refreshConfig } from '@/store/config'
 import { authState } from '@/store/auth'
 import type { CatalogTile } from '@/types'
 import { Sparkles, Palette, Flame } from 'lucide-vue-next'
+import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 // Components
 import AdventureStatusAlerts from '@/components/create-adventure/AdventureStatusAlerts.vue'
@@ -34,6 +35,9 @@ const form = ref({
   selected_tone_id: '',
   min_scenes: 3,
   max_scenes: 6,
+  quest_generation_enabled: true,
+  min_quests: 3,
+  max_quests: 5,
   container_generation_enabled: true,
   max_containers: 8,
   can_damage_npcs: true,
@@ -244,6 +248,7 @@ onMounted(() => {
             :items="imageStyles"
             :selected-id="form.selected_style_id"
             accent-color-class="bg-indigo-500/20 text-indigo-400"
+            :help-text="CREATE_ADVENTURE_HELP_TEXTS.visualStyle"
             @select="id => form.selected_style_id = id"
           />
 
@@ -254,6 +259,7 @@ onMounted(() => {
             :items="tones"
             :selected-id="form.selected_tone_id"
             accent-color-class="bg-amber-500/20 text-amber-400"
+            :help-text="CREATE_ADVENTURE_HELP_TEXTS.narrativeTone"
             @select="id => form.selected_tone_id = id"
           />
         </div>

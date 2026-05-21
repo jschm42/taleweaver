@@ -35,6 +35,9 @@ class CreateAdventureTemplatePayload(BaseModel):
     pacing: Optional[dict[str, Any]] = None
     min_scenes: int = 1
     max_scenes: int = 5
+    quest_generation_enabled: bool = True
+    min_quests: int = 3
+    max_quests: int = 5
     container_generation_enabled: bool = True
     max_containers: int = 8
     award_generation_enabled: bool = False
@@ -72,10 +75,22 @@ class CreateAdventureTemplatePayload(BaseModel):
     def validate_max_containers(cls, value: int) -> int:
         return max(0, min(30, int(value)))
 
+    @field_validator("min_quests")
+    @classmethod
+    def validate_min_quests(cls, value: int) -> int:
+        return max(1, min(20, int(value)))
+
+    @field_validator("max_quests")
+    @classmethod
+    def validate_max_quests(cls, value: int) -> int:
+        return max(1, min(20, int(value)))
+
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventureTemplatePayload':
         if self.max_scenes < self.min_scenes:
             raise ValueError("max_scenes must be greater than or equal to min_scenes")
+        if self.max_quests < self.min_quests:
+            raise ValueError("max_quests must be greater than or equal to min_quests")
         return self
 
 class AdventureTemplateResponse(BaseModel):
