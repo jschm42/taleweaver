@@ -6,6 +6,28 @@ better maintainability and documentation.
 
 from backend.core.voice_tags import build_voice_tag_catalog_prompt_block
 
+PUZZLE_JSON_ENFORCEMENT_BLOCK = (
+    "PUZZLE ENGINE CONTRACT (CRITICAL):\n"
+    "Every narrative puzzle must map to deterministic engine fields. Do not invent free-form puzzle logic without state bindings.\n"
+    "Use these fields explicitly where applicable: `is_locked`, `lock_description`, `combination_ingredients`, `reveals_item_id`, `is_hidden`, `reveal_rule`, `is_portable`, `spatial_position`, `wearable_slots`, `item_type`, `stat_modifier_strength`, `metadata_json.code_to_unlock`, `metadata_json.item_to_unlock`, `voice`, and time controls like `extra_time_minutes`.\n"
+    "Design puzzles so they can be resolved by concrete world state changes (entity updates, inventory/equipment changes, unlocks, reveals, movement), not by vague narration alone.\n"
+)
+
+PUZZLE_DESIGN_PATTERNS_BLOCK = (
+    "PUZZLE BEST PRACTICE DESIGN PATTERNS:\n"
+    "A1 Combination Crafting: Place two discoverable items (e.g. BROKEN_GEAR + GOLDEN_SPINDLE) and bind result via `combination_ingredients` -> `reveals_item_id=CHRONOS_KEY`.\n"
+    "A2 Equipment Slot Gate: Require a WEARABLE item to be equipped in a specific slot (e.g. `wearable_slots=[Head]`) to bypass an illusion or trigger progression.\n"
+    "A3 Static Object Reveal: Use a non-portable world object (`is_portable=false`) as ritual trigger that reveals a hidden item through `reveals_item_id`.\n"
+    "B1 Spatial Scavenger Clue: Put exact location hints in READABLE logs and enforce precise placement via `spatial_position` in a different scene.\n"
+    "B2 Multi-Zone Lock: Gate a key exit with `is_locked=true` and describe multi-scene switch conditions in `lock_description` to force exploration/backtracking.\n"
+    "C1 Stat Gate Challenge: Build an obstacle (e.g. bent grate) that needs temporary stat boosts from item modifiers (e.g. `stat_modifier_strength`) before success is possible.\n"
+    "C2 Pacifist Trade Route: A MONSTER blocks progress but accepts a specific CONSUMABLE; solve through item discovery and handover, not mandatory combat.\n"
+    "C3 Hidden NPC Discovery: Set `is_hidden=true` plus a clear `reveal_rule`; scene text/audio should hint presence before reveal action.\n"
+    "D1 Turn-Time Pressure: Use strict time cost (`time_per_turn` + `extra_time_minutes`) so puzzle failure has real consequences (e.g. flooding room, HP loss).\n"
+    "D2 Audio Password Puzzle: Assign an NPC `voice` and hide a phonetic clue in spoken dialogue/song so careful listening yields the unlock phrase/code.\n"
+    "Each generated adventure should include multiple puzzle categories (inventory, environment, roleplay, time/audio) instead of repeating one puzzle style.\n"
+)
+
 # --- World Generation Prompts ---
 
 WORLD_GENERATION_SYSTEM_PROMPT = (
@@ -42,7 +64,9 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "For NPCs, include both booleans: 'is_attackable' and 'is_killable'.\n"
     "For Protagonist, hp range is 60-120, stamina range is 60-100.\n\n"
     "AWARD & QUEST GENERATION:\n"
-    "Generate 3-5 Awards and 3-5 Quests matching the story context."
+    "Generate 3-5 Awards and 3-5 Quests matching the story context.\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 """
 The primary system prompt for generating a complete world manifest (scenes, NPCs, items, protagonist).
@@ -207,7 +231,9 @@ GM_MECHANICS_SUFFIX = (
     "GAME OVER & COMPLETION:\n"
     "- If the situation is hopeless or the player has violated core rules, set `game_over: true` and provide a `status_note` explanation.\n"
     "- If the story has reached its logical conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
-    "Your 'narrative_description' will be used as a draft/log; keep it short."
+    "Your 'narrative_description' will be used as a draft/log; keep it short.\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 """
 Appended to the system prompt when the GM is running in 'Mechanics' mode (Pass 1 of strict rules).
@@ -243,7 +269,9 @@ GM_STORY_MECHANICS_SUFFIX = (
     "- If an NPC moves to a different scene, use `moved_entities` with `to_scene_id` and `to_spatial_position`.\n"
     "- If an NPC changes their spot within the current scene, use `updated_entities` with `spatial_position`.\n"
     "IMPORTANT: `new_status_effects` is strictly for the PROTAGONIST's condition (e.g., 'Poisoned', 'Exhausted'). Do NOT use it for NPC actions or world state descriptions. "
-    "Your 'narrative_description' will be used as a draft/log; keep it short."
+    "Your 'narrative_description' will be used as a draft/log; keep it short.\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 """
 Appended to the system prompt when the GM is running in 'Mechanics' mode but for 'Story Mode' adventures.
@@ -360,7 +388,9 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "OPEN QUESTS:\n"
     "{quests_json}\n"
     "AVAILABLE UNEARNED AWARDS:\n"
-    "{awards_json}\n"
+    "{awards_json}\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 
 GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
@@ -389,7 +419,9 @@ GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "WORLD SCENES (REDUCED):\n"
     "{scenes_json}\n"
     "SESSION NOTES (REDUCED):\n"
-    "{notes_json}\n"
+    "{notes_json}\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 # --- Prompt Suggestion ---
 

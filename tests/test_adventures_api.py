@@ -1881,6 +1881,18 @@ async def test_export_adv_reimport_keeps_item_stats(client: AsyncClient):
     assert obj is not None
     assert obj.get("stat_modifier_charisma") == 4
 
+    async with TestSessionLocal() as session:
+        ent_res = await session.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == imported_template["template_id"],
+                WorldEntity.id == "OBJ_ROUNDTRIP",
+            )
+        )
+        entity = ent_res.scalars().first()
+        assert entity is not None
+        assert entity.stat_modifier_charisma == 4
+        assert "stat_modifier_charisma" not in (entity.metadata_json or {})
+
 async def test_list_templates_returns_created_template(client: AsyncClient):
     """Template endpoint returns template-centric records."""
     ids = await _create_adventure(client, "Template Listing Quest")

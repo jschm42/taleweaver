@@ -1423,9 +1423,10 @@ class WorldGenerator:
                 
                 if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder for Items
+                    item_type = str(o.get("item_type") or "PICKABLE").upper()
                     image_url = await MediaEngine.generate_placeholder(
                         template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
-                        category="ITEM"
+                        category=f"ITEM_{item_type}"
                     )
 
             is_starting_inv = o["id"] in starting_inv_ids
@@ -1465,18 +1466,6 @@ class WorldGenerator:
                 metadata_json["stamina_change"] = stamina_change
             if mana_change is not None:
                 metadata_json["mana_change"] = mana_change
-            if stat_strength is not None:
-                metadata_json["stat_modifier_strength"] = stat_strength
-            if stat_dexterity is not None:
-                metadata_json["stat_modifier_dexterity"] = stat_dexterity
-            if stat_intelligence is not None:
-                metadata_json["stat_modifier_intelligence"] = stat_intelligence
-            if stat_wisdom is not None:
-                metadata_json["stat_modifier_wisdom"] = stat_wisdom
-            if stat_charisma is not None:
-                metadata_json["stat_modifier_charisma"] = stat_charisma
-            if stat_armor_class is not None:
-                metadata_json["stat_modifier_armor_class"] = stat_armor_class
 
             if str(o.get("item_type") or "").upper() == "READABLE":
                 text_log_content = str(o.get("text_log_content") or "").strip()[:500]

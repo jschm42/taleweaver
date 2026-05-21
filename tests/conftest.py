@@ -159,13 +159,18 @@ async def db_session() -> AsyncSession:
 
 
 @pytest_asyncio.fixture(autouse=True)
-def _patch_external_generation_and_media(monkeypatch):
+def _patch_external_generation_and_media(monkeypatch, request):
     """Autouse fixture to stub external LLM/world generation and media generation.
 
     Many tests assume generation happens in background; to keep tests deterministic
     when no local Ollama or image backend is running we stub the heavy calls.
     Individual tests may still monkeypatch these targets for custom behavior.
     """
+
+    # MediaEngine unit tests should exercise the real wrappers and decide their own patches.
+    if request.node.fspath.basename == "test_media_engine.py":
+        yield
+        return
 
     async def _fake_generate_world(*args, **kwargs):
         return None

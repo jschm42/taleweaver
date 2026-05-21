@@ -41,6 +41,19 @@ NO_TEXT_IMAGE_PROMPT_SUFFIX = prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
+_FRONTEND_SVG_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "src", "assets", "svg")
+)
+
+_ITEM_PLACEHOLDER_ASSET_BY_TYPE = {
+    "CONTAINER": "chest.svg",
+    "COMBINABLE": "combinable.svg",
+    "CONSUMABLE": "potion.svg",
+    "READABLE": "scroll.svg",
+    "WEAPON": "sword.svg",
+    "KEY": "key.svg",
+}
+
 
 def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
     """Return a safe single path component, or None when invalid."""
@@ -101,6 +114,37 @@ def _normalize_output_filename(filename: Optional[str], extension: str) -> str:
     return f"{stem}.{normalized_ext}"
 
 
+def _normalize_svg_filename(filename: Optional[str], default_stem: str) -> str:
+    """Return a sanitized svg filename."""
+    candidate = (filename or "").strip()
+    if candidate:
+        candidate = os.path.basename(candidate)
+        stem, _ext = os.path.splitext(candidate)
+        stem = _SAFE_FILENAME_RE.sub("_", stem).strip("._")
+    else:
+        stem = _SAFE_FILENAME_RE.sub("_", default_stem).strip("._")
+    if not stem:
+        stem = str(uuid.uuid4())
+    return f"{stem}.svg"
+
+
+def _select_static_placeholder_asset(category: str) -> Optional[str]:
+    """Resolve static SVG placeholder source path for supported categories."""
+    cat = (category or "").upper()
+    if cat == "NPC":
+        return os.path.join(_FRONTEND_SVG_ROOT, "npcs", "silhouette.svg")
+
+    if cat == "ITEM":
+        filename = "pouch.svg"
+    elif cat.startswith("ITEM_"):
+        item_type = cat.removeprefix("ITEM_").split("_", 1)[0]
+        filename = _ITEM_PLACEHOLDER_ASSET_BY_TYPE.get(item_type, "pouch.svg")
+    else:
+        return None
+
+    return os.path.join(_FRONTEND_SVG_ROOT, "items", filename)
+
+
 def _resolve_output_dir(target_dir: str) -> str:
     """Resolve an output directory to a validated location inside DATA_DIR."""
     candidate = str(target_dir or "").strip()
@@ -155,6 +199,32 @@ def _sanitize_generation_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 
 class MediaEngine:
+    @staticmethod
+    async def _copy_static_svg_placeholder(
+        target_dir: str,
+        entity_id: str,
+        category: str,
+        filename: Optional[str] = None,
+    ) -> Optional[str]:
+        """Copy a curated static SVG placeholder into DATA_DIR and return its /data URL."""
+        source_asset = _select_static_placeholder_asset(category)
+        if not source_asset:
+            return None
+        if not os.path.exists(source_asset):
+            logger.warning("Static SVG placeholder asset not found: %s", source_asset)
+            return None
+
+        safe_target_dir = _ensure_within_data_dir(target_dir)
+        os.makedirs(safe_target_dir, exist_ok=True)
+
+        default_stem = f"placeholder_{entity_id}_{uuid.uuid4().hex[:6]}"
+        safe_filename = _normalize_svg_filename(filename, default_stem)
+        filepath = _ensure_within_data_dir(os.path.join(safe_target_dir, safe_filename))
+        await asyncio.to_thread(shutil.copyfile, source_asset, filepath)
+
+        rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
+        return f"/data/{rel_path}"
+
     @staticmethod
     async def cleanup_adventure_assets(adventure_id: str):
         """Removes all generated assets for an adventure from disk."""
@@ -962,13 +1032,20 @@ class MediaEngine:
         category: str = "",
         theme: Optional[str] = None
     ) -> str:
-        """
-        Generates a high-quality PIL-based placeholder image.
-        Uses organic gradients for scenes and blob-icons for entities.
-        """
+        """Generate placeholders using static SVG assets for NPC/items and PIL for other categories."""
         try:
             target_dir = _ensure_within_data_dir(target_dir)
             os.makedirs(target_dir, exist_ok=True)
+            cat = category.upper()
+
+            static_svg_url = await MediaEngine._copy_static_svg_placeholder(
+                target_dir=target_dir,
+                entity_id=entity_id,
+                category=cat,
+                filename=filename,
+            )
+            if static_svg_url:
+                return static_svg_url
             
             # Determine format and extension
             # Default to PNG for placeholders to preserve transparency if needed, 
@@ -987,8 +1064,6 @@ class MediaEngine:
             filepath = _ensure_within_data_dir(os.path.join(target_dir, filename))
             
             # Select strategy and theme based on category
-            cat = category.upper()
-            
             # Map theme string to ColorTheme enum
             color_theme = ColorTheme.COLORFUL
             if theme:
@@ -1001,8 +1076,8 @@ class MediaEngine:
                 # Scenes use random generation with subtle blur
                 strategy = OrganicGradientStrategy(theme=color_theme)
                 width, height = 1200, 800
-            elif cat in ["NPC", "CHARACTER", "AVATAR"] or cat == "ITEM" or cat.startswith("ITEM_"):
-                # NPCs, Items, and Avatars (Protagonist) use the classic SVG system with margins
+            elif cat in ["CHARACTER", "AVATAR"]:
+                # Avatars/characters still use the legacy SVG fallback.
                 return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
             else:
                 strategy = OrganicGradientStrategy(theme=color_theme)
@@ -1023,7 +1098,11 @@ class MediaEngine:
             return f"/data/{rel_path}"
         except (OSError, ValueError, TypeError) as e:
             logger.error("Failed to generate high-quality placeholder: %s", e)
-            # Fallback to SVG if PIL fails
+            cat = category.upper()
+            # Keep NPC/item placeholders on curated static assets and avoid procedural SVG generation.
+            if cat == "NPC" or cat == "ITEM" or cat.startswith("ITEM_"):
+                return ""
+            # Fallback to SVG for non-item/non-npc categories.
             return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
 
     @staticmethod
