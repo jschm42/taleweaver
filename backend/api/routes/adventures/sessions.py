@@ -358,6 +358,10 @@ async def start_session_for_template(
         locked = metadata_json.get("locked")
         if isinstance(locked, bool):
             initial_entity_states[ent.id] = {"locked": locked}
+            continue
+
+        if metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock"):
+            initial_entity_states[ent.id] = {"locked": True}
 
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
@@ -425,7 +429,7 @@ async def start_session_for_template(
             entity_type=ent.entity_type, name=ent.name, description=ent.description,
             current_scene_id=ent.current_scene_id, spatial_position=ent.spatial_position,
             image_url=ent.image_url, item_type=ent.item_type, wearable_slots=ent.wearable_slots,
-            is_in_inventory=ent.is_in_inventory, is_hidden=ent.is_hidden, unlock_rule=ent.unlock_rule, is_portable=ent.is_portable,
+            is_in_inventory=ent.is_in_inventory, is_hidden=ent.is_hidden, unlock_rule=None, is_portable=ent.is_portable,
             combination_ingredients=ent.combination_ingredients, reveals_item_id=ent.reveals_item_id,
             is_final_state=ent.is_final_state, state_comment=ent.state_comment,
             npc_type=ent.npc_type, movement_type=ent.movement_type,
@@ -760,7 +764,7 @@ async def copy_session(
             wearable_slots=ent.wearable_slots,
             is_in_inventory=ent.is_in_inventory,
             is_hidden=ent.is_hidden,
-            unlock_rule=ent.unlock_rule,
+            unlock_rule=None,
             is_portable=ent.is_portable,
             combination_ingredients=ent.combination_ingredients,
             reveals_item_id=ent.reveals_item_id,

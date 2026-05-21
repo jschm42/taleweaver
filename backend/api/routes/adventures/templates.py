@@ -489,6 +489,16 @@ async def reset_adventure(
         obj_id = obj_def.get("id")
         if not obj_id:
             continue
+        item_type = str(obj_def.get("item_type") or "PICKABLE").upper()
+        metadata_json = {}
+        if item_type == "CONTAINER":
+            code_to_unlock = str(obj_def.get("code_to_unlock") or "").strip()
+            item_to_unlock = str(obj_def.get("item_to_unlock") or "").strip().upper()
+            metadata_json = {
+                "code_to_unlock": code_to_unlock,
+                "item_to_unlock": item_to_unlock,
+                "locked": bool(code_to_unlock or item_to_unlock),
+            }
         db.add(WorldEntity(
             id=obj_id,
             template_id=template_id,
@@ -498,15 +508,16 @@ async def reset_adventure(
             current_scene_id=obj_def.get("start_scene_id"),
             image_url=existing_entity_images.get(obj_id),
             spatial_position=obj_def.get("spatial_position"),
-            item_type=obj_def.get("item_type", "PICKABLE"),
+            item_type=item_type,
             wearable_slots=obj_def.get("wearable_slots") or [],
             is_hidden=bool(obj_def.get("is_hidden", False)),
             reveal_rule=obj_def.get("reveal_rule") or None,
-            unlock_rule=obj_def.get("unlock_rule") or None,
+            unlock_rule=None,
             is_portable=bool(obj_def.get("is_portable", True)),
             combination_ingredients=obj_def.get("combination_ingredients") or [],
             reveals_item_id=obj_def.get("reveals_item_id") or None,
             inventory=obj_def.get("inventory") or [],
+            metadata_json=metadata_json,
         ))
 
     # Restore protagonist image from manifest protagonist data.

@@ -210,7 +210,8 @@ class WorldObjectSchema(BaseModel):
         )
     )
     is_portable: bool = Field(..., description="Whether the item can be picked up. False for STATIC objects.")
-    unlock_rule: str = Field("", description="Optional unlock hint. Use empty string if not locked.")
+    code_to_unlock: str = Field("", description="Optional deterministic access code for locked containers, e.g. ALPHA or 4711.")
+    item_to_unlock: str = Field("", description="Optional deterministic item ID required to unlock this container.")
     combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. Use [] if none.")
     reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Use empty string if none.")
     
@@ -435,7 +436,7 @@ class WorldGenerator:
             container_requirement = (
                 "\n\nCONTAINER ITEMS:\n"
                 f"- You may generate CONTAINER objects, but never more than {clamped_max_containers}.\n"
-                "- CONTAINER objects may contain items in `inventory` and can optionally set `unlock_rule`."
+                "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
             )
         else:
             container_requirement = (
@@ -628,13 +629,15 @@ class WorldGenerator:
                 obj = objects[idx]
                 obj["item_type"] = "PICKABLE"
                 obj["inventory"] = []
-                obj["unlock_rule"] = ""
+                obj["code_to_unlock"] = ""
+                obj["item_to_unlock"] = ""
         elif len(container_indices) > clamped_max_containers:
             for idx in container_indices[clamped_max_containers:]:
                 obj = objects[idx]
                 obj["item_type"] = "PICKABLE"
                 obj["inventory"] = []
-                obj["unlock_rule"] = ""
+                obj["code_to_unlock"] = ""
+                obj["item_to_unlock"] = ""
 
         readable_indices = [
             idx for idx, obj in enumerate(objects)
@@ -1483,6 +1486,13 @@ class WorldGenerator:
                 metadata_json["text_log_content"] = text_log_content
                 metadata_json["text_log_format"] = text_log_format
 
+            if str(o.get("item_type") or "").upper() == "CONTAINER":
+                code_to_unlock = str(o.get("code_to_unlock") or "").strip()
+                item_to_unlock = str(o.get("item_to_unlock") or "").strip().upper()
+                metadata_json["code_to_unlock"] = code_to_unlock
+                metadata_json["item_to_unlock"] = item_to_unlock
+                metadata_json["locked"] = bool(code_to_unlock or item_to_unlock)
+
             if avatar and is_in_avatar_inv:
                 if is_starting_inv:
                     # SQLAlchemy mutability: re-assign the list
@@ -1507,7 +1517,7 @@ class WorldGenerator:
                     wearable_slots=o.get("wearable_slots"),
                     is_hidden=o.get("is_hidden", False),
                     reveal_rule=o.get("reveal_rule") or None,
-                    unlock_rule=o.get("unlock_rule") or None,
+                    unlock_rule=None,
                     is_in_inventory=is_in_avatar_inv or is_in_npc_inv,
                     is_portable=o.get("is_portable", o.get("item_type") != "STATIC"),
                     combination_ingredients=o.get("combination_ingredients"),

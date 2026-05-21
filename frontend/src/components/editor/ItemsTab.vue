@@ -25,7 +25,8 @@ const emit = defineEmits<{
 const isContainerLocked = (obj: any): boolean => {
   if (String(obj?.item_type || '').toUpperCase() !== 'CONTAINER') return false
   if (typeof obj?.locked === 'boolean') return obj.locked
-  return String(obj?.unlock_rule || '').trim().length > 0
+  const metadata = (obj?.metadata_json && typeof obj.metadata_json === 'object') ? obj.metadata_json : {}
+  return Boolean(metadata.code_to_unlock || metadata.item_to_unlock)
 }
 </script>
 

@@ -219,6 +219,14 @@ export const api = {
     return request(`/adventures/${gameId}/text-logs/${encodeURIComponent(entityId)}/read`, { method: 'POST' })
   },
 
+  /** Attempts to unlock one container with a submitted access code. */
+  unlockContainerWithCode(gameId: string, entityId: string, code: string): Promise<{ status: string; entity_id: string; locked: boolean }> {
+    return request(`/adventures/${gameId}/containers/${encodeURIComponent(entityId)}/unlock-code`, {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    })
+  },
+
   /** @deprecated Use listSessions() instead. */
   listGameSessions(): Promise<GameSession[]> {
     return request<GameSession[]>('/adventures/')

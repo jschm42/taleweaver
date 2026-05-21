@@ -15,8 +15,9 @@ export interface EntityEditData {
   is_killable?: boolean
   item_type?: string
   is_portable?: boolean
-  unlock_rule?: string
   locked?: boolean
+  code_to_unlock?: string
+  item_to_unlock?: string
   inventory?: any[]
   text_log_content?: string
 }

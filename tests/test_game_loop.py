@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import AdventureGeneratorToolIntent, GameEvent
+from backend.engine.rule_engine import AdventureGeneratorToolIntent, GameEvent, InventoryItem, WorldEntityUpdate
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -2069,4 +2069,45 @@ async def test_combat_npc_stamina_logic_inactive(setup_test_db, monkeypatch):
         logs = combat.get("log") or []
         # Enemy should not rest/be exhausted
         assert not any("is exhausted and rests to recover stamina" in entry.get("text", "") for entry in logs)
+
+
+async def test_wrong_container_access_code_is_rejected_server_side(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        locker = WorldEntity(
+            id="LOCKER",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Maintenance Locker",
+            description="A secure maintenance locker.",
+            current_scene_id=state.current_scene_id,
+            item_type="CONTAINER",
+            unlock_rule=None,
+            inventory=["MEDIKIT_01"],
+            is_portable=False,
+            is_hidden=False,
+            is_in_inventory=False,
+            metadata_json={"code_to_unlock": "7341", "item_to_unlock": "", "locked": True},
+        )
+        db.add(locker)
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        manager.state = state
+        manager.avatar = avatar
+
+        event = GameEvent(
+            updated_entities=[WorldEntityUpdate(entity_id="LOCKER", locked=False)],
+            completed_quest_ids=["LOCKER_ROOKIE"],
+            new_inventory_items=[InventoryItem(id="MEDIKIT_01", name="Medikit", item_type="CONSUMABLE")],
+        )
+
+        messages = await manager._enforce_container_unlock_guardrails(event, "use code 1111 on maintenance locker")
+
+        assert any("Access code rejected" in msg for msg in messages)
+        assert event.completed_quest_ids == []
+        assert event.new_inventory_items == []
+        assert any(up.entity_id == "LOCKER" and up.locked is True for up in (event.updated_entities or []))
 
