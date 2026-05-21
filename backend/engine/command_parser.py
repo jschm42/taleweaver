@@ -90,6 +90,12 @@ class CommandParser:
             return f"[TRIGGER_TAKE] {args}"
         elif command == "/take_direct":
             return f"[TRIGGER_TAKE_DIRECT] {args}"
+        elif command == "/open":
+            return f"[TRIGGER_OPEN] {args}"
+        elif command == "/container_take_all":
+            return f"[TRIGGER_CONTAINER_TAKE_ALL] {args}"
+        elif command == "/container_drop_scene":
+            return f"[TRIGGER_CONTAINER_DROP_SCENE] {args}"
         elif command == "/talk":
             return f"[TRIGGER_TALK] {args}"
         elif command == "/say" or command == "/speak":
@@ -120,6 +126,9 @@ class CommandParser:
             "- `/equip <item>`: Equip an item from your inventory.",
             "- `/drop <item>`: Drop an item into the current room.",
             "- `/take <item>`: Pick up an item from the room.",
+            "- `/open <container>`: Open a container item.",
+            "- `/container_take_all <container>`: Take all items from a container.",
+            "- `/container_drop_scene <container>`: Drop all container items into the scene.",
             "- `/unequip <slot>`: Remove an item from a slot.",
             "- `/consume <item>`: Use a consumable item.",
             "- `/combine <item1> <item2>`: Attempt to combine two objects.",

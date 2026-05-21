@@ -65,6 +65,7 @@ class WorldEntity(Base, TimestampMixin):
     is_in_inventory = Column(Boolean, default=False, nullable=False)
     is_hidden = Column(Boolean, default=False, nullable=False)
     reveal_rule = Column(String(500), nullable=True)  # GM rule that triggers reveal (e.g. 'If the prot searches under the table')
+    unlock_rule = Column(String(500), nullable=True)  # Optional hint rule for opening container items
     
     is_portable = Column(Boolean, default=True, nullable=False)
     combination_ingredients = Column(JSON, nullable=True) # List of entity IDs

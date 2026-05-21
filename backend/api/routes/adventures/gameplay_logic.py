@@ -822,6 +822,70 @@ class GameTurnManager:
                     await self._spawn_scene_item(dropped_item)
                     response = f"You dropped {dropped_item.get('name')}."
 
+        if response.startswith("[TRIGGER_OPEN]"):
+            container_hint = response.replace("[TRIGGER_OPEN]", "").strip()
+            if not container_hint:
+                response = "Usage: /open <container>"
+            else:
+                scene_container, inventory_container, _ = await self._resolve_container_target(container_hint)
+                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                container_unlock_rule = (getattr(scene_container, "unlock_rule", None) if scene_container else inventory_container.get("unlock_rule") if inventory_container else None)
+                container_inventory = await self._get_container_inventory(scene_container, inventory_container)
+                if not container_name:
+                    response = f"No container named '{container_hint}' was found."
+                elif container_unlock_rule:
+                    response = (
+                        f"{container_name} is locked. Hint: {container_unlock_rule} "
+                        f"(You can still inspect its contents in this version.)"
+                    )
+                else:
+                    response = f"{container_name} contains {len(container_inventory)} item(s)."
+
+        if response.startswith("[TRIGGER_CONTAINER_TAKE_ALL]"):
+            container_hint = response.replace("[TRIGGER_CONTAINER_TAKE_ALL]", "").strip()
+            if not container_hint:
+                response = "Usage: /container_take_all <container>"
+            else:
+                scene_container, inventory_container, inventory_idx = await self._resolve_container_target(container_hint)
+                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                if not container_name:
+                    response = f"No container named '{container_hint}' was found."
+                else:
+                    raw_items = await self._get_container_inventory(scene_container, inventory_container)
+                    normalized_items = await self._normalize_container_items(raw_items)
+                    if not normalized_items:
+                        response = f"{container_name} is empty."
+                    else:
+                        new_inventory = list(self.avatar.inventory or [])
+                        for item in normalized_items:
+                            new_inventory.append(item)
+                            await self._move_container_item_to_inventory(item)
+                        self.avatar.inventory = new_inventory
+                        await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
+                        response = f"You take all {len(normalized_items)} item(s) from {container_name}."
+
+        if response.startswith("[TRIGGER_CONTAINER_DROP_SCENE]"):
+            container_hint = response.replace("[TRIGGER_CONTAINER_DROP_SCENE]", "").strip()
+            if not container_hint:
+                response = "Usage: /container_drop_scene <container>"
+            else:
+                scene_container, inventory_container, inventory_idx = await self._resolve_container_target(container_hint)
+                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                if not container_name:
+                    response = f"No container named '{container_hint}' was found."
+                else:
+                    raw_items = await self._get_container_inventory(scene_container, inventory_container)
+                    normalized_items = await self._normalize_container_items(raw_items)
+                    if not normalized_items:
+                        response = f"{container_name} is empty."
+                    else:
+                        for item in normalized_items:
+                            moved = await self._move_container_item_to_scene(item)
+                            if not moved:
+                                await self._spawn_scene_item(item)
+                        await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
+                        response = f"You drop {len(normalized_items)} item(s) from {container_name} into the scene."
+
         if response.startswith("[TRIGGER_CONSUME]"):
             item_name = response.replace("[TRIGGER_CONSUME]", "").strip()
             action_msg = self._consume_item_now(item_name)
@@ -843,6 +907,176 @@ class GameTurnManager:
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
         self.stop_requested = True # Stop after direct slash response
+
+    @staticmethod
+    def _is_container_item(item: Any) -> bool:
+        return isinstance(item, dict) and str(item.get("item_type") or "").upper() == "CONTAINER"
+
+    async def _resolve_container_target(self, hint: str) -> tuple[WorldEntity | None, dict[str, Any] | None, int | None]:
+        normalized_hint = (hint or "").strip().lower()
+        if not normalized_hint:
+            return None, None, None
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.current_scene_id == self.state.current_scene_id,
+                WorldEntity.entity_type == "OBJECT",
+                or_(
+                    WorldEntity.id == hint,
+                    WorldEntity.name == hint,
+                ),
+            )
+        )
+        scene_ent = ent_res.scalars().first()
+        if scene_ent and str(scene_ent.item_type or "").upper() == "CONTAINER":
+            return scene_ent, None, None
+
+        for idx, inv_item in enumerate(self.avatar.inventory or []):
+            if not self._is_container_item(inv_item):
+                continue
+            item_id = str(inv_item.get("id") or "").strip().lower()
+            item_name = str(inv_item.get("name") or "").strip().lower()
+            if normalized_hint in {item_id, item_name}:
+                return None, dict(inv_item), idx
+
+        return None, None, None
+
+    async def _get_container_inventory(self, scene_container: WorldEntity | None, inventory_container: dict[str, Any] | None) -> list[Any]:
+        if scene_container:
+            states = dict(self.state.entity_states or {})
+            state_inv = (states.get(scene_container.id) or {}).get("inventory")
+            if isinstance(state_inv, list):
+                return list(state_inv)
+            return list(scene_container.inventory or [])
+
+        if inventory_container:
+            return list(inventory_container.get("inventory") or [])
+
+        return []
+
+    async def _normalize_container_item_ref(self, item_ref: Any) -> dict[str, Any] | None:
+        if isinstance(item_ref, dict):
+            return dict(item_ref)
+
+        if isinstance(item_ref, str) and item_ref.strip():
+            item_id = item_ref.strip()
+            ent_res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == self.game_id,
+                    WorldEntity.id == item_id,
+                )
+            )
+            ent = ent_res.scalars().first()
+            if ent:
+                item_data = jsonable_encoder({c.name: getattr(ent, c.name) for c in ent.__table__.columns})
+                metadata = dict(ent.metadata_json or {})
+                for key in [
+                    "hp_change",
+                    "mana_change",
+                    "stamina_change",
+                    "stat_modifier_strength",
+                    "stat_modifier_dexterity",
+                    "stat_modifier_intelligence",
+                    "stat_modifier_wisdom",
+                    "stat_modifier_charisma",
+                    "stat_modifier_armor_class",
+                ]:
+                    if key not in item_data and key in metadata:
+                        item_data[key] = metadata[key]
+                return item_data
+
+            return {"id": item_id, "name": item_id}
+
+        return None
+
+    async def _normalize_container_items(self, raw_items: list[Any]) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for item in raw_items or []:
+            normalized_item = await self._normalize_container_item_ref(item)
+            if normalized_item:
+                normalized.append(normalized_item)
+        return normalized
+
+    async def _move_container_item_to_inventory(self, item: dict[str, Any]) -> None:
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            return
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.id == item_id,
+            )
+        )
+        ent = ent_res.scalars().first()
+        if ent:
+            ent.is_in_inventory = True
+            ent.current_scene_id = "INVENTORY"
+            ent.is_hidden = False
+
+        states = dict(self.state.entity_states or {})
+        if item_id not in states:
+            states[item_id] = {}
+        states[item_id]["is_in_inventory"] = True
+        states[item_id]["current_scene_id"] = "INVENTORY"
+        states[item_id]["is_hidden"] = False
+        self.state.entity_states = states
+        flag_modified(self.state, "entity_states")
+
+    async def _move_container_item_to_scene(self, item: dict[str, Any]) -> bool:
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            return False
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.id == item_id,
+            )
+        )
+        ent = ent_res.scalars().first()
+        if not ent:
+            return False
+
+        ent.is_in_inventory = False
+        ent.current_scene_id = self.state.current_scene_id
+        ent.is_hidden = False
+
+        states = dict(self.state.entity_states or {})
+        if item_id not in states:
+            states[item_id] = {}
+        states[item_id]["is_in_inventory"] = False
+        states[item_id]["current_scene_id"] = self.state.current_scene_id
+        states[item_id]["is_hidden"] = False
+        self.state.entity_states = states
+        flag_modified(self.state, "entity_states")
+        return True
+
+    async def _clear_container_inventory(
+        self,
+        scene_container: WorldEntity | None,
+        inventory_container: dict[str, Any] | None,
+        inventory_idx: int | None,
+    ) -> None:
+        if scene_container:
+            scene_container.inventory = []
+            self.db.add(scene_container)
+
+            states = dict(self.state.entity_states or {})
+            if scene_container.id not in states:
+                states[scene_container.id] = {}
+            states[scene_container.id]["inventory"] = []
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
+
+        if inventory_container is not None and inventory_idx is not None:
+            updated_inventory = list(self.avatar.inventory or [])
+            if 0 <= inventory_idx < len(updated_inventory) and isinstance(updated_inventory[inventory_idx], dict):
+                updated_container = dict(updated_inventory[inventory_idx])
+                updated_container["inventory"] = []
+                updated_inventory[inventory_idx] = updated_container
+                self.avatar.inventory = updated_inventory
 
     def _read_combat_state(self) -> dict[str, Any]:
         return self._combat_state_helper.read_combat_state()
@@ -1753,6 +1987,7 @@ class GameTurnManager:
             wearable_slots=item.get("wearable_slots"),
             is_in_inventory=False,
             is_hidden=False,
+            unlock_rule=item.get("unlock_rule"),
             is_portable=True,
             stat_modifier_strength=item.get("stat_modifier_strength"),
             stat_modifier_dexterity=item.get("stat_modifier_dexterity"),

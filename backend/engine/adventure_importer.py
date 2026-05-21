@@ -172,6 +172,16 @@ class AdventureTemplateImporter:
                     awards=adv_data.get("awards") or manifest_data.get("awards", []),
                     min_scenes=adv_data.get("min_scenes") or manifest_data.get("min_scenes", 1),
                     max_scenes=adv_data.get("max_scenes") or manifest_data.get("max_scenes", 5),
+                    container_generation_enabled=(
+                        adv_data.get("container_generation_enabled", True)
+                        if "container_generation_enabled" in adv_data
+                        else manifest_data.get("container_generation_enabled", True)
+                    ),
+                    max_containers=(
+                        int(adv_data.get("max_containers", 8))
+                        if "max_containers" in adv_data
+                        else int(manifest_data.get("max_containers", 8))
+                    ),
                     min_awards=adv_data.get("min_awards") or manifest_data.get("min_awards", 3),
                     max_awards=adv_data.get("max_awards") or manifest_data.get("max_awards", 8),
                     award_generation_enabled=adv_data.get("award_generation_enabled") or manifest_data.get("award_generation_enabled", False),

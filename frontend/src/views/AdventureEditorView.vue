@@ -53,7 +53,21 @@ const isBatchGenerating = ref<Record<string, boolean>>({})
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
-const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, goal: '', character: '', is_killable: true })
+const editForm = ref({
+  name: '',
+  teaser: '',
+  description: '',
+  hp: 0,
+  stamina: 0,
+  mana: 0,
+  goal: '',
+  character: '',
+  is_killable: true,
+  item_type: 'PICKABLE',
+  is_portable: true,
+  unlock_rule: '',
+  inventory_json: '[]',
+})
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -354,6 +368,10 @@ async function fetchDebugInfo() {
 }
 
 function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
+  const selectedObject = type === 'object'
+    ? (editorObjects.value || []).find((entry: any) => String(entry.id) === String(id))
+    : null
+
   editEntityContext.value = { type, id }
   editForm.value = { 
     name: currentName || '', 
@@ -365,6 +383,10 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     goal: goal || '',
     character: character || '',
     is_killable: isKillable ?? true,
+    item_type: selectedObject?.item_type || 'PICKABLE',
+    is_portable: selectedObject?.is_portable !== false,
+    unlock_rule: selectedObject?.unlock_rule || '',
+    inventory_json: JSON.stringify(selectedObject?.inventory || [], null, 2),
   }
   showEditModal.value = true
 }
@@ -401,6 +423,10 @@ async function saveEntityText(data: any) {
       goal: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.goal : undefined,
       character: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.character : undefined,
       is_killable: editEntityContext.value.type === 'npc' ? data.is_killable : undefined,
+      item_type: editEntityContext.value.type === 'object' ? data.item_type : undefined,
+      is_portable: editEntityContext.value.type === 'object' ? data.is_portable : undefined,
+      unlock_rule: editEntityContext.value.type === 'object' ? data.unlock_rule : undefined,
+      inventory: editEntityContext.value.type === 'object' ? data.inventory : undefined,
     })
     showEditModal.value = false
     editEntityContext.value = null

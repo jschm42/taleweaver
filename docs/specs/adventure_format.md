@@ -49,6 +49,8 @@ General configuration and world-building constraints.
 | `selected_tone` | `string` | The narrative tone (e.g., "Dark Fantasy", "Cyberpunk"). |
 | `selected_image_styles`| `array` | List of style IDs used for image generation. |
 | `min_scenes` / `max_scenes` | `number` | Constraints for world generation size. |
+| `container_generation_enabled` | `boolean` | Enables generation of container objects with nested inventory. |
+| `max_containers` | `number` | Hard cap for generated container objects (`0..30`). |
 | `award_generation_enabled`| `boolean` | Whether the system generated custom awards for this adventure. |
 
 ### 2.2 Protagonist (`protagonist`)
@@ -115,9 +117,11 @@ Items and interactable elements.
 | :--- | :--- | :--- |
 | `id` | `string` | Unique slug. |
 | `name` | `string` | Item name. |
-| `item_type` | `string` | `"WEAPON"`, `"WEARABLE"`, `"CONSUMABLE"`, `"KEY"`, `"READABLE"`, etc. |
+| `item_type` | `string` | `"WEAPON"`, `"WEARABLE"`, `"CONSUMABLE"`, `"KEY"`, `"READABLE"`, `"CONTAINER"`, etc. |
 | `description` | `string` | Physical description. |
 | `is_portable` | `boolean` | If false, the item is `"STATIC"` (e.g., a heavy altar). |
+| `unlock_rule` | `string \\| null` | Optional hint for opening/unlocking container items. |
+| `inventory` | `array` | Optional nested content for container items (item IDs and/or inline item objects). |
 | `spatial_position` | `string` | Where it is found (e.g., `"on the pedestal"`). |
 | `wearable_slots` | `array` | Valid slots (e.g., `["Head"]`, `["MainHand"]`). |
 | `stat_modifiers` | `number` | Modifiers for core attributes (e.g., `stat_modifier_strength`). |

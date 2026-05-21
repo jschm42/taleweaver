@@ -20,6 +20,13 @@ export type ContextMenuModel = {
   items: ContextMenuItem[]
 }
 
+const OPEN_CONTAINER_PREFIX = '[OPEN_CONTAINER] '
+
+const isContainerEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
+}
+
 export const gameCommandService = {
   resolveUiPanelCommand(normalized: string): UiPanelCommand | null {
     if (normalized === '/map') return 'map'
@@ -85,7 +92,7 @@ export const gameCommandService = {
   },
 
   shouldAutoTakeOnEntityClick(entity: any): boolean {
-    return entity?.entity_type === 'OBJECT' && entity?.is_portable !== false
+    return entity?.entity_type === 'OBJECT' && entity?.is_portable !== false && !isContainerEntity(entity)
   },
 
   buildContextMenu(entity: any, ruleMode?: string): ContextMenuModel | null {
@@ -112,6 +119,9 @@ export const gameCommandService = {
       items.push({ label: 'Search', action: 'Search the area', icon: 'ra ra-magnifying-glass', color: 'text-emerald-400' })
     } else if (entity?.entity_type === 'OBJECT' || entity?.entity_type === 'ITEM') {
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+      if (isContainerEntity(entity)) {
+        items.push({ label: 'Open', action: `${OPEN_CONTAINER_PREFIX}${entity.id || entity.name}`, icon: 'ra ra-treasure-chest', color: 'text-emerald-400' })
+      }
       items.push({ label: 'Pick up', action: `/take ${entity.name}`, icon: 'ra ra-hand', color: 'text-amber-400' })
       items.push({ label: 'Push', action: `Push ${entity.name}`, icon: 'ra ra-cog', color: 'text-slate-400' })
       items.push({ label: 'Pull', action: `Pull ${entity.name}`, icon: 'ra ra-tread', color: 'text-slate-400' })
@@ -138,6 +148,10 @@ export const gameCommandService = {
       }
     } else if (item.item_type === 'CONSUMABLE') {
       items.push({ label: 'Consume', action: `/consume ${item.name}`, icon: 'ra ra-flask', color: 'text-emerald-400' })
+    }
+
+    if (isContainerEntity(item)) {
+      items.push({ label: 'Open', action: `${OPEN_CONTAINER_PREFIX}${item.id || item.name}`, icon: 'ra ra-treasure-chest', color: 'text-emerald-400' })
     }
 
     items.push({ label: 'Drop', action: `/drop ${item.name}`, icon: 'ra ra-bottom-right', color: 'text-red-400' })

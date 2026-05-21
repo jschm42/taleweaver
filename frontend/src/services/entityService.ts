@@ -13,6 +13,10 @@ export interface EntityEditData {
   goal?: string
   character?: string
   is_killable?: boolean
+  item_type?: string
+  is_portable?: boolean
+  unlock_rule?: string
+  inventory?: any[]
 }
 
 /**

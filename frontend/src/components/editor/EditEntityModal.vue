@@ -4,7 +4,21 @@ import { ref, watch } from 'vue'
 const props = defineProps<{
   show: boolean
   context: { type: string; id: string } | null
-  initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; goal: string; character: string; is_killable: boolean }
+  initialForm: {
+    name: string
+    teaser: string
+    description: string
+    hp: number
+    stamina: number
+    mana: number
+    goal: string
+    character: string
+    is_killable: boolean
+    item_type: string
+    is_portable: boolean
+    unlock_rule: string
+    inventory_json: string
+  }
   ruleEnforcementMode: string
   isSaving: boolean
   adventureId?: string
@@ -22,7 +36,23 @@ watch(() => props.initialForm, (newVal) => {
 }, { deep: true })
 
 function handleSave() {
-  emit('save', { ...localForm.value })
+  let parsedInventory: any[] = []
+  if (props.context?.type === 'object') {
+    const raw = (localForm.value.inventory_json || '').trim()
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        parsedInventory = Array.isArray(parsed) ? parsed : []
+      } catch {
+        parsedInventory = []
+      }
+    }
+  }
+
+  emit('save', {
+    ...localForm.value,
+    inventory: parsedInventory,
+  })
 }
 
 import { entityService } from '@/services/entityService'
@@ -210,6 +240,43 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                   >
                     <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_killable ? 'translate-x-6' : 'translate-x-0']"></div>
                   </button>
+                </div>
+              </div>
+
+              <div v-if="context.type === 'object'" class="p-4 bg-black/30 border border-white/10 rounded-2xl space-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Item Type</label>
+                    <select v-model="localForm.item_type" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-amber-500/50 outline-none transition-all">
+                      <option value="PICKABLE">PICKABLE</option>
+                      <option value="WEAPON">WEAPON</option>
+                      <option value="ARMOR">ARMOR</option>
+                      <option value="CONSUMABLE">CONSUMABLE</option>
+                      <option value="CONTAINER">CONTAINER</option>
+                      <option value="STATIC">STATIC</option>
+                    </select>
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Portable</label>
+                    <button
+                      type="button"
+                      @click="localForm.is_portable = !localForm.is_portable"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_portable ? 'bg-emerald-600' : 'bg-slate-700']"
+                    >
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_portable ? 'translate-x-6' : 'translate-x-0']"></div>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Unlock Rule (Optional)</label>
+                  <input v-model="localForm.unlock_rule" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all" placeholder="e.g. Requires brass key or lockpick" />
+                </div>
+
+                <div v-if="String(localForm.item_type || '').toUpperCase() === 'CONTAINER'" class="space-y-2">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Contained Items (JSON Array)</label>
+                  <textarea v-model="localForm.inventory_json" rows="4" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-amber-500/50 outline-none transition-all" placeholder='["ITEM_KEY", {"id":"ITEM_MAP","name":"Old Map","item_type":"PICKABLE"}]'></textarea>
+                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Supports item IDs and inline item objects.</p>
                 </div>
               </div>
 

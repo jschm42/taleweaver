@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { AlertTriangle, MapPin, Trophy } from 'lucide-vue-next'
+import { AlertTriangle, Box, MapPin, Trophy } from 'lucide-vue-next'
 
 type RuleMode = 'rpg' | 'story' | 'chat'
 
@@ -11,6 +11,8 @@ const props = defineProps<{
     pacing_minutes: number
     min_scenes: number
     max_scenes: number
+    container_generation_enabled: boolean
+    max_containers: number
     award_generation_enabled: boolean
     min_awards: number
     max_awards: number
@@ -125,6 +127,39 @@ function update(field: string, value: any) {
             :min="modelValue.min_scenes" max="20" class="w-full accent-blue-500" 
           />
         </div>
+      </div>
+    </div>
+
+    <!-- Container Generation -->
+    <div class="p-6 bg-amber-500/5 border border-amber-500/10 rounded-2xl space-y-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400">
+            <Box class="w-5 h-5" />
+          </div>
+          <span class="text-xs font-black text-white/80 uppercase tracking-widest">Container Generation</span>
+        </div>
+        <div
+          @click="update('container_generation_enabled', !modelValue.container_generation_enabled)"
+          :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.container_generation_enabled ? 'bg-amber-500' : 'bg-slate-700']"
+        >
+          <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.container_generation_enabled ? 'left-6' : 'left-1']"></div>
+        </div>
+      </div>
+
+      <div v-if="modelValue.container_generation_enabled" class="space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Containers</label>
+          <span class="text-xs font-mono text-amber-300">{{ modelValue.max_containers }}</span>
+        </div>
+        <input
+          type="range"
+          :value="modelValue.max_containers"
+          @input="update('max_containers', Number(($event.target as HTMLInputElement).value))"
+          min="0"
+          max="30"
+          class="w-full accent-amber-500"
+        />
       </div>
     </div>
 

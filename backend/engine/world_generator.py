@@ -198,7 +198,7 @@ class WorldObjectSchema(BaseModel):
     start_scene_id: str = Field(..., description="The ID of the scene where the object starts.")
     spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'on the dusty shelf', 'under the rug'")
     
-    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
+    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER")
     wearable_slots: list[str] = Field(..., description="If WEARABLE, which slots? e.g. ['Head'], ['MainHand']. Use [] if none.")
     is_hidden: bool = Field(..., description="If True, the player must SEARCH or trigger an event to see this.")
     reveal_rule: str = Field(
@@ -210,6 +210,7 @@ class WorldObjectSchema(BaseModel):
         )
     )
     is_portable: bool = Field(..., description="Whether the item can be picked up. False for STATIC objects.")
+    unlock_rule: str = Field("", description="Optional unlock hint. Use empty string if not locked.")
     combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. Use [] if none.")
     reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Use empty string if none.")
     
@@ -332,6 +333,8 @@ class WorldGenerator:
         automatic_npc_voice_assignment: bool = True,
         min_scenes: int = 1,
         max_scenes: int = 5,
+        container_generation_enabled: bool = True,
+        max_containers: int = 8,
         quest_generation_enabled: bool = True,
         award_generation_enabled: bool = True,
         min_awards: int = 3,
@@ -416,6 +419,19 @@ class WorldGenerator:
         else:
             award_requirement = "\n\nAWARD SYSTEM:\n- Do not generate any awards for this adventure."
 
+        clamped_max_containers = max(0, min(30, int(max_containers)))
+        if container_generation_enabled and clamped_max_containers > 0:
+            container_requirement = (
+                "\n\nCONTAINER ITEMS:\n"
+                f"- You may generate CONTAINER objects, but never more than {clamped_max_containers}.\n"
+                "- CONTAINER objects may contain items in `inventory` and can optionally set `unlock_rule`."
+            )
+        else:
+            container_requirement = (
+                "\n\nCONTAINER ITEMS:\n"
+                "- Do not generate any objects with item_type CONTAINER."
+            )
+
         cover_guidance = ""
         if cover_source_manifest:
             source_title = cover_source_adventure_name or cover_source_manifest.get("title") or "Unknown Source Adventure"
@@ -455,6 +471,7 @@ class WorldGenerator:
             quest_requirement=quest_requirement,
             award_requirement=award_requirement
         )
+        user_prompt += container_requirement
 
         
         # 1. Update Status
@@ -487,6 +504,8 @@ class WorldGenerator:
                 "generate_npc_images": generate_npc_images,
                 "generate_item_images": generate_item_images,
                 "automatic_npc_voice_assignment": automatic_npc_voice_assignment,
+                "container_generation_enabled": container_generation_enabled,
+                "max_containers": clamped_max_containers,
             },
         )
 
@@ -567,6 +586,25 @@ class WorldGenerator:
                 }
 
         manifest_dict = manifesto.model_dump()
+
+        objects = manifest_dict.get("objects") or []
+        container_indices = [
+            idx for idx, obj in enumerate(objects)
+            if isinstance(obj, dict) and str(obj.get("item_type", "")).upper() == "CONTAINER"
+        ]
+        if not container_generation_enabled:
+            for idx in container_indices:
+                obj = objects[idx]
+                obj["item_type"] = "PICKABLE"
+                obj["inventory"] = []
+                obj["unlock_rule"] = ""
+        elif len(container_indices) > clamped_max_containers:
+            for idx in container_indices[clamped_max_containers:]:
+                obj = objects[idx]
+                obj["item_type"] = "PICKABLE"
+                obj["inventory"] = []
+                obj["unlock_rule"] = ""
+
         manifest_dict["cover_source_adventure_id"] = cover_source_adventure_id
         manifest_dict["cover_source_adventure_name"] = cover_source_adventure_name
         manifest_dict["cover_similarity_percent"] = max(0, min(100, int(cover_similarity_percent or 0)))
@@ -1401,10 +1439,12 @@ class WorldGenerator:
                     wearable_slots=o.get("wearable_slots"),
                     is_hidden=o.get("is_hidden", False),
                     reveal_rule=o.get("reveal_rule") or None,
+                    unlock_rule=o.get("unlock_rule") or None,
                     is_in_inventory=is_in_avatar_inv or is_in_npc_inv,
                     is_portable=o.get("is_portable", o.get("item_type") != "STATIC"),
                     combination_ingredients=o.get("combination_ingredients"),
                     reveals_item_id=o.get("reveals_item_id"),
+                    inventory=o.get("inventory") or [],
                     state_comment=o.get("state_comment"),
                     stat_modifier_strength=stat_strength,
                     stat_modifier_dexterity=stat_dexterity,

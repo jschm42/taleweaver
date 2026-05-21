@@ -21,6 +21,7 @@ import GameViewHeader from '@/components/game/GameViewHeader.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
+import ContainerModal from '@/components/game/ContainerModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
@@ -54,6 +55,14 @@ const showQuests = ref(false)
 const showDebugLog = ref(false)
 const showNoteModal = ref(false)
 const isSavingNote = ref(false)
+const showContainerModal = ref(false)
+const containerBusy = ref(false)
+const activeContainer = ref<{
+  id: string
+  name: string
+  unlockRule?: string | null
+  items: any[]
+} | null>(null)
 
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
@@ -149,11 +158,129 @@ const handleEntityClick = async (entity: any) => {
       await handlePlayerInput(command)
     }
   } else {
+    if (isContainerEntity(entity)) {
+      openContainerFromEntity(entity)
+      return
+    }
+
     // Default behavior for click (e.g. pick up if portable item)
     if (gameCommandService.shouldAutoTakeOnEntityClick(entity)) {
       await handleTakeDirect(entity)
     }
   }
+}
+
+const CONTAINER_OPEN_PREFIX = '[OPEN_CONTAINER] '
+
+const isContainerEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
+}
+
+const findItemById = (id: string): any | null => {
+  if (!id) return null
+  const foundInScene = (entities.value || []).find((entry: any) => String(entry.id || '').toLowerCase() === id.toLowerCase())
+  if (foundInScene) return foundInScene
+  const foundInInventory = (inventoryItems.value || []).find((entry: any) => String(entry?.id || '').toLowerCase() === id.toLowerCase())
+  return foundInInventory || null
+}
+
+const normalizeContainerItems = (rawItems: any[]): any[] => {
+  const result: any[] = []
+  for (const entry of rawItems || []) {
+    if (entry && typeof entry === 'object') {
+      result.push(entry)
+      continue
+    }
+
+    if (typeof entry === 'string') {
+      const resolved = findItemById(entry)
+      result.push(resolved || { id: entry, name: entry, item_type: 'PICKABLE' })
+    }
+  }
+  return result
+}
+
+const openContainerFromEntity = (entity: any) => {
+  if (!isContainerEntity(entity)) return
+
+  activeContainer.value = {
+    id: String(entity.id || entity.name || '').trim(),
+    name: String(entity.name || entity.id || 'Container'),
+    unlockRule: entity.unlock_rule || null,
+    items: normalizeContainerItems(entity.inventory || []),
+  }
+  showContainerModal.value = true
+}
+
+const openContainerFromInventoryItem = (item: any) => {
+  if (!isContainerEntity(item)) return
+
+  activeContainer.value = {
+    id: String(item.id || item.name || '').trim(),
+    name: String(item.name || item.id || 'Container'),
+    unlockRule: item.unlock_rule || null,
+    items: normalizeContainerItems(item.inventory || []),
+  }
+  showContainerModal.value = true
+}
+
+const openContainerByHint = (hint: string): boolean => {
+  const normalized = String(hint || '').trim().toLowerCase()
+  if (!normalized) return false
+
+  const sceneContainer = (items.value || []).find((entry: any) => {
+    if (!isContainerEntity(entry)) return false
+    const byId = String(entry.id || '').toLowerCase() === normalized
+    const byName = String(entry.name || '').toLowerCase() === normalized
+    return byId || byName
+  })
+
+  if (sceneContainer) {
+    openContainerFromEntity(sceneContainer)
+    return true
+  }
+
+  const inventoryContainer = (inventoryItems.value || []).find((entry: any) => {
+    if (!isContainerEntity(entry)) return false
+    const byId = String(entry.id || '').toLowerCase() === normalized
+    const byName = String(entry.name || '').toLowerCase() === normalized
+    return byId || byName
+  })
+
+  if (inventoryContainer) {
+    openContainerFromInventoryItem(inventoryContainer)
+    return true
+  }
+
+  return false
+}
+
+const closeContainerModal = () => {
+  showContainerModal.value = false
+  activeContainer.value = null
+}
+
+const runContainerAction = async (commandBuilder: (containerIdOrName: string) => string) => {
+  if (!activeContainer.value || containerBusy.value) return
+  const identifier = activeContainer.value.id || activeContainer.value.name
+  if (!identifier) return
+
+  containerBusy.value = true
+  try {
+    await sendMessage(commandBuilder(identifier))
+    closeContainerModal()
+  } finally {
+    containerBusy.value = false
+  }
+}
+
+const handleContainerTakeAll = async () => {
+  await runContainerAction((id) => `/container_take_all ${id}`)
+}
+
+const handleContainerDropToScene = async () => {
+  await runContainerAction((id) => `/container_drop_scene ${id}`)
 }
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
@@ -322,7 +449,15 @@ const {
   handlePlayerInput,
   onAction: () => {
     if (showSheet.value) sheetDirty.value = true
-  }
+  },
+  onDirectAction: (action: string) => {
+    if (!action.startsWith(CONTAINER_OPEN_PREFIX)) {
+      return false
+    }
+
+    const hint = action.replace(CONTAINER_OPEN_PREFIX, '').trim()
+    return openContainerByHint(hint)
+  },
 })
 
 const handleUnlockVoice = () => {
@@ -563,6 +698,7 @@ watch(showCombatDialog, (visible) => {
       @equip="handleEquipFromSheet"
       @unequip="handleUnequipFromSheet"
       @consume="handleConsumeFromSheet"
+      @open-container="openContainerFromInventoryItem"
       @changed="handleSheetChanged"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
@@ -652,6 +788,19 @@ watch(showCombatDialog, (visible) => {
       @close="closeLootPopup"
       @confirm="handleLootDone"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
+      @item-leave="hoveredEntity = null"
+    />
+
+    <ContainerModal
+      :open="showContainerModal"
+      :title="activeContainer?.name || 'Container'"
+      :unlock-rule="activeContainer?.unlockRule"
+      :items="activeContainer?.items || []"
+      :busy="containerBusy"
+      @close="closeContainerModal"
+      @take-all="handleContainerTakeAll"
+      @drop-to-scene="handleContainerDropToScene"
+      @item-hover="(item, event) => handleHover(item, event)"
       @item-leave="hoveredEntity = null"
     />
 

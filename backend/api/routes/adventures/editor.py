@@ -32,6 +32,10 @@ class EntityUpdateRequest(BaseModel):
     goal: Optional[str] = None
     character: Optional[str] = None
     is_killable: Optional[bool] = None
+    item_type: Optional[str] = None
+    is_portable: Optional[bool] = None
+    unlock_rule: Optional[str] = None
+    inventory: Optional[list] = None
 
 def _serialize_model(obj):
     if not obj: return None
@@ -184,6 +188,15 @@ async def update_editor_entity(
                 if payload.goal is not None: ent.goal = payload.goal
                 if payload.character is not None: ent.character = payload.character
                 if payload.is_killable is not None: ent.is_killable = payload.is_killable
+            if ent.entity_type == "OBJECT":
+                if payload.item_type is not None:
+                    ent.item_type = str(payload.item_type).upper()
+                if payload.is_portable is not None:
+                    ent.is_portable = bool(payload.is_portable)
+                if payload.unlock_rule is not None:
+                    ent.unlock_rule = payload.unlock_rule or None
+                if payload.inventory is not None:
+                    ent.inventory = payload.inventory
             
     await db.commit()
     return {"status": "success"}

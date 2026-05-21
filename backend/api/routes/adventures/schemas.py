@@ -35,6 +35,8 @@ class CreateAdventureTemplatePayload(BaseModel):
     pacing: Optional[dict[str, Any]] = None
     min_scenes: int = 1
     max_scenes: int = 5
+    container_generation_enabled: bool = True
+    max_containers: int = 8
     award_generation_enabled: bool = False
     min_awards: int = 3
     max_awards: int = 8
@@ -64,6 +66,11 @@ class CreateAdventureTemplatePayload(BaseModel):
     @classmethod
     def validate_cover_similarity(cls, value: int) -> int:
         return max(0, min(100, int(value)))
+
+    @field_validator("max_containers")
+    @classmethod
+    def validate_max_containers(cls, value: int) -> int:
+        return max(0, min(30, int(value)))
 
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventureTemplatePayload':
@@ -103,6 +110,8 @@ class AdventureTemplateResponse(BaseModel):
     allow_reuse_source_assets: bool = True
     min_scenes: int = 1
     max_scenes: int = 5
+    container_generation_enabled: bool = True
+    max_containers: int = 8
     can_damage_npcs: bool = True
     npcs_can_damage_protagonist: bool = True
 
@@ -279,6 +288,8 @@ class AdventureTemplateUpdate(BaseModel):
     selected_tone: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
+    container_generation_enabled: Optional[bool] = None
+    max_containers: Optional[int] = None
     award_generation_enabled: Optional[bool] = None
     min_awards: Optional[int] = None
     max_awards: Optional[int] = None

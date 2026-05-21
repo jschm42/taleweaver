@@ -173,6 +173,8 @@ async def create_adventure(
         selected_tone=payload.selected_tone,
         min_scenes=payload.min_scenes,
         max_scenes=payload.max_scenes,
+        container_generation_enabled=payload.container_generation_enabled,
+        max_containers=max(0, min(30, int(payload.max_containers))),
         award_generation_enabled=False if chat_mode else payload.award_generation_enabled,
         min_awards=payload.min_awards,
         max_awards=payload.max_awards,
@@ -290,6 +292,8 @@ async def create_adventure(
                     automatic_npc_voice_assignment=payload.automatic_npc_voice_assignment,
                     min_scenes=payload.min_scenes,
                     max_scenes=payload.max_scenes,
+                    container_generation_enabled=payload.container_generation_enabled,
+                    max_containers=max(0, min(30, int(payload.max_containers))),
                     quest_generation_enabled=not chat_mode,
                     award_generation_enabled=False if chat_mode else payload.award_generation_enabled,
                     min_awards=payload.min_awards,
@@ -427,6 +431,16 @@ async def reset_adventure(
             description=obj_def.get("description", ""),
             current_scene_id=obj_def.get("start_scene_id"),
             image_url=existing_entity_images.get(obj_id),
+            spatial_position=obj_def.get("spatial_position"),
+            item_type=obj_def.get("item_type", "PICKABLE"),
+            wearable_slots=obj_def.get("wearable_slots") or [],
+            is_hidden=bool(obj_def.get("is_hidden", False)),
+            reveal_rule=obj_def.get("reveal_rule") or None,
+            unlock_rule=obj_def.get("unlock_rule") or None,
+            is_portable=bool(obj_def.get("is_portable", True)),
+            combination_ingredients=obj_def.get("combination_ingredients") or [],
+            reveals_item_id=obj_def.get("reveals_item_id") or None,
+            inventory=obj_def.get("inventory") or [],
         ))
 
     # Restore protagonist image from manifest protagonist data.
@@ -458,6 +472,8 @@ async def update_adventure(
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "max_containers" in update_data and update_data["max_containers"] is not None:
+        update_data["max_containers"] = max(0, min(30, int(update_data["max_containers"])))
     
     # Apply updates to template
     for field, value in update_data.items():

@@ -17,6 +17,7 @@ const emit = defineEmits<{
   equip: [name: string]
   unequip: [slot: string]
   consume: [name: string]
+  openContainer: [item: any]
   changed: []
   itemContextmenu: [item: any, event: MouseEvent]
 }>()
@@ -103,13 +104,15 @@ const handleInventoryClick = (item: any) => {
     emit('equip', item.name)
   } else if (item.item_type === 'CONSUMABLE') {
     emit('consume', item.name)
+  } else if (String(item.item_type || '').toUpperCase() === 'CONTAINER') {
+    emit('openContainer', item)
   }
 }
 
 const isInteractable = (item: any) => {
   if (!item) return false
   const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
-  return isEquippable || item.item_type === 'CONSUMABLE'
+  return isEquippable || item.item_type === 'CONSUMABLE' || String(item.item_type || '').toUpperCase() === 'CONTAINER'
 }
 
 const handleUnequip = (slot: string) => {

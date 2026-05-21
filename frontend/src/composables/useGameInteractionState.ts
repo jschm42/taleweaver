@@ -15,6 +15,7 @@ type UseGameInteractionStateOptions = {
   npcMetadata: Ref<Record<string, any>>
   handlePlayerInput: (content: string) => Promise<void>
   onAction?: () => void
+  onDirectAction?: (action: string) => boolean
 }
 
 export function useGameInteractionState(options: UseGameInteractionStateOptions) {
@@ -24,6 +25,7 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     npcMetadata,
     handlePlayerInput,
     onAction,
+    onDirectAction,
   } = options
 
   const hoveredEntity = ref<any>(null)
@@ -115,6 +117,11 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     if (isActionInputBlocked.value) return
     const action = item.action
     contextMenu.value = null
+
+    if (typeof action === 'string' && onDirectAction?.(action)) {
+      return
+    }
+
     if (onAction) onAction()
     await handlePlayerInput(action)
   }
