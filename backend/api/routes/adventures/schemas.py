@@ -51,6 +51,16 @@ class CreateAdventureTemplatePayload(BaseModel):
     cover_similarity_percent: int = 50
     allow_reuse_source_assets: bool = True
 
+    @field_validator("title")
+    @classmethod
+    def validate_title_length(cls, value: str) -> str:
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("title is required")
+        if len(cleaned) > 50:
+            raise ValueError("title must be at most 50 characters")
+        return cleaned
+
     @field_validator("selected_tone", mode="before")
     @classmethod
     def parse_legacy_tone(cls, v):
@@ -284,6 +294,27 @@ class SuggestPromptRequest(BaseModel):
 class SuggestPromptResponse(BaseModel):
     suggested_prompt: str
 
+
+class StoryIdeaSuggestionRequest(BaseModel):
+    title: Optional[str] = None
+    story_idea: Optional[str] = None
+    selected_tone: Optional[dict[str, Any]] = None
+    rule_enforcement_mode: Literal["rpg", "story", "chat"] = "story"
+    language: Optional[str] = None
+
+
+class StoryIdeaSuggestionResponse(BaseModel):
+    title: str
+    story_idea: str
+
+    @field_validator("title")
+    @classmethod
+    def validate_title_length(cls, value: str) -> str:
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("title is required")
+        return cleaned[:50]
+
 class AdventureTemplateUpdate(BaseModel):
     """Payload for partial updates to an adventure template."""
     title: Optional[str] = None
@@ -323,6 +354,18 @@ class AdventureTemplateUpdate(BaseModel):
     allow_dynamic_items: Optional[bool] = None
     can_damage_npcs: Optional[bool] = None
     npcs_can_damage_protagonist: Optional[bool] = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("title cannot be empty")
+        if len(cleaned) > 50:
+            raise ValueError("title must be at most 50 characters")
+        return cleaned
 
     @field_validator("selected_tone", mode="before")
     @classmethod

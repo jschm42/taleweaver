@@ -10,6 +10,8 @@ import type {
   AdventureImportPayload,
   CatalogTile,
   AdventureTemplateSummary,
+  StoryIdeaSuggestionPayload,
+  StoryIdeaSuggestionResponse,
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
@@ -220,6 +222,11 @@ export const api = {
   /** Creates a new adventure and returns the generated IDs. */
   createAdventure(payload: CreateAdventurePayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
     return request('/adventures/', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  /** Generates or improves title and story idea from user input. */
+  suggestStoryIdea(payload: StoryIdeaSuggestionPayload): Promise<StoryIdeaSuggestionResponse> {
+    return request('/adventures/story-idea/suggest', { method: 'POST', body: JSON.stringify(payload) })
   },
 
   /** Returns a single adventure template details by ID. */

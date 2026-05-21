@@ -14,10 +14,17 @@ from backend.api.routes.adventures.schemas import (
     AdventureTemplateSummaryResponse,
     AdventureTemplateUpdate,
     CreateAdventureTemplatePayload,
+    StoryIdeaSuggestionRequest,
+    StoryIdeaSuggestionResponse,
 )
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import AsyncSessionLocal, get_db
+from backend.core.llm_router import GameMasterLLM
+from backend.core.prompts import (
+    STORY_IDEA_GENERATION_SYSTEM_PROMPT,
+    STORY_IDEA_GENERATION_USER_PROMPT_TEMPLATE,
+)
 from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -29,6 +36,61 @@ from backend.utils.text_utils import generate_adventure_id, generate_session_id
 
 router = APIRouter(tags=["Adventures"])
 logger = logging.getLogger(__name__)
+
+
+@router.post("/story-idea/suggest", response_model=StoryIdeaSuggestionResponse)
+async def suggest_story_idea(
+    payload: StoryIdeaSuggestionRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Generates or improves an adventure title/story idea using the configured small model."""
+    llm_settings = current_user.llm_settings or {}
+    provider = (
+        llm_settings.get("small_model_provider")
+        or llm_settings.get("complex_model_provider")
+        or llm_settings.get("preferred_provider")
+        or "openai"
+    )
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+
+    selected_tone = payload.selected_tone or {}
+    tone_label = ""
+    if isinstance(selected_tone, dict):
+        tone_label = str(selected_tone.get("name") or selected_tone.get("id") or "").strip()
+
+    title = (payload.title or "").strip()
+    story_idea = (payload.story_idea or "").strip()
+    has_existing_input = bool(title or story_idea)
+
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+    user_prompt = STORY_IDEA_GENERATION_USER_PROMPT_TEMPLATE.format(
+        selected_tone=tone_label or "Neutral",
+        rule_enforcement_mode=(payload.rule_enforcement_mode or "story").upper(),
+        language=payload.language or "Default",
+        has_existing_input="yes" if has_existing_input else "no",
+        title=title or "(empty)",
+        story_idea=story_idea or "(empty)",
+    )
+
+    try:
+        suggestion = await gm.aexecute_complex_task(
+            system_prompt=STORY_IDEA_GENERATION_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            response_model=StoryIdeaSuggestionResponse,
+            model=model,
+        )
+    except Exception as exc:
+        logger.error("Failed to suggest story idea: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to generate story idea.") from exc
+
+    final_title = suggestion.title.strip()[:50]
+    if has_existing_input and title:
+        final_title = title[:50]
+
+    return StoryIdeaSuggestionResponse(
+        title=final_title,
+        story_idea=suggestion.story_idea.strip(),
+    )
 
 @router.get("/templates", response_model=list[AdventureTemplateSummaryResponse])
 async def list_templates(

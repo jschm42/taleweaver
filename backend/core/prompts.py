@@ -422,3 +422,28 @@ TRAIT_GENERATION_USER_PROMPT_TEMPLATE = (
     "Biography/Description: {description}\n"
     "Adventure Theme: {adventure_theme}\n"
 )
+
+# --- Story Idea Generation ---
+
+STORY_IDEA_GENERATION_SYSTEM_PROMPT = (
+    "You are a creative RPG concept writer. Generate or refine an adventure title and story idea.\n\n"
+    "OUTPUT FORMAT (CRITICAL):\n"
+    "Return a single JSON object with exactly these keys:\n"
+    "- title: string (max 50 characters)\n"
+    "- story_idea: string (concise but evocative, 2-5 sentences)\n\n"
+    "RULES:\n"
+    "- Respect the requested Narrative Tone and Rule Mode.\n"
+    "- If user input already exists, preserve the core premise and improve clarity, stakes, and hook.\n"
+    "- If no input exists, invent a fresh original concept matching the tone and rule mode.\n"
+    "- Keep language consistent with the requested language when provided.\n"
+    "- Never include markdown or additional keys."
+)
+
+STORY_IDEA_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Narrative Tone: {selected_tone}\n"
+    "Rule Mode: {rule_enforcement_mode}\n"
+    "Language: {language}\n"
+    "User Provided Content: {has_existing_input}\n"
+    "Current Title: {title}\n"
+    "Current Story Idea: {story_idea}\n"
+)

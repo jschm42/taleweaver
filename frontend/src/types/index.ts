@@ -209,6 +209,19 @@ export interface CatalogTile {
   image_url?: string | null
 }
 
+export interface StoryIdeaSuggestionPayload {
+  title?: string
+  story_idea?: string
+  selected_tone?: CatalogTile | null
+  rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
+  language?: string
+}
+
+export interface StoryIdeaSuggestionResponse {
+  title: string
+  story_idea: string
+}
+
 /** Minimal import payload type for .ADV files (frontend-side). */
 export interface AdventureImportPayload {
   version: string

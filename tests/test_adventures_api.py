@@ -16,6 +16,7 @@ from PIL import Image
 from sqlalchemy import delete, func, select
 
 from backend.engine.debug_engine import DebugEngine
+from backend.api.routes.adventures.schemas import StoryIdeaSuggestionResponse
 from backend.models.adventure_template import AdventureTemplate as Adventure
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -62,6 +63,72 @@ async def test_create_adventure_returns_ids(client: AsyncClient):
     assert "game_id" in data
     assert "adventure_id" in data
     assert "avatar_id" in data
+
+
+async def test_suggest_story_idea_generates_title_and_story_when_empty(client: AsyncClient, monkeypatch):
+    """Story idea endpoint generates both title and story for empty input and clamps title length."""
+
+    async def fake_story_suggest(self, system_prompt, user_prompt, response_model, model, **kwargs):
+        assert "Narrative Tone: Horror" in user_prompt
+        assert "Rule Mode: STORY" in user_prompt
+        assert "User Provided Content: no" in user_prompt
+        return StoryIdeaSuggestionResponse(
+            title="This generated title is intentionally far too long to exceed fifty characters",
+            story_idea="A cursed observatory reopens at midnight, and every wish granted by its telescope demands a memory in return.",
+        )
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.templates.GameMasterLLM.aexecute_complex_task",
+        fake_story_suggest,
+    )
+
+    resp = await client.post(
+        "/api/adventures/story-idea/suggest",
+        json={
+            "title": "",
+            "story_idea": "",
+            "selected_tone": {"id": "horror", "name": "Horror"},
+            "rule_enforcement_mode": "story",
+            "language": "German",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data["title"]) <= 50
+    assert data["story_idea"]
+
+
+async def test_suggest_story_idea_keeps_existing_title_on_optimization(client: AsyncClient, monkeypatch):
+    """When input exists and title is present, endpoint keeps the existing title but updates story text."""
+
+    async def fake_story_suggest(self, system_prompt, user_prompt, response_model, model, **kwargs):
+        assert "User Provided Content: yes" in user_prompt
+        assert "Rule Mode: RPG" in user_prompt
+        return StoryIdeaSuggestionResponse(
+            title="Different Returned Title",
+            story_idea="Optimized premise: your artifact hunt becomes a survival race through collapsing ruins.",
+        )
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.templates.GameMasterLLM.aexecute_complex_task",
+        fake_story_suggest,
+    )
+
+    resp = await client.post(
+        "/api/adventures/story-idea/suggest",
+        json={
+            "title": "Ancient Ruins",
+            "story_idea": "Find the artifact.",
+            "selected_tone": {"id": "adventure", "name": "Adventure"},
+            "rule_enforcement_mode": "rpg",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["title"] == "Ancient Ruins"
+    assert "Optimized premise" in data["story_idea"]
 
 
 async def test_start_session_emits_intro_text_once(client: AsyncClient):

@@ -18,7 +18,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 flex flex-col min-h-0">
+  <div class="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 flex flex-col min-h-0">
     <div class="flex items-start justify-between gap-4 mb-8">
       <div class="flex items-center gap-4">
         <div :class="['w-12 h-12 rounded-2xl flex items-center justify-center', accentColorClass]">
