@@ -140,7 +140,7 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-300 hover:text-white hover:bg-white/5"
               @click="runAction('copy')"
             >
-              Copy Session
+              Clone Session
             </button>
             <button
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2"
@@ -174,7 +174,7 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
         <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight flex items-center gap-2">
           <span class="truncate">{{ props.session.adventure_title }}</span>
           <span v-if="props.session.copied_from_id" class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider shrink-0">
-            Copy
+            Clone
           </span>
           <span v-if="props.session.adventure_version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 shrink-0">v{{ props.session.adventure_version }}</span>
         </h3>

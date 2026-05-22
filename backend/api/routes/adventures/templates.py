@@ -1,7 +1,11 @@
 from __future__ import annotations
 import logging
 import os
+import re
+import shutil
+import uuid
 from copy import deepcopy
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -24,11 +28,233 @@ from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.utils.text_utils import generate_adventure_id, generate_session_id
 
 router = APIRouter(tags=["Adventures"])
 logger = logging.getLogger(__name__)
+
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
+def _copy_data_asset_to_session(
+    session_id: str,
+    bucket: str,
+    source_url: Optional[str],
+    cache: dict[str, str],
+) -> Optional[str]:
+    if not isinstance(source_url, str) or not source_url.startswith("/data/"):
+        return source_url
+
+    cached = cache.get(source_url)
+    if cached:
+        return cached
+
+    safe_session_id = _sanitize_path_component(session_id)
+    safe_bucket = _sanitize_path_component(bucket)
+    if not safe_session_id or not safe_bucket:
+        logger.warning("Skipping asset copy due to invalid session/bucket: %s / %s", session_id, bucket)
+        return source_url
+
+    rel_path = source_url.replace("/data/", "", 1).lstrip("/")
+    try:
+        source_path = _ensure_within_data_dir(os.path.join(settings.DATA_DIR, rel_path))
+    except ValueError:
+        logger.warning("Skipping asset copy for unsafe source URL: %s", source_url)
+        return source_url
+
+    if not os.path.isfile(source_path):
+        return source_url
+
+    ext = os.path.splitext(source_path)[1].lower()
+    if ext not in _SAFE_IMAGE_EXTENSIONS:
+        ext = ".png"
+
+    target_dir = _ensure_within_data_dir(
+        os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_session_id, "visuals", safe_bucket)
+    )
+    os.makedirs(target_dir, exist_ok=True)
+
+    target_name = f"{uuid.uuid4().hex}{ext}"
+    target_path = _ensure_within_data_dir(os.path.join(target_dir, target_name))
+    try:
+        shutil.copy2(source_path, target_path)
+    except OSError:
+        logger.exception("Failed copying asset to session folder: %s -> %s", source_path, target_path)
+        return source_url
+
+    rel_target_path = os.path.relpath(target_path, settings.DATA_DIR).replace("\\", "/")
+    target_url = f"/data/{rel_target_path}"
+    cache[source_url] = target_url
+    return target_url
+
+
+async def _materialize_initial_session_from_template(
+    db: AsyncSession,
+    template_id: str,
+    session_id: str,
+) -> None:
+    """Ensure the initial session is a complete session-owned copy of template world + visuals."""
+    session_res = await db.execute(select(GameSession).where(GameSession.id == session_id))
+    game_session = session_res.scalars().first()
+    if not game_session:
+        return
+
+    avatar_res = await db.execute(select(Avatar).where(Avatar.id == game_session.avatar_id))
+    avatar = avatar_res.scalars().first()
+    state_res = await db.execute(select(SessionState).where(SessionState.session_id == session_id))
+    session_state = state_res.scalars().first()
+    template_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == template_id))
+    template = template_res.scalars().first()
+
+    asset_copy_cache: dict[str, str] = {}
+    copied_cover = _copy_data_asset_to_session(session_id, "cover", template.image_url if template else None, asset_copy_cache)
+    if copied_cover:
+        game_session.adventure_image_url = copied_cover
+
+    if avatar:
+        copied_protagonist = _copy_data_asset_to_session(session_id, "protagonist", avatar.profile_image, asset_copy_cache)
+        if copied_protagonist:
+            avatar.profile_image = copied_protagonist
+
+    existing_scene_res = await db.execute(select(WorldScene.id).where(WorldScene.session_id == session_id).limit(1))
+    has_session_scenes = existing_scene_res.scalar_one_or_none() is not None
+
+    if not has_session_scenes:
+        scenes_res = await db.execute(
+            select(WorldScene).where(
+                WorldScene.template_id == template_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+        for scene in scenes_res.scalars().all():
+            copied_scene_image = _copy_data_asset_to_session(session_id, "scenes", scene.image_url, asset_copy_cache)
+            db.add(
+                WorldScene(
+                    id=scene.id,
+                    session_id=session_id,
+                    template_id=None,
+                    label=scene.label,
+                    description=scene.description,
+                    image_url=copied_scene_image or scene.image_url,
+                )
+            )
+
+        exits_res = await db.execute(
+            select(WorldExit).where(
+                WorldExit.template_id == template_id,
+                WorldExit.session_id.is_(None),
+            )
+        )
+        for exit_row in exits_res.scalars().all():
+            db.add(
+                WorldExit(
+                    session_id=session_id,
+                    template_id=None,
+                    from_scene_id=exit_row.from_scene_id,
+                    to_scene_id=exit_row.to_scene_id,
+                    label=exit_row.label,
+                    is_locked=exit_row.is_locked,
+                    lock_description=exit_row.lock_description,
+                )
+            )
+
+        entities_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == template_id,
+                WorldEntity.session_id.is_(None),
+            )
+        )
+        for entity in entities_res.scalars().all():
+            copied_entity_image = _copy_data_asset_to_session(session_id, "entities", entity.image_url, asset_copy_cache)
+            db.add(
+                WorldEntity(
+                    id=entity.id,
+                    session_id=session_id,
+                    template_id=None,
+                    entity_type=entity.entity_type,
+                    name=entity.name,
+                    description=entity.description,
+                    current_scene_id=entity.current_scene_id,
+                    spatial_position=entity.spatial_position,
+                    image_url=copied_entity_image or entity.image_url,
+                    item_type=entity.item_type,
+                    wearable_slots=entity.wearable_slots,
+                    is_in_inventory=entity.is_in_inventory,
+                    is_hidden=entity.is_hidden,
+                    is_portable=entity.is_portable,
+                    combination_ingredients=entity.combination_ingredients,
+                    reveals_item_id=entity.reveals_item_id,
+                    is_final_state=entity.is_final_state,
+                    state_comment=entity.state_comment,
+                    npc_type=entity.npc_type,
+                    movement_type=entity.movement_type,
+                    hp=entity.hp,
+                    max_hp=entity.max_hp,
+                    mana=entity.mana,
+                    max_mana=entity.max_mana,
+                    stamina=entity.stamina,
+                    max_stamina=entity.max_stamina,
+                    stat_modifier_strength=entity.stat_modifier_strength,
+                    stat_modifier_dexterity=entity.stat_modifier_dexterity,
+                    stat_modifier_intelligence=entity.stat_modifier_intelligence,
+                    stat_modifier_wisdom=entity.stat_modifier_wisdom,
+                    stat_modifier_charisma=entity.stat_modifier_charisma,
+                    stat_modifier_armor_class=entity.stat_modifier_armor_class,
+                    inventory=deepcopy(entity.inventory),
+                    metadata_json=deepcopy(entity.metadata_json),
+                )
+            )
+
+    if session_state:
+        entity_rows = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == template_id,
+                WorldEntity.session_id.is_(None),
+            )
+        )
+        entity_images: dict[str, Optional[str]] = {}
+        for ent in entity_rows.scalars().all():
+            if not ent.id:
+                continue
+            copied_entity_image = _copy_data_asset_to_session(session_id, "entities", ent.image_url, asset_copy_cache)
+            entity_images[ent.id] = copied_entity_image or ent.image_url
+
+        entity_states = deepcopy(session_state.entity_states or {})
+        raw_snapshot = entity_states.get("__asset_snapshot__")
+        snapshot = dict(raw_snapshot) if isinstance(raw_snapshot, dict) else {}
+        snapshot["cover"] = game_session.adventure_image_url
+        snapshot["protagonist"] = avatar.profile_image if avatar else snapshot.get("protagonist")
+        snapshot["entity_images"] = entity_images
+        entity_states["__asset_snapshot__"] = snapshot
+        session_state.entity_states = entity_states
 
 @router.get("/templates", response_model=list[AdventureTemplateSummaryResponse])
 async def list_templates(
@@ -219,6 +445,13 @@ async def create_adventure(
     # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
     os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", session.id), exist_ok=True)
 
+    asset_copy_cache: dict[str, str] = {}
+    copied_cover_url = _copy_data_asset_to_session(session.id, "cover", adv.image_url, asset_copy_cache)
+    copied_protagonist_url = _copy_data_asset_to_session(session.id, "protagonist", avatar.profile_image, asset_copy_cache)
+
+    session.adventure_image_url = copied_cover_url or adv.image_url
+    avatar.profile_image = copied_protagonist_url or avatar.profile_image
+
     # Create an initial SessionState (GameState alias) to capture template snapshot and asset mapping for newly created session.
     manifest_snapshot = AdventureLogic.build_session_manifest_snapshot(adv)
 
@@ -228,7 +461,7 @@ async def create_adventure(
     entity_images = {e.id: e.image_url for e in template_entities if getattr(e, "id", None)}
 
     asset_snapshot = {
-        "cover": adv.image_url,
+        "cover": session.adventure_image_url,
         "protagonist": avatar.profile_image,
         "entity_images": entity_images,
     }
@@ -258,6 +491,7 @@ async def create_adventure(
     db.add(new_state)
 
     await db.commit()
+    initial_session_id = session.id
     
     # 4. Trigger background generation
     async def run_gen():
@@ -299,6 +533,12 @@ async def create_adventure(
                     cover_source_adventure_name=(cover_source_name if source_template else None),
                     cover_similarity_percent=max(0, min(100, int(payload.cover_similarity_percent or 0))),
                     allow_reuse_source_assets=bool(payload.allow_reuse_source_assets),
+                )
+
+                await _materialize_initial_session_from_template(
+                    db=bg_db,
+                    template_id=new_id,
+                    session_id=initial_session_id,
                 )
 
                 # Finalize template

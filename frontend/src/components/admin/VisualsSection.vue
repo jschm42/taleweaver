@@ -43,10 +43,7 @@ const isModelCustom = (model: string, provider: string) => {
   return !predefined.includes(model)
 }
 
-const getModelOptionLabel = (provider: string, model: string) => {
-  if (provider === 'ollama') return `${model} (EXPERIMENTAL)`
-  return model
-}
+const getModelOptionLabel = (_provider: string, model: string) => model
 
 const getProviderName = (id: string) => {
   return props.availableConstants.image_providers?.find((p: any) => p.id === id)?.name || id

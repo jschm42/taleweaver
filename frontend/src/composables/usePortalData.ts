@@ -32,9 +32,11 @@ export interface UsePortalDataResult {
   startSessionForTemplate: (templateId: string, onStarted: (gameId: string) => void | Promise<void>) => Promise<void>
   confirmDeleteSession: (gameId: string, title: string) => void
   executeDeleteSession: () => Promise<void>
+  executeDeleteAllSessions: () => Promise<void>
   copySession: (gameId: string) => Promise<void>
   confirmDeleteTemplate: (templateId: string, title: string) => void
   executeDeleteTemplate: () => Promise<void>
+  executeDeleteAllTemplates: () => Promise<void>
   closeTemplateDeleteConfirm: () => void
   closeSessionDeleteConfirm: () => void
   closeImportExamplesConfirm: () => void
@@ -64,6 +66,13 @@ export interface UsePortalDataResult {
     adventureTitle: string
     format: 'adz' | 'adv' | 'ads'
     progress: number
+    errorMsg?: string
+  }>
+  cloneProgressState: Ref<{
+    isOpen: boolean
+    sessionTitle: string
+    progress: number
+    stage: 'preparing' | 'duplicating' | 'syncing' | 'completed'
     errorMsg?: string
   }>
   editNoteSessionId: Ref<string | null>
@@ -165,6 +174,19 @@ export function usePortalData(): UsePortalDataResult {
     progress: 0,
     errorMsg: undefined,
   })
+  const cloneProgressState = ref<{
+    isOpen: boolean
+    sessionTitle: string
+    progress: number
+    stage: 'preparing' | 'duplicating' | 'syncing' | 'completed'
+    errorMsg?: string
+  }>({
+    isOpen: false,
+    sessionTitle: '',
+    progress: 0,
+    stage: 'preparing',
+    errorMsg: undefined,
+  })
   const isSeeding = ref(false)
   const isDeleting = ref(false)
   const isDeletingSession = ref(false)
@@ -228,14 +250,62 @@ export function usePortalData(): UsePortalDataResult {
     }
   }
 
-  /** Duplicates an existing game session. */
-  async function copySession(gameId: string) {
-    isLoading.value = true
+  /** Deletes all currently listed game sessions. */
+  async function executeDeleteAllSessions() {
+    if (sessions.value.length === 0) return
+
+    isDeletingSession.value = true
     try {
-      await api.copySession(gameId)
+      const ids = sessions.value.map((entry) => entry.game_id)
+      for (const gameId of ids) {
+        await api.deleteSession(gameId)
+      }
       await fetchPortalData()
     } catch (error: any) {
+      errorMsg.value = error?.message || 'Sessions could not be deleted.'
+    } finally {
+      isDeletingSession.value = false
+    }
+  }
+
+  /** Duplicates an existing game session. */
+  async function copySession(gameId: string) {
+    const sourceSession = sessions.value.find((entry) => entry.game_id === gameId)
+    cloneProgressState.value = {
+      isOpen: true,
+      sessionTitle: sourceSession?.adventure_title || 'Session',
+      progress: 8,
+      stage: 'preparing',
+      errorMsg: undefined,
+    }
+
+    isLoading.value = true
+    try {
+      cloneProgressState.value = {
+        ...cloneProgressState.value,
+        progress: 42,
+        stage: 'duplicating',
+      }
+      await api.copySession(gameId)
+
+      cloneProgressState.value = {
+        ...cloneProgressState.value,
+        progress: 78,
+        stage: 'syncing',
+      }
+      await fetchPortalData()
+
+      cloneProgressState.value = {
+        ...cloneProgressState.value,
+        progress: 100,
+        stage: 'completed',
+      }
+    } catch (error: any) {
       errorMsg.value = error?.message || 'Session could not be copied.'
+      cloneProgressState.value = {
+        ...cloneProgressState.value,
+        errorMsg: errorMsg.value,
+      }
     } finally {
       isLoading.value = false
     }
@@ -277,6 +347,24 @@ export function usePortalData(): UsePortalDataResult {
       closeTemplateDeleteConfirm()
     } catch (error) {
       console.error('Error deleting template:', error)
+    } finally {
+      isDeleting.value = false
+    }
+  }
+
+  /** Deletes all currently listed adventure templates. */
+  async function executeDeleteAllTemplates() {
+    if (templates.value.length === 0) return
+
+    isDeleting.value = true
+    try {
+      const ids = templates.value.map((entry) => entry.template_id)
+      for (const templateId of ids) {
+        await api.deleteAdventure(templateId)
+      }
+      await fetchPortalData()
+    } catch (error: any) {
+      errorMsg.value = error?.message || 'Adventures could not be deleted.'
     } finally {
       isDeleting.value = false
     }
@@ -656,9 +744,11 @@ export function usePortalData(): UsePortalDataResult {
     startSessionForTemplate,
     confirmDeleteSession,
     executeDeleteSession,
+    executeDeleteAllSessions,
     copySession,
     confirmDeleteTemplate,
     executeDeleteTemplate,
+    executeDeleteAllTemplates,
     closeTemplateDeleteConfirm,
     closeSessionDeleteConfirm,
     closeImportExamplesConfirm,
@@ -684,6 +774,7 @@ export function usePortalData(): UsePortalDataResult {
     confirmConflictOverwrite,
     dismissWarning,
     exportProgressState,
+    cloneProgressState,
     editNoteSessionId,
     editNoteValue,
     isSavingNote,

@@ -41,7 +41,7 @@ const handleSave = () => {
             <option value="deepseek">DeepSeek</option>
             <option value="black_forest_labs">Black Forest Labs</option>
             <option value="anthropic">Anthropic</option>
-            <option value="ollama">Ollama (Local, EXPERIMENTAL)</option>
+            <option value="ollama">Ollama (Local)</option>
           </select>
         </div>
         <div class="space-y-2">

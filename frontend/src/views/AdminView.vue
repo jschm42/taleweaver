@@ -66,6 +66,10 @@ const handleSaveLlmSettings = async (payload: any) => {
   await settingsService.saveLlmSettings(payload)
 }
 
+const handleRefreshOllamaModels = async (ollamaUrl?: string) => {
+  await settingsService.fetchOllamaModels(ollamaUrl)
+}
+
 const handleSaveT2iSettings = async (payload: any) => {
   await settingsService.saveT2iSettings(payload)
 }
@@ -249,9 +253,11 @@ onMounted(() => {
           :available-constants="settingsService.availableConstants.value"
           :configured-keys="settingsService.configuredKeys.value"
           :is-submitting="settingsService.isSubmitting.value"
+          :is-loading-ollama-models="settingsService.isLoadingOllamaModels.value"
           :test-results="testService.testResults.value"
           @save="handleSaveLlmSettings"
           @test="({ key, model, provider }) => handleTestLlm(key, model, provider)"
+          @refresh-ollama-models="handleRefreshOllamaModels"
           @switch-section="(s) => activeSection = s as Section"
         />
 

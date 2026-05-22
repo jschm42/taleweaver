@@ -439,10 +439,6 @@ class AdventureLogic:
         Decouples game sessions so they remain playable.
         """
         from backend.engine.media_engine import MediaEngine
-        
-        # Check for sessions BEFORE we do anything
-        session_count_res = await db.execute(select(GameSession.id).where(GameSession.template_id == template_id).limit(1))
-        has_sessions = session_count_res.scalars().first() is not None
 
         # 1. Preserve session playability by detaching session-owned rows from template refs.
         session_avatar_query = select(GameSession.avatar_id).where(GameSession.template_id == template_id)
@@ -491,9 +487,7 @@ class AdventureLogic:
         await db.execute(delete(AdventureTemplate).where(AdventureTemplate.id == template_id))
         
         await db.commit()
-        
-        # 5. Cleanup Files (ONLY if no sessions exist for this template)
-        if not has_sessions:
-            await MediaEngine.cleanup_adventure_assets(template_id)
-        else:
-            logger.info("Skipping asset cleanup for adventure %s because sessions exist.", template_id)
+
+        # 5. Always clean up template-owned library assets.
+        # Session visuals are now copied into session folders when sessions are created.
+        await MediaEngine.cleanup_adventure_assets(template_id)

@@ -6,7 +6,9 @@ Covers: saving encrypted API keys for different providers.
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
+from typing import Optional
 
+from backend.api.routes import config_api
 from backend.core.auth import create_access_token, get_password_hash
 from backend.models.user import User
 from tests.conftest import TestSessionLocal
@@ -188,8 +190,62 @@ async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
     assert llm["complex_model_provider"] == "openai"
     assert llm["small_max_tokens"] == 12288
     assert llm["complex_max_tokens"] == 24576
+    assert llm["play_agent_model"] == ""
+    assert llm["play_agent_model_provider"] == "openai"
     assert llm["preferred_provider"] == "openai"
     assert llm["ollama_url"] == "http://localhost:11434"
+
+
+async def test_save_llm_settings_persists_play_agent_model(client: AsyncClient):
+    """Play agent should support dedicated model/provider configuration."""
+    payload = {
+        "small_model": "gpt-4o-mini",
+        "small_model_provider": "openai",
+        "complex_model": "gpt-4o",
+        "complex_model_provider": "openai",
+        "generator_model": "gpt-4o",
+        "generator_model_provider": "openai",
+        "play_agent_model": "gpt-5.3",
+        "play_agent_model_provider": "openai",
+        "preferred_provider": "openai",
+        "ollama_url": "http://localhost:11434",
+    }
+
+    save_resp = await client.post("/api/settings/llm", json=payload)
+    assert save_resp.status_code == 200
+
+    settings_resp = await client.get("/api/settings")
+    assert settings_resp.status_code == 200
+    llm = settings_resp.json()["llm_settings"]
+    assert llm["play_agent_model"] == "gpt-5.3"
+    assert llm["play_agent_model_provider"] == "openai"
+
+
+async def test_get_settings_uses_installed_ollama_models(client: AsyncClient, monkeypatch):
+    """Settings constants should expose installed Ollama models for LLM selection."""
+
+    async def fake_fetch_models(_ollama_url: Optional[str]):
+        return ["llama3.2:latest", "qwen2.5:14b"]
+
+    monkeypatch.setattr(config_api, "_fetch_ollama_models", fake_fetch_models)
+
+    resp = await client.get("/api/settings")
+    assert resp.status_code == 200
+    models = resp.json()["available_constants"]["predefined_llm_models"]["ollama"]
+    assert models == ["llama3.2:latest", "qwen2.5:14b"]
+
+
+async def test_get_ollama_models_endpoint(client: AsyncClient, monkeypatch):
+    """Dedicated Ollama models endpoint should return detected local models."""
+
+    async def fake_fetch_models(_ollama_url: Optional[str]):
+        return ["mistral:latest"]
+
+    monkeypatch.setattr(config_api, "_fetch_ollama_models", fake_fetch_models)
+
+    resp = await client.get("/api/settings/ollama-models?ollama_url=http://localhost:11434")
+    assert resp.status_code == 200
+    assert resp.json() == {"models": ["mistral:latest"]}
 
 
 async def test_get_settings_returns_style_and_tone_catalogs(client: AsyncClient):

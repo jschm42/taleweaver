@@ -4,6 +4,7 @@ import re
 import uuid
 from typing import Any, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
@@ -191,6 +192,47 @@ def _normalize_openrouter_model(model: Optional[str]) -> Optional[str]:
     return normalized
 
 
+async def _fetch_ollama_models(ollama_url: Optional[str]) -> list[str]:
+    """Return installed Ollama model names from the local Ollama daemon."""
+    base_url = (ollama_url or "http://localhost:11434").rstrip("/")
+    endpoint = f"{base_url}/api/tags"
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            response = await client.get(endpoint)
+        response.raise_for_status()
+        payload = response.json()
+
+        models: list[str] = []
+        for item in payload.get("models") or []:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            if name:
+                models.append(name)
+
+        return sorted(set(models))
+    except (httpx.HTTPError, ValueError, TypeError):
+        logger.info("Could not fetch Ollama models from %s", endpoint)
+        return []
+
+
+async def _build_available_constants(llm_settings: Optional[dict]) -> dict[str, Any]:
+    """Return available providers and model catalogs for the admin UI."""
+    normalized_llm = _normalize_llm_settings(llm_settings)
+    ollama_models = await _fetch_ollama_models(normalized_llm.get("ollama_url"))
+
+    predefined_llm_models = dict(PREDEFINED_LLM_MODELS)
+    predefined_llm_models["ollama"] = ollama_models
+
+    return {
+        "llm_providers": LLM_PROVIDERS,
+        "image_providers": IMAGE_PROVIDERS,
+        "tts_providers": TTS_PROVIDERS,
+        "predefined_llm_models": predefined_llm_models,
+        "predefined_image_models": PREDEFINED_IMAGE_MODELS,
+    }
+
+
 def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
     """Return LLM settings with separate providers, tokens and thinking modes."""
     fallback = {
@@ -209,6 +251,8 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         "generator_max_tokens": DEFAULT_GENERATOR_MAX_TOKENS,
         "generator_enable_thinking": False,
         "generator_max_thinking_tokens": 2048,
+        "play_agent_model": "",
+        "play_agent_model_provider": "openai",
         "preferred_provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
     }
@@ -224,6 +268,13 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         normalized["complex_model_provider"] = normalized.get("preferred_provider") or "openai"
     if "generator_model_provider" not in normalized:
         normalized["generator_model_provider"] = normalized.get("complex_model_provider") or "openai"
+    if "play_agent_model_provider" not in normalized:
+        normalized["play_agent_model_provider"] = (
+            normalized.get("small_model_provider")
+            or normalized.get("complex_model_provider")
+            or normalized.get("preferred_provider")
+            or "openai"
+        )
 
     # Per-model Max Tokens
     if "small_max_tokens" not in normalized:
@@ -274,6 +325,11 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         normalized["generator_enable_thinking"] = normalized.get("complex_enable_thinking")
         normalized["generator_max_thinking_tokens"] = normalized.get("complex_max_thinking_tokens")
 
+    # If play-agent model is missing, fallback to small for autonomous gameplay mode.
+    if not normalized.get("play_agent_model") and normalized.get("small_model"):
+        normalized["play_agent_model"] = normalized.get("small_model")
+        normalized["play_agent_model_provider"] = normalized.get("small_model_provider")
+
     # OpenRouter normalization
     if normalized.get("small_model_provider") == "openrouter":
         normalized["small_model"] = _normalize_openrouter_model(normalized.get("small_model"))
@@ -281,6 +337,8 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         normalized["complex_model"] = _normalize_openrouter_model(normalized.get("complex_model"))
     if normalized.get("generator_model_provider") == "openrouter":
         normalized["generator_model"] = _normalize_openrouter_model(normalized.get("generator_model"))
+    if normalized.get("play_agent_model_provider") == "openrouter":
+        normalized["play_agent_model"] = _normalize_openrouter_model(normalized.get("play_agent_model"))
 
     return normalized
 
@@ -458,6 +516,9 @@ class SettingsPayload(BaseModel):
     generator_max_tokens: int = DEFAULT_GENERATOR_MAX_TOKENS
     generator_enable_thinking: bool = False
     generator_max_thinking_tokens: int = 1024
+
+    play_agent_model: Optional[str] = ""
+    play_agent_model_provider: Optional[str] = "openai"
     
     preferred_provider: str # Legacy
     ollama_url: Optional[str] = None
@@ -525,6 +586,7 @@ async def get_settings(
     # Common defaults if no user/settings
     default_llm = _normalize_llm_settings(None)
     default_t2i = _normalize_t2i_settings(None)
+    default_available_constants = await _build_available_constants(default_llm)
     
     def get_keys_status(db_keys):
         status = {}
@@ -552,18 +614,17 @@ async def get_settings(
                 "date_format": "DD.MM.YY"
             },
             "available_constants": {
-                "llm_providers": LLM_PROVIDERS,
-                "image_providers": IMAGE_PROVIDERS,
-                "tts_providers": TTS_PROVIDERS,
-                "predefined_llm_models": PREDEFINED_LLM_MODELS,
-                "predefined_image_models": PREDEFINED_IMAGE_MODELS,
+                **default_available_constants,
             }
         }
+
+    normalized_llm_settings = _normalize_llm_settings(user.llm_settings)
+    available_constants = await _build_available_constants(normalized_llm_settings)
     
     return {
         "app_version": settings.APP_VERSION,
         "keys": get_keys_status(user.encrypted_api_keys),
-        "llm_settings": _normalize_llm_settings(user.llm_settings),
+        "llm_settings": normalized_llm_settings,
         "t2i_settings": _normalize_t2i_settings(user.t2i_settings),
         "is_llm_configured": _is_llm_configured(user, user.encrypted_api_keys),
         "is_t2i_configured": _is_t2i_configured(user, user.encrypted_api_keys),
@@ -580,14 +641,14 @@ async def get_settings(
             "date_format": "DD.MM.YY"
         },
         "tts_settings": _normalize_tts_settings(user.tts_settings),
-        "available_constants": {
-            "llm_providers": LLM_PROVIDERS,
-            "image_providers": IMAGE_PROVIDERS,
-            "tts_providers": TTS_PROVIDERS,
-            "predefined_llm_models": PREDEFINED_LLM_MODELS,
-            "predefined_image_models": PREDEFINED_IMAGE_MODELS,
-        }
+        "available_constants": available_constants,
     }
+
+
+@router.get("/ollama-models")
+async def get_ollama_models(ollama_url: Optional[str] = None):
+    """Return installed Ollama model names for the configured Ollama endpoint."""
+    return {"models": await _fetch_ollama_models(ollama_url)}
 
 @router.post("/keys")
 async def update_api_key(

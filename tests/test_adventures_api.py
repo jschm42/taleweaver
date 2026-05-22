@@ -15,6 +15,7 @@ from httpx import AsyncClient
 from PIL import Image
 from sqlalchemy import delete, func, select
 
+from backend.core.config import settings
 from backend.engine.debug_engine import DebugEngine
 from backend.models.adventure_template import AdventureTemplate as Adventure
 from backend.models.avatar import Avatar
@@ -97,6 +98,113 @@ async def test_create_adventure_creates_one_visible_session(client: AsyncClient)
     assert len(sessions) == 1
     assert sessions[0]["adventure_id"] == ids["adventure_id"]
     assert sessions[0]["game_id"] == ids["game_id"]
+
+
+async def test_create_adventure_materializes_initial_session_as_independent_copy(client: AsyncClient, monkeypatch, tmp_path):
+    """After generation, the initial auto-created session should own world rows and copied visuals."""
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(settings, "DATA_DIR", str(data_dir))
+
+    async def fake_generate_world(db, user=None, template_id=None, adventure_id=None, *args, **kwargs):
+        adv_id = template_id or adventure_id
+        assert adv_id
+
+        cover_rel = f"adventures/library/{adv_id}/cover.png"
+        hero_rel = f"adventures/library/{adv_id}/hero.png"
+        scene_rel = f"adventures/library/{adv_id}/scenes/start.png"
+        entity_rel = f"adventures/library/{adv_id}/entities/npc.png"
+
+        os.makedirs(data_dir / "adventures" / "library" / adv_id / "scenes", exist_ok=True)
+        os.makedirs(data_dir / "adventures" / "library" / adv_id / "entities", exist_ok=True)
+        (data_dir / cover_rel).write_bytes(b"cover")
+        (data_dir / hero_rel).write_bytes(b"hero")
+        (data_dir / scene_rel).write_bytes(b"scene")
+        (data_dir / entity_rel).write_bytes(b"entity")
+
+        adventure = await db.get(Adventure, adv_id)
+        assert adventure is not None
+        adventure.image_url = f"/data/{cover_rel}"
+
+        avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == adv_id).limit(1))
+        avatar = avatar_res.scalars().first()
+        assert avatar is not None
+        avatar.profile_image = f"/data/{hero_rel}"
+
+        db.add(
+            WorldScene(
+                id="START",
+                template_id=adv_id,
+                label="Start",
+                description="Generated start scene",
+                image_url=f"/data/{scene_rel}",
+            )
+        )
+        db.add(
+            WorldEntity(
+                id="AUTO_NPC",
+                template_id=adv_id,
+                session_id=None,
+                entity_type="NPC",
+                name="Auto NPC",
+                description="Generated NPC",
+                current_scene_id="START",
+                image_url=f"/data/{entity_rel}",
+            )
+        )
+        await db.commit()
+
+    monkeypatch.setattr("backend.api.routes.adventures.templates.WorldGenerator.generate_world", fake_generate_world)
+
+    ids = await _create_adventure(client, "Initial Session Materialization Quest")
+    game_id = ids["game_id"]
+
+    def _url_to_file_path(url: str) -> str:
+        rel = url.replace("/data/", "", 1).lstrip("/")
+        return os.path.join(str(data_dir), rel)
+
+    async with TestSessionLocal() as session:
+        game_session = await session.get(GameSession, game_id)
+        assert game_session is not None
+        assert game_session.adventure_image_url.startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(game_session.adventure_image_url))
+
+        avatar_res = await session.execute(select(Avatar).where(Avatar.id == game_session.avatar_id))
+        avatar = avatar_res.scalars().first()
+        assert avatar is not None
+        assert avatar.profile_image.startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(avatar.profile_image))
+
+        state_res = await session.execute(select(SessionState).where(SessionState.session_id == game_id))
+        state = state_res.scalars().first()
+        assert state is not None
+        snapshot = dict((state.entity_states or {}).get("__asset_snapshot__") or {})
+        assert snapshot.get("cover", "").startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert snapshot.get("protagonist", "").startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert snapshot.get("entity_images", {}).get("AUTO_NPC", "").startswith(
+            f"/data/adventures/sessions/{game_id}/visuals/"
+        )
+
+        scene_res = await session.execute(
+            select(WorldScene).where(
+                WorldScene.session_id == game_id,
+                WorldScene.id == "START",
+            )
+        )
+        cloned_scene = scene_res.scalars().first()
+        assert cloned_scene is not None
+        assert cloned_scene.image_url.startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(cloned_scene.image_url))
+
+        entity_res = await session.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == game_id,
+                WorldEntity.id == "AUTO_NPC",
+            )
+        )
+        cloned_entity = entity_res.scalars().first()
+        assert cloned_entity is not None
+        assert cloned_entity.image_url.startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(cloned_entity.image_url))
 
 
 async def test_post_chat_stream_includes_turn_correlation_id(client: AsyncClient):
@@ -1127,6 +1235,34 @@ async def test_delete_adventure_keeps_existing_sessions(client: AsyncClient):
     assert chat_resp.status_code == 200, chat_resp.text
 
 
+async def test_delete_adventure_removes_library_folder_even_with_sessions(client: AsyncClient, monkeypatch, tmp_path):
+    """Deleting a template must remove its library folder, even when sessions still exist."""
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(settings, "DATA_DIR", str(data_dir))
+
+    ids = await _create_adventure(client, "Folder Cleanup Quest")
+    adv_id = ids["adventure_id"]
+
+    library_dir = data_dir / "adventures" / "library" / adv_id
+    os.makedirs(library_dir, exist_ok=True)
+    cover_path = library_dir / "cover.png"
+    cover_path.write_bytes(b"fake-cover")
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, adv_id)
+        assert adventure is not None
+        adventure.image_url = f"/data/adventures/library/{adv_id}/cover.png"
+        await session.commit()
+
+    start_resp = await client.post(f"/api/adventures/{adv_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+
+    del_resp = await client.delete(f"/api/adventures/{adv_id}")
+    assert del_resp.status_code == 200, del_resp.text
+
+    assert not library_dir.exists()
+
+
 # ---------------------------------------------------------------------------
 # GET /api/adventures/{adventure_id}/state
 # ---------------------------------------------------------------------------
@@ -1940,6 +2076,24 @@ async def test_delete_session_with_chat_messages_succeeds(client: AsyncClient):
     assert del_resp.status_code == 200, del_resp.text
 
 
+async def test_delete_session_removes_session_folder(client: AsyncClient, monkeypatch, tmp_path):
+    """Deleting a session should also remove its session-bound folder from DATA_DIR."""
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(settings, "DATA_DIR", str(data_dir))
+
+    ids = await _create_adventure(client, "Delete Session Folder Quest")
+    game_id = ids["game_id"]
+
+    session_dir = data_dir / "adventures" / "sessions" / game_id
+    os.makedirs(session_dir, exist_ok=True)
+    (session_dir / "temp_asset.txt").write_bytes(b"dummy")
+    assert session_dir.exists()
+
+    del_resp = await client.delete(f"/api/adventures/sessions/{game_id}")
+    assert del_resp.status_code == 200, del_resp.text
+    assert not session_dir.exists()
+
+
 async def test_started_session_persists_asset_snapshot(client: AsyncClient):
     """Newly started sessions store a template asset snapshot for isolation."""
     ids = await _create_adventure(client, "Snapshot Quest")
@@ -1954,6 +2108,221 @@ async def test_started_session_persists_asset_snapshot(client: AsyncClient):
         assert state is not None
         assert isinstance(state.entity_states, dict)
         assert "__asset_snapshot__" in state.entity_states
+
+
+async def test_started_session_copies_visuals_into_session_folder(client: AsyncClient, monkeypatch, tmp_path):
+    """Starting a session copies template visuals into session-scoped storage and rewires URLs."""
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(settings, "DATA_DIR", str(data_dir))
+
+    ids = await _create_adventure(client, "Session Visual Isolation Quest")
+    adv_id = ids["adventure_id"]
+
+    library_dir = data_dir / "adventures" / "library" / adv_id
+    os.makedirs(library_dir / "scenes", exist_ok=True)
+    os.makedirs(library_dir / "entities", exist_ok=True)
+
+    cover_rel = f"adventures/library/{adv_id}/cover.png"
+    hero_rel = f"adventures/library/{adv_id}/hero.png"
+    scene_rel = f"adventures/library/{adv_id}/scenes/start.png"
+    entity_rel = f"adventures/library/{adv_id}/entities/npc.png"
+
+    (data_dir / cover_rel).write_bytes(b"cover")
+    (data_dir / hero_rel).write_bytes(b"hero")
+    (data_dir / scene_rel).write_bytes(b"scene")
+    (data_dir / entity_rel).write_bytes(b"entity")
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, adv_id)
+        assert adventure is not None
+        adventure.image_url = f"/data/{cover_rel}"
+
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert avatar is not None
+        avatar.profile_image = f"/data/{hero_rel}"
+
+        scene_res = await session.execute(
+            select(WorldScene).where(
+                WorldScene.template_id == adv_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+        template_scene = scene_res.scalars().first()
+        assert template_scene is not None
+        template_scene.image_url = f"/data/{scene_rel}"
+
+        session.add(
+            WorldEntity(
+                id="VISUAL_COPY_NPC",
+                template_id=adv_id,
+                session_id=None,
+                entity_type="NPC",
+                name="Visual Copy NPC",
+                description="Entity image copy regression test",
+                current_scene_id=template_scene.id,
+                image_url=f"/data/{entity_rel}",
+            )
+        )
+        await session.commit()
+
+    start_resp = await client.post(f"/api/adventures/{adv_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    def _url_to_file_path(url: str) -> str:
+        rel = url.replace("/data/", "", 1).lstrip("/")
+        return os.path.join(str(data_dir), rel)
+
+    async with TestSessionLocal() as session:
+        session_row = await session.get(GameSession, game_id)
+        assert session_row is not None
+        assert session_row.adventure_image_url.startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(session_row.adventure_image_url))
+
+        state_res = await session.execute(select(SessionState).where(SessionState.session_id == game_id))
+        state = state_res.scalars().first()
+        assert state is not None
+        snapshot = dict((state.entity_states or {}).get("__asset_snapshot__") or {})
+        assert snapshot.get("cover", "").startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert snapshot.get("protagonist", "").startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert snapshot.get("entity_images", {}).get("VISUAL_COPY_NPC", "").startswith(
+            f"/data/adventures/sessions/{game_id}/visuals/"
+        )
+
+        avatar_res = await session.execute(select(Avatar).where(Avatar.id == session_row.avatar_id))
+        session_avatar = avatar_res.scalars().first()
+        assert session_avatar is not None
+        assert session_avatar.profile_image.startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(session_avatar.profile_image))
+
+        scene_res = await session.execute(
+            select(WorldScene).where(
+                WorldScene.session_id == game_id,
+                WorldScene.id == "START",
+            )
+        )
+        session_scene = scene_res.scalars().first()
+        assert session_scene is not None
+        assert session_scene.image_url.startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(session_scene.image_url))
+
+        entity_res = await session.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == game_id,
+                WorldEntity.id == "VISUAL_COPY_NPC",
+            )
+        )
+        session_entity = entity_res.scalars().first()
+        assert session_entity is not None
+        assert session_entity.image_url.startswith(f"/data/adventures/sessions/{game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(session_entity.image_url))
+
+
+async def test_copied_session_copies_visuals_into_new_session_folder(client: AsyncClient, monkeypatch, tmp_path):
+    """Copying a session must re-copy visuals into the new target session folder."""
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(settings, "DATA_DIR", str(data_dir))
+
+    ids = await _create_adventure(client, "Copied Session Visual Isolation Quest")
+    adv_id = ids["adventure_id"]
+
+    library_dir = data_dir / "adventures" / "library" / adv_id
+    os.makedirs(library_dir / "scenes", exist_ok=True)
+    os.makedirs(library_dir / "entities", exist_ok=True)
+
+    cover_rel = f"adventures/library/{adv_id}/cover.png"
+    hero_rel = f"adventures/library/{adv_id}/hero.png"
+    scene_rel = f"adventures/library/{adv_id}/scenes/start.png"
+    entity_rel = f"adventures/library/{adv_id}/entities/npc.png"
+
+    (data_dir / cover_rel).write_bytes(b"cover")
+    (data_dir / hero_rel).write_bytes(b"hero")
+    (data_dir / scene_rel).write_bytes(b"scene")
+    (data_dir / entity_rel).write_bytes(b"entity")
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, adv_id)
+        assert adventure is not None
+        adventure.image_url = f"/data/{cover_rel}"
+
+        avatar = await session.get(Avatar, ids["avatar_id"])
+        assert avatar is not None
+        avatar.profile_image = f"/data/{hero_rel}"
+
+        scene_res = await session.execute(
+            select(WorldScene).where(
+                WorldScene.template_id == adv_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+        template_scene = scene_res.scalars().first()
+        assert template_scene is not None
+        template_scene.image_url = f"/data/{scene_rel}"
+
+        session.add(
+            WorldEntity(
+                id="VISUAL_COPY_NPC_FOR_DUP",
+                template_id=adv_id,
+                session_id=None,
+                entity_type="NPC",
+                name="Visual Copy NPC",
+                description="Entity image copy regression test",
+                current_scene_id=template_scene.id,
+                image_url=f"/data/{entity_rel}",
+            )
+        )
+        await session.commit()
+
+    start_resp = await client.post(f"/api/adventures/{adv_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    source_game_id = start_resp.json()["game_id"]
+
+    copy_resp = await client.post(f"/api/adventures/sessions/{source_game_id}/copy")
+    assert copy_resp.status_code == 201, copy_resp.text
+    copied_game_id = copy_resp.json()["game_id"]
+
+    def _url_to_file_path(url: str) -> str:
+        rel = url.replace("/data/", "", 1).lstrip("/")
+        return os.path.join(str(data_dir), rel)
+
+    async with TestSessionLocal() as session:
+        source_session = await session.get(GameSession, source_game_id)
+        copied_session = await session.get(GameSession, copied_game_id)
+        assert source_session is not None
+        assert copied_session is not None
+
+        assert source_session.adventure_image_url.startswith(f"/data/adventures/sessions/{source_game_id}/visuals/")
+        assert copied_session.adventure_image_url.startswith(f"/data/adventures/sessions/{copied_game_id}/visuals/")
+        assert copied_session.adventure_image_url != source_session.adventure_image_url
+        assert os.path.isfile(_url_to_file_path(copied_session.adventure_image_url))
+
+        avatar_res = await session.execute(select(Avatar).where(Avatar.id == copied_session.avatar_id))
+        copied_avatar = avatar_res.scalars().first()
+        assert copied_avatar is not None
+        assert copied_avatar.profile_image.startswith(f"/data/adventures/sessions/{copied_game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(copied_avatar.profile_image))
+
+        copied_scene_res = await session.execute(
+            select(WorldScene).where(
+                WorldScene.session_id == copied_game_id,
+                WorldScene.id == "START",
+            )
+        )
+        copied_scene = copied_scene_res.scalars().first()
+        assert copied_scene is not None
+        assert copied_scene.image_url.startswith(f"/data/adventures/sessions/{copied_game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(copied_scene.image_url))
+
+        copied_entity_res = await session.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == copied_game_id,
+                WorldEntity.id == "VISUAL_COPY_NPC_FOR_DUP",
+            )
+        )
+        copied_entity = copied_entity_res.scalars().first()
+        assert copied_entity is not None
+        assert copied_entity.image_url.startswith(f"/data/adventures/sessions/{copied_game_id}/visuals/")
+        assert os.path.isfile(_url_to_file_path(copied_entity.image_url))
 
 
 async def test_start_session_ignores_session_bound_template_rows(client: AsyncClient):

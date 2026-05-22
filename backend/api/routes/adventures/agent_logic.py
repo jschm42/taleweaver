@@ -128,10 +128,14 @@ class AgentService:
 
         user_prompt = "Based on the recent chat history and your current location, what is the single next action or command you want to perform? If you are stuck or encountered an error/bug, report it."
 
-        # Initialize the GameMasterLLM using the user's preferred simple/small model config
+        llm_settings = user.llm_settings or {}
+        play_model_provider = llm_settings.get("play_agent_model_provider") or ctx.small_model_provider
+        play_model = llm_settings.get("play_agent_model") or ctx.small_model
+
+        # Initialize the GameMasterLLM using the dedicated play-agent model config
         gm_llm = GameMasterLLM(
             user=user,
-            provider=ctx.small_model_provider,
+            provider=play_model_provider,
             model_category="small",
         )
 
@@ -140,7 +144,7 @@ class AgentService:
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 response_model=AgentDecision,
-                model=ctx.small_model,
+                model=play_model,
                 adventure_id=adventure.id,
                 game_id=game_id,
                 operation="agent_turn",

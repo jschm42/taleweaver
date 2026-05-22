@@ -1,5 +1,8 @@
 import logging
 import os
+import re
+import shutil
+import uuid
 from copy import deepcopy
 from typing import Any, Optional, Union
 
@@ -42,6 +45,146 @@ ITEM_INTEGRITY_FIELDS = [
     "stamina_change",
     "mana_change",
 ]
+
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
+def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
+def _copy_data_asset_to_session(
+    session_id: str,
+    bucket: str,
+    source_url: Optional[str],
+    cache: dict[str, str],
+) -> Optional[str]:
+    """Copy /data assets into the concrete session folder and return a rewritten URL."""
+    if not isinstance(source_url, str) or not source_url.startswith("/data/"):
+        return source_url
+
+    cached = cache.get(source_url)
+    if cached:
+        return cached
+
+    safe_session_id = _sanitize_path_component(session_id)
+    safe_bucket = _sanitize_path_component(bucket)
+    if not safe_session_id or not safe_bucket:
+        logger.warning("Skipping asset copy due to invalid session/bucket: %s / %s", session_id, bucket)
+        return source_url
+
+    rel_path = source_url.replace("/data/", "", 1).lstrip("/")
+    try:
+        source_path = _ensure_within_data_dir(os.path.join(settings.DATA_DIR, rel_path))
+    except ValueError:
+        logger.warning("Skipping asset copy for unsafe source URL: %s", source_url)
+        return source_url
+
+    if not os.path.isfile(source_path):
+        logger.warning("Skipping asset copy because source file does not exist: %s", source_path)
+        return source_url
+
+    ext = os.path.splitext(source_path)[1].lower()
+    if ext not in _SAFE_IMAGE_EXTENSIONS:
+        ext = ".png"
+
+    target_dir = _ensure_within_data_dir(
+        os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_session_id, "visuals", safe_bucket)
+    )
+    os.makedirs(target_dir, exist_ok=True)
+
+    target_name = f"{uuid.uuid4().hex}{ext}"
+    target_path = _ensure_within_data_dir(os.path.join(target_dir, target_name))
+
+    try:
+        shutil.copy2(source_path, target_path)
+    except OSError:
+        logger.exception("Failed copying asset to session folder: %s -> %s", source_path, target_path)
+        return source_url
+
+    rel_target_path = os.path.relpath(target_path, settings.DATA_DIR).replace("\\", "/")
+    target_url = f"/data/{rel_target_path}"
+    cache[source_url] = target_url
+    return target_url
+
+
+def _rewrite_avatar_item_visual_urls(avatar: Avatar, session_id: str, cache: dict[str, str]) -> None:
+    """Rewrite avatar inventory/equipment image URLs to copied session-local assets."""
+    rewritten_inventory = []
+    for item in (avatar.inventory or []):
+        if isinstance(item, dict):
+            item_copy = dict(item)
+            item_copy["image_url"] = _copy_data_asset_to_session(
+                session_id,
+                "items",
+                item_copy.get("image_url"),
+                cache,
+            )
+            rewritten_inventory.append(item_copy)
+        else:
+            rewritten_inventory.append(item)
+    avatar.inventory = rewritten_inventory
+
+    rewritten_equipment = {}
+    for slot, item in (avatar.equipment or {}).items():
+        if isinstance(item, dict):
+            item_copy = dict(item)
+            item_copy["image_url"] = _copy_data_asset_to_session(
+                session_id,
+                "items",
+                item_copy.get("image_url"),
+                cache,
+            )
+            rewritten_equipment[slot] = item_copy
+        else:
+            rewritten_equipment[slot] = item
+    avatar.equipment = rewritten_equipment
+
+
+def _rewrite_asset_snapshot_urls(session_id: str, snapshot: dict[str, Any], cache: dict[str, str]) -> dict[str, Any]:
+    """Rewrite known asset snapshot URL fields to copied session-local assets."""
+    rewritten = dict(snapshot or {})
+
+    rewritten["cover"] = _copy_data_asset_to_session(session_id, "cover", rewritten.get("cover"), cache)
+    rewritten["protagonist"] = _copy_data_asset_to_session(session_id, "protagonist", rewritten.get("protagonist"), cache)
+
+    entity_images = rewritten.get("entity_images")
+    if isinstance(entity_images, dict):
+        rewritten_entity_images = {}
+        for ent_id, image_url in entity_images.items():
+            rewritten_entity_images[ent_id] = _copy_data_asset_to_session(session_id, "entities", image_url, cache)
+        rewritten["entity_images"] = rewritten_entity_images
+
+    for key, value in list(rewritten.items()):
+        if key in {"cover", "protagonist", "entity_images"}:
+            continue
+        if isinstance(value, str):
+            rewritten[key] = _copy_data_asset_to_session(session_id, "snapshot", value, cache)
+
+    return rewritten
 
 
 def _to_int_or_none(value):
@@ -328,6 +471,16 @@ async def start_session_for_template(
     # Ensure a concrete session filesystem root exists for session-bound artifacts (e.g. TTS).
     os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", new_session.id), exist_ok=True)
 
+    asset_copy_cache: dict[str, str] = {}
+    copied_cover_url = _copy_data_asset_to_session(new_session.id, "cover", adventure.image_url, asset_copy_cache)
+    copied_protagonist_url = _copy_data_asset_to_session(new_session.id, "protagonist", avatar.profile_image, asset_copy_cache)
+
+    adventure_image_url = copied_cover_url or adventure.image_url
+    protagonist_image_url = copied_protagonist_url or avatar.profile_image
+
+    new_session.adventure_image_url = adventure_image_url
+    avatar.profile_image = protagonist_image_url
+
     # Create SessionState with narrative and asset snapshot
     manifest_snapshot = AdventureLogic.build_session_manifest_snapshot(adventure)
 
@@ -339,11 +492,21 @@ async def start_session_for_template(
         )
     )
     template_entities = ent_rows.scalars().all()
-    entity_images = {e.id: e.image_url for e in template_entities if getattr(e, "id", None)}
+    entity_images = {}
+    for ent in template_entities:
+        if not getattr(ent, "id", None):
+            continue
+        copied_entity_image = _copy_data_asset_to_session(
+            new_session.id,
+            "entities",
+            ent.image_url,
+            asset_copy_cache,
+        )
+        entity_images[ent.id] = copied_entity_image or ent.image_url
 
     asset_snapshot = {
-        "cover": adventure.image_url,
-        "protagonist": avatar.profile_image,
+        "cover": adventure_image_url,
+        "protagonist": protagonist_image_url,
         "entity_images": entity_images,
     }
 
@@ -380,9 +543,10 @@ async def start_session_for_template(
     )
     scenes = scenes_res.scalars().all()
     for s in scenes:
+        copied_scene_image = _copy_data_asset_to_session(new_session.id, "scenes", s.image_url, asset_copy_cache)
         new_s = WorldScene(
             id=s.id, session_id=new_session.id, template_id=None,
-            label=s.label, description=s.description, image_url=s.image_url
+            label=s.label, description=s.description, image_url=(copied_scene_image or s.image_url)
         )
         db.add(new_s)
     
@@ -411,11 +575,14 @@ async def start_session_for_template(
     )
     entities = entities_res.scalars().all()
     for ent in entities:
+        copied_entity_image = entity_images.get(ent.id)
+        if copied_entity_image is None:
+            copied_entity_image = _copy_data_asset_to_session(new_session.id, "entities", ent.image_url, asset_copy_cache)
         new_ent = WorldEntity(
             id=ent.id, session_id=new_session.id, template_id=None,
             entity_type=ent.entity_type, name=ent.name, description=ent.description,
             current_scene_id=ent.current_scene_id, spatial_position=ent.spatial_position,
-            image_url=ent.image_url, item_type=ent.item_type, wearable_slots=ent.wearable_slots,
+            image_url=(copied_entity_image or ent.image_url), item_type=ent.item_type, wearable_slots=ent.wearable_slots,
             is_in_inventory=ent.is_in_inventory, is_hidden=ent.is_hidden, is_portable=ent.is_portable,
             combination_ingredients=ent.combination_ingredients, reveals_item_id=ent.reveals_item_id,
             is_final_state=ent.is_final_state, state_comment=ent.state_comment,
@@ -480,6 +647,21 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
             await db.delete(avatar)
         
     await db.commit()
+
+    # Remove session-bound files from disk.
+    safe_game_id = _sanitize_path_component(game_id)
+    if safe_game_id:
+        session_dir = _ensure_within_data_dir(
+            os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_game_id)
+        )
+        if os.path.isdir(session_dir):
+            try:
+                shutil.rmtree(session_dir)
+            except OSError:
+                logger.exception("Failed to remove session directory for %s", game_id)
+    else:
+        logger.warning("Skipping session directory cleanup due to invalid session id: %s", game_id)
+
     return {"status": "deleted", "game_id": game_id}
 
 
@@ -605,6 +787,8 @@ async def copy_session(
     if not original_avatar:
         raise HTTPException(status_code=404, detail="Session avatar not found.")
 
+    asset_copy_cache: dict[str, str] = {}
+
     # 3. Clone Avatar
     cloned_avatar = Avatar(
         user_id=current_user.id,
@@ -657,10 +841,37 @@ async def copy_session(
     # Create session-bound folder
     os.makedirs(os.path.join(settings.DATA_DIR, "adventures", "sessions", copied_session.id), exist_ok=True)
 
+    copied_cover_url = _copy_data_asset_to_session(
+        copied_session.id,
+        "cover",
+        original_session.adventure_image_url,
+        asset_copy_cache,
+    )
+    copied_session.adventure_image_url = copied_cover_url or original_session.adventure_image_url
+
+    copied_profile_url = _copy_data_asset_to_session(
+        copied_session.id,
+        "protagonist",
+        original_avatar.profile_image,
+        asset_copy_cache,
+    )
+    cloned_avatar.profile_image = copied_profile_url or original_avatar.profile_image
+    _rewrite_avatar_item_visual_urls(cloned_avatar, copied_session.id, asset_copy_cache)
+
     # 5. Clone SessionState
     state_res = await db.execute(select(SessionState).where(SessionState.session_id == original_session.id))
     original_state = state_res.scalars().first()
     if original_state:
+        entity_states = deepcopy(original_state.entity_states)
+        if isinstance(entity_states, dict):
+            raw_snapshot = entity_states.get("__asset_snapshot__")
+            if isinstance(raw_snapshot, dict):
+                entity_states["__asset_snapshot__"] = _rewrite_asset_snapshot_urls(
+                    copied_session.id,
+                    raw_snapshot,
+                    asset_copy_cache,
+                )
+
         cloned_state = SessionState(
             session_id=copied_session.id,
             user_id=current_user.id,
@@ -671,7 +882,7 @@ async def copy_session(
             time_system=original_state.time_system,
             time_config=deepcopy(original_state.time_config),
             inventory=deepcopy(original_state.inventory),
-            entity_states=deepcopy(original_state.entity_states),
+            entity_states=entity_states,
             exit_states=deepcopy(original_state.exit_states),
             discovered_scenes=deepcopy(original_state.discovered_scenes),
             quests=deepcopy(original_state.quests),
@@ -706,13 +917,14 @@ async def copy_session(
     scenes_res = await db.execute(select(WorldScene).where(WorldScene.session_id == original_session.id))
     original_scenes = scenes_res.scalars().all()
     for s in original_scenes:
+        copied_scene_image = _copy_data_asset_to_session(copied_session.id, "scenes", s.image_url, asset_copy_cache)
         cloned_scene = WorldScene(
             id=s.id,
             session_id=copied_session.id,
             template_id=None,
             label=s.label,
             description=s.description,
-            image_url=s.image_url
+            image_url=(copied_scene_image or s.image_url)
         )
         db.add(cloned_scene)
 
@@ -735,6 +947,7 @@ async def copy_session(
     entities_res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == original_session.id))
     original_entities = entities_res.scalars().all()
     for ent in original_entities:
+        copied_entity_image = _copy_data_asset_to_session(copied_session.id, "entities", ent.image_url, asset_copy_cache)
         cloned_ent = WorldEntity(
             id=ent.id,
             session_id=copied_session.id,
@@ -744,7 +957,7 @@ async def copy_session(
             description=ent.description,
             current_scene_id=ent.current_scene_id,
             spatial_position=ent.spatial_position,
-            image_url=ent.image_url,
+            image_url=(copied_entity_image or ent.image_url),
             item_type=ent.item_type,
             wearable_slots=ent.wearable_slots,
             is_in_inventory=ent.is_in_inventory,

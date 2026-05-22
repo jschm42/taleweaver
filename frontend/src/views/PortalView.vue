@@ -13,19 +13,24 @@ import UserProfileContent from '@/components/portal/UserProfileContent.vue'
 import PortalFooter from '@/components/portal/PortalFooter.vue'
 
 import DeleteAdventureModal from '@/components/portal/DeleteAdventureModal.vue'
+import DeleteAllAdventuresModal from '@/components/portal/DeleteAllAdventuresModal.vue'
 import ImportExamplesModal from '@/components/portal/ImportExamplesModal.vue'
 import ImportWarningModal from '@/components/portal/ImportWarningModal.vue'
 import DeleteSessionModal from '@/components/portal/DeleteSessionModal.vue'
+import DeleteAllSessionsModal from '@/components/portal/DeleteAllSessionsModal.vue'
 import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
 import AboutModal from '@/components/portal/AboutModal.vue'
 import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
 import SetupWarningModal from '@/components/portal/SetupWarningModal.vue'
 import ExportProgressModal from '@/components/portal/ExportProgressModal.vue'
+import CloneProgressModal from '@/components/portal/CloneProgressModal.vue'
 
 const { route, router, activeSection, pushSection } = usePortalSectionRouting()
 const showAboutModal = ref(false)
 const showSetupWarningModal = ref(false)
 const hasCheckedSetup = ref(false)
+const showDeleteAllAdventuresConfirm = ref(false)
+const showDeleteAllSessionsConfirm = ref(false)
 
 const {
   templates,
@@ -50,9 +55,11 @@ const {
   startSessionForTemplate,
   confirmDeleteSession,
   executeDeleteSession,
+  executeDeleteAllSessions,
   copySession,
   confirmDeleteTemplate,
   executeDeleteTemplate,
+  executeDeleteAllTemplates,
   closeTemplateDeleteConfirm,
   closeSessionDeleteConfirm,
   closeImportExamplesConfirm,
@@ -78,6 +85,7 @@ const {
   confirmConflictOverwrite,
   dismissWarning,
   exportProgressState,
+  cloneProgressState,
   editNoteSessionId,
   editNoteValue,
   isSavingNote,
@@ -108,6 +116,34 @@ function editAdventure(templateId: string) {
 
 function openCreateModal() {
   router.push({ name: 'adventure-create' })
+}
+
+async function onDeleteAllAdventures() {
+  if (templates.length === 0 || isDeleting.value) return
+  showDeleteAllAdventuresConfirm.value = true
+}
+
+function closeDeleteAllAdventuresConfirm() {
+  showDeleteAllAdventuresConfirm.value = false
+}
+
+async function confirmDeleteAllAdventures() {
+  await executeDeleteAllTemplates()
+  showDeleteAllAdventuresConfirm.value = false
+}
+
+async function onDeleteAllSessions() {
+  if (sessions.length === 0 || isDeletingSession.value) return
+  showDeleteAllSessionsConfirm.value = true
+}
+
+function closeDeleteAllSessionsConfirm() {
+  showDeleteAllSessionsConfirm.value = false
+}
+
+async function confirmDeleteAllSessions() {
+  await executeDeleteAllSessions()
+  showDeleteAllSessionsConfirm.value = false
 }
 
 function openCoverCreate(templateId: string) {
@@ -194,10 +230,16 @@ onUnmounted(() => {
         <PortalLibraryToolbar
           v-if="activeSection !== 'profile'"
           :active-section="activeSection"
+          :template-count="templates.length"
+          :is-deleting-templates="isDeleting"
+          :session-count="sessions.length"
+          :is-deleting-sessions="isDeletingSession"
           @change-section="activeSection = $event"
+          @delete-all-adventures="onDeleteAllAdventures"
           @create="openCreateModal"
           @import="triggerImportPicker"
           @restore-defaults="executeRestoreDefaults"
+          @delete-all-sessions="onDeleteAllSessions"
         />
 
         <!-- Loading State -->
@@ -266,6 +308,14 @@ onUnmounted(() => {
         @close="closeTemplateDeleteConfirm"
         @confirm="executeDeleteTemplate"
       />
+
+      <DeleteAllAdventuresModal
+        v-if="showDeleteAllAdventuresConfirm"
+        :adventure-count="templates.length"
+        :is-deleting="isDeleting"
+        @close="closeDeleteAllAdventuresConfirm"
+        @confirm="confirmDeleteAllAdventures"
+      />
       
       <ImportExamplesModal
         v-if="showImportConfirm"
@@ -279,6 +329,14 @@ onUnmounted(() => {
         :is-deleting="isDeletingSession"
         @close="closeSessionDeleteConfirm"
         @confirm="executeDeleteSession"
+      />
+
+      <DeleteAllSessionsModal
+        v-if="showDeleteAllSessionsConfirm"
+        :session-count="sessions.length"
+        :is-deleting="isDeletingSession"
+        @close="closeDeleteAllSessionsConfirm"
+        @confirm="confirmDeleteAllSessions"
       />
 
       <SessionNoteModal
@@ -323,6 +381,15 @@ onUnmounted(() => {
         :progress="exportProgressState.progress"
         :error-msg="exportProgressState.errorMsg"
         @close="exportProgressState.isOpen = false"
+      />
+
+      <CloneProgressModal
+        v-if="cloneProgressState.isOpen"
+        :session-title="cloneProgressState.sessionTitle"
+        :progress="cloneProgressState.progress"
+        :stage="cloneProgressState.stage"
+        :error-msg="cloneProgressState.errorMsg"
+        @close="cloneProgressState.isOpen = false"
       />
     </Teleport>
 

@@ -6,6 +6,7 @@ const props = defineProps<{
   availableConstants: any
   configuredKeys: any
   isSubmitting: boolean
+  isLoadingOllamaModels: boolean
   testResults: any
 }>()
 
@@ -14,6 +15,7 @@ const missingProviders = computed(() => {
     localForm.value.small_model_provider,
     localForm.value.complex_model_provider,
     localForm.value.generator_model_provider,
+    localForm.value.play_agent_model_provider,
   ])
   const missing: string[] = []
   for (const p of providers) {
@@ -28,6 +30,7 @@ const missingProviders = computed(() => {
 const emit = defineEmits<{
   (e: 'save', payload: any): void
   (e: 'test', payload: { key: string, model: string, provider: string }): void
+  (e: 'refreshOllamaModels', ollamaUrl?: string): void
   (e: 'switchSection', section: string): void
 }>()
 
@@ -44,10 +47,7 @@ const isModelCustom = (model: string, provider: string) => {
   return !predefined.includes(model)
 }
 
-const getModelOptionLabel = (provider: string, model: string) => {
-  if (provider === 'ollama') return `${model} (EXPERIMENTAL)`
-  return model
-}
+const getModelOptionLabel = (_provider: string, model: string) => model
 
 const getProviderName = (id: string) => {
   return props.availableConstants.llm_providers?.find((p: any) => p.id === id)?.name || id
@@ -85,6 +85,32 @@ watch(() => localForm.value.complex_model_provider, (provider, oldProvider) => {
 watch(() => localForm.value.generator_model_provider, (provider, oldProvider) => {
   localForm.value.generator_model = resolveModelOnProviderChange(localForm.value.generator_model, provider, oldProvider)
 })
+
+watch(() => localForm.value.play_agent_model_provider, (provider, oldProvider) => {
+  localForm.value.play_agent_model = resolveModelOnProviderChange(localForm.value.play_agent_model, provider, oldProvider)
+})
+
+const hasOllamaProviderSelected = computed(() => (
+  localForm.value.small_model_provider === 'ollama'
+  || localForm.value.complex_model_provider === 'ollama'
+  || localForm.value.generator_model_provider === 'ollama'
+  || localForm.value.play_agent_model_provider === 'ollama'
+))
+
+const ollamaModelCount = computed(() => {
+  const models = props.availableConstants?.predefined_llm_models?.ollama
+  return Array.isArray(models) ? models.length : 0
+})
+
+watch(hasOllamaProviderSelected, (enabled) => {
+  if (enabled) {
+    emit('refreshOllamaModels', localForm.value.ollama_url)
+  }
+}, { immediate: true })
+
+const refreshOllamaModels = () => {
+  emit('refreshOllamaModels', localForm.value.ollama_url)
+}
 
 watch(localForm, () => {
   // Sync back to parent if needed, but since we have a save button, maybe we just emit the whole form on save.
@@ -337,14 +363,82 @@ const handleSave = () => {
       </div>
 
       <!-- GLOBAL LLM SETTINGS -->
+      <div class="space-y-4 p-6 bg-slate-950/50 rounded-2xl border border-purple-500/10 shadow-inner">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
+            <i class="ra ra-player"></i> Play Agent Model (Autonomous Gameplay)
+          </h3>
+          <button
+            @click="emit('test', { key: 'play_agent', model: localForm.play_agent_model, provider: localForm.play_agent_model_provider })"
+            class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
+          >
+            <i class="ra ra-gear-hammer"></i> Test Connection
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Provider</label>
+            <select v-model="localForm.play_agent_model_provider" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50">
+              <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </div>
+          <div class="space-y-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
+            <select
+              :value="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) ? 'custom' : localForm.play_agent_model"
+              @change="(e) => {
+                const val = (e.target as HTMLSelectElement).value;
+                if (val !== 'custom') localForm.play_agent_model = val;
+                else if (!isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider)) localForm.play_agent_model = '';
+              }"
+              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
+            >
+              <option value="" disabled>-- Please Select --</option>
+              <option v-for="m in availableConstants.predefined_llm_models[localForm.play_agent_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.play_agent_model_provider, m) }}</option>
+              <option value="custom">-- Custom Model String --</option>
+            </select>
+          </div>
+        </div>
+
+        <div v-if="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) || localForm.play_agent_model === ''" class="space-y-2 animate-fade-in">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
+          <input v-model="localForm.play_agent_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+        </div>
+
+        <p class="text-xxs text-slate-500">Used when Autonomous Agent Mode is active. Falls back to the Simple Model if left empty.</p>
+
+        <div v-if="testResults.play_agent" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.play_agent.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.play_agent.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <div v-if="testResults.play_agent.status === 'loading'" class="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+              <i v-else :class="testResults.play_agent.status === 'success' ? 'ra ra-check' : 'ra ra-warning'"></i>
+              {{ testResults.play_agent.message }}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="pt-6 border-t border-slate-800 space-y-6">
         <h4 class="text-xs font-black uppercase tracking-[0.2em] text-purple-400">Global Infrastructure</h4>
         
         <div class="space-y-4">
-          <div v-if="localForm.small_model_provider === 'ollama' || localForm.complex_model_provider === 'ollama' || localForm.generator_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
-            <label class="block text-sm font-semibold text-slate-300">Ollama API Base URL</label>
+          <div v-if="localForm.small_model_provider === 'ollama' || localForm.complex_model_provider === 'ollama' || localForm.generator_model_provider === 'ollama' || localForm.play_agent_model_provider === 'ollama'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
+            <div class="flex items-center justify-between gap-3">
+              <label class="block text-sm font-semibold text-slate-300">Ollama API Base URL</label>
+              <button
+                type="button"
+                @click="refreshOllamaModels"
+                class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all"
+              >
+                {{ isLoadingOllamaModels ? 'Loading models...' : 'Refresh Models' }}
+              </button>
+            </div>
             <input v-model="localForm.ollama_url" type="text" placeholder="http://localhost:11434" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
-            <p class="text-xxs text-slate-500">Local endpoint used for local model execution.</p>
+            <p class="text-xxs text-slate-500">Local endpoint used for local model execution. The model lists above show installed Ollama models.</p>
+            <div v-if="!isLoadingOllamaModels && ollamaModelCount === 0" class="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
+              No local Ollama models were found for this URL. Download one first (for example: ollama pull llama3.2), then click Refresh Models.
+            </div>
           </div>
         </div>
       </div>

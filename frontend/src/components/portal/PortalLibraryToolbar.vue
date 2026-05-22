@@ -1,6 +1,10 @@
 <script setup lang="ts">
 const props = defineProps<{
   activeSection: 'templates' | 'sessions'
+  templateCount?: number
+  isDeletingTemplates?: boolean
+  sessionCount?: number
+  isDeletingSessions?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -8,6 +12,8 @@ const emit = defineEmits<{
   (e: 'create'): void
   (e: 'import'): void
   (e: 'restore-defaults'): void
+  (e: 'delete-all-adventures'): void
+  (e: 'delete-all-sessions'): void
 }>()
 </script>
 
@@ -23,6 +29,14 @@ const emit = defineEmits<{
     </div>
     <div class="flex items-center gap-3">
       <div v-if="props.activeSection === 'templates'" class="flex gap-2">
+        <button
+          class="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold uppercase tracking-widest hover:bg-red-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="(props.templateCount || 0) === 0 || !!props.isDeletingTemplates"
+          @click="emit('delete-all-adventures')"
+        >
+          <i class="ra ra-burning-embers"></i>
+          {{ props.isDeletingTemplates ? 'Deleting...' : 'Delete All Adventures' }}
+        </button>
         <button
           class="px-4 py-2 rounded-xl bg-aether-primary/10 border border-aether-primary/20 text-aether-primary text-xs font-bold uppercase tracking-widest hover:bg-aether-primary/20 transition-all flex items-center gap-2"
           @click="emit('create')"
@@ -47,6 +61,14 @@ const emit = defineEmits<{
         </button>
       </div>
       <div v-else-if="props.activeSection === 'sessions'" class="flex gap-2">
+        <button
+          class="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold uppercase tracking-widest hover:bg-red-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="(props.sessionCount || 0) === 0 || !!props.isDeletingSessions"
+          @click="emit('delete-all-sessions')"
+        >
+          <i class="ra ra-trash"></i>
+          {{ props.isDeletingSessions ? 'Deleting...' : 'Delete All Sessions' }}
+        </button>
         <button
           class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2"
           @click="emit('import')"

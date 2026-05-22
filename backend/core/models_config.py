@@ -8,7 +8,7 @@ LLM_PROVIDERS = [
     {"id": "deepseek", "name": "DeepSeek"},
     {"id": "openrouter", "name": "OpenRouter"},
     {"id": "anthropic", "name": "Anthropic"},
-    {"id": "ollama", "name": "Ollama (Local, EXPERIMENTAL)"},
+    {"id": "ollama", "name": "Ollama (Local)"},
 ]
 
 IMAGE_PROVIDERS = [
@@ -16,7 +16,7 @@ IMAGE_PROVIDERS = [
     {"id": "openrouter", "name": "OpenRouter (Various)"},
     {"id": "black_forest_labs", "name": "Black Forest Labs"},
     {"id": "google", "name": "Google Gemini"},
-    {"id": "ollama", "name": "Ollama (Local, EXPERIMENTAL)"},
+    {"id": "ollama", "name": "Ollama (Local)"},
 ]
 
 TTS_PROVIDERS = [

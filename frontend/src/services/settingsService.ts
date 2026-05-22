@@ -40,6 +40,9 @@ class SettingsService {
     generator_enable_thinking: false,
     generator_max_thinking_tokens: 1024,
 
+    play_agent_model: '',
+    play_agent_model_provider: 'openai',
+
     preferred_provider: 'openai',
     ollama_url: 'http://localhost:11434',
   })
@@ -89,6 +92,7 @@ class SettingsService {
   isSubmitting = ref(false)
   statusMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
   isHydratingSettings = ref(false)
+  isLoadingOllamaModels = ref(false)
 
   // ============ FETCHING & INITIALIZATION ============
 
@@ -136,6 +140,8 @@ class SettingsService {
       if ((data as any).available_constants) {
         this.availableConstants.value = (data as any).available_constants
       }
+
+      await this.fetchOllamaModels(this.llmForm.value.ollama_url)
     } catch (error) {
       console.error('[SettingsService] Failed to fetch settings:', error)
       this.statusMessage.value = {
@@ -144,6 +150,34 @@ class SettingsService {
       }
     } finally {
       this.isHydratingSettings.value = false
+    }
+  }
+
+  async fetchOllamaModels(ollamaUrl?: string) {
+    this.isLoadingOllamaModels.value = true
+    try {
+      const data = await api.getOllamaModels(ollamaUrl)
+      const models = Array.isArray(data.models) ? data.models : []
+      this.availableConstants.value = {
+        ...this.availableConstants.value,
+        predefined_llm_models: {
+          ...this.availableConstants.value.predefined_llm_models,
+          ollama: models,
+        },
+      }
+      return models
+    } catch (error) {
+      console.error('[SettingsService] Failed to fetch Ollama models:', error)
+      this.availableConstants.value = {
+        ...this.availableConstants.value,
+        predefined_llm_models: {
+          ...this.availableConstants.value.predefined_llm_models,
+          ollama: [],
+        },
+      }
+      return []
+    } finally {
+      this.isLoadingOllamaModels.value = false
     }
   }
 

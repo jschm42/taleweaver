@@ -354,6 +354,13 @@ export const api = {
     return request('/settings/tts/elevenlabs-models', { method: 'GET' })
   },
 
+  getOllamaModels(ollamaUrl?: string): Promise<{ models: string[] }> {
+    const url = ollamaUrl
+      ? `/settings/ollama-models?ollama_url=${encodeURIComponent(ollamaUrl)}`
+      : '/settings/ollama-models'
+    return request(url, { method: 'GET' })
+  },
+
   /** Testing */
   testLlm(payload: any): Promise<any> {
     return request('/settings/test-llm', { method: 'POST', body: JSON.stringify(payload) })
