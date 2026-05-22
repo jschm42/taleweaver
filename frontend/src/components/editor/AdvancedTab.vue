@@ -7,6 +7,8 @@ const emit = defineEmits<{
   (e: 'save-changes'): void
   (e: 'update:generator', val: boolean): void
   (e: 'update:dynamic-items', val: boolean): void
+  (e: 'update:can-damage-npcs', val: boolean): void
+  (e: 'update:npcs-can-damage-protagonist', val: boolean): void
   (e: 'show-debug'): void
 }>()
 </script>
@@ -78,6 +80,52 @@ const emit = defineEmits<{
               :class="[
                 'w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300',
                 form.allow_dynamic_items ? 'translate-x-6' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between p-5 bg-black/30 rounded-2xl border border-white/5">
+          <div class="space-y-1 pr-6">
+            <p class="text-sm font-bold text-white">Protagonist can damage NPCs</p>
+            <p class="text-xs text-slate-500 leading-relaxed">Disabling this prevents all player attacks from reducing NPC HP.</p>
+          </div>
+          <button
+            type="button"
+            @click="emit('update:can-damage-npcs', !form.can_damage_npcs)"
+            :class="[
+              'w-14 h-8 rounded-full transition-all relative flex items-center px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500',
+              form.can_damage_npcs ? 'bg-rose-600' : 'bg-slate-800'
+            ]"
+            :aria-pressed="form.can_damage_npcs"
+          >
+            <div
+              :class="[
+                'w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300',
+                form.can_damage_npcs ? 'translate-x-6' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between p-5 bg-black/30 rounded-2xl border border-white/5">
+          <div class="space-y-1 pr-6">
+            <p class="text-sm font-bold text-white">NPCs can damage protagonist</p>
+            <p class="text-xs text-slate-500 leading-relaxed">Disabling this keeps enemy turns but prevents HP loss for the protagonist.</p>
+          </div>
+          <button
+            type="button"
+            @click="emit('update:npcs-can-damage-protagonist', !form.npcs_can_damage_protagonist)"
+            :class="[
+              'w-14 h-8 rounded-full transition-all relative flex items-center px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500',
+              form.npcs_can_damage_protagonist ? 'bg-rose-600' : 'bg-slate-800'
+            ]"
+            :aria-pressed="form.npcs_can_damage_protagonist"
+          >
+            <div
+              :class="[
+                'w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300',
+                form.npcs_can_damage_protagonist ? 'translate-x-6' : 'translate-x-0'
               ]"
             />
           </button>

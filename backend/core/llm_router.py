@@ -609,7 +609,7 @@ class GameMasterLLM:
 
         if use_json_mode_fallback:
             # Inject schema into prompt since we are bypassing strict tool enforcement
-            schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+            schema_json = json.dumps(response_model.model_json_schema(), separators=(",", ":"))
             system_prompt += (
                 f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
                 f"DO NOT wrap the response in a list (no square brackets at the top level).\n"
@@ -749,7 +749,7 @@ class GameMasterLLM:
 
         if use_json_mode_fallback:
             # Inject schema into prompt since we are bypassing strict enforcement
-            schema_json = json.dumps(response_model.model_json_schema(), indent=2)
+            schema_json = json.dumps(response_model.model_json_schema(), separators=(",", ":"))
             system_prompt += (
                 f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
                 f"DO NOT wrap the response in a list (no square brackets at the top level).\n"

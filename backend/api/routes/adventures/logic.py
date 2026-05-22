@@ -76,6 +76,8 @@ class AdventureLogic:
             "tts_director_notes": adventure.tts_director_notes,
             "original_prompt": adventure.original_prompt,
             "allow_dynamic_items": adventure.allow_dynamic_items,
+            "can_damage_npcs": adventure.can_damage_npcs,
+            "npcs_can_damage_protagonist": adventure.npcs_can_damage_protagonist,
             "is_adventure_generator": adventure.is_adventure_generator,
             "is_ready": True,
             "creation_status": "Ready",

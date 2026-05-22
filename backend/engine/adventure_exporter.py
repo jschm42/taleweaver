@@ -16,6 +16,69 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 logger = logging.getLogger(__name__)
 
+_ENTITY_BASE_KEYS = {
+    "id",
+    "entity_type",
+    "name",
+    "description",
+    "current_scene_id",
+    "spatial_position",
+    "image_url",
+}
+
+_OBJECT_ENTITY_KEYS = {
+    "item_type",
+    "wearable_slots",
+    "is_in_inventory",
+    "is_hidden",
+    "reveal_rule",
+    "unlock_rule",
+    "is_portable",
+    "combination_ingredients",
+    "reveals_item_id",
+    "is_final_state",
+    "state_comment",
+    "stat_modifier_strength",
+    "stat_modifier_dexterity",
+    "stat_modifier_intelligence",
+    "stat_modifier_wisdom",
+    "stat_modifier_charisma",
+    "stat_modifier_armor_class",
+    "inventory",
+    "metadata_json",
+}
+
+_NPC_ENTITY_KEYS = {
+    "is_hidden",
+    "reveal_rule",
+    "npc_type",
+    "movement_type",
+    "goal",
+    "character",
+    "hp",
+    "max_hp",
+    "mana",
+    "max_mana",
+    "stamina",
+    "max_stamina",
+    "voice",
+    "is_attackable",
+    "is_killable",
+    "inventory",
+    "metadata_json",
+}
+
+_SYSTEM_ENTITY_KEYS = {"pk", "session_id", "created_at", "updated_at", "template_id"}
+
+_STAT_MODIFIER_KEYS = {
+    "stat_modifier_strength",
+    "stat_modifier_dexterity",
+    "stat_modifier_intelligence",
+    "stat_modifier_wisdom",
+    "stat_modifier_charisma",
+    "stat_modifier_armor_class",
+}
+
 
 def _ensure_within_data_dir(path: str) -> str:
     """Validate that a path resolves inside DATA_DIR and return absolute path."""
@@ -38,6 +101,51 @@ def _safe_zip_asset_name(path: str) -> str:
     """Return a flattened safe asset name for zip entries."""
     base = os.path.basename(path or "")
     return base or "asset"
+
+
+def _prune_none(value: Any) -> Any:
+    """Recursively drop None values while preserving falsy values like 0 and False."""
+    if isinstance(value, dict):
+        return {k: _prune_none(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_prune_none(v) for v in value if v is not None]
+    return value
+
+
+def _serialize_world_entity(entity: WorldEntity) -> dict[str, Any]:
+    """Serialize a world entity with type-specific keys and no None values."""
+    raw = {
+        c.name: getattr(entity, c.name)
+        for c in entity.__table__.columns
+        if c.name not in _SYSTEM_ENTITY_KEYS
+    }
+
+    entity_type = str(raw.get("entity_type") or "").upper()
+    if entity_type == "OBJECT":
+        allowed_keys = _ENTITY_BASE_KEYS | _OBJECT_ENTITY_KEYS
+    elif entity_type == "NPC":
+        allowed_keys = _ENTITY_BASE_KEYS | _NPC_ENTITY_KEYS
+    else:
+        allowed_keys = set(raw.keys())
+
+    filtered = {
+        key: _prune_none(value)
+        for key, value in raw.items()
+        if key in allowed_keys and value is not None
+    }
+
+    # Keep stat modifiers canonical at top level for objects to avoid duplicated ADV fields.
+    if entity_type == "OBJECT" and isinstance(filtered.get("metadata_json"), dict):
+        metadata = dict(filtered["metadata_json"])
+        for stat_key in _STAT_MODIFIER_KEYS:
+            if stat_key in metadata and metadata.get(stat_key) == filtered.get(stat_key):
+                metadata.pop(stat_key, None)
+        if metadata:
+            filtered["metadata_json"] = metadata
+        else:
+            filtered.pop("metadata_json", None)
+
+    return filtered
 
 class AdventureExporter:
     @staticmethod
@@ -99,6 +207,7 @@ class AdventureExporter:
                             item_type=item_dict.get("item_type", "PICKABLE"),
                             wearable_slots=[item_slot] if item_slot else None,
                             is_in_inventory=True,
+                            unlock_rule=item_dict.get("unlock_rule"),
                             is_portable=True,
                             stat_modifier_strength=item_dict.get("stat_modifier_strength"),
                             stat_modifier_dexterity=item_dict.get("stat_modifier_dexterity"),
@@ -201,6 +310,8 @@ class AdventureExporter:
                 "generate_item_images": adv.generate_item_images,
                 "min_scenes": adv.min_scenes,
                 "max_scenes": adv.max_scenes,
+                "container_generation_enabled": adv.container_generation_enabled,
+                "max_containers": adv.max_containers,
                 "award_generation_enabled": adv.award_generation_enabled,
                 "min_awards": adv.min_awards,
                 "max_awards": adv.max_awards,
@@ -217,6 +328,8 @@ class AdventureExporter:
                 "time_config": adv.time_config,
                 "game_over_rules": adv.game_over_rules,
                 "allow_dynamic_items": adv.allow_dynamic_items,
+                "can_damage_npcs": adv.can_damage_npcs,
+                "npcs_can_damage_protagonist": adv.npcs_can_damage_protagonist,
                 "cover_source_adventure_id": adv.cover_source_adventure_id,
                 "cover_source_adventure_name": adv.cover_source_adventure_name,
                 "cover_similarity_percent": adv.cover_similarity_percent,
@@ -256,8 +369,8 @@ class AdventureExporter:
             
             "scenes": [to_dict(s) for s in scenes],
             "exits": [to_dict(e) for e in exits],
-            "npcs": [to_dict(ent) for ent in entities if ent.entity_type == "NPC"],
-            "objects": [to_dict(ent) for ent in entities if ent.entity_type == "OBJECT"],
+            "npcs": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "NPC"],
+            "objects": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "OBJECT"],
             "quests": adv.quests or [],
             "awards": adv.awards or [],
         }
@@ -310,15 +423,15 @@ class AdventureExporter:
             return path
 
         # Localize all image fields
-        manifest["adventure"]["image_url"] = localize_path(manifest["adventure"]["image_url"])
+        manifest["adventure"]["image_url"] = localize_path(manifest["adventure"].get("image_url"))
         if manifest["protagonist"]:
-            manifest["protagonist"]["profile_image"] = localize_path(manifest["protagonist"]["profile_image"])
+            manifest["protagonist"]["profile_image"] = localize_path(manifest["protagonist"].get("profile_image"))
         for s in manifest["scenes"]:
-            s["image_url"] = localize_path(s["image_url"])
+            s["image_url"] = localize_path(s.get("image_url"))
         for n in manifest["npcs"]:
-            n["image_url"] = localize_path(n["image_url"])
+            n["image_url"] = localize_path(n.get("image_url"))
         for o in manifest["objects"]:
-            o["image_url"] = localize_path(o["image_url"])
+            o["image_url"] = localize_path(o.get("image_url"))
 
         # Create the ZIP
         zip_buffer = io.BytesIO()

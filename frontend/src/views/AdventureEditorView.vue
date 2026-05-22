@@ -53,7 +53,24 @@ const isBatchGenerating = ref<Record<string, boolean>>({})
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
-const editForm = ref({ name: '', teaser: '', description: '', hp: 0, stamina: 0, mana: 0, goal: '', character: '' })
+const editForm = ref({
+  name: '',
+  teaser: '',
+  description: '',
+  hp: 0,
+  stamina: 0,
+  mana: 0,
+  goal: '',
+  character: '',
+  is_killable: true,
+  item_type: 'PICKABLE',
+  is_portable: true,
+  locked: false,
+  code_to_unlock: '',
+  item_to_unlock: '',
+  inventory_json: '[]',
+  text_log_content: '',
+})
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -216,6 +233,8 @@ const form = ref({
   max_scenes: 5,
   awards: [] as any[],
   allow_dynamic_items: true,
+  can_damage_npcs: true,
+  npcs_can_damage_protagonist: true,
   plot: '',
   rules: '',
   intro_text: '',
@@ -284,7 +303,14 @@ const editorObjects = computed<any[]>(() => {
   const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
   const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
   const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
-  return mergeUniqueById(source, inferred)
+  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() !== 'READABLE')
+})
+
+const editorTextLogs = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
+  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() === 'READABLE')
 })
 
 async function fetchAdventure() {
@@ -305,6 +331,8 @@ async function fetchAdventure() {
     form.value.awards = data.awards || []
     form.value.allow_dynamic_items = data.allow_dynamic_items ?? true
     form.value.plot = data.plot || ''
+    form.value.can_damage_npcs = data.can_damage_npcs ?? true
+    form.value.npcs_can_damage_protagonist = data.npcs_can_damage_protagonist ?? true
     form.value.rules = data.rules || ''
     form.value.intro_text = data.intro_text || ''
     form.value.walkthrough = data.walkthrough || ''
@@ -349,7 +377,11 @@ async function fetchDebugInfo() {
   }
 }
 
-function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string) {
+function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
+  const selectedObject = type === 'object'
+    ? ([...(editorObjects.value || []), ...(editorTextLogs.value || [])]).find((entry: any) => String(entry.id) === String(id))
+    : null
+
   editEntityContext.value = { type, id }
   editForm.value = { 
     name: currentName || '', 
@@ -359,7 +391,15 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     stamina: stamina ?? 0,
     mana: mana ?? 0,
     goal: goal || '',
-    character: character || ''
+    character: character || '',
+    is_killable: isKillable ?? true,
+    item_type: selectedObject?.item_type || 'PICKABLE',
+    is_portable: selectedObject?.is_portable !== false,
+    locked: selectedObject?.locked === true,
+    code_to_unlock: selectedObject?.code_to_unlock || '',
+    item_to_unlock: selectedObject?.item_to_unlock || '',
+    inventory_json: JSON.stringify(selectedObject?.inventory || [], null, 2),
+    text_log_content: fixNewlines(selectedObject?.metadata_json?.text_log_content || ''),
   }
   showEditModal.value = true
 }
@@ -381,6 +421,11 @@ async function saveEntityText(data: any) {
     }
   }
 
+  if (editEntityContext.value.type === 'object' && (data.text_log_content || '').length > 500) {
+    addNotification('Text logs must be 500 characters or less.', 'error')
+    return
+  }
+
   isSavingText.value = true
   promptError.value = ''
   try {
@@ -395,6 +440,14 @@ async function saveEntityText(data: any) {
       mana: data.mana || undefined,
       goal: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.goal : undefined,
       character: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.character : undefined,
+      is_killable: editEntityContext.value.type === 'npc' ? data.is_killable : undefined,
+      item_type: editEntityContext.value.type === 'object' ? data.item_type : undefined,
+      is_portable: editEntityContext.value.type === 'object' ? data.is_portable : undefined,
+      locked: editEntityContext.value.type === 'object' ? data.locked : undefined,
+      code_to_unlock: editEntityContext.value.type === 'object' ? data.code_to_unlock : undefined,
+      item_to_unlock: editEntityContext.value.type === 'object' ? data.item_to_unlock : undefined,
+      inventory: editEntityContext.value.type === 'object' ? data.inventory : undefined,
+      text_log_content: editEntityContext.value.type === 'object' ? data.text_log_content : undefined,
     })
     showEditModal.value = false
     editEntityContext.value = null
@@ -681,6 +734,7 @@ const goBack = () => {
             <ItemsTab 
               v-if="activeTab === 'items'"
               :editor-objects="editorObjects"
+              :editor-text-logs="editorTextLogs"
               :is-batch-generating="isBatchGenerating"
               :is-quick-generating="isQuickGenerating"
               :active-menu-id="activeMenuId"
@@ -770,6 +824,8 @@ const goBack = () => {
               :form="form"
               @update:generator="form.is_adventure_generator = $event; saveChanges()"
               @update:dynamic-items="form.allow_dynamic_items = $event; saveChanges()"
+              @update:can-damage-npcs="form.can_damage_npcs = $event; saveChanges()"
+              @update:npcs-can-damage-protagonist="form.npcs_can_damage_protagonist = $event; saveChanges()"
               @show-debug="showDebug = true"
               @save-changes="saveChanges"
             />

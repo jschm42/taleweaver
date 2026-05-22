@@ -196,6 +196,16 @@ def _to_int_or_none(value):
 def _backfill_item_from_entity(item: dict, entity: WorldEntity) -> dict:
     merged = dict(item)
     metadata = entity.metadata_json or {}
+    item_type = str(entity.item_type or merged.get("item_type") or "").upper()
+
+    # Preserve metadata for item-specific frontend behavior (e.g. READABLE text logs, container locks).
+    if isinstance(merged.get("metadata_json"), dict):
+        merged_metadata = dict(merged.get("metadata_json") or {})
+        for key, value in metadata.items():
+            merged_metadata.setdefault(key, value)
+        merged["metadata_json"] = merged_metadata
+    else:
+        merged["metadata_json"] = dict(metadata)
 
     def fill(key: str, *candidates):
         if merged.get(key) is not None:
@@ -218,6 +228,15 @@ def _backfill_item_from_entity(item: dict, entity: WorldEntity) -> dict:
     fill("stamina_change", metadata.get("stamina_change"), effects.get("stamina"), effects.get("energy"))
     fill("mana_change", metadata.get("mana_change"), effects.get("mana"))
 
+    if item_type == "READABLE":
+        if not merged.get("text_log_content"):
+            merged["text_log_content"] = str(metadata.get("text_log_content") or "").strip()[:500]
+        if not merged.get("text_log_format"):
+            text_log_format = str(metadata.get("text_log_format") or "DOCUMENT").strip().upper()
+            if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+                text_log_format = "DOCUMENT"
+            merged["text_log_format"] = text_log_format
+
     return merged
 
 
@@ -234,6 +253,12 @@ def _reconstruct_item_dict_from_entity(entity: WorldEntity) -> dict:
 
     metadata = entity.metadata_json or {}
     effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
+    item_type = entity.item_type or "PICKABLE"
+
+    text_log_content = str(metadata.get("text_log_content") or "").strip()[:500]
+    text_log_format = str(metadata.get("text_log_format") or "DOCUMENT").strip().upper()
+    if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+        text_log_format = "DOCUMENT"
 
     def get_val(*candidates):
         for candidate in candidates:
@@ -247,8 +272,11 @@ def _reconstruct_item_dict_from_entity(entity: WorldEntity) -> dict:
         "name": entity.name,
         "description": entity.description,
         "image_url": entity.image_url,
-        "item_type": entity.item_type or "PICKABLE",
+        "item_type": item_type,
         "slot": item_slot,
+        "metadata_json": dict(metadata),
+        "text_log_content": text_log_content if str(item_type).upper() == "READABLE" else "",
+        "text_log_format": text_log_format if str(item_type).upper() == "READABLE" else "",
         "stat_modifier_strength": get_val(entity.stat_modifier_strength, metadata.get("stat_modifier_strength")),
         "stat_modifier_dexterity": get_val(entity.stat_modifier_dexterity, metadata.get("stat_modifier_dexterity"), metadata.get("stat_modifier_agility")),
         "stat_modifier_intelligence": get_val(entity.stat_modifier_intelligence, metadata.get("stat_modifier_intelligence")),
@@ -510,13 +538,26 @@ async def start_session_for_template(
         "entity_images": entity_images,
     }
 
+    initial_entity_states = {
+        AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot,
+        "__asset_snapshot__": asset_snapshot,
+    }
+    for ent in template_entities:
+        if str(getattr(ent, "entity_type", "") or "").upper() != "OBJECT":
+            continue
+        metadata_json = dict(getattr(ent, "metadata_json", None) or {})
+        locked = metadata_json.get("locked")
+        if isinstance(locked, bool):
+            initial_entity_states[ent.id] = {"locked": locked}
+            continue
+
+        if metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock"):
+            initial_entity_states[ent.id] = {"locked": True}
+
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
         current_scene_id=first_scene_id, in_game_time=0, quests=deepcopy(adventure.quests or []),
-        entity_states={
-            AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot,
-            "__asset_snapshot__": asset_snapshot,
-        },
+        entity_states=initial_entity_states,
         start_datetime=AdventureLogic.resolve_start_datetime(adventure.original_manifest),
         plot=adventure.plot,
         rules=adventure.rules,
@@ -583,7 +624,7 @@ async def start_session_for_template(
             entity_type=ent.entity_type, name=ent.name, description=ent.description,
             current_scene_id=ent.current_scene_id, spatial_position=ent.spatial_position,
             image_url=(copied_entity_image or ent.image_url), item_type=ent.item_type, wearable_slots=ent.wearable_slots,
-            is_in_inventory=ent.is_in_inventory, is_hidden=ent.is_hidden, is_portable=ent.is_portable,
+            is_in_inventory=ent.is_in_inventory, is_hidden=ent.is_hidden, unlock_rule=ent.unlock_rule, is_portable=ent.is_portable,
             combination_ingredients=ent.combination_ingredients, reveals_item_id=ent.reveals_item_id,
             is_final_state=ent.is_final_state, state_comment=ent.state_comment,
             npc_type=ent.npc_type, movement_type=ent.movement_type,
@@ -591,6 +632,8 @@ async def start_session_for_template(
             stat_modifier_strength=ent.stat_modifier_strength, stat_modifier_dexterity=ent.stat_modifier_dexterity,
             stat_modifier_intelligence=ent.stat_modifier_intelligence, stat_modifier_wisdom=ent.stat_modifier_wisdom,
             stat_modifier_charisma=ent.stat_modifier_charisma, stat_modifier_armor_class=ent.stat_modifier_armor_class,
+            is_attackable=ent.is_attackable,
+            is_killable=ent.is_killable,
             inventory=deepcopy(ent.inventory), metadata_json=deepcopy(ent.metadata_json)
         )
         db.add(new_ent)
@@ -962,6 +1005,7 @@ async def copy_session(
             wearable_slots=ent.wearable_slots,
             is_in_inventory=ent.is_in_inventory,
             is_hidden=ent.is_hidden,
+            unlock_rule=None,
             is_portable=ent.is_portable,
             combination_ingredients=ent.combination_ingredients,
             reveals_item_id=ent.reveals_item_id,
@@ -981,6 +1025,8 @@ async def copy_session(
             stat_modifier_wisdom=ent.stat_modifier_wisdom,
             stat_modifier_charisma=ent.stat_modifier_charisma,
             stat_modifier_armor_class=ent.stat_modifier_armor_class,
+            is_attackable=ent.is_attackable,
+            is_killable=ent.is_killable,
             inventory=deepcopy(ent.inventory),
             metadata_json=deepcopy(ent.metadata_json),
             voice=ent.voice

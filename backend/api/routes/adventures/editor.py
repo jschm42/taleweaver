@@ -31,6 +31,14 @@ class EntityUpdateRequest(BaseModel):
     stamina: Optional[int] = None
     goal: Optional[str] = None
     character: Optional[str] = None
+    is_killable: Optional[bool] = None
+    item_type: Optional[str] = None
+    is_portable: Optional[bool] = None
+    locked: Optional[bool] = None
+    code_to_unlock: Optional[str] = None
+    item_to_unlock: Optional[str] = None
+    inventory: Optional[list] = None
+    text_log_content: Optional[str] = None
 
 def _serialize_model(obj):
     if not obj: return None
@@ -53,6 +61,13 @@ def _serialize_model(obj):
             if obj.stat_modifier_charisma: stats["CHA"] = obj.stat_modifier_charisma
             if obj.stat_modifier_armor_class: stats["AC"] = obj.stat_modifier_armor_class
             data["stats"] = stats
+            metadata_json = dict(obj.metadata_json or {})
+            data["code_to_unlock"] = str(metadata_json.get("code_to_unlock") or "")
+            data["item_to_unlock"] = str(metadata_json.get("item_to_unlock") or "")
+            if isinstance(metadata_json.get("locked"), bool):
+                data["locked"] = metadata_json.get("locked")
+            else:
+                data["locked"] = bool(metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock"))
     return data
 
 def _is_npc_entity(ent):
@@ -182,6 +197,31 @@ async def update_editor_entity(
             if ent.entity_type == "NPC":
                 if payload.goal is not None: ent.goal = payload.goal
                 if payload.character is not None: ent.character = payload.character
+                if payload.is_killable is not None: ent.is_killable = payload.is_killable
+            if ent.entity_type == "OBJECT":
+                if payload.item_type is not None:
+                    ent.item_type = str(payload.item_type).upper()
+                if payload.is_portable is not None:
+                    ent.is_portable = bool(payload.is_portable)
+                if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.locked is not None:
+                    metadata_json = dict(ent.metadata_json or {})
+                    if payload.code_to_unlock is not None:
+                        metadata_json["code_to_unlock"] = str(payload.code_to_unlock or "").strip()
+                    if payload.item_to_unlock is not None:
+                        metadata_json["item_to_unlock"] = str(payload.item_to_unlock or "").strip().upper()
+                    if payload.locked is not None:
+                        metadata_json["locked"] = bool(payload.locked)
+                    ent.metadata_json = metadata_json
+                    # Legacy free-text unlock rules are deprecated in favor of deterministic attributes.
+                    ent.unlock_rule = None
+                if payload.inventory is not None:
+                    ent.inventory = payload.inventory
+                if payload.text_log_content is not None:
+                    if len(payload.text_log_content) > 500:
+                        raise HTTPException(status_code=400, detail="text_log_content must be at most 500 characters.")
+                    metadata_json = dict(ent.metadata_json or {})
+                    metadata_json["text_log_content"] = payload.text_log_content.strip()
+                    ent.metadata_json = metadata_json
             
     await db.commit()
     return {"status": "success"}

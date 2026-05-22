@@ -6,31 +6,36 @@ better maintainability and documentation.
 
 from backend.core.voice_tags import build_voice_tag_catalog_prompt_block
 
+PUZZLE_JSON_ENFORCEMENT_BLOCK = (
+    "PUZZLE ENGINE CONTRACT (CRITICAL):\n"
+    "Every narrative puzzle must map to deterministic engine fields. Do not invent free-form puzzle logic without state bindings.\n"
+    "Use these fields explicitly where applicable: `is_locked`, `lock_description`, `combination_ingredients`, `reveals_item_id`, `is_hidden`, `reveal_rule`, `is_portable`, `spatial_position`, `wearable_slots`, `item_type`, `stat_modifier_strength`, `metadata_json.code_to_unlock`, `metadata_json.item_to_unlock`, `voice`, and time controls like `extra_time_minutes`.\n"
+    "Design puzzles so they can be resolved by concrete world state changes (entity updates, inventory/equipment changes, unlocks, reveals, movement), not by vague narration alone.\n"
+)
+
+PUZZLE_DESIGN_PATTERNS_BLOCK = (
+    "PUZZLE DESIGN PRIORITIES:\n"
+    "- Include varied puzzle types (combination, spatial clue, social/roleplay, optional time pressure).\n"
+    "- Prefer deterministic state bindings (`combination_ingredients`, `reveals_item_id`, `is_locked`, `lock_description`, `reveal_rule`).\n"
+    "- Encourage at least one optional alternate solution path where plausible.\n"
+)
+
 # --- World Generation Prompts ---
 
 WORLD_GENERATION_SYSTEM_PROMPT = (
     "You are a master world-builder for a Role Playing Game. Your task is to generate a coherent, "
     "interconnected game world based on a provided Story Idea.\n\n"
     "JSON STRUCTURE REQUIREMENTS (CRITICAL):\n"
-    "Your response must be a single JSON object with the following top-level fields:\n"
-    "- 'protagonist': A single object defining the player character.\n"
-    "- 'scenes': A flat list of all locations/rooms in the world.\n"
-    "- 'exits': A flat list of all connections between scenes.\n"
-    "- 'npcs': A flat list of all characters in the world. Use 'start_scene_id' to place them.\n"
-    "- 'objects': A flat list of all interactable items/objects. Use 'start_scene_id' to place them.\n"
-    "- 'quests': A flat list of narrative goals.\n"
-    "- 'awards': A flat list of achievements.\n"
-    "- 'language': The target language for all generated content.\n"
-    "- 'teaser', 'plot', 'rules', 'walkthrough', 'completed_condition', 'gameover_condition', 'intro_text', 'origin_id': Descriptive top-level strings.\n"
-    "- 'tts_director_notes': Style instructions for the narrator.\n\n"
+    "Return one JSON object (no markdown, no wrapper list).\n"
+    "Required top-level keys: protagonist, scenes, exits, npcs, objects, quests, awards, language, teaser, plot, rules, walkthrough, completed_condition, gameover_condition, intro_text, origin_id, tts_director_notes.\n\n"
     "MANDATORY FIELDS & DEFAULTS:\n"
-    "EVERY field in the schema is MANDATORY. If a field is not applicable (e.g., an NPC has no inventory, or an object has no stat modifiers), "
-    "you MUST still provide the field with a default value: empty string \"\", empty list [], or 0 for numbers.\n\n"
+    "Every required schema field must be present. If not applicable, use defaults: empty string \"\", empty list [], false for booleans, and 0 for numbers.\n\n"
     "NPC & OBJECT SPATIAL LOGIC:\n"
     "Every NPC and Object must have a 'spatial_position' relative to items in the room.\n"
     "NPC 'description' (bio) MUST be max 400 characters.\n"
     "NPC 'goal' (motivation) and 'character' (traits) fields MUST be concise (max 200 characters each).\n"
     "For OBJECTS, assign a specific 'item_type': CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE.\n"
+    "If an OBJECT has item_type READABLE, include text_log_content (max 500 characters) and text_log_format (DOCUMENT, SCROLL, BOOK, SIGN).\n"
     "For NPCs, assign an 'npc_type': HUMANOID, ANIMAL, MONSTER, BEING.\n"
     "Every NPC MUST also have a 'goal' and a 'character' description (both strings).\n\n"
     "PROTAGONIST:\n"
@@ -38,9 +43,12 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "These help the GM understand how the player character thinks and acts.\n\n"
     "STATS & RESOURCES:\n"
     "For NPCs, always assign 'hp' (range 40-100) and 'stamina' (range 50-100). Default to 0 if not relevant.\n"
+    "For NPCs, include both booleans: 'is_attackable' and 'is_killable'.\n"
     "For Protagonist, hp range is 60-120, stamina range is 60-100.\n\n"
     "AWARD & QUEST GENERATION:\n"
-    "Generate 3-5 Awards and 3-5 Quests matching the story context."
+    "Generate varied quests and awards that match the story context.\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 """
 The primary system prompt for generating a complete world manifest (scenes, NPCs, items, protagonist).
@@ -53,6 +61,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "Narrative Tone: {selected_tone}\n\n"
     "WORLD SIZE REQUIREMENTS:\n"
     "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
+    "- Set top-level combat flags exactly as requested: can_damage_npcs={can_damage_npcs}, npcs_can_damage_protagonist={npcs_can_damage_protagonist}.\n"
 
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
     "TTS DIRECTION:\n"
@@ -61,6 +70,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "{voice_assignment_requirement}"
     "{quest_requirement}"
     "{award_requirement}"
+    "{text_log_requirement}"
 )
 """
 Template for the user message that kicks off world generation.
@@ -189,6 +199,7 @@ GM_MECHANICS_SUFFIX = (
     "UNRESOLVED QUESTS:\n"
     "{quests_json}\n"
     "If an action affects an NPC or object (e.g. healing, movement, aggression), use `updated_entities` to reflect the new state. "
+    "For locked CONTAINER objects, only unlock when deterministic requirements in metadata (`code_to_unlock` and/or `item_to_unlock`) are satisfied; then set `updated_entities.locked=false` for that container entity so the player can open it. "
     "To move an NPC to a different scene, use `moved_entities` with `to_scene_id` and ideally a new `to_spatial_position` for the target location. "
     "IMPORTANT: `new_status_effects` is strictly for the PROTAGONIST's condition (e.g., 'Poisoned', 'Exhausted'). Do NOT use it for NPC actions or world state descriptions. "
     "NPC HP is usually handled automatically by `requested_attacks`, but can be manually adjusted here too.\n"
@@ -202,7 +213,9 @@ GM_MECHANICS_SUFFIX = (
     "GAME OVER & COMPLETION:\n"
     "- If the situation is hopeless or the player has violated core rules, set `game_over: true` and provide a `status_note` explanation.\n"
     "- If the story has reached its logical conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
-    "Your 'narrative_description' will be used as a draft/log; keep it short."
+    "Your 'narrative_description' will be used as a draft/log; keep it short.\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 """
 Appended to the system prompt when the GM is running in 'Mechanics' mode (Pass 1 of strict rules).
@@ -223,6 +236,7 @@ GM_STORY_MECHANICS_SUFFIX = (
     "- NPCs also have inventories. If the player gives an item to an NPC, receives one, or if an NPC drops/places an item in the scene, update BOTH the player's inventory (via `removed_inventory_item_ids`/`new_inventory_items`) and the NPC's `inventory` field (via `updated_entities`). If the item is dropped/placed in the scene, use `spawned_items` with the item's correct `id` and `name` so it retains its pre-defined properties and image.\n"
     "UNRESOLVED QUESTS:\n"
     "{quests_json}\n"
+    "For locked CONTAINER objects, only unlock when deterministic requirements in metadata (`code_to_unlock` and/or `item_to_unlock`) are satisfied; then set `updated_entities.locked=false` for that container entity.\n"
     "Evaluate if any of the following Awards have been earned based on the current action:\n"
     "{awards_json}\n"
     "If an award is earned, return its key in 'earned_award_keys'. Only grant an award once per session. You CANNOT create new awards; only use the keys provided in the list below.\n"
@@ -237,7 +251,9 @@ GM_STORY_MECHANICS_SUFFIX = (
     "- If an NPC moves to a different scene, use `moved_entities` with `to_scene_id` and `to_spatial_position`.\n"
     "- If an NPC changes their spot within the current scene, use `updated_entities` with `spatial_position`.\n"
     "IMPORTANT: `new_status_effects` is strictly for the PROTAGONIST's condition (e.g., 'Poisoned', 'Exhausted'). Do NOT use it for NPC actions or world state descriptions. "
-    "Your 'narrative_description' will be used as a draft/log; keep it short."
+    "Your 'narrative_description' will be used as a draft/log; keep it short.\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 """
 Appended to the system prompt when the GM is running in 'Mechanics' mode but for 'Story Mode' adventures.
@@ -354,7 +370,9 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "OPEN QUESTS:\n"
     "{quests_json}\n"
     "AVAILABLE UNEARNED AWARDS:\n"
-    "{awards_json}\n"
+    "{awards_json}\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 
 GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
@@ -383,7 +401,9 @@ GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "WORLD SCENES (REDUCED):\n"
     "{scenes_json}\n"
     "SESSION NOTES (REDUCED):\n"
-    "{notes_json}\n"
+    "{notes_json}\n\n"
+    + PUZZLE_JSON_ENFORCEMENT_BLOCK
+    + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
 # --- Prompt Suggestion ---
 
@@ -419,4 +439,29 @@ TRAIT_GENERATION_USER_PROMPT_TEMPLATE = (
     "Character Name: {name}\n"
     "Biography/Description: {description}\n"
     "Adventure Theme: {adventure_theme}\n"
+)
+
+# --- Story Idea Generation ---
+
+STORY_IDEA_GENERATION_SYSTEM_PROMPT = (
+    "You are a creative RPG concept writer. Generate or refine an adventure title and story idea.\n\n"
+    "OUTPUT FORMAT (CRITICAL):\n"
+    "Return a single JSON object with exactly these keys:\n"
+    "- title: string (max 50 characters)\n"
+    "- story_idea: string (concise but evocative, 2-5 sentences)\n\n"
+    "RULES:\n"
+    "- Respect the requested Narrative Tone and Rule Mode.\n"
+    "- If user input already exists, preserve the core premise and improve clarity, stakes, and hook.\n"
+    "- If no input exists, invent a fresh original concept matching the tone and rule mode.\n"
+    "- Keep language consistent with the requested language when provided.\n"
+    "- Never include markdown or additional keys."
+)
+
+STORY_IDEA_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Narrative Tone: {selected_tone}\n"
+    "Rule Mode: {rule_enforcement_mode}\n"
+    "Language: {language}\n"
+    "User Provided Content: {has_existing_input}\n"
+    "Current Title: {title}\n"
+    "Current Story Idea: {story_idea}\n"
 )

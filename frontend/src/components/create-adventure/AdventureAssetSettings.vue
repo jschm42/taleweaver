@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ImageIcon, Users, Sword, MapPin, Sparkles } from 'lucide-vue-next'
+import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
+import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 const props = defineProps<{
   modelValue: {
@@ -47,6 +49,14 @@ function toggleAsset(key: keyof typeof props.modelValue) {
 
 <template>
   <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h3 class="text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Asset Automation</h3>
+      <InfoPopoverButton
+        title="Asset Automation"
+        :text="CREATE_ADVENTURE_HELP_TEXTS.assetAutomation"
+      />
+    </div>
+
     <div class="flex items-center justify-between">
       <label class="text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Automated Assets</label>
       <div 

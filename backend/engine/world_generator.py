@@ -176,6 +176,7 @@ class WorldNPCSchema(BaseModel):
     mana: int = Field(..., description="Mana (range 0-999)")
     stamina: int = Field(..., description="Stamina (range 50-100)")
     is_attackable: bool = Field(..., description="If False, the player cannot start a fight with this NPC.")
+    is_killable: bool = Field(..., description="If False, this NPC can be defeated but cannot be permanently killed.")
     is_hidden: bool = Field(..., description="If True, the NPC is initially concealed.")
     source_asset_id: Optional[str] = Field(None, description="Optional source NPC ID to reuse an old portrait image.")
     reveal_rule: str = Field(
@@ -197,7 +198,7 @@ class WorldObjectSchema(BaseModel):
     start_scene_id: str = Field(..., description="The ID of the scene where the object starts.")
     spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'on the dusty shelf', 'under the rug'")
     
-    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE")
+    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER")
     wearable_slots: list[str] = Field(..., description="If WEARABLE, which slots? e.g. ['Head'], ['MainHand']. Use [] if none.")
     is_hidden: bool = Field(..., description="If True, the player must SEARCH or trigger an event to see this.")
     reveal_rule: str = Field(
@@ -209,6 +210,8 @@ class WorldObjectSchema(BaseModel):
         )
     )
     is_portable: bool = Field(..., description="Whether the item can be picked up. False for STATIC objects.")
+    code_to_unlock: str = Field("", description="Optional deterministic access code for locked containers, e.g. ALPHA or 4711.")
+    item_to_unlock: str = Field("", description="Optional deterministic item ID required to unlock this container.")
     combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. Use [] if none.")
     reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Use empty string if none.")
     
@@ -224,6 +227,8 @@ class WorldObjectSchema(BaseModel):
     mana_change: int = Field(..., description="Mana restoration when consumed. Use 0 if none.")
     
     inventory: list[str] = Field(..., description="List of object IDs inside this container object. Use [] if empty.")
+    text_log_content: str = Field("", description="Only for READABLE objects: visible text content, max 500 characters. Use empty string for non-readable items.")
+    text_log_format: str = Field("", description="Only for READABLE objects: one of DOCUMENT, SCROLL, BOOK, SIGN. Use empty string for non-readable items.")
     source_asset_id: Optional[str] = Field(None, description="Optional source object ID to reuse an old item image.")
     
     model_config = {"extra": "forbid"}
@@ -299,6 +304,8 @@ class WorldManifesto(BaseModel):
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
     tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
+    can_damage_npcs: bool = Field(..., description="Global flag: whether the protagonist can damage NPCs.")
+    npcs_can_damage_protagonist: bool = Field(..., description="Global flag: whether NPCs can damage the protagonist.")
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]
     npcs: list[WorldNPCSchema]
@@ -329,10 +336,18 @@ class WorldGenerator:
         automatic_npc_voice_assignment: bool = True,
         min_scenes: int = 1,
         max_scenes: int = 5,
+        container_generation_enabled: bool = True,
+        max_containers: int = 8,
+        text_log_generation_enabled: bool = True,
+        max_text_logs: int = 8,
         quest_generation_enabled: bool = True,
+        min_quests: int = 3,
+        max_quests: int = 5,
         award_generation_enabled: bool = True,
         min_awards: int = 3,
         max_awards: int = 5,
+        can_damage_npcs: bool = True,
+        npcs_can_damage_protagonist: bool = True,
         selected_image_styles: Optional[list[str]] = None,
         selected_tone: Optional[str] = None,
         language: Optional[str] = None,
@@ -400,8 +415,13 @@ class WorldGenerator:
             system_prompt += "\n\nQUEST GENERATION OVERRIDE: Do not generate any quests for this adventure."
 
         quest_requirement = ""
+        clamped_min_quests = max(1, min(20, int(min_quests)))
+        clamped_max_quests = max(clamped_min_quests, min(20, int(max_quests)))
         if quest_generation_enabled:
-            quest_requirement = "\n- Generate 1-2 Main Quests and 2-3 Side Quests that fit the narrative context."
+            quest_requirement = (
+                f"\n- Generate between {clamped_min_quests} and {clamped_max_quests} total quests that fit the narrative context."
+                " Mix main and side quests naturally."
+            )
         else:
             quest_requirement = "\n- Do not generate any quests for this adventure."
         
@@ -410,6 +430,33 @@ class WorldGenerator:
             award_requirement = f"\n\nAWARD SYSTEM:\n- Generate between {min_awards} and {max_awards} unique Awards that players can earn."
         else:
             award_requirement = "\n\nAWARD SYSTEM:\n- Do not generate any awards for this adventure."
+
+        clamped_max_containers = max(0, min(30, int(max_containers)))
+        if container_generation_enabled and clamped_max_containers > 0:
+            container_requirement = (
+                "\n\nCONTAINER ITEMS:\n"
+                f"- You may generate CONTAINER objects, but never more than {clamped_max_containers}.\n"
+                "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+            )
+        else:
+            container_requirement = (
+                "\n\nCONTAINER ITEMS:\n"
+                "- Do not generate any objects with item_type CONTAINER."
+            )
+
+        clamped_max_text_logs = max(0, min(30, int(max_text_logs)))
+        if text_log_generation_enabled and clamped_max_text_logs > 0:
+            text_log_requirement = (
+                "\n\nTEXT LOGS (READABLE OBJECTS):\n"
+                f"- You may generate READABLE objects, but never more than {clamped_max_text_logs}.\n"
+                "- For every READABLE object, provide `text_log_content` with at most 500 characters and `text_log_format` as DOCUMENT, SCROLL, BOOK, or SIGN.\n"
+                "- Keep text_log_content practical: hints, story fragments, warnings, clues."
+            )
+        else:
+            text_log_requirement = (
+                "\n\nTEXT LOGS (READABLE OBJECTS):\n"
+                "- Do not generate any READABLE objects."
+            )
 
         cover_guidance = ""
         if cover_source_manifest:
@@ -421,17 +468,33 @@ class WorldGenerator:
                 or ""
             )
             similarity = max(0, min(100, int(cover_similarity_percent or 0)))
-            source_manifest_json = json.dumps(cover_source_manifest, ensure_ascii=True)
+            source_scene_ids = [
+                s.get("id")
+                for s in (cover_source_manifest.get("scenes") or [])
+                if isinstance(s, dict) and s.get("id")
+            ][:12]
+            source_npc_ids = [
+                n.get("id")
+                for n in (cover_source_manifest.get("npcs") or [])
+                if isinstance(n, dict) and n.get("id")
+            ][:12]
+            source_object_ids = [
+                o.get("id")
+                for o in (cover_source_manifest.get("objects") or [])
+                if isinstance(o, dict) and o.get("id")
+            ][:24]
             cover_guidance = (
                 "\n\nCOVER MODE:\n"
                 f"- Create this as a cover of '{source_title}'.\n"
                 f"- Requested similarity: {similarity}% (0 = freely inspired, 100 = very close).\n"
-                f"- Source summary: {source_description}\n"
+                f"- Source summary: {source_description[:800]}\n"
                 f"- Old asset reuse allowed: {'yes' if allow_reuse_source_assets else 'no'}.\n"
-                "- You receive the full source manifest below; use all relevant content to preserve style, structure, and motifs at the requested similarity level.\n"
+                "- Use the source IDs below to preserve motifs and mapping where useful.\n"
                 "- If you intentionally want to reuse old visual assets, set `source_asset_id` on protagonist/scenes/npcs/objects entries to the chosen source IDs.\n"
                 "- If you want to reuse the old cover image, set `cover_source_asset_id` to `COVER`.\n"
-                f"- Full source manifest JSON: {source_manifest_json}\n"
+                f"- Source scene IDs (sample): {source_scene_ids}\n"
+                f"- Source NPC IDs (sample): {source_npc_ids}\n"
+                f"- Source object IDs (sample): {source_object_ids}\n"
             )
 
         user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE.format(
@@ -440,14 +503,18 @@ class WorldGenerator:
             selected_tone=selected_tone or "Standard RPG",
             min_scenes=min_scenes, 
             max_scenes=max_scenes,
+            can_damage_npcs="true" if can_damage_npcs else "false",
+            npcs_can_damage_protagonist="true" if npcs_can_damage_protagonist else "false",
             voice_assignment_requirement=_build_voice_assignment_requirement(
                 automatic_npc_voice_assignment,
                 available_voice_list,
             ),
             cover_guidance=cover_guidance,
             quest_requirement=quest_requirement,
-            award_requirement=award_requirement
+            award_requirement=award_requirement,
+            text_log_requirement=text_log_requirement,
         )
+        user_prompt += container_requirement
 
         
         # 1. Update Status
@@ -480,6 +547,13 @@ class WorldGenerator:
                 "generate_npc_images": generate_npc_images,
                 "generate_item_images": generate_item_images,
                 "automatic_npc_voice_assignment": automatic_npc_voice_assignment,
+                "container_generation_enabled": container_generation_enabled,
+                "max_containers": clamped_max_containers,
+                "text_log_generation_enabled": text_log_generation_enabled,
+                "max_text_logs": clamped_max_text_logs,
+                "quest_generation_enabled": quest_generation_enabled,
+                "min_quests": clamped_min_quests,
+                "max_quests": clamped_max_quests,
             },
         )
 
@@ -560,6 +634,54 @@ class WorldGenerator:
                 }
 
         manifest_dict = manifesto.model_dump()
+
+        objects = manifest_dict.get("objects") or []
+        container_indices = [
+            idx for idx, obj in enumerate(objects)
+            if isinstance(obj, dict) and str(obj.get("item_type", "")).upper() == "CONTAINER"
+        ]
+        if not container_generation_enabled:
+            for idx in container_indices:
+                obj = objects[idx]
+                obj["item_type"] = "PICKABLE"
+                obj["inventory"] = []
+                obj["code_to_unlock"] = ""
+                obj["item_to_unlock"] = ""
+        elif len(container_indices) > clamped_max_containers:
+            for idx in container_indices[clamped_max_containers:]:
+                obj = objects[idx]
+                obj["item_type"] = "PICKABLE"
+                obj["inventory"] = []
+                obj["code_to_unlock"] = ""
+                obj["item_to_unlock"] = ""
+
+        readable_indices = [
+            idx for idx, obj in enumerate(objects)
+            if isinstance(obj, dict) and str(obj.get("item_type", "")).upper() == "READABLE"
+        ]
+        if not text_log_generation_enabled:
+            for idx in readable_indices:
+                obj = objects[idx]
+                obj["item_type"] = "PICKABLE"
+                obj["text_log_content"] = ""
+                obj["text_log_format"] = ""
+        else:
+            if len(readable_indices) > clamped_max_text_logs:
+                for idx in readable_indices[clamped_max_text_logs:]:
+                    obj = objects[idx]
+                    obj["item_type"] = "PICKABLE"
+                    obj["text_log_content"] = ""
+                    obj["text_log_format"] = ""
+
+            for idx in readable_indices[:clamped_max_text_logs]:
+                obj = objects[idx]
+                raw_content = str(obj.get("text_log_content") or "").strip()
+                obj["text_log_content"] = raw_content[:500]
+                text_log_format = str(obj.get("text_log_format") or "DOCUMENT").strip().upper()
+                if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+                    text_log_format = "DOCUMENT"
+                obj["text_log_format"] = text_log_format
+
         manifest_dict["cover_source_adventure_id"] = cover_source_adventure_id
         manifest_dict["cover_source_adventure_name"] = cover_source_adventure_name
         manifest_dict["cover_similarity_percent"] = max(0, min(100, int(cover_similarity_percent or 0)))
@@ -741,6 +863,12 @@ class WorldGenerator:
                 
                 if manifest_dict.get("allow_dynamic_items") is not None:
                     adventure.allow_dynamic_items = manifest_dict["allow_dynamic_items"]  # type: ignore
+
+                if manifest_dict.get("can_damage_npcs") is not None:
+                    adventure.can_damage_npcs = manifest_dict["can_damage_npcs"]  # type: ignore
+
+                if manifest_dict.get("npcs_can_damage_protagonist") is not None:
+                    adventure.npcs_can_damage_protagonist = manifest_dict["npcs_can_damage_protagonist"]  # type: ignore
 
                 if manifest_dict.get("game_over_rules") is not None:
                     adventure.game_over_rules = manifest_dict["game_over_rules"]  # type: ignore
@@ -969,7 +1097,7 @@ class WorldGenerator:
                     if not avatar.profile_image or not avatar.profile_image.startswith("/data/"):
                         image_url = await MediaEngine.generate_placeholder(
                             template_id, "PROTAGONIST", os.path.join(settings.DATA_DIR, "adventures", "library", template_id),
-                            category="AVATAR"
+                            category="SCENE"
                         )
                     else:
                         image_url = avatar.profile_image
@@ -1134,6 +1262,7 @@ class WorldGenerator:
                 is_hidden=n.get("is_hidden", False),
                 reveal_rule=n.get("reveal_rule") or None,
                 is_attackable=n.get("is_attackable", True),
+                is_killable=n.get("is_killable", True),
             ))
             
             # Commit after each NPC to save progress and release locks during long generations
@@ -1154,6 +1283,8 @@ class WorldGenerator:
             adventure.is_ready = False  # type: ignore
             adventure.origin_id = manifest_dict.get("origin_id", "")  # type: ignore
             adventure.is_adventure_generator = manifest_dict.get("is_adventure_generator", False)  # type: ignore
+            adventure.can_damage_npcs = manifest_dict.get("can_damage_npcs", True)  # type: ignore
+            adventure.npcs_can_damage_protagonist = manifest_dict.get("npcs_can_damage_protagonist", True)  # type: ignore
             adventure.original_manifest = manifest_dict  # type: ignore
         # Merge starting inventory & equipment definitions into the objects list if defined inline.
         objects = list(manifest_dict.get("objects", []))
@@ -1308,9 +1439,10 @@ class WorldGenerator:
                 
                 if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder for Items
+                    item_type = str(o.get("item_type") or "PICKABLE").upper()
                     image_url = await MediaEngine.generate_placeholder(
                         template_id, o["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
-                        category="ITEM"
+                        category=f"ITEM_{item_type}"
                     )
 
             is_starting_inv = o["id"] in starting_inv_ids
@@ -1329,6 +1461,8 @@ class WorldGenerator:
                 "image_url": image_url,
                 "item_type": o.get("item_type", "PICKABLE"),
                 "slot": item_slot,
+                "text_log_content": str(o.get("text_log_content") or "").strip()[:500],
+                "text_log_format": str(o.get("text_log_format") or "").strip().upper() or None,
                 "stat_modifier_strength": stat_strength,
                 "stat_modifier_dexterity": stat_dexterity,
                 "stat_modifier_intelligence": stat_intelligence,
@@ -1348,18 +1482,21 @@ class WorldGenerator:
                 metadata_json["stamina_change"] = stamina_change
             if mana_change is not None:
                 metadata_json["mana_change"] = mana_change
-            if stat_strength is not None:
-                metadata_json["stat_modifier_strength"] = stat_strength
-            if stat_dexterity is not None:
-                metadata_json["stat_modifier_dexterity"] = stat_dexterity
-            if stat_intelligence is not None:
-                metadata_json["stat_modifier_intelligence"] = stat_intelligence
-            if stat_wisdom is not None:
-                metadata_json["stat_modifier_wisdom"] = stat_wisdom
-            if stat_charisma is not None:
-                metadata_json["stat_modifier_charisma"] = stat_charisma
-            if stat_armor_class is not None:
-                metadata_json["stat_modifier_armor_class"] = stat_armor_class
+
+            if str(o.get("item_type") or "").upper() == "READABLE":
+                text_log_content = str(o.get("text_log_content") or "").strip()[:500]
+                text_log_format = str(o.get("text_log_format") or "DOCUMENT").strip().upper()
+                if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+                    text_log_format = "DOCUMENT"
+                metadata_json["text_log_content"] = text_log_content
+                metadata_json["text_log_format"] = text_log_format
+
+            if str(o.get("item_type") or "").upper() == "CONTAINER":
+                code_to_unlock = str(o.get("code_to_unlock") or "").strip()
+                item_to_unlock = str(o.get("item_to_unlock") or "").strip().upper()
+                metadata_json["code_to_unlock"] = code_to_unlock
+                metadata_json["item_to_unlock"] = item_to_unlock
+                metadata_json["locked"] = bool(code_to_unlock or item_to_unlock)
 
             if avatar and is_in_avatar_inv:
                 if is_starting_inv:
@@ -1385,10 +1522,12 @@ class WorldGenerator:
                     wearable_slots=o.get("wearable_slots"),
                     is_hidden=o.get("is_hidden", False),
                     reveal_rule=o.get("reveal_rule") or None,
+                    unlock_rule=None,
                     is_in_inventory=is_in_avatar_inv or is_in_npc_inv,
                     is_portable=o.get("is_portable", o.get("item_type") != "STATIC"),
                     combination_ingredients=o.get("combination_ingredients"),
                     reveals_item_id=o.get("reveals_item_id"),
+                    inventory=o.get("inventory") or [],
                     state_comment=o.get("state_comment"),
                     stat_modifier_strength=stat_strength,
                     stat_modifier_dexterity=stat_dexterity,

@@ -35,14 +35,33 @@ class CreateAdventureTemplatePayload(BaseModel):
     pacing: Optional[dict[str, Any]] = None
     min_scenes: int = 1
     max_scenes: int = 5
+    quest_generation_enabled: bool = True
+    min_quests: int = 3
+    max_quests: int = 5
+    container_generation_enabled: bool = True
+    max_containers: int = 8
+    text_log_generation_enabled: bool = True
+    max_text_logs: int = 8
     award_generation_enabled: bool = False
     min_awards: int = 3
     max_awards: int = 8
+    can_damage_npcs: bool = True
+    npcs_can_damage_protagonist: bool = True
     is_adventure_generator: bool = False
     cover_source_adventure_id: Optional[str] = None
     cover_source_adventure_name: Optional[str] = None
     cover_similarity_percent: int = 50
     allow_reuse_source_assets: bool = True
+
+    @field_validator("title")
+    @classmethod
+    def validate_title_length(cls, value: str) -> str:
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("title is required")
+        if len(cleaned) > 50:
+            raise ValueError("title must be at most 50 characters")
+        return cleaned
 
     @field_validator("selected_tone", mode="before")
     @classmethod
@@ -63,10 +82,32 @@ class CreateAdventureTemplatePayload(BaseModel):
     def validate_cover_similarity(cls, value: int) -> int:
         return max(0, min(100, int(value)))
 
+    @field_validator("max_containers")
+    @classmethod
+    def validate_max_containers(cls, value: int) -> int:
+        return max(0, min(30, int(value)))
+
+    @field_validator("max_text_logs")
+    @classmethod
+    def validate_max_text_logs(cls, value: int) -> int:
+        return max(0, min(30, int(value)))
+
+    @field_validator("min_quests")
+    @classmethod
+    def validate_min_quests(cls, value: int) -> int:
+        return max(1, min(20, int(value)))
+
+    @field_validator("max_quests")
+    @classmethod
+    def validate_max_quests(cls, value: int) -> int:
+        return max(1, min(20, int(value)))
+
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventureTemplatePayload':
         if self.max_scenes < self.min_scenes:
             raise ValueError("max_scenes must be greater than or equal to min_scenes")
+        if self.max_quests < self.min_quests:
+            raise ValueError("max_quests must be greater than or equal to min_quests")
         return self
 
 class AdventureTemplateResponse(BaseModel):
@@ -101,6 +142,10 @@ class AdventureTemplateResponse(BaseModel):
     allow_reuse_source_assets: bool = True
     min_scenes: int = 1
     max_scenes: int = 5
+    container_generation_enabled: bool = True
+    max_containers: int = 8
+    can_damage_npcs: bool = True
+    npcs_can_damage_protagonist: bool = True
 
 
     @field_validator("selected_tone", mode="before")
@@ -256,6 +301,27 @@ class SuggestPromptRequest(BaseModel):
 class SuggestPromptResponse(BaseModel):
     suggested_prompt: str
 
+
+class StoryIdeaSuggestionRequest(BaseModel):
+    title: Optional[str] = None
+    story_idea: Optional[str] = None
+    selected_tone: Optional[dict[str, Any]] = None
+    rule_enforcement_mode: Literal["rpg", "story", "chat"] = "story"
+    language: Optional[str] = None
+
+
+class StoryIdeaSuggestionResponse(BaseModel):
+    title: str
+    story_idea: str
+
+    @field_validator("title")
+    @classmethod
+    def validate_title_length(cls, value: str) -> str:
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("title is required")
+        return cleaned[:50]
+
 class AdventureTemplateUpdate(BaseModel):
     """Payload for partial updates to an adventure template."""
     title: Optional[str] = None
@@ -275,6 +341,8 @@ class AdventureTemplateUpdate(BaseModel):
     selected_tone: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None
+    container_generation_enabled: Optional[bool] = None
+    max_containers: Optional[int] = None
     award_generation_enabled: Optional[bool] = None
     min_awards: Optional[int] = None
     max_awards: Optional[int] = None
@@ -291,6 +359,20 @@ class AdventureTemplateUpdate(BaseModel):
     selected_tone_id: Optional[str] = None
     time_system: Optional[str] = None
     allow_dynamic_items: Optional[bool] = None
+    can_damage_npcs: Optional[bool] = None
+    npcs_can_damage_protagonist: Optional[bool] = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("title cannot be empty")
+        if len(cleaned) > 50:
+            raise ValueError("title must be at most 50 characters")
+        return cleaned
 
     @field_validator("selected_tone", mode="before")
     @classmethod

@@ -4,7 +4,24 @@ import { ref, watch } from 'vue'
 const props = defineProps<{
   show: boolean
   context: { type: string; id: string } | null
-  initialForm: { name: string; teaser: string; description: string; hp: number; stamina: number; mana: number; goal: string; character: string }
+  initialForm: {
+    name: string
+    teaser: string
+    description: string
+    hp: number
+    stamina: number
+    mana: number
+    goal: string
+    character: string
+    is_killable: boolean
+    item_type: string
+    is_portable: boolean
+    locked: boolean
+    code_to_unlock: string
+    item_to_unlock: string
+    inventory_json: string
+    text_log_content: string
+  }
   ruleEnforcementMode: string
   isSaving: boolean
   adventureId?: string
@@ -22,7 +39,23 @@ watch(() => props.initialForm, (newVal) => {
 }, { deep: true })
 
 function handleSave() {
-  emit('save', { ...localForm.value })
+  let parsedInventory: any[] = []
+  if (props.context?.type === 'object') {
+    const raw = (localForm.value.inventory_json || '').trim()
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        parsedInventory = Array.isArray(parsed) ? parsed : []
+      } catch {
+        parsedInventory = []
+      }
+    }
+  }
+
+  emit('save', {
+    ...localForm.value,
+    inventory: parsedInventory,
+  })
 }
 
 import { entityService } from '@/services/entityService'
@@ -194,6 +227,101 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                     <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['character'] }"></i>
                     <span>Quick-Gen Traits</span>
                   </button>
+                </div>
+              </div>
+
+              <div v-if="context.type === 'npc'" class="p-4 bg-black/30 border border-white/10 rounded-2xl">
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1 pr-4">
+                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">NPC Can Be Killed</p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If disabled, the NPC can still fight but is never permanently defeated.</p>
+                  </div>
+                  <button
+                    type="button"
+                    @click="localForm.is_killable = !localForm.is_killable"
+                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_killable ? 'bg-emerald-600' : 'bg-slate-700']"
+                  >
+                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_killable ? 'translate-x-6' : 'translate-x-0']"></div>
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="context.type === 'object'" class="p-4 bg-black/30 border border-white/10 rounded-2xl space-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Item Type</label>
+                    <select v-model="localForm.item_type" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-amber-500/50 outline-none transition-all">
+                      <option value="PICKABLE">PICKABLE</option>
+                      <option value="WEAPON">WEAPON</option>
+                      <option value="ARMOR">ARMOR</option>
+                      <option value="CONSUMABLE">CONSUMABLE</option>
+                      <option value="CONTAINER">CONTAINER</option>
+                      <option value="STATIC">STATIC</option>
+                    </select>
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Portable</label>
+                    <button
+                      type="button"
+                      @click="localForm.is_portable = !localForm.is_portable"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_portable ? 'bg-emerald-600' : 'bg-slate-700']"
+                    >
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_portable ? 'translate-x-6' : 'translate-x-0']"></div>
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="String(localForm.item_type || '').toUpperCase() === 'CONTAINER'" class="p-3 bg-black/20 border border-white/10 rounded-xl">
+                  <div class="flex items-center justify-between">
+                    <div class="space-y-1 pr-4">
+                      <p class="text-xs font-black text-slate-200 uppercase tracking-widest">Locked State</p>
+                      <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If enabled, this container needs either a code or a key item.</p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="localForm.locked = !localForm.locked"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.locked ? 'bg-amber-600' : 'bg-emerald-600']"
+                    >
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.locked ? 'translate-x-0' : 'translate-x-6']"></div>
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="String(localForm.item_type || '').toUpperCase() === 'CONTAINER'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Code To Unlock</label>
+                    <input
+                      v-model="localForm.code_to_unlock"
+                      maxlength="32"
+                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all"
+                      placeholder="ALPHA or 4711"
+                    />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Item ID To Unlock</label>
+                    <input
+                      v-model="localForm.item_to_unlock"
+                      maxlength="64"
+                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all"
+                      placeholder="ITEM_KEY_BRASS"
+                    />
+                  </div>
+                </div>
+
+                <div v-if="String(localForm.item_type || '').toUpperCase() === 'CONTAINER'" class="space-y-2">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Contained Items (JSON Array)</label>
+                  <textarea v-model="localForm.inventory_json" rows="4" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-amber-500/50 outline-none transition-all" placeholder='["ITEM_KEY", {"id":"ITEM_MAP","name":"Old Map","item_type":"PICKABLE"}]'></textarea>
+                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Supports item IDs and inline item objects.</p>
+                </div>
+
+                <div v-if="String(localForm.item_type || '').toUpperCase() === 'READABLE'" class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Text Log Content</label>
+                    <span :class="['text-xs font-bold tracking-widest', (localForm.text_log_content || '').length > 500 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (localForm.text_log_content || '').length }} / 500
+                    </span>
+                  </div>
+                  <textarea v-model="localForm.text_log_content" maxlength="500" rows="5" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all" placeholder="Readable note text shown to the player."></textarea>
                 </div>
               </div>
 

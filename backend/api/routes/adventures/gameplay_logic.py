@@ -359,6 +359,8 @@ class GameTurnManager:
                     tts_director_notes=snapshot_adventure.get("tts_director_notes") or self.state.tts_director_notes,
                     original_prompt=snapshot_adventure.get("original_prompt") or "",
                     allow_dynamic_items=bool(snapshot_adventure.get("allow_dynamic_items", True)),
+                    can_damage_npcs=bool(snapshot_adventure.get("can_damage_npcs", True)),
+                    npcs_can_damage_protagonist=bool(snapshot_adventure.get("npcs_can_damage_protagonist", True)),
                     is_adventure_generator=bool(snapshot_adventure.get("is_adventure_generator", False)),
                     original_manifest=snapshot_manifest,
                 )
@@ -686,8 +688,10 @@ class GameTurnManager:
                     states[enemy_id] = {}
                 states[enemy_id]["hp"] = 0
                 states[enemy_id]["inventory"] = []
-                states[enemy_id]["is_defeated"] = True
-                states[enemy_id]["is_attackable"] = False
+                enemy_is_killable = (states[enemy_id].get("is_killable") if "is_killable" in states[enemy_id] else enemy_ent.is_killable if enemy_ent else True)
+                if enemy_is_killable:
+                    states[enemy_id]["is_defeated"] = True
+                    states[enemy_id]["is_attackable"] = False
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
 
@@ -919,6 +923,76 @@ class GameTurnManager:
                     await self._spawn_scene_item(dropped_item)
                     response = f"You dropped {dropped_item.get('name')}."
 
+        if response.startswith("[TRIGGER_OPEN]"):
+            container_hint = response.replace("[TRIGGER_OPEN]", "").strip()
+            if not container_hint:
+                response = "Usage: /open <container>"
+            else:
+                scene_container, inventory_container, _ = await self._resolve_container_target(container_hint)
+                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                if not container_name:
+                    response = f"No container named '{container_hint}' was found."
+                else:
+                    is_locked = self._is_container_locked(scene_container, inventory_container)
+                    if is_locked:
+                        response = f"{container_name} is locked."
+                    else:
+                        container_inventory = await self._get_container_inventory(scene_container, inventory_container)
+                        response = f"{container_name} contains {len(container_inventory)} item(s)."
+
+        if response.startswith("[TRIGGER_CONTAINER_TAKE_ALL]"):
+            container_hint = response.replace("[TRIGGER_CONTAINER_TAKE_ALL]", "").strip()
+            if not container_hint:
+                response = "Usage: /container_take_all <container>"
+            else:
+                scene_container, inventory_container, inventory_idx = await self._resolve_container_target(container_hint)
+                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                if not container_name:
+                    response = f"No container named '{container_hint}' was found."
+                else:
+                    is_locked = self._is_container_locked(scene_container, inventory_container)
+                    if is_locked:
+                        response = f"{container_name} is locked."
+                    else:
+                        raw_items = await self._get_container_inventory(scene_container, inventory_container)
+                        normalized_items = await self._normalize_container_items(raw_items)
+                        if not normalized_items:
+                            response = f"{container_name} is empty."
+                        else:
+                            new_inventory = list(self.avatar.inventory or [])
+                            for item in normalized_items:
+                                new_inventory.append(item)
+                                await self._move_container_item_to_inventory(item)
+                            self.avatar.inventory = new_inventory
+                            await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
+                            response = f"You take all {len(normalized_items)} item(s) from {container_name}."
+
+        if response.startswith("[TRIGGER_CONTAINER_DROP_SCENE]"):
+            container_hint = response.replace("[TRIGGER_CONTAINER_DROP_SCENE]", "").strip()
+            if not container_hint:
+                response = "Usage: /container_drop_scene <container>"
+            else:
+                scene_container, inventory_container, inventory_idx = await self._resolve_container_target(container_hint)
+                container_name = (scene_container.name if scene_container else inventory_container.get("name")) if (scene_container or inventory_container) else None
+                if not container_name:
+                    response = f"No container named '{container_hint}' was found."
+                else:
+                    is_locked = self._is_container_locked(scene_container, inventory_container)
+                    if is_locked:
+                        response = f"{container_name} is locked."
+                    else:
+                        raw_items = await self._get_container_inventory(scene_container, inventory_container)
+                        normalized_items = await self._normalize_container_items(raw_items)
+                        if not normalized_items:
+                            response = f"{container_name} is empty."
+                        else:
+                            for item in normalized_items:
+                                moved = await self._move_container_item_to_scene(item)
+                                if not moved:
+                                    await self._spawn_scene_item(item)
+                            await self._clear_container_inventory(scene_container, inventory_container, inventory_idx)
+                            response = f"You drop {len(normalized_items)} item(s) from {container_name} into the scene."
+
         if response.startswith("[TRIGGER_CONSUME]"):
             item_name = response.replace("[TRIGGER_CONSUME]", "").strip()
             action_msg = self._consume_item_now(item_name)
@@ -940,6 +1014,330 @@ class GameTurnManager:
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
         self.stop_requested = True # Stop after direct slash response
+
+    @staticmethod
+    def _is_container_item(item: Any) -> bool:
+        return isinstance(item, dict) and str(item.get("item_type") or "").upper() == "CONTAINER"
+
+    def _is_container_locked(self, scene_container: WorldEntity | None, inventory_container: dict[str, Any] | None) -> bool:
+        states = self.state.entity_states or {}
+
+        def _requirements_from_metadata(metadata: dict[str, Any]) -> tuple[str, str]:
+            return (
+                str(metadata.get("code_to_unlock") or "").strip(),
+                str(metadata.get("item_to_unlock") or "").strip().upper(),
+            )
+
+        if scene_container:
+            state_locked = (states.get(scene_container.id) or {}).get("locked")
+            if isinstance(state_locked, bool):
+                return state_locked
+            metadata_json = dict(getattr(scene_container, "metadata_json", None) or {})
+            code_to_unlock, item_to_unlock = _requirements_from_metadata(metadata_json)
+            return bool(code_to_unlock or item_to_unlock)
+
+        if inventory_container:
+            inv_id = str(inventory_container.get("id") or "").strip()
+            if inv_id:
+                state_locked = (states.get(inv_id) or {}).get("locked")
+                if isinstance(state_locked, bool):
+                    return state_locked
+            item_locked = inventory_container.get("locked")
+            if isinstance(item_locked, bool):
+                return item_locked
+            metadata_json = inventory_container.get("metadata_json")
+            if not isinstance(metadata_json, dict):
+                metadata_json = {}
+            code_to_unlock, item_to_unlock = _requirements_from_metadata(metadata_json)
+            return bool(code_to_unlock or item_to_unlock)
+
+        return False
+
+    @staticmethod
+    def _extract_access_code(text: str) -> str | None:
+        if not text:
+            return None
+        quoted = re.search(r"[\"']([A-Za-z0-9]{1,32})[\"']", text)
+        if quoted:
+            return quoted.group(1)
+        match = re.search(r"\b(\d{3,8})\b", text)
+        return match.group(1) if match else None
+
+    async def _resolve_container_from_free_text(self, text: str) -> tuple[str, str, str, str, bool] | None:
+        lowered = (text or "").strip().lower()
+        if not lowered:
+            return None
+
+        best_match: tuple[int, str, str, str, str, bool] | None = None
+
+        scene_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.current_scene_id == self.state.current_scene_id,
+                WorldEntity.entity_type == "OBJECT",
+                WorldEntity.item_type == "CONTAINER",
+                WorldEntity.is_hidden.is_(False),
+                WorldEntity.is_in_inventory.is_(False),
+            )
+        )
+        for ent in scene_res.scalars().all():
+            cid = str(ent.id or "")
+            cname = str(ent.name or "")
+            tokens = [cid.lower(), cname.lower()]
+            token = next((tok for tok in tokens if tok and tok in lowered), None)
+            if not token:
+                continue
+            locked = self._is_container_locked(ent, None)
+            metadata_json = dict(ent.metadata_json or {})
+            code_to_unlock = str(metadata_json.get("code_to_unlock") or "").strip()
+            item_to_unlock = str(metadata_json.get("item_to_unlock") or "").strip().upper()
+            candidate = (len(token), cid, cname or cid, code_to_unlock, item_to_unlock, locked)
+            if best_match is None or candidate[0] > best_match[0]:
+                best_match = candidate
+
+        for inv_item in (self.avatar.inventory or []):
+            if not self._is_container_item(inv_item):
+                continue
+            cid = str(inv_item.get("id") or "").strip()
+            cname = str(inv_item.get("name") or "").strip()
+            tokens = [cid.lower(), cname.lower()]
+            token = next((tok for tok in tokens if tok and tok in lowered), None)
+            if not token:
+                continue
+            locked = self._is_container_locked(None, inv_item)
+            metadata_json = inv_item.get("metadata_json")
+            if not isinstance(metadata_json, dict):
+                metadata_json = {}
+            code_to_unlock = str(metadata_json.get("code_to_unlock") or "").strip()
+            item_to_unlock = str(metadata_json.get("item_to_unlock") or "").strip().upper()
+            candidate = (len(token), cid or cname, cname or cid or "container", code_to_unlock, item_to_unlock, locked)
+            if best_match is None or candidate[0] > best_match[0]:
+                best_match = candidate
+
+        if not best_match:
+            return None
+
+        _, cid, cname, code_to_unlock, item_to_unlock, locked = best_match
+        return cid, cname, code_to_unlock, item_to_unlock, locked
+
+    async def _enforce_container_unlock_guardrails(self, event: GameEvent, user_msg: str) -> list[str]:
+        lowered = (user_msg or "").strip().lower()
+        if not lowered:
+            return []
+
+        resolved = await self._resolve_container_from_free_text(lowered)
+        if not resolved:
+            return []
+
+        container_id, container_name, required_code, required_item_id, is_locked = resolved
+        if not is_locked:
+            return []
+
+        unlock_allowed = True
+        reason = ""
+
+        if required_code:
+            code_match = re.search(r"(?:code|pin|access)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
+            attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
+            if not attempted_code or attempted_code.lower() != required_code.lower():
+                unlock_allowed = False
+                reason = f"Access code rejected for {container_name}. The lock remains engaged."
+
+        if unlock_allowed and required_item_id:
+            inventory_ids = {
+                str(item.get("id") or "").strip().upper()
+                for item in (self.avatar.inventory or [])
+                if isinstance(item, dict)
+            }
+            if required_item_id.upper() not in inventory_ids:
+                unlock_allowed = False
+                reason = f"You need {required_item_id} to unlock {container_name}."
+
+        if unlock_allowed:
+            return []
+
+        sanitized_updates: list[WorldEntityUpdate] = []
+        for update in (event.updated_entities or []):
+            if update.entity_id == container_id and update.locked is False:
+                continue
+            sanitized_updates.append(update)
+        sanitized_updates.append(WorldEntityUpdate(entity_id=container_id, locked=True))
+        event.updated_entities = sanitized_updates
+
+        event.completed_quest_ids = []
+        event.earned_award_keys = []
+        event.new_inventory_items = []
+        event.updated_inventory_items = []
+        event.removed_inventory_item_ids = []
+        event.spawned_items = []
+
+        return [reason or f"{container_name} stays locked."]
+
+    async def _resolve_container_target(self, hint: str) -> tuple[WorldEntity | None, dict[str, Any] | None, int | None]:
+        normalized_hint = (hint or "").strip().lower()
+        if not normalized_hint:
+            return None, None, None
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.current_scene_id == self.state.current_scene_id,
+                WorldEntity.entity_type == "OBJECT",
+                or_(
+                    WorldEntity.id == hint,
+                    WorldEntity.name == hint,
+                ),
+            )
+        )
+        scene_ent = ent_res.scalars().first()
+        if scene_ent and str(scene_ent.item_type or "").upper() == "CONTAINER":
+            return scene_ent, None, None
+
+        for idx, inv_item in enumerate(self.avatar.inventory or []):
+            if not self._is_container_item(inv_item):
+                continue
+            item_id = str(inv_item.get("id") or "").strip().lower()
+            item_name = str(inv_item.get("name") or "").strip().lower()
+            if normalized_hint in {item_id, item_name}:
+                return None, dict(inv_item), idx
+
+        return None, None, None
+
+    async def _get_container_inventory(self, scene_container: WorldEntity | None, inventory_container: dict[str, Any] | None) -> list[Any]:
+        if scene_container:
+            states = dict(self.state.entity_states or {})
+            state_inv = (states.get(scene_container.id) or {}).get("inventory")
+            if isinstance(state_inv, list):
+                return list(state_inv)
+            return list(scene_container.inventory or [])
+
+        if inventory_container:
+            return list(inventory_container.get("inventory") or [])
+
+        return []
+
+    async def _normalize_container_item_ref(self, item_ref: Any) -> dict[str, Any] | None:
+        if isinstance(item_ref, dict):
+            return dict(item_ref)
+
+        if isinstance(item_ref, str) and item_ref.strip():
+            item_id = item_ref.strip()
+            ent_res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == self.game_id,
+                    WorldEntity.id == item_id,
+                )
+            )
+            ent = ent_res.scalars().first()
+            if ent:
+                item_data = jsonable_encoder({c.name: getattr(ent, c.name) for c in ent.__table__.columns})
+                metadata = dict(ent.metadata_json or {})
+                for key in [
+                    "hp_change",
+                    "mana_change",
+                    "stamina_change",
+                    "stat_modifier_strength",
+                    "stat_modifier_dexterity",
+                    "stat_modifier_intelligence",
+                    "stat_modifier_wisdom",
+                    "stat_modifier_charisma",
+                    "stat_modifier_armor_class",
+                ]:
+                    if key not in item_data and key in metadata:
+                        item_data[key] = metadata[key]
+                return item_data
+
+            return {"id": item_id, "name": item_id}
+
+        return None
+
+    async def _normalize_container_items(self, raw_items: list[Any]) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for item in raw_items or []:
+            normalized_item = await self._normalize_container_item_ref(item)
+            if normalized_item:
+                normalized.append(normalized_item)
+        return normalized
+
+    async def _move_container_item_to_inventory(self, item: dict[str, Any]) -> None:
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            return
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.id == item_id,
+            )
+        )
+        ent = ent_res.scalars().first()
+        if ent:
+            ent.is_in_inventory = True
+            ent.current_scene_id = "INVENTORY"
+            ent.is_hidden = False
+
+        states = dict(self.state.entity_states or {})
+        if item_id not in states:
+            states[item_id] = {}
+        states[item_id]["is_in_inventory"] = True
+        states[item_id]["current_scene_id"] = "INVENTORY"
+        states[item_id]["is_hidden"] = False
+        self.state.entity_states = states
+        flag_modified(self.state, "entity_states")
+
+    async def _move_container_item_to_scene(self, item: dict[str, Any]) -> bool:
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            return False
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.id == item_id,
+            )
+        )
+        ent = ent_res.scalars().first()
+        if not ent:
+            return False
+
+        ent.is_in_inventory = False
+        ent.current_scene_id = self.state.current_scene_id
+        ent.is_hidden = False
+
+        states = dict(self.state.entity_states or {})
+        if item_id not in states:
+            states[item_id] = {}
+        states[item_id]["is_in_inventory"] = False
+        states[item_id]["current_scene_id"] = self.state.current_scene_id
+        states[item_id]["is_hidden"] = False
+        self.state.entity_states = states
+        flag_modified(self.state, "entity_states")
+        return True
+
+    async def _clear_container_inventory(
+        self,
+        scene_container: WorldEntity | None,
+        inventory_container: dict[str, Any] | None,
+        inventory_idx: int | None,
+    ) -> None:
+        if scene_container:
+            scene_container.inventory = []
+            self.db.add(scene_container)
+
+            states = dict(self.state.entity_states or {})
+            if scene_container.id not in states:
+                states[scene_container.id] = {}
+            states[scene_container.id]["inventory"] = []
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
+
+        if inventory_container is not None and inventory_idx is not None:
+            updated_inventory = list(self.avatar.inventory or [])
+            if 0 <= inventory_idx < len(updated_inventory) and isinstance(updated_inventory[inventory_idx], dict):
+                updated_container = dict(updated_inventory[inventory_idx])
+                updated_container["inventory"] = []
+                updated_inventory[inventory_idx] = updated_container
+                self.avatar.inventory = updated_inventory
 
     def _read_combat_state(self) -> dict[str, Any]:
         return self._combat_state_helper.read_combat_state()
@@ -1039,6 +1437,13 @@ class GameTurnManager:
             return ent_val
         return fallback
 
+    def _is_npc_killable(self, npc: WorldEntity) -> bool:
+        states = self.state.entity_states or {}
+        override = (states.get(npc.id, {}) or {}).get("is_killable")
+        if isinstance(override, bool):
+            return override
+        return bool(getattr(npc, "is_killable", True))
+
     def _player_damage_dice(self) -> str:
         eq = self.avatar.equipment or {}
         main_hand = eq.get("MainHand")
@@ -1135,6 +1540,13 @@ class GameTurnManager:
     async def _handle_fight_start(self, user_msg: str) -> AsyncGenerator[str, None]:
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
             msg = "Turn-based combat is only available in RPG mode."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
+
+        if not bool(getattr(self.adventure, "can_damage_npcs", True)):
+            msg = "Combat is disabled for this adventure: the protagonist cannot damage NPCs."
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             async for chunk in self._emit_combat_final(msg):
                 yield chunk
@@ -1253,6 +1665,8 @@ class GameTurnManager:
         if self._is_combat_active() or self._has_combat_phase():
             return False
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
+            return False
+        if not bool(getattr(self.adventure, "can_damage_npcs", True)):
             return False
         if not game_event.requested_attacks:
             return False
@@ -1541,6 +1955,10 @@ class GameTurnManager:
             return None
 
         enemy_name = combat.get("enemy", {}).get("name", "Enemy")
+        if not bool(getattr(self.adventure, "npcs_can_damage_protagonist", True)):
+            text = f"Special Event: {enemy_name} shifts the pressure of battle, but no direct damage is dealt."
+            self._append_combat_log(combat, text, "special")
+            return text
         event_data = await self._request_llm_combat_special_event(combat)
 
         # Safe fallback if LLM is unavailable or returns invalid payload.
@@ -1656,6 +2074,18 @@ class GameTurnManager:
             equipment={},
             inventory=[]
         )
+
+        if not bool(getattr(self.adventure, "npcs_can_damage_protagonist", True)):
+            text = f"{enemy_ent.name} attacks, but this adventure disables NPC damage to the protagonist."
+            self._sync_combat_player_snapshot(combat)
+            self._append_combat_log(combat, text, "enemy_action")
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': text})}\n\n"
+            combat["turn"] = "player"
+            combat["round"] = int(combat.get("round", 1)) + 1
+            self._append_combat_log(combat, f"Round {combat['round']}: {self.avatar.name}'s turn.", "turn")
+            self._set_combat_state(combat)
+            return
+
         roll = roll_attack(enemy_avatar, "dexterity", player_ac, self._enemy_damage_dice(enemy_ent))
         if roll["is_hit"]:
             self.avatar.hp = max(0, self.avatar.hp - roll["damage_total"])
@@ -1818,6 +2248,7 @@ class GameTurnManager:
             wearable_slots=item.get("wearable_slots"),
             is_in_inventory=False,
             is_hidden=False,
+            unlock_rule=None,
             is_portable=True,
             stat_modifier_strength=item.get("stat_modifier_strength"),
             stat_modifier_dexterity=item.get("stat_modifier_dexterity"),
@@ -1829,6 +2260,9 @@ class GameTurnManager:
                 "hp_change": item.get("hp_change"),
                 "mana_change": item.get("mana_change"),
                 "stamina_change": item.get("stamina_change"),
+                "code_to_unlock": str(item.get("code_to_unlock") or "").strip(),
+                "item_to_unlock": str(item.get("item_to_unlock") or "").strip().upper(),
+                "locked": bool(item.get("locked")) if item.get("locked") is not None else None,
             }
         )
         self.db.add(entity)
@@ -2046,6 +2480,13 @@ class GameTurnManager:
             return
 
         action_msg = None
+        if (cmd == "attack" or cmd == "/attack" or cmd == "a" or cmd.startswith("attack ") or cmd.startswith("/attack ")) and not bool(getattr(self.adventure, "can_damage_npcs", True)):
+            msg = "The protagonist cannot damage NPCs in this adventure. Use Run, Rest, or /consume."
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            async for chunk in self._emit_combat_final(msg):
+                yield chunk
+            return
+
         if cmd == "attack" or cmd == "/attack" or cmd == "a" or cmd.startswith("attack ") or cmd.startswith("/attack "):
             if self.avatar.stamina < 20:
                 msg = f"Not enough stamina to attack! You have {self.avatar.stamina} stamina, but attacks require 20. Use Rest to recover."
@@ -2130,9 +2571,10 @@ class GameTurnManager:
             if enemy_id not in states:
                 states[enemy_id] = {}
             states[enemy_id]["inventory"] = []
-            # Mark NPC as permanently defeated so they cannot be re-engaged
-            states[enemy_id]["is_defeated"] = True
-            states[enemy_id]["is_attackable"] = False
+            if self._is_npc_killable(enemy_ent):
+                # Mark NPC as permanently defeated so they cannot be re-engaged
+                states[enemy_id]["is_defeated"] = True
+                states[enemy_id]["is_attackable"] = False
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
             self._append_combat_log(combat, combat["status_note"], "outcome")
@@ -2156,8 +2598,9 @@ class GameTurnManager:
                 states = dict(self.state.entity_states or {})
                 if enemy_id not in states:
                     states[enemy_id] = {}
-                states[enemy_id]["is_defeated"] = True
-                states[enemy_id]["is_attackable"] = False
+                if self._is_npc_killable(enemy_ent):
+                    states[enemy_id]["is_defeated"] = True
+                    states[enemy_id]["is_attackable"] = False
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
                 # Spawn any remaining NPC inventory items to the scene automatically
@@ -2426,6 +2869,11 @@ class GameTurnManager:
             # 3. Apply Changes
             pre_inventory_ids = {item.get("id") for item in (self.avatar.inventory or []) if item.get("id")}
             try:
+                guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
+                for gm in guardrail_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
@@ -2585,6 +3033,11 @@ class GameTurnManager:
             game_event = self._build_progression_event(progression_intent)
 
             try:
+                guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
+                for gm in guardrail_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
@@ -3151,8 +3604,12 @@ class GameTurnManager:
                     states[eid]["stamina"] = update.stamina
                 if update.is_attackable is not None:
                     states[eid]["is_attackable"] = update.is_attackable
+                if update.is_killable is not None:
+                    states[eid]["is_killable"] = update.is_killable
                 if update.is_defeated is not None:
                     states[eid]["is_defeated"] = update.is_defeated
+                if update.locked is not None:
+                    states[eid]["locked"] = update.locked
                 if update.inventory is not None: 
                     states[eid]["inventory"] = [i.model_dump(exclude_none=True) for i in update.inventory]
                 state_dirty = True

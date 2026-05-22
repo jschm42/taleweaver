@@ -12,6 +12,14 @@ export interface EntityEditData {
   mana?: number
   goal?: string
   character?: string
+  is_killable?: boolean
+  item_type?: string
+  is_portable?: boolean
+  locked?: boolean
+  code_to_unlock?: string
+  item_to_unlock?: string
+  inventory?: any[]
+  text_log_content?: string
 }
 
 /**

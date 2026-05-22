@@ -17,6 +17,7 @@ from sqlalchemy import delete, func, select
 
 from backend.core.config import settings
 from backend.engine.debug_engine import DebugEngine
+from backend.api.routes.adventures.schemas import StoryIdeaSuggestionResponse
 from backend.models.adventure_template import AdventureTemplate as Adventure
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -63,6 +64,72 @@ async def test_create_adventure_returns_ids(client: AsyncClient):
     assert "game_id" in data
     assert "adventure_id" in data
     assert "avatar_id" in data
+
+
+async def test_suggest_story_idea_generates_title_and_story_when_empty(client: AsyncClient, monkeypatch):
+    """Story idea endpoint generates both title and story for empty input and clamps title length."""
+
+    async def fake_story_suggest(self, system_prompt, user_prompt, response_model, model, **kwargs):
+        assert "Narrative Tone: Horror" in user_prompt
+        assert "Rule Mode: STORY" in user_prompt
+        assert "User Provided Content: no" in user_prompt
+        return StoryIdeaSuggestionResponse(
+            title="This generated title is intentionally far too long to exceed fifty characters",
+            story_idea="A cursed observatory reopens at midnight, and every wish granted by its telescope demands a memory in return.",
+        )
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.templates.GameMasterLLM.aexecute_complex_task",
+        fake_story_suggest,
+    )
+
+    resp = await client.post(
+        "/api/adventures/story-idea/suggest",
+        json={
+            "title": "",
+            "story_idea": "",
+            "selected_tone": {"id": "horror", "name": "Horror"},
+            "rule_enforcement_mode": "story",
+            "language": "German",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data["title"]) <= 50
+    assert data["story_idea"]
+
+
+async def test_suggest_story_idea_keeps_existing_title_on_optimization(client: AsyncClient, monkeypatch):
+    """When input exists and title is present, endpoint keeps the existing title but updates story text."""
+
+    async def fake_story_suggest(self, system_prompt, user_prompt, response_model, model, **kwargs):
+        assert "User Provided Content: yes" in user_prompt
+        assert "Rule Mode: RPG" in user_prompt
+        return StoryIdeaSuggestionResponse(
+            title="Different Returned Title",
+            story_idea="Optimized premise: your artifact hunt becomes a survival race through collapsing ruins.",
+        )
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.templates.GameMasterLLM.aexecute_complex_task",
+        fake_story_suggest,
+    )
+
+    resp = await client.post(
+        "/api/adventures/story-idea/suggest",
+        json={
+            "title": "Ancient Ruins",
+            "story_idea": "Find the artifact.",
+            "selected_tone": {"id": "adventure", "name": "Adventure"},
+            "rule_enforcement_mode": "rpg",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["title"] == "Ancient Ruins"
+    assert "Optimized premise" in data["story_idea"]
 
 
 async def test_start_session_emits_intro_text_once(client: AsyncClient):
@@ -1871,6 +1938,84 @@ async def test_import_adv_preserves_consumable_effects_in_avatar_inventory(clien
     assert integrity["issue_count"] == 0
 
 
+async def test_chat_snapshot_inventory_readable_uses_text_log_content(client: AsyncClient):
+    """Session chat payload should include READABLE inventory text from metadata_json."""
+    adv_payload = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "ADV Readable Inventory Snapshot",
+            "context": "Readable text log payload check",
+            "strict_rules": True,
+        },
+        "protagonist": {
+            "name": "Reader Hero",
+            "role": "Technician",
+            "description": "Carries a datapad",
+            "starting_inventory": [
+                {
+                    "id": "DATAPAD",
+                    "name": "Dienstliches Datapad",
+                    "description": "Ein robustes Tablet mit gesprungenem Display.",
+                    "item_type": "READABLE",
+                }
+            ],
+            "starting_equipment": {},
+            "stats": {},
+        },
+        "scenes": [
+            {"id": "ROOM_A", "name": "Room A", "description": "First room"},
+        ],
+        "exits": [],
+        "npcs": [],
+        "objects": [
+            {
+                "id": "DATAPAD",
+                "name": "Dienstliches Datapad",
+                "description": "Ein robustes Tablet mit gesprungenem Display.",
+                "start_scene_id": "ROOM_A",
+                "item_type": "READABLE",
+                "text_log_content": "ACHTUNG: Zugangscode 7391. Frequenz 733.3 kHz aktiv.",
+                "text_log_format": "DOCUMENT",
+            }
+        ],
+    }
+
+    file_bytes = json.dumps(adv_payload).encode("utf-8")
+    resp = await client.post(
+        "/api/adventures/import/adv",
+        files={"file": ("import_readable_inventory_snapshot.adv", file_bytes, "application/json")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("status") == "success"
+
+    templates_resp = await client.get("/api/adventures/templates")
+    assert templates_resp.status_code == 200, templates_resp.text
+    template_row = next(
+        (row for row in templates_resp.json() if row.get("title") == "ADV Readable Inventory Snapshot"),
+        None,
+    )
+    assert template_row is not None
+
+    start_resp = await client.post(f"/api/adventures/{template_row['template_id']}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    chat_resp = await client.get(f"/api/adventures/{game_id}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
+    payload = chat_resp.json()
+
+    inventory = ((payload.get("sheet") or {}).get("inventory") or [])
+    datapad = next((item for item in inventory if item.get("id") == "DATAPAD"), None)
+    assert datapad is not None
+    assert datapad.get("item_type") == "READABLE"
+    assert datapad.get("text_log_content") == "ACHTUNG: Zugangscode 7391. Frequenz 733.3 kHz aktiv."
+    assert datapad.get("text_log_format") == "DOCUMENT"
+    assert isinstance(datapad.get("metadata_json"), dict)
+    assert datapad.get("metadata_json", {}).get("text_log_content") == "ACHTUNG: Zugangscode 7391. Frequenz 733.3 kHz aktiv."
+
+
 async def test_export_adv_reimport_keeps_item_stats(client: AsyncClient):
     """Stats on objects should survive an ADV export and re-import cycle."""
     source_payload = {
@@ -1949,6 +2094,18 @@ async def test_export_adv_reimport_keeps_item_stats(client: AsyncClient):
     obj = next((o for o in debug_data.get("objects", []) if o.get("id") == "OBJ_ROUNDTRIP"), None)
     assert obj is not None
     assert obj.get("stat_modifier_charisma") == 4
+
+    async with TestSessionLocal() as session:
+        ent_res = await session.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == imported_template["template_id"],
+                WorldEntity.id == "OBJ_ROUNDTRIP",
+            )
+        )
+        entity = ent_res.scalars().first()
+        assert entity is not None
+        assert entity.stat_modifier_charisma == 4
+        assert "stat_modifier_charisma" not in (entity.metadata_json or {})
 
 async def test_list_templates_returns_created_template(client: AsyncClient):
     """Template endpoint returns template-centric records."""

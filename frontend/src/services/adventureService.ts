@@ -11,8 +11,12 @@ export interface Adventure {
   time_per_turn: number
   min_scenes: number
   max_scenes: number
+  container_generation_enabled?: boolean
+  max_containers?: number
   awards?: any[]
   allow_dynamic_items: boolean
+  can_damage_npcs: boolean
+  npcs_can_damage_protagonist: boolean
   plot?: string
   rules?: string
   intro_text?: string
@@ -40,8 +44,12 @@ export interface AdventureFormData {
   time_per_turn: number
   min_scenes: number
   max_scenes: number
+  container_generation_enabled: boolean
+  max_containers: number
   awards: any[]
   allow_dynamic_items: boolean
+  can_damage_npcs: boolean
+  npcs_can_damage_protagonist: boolean
   plot: string
   rules: string
   intro_text: string

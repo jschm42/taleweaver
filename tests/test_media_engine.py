@@ -1,6 +1,10 @@
 """Tests for MediaEngine provider routing and Ollama fallback behavior."""
+import os
+
 import pytest
 
+from backend.core import prompts
+from backend.engine import media_engine as media_engine_module
 from backend.engine.media_engine import MediaEngine
 
 pytestmark = pytest.mark.asyncio
@@ -130,8 +134,7 @@ async def test_generate_image_black_forest_labs_uses_direct_polling_flow(monkeyp
     assert post_calls[0]["url"] == "https://api.bfl.ai/v1/flux-pro-1.1"
     assert post_calls[0]["headers"]["x-key"] == "bfl-key"
     assert post_calls[0]["json"]["prompt"] == (
-        "A glowing forest temple "
-        "Do not include any text, letters, captions, logos, watermarks, or signage unless the prompt explicitly asks for text."
+        f"A glowing forest temple. {prompts.NO_TEXT_IMAGE_PROMPT_SUFFIX}"
     )
     assert post_calls[0]["json"]["width"] == 1024
     assert post_calls[0]["json"]["height"] == 1024
@@ -199,3 +202,55 @@ async def test_generate_entity_image_forwards_style_instruction(monkeypatch):
 
     assert result == "/data/adventures/test/entity.png"
     assert captured.get("style_instruction") == "pixel art, warm rim light"
+
+
+async def test_generate_placeholder_uses_static_item_svg(tmp_path, monkeypatch):
+    """Item placeholders should copy the curated frontend SVG by item type."""
+    monkeypatch.setattr("backend.engine.media_engine.settings.DATA_DIR", str(tmp_path))
+
+    target_dir = tmp_path / "adventures" / "library" / "adv-1" / "entities"
+    result = await MediaEngine.generate_placeholder(
+        adventure_id="adv-1",
+        entity_id="ITEM_X",
+        target_dir=str(target_dir),
+        category="ITEM_WEAPON",
+    )
+
+    assert result.startswith("/data/")
+    rel_path = result.replace("/data/", "", 1).replace("/", os.sep)
+    copied_path = os.path.join(str(tmp_path), rel_path)
+    assert os.path.exists(copied_path)
+    assert copied_path.endswith(".svg")
+
+    source_asset = os.path.join(media_engine_module._FRONTEND_SVG_ROOT, "items", "sword.svg")
+    with open(source_asset, encoding="utf-8") as src:
+        expected_svg = src.read()
+    with open(copied_path, encoding="utf-8") as dst:
+        copied_svg = dst.read()
+    assert copied_svg == expected_svg
+
+
+async def test_generate_placeholder_uses_static_npc_silhouette(tmp_path, monkeypatch):
+    """NPC placeholders should use the static silhouette.svg asset."""
+    monkeypatch.setattr("backend.engine.media_engine.settings.DATA_DIR", str(tmp_path))
+
+    target_dir = tmp_path / "adventures" / "library" / "adv-2" / "entities"
+    result = await MediaEngine.generate_placeholder(
+        adventure_id="adv-2",
+        entity_id="NPC_X",
+        target_dir=str(target_dir),
+        category="NPC",
+    )
+
+    assert result.startswith("/data/")
+    rel_path = result.replace("/data/", "", 1).replace("/", os.sep)
+    copied_path = os.path.join(str(tmp_path), rel_path)
+    assert os.path.exists(copied_path)
+    assert copied_path.endswith(".svg")
+
+    source_asset = os.path.join(media_engine_module._FRONTEND_SVG_ROOT, "npcs", "silhouette.svg")
+    with open(source_asset, encoding="utf-8") as src:
+        expected_svg = src.read()
+    with open(copied_path, encoding="utf-8") as dst:
+        copied_svg = dst.read()
+    assert copied_svg == expected_svg

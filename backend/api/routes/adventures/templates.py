@@ -18,10 +18,17 @@ from backend.api.routes.adventures.schemas import (
     AdventureTemplateSummaryResponse,
     AdventureTemplateUpdate,
     CreateAdventureTemplatePayload,
+    StoryIdeaSuggestionRequest,
+    StoryIdeaSuggestionResponse,
 )
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import AsyncSessionLocal, get_db
+from backend.core.llm_router import GameMasterLLM
+from backend.core.prompts import (
+    STORY_IDEA_GENERATION_SYSTEM_PROMPT,
+    STORY_IDEA_GENERATION_USER_PROMPT_TEMPLATE,
+)
 from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -256,6 +263,60 @@ async def _materialize_initial_session_from_template(
         entity_states["__asset_snapshot__"] = snapshot
         session_state.entity_states = entity_states
 
+@router.post("/story-idea/suggest", response_model=StoryIdeaSuggestionResponse)
+async def suggest_story_idea(
+    payload: StoryIdeaSuggestionRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Generates or improves an adventure title/story idea using the configured small model."""
+    llm_settings = current_user.llm_settings or {}
+    provider = (
+        llm_settings.get("small_model_provider")
+        or llm_settings.get("complex_model_provider")
+        or llm_settings.get("preferred_provider")
+        or "openai"
+    )
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+
+    selected_tone = payload.selected_tone or {}
+    tone_label = ""
+    if isinstance(selected_tone, dict):
+        tone_label = str(selected_tone.get("name") or selected_tone.get("id") or "").strip()
+
+    title = (payload.title or "").strip()
+    story_idea = (payload.story_idea or "").strip()
+    has_existing_input = bool(title or story_idea)
+
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+    user_prompt = STORY_IDEA_GENERATION_USER_PROMPT_TEMPLATE.format(
+        selected_tone=tone_label or "Neutral",
+        rule_enforcement_mode=(payload.rule_enforcement_mode or "story").upper(),
+        language=payload.language or "Default",
+        has_existing_input="yes" if has_existing_input else "no",
+        title=title or "(empty)",
+        story_idea=story_idea or "(empty)",
+    )
+
+    try:
+        suggestion = await gm.aexecute_complex_task(
+            system_prompt=STORY_IDEA_GENERATION_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            response_model=StoryIdeaSuggestionResponse,
+            model=model,
+        )
+    except Exception as exc:
+        logger.error("Failed to suggest story idea: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to generate story idea.") from exc
+
+    final_title = suggestion.title.strip()[:50]
+    if has_existing_input and title:
+        final_title = title[:50]
+
+    return StoryIdeaSuggestionResponse(
+        title=final_title,
+        story_idea=suggestion.story_idea.strip(),
+    )
+
 @router.get("/templates", response_model=list[AdventureTemplateSummaryResponse])
 async def list_templates(
     db: AsyncSession = Depends(get_db),
@@ -399,9 +460,13 @@ async def create_adventure(
         selected_tone=payload.selected_tone,
         min_scenes=payload.min_scenes,
         max_scenes=payload.max_scenes,
+        container_generation_enabled=payload.container_generation_enabled,
+        max_containers=max(0, min(30, int(payload.max_containers))),
         award_generation_enabled=False if chat_mode else payload.award_generation_enabled,
         min_awards=payload.min_awards,
         max_awards=payload.max_awards,
+        can_damage_npcs=payload.can_damage_npcs,
+        npcs_can_damage_protagonist=payload.npcs_can_damage_protagonist,
         is_ready=False,
         creation_status="Initializing...",
         original_manifest=payload.original_manifest,
@@ -522,10 +587,18 @@ async def create_adventure(
                     automatic_npc_voice_assignment=payload.automatic_npc_voice_assignment,
                     min_scenes=payload.min_scenes,
                     max_scenes=payload.max_scenes,
-                    quest_generation_enabled=not chat_mode,
+                    container_generation_enabled=payload.container_generation_enabled,
+                    max_containers=max(0, min(30, int(payload.max_containers))),
+                    text_log_generation_enabled=bool(payload.text_log_generation_enabled),
+                    max_text_logs=max(0, min(30, int(payload.max_text_logs))),
+                    quest_generation_enabled=(not chat_mode) and bool(payload.quest_generation_enabled),
+                    min_quests=max(1, min(20, int(payload.min_quests))),
+                    max_quests=max(1, min(20, int(payload.max_quests))),
                     award_generation_enabled=False if chat_mode else payload.award_generation_enabled,
                     min_awards=payload.min_awards,
                     max_awards=payload.max_awards,
+                    can_damage_npcs=payload.can_damage_npcs,
+                    npcs_can_damage_protagonist=payload.npcs_can_damage_protagonist,
                     selected_image_styles=adv.selected_image_styles,
                     language=payload.language,
                     cover_source_manifest=cover_source_manifest,
@@ -655,6 +728,16 @@ async def reset_adventure(
         obj_id = obj_def.get("id")
         if not obj_id:
             continue
+        item_type = str(obj_def.get("item_type") or "PICKABLE").upper()
+        metadata_json = {}
+        if item_type == "CONTAINER":
+            code_to_unlock = str(obj_def.get("code_to_unlock") or "").strip()
+            item_to_unlock = str(obj_def.get("item_to_unlock") or "").strip().upper()
+            metadata_json = {
+                "code_to_unlock": code_to_unlock,
+                "item_to_unlock": item_to_unlock,
+                "locked": bool(code_to_unlock or item_to_unlock),
+            }
         db.add(WorldEntity(
             id=obj_id,
             template_id=template_id,
@@ -663,6 +746,17 @@ async def reset_adventure(
             description=obj_def.get("description", ""),
             current_scene_id=obj_def.get("start_scene_id"),
             image_url=existing_entity_images.get(obj_id),
+            spatial_position=obj_def.get("spatial_position"),
+            item_type=item_type,
+            wearable_slots=obj_def.get("wearable_slots") or [],
+            is_hidden=bool(obj_def.get("is_hidden", False)),
+            reveal_rule=obj_def.get("reveal_rule") or None,
+            unlock_rule=None,
+            is_portable=bool(obj_def.get("is_portable", True)),
+            combination_ingredients=obj_def.get("combination_ingredients") or [],
+            reveals_item_id=obj_def.get("reveals_item_id") or None,
+            inventory=obj_def.get("inventory") or [],
+            metadata_json=metadata_json,
         ))
 
     # Restore protagonist image from manifest protagonist data.
@@ -694,6 +788,8 @@ async def update_adventure(
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "max_containers" in update_data and update_data["max_containers"] is not None:
+        update_data["max_containers"] = max(0, min(30, int(update_data["max_containers"])))
     
     # Apply updates to template
     for field, value in update_data.items():

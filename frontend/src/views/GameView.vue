@@ -21,6 +21,9 @@ import GameViewHeader from '@/components/game/GameViewHeader.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
+import ContainerModal from '@/components/game/ContainerModal.vue'
+import ContainerCodeModal from '@/components/game/ContainerCodeModal.vue'
+import TextLogModal from '@/components/game/TextLogModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
@@ -54,6 +57,24 @@ const showQuests = ref(false)
 const showDebugLog = ref(false)
 const showNoteModal = ref(false)
 const isSavingNote = ref(false)
+const showContainerModal = ref(false)
+const containerBusy = ref(false)
+const showContainerCodeModal = ref(false)
+const containerCodeBusy = ref(false)
+const showTextLogModal = ref(false)
+const activeTextLog = ref<{
+  id: string
+  title: string
+  format: string
+  content: string
+  imageUrl?: string | null
+} | null>(null)
+const activeContainer = ref<{
+  id: string
+  name: string
+  items: any[]
+} | null>(null)
+const activeCodeContainer = ref<{ id: string; name: string; source: 'scene' | 'inventory' } | null>(null)
 
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
@@ -152,11 +173,299 @@ const handleEntityClick = async (entity: any) => {
       await handlePlayerInput(command)
     }
   } else {
+    if (isReadableEntity(entity)) {
+      await openTextLogFromEntity(entity)
+      return
+    }
+
+    if (isContainerEntity(entity)) {
+      openContainerFromEntity(entity)
+      return
+    }
+
     // Default behavior for click (e.g. pick up if portable item)
     if (gameCommandService.shouldAutoTakeOnEntityClick(entity)) {
       await handleTakeDirect(entity)
     }
   }
+}
+
+const CONTAINER_OPEN_PREFIX = '[OPEN_CONTAINER] '
+const TEXT_LOG_OPEN_PREFIX = '[OPEN_TEXT_LOG] '
+
+const isContainerEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
+}
+
+const isContainerLocked = (container: any): boolean => {
+  if (!isContainerEntity(container)) return false
+  if (typeof container?.locked === 'boolean') {
+    return container.locked
+  }
+  const metadata = (container?.metadata_json && typeof container.metadata_json === 'object') ? container.metadata_json : {}
+  return Boolean(metadata.code_to_unlock || metadata.item_to_unlock)
+}
+
+const getContainerCodeRequirement = (container: any): string => {
+  const metadata = (container?.metadata_json && typeof container.metadata_json === 'object') ? container.metadata_json : {}
+  return String(metadata.code_to_unlock || '').trim()
+}
+
+const markContainerUnlockedLocally = (containerId: string) => {
+  const normalized = String(containerId || '').trim().toLowerCase()
+  if (!normalized) return
+
+  const updateLock = (entry: any) => {
+    if (!entry || String(entry.id || '').toLowerCase() !== normalized) return
+    entry.locked = false
+    const metadata = (entry.metadata_json && typeof entry.metadata_json === 'object') ? { ...entry.metadata_json } : {}
+    metadata.locked = false
+    entry.metadata_json = metadata
+  }
+
+  for (const entry of (entities.value || [])) updateLock(entry)
+  for (const entry of (inventoryItems.value || [])) updateLock(entry)
+}
+
+const isReadableEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'READABLE'
+}
+
+const extractTextLogPayload = (entity: any) => {
+  const metadata = (entity?.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
+  const content = String(
+    entity?.text_log_content ||
+    metadata.text_log_content ||
+    entity?.description ||
+    ''
+  ).trim().slice(0, 500)
+  const format = String(entity?.text_log_format || metadata.text_log_format || 'DOCUMENT').trim().toUpperCase()
+  return {
+    id: String(entity?.id || ''),
+    title: String(entity?.name || entity?.id || 'Text Log'),
+    format: ['DOCUMENT', 'SCROLL', 'BOOK', 'SIGN'].includes(format) ? format : 'DOCUMENT',
+    content,
+    imageUrl: entity?.image_url || null,
+  }
+}
+
+const openTextLogFromEntity = async (entity: any) => {
+  const payload = extractTextLogPayload(entity)
+  activeTextLog.value = payload
+  showTextLogModal.value = true
+
+  if (!payload.id) {
+    return
+  }
+
+  try {
+    await api.markTextLogRead(props.id, payload.id)
+    entity.is_read = true
+  } catch {
+    addNotification('Could not persist read status for this text log.', 'error')
+  }
+}
+
+const closeTextLogModal = () => {
+  showTextLogModal.value = false
+  activeTextLog.value = null
+}
+
+const findItemById = (id: string): any | null => {
+  if (!id) return null
+  const foundInScene = (entities.value || []).find((entry: any) => String(entry.id || '').toLowerCase() === id.toLowerCase())
+  if (foundInScene) return foundInScene
+  const foundInInventory = (inventoryItems.value || []).find((entry: any) => String(entry?.id || '').toLowerCase() === id.toLowerCase())
+  return foundInInventory || null
+}
+
+const normalizeContainerItems = (rawItems: any[]): any[] => {
+  const result: any[] = []
+  for (const entry of rawItems || []) {
+    if (entry && typeof entry === 'object') {
+      result.push(entry)
+      continue
+    }
+
+    if (typeof entry === 'string') {
+      const resolved = findItemById(entry)
+      result.push(resolved || { id: entry, name: entry, item_type: 'PICKABLE' })
+    }
+  }
+  return result
+}
+
+const openContainerFromEntity = (entity: any): boolean => {
+  if (!isContainerEntity(entity)) return false
+  if (isContainerLocked(entity)) {
+    const requiredCode = getContainerCodeRequirement(entity)
+    if (requiredCode) {
+      activeCodeContainer.value = {
+        id: String(entity.id || entity.name || '').trim(),
+        name: String(entity.name || entity.id || 'Container'),
+        source: 'scene',
+      }
+      showContainerCodeModal.value = true
+      return false
+    }
+    addNotification(`${entity?.name || 'Container'} is locked.`, 'info')
+    return false
+  }
+
+  activeContainer.value = {
+    id: String(entity.id || entity.name || '').trim(),
+    name: String(entity.name || entity.id || 'Container'),
+    items: normalizeContainerItems(entity.inventory || []),
+  }
+  showContainerModal.value = true
+  return true
+}
+
+const openContainerFromInventoryItem = (item: any): boolean => {
+  if (!isContainerEntity(item)) return false
+  if (isContainerLocked(item)) {
+    const requiredCode = getContainerCodeRequirement(item)
+    if (requiredCode) {
+      activeCodeContainer.value = {
+        id: String(item.id || item.name || '').trim(),
+        name: String(item.name || item.id || 'Container'),
+        source: 'inventory',
+      }
+      showContainerCodeModal.value = true
+      return false
+    }
+    addNotification(`${item?.name || 'Container'} is locked.`, 'info')
+    return false
+  }
+
+  activeContainer.value = {
+    id: String(item.id || item.name || '').trim(),
+    name: String(item.name || item.id || 'Container'),
+    items: normalizeContainerItems(item.inventory || []),
+  }
+  showContainerModal.value = true
+  return true
+}
+
+const openContainerByHint = (hint: string): boolean => {
+  const normalized = String(hint || '').trim().toLowerCase()
+  if (!normalized) return false
+
+  const sceneContainer = (items.value || []).find((entry: any) => {
+    if (!isContainerEntity(entry)) return false
+    const byId = String(entry.id || '').toLowerCase() === normalized
+    const byName = String(entry.name || '').toLowerCase() === normalized
+    return byId || byName
+  })
+
+  if (sceneContainer) {
+    return openContainerFromEntity(sceneContainer)
+  }
+
+  const inventoryContainer = (inventoryItems.value || []).find((entry: any) => {
+    if (!isContainerEntity(entry)) return false
+    const byId = String(entry.id || '').toLowerCase() === normalized
+    const byName = String(entry.name || '').toLowerCase() === normalized
+    return byId || byName
+  })
+
+  if (inventoryContainer) {
+    return openContainerFromInventoryItem(inventoryContainer)
+  }
+
+  return false
+}
+
+const openTextLogByHint = async (hint: string): Promise<boolean> => {
+  const normalized = String(hint || '').trim().toLowerCase()
+  if (!normalized) return false
+
+  const sceneReadable = (items.value || []).find((entry: any) => {
+    if (!isReadableEntity(entry)) return false
+    const byId = String(entry.id || '').toLowerCase() === normalized
+    const byName = String(entry.name || '').toLowerCase() === normalized
+    return byId || byName
+  })
+
+  if (sceneReadable) {
+    await openTextLogFromEntity(sceneReadable)
+    return true
+  }
+
+  const inventoryReadable = (inventoryItems.value || []).find((entry: any) => {
+    if (!isReadableEntity(entry)) return false
+    const byId = String(entry.id || '').toLowerCase() === normalized
+    const byName = String(entry.name || '').toLowerCase() === normalized
+    return byId || byName
+  })
+
+  if (inventoryReadable) {
+    await openTextLogFromEntity(inventoryReadable)
+    return true
+  }
+
+  return false
+}
+
+const closeContainerModal = () => {
+  showContainerModal.value = false
+  activeContainer.value = null
+}
+
+const closeContainerCodeModal = () => {
+  showContainerCodeModal.value = false
+  activeCodeContainer.value = null
+}
+
+const submitContainerCode = async (code: string) => {
+  if (!activeCodeContainer.value || containerCodeBusy.value) return
+  const containerId = String(activeCodeContainer.value.id || '').trim()
+  if (!containerId) return
+
+  containerCodeBusy.value = true
+  try {
+    await api.unlockContainerWithCode(props.id, containerId, code)
+    markContainerUnlockedLocally(containerId)
+    addNotification(`${activeCodeContainer.value.name} unlocked.`, 'success')
+    const source = activeCodeContainer.value.source
+    closeContainerCodeModal()
+
+    if (source === 'scene') {
+      const container = (items.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromEntity(container)
+    } else {
+      const container = (inventoryItems.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromInventoryItem(container)
+    }
+  } catch (error: any) {
+    addNotification(error?.message || 'Invalid access code.', 'error')
+  } finally {
+    containerCodeBusy.value = false
+  }
+}
+
+const runContainerAction = async (commandBuilder: (containerIdOrName: string) => string) => {
+  if (!activeContainer.value || containerBusy.value) return
+  const identifier = activeContainer.value.id || activeContainer.value.name
+  if (!identifier) return
+
+  containerBusy.value = true
+  try {
+    await sendMessage(commandBuilder(identifier))
+    closeContainerModal()
+  } finally {
+    containerBusy.value = false
+  }
+}
+
+const handleContainerTakeAll = async () => {
+  await runContainerAction((id) => `/container_take_all ${id}`)
+}
+
+const handleContainerDropToScene = async () => {
+  await runContainerAction((id) => `/container_drop_scene ${id}`)
 }
 
 // Split entities into NPCs and Objects, and inject the player as the top-listed NPC
@@ -325,7 +634,20 @@ const {
   handlePlayerInput,
   onAction: () => {
     if (showSheet.value) sheetDirty.value = true
-  }
+  },
+  onDirectAction: (action: string) => {
+    if (!action.startsWith(CONTAINER_OPEN_PREFIX)) {
+      if (!action.startsWith(TEXT_LOG_OPEN_PREFIX)) {
+        return false
+      }
+      const hint = action.replace(TEXT_LOG_OPEN_PREFIX, '').trim()
+      void openTextLogByHint(hint)
+      return true
+    }
+
+    const hint = action.replace(CONTAINER_OPEN_PREFIX, '').trim()
+    return openContainerByHint(hint)
+  },
 })
 
 const handleUnlockVoice = () => {
@@ -586,6 +908,7 @@ watch(
       @equip="handleEquipFromSheet"
       @unequip="handleUnequipFromSheet"
       @consume="handleConsumeFromSheet"
+      @open-container="openContainerFromInventoryItem"
       @changed="handleSheetChanged"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"
@@ -676,6 +999,35 @@ watch(
       @confirm="handleLootDone"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'Loot recovered from battle.' }, event)"
       @item-leave="hoveredEntity = null"
+    />
+
+    <ContainerModal
+      :open="showContainerModal"
+      :title="activeContainer?.name || 'Container'"
+      :items="activeContainer?.items || []"
+      :busy="containerBusy"
+      @close="closeContainerModal"
+      @take-all="handleContainerTakeAll"
+      @drop-to-scene="handleContainerDropToScene"
+      @item-hover="(item, event) => handleHover(item, event)"
+      @item-leave="hoveredEntity = null"
+    />
+
+    <ContainerCodeModal
+      :open="showContainerCodeModal"
+      :title="activeCodeContainer?.name || 'Container'"
+      :busy="containerCodeBusy"
+      @close="closeContainerCodeModal"
+      @submit="submitContainerCode"
+    />
+
+    <TextLogModal
+      :open="showTextLogModal"
+      :title="activeTextLog?.title || 'Text Log'"
+      :format="activeTextLog?.format || 'DOCUMENT'"
+      :content="activeTextLog?.content || ''"
+      :image-url="activeTextLog?.imageUrl || null"
+      @close="closeTextLogModal"
     />
 
     <!-- HOVER TOOLTIP -->

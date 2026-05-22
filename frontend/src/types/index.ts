@@ -181,6 +181,10 @@ export interface CreateAdventurePayload {
   selected_tone?: CatalogTile | string | null
   min_scenes?: number
   max_scenes?: number
+  container_generation_enabled?: boolean
+  max_containers?: number
+  text_log_generation_enabled?: boolean
+  max_text_logs?: number
   clock_enabled?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean
@@ -192,6 +196,8 @@ export interface CreateAdventurePayload {
   min_awards?: number
   max_awards?: number
   allow_dynamic_items?: boolean
+  can_damage_npcs?: boolean
+  npcs_can_damage_protagonist?: boolean
   cover_source_adventure_id?: string
   cover_source_adventure_name?: string
   cover_similarity_percent?: number
@@ -204,6 +210,19 @@ export interface CatalogTile {
   description?: string
   instruction?: string
   image_url?: string | null
+}
+
+export interface StoryIdeaSuggestionPayload {
+  title?: string
+  story_idea?: string
+  selected_tone?: CatalogTile | null
+  rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
+  language?: string
+}
+
+export interface StoryIdeaSuggestionResponse {
+  title: string
+  story_idea: string
 }
 
 /** Minimal import payload type for .ADV files (frontend-side). */

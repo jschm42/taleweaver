@@ -10,6 +10,8 @@ import type {
   AdventureImportPayload,
   CatalogTile,
   AdventureTemplateSummary,
+  StoryIdeaSuggestionPayload,
+  StoryIdeaSuggestionResponse,
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
@@ -212,6 +214,19 @@ export const api = {
     return request(`/adventures/${templateId}/reset`, { method: 'POST' })
   },
 
+  /** Marks one readable text log as read within a session. */
+  markTextLogRead(gameId: string, entityId: string): Promise<{ status: string; entity_id: string; is_read: boolean }> {
+    return request(`/adventures/${gameId}/text-logs/${encodeURIComponent(entityId)}/read`, { method: 'POST' })
+  },
+
+  /** Attempts to unlock one container with a submitted access code. */
+  unlockContainerWithCode(gameId: string, entityId: string, code: string): Promise<{ status: string; entity_id: string; locked: boolean }> {
+    return request(`/adventures/${gameId}/containers/${encodeURIComponent(entityId)}/unlock-code`, {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    })
+  },
+
   /** @deprecated Use listSessions() instead. */
   listGameSessions(): Promise<GameSession[]> {
     return request<GameSession[]>('/adventures/')
@@ -220,6 +235,11 @@ export const api = {
   /** Creates a new adventure and returns the generated IDs. */
   createAdventure(payload: CreateAdventurePayload): Promise<{ game_id: string; adventure_id: string; avatar_id: string }> {
     return request('/adventures/', { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  /** Generates or improves title and story idea from user input. */
+  suggestStoryIdea(payload: StoryIdeaSuggestionPayload): Promise<StoryIdeaSuggestionResponse> {
+    return request('/adventures/story-idea/suggest', { method: 'POST', body: JSON.stringify(payload) })
   },
 
   /** Returns a single adventure template details by ID. */

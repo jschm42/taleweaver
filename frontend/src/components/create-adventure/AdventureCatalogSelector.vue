@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CatalogTile } from '@/types'
+import InfoPopoverButton from '@/components/create-adventure/InfoPopoverButton.vue'
 
 defineProps<{
   title: string
@@ -8,6 +9,7 @@ defineProps<{
   items: CatalogTile[]
   selectedId: string
   accentColorClass: string
+  helpText?: string
 }>()
 
 const emit = defineEmits<{
@@ -16,15 +18,18 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 flex flex-col min-h-0">
-    <div class="flex items-center gap-4 mb-8">
-      <div :class="['w-12 h-12 rounded-2xl flex items-center justify-center', accentColorClass]">
-        <component :is="icon" class="w-6 h-6" />
+  <div class="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 flex flex-col min-h-0">
+    <div class="flex items-start justify-between gap-4 mb-8">
+      <div class="flex items-center gap-4">
+        <div :class="['w-12 h-12 rounded-2xl flex items-center justify-center', accentColorClass]">
+          <component :is="icon" class="w-6 h-6" />
+        </div>
+        <div>
+          <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">{{ title }}</h3>
+          <p class="text-xxs text-white/40 uppercase tracking-widest">{{ subtitle }}</p>
+        </div>
       </div>
-      <div>
-        <h3 class="text-sm font-black text-white uppercase tracking-[0.2em]">{{ title }}</h3>
-        <p class="text-xxs text-white/40 uppercase tracking-widest">{{ subtitle }}</p>
-      </div>
+      <InfoPopoverButton v-if="helpText" :title="title" :text="helpText" />
     </div>
 
     <div class="grid grid-cols-2 gap-4 overflow-y-auto pr-2 custom-scrollbar max-h-[416px]">

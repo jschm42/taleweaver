@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import AdventureGeneratorToolIntent, GameEvent
+from backend.engine.rule_engine import AdventureGeneratorToolIntent, GameEvent, InventoryItem, WorldEntityUpdate
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -1297,6 +1297,23 @@ async def test_combat_start_creates_state(setup_test_db):
         assert any("event: final" in c for c in chunks)
 
 
+async def test_combat_start_blocked_when_npc_damage_disabled(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        adv.can_damage_npcs = False
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__") or {}
+        assert combat.get("active") is not True
+
+
 async def test_combat_attack_defeat_enables_loot_phase(setup_test_db, monkeypatch):
     from tests.conftest import TestSessionLocal
 
@@ -1335,6 +1352,68 @@ async def test_combat_attack_defeat_enables_loot_phase(setup_test_db, monkeypatc
         assert combat.get("outcome") == "victory"
         assert combat.get("loot_pending") is True
         assert len(combat.get("loot_items") or []) == 1
+
+
+async def test_non_killable_npc_not_marked_permanently_defeated(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, npc = await _seed_combat_npc(db)
+        npc.is_killable = False
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 19,
+                "hit_modifier": 5,
+                "hit_total": 24,
+                "target_ac": 11,
+                "is_hit": True,
+                "damage_total": 60,
+                "damage_dice_total": 60,
+                "damage_rolls": [60],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d8",
+            },
+        )
+
+        async for _ in manager.process_turn("/attack"):
+            pass
+
+        await db.refresh(state)
+        npc_state = ((state.entity_states or {}).get("RAT_ENEMY") or {})
+        assert npc_state.get("is_defeated") is not True
+        assert npc_state.get("is_attackable") is not False
+
+
+async def test_enemy_turn_no_damage_when_npc_damage_to_protagonist_disabled(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state, _npc = await _seed_combat_npc(db)
+        adv.npcs_can_damage_protagonist = False
+        avatar.hp = 100
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+
+        # Ensure player starts combat and enemy turn resolves deterministically.
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.randint", lambda *_args, **_kwargs: 20)
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.random.random", lambda: 1.0)
+
+        async for _ in manager.process_turn("/fight RAT_ENEMY"):
+            pass
+        async for _ in manager.process_turn("/rest"):
+            pass
+
+        await db.refresh(avatar)
+        assert avatar.hp == 100
 
 
 async def test_combat_loot_take_moves_item_to_inventory(setup_test_db, monkeypatch):
@@ -2062,4 +2141,45 @@ async def test_combat_npc_stamina_logic_inactive(setup_test_db, monkeypatch):
         logs = combat.get("log") or []
         # Enemy should not rest/be exhausted
         assert not any("is exhausted and rests to recover stamina" in entry.get("text", "") for entry in logs)
+
+
+async def test_wrong_container_access_code_is_rejected_server_side(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        locker = WorldEntity(
+            id="LOCKER",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Maintenance Locker",
+            description="A secure maintenance locker.",
+            current_scene_id=state.current_scene_id,
+            item_type="CONTAINER",
+            unlock_rule=None,
+            inventory=["MEDIKIT_01"],
+            is_portable=False,
+            is_hidden=False,
+            is_in_inventory=False,
+            metadata_json={"code_to_unlock": "7341", "item_to_unlock": "", "locked": True},
+        )
+        db.add(locker)
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        manager.state = state
+        manager.avatar = avatar
+
+        event = GameEvent(
+            updated_entities=[WorldEntityUpdate(entity_id="LOCKER", locked=False)],
+            completed_quest_ids=["LOCKER_ROOKIE"],
+            new_inventory_items=[InventoryItem(id="MEDIKIT_01", name="Medikit", item_type="CONSUMABLE")],
+        )
+
+        messages = await manager._enforce_container_unlock_guardrails(event, "use code 1111 on maintenance locker")
+
+        assert any("Access code rejected" in msg for msg in messages)
+        assert event.completed_quest_ids == []
+        assert event.new_inventory_items == []
+        assert any(up.entity_id == "LOCKER" and up.locked is True for up in (event.updated_entities or []))
 

@@ -172,6 +172,16 @@ class AdventureTemplateImporter:
                     awards=adv_data.get("awards") or manifest_data.get("awards", []),
                     min_scenes=adv_data.get("min_scenes") or manifest_data.get("min_scenes", 1),
                     max_scenes=adv_data.get("max_scenes") or manifest_data.get("max_scenes", 5),
+                    container_generation_enabled=(
+                        adv_data.get("container_generation_enabled", True)
+                        if "container_generation_enabled" in adv_data
+                        else manifest_data.get("container_generation_enabled", True)
+                    ),
+                    max_containers=(
+                        int(adv_data.get("max_containers", 8))
+                        if "max_containers" in adv_data
+                        else int(manifest_data.get("max_containers", 8))
+                    ),
                     min_awards=adv_data.get("min_awards") or manifest_data.get("min_awards", 3),
                     max_awards=adv_data.get("max_awards") or manifest_data.get("max_awards", 8),
                     award_generation_enabled=adv_data.get("award_generation_enabled") or manifest_data.get("award_generation_enabled", False),
@@ -187,6 +197,8 @@ class AdventureTemplateImporter:
                     time_config=adv_data.get("time_config") or manifest_data.get("time_config"),
                     game_over_rules=adv_data.get("game_over_rules") or manifest_data.get("game_over_rules"),
                     allow_dynamic_items=adv_data.get("allow_dynamic_items", True) if "allow_dynamic_items" in adv_data else (manifest_data.get("allow_dynamic_items", True)),
+                    can_damage_npcs=adv_data.get("can_damage_npcs", True) if "can_damage_npcs" in adv_data else (manifest_data.get("can_damage_npcs", True)),
+                    npcs_can_damage_protagonist=adv_data.get("npcs_can_damage_protagonist", True) if "npcs_can_damage_protagonist" in adv_data else (manifest_data.get("npcs_can_damage_protagonist", True)),
                     cover_source_adventure_id=adv_data.get("cover_source_adventure_id") or manifest_data.get("cover_source_adventure_id"),
                     cover_source_adventure_name=adv_data.get("cover_source_adventure_name") or manifest_data.get("cover_source_adventure_name"),
                     cover_similarity_percent=(
@@ -402,6 +414,8 @@ class AdventureTemplateImporter:
                     time_system=old_adv.get("time_system", "calendar"),
                     time_config=old_adv.get("time_config"),
                     allow_dynamic_items=old_adv.get("allow_dynamic_items", True),
+                    can_damage_npcs=old_adv.get("can_damage_npcs", True),
+                    npcs_can_damage_protagonist=old_adv.get("npcs_can_damage_protagonist", True),
                     cover_source_adventure_id=old_adv.get("cover_source_adventure_id"),
                     cover_source_adventure_name=old_adv.get("cover_source_adventure_name"),
                     cover_similarity_percent=old_adv.get("cover_similarity_percent", 50),
@@ -555,6 +569,8 @@ class AdventureTemplateImporter:
                     time_system=adv_meta.get("time_system") or manifest.get("time_system", "calendar"),
                     time_config=adv_meta.get("time_config") or manifest.get("time_config"),
                     allow_dynamic_items=adv_meta.get("allow_dynamic_items", True) if "allow_dynamic_items" in adv_meta else (manifest.get("allow_dynamic_items", True)),
+                    can_damage_npcs=adv_meta.get("can_damage_npcs", True) if "can_damage_npcs" in adv_meta else (manifest.get("can_damage_npcs", True)),
+                    npcs_can_damage_protagonist=adv_meta.get("npcs_can_damage_protagonist", True) if "npcs_can_damage_protagonist" in adv_meta else (manifest.get("npcs_can_damage_protagonist", True)),
                     cover_source_adventure_id=adv_meta.get("cover_source_adventure_id") or manifest.get("cover_source_adventure_id"),
                     cover_source_adventure_name=adv_meta.get("cover_source_adventure_name") or manifest.get("cover_source_adventure_name"),
                     cover_similarity_percent=(

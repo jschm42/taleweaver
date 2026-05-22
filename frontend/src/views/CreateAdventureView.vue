@@ -6,6 +6,7 @@ import { configState, refreshConfig } from '@/store/config'
 import { authState } from '@/store/auth'
 import type { CatalogTile } from '@/types'
 import { Sparkles, Palette, Flame } from 'lucide-vue-next'
+import { CREATE_ADVENTURE_HELP_TEXTS } from '@/constants/createAdventureHelpTexts'
 
 // Components
 import AdventureStatusAlerts from '@/components/create-adventure/AdventureStatusAlerts.vue'
@@ -34,6 +35,15 @@ const form = ref({
   selected_tone_id: '',
   min_scenes: 3,
   max_scenes: 6,
+  quest_generation_enabled: true,
+  min_quests: 3,
+  max_quests: 5,
+  container_generation_enabled: true,
+  max_containers: 8,
+  text_log_generation_enabled: true,
+  max_text_logs: 8,
+  can_damage_npcs: true,
+  npcs_can_damage_protagonist: true,
   award_generation_enabled: true,
   min_awards: 3,
   max_awards: 8,
@@ -54,11 +64,15 @@ const imageStyles = ref<CatalogTile[]>([])
 const tones = ref<CatalogTile[]>([])
 const isLoadingCatalogs = ref(true)
 const isGenerating = ref(false)
+const isSuggestingStoryIdea = ref(false)
 const errorMsg = ref('')
 const config = ref<any>(null)
 
 const hasLlmConfig = computed(() => configState.hasLlmConfig)
 const hasT2iConfig = computed(() => configState.hasT2iConfig)
+const selectedToneObject = computed(() => {
+  return tones.value.find(t => t.id === form.value.selected_tone_id) || null
+})
 
 async function loadCatalogs() {
   isLoadingCatalogs.value = true
@@ -88,6 +102,8 @@ function initializeLanguage() {
 }
 
 async function handleCreate() {
+  form.value.title = (form.value.title || '').slice(0, 50)
+
   if (!form.value.title.trim()) {
     errorMsg.value = 'Title is required.'
     return
@@ -106,7 +122,7 @@ async function handleCreate() {
   const payload: any = {
     ...form.value,
     id: crypto.randomUUID(),
-    title: form.value.title.trim() || 'Untitled Odyssey',
+    title: (form.value.title.trim() || 'Untitled Odyssey').slice(0, 50),
     original_prompt: form.value.storyIdea.trim(),
     time_per_turn: form.value.pacing_minutes,
     selected_image_styles: form.value.selected_style_id ? [fullStyleObj] : [],
@@ -129,6 +145,32 @@ async function handleCreate() {
   }
 }
 
+async function handleSuggestStoryIdea() {
+  if (!hasLlmConfig.value) {
+    errorMsg.value = 'LLM configuration is required to generate a story idea.'
+    return
+  }
+
+  isSuggestingStoryIdea.value = true
+  errorMsg.value = ''
+  try {
+    const suggestion = await api.suggestStoryIdea({
+      title: form.value.title,
+      story_idea: form.value.storyIdea,
+      selected_tone: selectedToneObject.value,
+      rule_enforcement_mode: form.value.rule_enforcement_mode,
+      language: form.value.language || undefined,
+    })
+
+    form.value.title = (suggestion.title || '').slice(0, 50)
+    form.value.storyIdea = suggestion.story_idea || ''
+  } catch (error: any) {
+    errorMsg.value = error?.message || 'Failed to generate story idea.'
+  } finally {
+    isSuggestingStoryIdea.value = false
+  }
+}
+
 async function loadCoverSource() {
   if (!isCoverMode.value) {
     sourceAdventure.value = null
@@ -141,7 +183,7 @@ async function loadCoverSource() {
     sourceAdventure.value = source
 
     if (!form.value.title.trim()) {
-      form.value.title = `(Cover) ${source.title || 'Adventure'}`
+      form.value.title = (`(Cover) ${source.title || 'Adventure'}`).slice(0, 50)
     }
     if (!form.value.storyIdea.trim()) {
       form.value.storyIdea = source.original_prompt || source.plot || source.teaser || ''
@@ -219,13 +261,12 @@ onMounted(() => {
 
             <AdventureBasicInfo 
               v-model="form"
+              :is-suggesting-story-idea="isSuggestingStoryIdea"
+              :can-suggest-story-idea="hasLlmConfig"
+              @suggest-story-idea="handleSuggestStoryIdea"
             />
 
             <AdventureGameSettings 
-              v-model="form"
-            />
-
-            <AdventureAssetSettings 
               v-model="form"
             />
           </div>
@@ -233,6 +274,10 @@ onMounted(() => {
 
         <!-- Style & Tone Selection (Right) -->
         <div class="flex flex-col gap-8 h-full">
+          <AdventureAssetSettings 
+            v-model="form"
+          />
+
           <AdventureCatalogSelector 
             title="Visual Style"
             subtitle="Select one aesthetic direction"
@@ -240,6 +285,7 @@ onMounted(() => {
             :items="imageStyles"
             :selected-id="form.selected_style_id"
             accent-color-class="bg-indigo-500/20 text-indigo-400"
+            :help-text="CREATE_ADVENTURE_HELP_TEXTS.visualStyle"
             @select="id => form.selected_style_id = id"
           />
 
@@ -250,6 +296,7 @@ onMounted(() => {
             :items="tones"
             :selected-id="form.selected_tone_id"
             accent-color-class="bg-amber-500/20 text-amber-400"
+            :help-text="CREATE_ADVENTURE_HELP_TEXTS.narrativeTone"
             @select="id => form.selected_tone_id = id"
           />
         </div>

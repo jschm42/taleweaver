@@ -95,6 +95,55 @@ async def _seed_adventure(db: AsyncSession, user_id: str) -> str:
     await db.commit()
     return adv.id
 
+
+async def test_export_adv_objects_omit_null_and_npc_fields(auth_client, setup_test_db):
+    """Object export should omit null/NPC-only fields while preserving meaningful zero values."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        adventure_id = await _seed_adventure(db, user.id)
+
+        object_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == adventure_id,
+                WorldEntity.id == "SWORD_1",
+            )
+        )
+        obj = object_res.scalars().first()
+        assert obj is not None
+
+        obj.stat_modifier_strength = 0
+        obj.metadata_json = {
+            "hp_change": 0,
+            "stat_modifier_strength": 0,
+            "mana_change": None,
+        }
+        await db.commit()
+
+        manifest = await AdventureExporter.build_full_manifest(db, adventure_id)
+        exported_obj = next((o for o in manifest["objects"] if o["id"] == "SWORD_1"), None)
+
+        assert exported_obj is not None
+        assert exported_obj.get("stat_modifier_strength") == 0
+        assert exported_obj.get("metadata_json", {}).get("hp_change") == 0
+        assert "stat_modifier_strength" not in exported_obj.get("metadata_json", {})
+
+        # Null and NPC-only attributes should be excluded from object payloads.
+        assert "npc_type" not in exported_obj
+        assert "movement_type" not in exported_obj
+        assert "goal" not in exported_obj
+        assert "character" not in exported_obj
+        assert "hp" not in exported_obj
+        assert "mana" not in exported_obj
+        assert "session_id" not in exported_obj
+        assert "pk" not in exported_obj
+        assert "created_at" not in exported_obj
+        assert "updated_at" not in exported_obj
+
+        assert "mana_change" not in exported_obj.get("metadata_json", {})
+
 async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, monkeypatch):
     """Verifies that an adventure can be exported to ADZ and imported back with all data intact."""
     from tests.conftest import TestSessionLocal
