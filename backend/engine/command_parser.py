@@ -87,7 +87,7 @@ class CommandParser:
         elif command == "/combine" or command == "/use":
             return f"[TRIGGER_COMBINE] {args}"
         elif command == "/take":
-            return f"[TRIGGER_TAKE] {args}"
+            return f"[TRIGGER_TAKE_DIRECT] {args}"
         elif command == "/take_direct":
             return f"[TRIGGER_TAKE_DIRECT] {args}"
         elif command == "/talk":
@@ -96,6 +96,22 @@ class CommandParser:
             return f"[TRIGGER_SAY] {args}"
         elif command == "/inspect":
             return f"[TRIGGER_INSPECT] {args}"
+        elif command == "/open":
+            return f"[TRIGGER_OPEN] {args}"
+        elif command == "/read":
+            return f"[TRIGGER_READ] {args}"
+        elif command == "/push":
+            return f"[TRIGGER_PUSH] {args}"
+        elif command == "/pull":
+            return f"[TRIGGER_PULL] {args}"
+        elif command == "/chat":
+            return f"[TRIGGER_CHAT] {args}"
+        elif command == "/search":
+            return f"[TRIGGER_SEARCH] {args}"
+        elif command == "/lookaround" or command == "/look":
+            return "[TRIGGER_LOOKAROUND]"
+        elif command == "/rest":
+            return "[TRIGGER_REST]"
         elif command == "/unequip":
             return CommandParser._handle_unequip(avatar, args)
         elif command == "/consume":
@@ -114,9 +130,17 @@ class CommandParser:
             "- `/help`: Show this list.",
             "- `/map`: Toggle the world map.",
             "- `/talk <target>`: Talk to an NPC.",
+            "- `/chat <target>`: Alias for talking to an NPC.",
             "- `/say <text>`: Say something out loud (wörtliche Rede).",
             "- `/inspect <target>`: Inspect an NPC, object or the surroundings.",
+            "- `/open <target>`: Open a container or mechanism.",
+            "- `/read <target>`: Read a note, book, sign, scroll, or text log.",
+            "- `/search [target]`: Search the surroundings or a specific object.",
+            "- `/lookaround` or `/look`: Get a fresh overview of the current area.",
             "- `/attack <target>`: Start a fight with a specific NPC (by name or ID).",
+            "- `/push <target>`: Push an object, lever, mechanism, or obstacle.",
+            "- `/pull <target>`: Pull an object, lever, mechanism, or obstacle.",
+            "- `/rest`: Take a short rest if the situation allows it.",
             "- `/equip <item>`: Equip an item from your inventory.",
             "- `/drop <item>`: Drop an item into the current room.",
             "- `/take <item>`: Pick up an item from the room.",

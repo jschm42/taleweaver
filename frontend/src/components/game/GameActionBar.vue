@@ -13,6 +13,8 @@ interface Action {
 const actions: Action[] = [
   { id: 'talk', label: 'Talk', icon: 'ra-speech-bubbles', color: 'text-blue-400' },
   { id: 'inspect', label: 'Inspect', icon: 'ra-scroll-unfurled', color: 'text-cyan-400' },
+  { id: 'open', label: 'Open', icon: 'ra-chest', color: 'text-lime-400' },
+  { id: 'read', label: 'Read', icon: 'ra-book-cover', color: 'text-violet-400' },
   { id: 'take', label: 'Take', icon: 'ra-hand', color: 'text-amber-400' },
   { id: 'attack', label: 'Attack', icon: 'ra-sword', color: 'text-red-400' },
   { id: 'push', label: 'Push', icon: 'ra-cog', color: 'text-slate-400' },

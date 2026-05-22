@@ -20,3 +20,50 @@ def test_walkthrough_reveal_command_returns_trigger() -> None:
 def test_hint_command_returns_trigger() -> None:
     response = CommandParser.parse_command(_avatar(), "/hint")
     assert response == "[TRIGGER_HINT]"
+
+
+def test_take_command_routes_to_direct_take_trigger() -> None:
+    response = CommandParser.parse_command(_avatar(), "/take Ancient Key")
+    assert response == "[TRIGGER_TAKE_DIRECT] Ancient Key"
+
+
+def test_pickup_is_not_a_known_command() -> None:
+    response = CommandParser.parse_command(_avatar(), "/pickup Ancient Key")
+    assert "Unknown command" in response
+
+
+def test_push_command_returns_trigger() -> None:
+    response = CommandParser.parse_command(_avatar(), "/push Lever")
+    assert response == "[TRIGGER_PUSH] Lever"
+
+
+def test_pull_command_returns_trigger() -> None:
+    response = CommandParser.parse_command(_avatar(), "/pull Chain")
+    assert response == "[TRIGGER_PULL] Chain"
+
+
+def test_chat_command_returns_trigger() -> None:
+    response = CommandParser.parse_command(_avatar(), "/chat Guard")
+    assert response == "[TRIGGER_CHAT] Guard"
+
+
+def test_search_command_returns_trigger() -> None:
+    response = CommandParser.parse_command(_avatar(), "/search Desk")
+    assert response == "[TRIGGER_SEARCH] Desk"
+
+
+def test_lookaround_and_rest_commands_return_triggers() -> None:
+    look = CommandParser.parse_command(_avatar(), "/lookaround")
+    rest = CommandParser.parse_command(_avatar(), "/rest")
+    assert look == "[TRIGGER_LOOKAROUND]"
+    assert rest == "[TRIGGER_REST]"
+
+
+def test_open_command_returns_trigger() -> None:
+    response = CommandParser.parse_command(_avatar(), "/open Rusty Chest")
+    assert response == "[TRIGGER_OPEN] Rusty Chest"
+
+
+def test_read_command_returns_trigger() -> None:
+    response = CommandParser.parse_command(_avatar(), "/read Captain Log")
+    assert response == "[TRIGGER_READ] Captain Log"

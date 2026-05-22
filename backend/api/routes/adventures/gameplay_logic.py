@@ -515,6 +515,60 @@ class GameTurnManager:
             elif response.startswith("[TRIGGER_INSPECT]"):
                 user_msg = f"Inspect {response[17:].strip()}"
                 # Continue turn as normal
+            elif response.startswith("[TRIGGER_OPEN]"):
+                open_target = response[14:].strip()
+                if open_target:
+                    user_msg = (
+                        f"Open {open_target}. If this reveals any contents, list those contents explicitly in the chat response "
+                        "(not only in UI dialogs), so they are visible in chat history."
+                    )
+                else:
+                    user_msg = "Usage: /open <target>"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_READ]"):
+                read_target = response[14:].strip()
+                if read_target:
+                    user_msg = (
+                        f"Read {read_target}. If there is readable text/log content, print the full relevant text in the chat response "
+                        "(not only in UI dialogs), so it remains in chat history."
+                    )
+                else:
+                    user_msg = "Usage: /read <target>"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_CHAT]"):
+                chat_target = response[14:].strip()
+                if chat_target:
+                    user_msg = f"Talk to {chat_target}"
+                else:
+                    user_msg = "Talk to someone nearby"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_PUSH]"):
+                push_target = response[14:].strip()
+                if push_target:
+                    user_msg = f"Push {push_target}"
+                else:
+                    user_msg = "Push the most relevant mechanism in the scene"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_PULL]"):
+                pull_target = response[14:].strip()
+                if pull_target:
+                    user_msg = f"Pull {pull_target}"
+                else:
+                    user_msg = "Pull the most relevant mechanism in the scene"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_SEARCH]"):
+                search_target = response[16:].strip()
+                if search_target:
+                    user_msg = f"Search {search_target}"
+                else:
+                    user_msg = "Search the surroundings carefully"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_LOOKAROUND]"):
+                user_msg = "Look around and describe all relevant details in the current area"
+                # Continue turn as normal
+            elif response.startswith("[TRIGGER_REST]"):
+                user_msg = "Take a short rest if it is safe and possible"
+                # Continue turn as normal
             elif response.startswith("[TRIGGER_TAKE]"):
                 take_target = response[14:].strip()
                 take_npc = await self._find_scene_npc_by_hint(take_target)
@@ -789,15 +843,34 @@ class GameTurnManager:
             
         if response.startswith("[TRIGGER_TAKE_DIRECT]"):
             entity_id_or_name = response[21:].strip()
-            # Find entity in current scene (snapshot)
+            take_npc = await self._find_scene_npc_by_hint(entity_id_or_name)
+            if take_npc and self._is_npc_defeated(take_npc):
+                msg = f"{take_npc.name} is defeated. Only inspect is available."
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                async for chunk in self._emit_combat_final(msg):
+                    yield chunk
+                return
+
+            # Find portable OBJECT in current scene (snapshot), matching by name or ID (case-insensitive).
             ent_res = await self.db.execute(
                 select(WorldEntity).where(
                     WorldEntity.session_id == self.game_id,
                     WorldEntity.current_scene_id == self.state.current_scene_id,
-                    (WorldEntity.id == entity_id_or_name) | (WorldEntity.name == entity_id_or_name)
+                    WorldEntity.entity_type == "OBJECT",
+                    WorldEntity.is_hidden.is_(False),
+                    WorldEntity.is_in_inventory.is_(False),
                 )
             )
-            ent = ent_res.scalars().first()
+            candidates = ent_res.scalars().all()
+            hint_lower = entity_id_or_name.lower()
+            ent = None
+            for candidate in candidates:
+                if candidate.id and candidate.id.lower() == hint_lower:
+                    ent = candidate
+                    break
+                if candidate.name and candidate.name.lower() == hint_lower:
+                    ent = candidate
+                    break
             if ent and ent.is_portable:
                 # Move to inventory
                 new_inv = list(self.avatar.inventory)

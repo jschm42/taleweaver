@@ -1,12 +1,15 @@
 import os
+from types import SimpleNamespace
 import json
 import pytest
 from unittest.mock import patch, AsyncMock
 from sqlalchemy import select
 
 from backend.models.adventure_template import AdventureTemplate
+from backend.models.avatar import Avatar
 from backend.models.user import User
 from backend.models.session_state import SessionState
+from backend.models.world_entity import WorldEntity
 from backend.api.routes.adventures.sessions import start_session_for_template
 from backend.api.routes.adventures.agent_logic import AgentService, AgentDecision
 from backend.core.config import settings
@@ -220,3 +223,86 @@ async def test_agent_turn_retry_and_deactivation_on_failure(mock_get_decision, a
             content = f.read()
             assert "# TaleWeaver Agent Issues Log" in content
             assert "Walkthrough mismatch: missing required key" in content
+
+
+async def test_agent_prompt_includes_scene_items_and_take_name_guidance(setup_test_db, monkeypatch):
+    """Agent prompt should list visible scene items and explain /take uses item names (no ID required)."""
+    from tests.conftest import TestSessionLocal
+
+    captured: dict[str, str] = {}
+
+    class FakeLLM:
+        async def aexecute_complex_task(self, **kwargs):
+            captured["system_prompt"] = kwargs.get("system_prompt", "")
+            return AgentDecision(
+                thoughts="I'll pick up the key.",
+                action="/take Ancient Key",
+                is_stuck_or_bug=False,
+                issue_description="",
+            )
+
+    async def fake_build_context(self, user_msg: str, language=None):
+        _ = user_msg
+        _ = language
+        return SimpleNamespace(
+            mechanics_system_prompt="Mechanics context",
+            small_model_provider="ollama",
+            small_model="llama3.2",
+        )
+
+    monkeypatch.setattr("backend.api.routes.adventures.agent_logic.TurnLlmContextBuilder.build_context", fake_build_context)
+    monkeypatch.setattr("backend.api.routes.adventures.agent_logic.GameMasterLLM", lambda *args, **kwargs: FakeLLM())
+
+    async with TestSessionLocal() as db:
+        user = User(username="agent_items_user", hashed_password="hash", role="admin")
+        db.add(user)
+        await db.flush()
+
+        adv = AdventureTemplate(
+            id="agent-items-test", owner_id=user.id, title="Agent Items Test", is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+
+        result = await start_session_for_template("agent-items-test", db, user)
+        game_id = result["game_id"]
+
+        state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
+        state = state_res.scalars().first()
+        assert state is not None
+
+        db.add(
+            WorldEntity(
+                id="ANCIENT_KEY",
+                session_id=game_id,
+                template_id=None,
+                entity_type="OBJECT",
+                name="Ancient Key",
+                description="A weathered bronze key.",
+                current_scene_id=state.current_scene_id,
+                is_hidden=False,
+                is_in_inventory=False,
+                is_portable=True,
+            )
+        )
+        await db.commit()
+
+        manager = SimpleNamespace()
+        avatar = await db.get(Avatar, state.avatar_id)
+        assert avatar is not None
+        decision = await AgentService.get_decision(db, game_id, user, state, avatar, adv, manager)
+        _ = decision
+
+    prompt = captured.get("system_prompt", "")
+    assert "CURRENT SCENE ITEMS (VISIBLE NOW)" in prompt
+    assert "Ancient Key" in prompt
+    assert "Use `/take <item name>`" in prompt
+    assert "Do NOT require or invent item IDs" in prompt
+    assert "`/open <target>`" in prompt
+    assert "`/read <target>`" in prompt
+    assert "`/chat <target>`" in prompt
+    assert "`/search` or `/search <target>`" in prompt
+    assert "`/lookaround` or `/look`" in prompt
+    assert "`/push <target>` or `/pull <target>`" in prompt
+    assert "`/rest`" in prompt
+    assert "MODAL CONTENT MIRRORING" in prompt

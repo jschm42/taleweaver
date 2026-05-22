@@ -68,6 +68,10 @@ export const gameCommandService = {
         return { command: `/talk ${targetName}`, errorMessage: null }
       case 'inspect':
         return { command: `/inspect ${targetName}`, errorMessage: null }
+      case 'open':
+        return { command: `/open ${targetName}`, errorMessage: null }
+      case 'read':
+        return { command: `/read ${targetName}`, errorMessage: null }
       case 'take':
         return { command: `/take ${targetName}`, errorMessage: null }
       case 'attack':
@@ -110,8 +114,11 @@ export const gameCommandService = {
     } else if (entity?.entity_type === 'SCENE') {
       items.push({ label: 'Look around', action: 'Look around', icon: 'ra ra-eye', color: 'text-indigo-400' })
       items.push({ label: 'Search', action: 'Search the area', icon: 'ra ra-magnifying-glass', color: 'text-emerald-400' })
+      items.push({ label: 'Read signs/logs', action: '/read surroundings', icon: 'ra ra-book-cover', color: 'text-violet-400' })
     } else if (entity?.entity_type === 'OBJECT' || entity?.entity_type === 'ITEM') {
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+      items.push({ label: 'Open', action: `/open ${entity.name}`, icon: 'ra ra-chest', color: 'text-lime-400' })
+      items.push({ label: 'Read', action: `/read ${entity.name}`, icon: 'ra ra-book-cover', color: 'text-violet-400' })
       items.push({ label: 'Pick up', action: `/take ${entity.name}`, icon: 'ra ra-hand', color: 'text-amber-400' })
       items.push({ label: 'Push', action: `Push ${entity.name}`, icon: 'ra ra-cog', color: 'text-slate-400' })
       items.push({ label: 'Pull', action: `Pull ${entity.name}`, icon: 'ra ra-tread', color: 'text-slate-400' })

@@ -13,6 +13,7 @@ from backend.models.avatar import Avatar
 from backend.models.user import User
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.chat import ChatMessage
+from backend.models.world_entity import WorldEntity
 from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,30 @@ class AgentService:
         # Build LLM Turn context (exits, entities, current_scene, system prompts, models, etc.)
         builder = TurnLlmContextBuilder(manager)
         ctx = await builder.build_context(user_msg="", language=None)
+
+        # Build a fresh per-turn list of visible scene items so the agent can issue precise /take commands.
+        scene_items_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == game_id,
+                WorldEntity.entity_type == "OBJECT",
+            )
+        )
+        scene_entities = scene_items_res.scalars().all()
+        states = state.entity_states or {}
+        visible_scene_item_names: list[str] = []
+        for entity in scene_entities:
+            entity_state = states.get(entity.id, {}) if isinstance(states, dict) else {}
+            current_scene_id = entity_state.get("current_scene_id", entity.current_scene_id)
+            is_hidden = bool(entity_state.get("is_hidden", entity.is_hidden))
+            is_in_inventory = bool(entity_state.get("is_in_inventory", entity.is_in_inventory))
+            if current_scene_id != state.current_scene_id:
+                continue
+            if is_hidden or is_in_inventory:
+                continue
+            if entity.name:
+                visible_scene_item_names.append(entity.name)
+
+        visible_scene_items_text = ", ".join(visible_scene_item_names) if visible_scene_item_names else "None"
         
         walkthrough_text = state.walkthrough or adventure.walkthrough or "No walkthrough available for this adventure."
         
@@ -107,17 +132,30 @@ class AgentService:
             "You can execute actions in two ways: using official slash commands or writing natural language roleplay.\n\n"
             "1. OFFICIAL SLASH COMMANDS (Use EXACTLY this syntax):\n"
             "   - To speak/talk to an NPC: Use `/say <TEXT>` or `/speak <TEXT>` (e.g., `/say Hello, who are you?`). You must use this when addressing characters.\n"
+            "   - To start/continue dialogue with an NPC: Use `/talk <target>` or `/chat <target>` (e.g., `/chat guard`).\n"
             "   - To use or combine items: Use `/use <item>` or `/use <item_a> on <item_b>` or `/combine <item_a> with <item_b>` (e.g., `/use key on chest`, `/combine battery with flashlight`). Wear/use consumables or combine key pieces to solve puzzles!\n"
-            "   - To take/pick up an item: Use `/take <item>` (e.g., `/take ancient key`).\n"
+            "   - To take/pick up an item: Use `/take <item name>` (e.g., `/take ancient key`).\n"
+            "   - IMPORTANT for /take: The item NAME is enough. Do NOT require or invent item IDs.\n"
             "   - To equip gear/weapons/armor: Use `/equip <item>` (e.g., `/equip iron sword`).\n"
             "   - To remove gear: Use `/unequip <slot>` (e.g., `/unequip MainHand`).\n"
             "   - To inspect a person, item, or place: Use `/inspect <name>` (e.g., `/inspect desk`).\n"
+            "   - To open containers/mechanisms: Use `/open <target>` (e.g., `/open chest`).\n"
+            "   - To read notes/books/signs/logs: Use `/read <target>` (e.g., `/read terminal log`).\n"
+            "   - To search the area or a target: Use `/search` or `/search <target>` (e.g., `/search desk`).\n"
+            "   - To look around the whole scene: Use `/lookaround` or `/look`.\n"
+            "   - To manipulate mechanisms: Use `/push <target>` or `/pull <target>` (e.g., `/push lever`, `/pull chain`).\n"
+            "   - To recover when safe: Use `/rest`.\n"
             "   - To drop an item: Use `/drop <item>`.\n\n"
             "2. NATURAL LANGUAGE ACTIONS:\n"
             "   - For any other environmental interaction (e.g., plugging in an oven, flipping a switch, opening a standard door, moving/exiting, looking around): Write your action in natural, descriptive language (e.g., 'I plug in the oven', 'go north', 'look around', 'open the door').\n"
             "   - NEVER invent or use custom slash commands starting with `/` that are not listed above (e.g., do NOT write `/plug`, `/go`, `/flip`, `/open`). Unrecognized commands will fail.\n\n"
+            "3. MODAL CONTENT MIRRORING (CRITICAL):\n"
+            "   - If an action opens a modal dialog (especially `/open` for containers or `/read` for text logs), ensure the discovered content/text is ALSO written explicitly into chat output.\n"
+            "   - The chat must contain the relevant listed content so future turns (and the agent) can reference it reliably.\n\n"
             "--- GAME WORLD CONTEXT ---\n"
             f"{ctx.mechanics_system_prompt}\n\n"
+            "--- CURRENT SCENE ITEMS (VISIBLE NOW) ---\n"
+            f"{visible_scene_items_text}\n\n"
             "--- OFFICIAL ADVENTURE WALKTHROUGH/SOLUTION ---\n"
             f"{walkthrough_text}\n\n"
             "--- AGENT OBJECTIVES ---\n"

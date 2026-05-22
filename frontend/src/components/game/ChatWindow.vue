@@ -69,6 +69,8 @@ const commands = [
   { id: '/equip', label: '/equip' },
   { id: '/unequip', label: '/unequip' },
   { id: '/consume', label: '/consume' },
+  { id: '/open', label: '/open' },
+  { id: '/read', label: '/read' },
   { id: '/debug session', label: '/debug session' },
   { id: '/debug reveal_map', label: '/debug reveal_map' },
   { id: '/debug walkthrough', label: '/debug walkthrough' },

@@ -1543,6 +1543,54 @@ async def test_take_on_defeated_npc_is_rejected_except_inspect(setup_test_db):
         assert any("Only inspect is available" in c for c in system_chunks)
 
 
+async def test_open_command_forwards_chat_mirroring_instruction(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state = await _seed_game_context(db)
+        captured_user_msgs: list[str] = []
+
+        async def _fake_run_llm_cycle(self, user_msg: str, auto_visualize: bool, language=None):
+            _ = auto_visualize
+            _ = language
+            captured_user_msgs.append(user_msg)
+            yield "event: final\ndata: {}\n\n"
+
+        monkeypatch.setattr(GameTurnManager, "_run_llm_cycle", _fake_run_llm_cycle)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("/open Iron Chest"):
+            pass
+
+        assert captured_user_msgs
+        assert "Open Iron Chest." in captured_user_msgs[0]
+        assert "visible in chat history" in captured_user_msgs[0]
+
+
+async def test_read_command_forwards_chat_mirroring_instruction(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state = await _seed_game_context(db)
+        captured_user_msgs: list[str] = []
+
+        async def _fake_run_llm_cycle(self, user_msg: str, auto_visualize: bool, language=None):
+            _ = auto_visualize
+            _ = language
+            captured_user_msgs.append(user_msg)
+            yield "event: final\ndata: {}\n\n"
+
+        monkeypatch.setattr(GameTurnManager, "_run_llm_cycle", _fake_run_llm_cycle)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("/read Captain Log"):
+            pass
+
+        assert captured_user_msgs
+        assert "Read Captain Log." in captured_user_msgs[0]
+        assert "remains in chat history" in captured_user_msgs[0]
+
+
 async def test_combat_auto_triggers_from_gm_requested_attacks(setup_test_db, monkeypatch):
     from backend.engine.rule_engine import AttackRequest
     from tests.conftest import TestSessionLocal
