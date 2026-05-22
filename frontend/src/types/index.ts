@@ -39,6 +39,7 @@ export interface CharacterSheet {
   adventure_tone?: string | null
   is_debug_enabled?: boolean
   debug_mode?: boolean
+  agent_active?: boolean
 }
 
 export interface InventoryItem {

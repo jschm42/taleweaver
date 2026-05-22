@@ -127,7 +127,8 @@ class CommandParser:
             "- `/walkthrough`: Open the secret walkthrough panel.",
             "- `/walkthrough reveal`: Reveal all steps for 200 XP.",
             "- `/hint`: Buy one tactical hint for 50 XP.",
-            "- `/sheet`: Open your character sheet."
+            "- `/sheet`: Open your character sheet.",
+            "- `/agent on/off`: Turn on/off autonomous agent gameplay mode."
         ]
         
         if debug_enabled:

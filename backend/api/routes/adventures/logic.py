@@ -387,6 +387,7 @@ class AdventureLogic:
             "adventure_tone": adventure.selected_tone if adventure else (session_snapshot.get("adventure") or {}).get("selected_tone"),
             "time_system": state.time_system or (adventure.time_system if adventure else (session_snapshot.get("adventure") or {}).get("time_system", "calendar")),
             "time_config": state.time_config or (adventure.time_config if adventure else (session_snapshot.get("adventure") or {}).get("time_config")),
+            "agent_active": bool((state.entity_states or {}).get("__agent__", {}).get("active", False)),
             "is_debug_enabled": bool(state.is_debug_enabled),
             "debug_mode": bool(settings.TALEWEAVER_DEBUG_ENABLED or state.is_debug_enabled)
         }

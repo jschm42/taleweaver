@@ -30,7 +30,7 @@ const props = defineProps<{
   currentSceneDescription?: string
 }>()
 
-const { deleteMessage } = useGameSocket()
+const { deleteMessage, agentPaused, agentStepByStep, runAgentTurn } = useGameSocket()
 
 const emit = defineEmits<{
   send: [content: string]
@@ -163,16 +163,114 @@ function appendText(text: string) {
 
 defineExpose({ appendText })
 
+const visibleStart = ref(0)
+const visibleEnd = ref(0)
+const isShifting = ref(false)
+
+const visibleMessages = computed(() => {
+  return props.messages.slice(visibleStart.value, visibleEnd.value)
+})
+
+const handleScroll = () => {
+  if (!logEl.value || isShifting.value) return
+  const el = logEl.value
+  const scrollTop = el.scrollTop
+  const scrollHeight = el.scrollHeight
+  const clientHeight = el.clientHeight
+
+  const WINDOW_SIZE = 50
+  const total = props.messages.length
+
+  if (total <= WINDOW_SIZE) return
+
+  // Scroll up: if near the top and there are older messages not visible
+  if (scrollTop < 100 && visibleStart.value > 0) {
+    const K = visibleStart.value
+    const anchorEl = el.querySelector(`[data-index="${K}"]`) as HTMLElement
+    if (anchorEl) {
+      const anchorOffsetBefore = anchorEl.offsetTop
+      
+      // Shift window up
+      const shift = Math.min(15, visibleStart.value)
+      isShifting.value = true
+      visibleStart.value -= shift
+      visibleEnd.value -= shift
+
+      nextTick(() => {
+        const anchorElAfter = el.querySelector(`[data-index="${K}"]`) as HTMLElement
+        if (anchorElAfter) {
+          const anchorOffsetAfter = anchorElAfter.offsetTop
+          el.scrollTop = scrollTop + (anchorOffsetAfter - anchorOffsetBefore)
+        }
+        isShifting.value = false
+      })
+    }
+  }
+
+  // Scroll down: if near the bottom and there are newer messages not visible
+  if (scrollHeight - scrollTop - clientHeight < 150 && visibleEnd.value < total) {
+    const shift = Math.min(15, total - visibleEnd.value)
+    const K = visibleStart.value + shift
+    const anchorEl = el.querySelector(`[data-index="${K}"]`) as HTMLElement
+    if (anchorEl) {
+      const anchorOffsetBefore = anchorEl.offsetTop
+      
+      // Shift window down
+      isShifting.value = true
+      visibleStart.value += shift
+      visibleEnd.value += shift
+
+      nextTick(() => {
+        const anchorElAfter = el.querySelector(`[data-index="${K}"]`) as HTMLElement
+        if (anchorElAfter) {
+          const anchorOffsetAfter = anchorElAfter.offsetTop
+          el.scrollTop = scrollTop + (anchorOffsetAfter - anchorOffsetBefore)
+        }
+        isShifting.value = false
+      })
+    }
+  }
+}
+
 watch(
   () => props.messages,
-  async () => {
+  async (newMsgs, oldMsgs) => {
+    const total = newMsgs ? newMsgs.length : 0
+    const WINDOW_SIZE = 50
+    let wasAtEnd = true
+
+    if (total <= WINDOW_SIZE) {
+      visibleStart.value = 0
+      visibleEnd.value = total
+    } else {
+      wasAtEnd = !oldMsgs || visibleEnd.value >= oldMsgs.length
+      if (wasAtEnd) {
+        visibleEnd.value = total
+        visibleStart.value = Math.max(0, total - WINDOW_SIZE)
+      } else {
+        if (visibleEnd.value > total) {
+          visibleEnd.value = total
+        }
+        if (visibleStart.value >= visibleEnd.value) {
+          visibleStart.value = Math.max(0, visibleEnd.value - WINDOW_SIZE)
+        }
+      }
+    }
+
     await nextTick()
-    if (logEl.value) {
+    if (logEl.value && wasAtEnd) {
       logEl.value.scrollTop = logEl.value.scrollHeight
     }
   },
-  { deep: true }
+  { deep: true, immediate: true }
 )
+
+onMounted(async () => {
+  await nextTick()
+  if (logEl.value) {
+    logEl.value.scrollTop = logEl.value.scrollHeight
+  }
+})
 
 const canSendInput = computed(() => (props.status === 'connected' || props.status === 'completed') && !props.inputLocked)
 const isPassRunning = computed(() => props.status === 'connecting' || props.status === 'loading')
@@ -606,18 +704,20 @@ onUnmounted(() => {
     <!-- Message log -->
     <div
       ref="logEl"
-      class="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0 relative scroll-smooth custom-scrollbar"
+      class="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0 relative custom-scrollbar"
       aria-live="polite"
       aria-label="Game log"
       @mousemove="handleMouseMove"
       @mouseleave="emit('npcLeave')"
       @click="handleClick"
       @contextmenu="handleContextMenu"
+      @scroll="handleScroll"
     >
 
       <div
-        v-for="(msg, idx) in messages"
-        :key="idx"
+        v-for="(msg, idx) in visibleMessages"
+        :key="visibleStart + idx"
+        :data-index="visibleStart + idx"
         class="group flex flex-col pt-1"
       >
         <!-- Author info -->
@@ -628,10 +728,11 @@ onUnmounted(() => {
               (msg as any).is_debug ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50' :
               msg.role === 'user' ? 'bg-cyan-500/20 text-cyan-400' :
               msg.role === 'assistant' ? 'bg-amber-500/20 text-amber-500' :
+              msg.role === 'thought' ? 'bg-indigo-500/30 text-indigo-300 border border-indigo-500/50' :
               'bg-emerald-500/20 text-emerald-500'
             ]"
           >
-            {{ (msg as any).is_debug ? 'Debug' : msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Game Master' : 'System' }}
+            {{ (msg as any).is_debug ? 'Debug' : msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Game Master' : msg.role === 'thought' ? 'Agent Thoughts' : 'System' }}
           </span>
           <span class="text-xs text-slate-600 font-mono opacity-0 group-hover:opacity-100 transition-opacity">
             {{ formatTime(msg.timestamp) }}
@@ -704,6 +805,7 @@ onUnmounted(() => {
             messageTypographyClass,
             msg.role === 'user' ? 'text-slate-300 border-cyan-500/50' :
             msg.role === 'assistant' ? 'text-amber-50/90 border-amber-500/50' :
+            msg.role === 'thought' ? 'text-indigo-200/90 border-indigo-500/50 bg-indigo-950/20 py-2.5 px-4 rounded-r-lg italic font-medium' :
             'text-emerald-400 border-emerald-500/30 bg-emerald-500/5 py-2 px-4 rounded-r-lg italic font-medium'
           ]"
         >
@@ -778,7 +880,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Connecting/empty state -->
-      <div v-if="canSendInput && messages.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+      <div v-if="canSendInput && props.messages.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
         <div class="flex flex-col items-center gap-3">
           <div class="w-8 h-8 rounded-full border-t-2 border-emerald-500 animate-spin"></div>
           <p>Awaiting game start...</p>
@@ -800,6 +902,69 @@ onUnmounted(() => {
           <div class="flex-grow h-px bg-slate-800/50"></div>
         </div>
       </template>
+    </div>
+
+    <!-- AGENT ACTIVE BANNER -->
+    <div
+      v-if="props.sheet?.agent_active"
+      class="mx-4 mb-2 px-4 py-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-200 text-xs font-semibold tracking-wide flex items-center justify-between gap-2 shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0"
+      :class="{ 'animate-pulse': !agentPaused }"
+    >
+      <div class="flex items-center gap-2">
+        <div :class="['w-2.5 h-2.5 rounded-full', agentPaused ? 'bg-amber-400' : 'bg-indigo-400 animate-ping']"></div>
+        <span>{{ agentPaused ? 'Autonomous Agent Mode is paused.' : 'Autonomous Agent Mode is active. The AI is playing the game.' }}</span>
+      </div>
+      <div class="flex items-center gap-2.5 select-none shrink-0">
+        <!-- Step by Step Toggle -->
+        <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider text-indigo-300 hover:text-indigo-200">
+          <input 
+            type="checkbox" 
+            v-model="agentStepByStep" 
+            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-slate-950 focus:ring-1" 
+          />
+          Step-by-Step
+        </label>
+
+        <!-- Next Step Button -->
+        <button 
+          v-if="agentStepByStep && !agentPaused"
+          :disabled="props.status !== 'connected'"
+          @click="runAgentTurn"
+          class="px-3 py-1.5 bg-emerald-600/80 hover:bg-emerald-600 border border-emerald-500/50 hover:border-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-[10px] font-black uppercase tracking-[0.15em] transition-all transform active:scale-95 flex items-center gap-1.5 shadow-lg"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+          </svg>
+          Next
+        </button>
+
+        <!-- Pause / Resume Button -->
+        <button 
+          @click="agentPaused = !agentPaused"
+          class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-500/50 hover:border-indigo-400 text-white rounded-lg text-[10px] font-black uppercase tracking-[0.15em] transition-all transform active:scale-95 flex items-center gap-1.5 shadow-lg"
+        >
+          <svg v-if="agentPaused" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {{ agentPaused ? 'Resume' : 'Pause' }}
+        </button>
+
+        <!-- Stop Agent Button -->
+        <button 
+          @click="emit('send', '/agent off')"
+          class="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 border border-red-500/50 hover:border-red-400 text-white rounded-lg text-[10px] font-black uppercase tracking-[0.15em] transition-all transform active:scale-95 flex items-center gap-1.5 shadow-lg"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+          </svg>
+          Stop
+        </button>
+      </div>
     </div>
 
     <!-- ACTION BAR -->
@@ -831,8 +996,8 @@ onUnmounted(() => {
           <input
             v-model="inputText"
             type="text"
-            :disabled="!canSendInput || audioService.isGenerating.value"
-            placeholder="What do you do next?"
+            :disabled="!canSendInput || audioService.isGenerating.value || props.sheet?.agent_active"
+            :placeholder="props.sheet?.agent_active ? (agentPaused ? 'Agent Mode Paused. Click Resume or Stop.' : 'Agent Mode Active. Click Stop to regain control.') : 'What do you do next?'"
             class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
             @keydown="handleKeydown"
           />

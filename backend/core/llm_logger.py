@@ -86,3 +86,38 @@ def log_llm_interaction(
     }
 
     _write_entry(entry)
+
+    # Print token usage to console
+    usage = (raw_response or {}).get("usage") if isinstance(raw_response, dict) else None
+    if usage:
+        prompt_t = usage.get("prompt_tokens") or 0
+        completion_t = usage.get("completion_tokens") or 0
+        total_t = usage.get("total_tokens") or 0
+        print(
+            f"\n>>> [TOKEN USAGE] Phase: {phase or 'unknown'} | Model: {model} | "
+            f"Prompt: {prompt_t} | Completion: {completion_t} | Total: {total_t}\n",
+            flush=True
+        )
+    else:
+        try:
+            import litellm
+            prompt_t = litellm.token_counter(model=model, messages=[
+                {"role": "system", "content": system_prompt or ""},
+                {"role": "user", "content": user_prompt or ""}
+            ])
+            completion_t = litellm.token_counter(model=model, text=response_content or "")
+            total_t = prompt_t + completion_t
+            print(
+                f"\n>>> [TOKEN USAGE (ESTIMATED)] Phase: {phase or 'unknown'} | Model: {model} | "
+                f"Prompt: {prompt_t} | Completion: {completion_t} | Total: {total_t}\n",
+                flush=True
+            )
+        except Exception:
+            prompt_t = int(len((system_prompt or "") + (user_prompt or "")) / 4)
+            completion_t = int(len(response_content or "") / 4)
+            total_t = prompt_t + completion_t
+            print(
+                f"\n>>> [TOKEN USAGE (ESTIMATED FALLBACK)] Phase: {phase or 'unknown'} | Model: {model} | "
+                f"Prompt: {prompt_t} | Completion: {completion_t} | Total: {total_t}\n",
+                flush=True
+            )

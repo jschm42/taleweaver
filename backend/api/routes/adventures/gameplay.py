@@ -156,6 +156,115 @@ async def post_chat_message(
         raise HTTPException(status_code=500, detail="Unable to process this turn.") from exc
 
 
+@router.post("/{game_id}/agent/turn")
+async def run_agent_turn(
+    game_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Computes an agent decision based on walkthrough & game state, then executes the turn."""
+    import json
+    import asyncio
+    from fastapi.encoders import jsonable_encoder
+    from backend.api.routes.adventures.agent_logic import AgentService
+    from backend.core.database import AsyncSessionLocal
+
+    # Pre-flight check to raise direct HTTP exceptions if session invalid or agent not active
+    async with AsyncSessionLocal() as db:
+        manager = GameTurnManager(db, game_id, current_user)
+        if not await manager.initialize():
+            raise HTTPException(status_code=404, detail="Game session not found.")
+        agent_state = AgentService.get_agent_state(manager.state)
+        if not agent_state.get("active", False):
+            raise HTTPException(status_code=400, detail="Agent is not enabled for this session.")
+
+    turn_id = uuid4().hex
+
+    async def _agent_stream() -> AsyncGenerator[str, None]:
+        yield f"event: status\ndata: {json.dumps({'content': 'Agent is thinking...'})}\n\n"
+        
+        async with AsyncSessionLocal() as db:
+            manager = GameTurnManager(db, game_id, current_user)
+            await manager.initialize()
+            state = manager.state
+
+            try:
+                try:
+                    decision = await AgentService.get_decision(
+                        db, game_id, current_user, state, manager.avatar, manager.adventure, manager
+                    )
+                except asyncio.CancelledError:
+                    logger.info("Agent turn stream cancelled during LLM decision call.")
+                    await db.rollback()
+                    raise
+                except Exception as exc:
+                    logger.exception("Agent decision failed")
+                    decision = None
+                    decision_err = str(exc)
+
+                if not decision or decision.is_stuck_or_bug:
+                    desc = decision.issue_description if decision else f"Exception: {decision_err}"
+                    thoughts = decision.thoughts if decision else "Failed to get decision thoughts."
+                    action = decision.action if decision else "None"
+                    
+                    hist_res = await db.execute(
+                        select(ChatMessage)
+                        .where(ChatMessage.session_id == game_id)
+                        .order_by(ChatMessage.created_at.desc())
+                        .limit(5)
+                    )
+                    recent_msgs = list(reversed(list(hist_res.scalars().all())))
+                    history_summary = " | ".join([f"{m.role}: {m.content}" for m in recent_msgs])
+                    
+                    failures = AgentService.increment_failure(state)
+                    AgentService.log_issue(game_id, thoughts, action, desc, history_summary)
+                    await db.commit()
+
+                    msg = f"Agent issue detected: {desc} (Attempt {failures}/3)"
+                    if failures >= 3:
+                        msg += " - Agent mode has been deactivated."
+                    
+                    await manager._save_chat_message("system", msg)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                    
+                    final_data = jsonable_encoder({
+                        'sheet': await AdventureLogic.build_sheet_snapshot(manager.avatar, state, db),
+                        'entities': await AdventureLogic.build_session_entities(db, state),
+                        'combat': AdventureLogic.get_combat_snapshot(state),
+                        **manager._build_terminal_flags_payload(),
+                        'status': 'success',
+                    })
+                    yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+                    return
+
+                yield f"event: thought\ndata: {json.dumps({'content': decision.thoughts})}\n\n"
+                await asyncio.sleep(0.5)
+                
+                await manager._save_chat_message("player", decision.action)
+                yield f"event: player_action\ndata: {json.dumps({'content': decision.action})}\n\n"
+                yield f"event: status\ndata: {json.dumps({'content': f'Agent decides: {decision.action}'})}\n\n"
+                
+                AgentService.reset_failures(state)
+                await db.commit()
+
+                try:
+                    async for chunk in manager.process_turn(decision.action):
+                        yield chunk
+                except asyncio.CancelledError:
+                    logger.info("Agent turn stream cancelled during gameplay process_turn.")
+                    await db.rollback()
+                    raise
+            except asyncio.CancelledError:
+                logger.info("Agent turn stream cancelled, rolling back db session.")
+                await db.rollback()
+                raise
+
+    return StreamingResponse(
+        _agent_stream(),
+        media_type="text/event-stream",
+        headers={"X-Taleweaver-Turn-Id": turn_id},
+    )
+
+
 @router.post("/{game_id}/terminal-epilogue", response_model=TerminalEpilogueResponse)
 async def create_terminal_epilogue(
     game_id: str,

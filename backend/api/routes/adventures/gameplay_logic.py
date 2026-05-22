@@ -407,6 +407,44 @@ class GameTurnManager:
         if not user_msg:
             user_msg = "[LOOK AROUND]"
 
+        if user_msg.lower().startswith("/agent"):
+            from backend.api.routes.adventures.agent_logic import AgentService
+            cmd_args = user_msg[6:].strip().lower()
+            if cmd_args == "on":
+                AgentService.set_agent_active(self.state, True)
+                await self.db.commit()
+                msg = "Autonomous Agent Gameplay Mode enabled. The AI will now play the game on your behalf."
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            elif cmd_args == "off":
+                AgentService.set_agent_active(self.state, False)
+                await self.db.commit()
+                
+                import os
+                agents_md_path = os.path.abspath(os.path.join(settings.DATA_DIR, "adventures", "sessions", self.game_id, "AGENTS.md"))
+                link_path = agents_md_path.replace("\\", "/")
+                if not link_path.startswith("/"):
+                    link_path = "/" + link_path
+                msg = (
+                    "Autonomous Agent Gameplay Mode disabled. You are now back in control.\n\n"
+                    f"Agent issues log file: [AGENTS.md](file://{link_path}) (Path: `{agents_md_path}`)"
+                )
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            else:
+                msg = "Usage: /agent on | /agent off"
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+
+            final_data = jsonable_encoder({
+                'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+                'entities': await AdventureLogic.build_session_entities(self.db, self.state),
+                'combat': AdventureLogic.get_combat_snapshot(self.state),
+                **self._build_terminal_flags_payload(),
+                'status': 'success',
+            })
+            yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+            return
+
         if self._is_input_locked():
             lock_message = (
                 "This story has reached its final ending. You can still review the map, character sheet, "
@@ -2187,6 +2225,8 @@ class GameTurnManager:
                     user_msg,
                     response_model=GameEvent,
                     model=small_model,
+                    operation="chat_turn",
+                    phase="mechanics",
                 )
             except Exception as e:
                 user_safe_error = _friendly_llm_error_message(e)
@@ -2529,7 +2569,13 @@ class GameTurnManager:
         pass2_start = time.perf_counter()
         logger.debug(f"[Turn {self.game_id}] [Pass 2] Calling complex model: {complex_model} via {complex_model_provider}")
         try:
-            stream = await llm.stream_simple_task(narration_prompt, user_msg, complex_model)
+            stream = await llm.stream_simple_task(
+                narration_prompt,
+                user_msg,
+                complex_model,
+                operation="chat_turn",
+                phase="narration",
+            )
 
             async for chunk in stream:
                 delta = chunk.choices[0].delta.content or ""
@@ -2542,6 +2588,23 @@ class GameTurnManager:
                 yield f"event: error\ndata: {json.dumps({'detail': user_safe_error})}\n\n"
                 return
             raise
+
+        try:
+            import litellm
+            prompt_tokens = litellm.token_counter(model=complex_model, messages=[
+                {"role": "system", "content": narration_prompt},
+                {"role": "user", "content": user_msg}
+            ])
+            completion_tokens = litellm.token_counter(model=complex_model, text=response_text)
+        except Exception:
+            prompt_tokens = int(len(narration_prompt + user_msg) / 4)
+            completion_tokens = int(len(response_text) / 4)
+
+        print(
+            f"\n>>> [TOKEN USAGE] Phase: narration | Model: {complex_model} | "
+            f"Prompt: {prompt_tokens} | Completion: {completion_tokens} | Total: {prompt_tokens + completion_tokens}\n",
+            flush=True
+        )
         
         pass2_duration = time.perf_counter() - pass2_start
         log_structured_event(

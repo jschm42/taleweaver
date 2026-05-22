@@ -36,9 +36,12 @@ export interface UseGameSocket {
   inventoryGlow: Ref<boolean>
   mapGlow: Ref<boolean>
   questGlow: Ref<boolean>
+  agentPaused: Ref<boolean>
+  agentStepByStep: Ref<boolean>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   sendMessage: (content: string) => Promise<void>
+  runAgentTurn: () => Promise<void>
   createTerminalEpilogue: () => Promise<void>
   revealIllustration: (name: string, url: string) => void
   deleteMessage: (messageId: string) => Promise<void>
@@ -79,6 +82,20 @@ export function useGameSocket(): UseGameSocket {
   const questGlow = ref(false)
   let currentGameId = ''
   let syncTimer: number | null = null
+  let activeAgentController: AbortController | null = null
+  let activeChatController: AbortController | null = null
+  const agentPaused = ref(false)
+  const agentStepByStep = ref(localStorage.getItem('tw_agent_step_by_step') === 'true')
+
+  watch(agentStepByStep, (val) => {
+    localStorage.setItem('tw_agent_step_by_step', String(val))
+  })
+
+  watch(() => sheet.value?.agent_active, (active) => {
+    if (!active) {
+      agentPaused.value = false
+    }
+  })
 
   // Sync with User Profile default if no local preference exists
   watch(() => authState.user?.default_language, (newDef) => {
@@ -242,7 +259,26 @@ export function useGameSocket(): UseGameSocket {
    * Posts a player message and processes the GM response.
    */
   async function sendMessage(content: string): Promise<void> {
-    const isBusy = status.value === 'connecting' || status.value === 'loading'
+    const isAgentOff = content.trim().toLowerCase() === '/agent off'
+    
+    if (activeChatController) {
+      activeChatController.abort()
+      activeChatController = null
+    }
+
+    if (isAgentOff) {
+      if (sheet.value) {
+        sheet.value.agent_active = false
+      }
+      if (activeAgentController) {
+        activeAgentController.abort()
+        activeAgentController = null
+      }
+      status.value = 'connected'
+      statusText.value = ''
+    }
+
+    const isBusy = (status.value === 'connecting' || status.value === 'loading') && !isAgentOff
     const wasGameOver = status.value === 'game_over'
     if (!currentGameId) return
     if (isBusy) {
@@ -260,11 +296,14 @@ export function useGameSocket(): UseGameSocket {
     if (content && !isSilent) _pushMessage('user', content)
     const preTurnMessageCount = messages.value.length
 
-    status.value = 'connecting' 
-    statusText.value = 'Considering...'
+    if (!isAgentOff) {
+      status.value = 'connecting' 
+      statusText.value = 'Considering...'
+    }
     let receivedFinalEvent = false
     let receivedErrorEvent = false
     const controller = new AbortController()
+    activeChatController = controller
     const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
 
     try {
@@ -374,11 +413,182 @@ export function useGameSocket(): UseGameSocket {
               gameOverReason.value = data.status_note || ''
               status.value = data.input_locked ? 'completed' : 'connected'
             } else {
+              if (status.value === 'connecting' || status.value === 'loading') {
+                status.value = 'connected'
+                statusText.value = ''
+              }
+            }
+          } else if (event === 'error') {
+            receivedErrorEvent = true
+            const detail = data.detail || 'An error occurred.'
+            _pushMessage('system', detail)
+            addNotification(detail, 'error')
+            if (status.value === 'connecting' || status.value === 'loading') {
+              status.value = 'connected'
+              statusText.value = ''
+            }
+          }
+        }
+      }
+
+      if (receivedFinalEvent) {
+        const snapshot = await fetchSessionSnapshot(currentGameId)
+        if (snapshot && Array.isArray(snapshot.messages)) {
+          messages.value = snapshot.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
+        }
+      }
+
+      // Fallback for truncated streams without explicit final/error event.
+      if (!receivedFinalEvent && !receivedErrorEvent && (status.value === 'connecting' || isAgentOff)) {
+        const snapshot = await fetchSessionSnapshot(currentGameId)
+        if (snapshot) {
+          applySessionSnapshot(snapshot, false)
+          if (status.value === 'connecting') {
+            status.value = 'connected'
+          }
+        } else {
+          if (status.value === 'connecting') {
+            status.value = 'connected'
+          }
+        }
+
+        if (!isAgentOff) {
+          const postTurnMessages = messages.value.slice(preTurnMessageCount)
+          const hasTurnResponse = postTurnMessages.some(m => m.role === 'assistant' || m.role === 'system')
+          if (!hasTurnResponse) {
+            const fallbackMsg = 'The turn ended unexpectedly without a response. Please try your action again.'
+            _pushMessage('system', fallbackMsg)
+            addNotification(fallbackMsg, 'error')
+          }
+        }
+
+        if (status.value === 'connecting') {
+          statusText.value = ''
+        }
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log('Chat/deactivation fetch request was aborted.')
+      } else {
+        console.error('[Session] Chat error:', err)
+        _pushMessage('system', 'The Game Master did not respond in time. Please try again.')
+        if (status.value === 'connecting' || status.value === 'loading') {
+          status.value = 'connected'
+          statusText.value = ''
+        }
+      }
+    } finally {
+      clearTimeout(timeoutId)
+      if (activeChatController === controller) {
+        activeChatController = null
+      }
+      if ((status.value as any) === 'connecting' || (status.value as any) === 'loading') {
+        status.value = 'connected'
+        statusText.value = ''
+      }
+    }
+  }
+
+  async function runAgentTurn(): Promise<void> {
+    const isBusy = status.value === 'connecting' || status.value === 'loading'
+    if (!currentGameId) return
+    if (isBusy) return
+
+    status.value = 'connecting' 
+    statusText.value = 'Agent is thinking...'
+    let receivedFinalEvent = false
+    const controller = new AbortController()
+    activeAgentController = controller
+    const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
+
+    try {
+      const res = await fetch(`${BASE}/adventures/${currentGameId}/agent/turn`, {
+        method: 'POST',
+        headers: authHeaders(false),
+        signal: controller.signal
+      })
+
+      if (res.status === 401 && authState.isAuthenticated) {
+        window.dispatchEvent(new CustomEvent('auth-unauthorized'))
+        status.value = 'error'
+        statusText.value = ''
+        return
+      }
+
+      if (!res.ok) {
+        _pushMessage('system', 'The Agent encountered a connection error. Try once more.')
+        status.value = 'connected'
+        return
+      }
+
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No reader available')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+
+        for (const part of parts) {
+          if (!part.trim()) continue
+          const lines = part.split('\n')
+          let event = 'message'
+          let data = null
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) event = line.slice(6).trim()
+            else if (line.startsWith('data:')) {
+              try {
+                data = JSON.parse(line.slice(5).trim())
+              } catch (e) {
+                console.error('Failed to parse SSE data', e)
+              }
+            }
+          }
+
+          if (!data) continue
+
+          if (event === 'status') {
+            statusText.value = data.content
+            debugLogs.value.push({
+              timestamp: new Date().toLocaleTimeString(),
+              content: data.content
+            })
+          } else if (event === 'thought') {
+            _pushMessage('thought' as any, data.content)
+          } else if (event === 'player_action') {
+            _pushMessage('user', data.content)
+          } else if (event === 'system') {
+            const role = data.role || 'system'
+            _pushMessage(role, data.content, undefined, data.is_debug)
+          } else if (event === 'chunk') {
+            let lastMsg = messages.value[messages.value.length - 1]
+            if (!lastMsg || lastMsg.role !== 'assistant' || (lastMsg as any).is_debug) {
+              _pushMessage('assistant', '')
+              lastMsg = messages.value[messages.value.length - 1]
+            }
+            lastMsg.content += data.content
+          } else if (event === 'final') {
+            receivedFinalEvent = true
+            applySessionSnapshot(data, false)
+            if (data.game_over) {
+              status.value = 'game_over'
+              gameOverReason.value = data.game_over_reason || data.status_note || ''
+              stopSyncTimer()
+            } else if (data.game_completed) {
+              gameOverReason.value = data.status_note || ''
+              status.value = data.input_locked ? 'completed' : 'connected'
+            } else {
               status.value = 'connected'
               statusText.value = ''
             }
           } else if (event === 'error') {
-            receivedErrorEvent = true
             const detail = data.detail || 'An error occurred.'
             _pushMessage('system', detail)
             addNotification(detail, 'error')
@@ -394,37 +604,19 @@ export function useGameSocket(): UseGameSocket {
           messages.value = snapshot.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
         }
       }
-
-      // Fallback for truncated streams without explicit final/error event.
-      if (!receivedFinalEvent && !receivedErrorEvent && status.value === 'connecting') {
-        const snapshot = await fetchSessionSnapshot(currentGameId)
-        if (snapshot) {
-          applySessionSnapshot(snapshot, false)
-          if (status.value === 'connecting') {
-            status.value = 'connected'
-          }
-        } else {
-          status.value = 'connected'
-        }
-
-        const postTurnMessages = messages.value.slice(preTurnMessageCount)
-        const hasTurnResponse = postTurnMessages.some(m => m.role === 'assistant' || m.role === 'system')
-        if (!hasTurnResponse) {
-          const fallbackMsg = 'The turn ended unexpectedly without a response. Please try your action again.'
-          _pushMessage('system', fallbackMsg)
-          addNotification(fallbackMsg, 'error')
-        }
-
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log('Agent request was aborted by user.')
+      } else {
+        console.error('[Session] Agent turn error:', err)
+        _pushMessage('system', 'The Agent request failed. Please try again.')
+        status.value = 'connected'
         statusText.value = ''
       }
-    } catch (err) {
-      console.error('[Session] Chat error:', err)
-      _pushMessage('system', 'The Game Master did not respond in time. Please try again.')
-      status.value = 'connected'
-      statusText.value = ''
     } finally {
       clearTimeout(timeoutId)
-      if ((status.value as any) === 'connecting' || (status.value as any) === 'loading') {
+      activeAgentController = null
+      if (((status.value as any) === 'connecting' || (status.value as any) === 'loading') && sheet.value?.agent_active) {
         status.value = 'connected'
         statusText.value = ''
       }
@@ -501,9 +693,12 @@ export function useGameSocket(): UseGameSocket {
     inventoryGlow,
     mapGlow,
     questGlow,
+    agentPaused,
+    agentStepByStep,
     connect,
     disconnect,
     sendMessage,
+    runAgentTurn,
     createTerminalEpilogue,
     deleteMessage,
     revealIllustration: (name: string, url: string) => {
