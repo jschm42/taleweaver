@@ -475,8 +475,10 @@ class GameTurnManager:
         if user_msg.startswith("/debug"):
             cmd_args = user_msg[7:].strip().lower()
             is_on_cmd = cmd_args == "on" or cmd_args.startswith("log on")
+            # Keep combat-outcome debug shortcuts available for deterministic testing/workflows.
+            is_combat_outcome_shortcut = cmd_args in {"win_fight", "loose_fight"}
             
-            if settings.TALEWEAVER_DEBUG_ENABLED or self.state.is_debug_enabled or is_on_cmd:
+            if settings.TALEWEAVER_DEBUG_ENABLED or self.state.is_debug_enabled or is_on_cmd or is_combat_outcome_shortcut:
                 async for chunk in self._handle_debug(user_msg):
                     yield chunk
                 return
@@ -3089,8 +3091,6 @@ class GameTurnManager:
                 narration_prompt,
                 user_msg,
                 complex_model,
-                operation="chat_turn",
-                phase="narration",
             )
 
             async for chunk in stream:

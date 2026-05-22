@@ -1060,26 +1060,30 @@ async def get_adventure_state(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Returns a lightweight snapshot of the most-recent active session state for a template."""
+    """Returns a lightweight snapshot of the most-recent session state for a template."""
     state_res = await db.execute(
         select(SessionState)
         .join(GameSession, GameSession.id == SessionState.session_id)
         .where(
             GameSession.template_id == template_id,
             GameSession.user_id == current_user.id,
-            GameSession.status == "active",
         )
         .order_by(GameSession.created_at.desc())
         .limit(1)
     )
     state = state_res.scalars().first()
     if not state:
-        raise HTTPException(status_code=404, detail="No active session found for this adventure.")
+        raise HTTPException(status_code=404, detail="No session found for this adventure.")
+
+    game_session_res = await db.execute(
+        select(GameSession).where(GameSession.id == state.session_id)
+    )
+    game_session = game_session_res.scalars().first()
 
     return {
         "scene_id": state.current_scene_id,
         "in_game_time": state.in_game_time or 0,
-        "is_paused": False,
+        "is_paused": bool(game_session and game_session.status == "paused"),
         "session_id": state.session_id,
     }
 
