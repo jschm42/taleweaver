@@ -69,24 +69,23 @@ async def get_chat_history(
     chat_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == state.session_id).order_by(ChatMessage.created_at.asc()))
     history = [{"id": m.id, "role": m.role, "content": m.content} for m in chat_res.scalars().all()]
     
-    world_map = await AdventureLogic.get_or_create_map(db, state.template_id, session_id=state.session_id)
+    # Use the canonical template map so all sessions of the same adventure share one topology.
+    world_map = await AdventureLogic.get_or_create_map(db, state.template_id)
     map_dict = MapEngine.to_dict(world_map) if world_map else None
+    if map_dict is not None:
+        map_dict["current_scene_id"] = MapEngine._safe_id(state.current_scene_id)
     
     # Augment with adjacent unvisited scenes
-    if world_map and world_map.current_scene_id:
-        current_node = world_map.nodes.get(world_map.current_scene_id)
-        raw_current_id = current_node.get("id") if current_node else None
-        
-        if raw_current_id:
-            exit_query = select(WorldExit).where(
-                or_(
-                    WorldExit.session_id == state.session_id,
-                    WorldExit.template_id == state.template_id
-                )
+    if world_map:
+        exit_query = select(WorldExit).where(
+            or_(
+                WorldExit.session_id == state.session_id,
+                WorldExit.template_id == state.template_id
             )
-            exits_res = await db.execute(exit_query)
-            exits = list(exits_res.scalars().all())
-            map_dict = MapEngine.augment_map_data(map_dict, exits, raw_current_id)
+        )
+        exits_res = await db.execute(exit_query)
+        exits = list(exits_res.scalars().all())
+        map_dict = MapEngine.augment_map_data(map_dict, exits, state.current_scene_id)
 
     entities = await AdventureLogic.build_session_entities(db, state)
     
@@ -216,7 +215,7 @@ async def run_agent_turn(
                     history_summary = " | ".join([f"{m.role}: {m.content}" for m in recent_msgs])
                     
                     failures = AgentService.increment_failure(state)
-                    AgentService.log_issue(game_id, thoughts, action, desc, history_summary)
+                    AgentService.log_issue(state.session_id, thoughts, action, desc, history_summary)
                     await db.commit()
 
                     msg = f"Agent issue detected: {desc} (Attempt {failures}/3)"

@@ -90,8 +90,6 @@ class CommandParser:
             return f"[TRIGGER_TAKE_DIRECT] {args}"
         elif command == "/take_direct":
             return f"[TRIGGER_TAKE_DIRECT] {args}"
-        elif command == "/talk":
-            return f"[TRIGGER_TALK] {args}"
         elif command == "/say" or command == "/speak":
             return f"[TRIGGER_SAY] {args}"
         elif command == "/inspect":
@@ -104,8 +102,6 @@ class CommandParser:
             return f"[TRIGGER_PUSH] {args}"
         elif command == "/pull":
             return f"[TRIGGER_PULL] {args}"
-        elif command == "/chat":
-            return f"[TRIGGER_CHAT] {args}"
         elif command == "/search":
             return f"[TRIGGER_SEARCH] {args}"
         elif command == "/lookaround" or command == "/look":
@@ -129,9 +125,7 @@ class CommandParser:
             "**Available Commands:**",
             "- `/help`: Show this list.",
             "- `/map`: Toggle the world map.",
-            "- `/talk <target>`: Talk to an NPC.",
-            "- `/chat <target>`: Alias for talking to an NPC.",
-            "- `/say <text>`: Say something out loud (wörtliche Rede).",
+            "- `/say <text>`: Speak directly to NPCs (and others) in quoted/out-loud form.",
             "- `/inspect <target>`: Inspect an NPC, object or the surroundings.",
             "- `/open <target>`: Open a container or mechanism.",
             "- `/read <target>`: Read a note, book, sign, scroll, or text log.",

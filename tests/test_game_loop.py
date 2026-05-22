@@ -1505,7 +1505,22 @@ async def test_combat_loot_done_emits_dropped_items_system_message(setup_test_db
         assert any("- Rat Tooth" in c for c in system_chunks)
 
 
-async def test_talk_to_defeated_npc_is_rejected_except_inspect(setup_test_db, monkeypatch):
+async def test_talk_command_is_unknown(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state, npc = await _seed_combat_npc(db)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        chunks: list[str] = []
+        async for chunk in manager.process_turn("/talk Giant Rat"):
+            chunks.append(chunk)
+
+        system_chunks = [c for c in chunks if "event: system" in c]
+        assert any("Unknown command: /talk" in c for c in system_chunks)
+
+
+async def test_say_to_defeated_npc_is_allowed_as_direct_speech(setup_test_db, monkeypatch):
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -1515,13 +1530,22 @@ async def test_talk_to_defeated_npc_is_rejected_except_inspect(setup_test_db, mo
         state.entity_states = overrides
         await db.commit()
 
-        manager = GameTurnManager(db, state.session_id, user)
-        chunks: list[str] = []
-        async for chunk in manager.process_turn("/talk Giant Rat"):
-            chunks.append(chunk)
+        captured_user_msgs: list[str] = []
 
-        system_chunks = [c for c in chunks if "event: system" in c]
-        assert any("Only inspect is available" in c for c in system_chunks)
+        async def _fake_run_llm_cycle(self, user_msg: str, auto_visualize: bool, language=None):
+            _ = auto_visualize
+            _ = language
+            captured_user_msgs.append(user_msg)
+            yield "event: final\ndata: {}\n\n"
+
+        monkeypatch.setattr(GameTurnManager, "_run_llm_cycle", _fake_run_llm_cycle)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("/say Hello, Giant Rat"):
+            pass
+
+        assert captured_user_msgs
+        assert captured_user_msgs[0] == 'Say out loud: "Hello, Giant Rat"'
 
 
 async def test_take_on_defeated_npc_is_rejected_except_inspect(setup_test_db):

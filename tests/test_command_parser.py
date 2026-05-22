@@ -42,9 +42,11 @@ def test_pull_command_returns_trigger() -> None:
     assert response == "[TRIGGER_PULL] Chain"
 
 
-def test_chat_command_returns_trigger() -> None:
-    response = CommandParser.parse_command(_avatar(), "/chat Guard")
-    assert response == "[TRIGGER_CHAT] Guard"
+def test_talk_and_chat_commands_are_not_known() -> None:
+    talk_response = CommandParser.parse_command(_avatar(), "/talk Guard")
+    chat_response = CommandParser.parse_command(_avatar(), "/chat Guard")
+    assert "Unknown command" in talk_response
+    assert "Unknown command" in chat_response
 
 
 def test_search_command_returns_trigger() -> None:

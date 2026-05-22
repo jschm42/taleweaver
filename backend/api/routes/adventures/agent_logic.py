@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class AgentDecision(BaseModel):
     thoughts: str = Field(description="Internal reasoning and goals based on the character persona, current situation, history, and walkthrough. Keep it concise.")
-    action: str = Field(description="The next action or slash command to execute (e.g. '/inspect shelf', 'go north', '/talk Merlin', 'I want to ask Merlin about the key'). Do not use markdown bolds or style formatting.")
+    action: str = Field(description="The next action or slash command to execute (e.g. '/inspect shelf', 'go north', '/say Hello, Merlin'). Do not use markdown bolds or style formatting.")
     is_stuck_or_bug: bool = Field(description="Set to true if there is an error, a bug, or an unsolvable puzzle/situation that prevents proceeding.")
     issue_description: str = Field(description="Detailed description of the bug, error, or unsolvable puzzle if is_stuck_or_bug is true. Otherwise empty.")
 
@@ -66,16 +66,21 @@ class AgentService:
         flag_modified(state, "entity_states")
 
     @staticmethod
-    def log_issue(game_id: str, thoughts: str, action: str, issue_description: str, history_summary: str) -> None:
-        """Append agent issues or unsolvable puzzles/bugs to session AGENTS.md."""
-        session_dir = os.path.join(settings.DATA_DIR, "adventures", "sessions", game_id)
-        os.makedirs(session_dir, exist_ok=True)
+    def log_issue(session_id: str, thoughts: str, action: str, issue_description: str, history_summary: str) -> None:
+        """Append agent issues to the existing AGENTS.md inside the resolved session directory.
+
+        This function never creates new session directories to avoid stray folders from invalid IDs.
+        """
+        session_dir = os.path.join(settings.DATA_DIR, "adventures", "sessions", session_id)
+        if not os.path.isdir(session_dir):
+            logger.warning("Agent issue log skipped: session directory does not exist for session_id=%s", session_id)
+            return
         file_path = os.path.join(session_dir, "AGENTS.md")
         
         mode = "a" if os.path.exists(file_path) else "w"
         with open(file_path, mode, encoding="utf-8") as f:
             if mode == "w":
-                f.write(f"# TaleWeaver Agent Issues Log - Session {game_id}\n\n")
+                f.write(f"# TaleWeaver Agent Issues Log - Session {session_id}\n\n")
                 f.write("This file contains bugs, unsolvable puzzles, or errors encountered during autonomous gameplay.\n\n")
             
             f.write(f"## Issue Detected\n")
@@ -131,8 +136,8 @@ class AgentService:
             "--- COMMAND GUIDELINES (CRITICAL) ---\n"
             "You can execute actions in two ways: using official slash commands or writing natural language roleplay.\n\n"
             "1. OFFICIAL SLASH COMMANDS (Use EXACTLY this syntax):\n"
-            "   - To speak/talk to an NPC: Use `/say <TEXT>` or `/speak <TEXT>` (e.g., `/say Hello, who are you?`). You must use this when addressing characters.\n"
-            "   - To start/continue dialogue with an NPC: Use `/talk <target>` or `/chat <target>` (e.g., `/chat guard`).\n"
+            "   - To speak directly to NPCs: Use `/say <TEXT>` or `/speak <TEXT>` (e.g., `/say Hello, who are you?`).\n"
+            "   - `/talk` and `/chat` are removed. For direct conversation, ALWAYS use `/say`.\n"
             "   - To use or combine items: Use `/use <item>` or `/use <item_a> on <item_b>` or `/combine <item_a> with <item_b>` (e.g., `/use key on chest`, `/combine battery with flashlight`). Wear/use consumables or combine key pieces to solve puzzles!\n"
             "   - To take/pick up an item: Use `/take <item name>` (e.g., `/take ancient key`).\n"
             "   - IMPORTANT for /take: The item NAME is enough. Do NOT require or invent item IDs.\n"

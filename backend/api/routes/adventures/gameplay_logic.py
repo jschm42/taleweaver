@@ -368,9 +368,14 @@ class GameTurnManager:
 
         # Lazy-register initial map visit
         try:
-            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
+            world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
             # Use session_id to find the scene (snapshot)
-            scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == self.state.current_scene_id, WorldScene.session_id == self.game_id))
+            scene_res = await self.db.execute(
+                select(WorldScene).where(
+                    WorldScene.id == self.state.current_scene_id,
+                    WorldScene.session_id == self.state.session_id,
+                )
+            )
             cur_scene = scene_res.scalars().first()
             
             # Fallback to template if not found (though it should be there after deep clone)
@@ -421,7 +426,10 @@ class GameTurnManager:
                 await self.db.commit()
                 
                 import os
-                agents_md_path = os.path.abspath(os.path.join(settings.DATA_DIR, "adventures", "sessions", self.game_id, "AGENTS.md"))
+                session_id = self.state.session_id if self.state else self.game_id
+                agents_md_path = os.path.abspath(
+                    os.path.join(settings.DATA_DIR, "adventures", "sessions", session_id, "AGENTS.md")
+                )
                 link_path = agents_md_path.replace("\\", "/")
                 if not link_path.startswith("/"):
                     link_path = "/" + link_path
@@ -498,17 +506,6 @@ class GameTurnManager:
                 is_rule_pass = True
                 user_msg = "[EVALUATE STATE]"
                 yield f"event: status\ndata: {json.dumps({'content': 'The Game Master evaluates your situation...'})}\n\n"
-            elif response.startswith("[TRIGGER_TALK]"):
-                talk_target = response[14:].strip()
-                talk_npc = await self._find_scene_npc_by_hint(talk_target)
-                if talk_npc and self._is_npc_defeated(talk_npc):
-                    msg = f"{talk_npc.name} is defeated. Only inspect is available."
-                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-                    async for chunk in self._emit_combat_final(msg):
-                        yield chunk
-                    return
-                user_msg = f"Talk to {talk_target}"
-                # Continue turn as normal
             elif response.startswith("[TRIGGER_SAY]"):
                 user_msg = f'Say out loud: "{response[13:].strip()}"'
                 # Continue turn as normal
@@ -534,13 +531,6 @@ class GameTurnManager:
                     )
                 else:
                     user_msg = "Usage: /read <target>"
-                # Continue turn as normal
-            elif response.startswith("[TRIGGER_CHAT]"):
-                chat_target = response[14:].strip()
-                if chat_target:
-                    user_msg = f"Talk to {chat_target}"
-                else:
-                    user_msg = "Talk to someone nearby"
                 # Continue turn as normal
             elif response.startswith("[TRIGGER_PUSH]"):
                 push_target = response[14:].strip()
@@ -2887,30 +2877,24 @@ class GameTurnManager:
 
     async def _build_map_payload(self) -> dict:
         """Helper to build the augmented map payload for the frontend."""
-        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.state.session_id)
+        world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
         if not world_map:
             return {"nodes": {}, "edges": [], "current_scene_id": None}
 
         map_dict = MapEngine.to_dict(world_map)
+        map_dict["current_scene_id"] = MapEngine._safe_id(self.state.current_scene_id)
         
         # Augment with adjacent unvisited scenes
-        if world_map.current_scene_id:
-            # Find the raw ID for the current scene (stored in metadata)
-            current_node = world_map.nodes.get(world_map.current_scene_id)
-            raw_current_id = current_node.get("id") if current_node else None
-            
-            if raw_current_id:
-                # Fetch exits for this session or template
-                exit_query = select(WorldExit).where(
-                    or_(
-                        WorldExit.session_id == self.state.session_id,
-                        WorldExit.template_id == self.state.template_id
-                    )
-                )
-                exits_res = await self.db.execute(exit_query)
-                exits = list(exits_res.scalars().all())
-                
-                map_dict = MapEngine.augment_map_data(map_dict, exits, raw_current_id)
+        # Fetch exits for this session or template
+        exit_query = select(WorldExit).where(
+            or_(
+                WorldExit.session_id == self.state.session_id,
+                WorldExit.template_id == self.state.template_id
+            )
+        )
+        exits_res = await self.db.execute(exit_query)
+        exits = list(exits_res.scalars().all())
+        map_dict = MapEngine.augment_map_data(map_dict, exits, self.state.current_scene_id)
 
         return map_dict
 
@@ -3074,12 +3058,17 @@ class GameTurnManager:
             
             # Map Update
             try:
-                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id, session_id=self.game_id)
+                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
                 # 1. Register exit between scenes
                 MapEngine.register_exit(world_map, old_scene_id, event.new_scene_id, exit_label=event.exit_label or "")
                 # 2. Register visit to the new scene
                 # Use session snapshot for scene data
-                scene_res = await self.db.execute(select(WorldScene).where(WorldScene.id == event.new_scene_id, WorldScene.session_id == self.game_id))
+                scene_res = await self.db.execute(
+                    select(WorldScene).where(
+                        WorldScene.id == event.new_scene_id,
+                        WorldScene.session_id == self.state.session_id,
+                    )
+                )
                 new_scene_db = scene_res.scalars().first()
                 
                 # Add system message for scene change

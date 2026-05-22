@@ -65,7 +65,7 @@ export const gameCommandService = {
 
     switch (actionId) {
       case 'talk':
-        return { command: `/talk ${targetName}`, errorMessage: null }
+        return { command: `/say Hello, ${targetName}.`, errorMessage: null }
       case 'inspect':
         return { command: `/inspect ${targetName}`, errorMessage: null }
       case 'open':
@@ -109,7 +109,7 @@ export const gameCommandService = {
         if (ruleMode === 'rpg' && entity?.is_attackable !== false) {
           items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
         }
-        items.push({ label: 'Chat', action: `/talk ${entity.name}`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
+        items.push({ label: 'Speak', action: `/say Hello, ${entity.name}.`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
       }
     } else if (entity?.entity_type === 'SCENE') {
       items.push({ label: 'Look around', action: 'Look around', icon: 'ra ra-eye', color: 'text-indigo-400' })

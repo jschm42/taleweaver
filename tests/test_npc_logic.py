@@ -146,8 +146,8 @@ async def test_npc_update_persistence(setup_test_db, monkeypatch):
         assert marge_state["name"] == "Angry Marge"
         assert marge_state["description"] == "She looks very upset."
 
-async def test_talk_command_trigger(setup_test_db, monkeypatch):
-    """Verifies that /talk command correctly triggers an interaction turn."""
+async def test_talk_command_removed_and_say_used_for_direct_dialog(setup_test_db, monkeypatch):
+    """Verifies /talk is unknown and /say is used for direct NPC dialogue turns."""
     from tests.conftest import TestSessionLocal
     
     async with TestSessionLocal() as db:
@@ -169,19 +169,26 @@ async def test_talk_command_trigger(setup_test_db, monkeypatch):
         
         monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
         
-        # Act
+        # Act: /talk is removed
         manager = GameTurnManager(db, "session-npc", user)
-        async for _ in manager.process_turn("/talk Marge"):
+        talk_chunks: list[str] = []
+        async for chunk in manager.process_turn("/talk Marge"):
+            talk_chunks.append(chunk)
+
+        # /say is the supported direct conversation command
+        async for _ in manager.process_turn("/say Hello, Marge"):
             pass
             
         # Assert
-        # /talk Marge should be transformed into "Talk to Marge"
-        assert captured_user_msg[0] == "Talk to Marge"
-        # Verify it was saved as a chat message
+        assert any("Unknown command: /talk" in c for c in talk_chunks if "event: system" in c)
+        assert captured_user_msg[0] == 'Say out loud: "Hello, Marge"'
+
+        # Verify original user chat messages are persisted
         res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == "session-npc", ChatMessage.role == "user"))
         msgs = res.scalars().all()
-        # The first message is the transformed /talk Marge
-        assert msgs[0].content == "/talk Marge"
+        msg_contents = [m.content for m in msgs]
+        assert "/say Hello, Marge" in msg_contents
+        assert "/talk Marge" not in msg_contents
 
 
 async def test_npc_inventory_sync_and_name_fallback_spawning(setup_test_db, monkeypatch):

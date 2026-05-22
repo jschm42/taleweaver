@@ -300,9 +300,31 @@ async def test_agent_prompt_includes_scene_items_and_take_name_guidance(setup_te
     assert "Do NOT require or invent item IDs" in prompt
     assert "`/open <target>`" in prompt
     assert "`/read <target>`" in prompt
-    assert "`/chat <target>`" in prompt
+    assert "`/talk` and `/chat` are removed" in prompt
+    assert "ALWAYS use `/say`" in prompt
     assert "`/search` or `/search <target>`" in prompt
     assert "`/lookaround` or `/look`" in prompt
     assert "`/push <target>` or `/pull <target>`" in prompt
     assert "`/rest`" in prompt
     assert "MODAL CONTENT MIRRORING" in prompt
+
+
+def test_log_issue_does_not_create_unknown_session_folder(tmp_path, monkeypatch):
+    """Agent issue logging must not create arbitrary session folders for invalid IDs."""
+    from backend.api.routes.adventures.agent_logic import AgentService
+
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+
+    unknown_session_id = "agent-items-test-spurious"
+    target_session_dir = tmp_path / "adventures" / "sessions" / unknown_session_id
+    assert not target_session_dir.exists()
+
+    AgentService.log_issue(
+        unknown_session_id,
+        thoughts="test thoughts",
+        action="/say Hello",
+        issue_description="test issue",
+        history_summary="history",
+    )
+
+    assert not target_session_dir.exists()

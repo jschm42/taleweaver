@@ -168,10 +168,24 @@ defineExpose({ appendText })
 const visibleStart = ref(0)
 const visibleEnd = ref(0)
 const isShifting = ref(false)
+const previousMessageCount = ref(0)
 
 const visibleMessages = computed(() => {
   return props.messages.slice(visibleStart.value, visibleEnd.value)
 })
+
+const isNearBottom = (): boolean => {
+  if (!logEl.value) return true
+  const el = logEl.value
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 140
+}
+
+const scrollToBottom = async (): Promise<void> => {
+  await nextTick()
+  if (logEl.value) {
+    logEl.value.scrollTop = logEl.value.scrollHeight
+  }
+}
 
 const handleScroll = () => {
   if (!logEl.value || isShifting.value) return
@@ -235,36 +249,41 @@ const handleScroll = () => {
 }
 
 watch(
-  () => props.messages,
-  async (newMsgs, oldMsgs) => {
-    const total = newMsgs ? newMsgs.length : 0
+  () => props.messages.length,
+  async (total) => {
     const WINDOW_SIZE = 50
-    let wasAtEnd = true
+    const wasAtEnd = isNearBottom() || visibleEnd.value >= previousMessageCount.value
 
     if (total <= WINDOW_SIZE) {
       visibleStart.value = 0
       visibleEnd.value = total
+    } else if (wasAtEnd) {
+      visibleEnd.value = total
+      visibleStart.value = Math.max(0, total - WINDOW_SIZE)
     } else {
-      wasAtEnd = !oldMsgs || visibleEnd.value >= oldMsgs.length
-      if (wasAtEnd) {
+      if (visibleEnd.value > total) {
         visibleEnd.value = total
-        visibleStart.value = Math.max(0, total - WINDOW_SIZE)
-      } else {
-        if (visibleEnd.value > total) {
-          visibleEnd.value = total
-        }
-        if (visibleStart.value >= visibleEnd.value) {
-          visibleStart.value = Math.max(0, visibleEnd.value - WINDOW_SIZE)
-        }
+      }
+      if (visibleStart.value >= visibleEnd.value) {
+        visibleStart.value = Math.max(0, visibleEnd.value - WINDOW_SIZE)
       }
     }
 
-    await nextTick()
-    if (logEl.value && wasAtEnd) {
-      logEl.value.scrollTop = logEl.value.scrollHeight
+    previousMessageCount.value = total
+    if (wasAtEnd) {
+      await scrollToBottom()
     }
   },
-  { deep: true, immediate: true }
+  { immediate: true }
+)
+
+watch(
+  () => props.messages[props.messages.length - 1]?.content,
+  async () => {
+    if (isNearBottom() || visibleEnd.value >= props.messages.length) {
+      await scrollToBottom()
+    }
+  }
 )
 
 onMounted(async () => {
