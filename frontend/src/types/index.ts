@@ -179,13 +179,16 @@ export interface CreateAdventurePayload {
   automatic_npc_voice_assignment?: boolean
   selected_image_styles?: CatalogTile[]
   selected_tone?: CatalogTile | string | null
-  min_scenes?: number
-  max_scenes?: number
-  max_items?: number
+  min_scenes?: number | null
+  max_scenes?: number | null
+  min_items?: number | null
+  max_items?: number | null
   container_generation_enabled?: boolean
-  max_containers?: number
+  min_containers?: number | null
+  max_containers?: number | null
   text_log_generation_enabled?: boolean
-  max_text_logs?: number
+  min_text_logs?: number | null
+  max_text_logs?: number | null
   clock_enabled?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean

@@ -9,10 +9,16 @@ export interface Adventure {
   original_prompt?: string
   rule_enforcement_mode: 'rpg' | 'story' | 'chat'
   time_per_turn: number
-  min_scenes: number
-  max_scenes: number
+  min_scenes: number | null
+  max_scenes: number | null
+  min_items?: number | null
+  max_items?: number | null
   container_generation_enabled?: boolean
-  max_containers?: number
+  min_containers?: number | null
+  max_containers?: number | null
+  text_log_generation_enabled?: boolean
+  min_text_logs?: number | null
+  max_text_logs?: number | null
   awards?: any[]
   allow_dynamic_items: boolean
   can_damage_npcs: boolean
@@ -42,10 +48,16 @@ export interface AdventureFormData {
   original_prompt: string
   rule_enforcement_mode: 'rpg' | 'story' | 'chat'
   time_per_turn: number
-  min_scenes: number
-  max_scenes: number
+  min_scenes: number | null
+  max_scenes: number | null
+  min_items: number | null
+  max_items: number | null
   container_generation_enabled: boolean
-  max_containers: number
+  min_containers: number | null
+  max_containers: number | null
+  text_log_generation_enabled: boolean
+  min_text_logs: number | null
+  max_text_logs: number | null
   awards: any[]
   allow_dynamic_items: boolean
   can_damage_npcs: boolean

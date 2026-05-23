@@ -92,6 +92,16 @@ async def test_save_t2i_settings_with_ollama_fields(client: AsyncClient):
 
 async def test_get_settings_returns_extended_t2i_defaults(client: AsyncClient):
     """Default settings include Ollama-compatible fields for forward compatibility."""
+    from sqlalchemy import update
+    async with TestSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.username == "test_user").values(
+                llm_settings=None,
+                t2i_settings=None
+            )
+        )
+        await session.commit()
+
     resp = await client.get("/api/settings")
     assert resp.status_code == 200
     data = resp.json()
@@ -183,6 +193,16 @@ async def test_save_llm_settings_normalizes_openrouter_models(client: AsyncClien
 
 async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
     """Default llm settings include ollama_url for local provider use."""
+    from sqlalchemy import update
+    async with TestSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.username == "test_user").values(
+                llm_settings=None,
+                t2i_settings=None
+            )
+        )
+        await session.commit()
+
     resp = await client.get("/api/settings")
     assert resp.status_code == 200
     llm = resp.json()["llm_settings"]

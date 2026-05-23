@@ -231,8 +231,16 @@ const form = ref({
   original_prompt: '',
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
-  min_scenes: 1,
-  max_scenes: 5,
+  min_scenes: null as number | null,
+  max_scenes: null as number | null,
+  min_items: null as number | null,
+  max_items: null as number | null,
+  container_generation_enabled: true,
+  min_containers: null as number | null,
+  max_containers: null as number | null,
+  text_log_generation_enabled: true,
+  min_text_logs: null as number | null,
+  max_text_logs: null as number | null,
   awards: [] as any[],
   allow_dynamic_items: true,
   can_damage_npcs: true,
@@ -328,8 +336,16 @@ async function fetchAdventure() {
     form.value.original_prompt = data.original_prompt || ''
     form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
-    form.value.min_scenes = data.min_scenes || 1
-    form.value.max_scenes = data.max_scenes || 5
+    form.value.min_scenes = data.min_scenes !== undefined ? data.min_scenes : null
+    form.value.max_scenes = data.max_scenes !== undefined ? data.max_scenes : null
+    form.value.min_items = data.min_items !== undefined ? data.min_items : null
+    form.value.max_items = data.max_items !== undefined ? data.max_items : null
+    form.value.container_generation_enabled = data.container_generation_enabled ?? true
+    form.value.min_containers = data.min_containers !== undefined ? data.min_containers : null
+    form.value.max_containers = data.max_containers !== undefined ? data.max_containers : null
+    form.value.text_log_generation_enabled = data.text_log_generation_enabled ?? true
+    form.value.min_text_logs = data.min_text_logs !== undefined ? data.min_text_logs : null
+    form.value.max_text_logs = data.max_text_logs !== undefined ? data.max_text_logs : null
     form.value.awards = data.awards || []
     form.value.allow_dynamic_items = data.allow_dynamic_items ?? true
     form.value.plot = data.plot || ''

@@ -33,19 +33,22 @@ class CreateAdventureTemplatePayload(BaseModel):
     original_manifest: Optional[dict[str, Any]] = None
     automatic_cover_generation: Optional[bool] = False
     pacing: Optional[dict[str, Any]] = None
-    min_scenes: int = 1
-    max_scenes: int = 5
+    min_scenes: Optional[int] = None
+    max_scenes: Optional[int] = None
     quest_generation_enabled: bool = True
-    min_quests: int = 3
-    max_quests: int = 5
-    max_items: int = 30
+    min_quests: Optional[int] = None
+    max_quests: Optional[int] = None
+    min_items: Optional[int] = None
+    max_items: Optional[int] = None
     container_generation_enabled: bool = True
-    max_containers: int = 8
+    min_containers: Optional[int] = None
+    max_containers: Optional[int] = None
     text_log_generation_enabled: bool = True
-    max_text_logs: int = 8
+    min_text_logs: Optional[int] = None
+    max_text_logs: Optional[int] = None
     award_generation_enabled: bool = False
-    min_awards: int = 3
-    max_awards: int = 8
+    min_awards: Optional[int] = None
+    max_awards: Optional[int] = None
     can_damage_npcs: bool = True
     npcs_can_damage_protagonist: bool = True
     is_adventure_generator: bool = False
@@ -85,45 +88,102 @@ class CreateAdventureTemplatePayload(BaseModel):
 
     @field_validator("max_containers")
     @classmethod
-    def validate_max_containers(cls, value: int) -> int:
+    def validate_max_containers(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
+        return max(0, min(30, int(value)))
+
+    @field_validator("min_containers")
+    @classmethod
+    def validate_min_containers(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
         return max(0, min(30, int(value)))
 
     @field_validator("max_text_logs")
     @classmethod
-    def validate_max_text_logs(cls, value: int) -> int:
+    def validate_max_text_logs(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
+        return max(0, min(30, int(value)))
+
+    @field_validator("min_text_logs")
+    @classmethod
+    def validate_min_text_logs(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
         return max(0, min(30, int(value)))
 
     @field_validator("min_scenes")
     @classmethod
-    def validate_min_scenes(cls, value: int) -> int:
+    def validate_min_scenes(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
         return max(1, min(50, int(value)))
 
     @field_validator("max_scenes")
     @classmethod
-    def validate_max_scenes(cls, value: int) -> int:
+    def validate_max_scenes(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
         return max(1, min(50, int(value)))
 
     @field_validator("min_quests")
     @classmethod
-    def validate_min_quests(cls, value: int) -> int:
+    def validate_min_quests(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
         return max(1, min(30, int(value)))
 
     @field_validator("max_quests")
     @classmethod
-    def validate_max_quests(cls, value: int) -> int:
+    def validate_max_quests(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
         return max(1, min(30, int(value)))
+
+    @field_validator("min_items")
+    @classmethod
+    def validate_min_items(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
+        return max(1, min(100, int(value)))
 
     @field_validator("max_items")
     @classmethod
-    def validate_max_items(cls, value: int) -> int:
+    def validate_max_items(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
         return max(1, min(100, int(value)))
+
+    @field_validator("min_awards")
+    @classmethod
+    def validate_min_awards(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
+        return max(1, min(30, int(value)))
+
+    @field_validator("max_awards")
+    @classmethod
+    def validate_max_awards(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
+        return max(1, min(30, int(value)))
 
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventureTemplatePayload':
-        if self.max_scenes < self.min_scenes:
+        if self.max_scenes is not None and self.min_scenes is not None and self.max_scenes < self.min_scenes:
             raise ValueError("max_scenes must be greater than or equal to min_scenes")
-        if self.max_quests < self.min_quests:
+        if self.max_quests is not None and self.min_quests is not None and self.max_quests < self.min_quests:
             raise ValueError("max_quests must be greater than or equal to min_quests")
+        if self.max_items is not None and self.min_items is not None and self.max_items < self.min_items:
+            raise ValueError("max_items must be greater than or equal to min_items")
+        if self.max_containers is not None and self.min_containers is not None and self.max_containers < self.min_containers:
+            raise ValueError("max_containers must be greater than or equal to min_containers")
+        if self.max_text_logs is not None and self.min_text_logs is not None and self.max_text_logs < self.min_text_logs:
+            raise ValueError("max_text_logs must be greater than or equal to min_text_logs")
+        if self.max_awards is not None and self.min_awards is not None and self.max_awards < self.min_awards:
+            raise ValueError("max_awards must be greater than or equal to min_awards")
         return self
 
 class AdventureTemplateResponse(BaseModel):
@@ -156,10 +216,16 @@ class AdventureTemplateResponse(BaseModel):
     cover_source_adventure_name: Optional[str] = None
     cover_similarity_percent: int = 50
     allow_reuse_source_assets: bool = True
-    min_scenes: int = 1
-    max_scenes: int = 5
+    min_scenes: Optional[int] = None
+    max_scenes: Optional[int] = None
+    min_items: Optional[int] = None
+    max_items: Optional[int] = None
     container_generation_enabled: bool = True
-    max_containers: int = 8
+    min_containers: Optional[int] = None
+    max_containers: Optional[int] = None
+    text_log_generation_enabled: bool = True
+    min_text_logs: Optional[int] = None
+    max_text_logs: Optional[int] = None
     can_damage_npcs: bool = True
     npcs_can_damage_protagonist: bool = True
 

@@ -60,7 +60,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "Story Idea: {original_prompt}\n"
     "Narrative Tone: {selected_tone}\n\n"
     "WORLD SIZE REQUIREMENTS:\n"
-    "- Generate between {min_scenes} and {max_scenes} unique scenes.\n"
+    "{scene_requirement}\n"
     "- Set top-level combat flags exactly as requested: can_damage_npcs={can_damage_npcs}, npcs_can_damage_protagonist={npcs_can_damage_protagonist}.\n"
 
     "- Create a complex network of exits and interesting entities connecting these locations.\n"

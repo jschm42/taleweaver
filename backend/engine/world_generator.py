@@ -304,8 +304,8 @@ class WorldManifesto(BaseModel):
     completed_condition: str = Field(..., description="Technical or narrative condition for winning the adventure.")
     gameover_condition: str = Field(..., description="Technical or narrative condition for losing the adventure.")
     tts_director_notes: str = Field(..., description="Style instructions for the Text-to-Speech engine (tone, pacing, emphasis).")
-    can_damage_npcs: bool = Field(..., description="Global flag: whether the protagonist can damage NPCs.")
-    npcs_can_damage_protagonist: bool = Field(..., description="Global flag: whether NPCs can damage the protagonist.")
+    can_damage_npcs: bool = Field(True, description="Global flag: whether the protagonist can damage NPCs.")
+    npcs_can_damage_protagonist: bool = Field(True, description="Global flag: whether NPCs can damage the protagonist.")
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]
     npcs: list[WorldNPCSchema]
@@ -334,19 +334,22 @@ class WorldGenerator:
         generate_npc_images: bool = False,
         generate_item_images: bool = False,
         automatic_npc_voice_assignment: bool = True,
-        min_scenes: int = 1,
-        max_scenes: int = 5,
+        min_scenes: Optional[int] = None,
+        max_scenes: Optional[int] = None,
         container_generation_enabled: bool = True,
-        max_containers: int = 8,
+        min_containers: Optional[int] = None,
+        max_containers: Optional[int] = None,
         text_log_generation_enabled: bool = True,
-        max_text_logs: int = 8,
+        min_text_logs: Optional[int] = None,
+        max_text_logs: Optional[int] = None,
         quest_generation_enabled: bool = True,
-        min_quests: int = 3,
-        max_quests: int = 5,
-        max_items: int = 30,
+        min_quests: Optional[int] = None,
+        max_quests: Optional[int] = None,
+        min_items: Optional[int] = None,
+        max_items: Optional[int] = None,
         award_generation_enabled: bool = True,
-        min_awards: int = 3,
-        max_awards: int = 5,
+        min_awards: Optional[int] = None,
+        max_awards: Optional[int] = None,
         can_damage_npcs: bool = True,
         npcs_can_damage_protagonist: bool = True,
         selected_image_styles: Optional[list[str]] = None,
@@ -415,55 +418,138 @@ class WorldGenerator:
         if not quest_generation_enabled:
             system_prompt += "\n\nQUEST GENERATION OVERRIDE: Do not generate any quests for this adventure."
 
+        # Scene requirement
+        if min_scenes is None and max_scenes is None:
+            scene_requirement = "- Generate a suitable number of unique scenes (typically between 3 and 10) based on the story complexity."
+        elif min_scenes is not None and max_scenes is None:
+            scene_requirement = f"- Generate at least {max(1, min_scenes)} unique scenes."
+        elif min_scenes is None and max_scenes is not None:
+            scene_requirement = f"- Generate no more than {max(1, max_scenes)} unique scenes."
+        else:
+            scene_requirement = f"- Generate between {max(1, min_scenes)} and {max(1, max_scenes)} unique scenes."
+
         quest_requirement = ""
-        clamped_min_quests = max(1, min(30, int(min_quests)))
-        clamped_max_quests = max(clamped_min_quests, min(30, int(max_quests)))
         if quest_generation_enabled:
-            quest_requirement = (
-                f"\n- Generate between {clamped_min_quests} and {clamped_max_quests} total quests that fit the narrative context."
-                " Mix main and side quests naturally."
-            )
+            if min_quests is None and max_quests is None:
+                quest_requirement = "\n- Generate a suitable number of total quests (typically between 2 and 6) that fit the narrative context. Mix main and side quests naturally."
+            elif min_quests is not None and max_quests is None:
+                quest_requirement = f"\n- Generate at least {max(1, min_quests)} total quests. Mix main and side quests naturally."
+            elif min_quests is None and max_quests is not None:
+                quest_requirement = f"\n- Generate no more than {max(1, max_quests)} total quests. Mix main and side quests naturally."
+            else:
+                clamped_min_quests = max(1, min(30, int(min_quests)))
+                clamped_max_quests = max(clamped_min_quests, min(30, int(max_quests)))
+                quest_requirement = (
+                    f"\n- Generate between {clamped_min_quests} and {clamped_max_quests} total quests that fit the narrative context."
+                    " Mix main and side quests naturally."
+                )
         else:
             quest_requirement = "\n- Do not generate any quests for this adventure."
         
         award_requirement = ""
         if award_generation_enabled:
-            award_requirement = f"\n\nAWARD SYSTEM:\n- Generate between {min_awards} and {max_awards} unique Awards that players can earn."
+            if min_awards is None and max_awards is None:
+                award_requirement = "\n\nAWARD SYSTEM:\n- Generate a suitable number of unique Awards (typically between 3 and 8) that players can earn."
+            elif min_awards is not None and max_awards is None:
+                award_requirement = f"\n\nAWARD SYSTEM:\n- Generate at least {max(1, min_awards)} unique Awards that players can earn."
+            elif min_awards is None and max_awards is not None:
+                award_requirement = f"\n\nAWARD SYSTEM:\n- Generate no more than {max(1, max_awards)} unique Awards that players can earn."
+            else:
+                clamped_min_awards = max(1, min(30, int(min_awards)))
+                clamped_max_awards = max(clamped_min_awards, min(30, int(max_awards)))
+                award_requirement = f"\n\nAWARD SYSTEM:\n- Generate between {clamped_min_awards} and {clamped_max_awards} unique Awards that players can earn."
         else:
             award_requirement = "\n\nAWARD SYSTEM:\n- Do not generate any awards for this adventure."
 
-        clamped_max_containers = max(0, min(30, int(max_containers)))
-        if container_generation_enabled and clamped_max_containers > 0:
-            container_requirement = (
-                "\n\nCONTAINER ITEMS:\n"
-                f"- You may generate CONTAINER objects, but never more than {clamped_max_containers}.\n"
-                "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
-            )
-        else:
+        # Container requirement
+        if not container_generation_enabled:
             container_requirement = (
                 "\n\nCONTAINER ITEMS:\n"
                 "- Do not generate any objects with item_type CONTAINER."
             )
-
-        clamped_max_text_logs = max(0, min(30, int(max_text_logs)))
-        if text_log_generation_enabled and clamped_max_text_logs > 0:
-            text_log_requirement = (
-                "\n\nTEXT LOGS (READABLE OBJECTS):\n"
-                f"- You may generate READABLE objects, but never more than {clamped_max_text_logs}.\n"
-                "- For every READABLE object, provide `text_log_content` with at most 500 characters and `text_log_format` as DOCUMENT, SCROLL, BOOK, or SIGN.\n"
-                "- Keep text_log_content practical: hints, story fragments, warnings, clues."
-            )
         else:
+            if min_containers is None and max_containers is None:
+                container_requirement = (
+                    "\n\nCONTAINER ITEMS:\n"
+                    "- Generate a suitable number of container items (typically between 2 and 6) if the scenes require them.\n"
+                    "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+                )
+            elif min_containers is not None and max_containers is None:
+                container_requirement = (
+                    "\n\nCONTAINER ITEMS:\n"
+                    f"- Generate at least {max(0, min_containers)} container items.\n"
+                    "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+                )
+            elif min_containers is None and max_containers is not None:
+                container_requirement = (
+                    "\n\nCONTAINER ITEMS:\n"
+                    f"- You may generate CONTAINER objects, but never more than {max(0, max_containers)}.\n"
+                    "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+                )
+            else:
+                container_requirement = (
+                    "\n\nCONTAINER ITEMS:\n"
+                    f"- Generate between {max(0, min_containers)} and {max(0, max_containers)} container items.\n"
+                    "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+                )
+
+        # Text log requirement
+        if not text_log_generation_enabled:
             text_log_requirement = (
                 "\n\nTEXT LOGS (READABLE OBJECTS):\n"
                 "- Do not generate any READABLE objects."
             )
+        else:
+            base_text_log_instruction = (
+                "- For every READABLE object, provide `text_log_content` with at most 500 characters and `text_log_format` as DOCUMENT, SCROLL, BOOK, or SIGN.\n"
+                "- Keep text_log_content practical: hints, story fragments, warnings, clues."
+            )
+            if min_text_logs is None and max_text_logs is None:
+                text_log_requirement = (
+                    "\n\nTEXT LOGS (READABLE OBJECTS):\n"
+                    "- Generate a suitable number of readable text logs (typically between 1 and 5) containing clues or lore.\n"
+                    f"{base_text_log_instruction}"
+                )
+            elif min_text_logs is not None and max_text_logs is None:
+                text_log_requirement = (
+                    "\n\nTEXT LOGS (READABLE OBJECTS):\n"
+                    f"- Generate at least {max(0, min_text_logs)} readable text logs.\n"
+                    f"{base_text_log_instruction}"
+                )
+            elif min_text_logs is None and max_text_logs is not None:
+                text_log_requirement = (
+                    "\n\nTEXT LOGS (READABLE OBJECTS):\n"
+                    f"- You may generate READABLE objects, but never more than {max(0, max_text_logs)}.\n"
+                    f"{base_text_log_instruction}"
+                )
+            else:
+                text_log_requirement = (
+                    "\n\nTEXT LOGS (READABLE OBJECTS):\n"
+                    f"- Generate between {max(0, min_text_logs)} and {max(0, max_text_logs)} readable text logs.\n"
+                    f"{base_text_log_instruction}"
+                )
 
-        clamped_max_items = max(1, min(100, int(max_items)))
-        item_requirement = (
-            "\n\nITEM COUNT LIMIT:\n"
-            f"- Generate no more than {clamped_max_items} total objects/items in `objects`."
-        )
+        # Item requirement
+        if min_items is None and max_items is None:
+            item_requirement = (
+                "\n\nITEM COUNT LIMIT:\n"
+                "- Generate a suitable number of total objects/items in `objects` (typically between 5 and 25) that fit the scenes."
+            )
+        elif min_items is not None and max_items is None:
+            item_requirement = (
+                "\n\nITEM COUNT LIMIT:\n"
+                f"- Generate at least {max(1, min_items)} total objects/items in `objects`."
+            )
+        elif min_items is None and max_items is not None:
+            item_requirement = (
+                "\n\nITEM COUNT LIMIT:\n"
+                f"- Generate no more than {max(1, max_items)} total objects/items in `objects`."
+            )
+        else:
+            item_requirement = (
+                "\n\nITEM COUNT LIMIT:\n"
+                f"- Generate between {max(1, min_items)} and {max(1, max_items)} total objects/items in `objects`."
+            )
 
         cover_guidance = ""
         if cover_source_manifest:
@@ -508,8 +594,7 @@ class WorldGenerator:
             title=title, 
             original_prompt=original_prompt, 
             selected_tone=selected_tone or "Standard RPG",
-            min_scenes=min_scenes, 
-            max_scenes=max_scenes,
+            scene_requirement=scene_requirement,
             can_damage_npcs="true" if can_damage_npcs else "false",
             npcs_can_damage_protagonist="true" if npcs_can_damage_protagonist else "false",
             voice_assignment_requirement=_build_voice_assignment_requirement(
@@ -555,14 +640,19 @@ class WorldGenerator:
                 "generate_npc_images": generate_npc_images,
                 "generate_item_images": generate_item_images,
                 "automatic_npc_voice_assignment": automatic_npc_voice_assignment,
+                "min_scenes": min_scenes,
+                "max_scenes": max_scenes,
+                "min_items": min_items,
+                "max_items": max_items,
                 "container_generation_enabled": container_generation_enabled,
-                "max_containers": clamped_max_containers,
+                "min_containers": min_containers,
+                "max_containers": max_containers,
                 "text_log_generation_enabled": text_log_generation_enabled,
-                "max_text_logs": clamped_max_text_logs,
+                "min_text_logs": min_text_logs,
+                "max_text_logs": max_text_logs,
                 "quest_generation_enabled": quest_generation_enabled,
-                "min_quests": clamped_min_quests,
-                "max_quests": clamped_max_quests,
-                "max_items": clamped_max_items,
+                "min_quests": min_quests,
+                "max_quests": max_quests,
             },
         )
 
@@ -643,6 +733,10 @@ class WorldGenerator:
                 }
 
         manifest_dict = manifesto.model_dump()
+
+        # Post-processing clamp limits for Auto Mode vs Manual constraints
+        clamped_max_containers = max(0, min(30, int(max_containers))) if max_containers is not None else 9999
+        clamped_max_text_logs = max(0, min(30, int(max_text_logs))) if max_text_logs is not None else 9999
 
         objects = manifest_dict.get("objects") or []
         container_indices = [

@@ -56,11 +56,13 @@ def test_puzzle_json_enforcement_block_covers_required_engine_fields() -> None:
         assert field_name in block
 
 
-def test_puzzle_design_patterns_block_contains_all_pattern_ids() -> None:
+def test_puzzle_design_patterns_block_contains_priorities() -> None:
     block = prompts.PUZZLE_DESIGN_PATTERNS_BLOCK
-
-    for pattern_id in ("A1", "A2", "A3", "B1", "B2", "C1", "C2", "C3", "D1", "D2"):
-        assert f"{pattern_id} " in block
+    assert "PUZZLE DESIGN PRIORITIES" in block
+    assert "combination" in block
+    assert "spatial clue" in block
+    assert "social/roleplay" in block
+    assert "time pressure" in block
 
 
 def test_world_and_gm_prompts_include_puzzle_contract_and_patterns() -> None:

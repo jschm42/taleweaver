@@ -49,3 +49,79 @@ async def test_service_disables_all_image_generation_when_scene_images_disabled(
         adventure = await db.get(AdventureTemplate, new_id)
         assert adventure is not None
         assert adventure.generate_scene_images is False
+
+
+async def test_service_supports_auto_mode_density_constraints(setup_test_db, monkeypatch):
+    """An adventure creation request with Auto density values (None) should preserve them in DB and pass them to the generator."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user = User(username="auto_user", hashed_password="pw", role="user")
+        db.add(user)
+        await db.commit()
+
+        captured_kwargs = {}
+
+        async def fake_generate_world(*_args, **kwargs):
+            captured_kwargs.update(kwargs)
+
+        monkeypatch.setattr(
+            "backend.engine.adventure_generator_service.WorldGenerator.generate_world",
+            fake_generate_world,
+        )
+
+        req = AdventureGenerationRequest(
+            title="Auto Density Adventure",
+            prompt="Generate a world with dynamic AI-determined size/density.",
+            min_scenes=None,
+            max_scenes=None,
+            min_items=None,
+            max_items=None,
+            min_containers=None,
+            max_containers=None,
+            min_text_logs=None,
+            max_text_logs=None,
+            generate_scene_images=False,
+            selected_image_styles=["cinematic-realism"],
+            selected_tone="mystery",
+            min_awards=None,
+            max_awards=None,
+            award_generation_enabled=True,
+            quest_generation_enabled=True,
+            min_quests=None,
+            max_quests=None,
+        )
+
+        new_id = await AdventureGeneratorService.generate_adventure(db, user, req)
+
+        # Check that None constraints are passed to generate_world
+        assert captured_kwargs.get("min_scenes") is None
+        assert captured_kwargs.get("max_scenes") is None
+        assert captured_kwargs.get("min_items") is None
+        assert captured_kwargs.get("max_items") is None
+        assert captured_kwargs.get("min_containers") is None
+        assert captured_kwargs.get("max_containers") is None
+        assert captured_kwargs.get("min_text_logs") is None
+        assert captured_kwargs.get("max_text_logs") is None
+        assert captured_kwargs.get("min_quests") is None
+        assert captured_kwargs.get("max_quests") is None
+        assert captured_kwargs.get("min_awards") is None
+        assert captured_kwargs.get("max_awards") is None
+
+        # Check they are persisted correctly in AdventureTemplate database record
+        adventure = await db.get(AdventureTemplate, new_id)
+        assert adventure is not None
+        assert adventure.min_scenes is None
+        assert adventure.max_scenes is None
+        assert adventure.min_items is None
+        assert adventure.max_items is None
+        assert adventure.min_containers is None
+        assert adventure.max_containers is None
+        assert adventure.min_text_logs is None
+        assert adventure.max_text_logs is None
+        assert adventure.min_quests is None
+        assert adventure.max_quests is None
+        assert adventure.min_awards is None
+        assert adventure.max_awards is None
+        assert adventure.quest_generation_enabled is True
+        assert adventure.award_generation_enabled is True

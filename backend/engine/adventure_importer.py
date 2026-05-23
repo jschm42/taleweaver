@@ -170,21 +170,134 @@ class AdventureTemplateImporter:
                     selected_tone=adv_data.get("selected_tone") or manifest_data.get("selected_tone"),
                     quests=adv_data.get("quests") or manifest_data.get("quests", []),
                     awards=adv_data.get("awards") or manifest_data.get("awards", []),
-                    min_scenes=adv_data.get("min_scenes") or manifest_data.get("min_scenes", 1),
-                    max_scenes=adv_data.get("max_scenes") or manifest_data.get("max_scenes", 5),
+                    min_scenes=(
+                        int(adv_data["min_scenes"])
+                        if adv_data.get("min_scenes") is not None
+                        else (
+                            int(manifest_data["min_scenes"])
+                            if manifest_data.get("min_scenes") is not None
+                            else None
+                        )
+                    ),
+                    max_scenes=(
+                        int(adv_data["max_scenes"])
+                        if adv_data.get("max_scenes") is not None
+                        else (
+                            int(manifest_data["max_scenes"])
+                            if manifest_data.get("max_scenes") is not None
+                            else None
+                        )
+                    ),
+                    min_items=(
+                        int(adv_data["min_items"])
+                        if adv_data.get("min_items") is not None
+                        else (
+                            int(manifest_data["min_items"])
+                            if manifest_data.get("min_items") is not None
+                            else None
+                        )
+                    ),
+                    max_items=(
+                        int(adv_data["max_items"])
+                        if adv_data.get("max_items") is not None
+                        else (
+                            int(manifest_data["max_items"])
+                            if manifest_data.get("max_items") is not None
+                            else None
+                        )
+                    ),
                     container_generation_enabled=(
                         adv_data.get("container_generation_enabled", True)
                         if "container_generation_enabled" in adv_data
                         else manifest_data.get("container_generation_enabled", True)
                     ),
-                    max_containers=(
-                        int(adv_data.get("max_containers", 8))
-                        if "max_containers" in adv_data
-                        else int(manifest_data.get("max_containers", 8))
+                    min_containers=(
+                        int(adv_data["min_containers"])
+                        if adv_data.get("min_containers") is not None
+                        else (
+                            int(manifest_data["min_containers"])
+                            if manifest_data.get("min_containers") is not None
+                            else None
+                        )
                     ),
-                    min_awards=adv_data.get("min_awards") or manifest_data.get("min_awards", 3),
-                    max_awards=adv_data.get("max_awards") or manifest_data.get("max_awards", 8),
-                    award_generation_enabled=adv_data.get("award_generation_enabled") or manifest_data.get("award_generation_enabled", False),
+                    max_containers=(
+                        int(adv_data["max_containers"])
+                        if adv_data.get("max_containers") is not None
+                        else (
+                            int(manifest_data["max_containers"])
+                            if manifest_data.get("max_containers") is not None
+                            else None
+                        )
+                    ),
+                    text_log_generation_enabled=(
+                        adv_data.get("text_log_generation_enabled", True)
+                        if "text_log_generation_enabled" in adv_data
+                        else manifest_data.get("text_log_generation_enabled", True)
+                    ),
+                    min_text_logs=(
+                        int(adv_data["min_text_logs"])
+                        if adv_data.get("min_text_logs") is not None
+                        else (
+                            int(manifest_data["min_text_logs"])
+                            if manifest_data.get("min_text_logs") is not None
+                            else None
+                        )
+                    ),
+                    max_text_logs=(
+                        int(adv_data["max_text_logs"])
+                        if adv_data.get("max_text_logs") is not None
+                        else (
+                            int(manifest_data["max_text_logs"])
+                            if manifest_data.get("max_text_logs") is not None
+                            else None
+                        )
+                    ),
+                    min_quests=(
+                        int(adv_data["min_quests"])
+                        if adv_data.get("min_quests") is not None
+                        else (
+                            int(manifest_data["min_quests"])
+                            if manifest_data.get("min_quests") is not None
+                            else None
+                        )
+                    ),
+                    max_quests=(
+                        int(adv_data["max_quests"])
+                        if adv_data.get("max_quests") is not None
+                        else (
+                            int(manifest_data["max_quests"])
+                            if manifest_data.get("max_quests") is not None
+                            else None
+                        )
+                    ),
+                    quest_generation_enabled=(
+                        adv_data.get("quest_generation_enabled", True)
+                        if "quest_generation_enabled" in adv_data
+                        else manifest_data.get("quest_generation_enabled", True)
+                    ),
+                    min_awards=(
+                        int(adv_data["min_awards"])
+                        if adv_data.get("min_awards") is not None
+                        else (
+                            int(manifest_data["min_awards"])
+                            if manifest_data.get("min_awards") is not None
+                            else None
+                        )
+                    ),
+                    max_awards=(
+                        int(adv_data["max_awards"])
+                        if adv_data.get("max_awards") is not None
+                        else (
+                            int(manifest_data["max_awards"])
+                            if manifest_data.get("max_awards") is not None
+                            else None
+                        )
+                    ),
+                    award_generation_enabled=(
+                        adv_data.get("award_generation_enabled", False)
+                        if "award_generation_enabled" in adv_data
+                        else manifest_data.get("award_generation_enabled", False)
+                    ),
                     plot=adv_data.get("plot") or manifest_data.get("plot"),
                     rules=adv_data.get("rules") or manifest_data.get("rules"),
                     intro_text=adv_data.get("intro_text") or manifest_data.get("intro_text"),
@@ -420,6 +533,22 @@ class AdventureTemplateImporter:
                     cover_source_adventure_name=old_adv.get("cover_source_adventure_name"),
                     cover_similarity_percent=old_adv.get("cover_similarity_percent", 50),
                     allow_reuse_source_assets=old_adv.get("allow_reuse_source_assets", True),
+                    min_scenes=old_adv.get("min_scenes") if old_adv.get("min_scenes") is not None else data.get("min_scenes"),
+                    max_scenes=old_adv.get("max_scenes") if old_adv.get("max_scenes") is not None else data.get("max_scenes"),
+                    min_items=old_adv.get("min_items") if old_adv.get("min_items") is not None else data.get("min_items"),
+                    max_items=old_adv.get("max_items") if old_adv.get("max_items") is not None else data.get("max_items"),
+                    container_generation_enabled=old_adv.get("container_generation_enabled", True) if "container_generation_enabled" in old_adv else data.get("container_generation_enabled", True),
+                    min_containers=old_adv.get("min_containers") if old_adv.get("min_containers") is not None else data.get("min_containers"),
+                    max_containers=old_adv.get("max_containers") if old_adv.get("max_containers") is not None else data.get("max_containers"),
+                    text_log_generation_enabled=old_adv.get("text_log_generation_enabled", True) if "text_log_generation_enabled" in old_adv else data.get("text_log_generation_enabled", True),
+                    min_text_logs=old_adv.get("min_text_logs") if old_adv.get("min_text_logs") is not None else data.get("min_text_logs"),
+                    max_text_logs=old_adv.get("max_text_logs") if old_adv.get("max_text_logs") is not None else data.get("max_text_logs"),
+                    min_quests=old_adv.get("min_quests") if old_adv.get("min_quests") is not None else data.get("min_quests"),
+                    max_quests=old_adv.get("max_quests") if old_adv.get("max_quests") is not None else data.get("max_quests"),
+                    quest_generation_enabled=old_adv.get("quest_generation_enabled", True) if "quest_generation_enabled" in old_adv else data.get("quest_generation_enabled", True),
+                    min_awards=old_adv.get("min_awards") if old_adv.get("min_awards") is not None else data.get("min_awards"),
+                    max_awards=old_adv.get("max_awards") if old_adv.get("max_awards") is not None else data.get("max_awards"),
+                    award_generation_enabled=old_adv.get("award_generation_enabled", False) if "award_generation_enabled" in old_adv else data.get("award_generation_enabled", False),
                     language=old_adv.get("language") or data.get("language"),
                     origin_id=origin_id,
                     is_adventure_generator=old_adv.get("is_adventure_generator", False),
@@ -579,6 +708,22 @@ class AdventureTemplateImporter:
                         else manifest.get("cover_similarity_percent", 50)
                     ),
                     allow_reuse_source_assets=adv_meta.get("allow_reuse_source_assets", True) if "allow_reuse_source_assets" in adv_meta else manifest.get("allow_reuse_source_assets", True),
+                    min_scenes=adv_meta.get("min_scenes") if adv_meta.get("min_scenes") is not None else manifest.get("min_scenes"),
+                    max_scenes=adv_meta.get("max_scenes") if adv_meta.get("max_scenes") is not None else manifest.get("max_scenes"),
+                    min_items=adv_meta.get("min_items") if adv_meta.get("min_items") is not None else manifest.get("min_items"),
+                    max_items=adv_meta.get("max_items") if adv_meta.get("max_items") is not None else manifest.get("max_items"),
+                    container_generation_enabled=adv_meta.get("container_generation_enabled", True) if "container_generation_enabled" in adv_meta else manifest.get("container_generation_enabled", True),
+                    min_containers=adv_meta.get("min_containers") if adv_meta.get("min_containers") is not None else manifest.get("min_containers"),
+                    max_containers=adv_meta.get("max_containers") if adv_meta.get("max_containers") is not None else manifest.get("max_containers"),
+                    text_log_generation_enabled=adv_meta.get("text_log_generation_enabled", True) if "text_log_generation_enabled" in adv_meta else manifest.get("text_log_generation_enabled", True),
+                    min_text_logs=adv_meta.get("min_text_logs") if adv_meta.get("min_text_logs") is not None else manifest.get("min_text_logs"),
+                    max_text_logs=adv_meta.get("max_text_logs") if adv_meta.get("max_text_logs") is not None else manifest.get("max_text_logs"),
+                    min_quests=adv_meta.get("min_quests") if adv_meta.get("min_quests") is not None else manifest.get("min_quests"),
+                    max_quests=adv_meta.get("max_quests") if adv_meta.get("max_quests") is not None else manifest.get("max_quests"),
+                    quest_generation_enabled=adv_meta.get("quest_generation_enabled", True) if "quest_generation_enabled" in adv_meta else manifest.get("quest_generation_enabled", True),
+                    min_awards=adv_meta.get("min_awards") if adv_meta.get("min_awards") is not None else manifest.get("min_awards"),
+                    max_awards=adv_meta.get("max_awards") if adv_meta.get("max_awards") is not None else manifest.get("max_awards"),
+                    award_generation_enabled=adv_meta.get("award_generation_enabled", False) if "award_generation_enabled" in adv_meta else manifest.get("award_generation_enabled", False),
                     language=adv_meta.get("language") or manifest.get("language"),
                     origin_id=origin_id,
                     is_adventure_generator=adv_meta.get("is_adventure_generator", False),

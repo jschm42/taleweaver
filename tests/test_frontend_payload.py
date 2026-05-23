@@ -4,7 +4,8 @@ from httpx import AsyncClient
 # POST /api/adventures/
 # ---------------------------------------------------------------------------
 
-async def test_update_adventure_frontend_payload(client: AsyncClient):
+async def test_update_adventure_frontend_payload(auth_client: AsyncClient):
+    client = auth_client
     """Patching with frontend payload should not give 422."""
     # 1. create an adventure
     resp = await client.post(

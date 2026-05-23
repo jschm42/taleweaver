@@ -110,14 +110,25 @@ class AdventureGenerationRequest(BaseModel):
     """
     title: str
     prompt: str
-    min_scenes: int = 1
-    max_scenes: int = 5
+    min_scenes: Optional[int] = None
+    max_scenes: Optional[int] = None
     generate_scene_images: bool = False
     selected_image_styles: Optional[list[str]] = None
     selected_tone: Optional[str] = None
-    min_awards: int = 3
-    max_awards: int = 8
+    min_awards: Optional[int] = None
+    max_awards: Optional[int] = None
     award_generation_enabled: bool = False
+    quest_generation_enabled: bool = True
+    min_quests: Optional[int] = None
+    max_quests: Optional[int] = None
+    min_items: Optional[int] = None
+    max_items: Optional[int] = None
+    container_generation_enabled: bool = True
+    min_containers: Optional[int] = None
+    max_containers: Optional[int] = None
+    text_log_generation_enabled: bool = True
+    min_text_logs: Optional[int] = None
+    max_text_logs: Optional[int] = None
 
 
 class ToolResults(BaseModel):

@@ -56,10 +56,16 @@ class AdventureTemplate(Base, TimestampMixin):
     original_manifest: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
     # Generation Constraints
-    min_scenes: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    max_scenes: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    min_scenes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    max_scenes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     container_generation_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    max_containers: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    min_containers: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    max_containers: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    min_items: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    max_items: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    text_log_generation_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    min_text_logs: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    max_text_logs: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
 
     # New Concept Fields
     plot: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
@@ -78,8 +84,11 @@ class AdventureTemplate(Base, TimestampMixin):
     # Award System
     awards: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     award_generation_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    min_awards: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
-    max_awards: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
+    min_awards: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    max_awards: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    quest_generation_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    min_quests: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    max_quests: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     
     # Adventure Generator Mode
     is_adventure_generator: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
