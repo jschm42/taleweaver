@@ -6,7 +6,7 @@ export const CREATE_ADVENTURE_HELP_TEXTS = {
   pacing:
     'Controls in-game time progression per action. Higher pacing values move time faster and can trigger world events more often.',
   sceneComplexity:
-    'Sets the scene range for world generation. More scenes create larger adventures but may increase generation time.',
+    'Sets the scene range for world generation. Larger worlds create more locations to explore, but do not automatically scale up the walkthrough length or entity count due to AI model token limits.',
   questGeneration:
     'Toggle automatic quest generation. Min and max define how many quests are produced (up to 30).',
   itemCount:

@@ -17,6 +17,7 @@ import VisualsTab from '@/components/editor/VisualsTab.vue'
 import ToneTab from '@/components/editor/ToneTab.vue'
 import InhabitantsTab from '@/components/editor/InhabitantsTab.vue'
 import ScenesTab from '@/components/editor/ScenesTab.vue'
+import MapTab from '@/components/editor/MapTab.vue'
 import QuestTab from '@/components/editor/QuestTab.vue'
 import AwardsTab from '@/components/editor/AwardsTab.vue'
 import AdvancedTab from '@/components/editor/AdvancedTab.vue'
@@ -32,7 +33,6 @@ import {
   isNpcEntity, 
   isObjectEntity, 
   mergeUniqueById, 
-  formatVoiceOption, 
   formatBytes,
   makeSafeFilename,
   getImageExtension,
@@ -79,7 +79,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'world' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'quest' | 'awards' | 'tone' | 'advanced'>('world')
+const activeTab = ref<'world' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('world')
 
 const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
 const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
@@ -131,6 +131,7 @@ const editorTabs = [
   { key: 'visuals', label: 'Visuals' },
   { key: 'inhabitants', label: 'Inhabitants' },
   { key: 'scenes', label: 'Scenes' },
+  { key: 'map', label: 'Map' },
   { key: 'quest', label: 'Quest' },
   { key: 'awards', label: 'Awards' },
   { key: 'tone', label: 'Tone' },
@@ -144,16 +145,17 @@ function addNotification(message: string, type: 'error' | 'success' | 'info' = '
   notificationService.add(message, type)
 }
 
-async function clearCreationError() {
-  if (!adventure.value) return
-  try {
-    await adventureService.clearCreationError(props.adventureId)
-    adventure.value.creation_error = null
-    addNotification('Generation notice dismissed.', 'success')
-  } catch (error) {
-    console.error('Failed to clear creation error:', error)
-  }
-}
+// clearCreationError is currently unused but kept for future functionality
+// async function clearCreationError() {
+//   if (!adventure.value) return
+//   try {
+//     await adventureService.clearCreationError(props.adventureId)
+//     adventure.value.creation_error = null
+//     addNotification('Generation notice dismissed.', 'success')
+//   } catch (error) {
+//     console.error('Failed to clear creation error:', error)
+//   }
+// }
 
 function handleHover(entity: any, event: MouseEvent) {
   if (activeMenuId.value) return
@@ -503,9 +505,9 @@ function downloadVisualAsset(imagePath: string | null | undefined, filenameLabel
   activeMenuId.value = null
 }
 
-function openRegenerateDialog(kind: VisualKind, id: string, label: string) {
+function openRegenerateDialog(kind: any, id: string, label: string) {
   const description = getVisualDescription(kind, id)
-  const hint = visualService.UPLOAD_LIMITS[kind].hint
+  const hint = visualService.UPLOAD_LIMITS[kind as VisualKind].hint
   selectedVisual.value = { kind, id, label, description, hint }
   visualPrompt.value = ''
   useAdvancedModel.value = kind === 'scene' || kind === 'cover'
@@ -513,7 +515,7 @@ function openRegenerateDialog(kind: VisualKind, id: string, label: string) {
   showPromptDialog.value = true
 }
 
-function getVisualDescription(kind: VisualKind, id: string) {
+function getVisualDescription(kind: any, id: string) {
   if (!debugData.value) return ''
   if (kind === 'cover') return debugData.value.adventure?.plot || debugData.value.adventure?.original_prompt || ''
   if (kind === 'protagonist') {
@@ -526,17 +528,17 @@ function getVisualDescription(kind: VisualKind, id: string) {
   return (debugData.value.objects || []).find((o: any) => o.id === id)?.description || ''
 }
 
-function openUploadPicker(kind: VisualKind, id: string, label: string) {
+function openUploadPicker(kind: any, id: string, label: string) {
   selectedUploadTarget.value = { kind, id, label }
   promptError.value = ''
-  addNotification(`Upload ${label}: ${visualService.UPLOAD_LIMITS[kind].hint}`, 'info')
+  addNotification(`Upload ${label}: ${visualService.UPLOAD_LIMITS[kind as VisualKind].hint}`, 'info')
   if (uploadInput.value) {
     uploadInput.value.value = ''
     uploadInput.value.click()
   }
 }
 
-async function quickRegenerateVisual(kind: VisualKind, id: string, skipFetch: boolean = false) {
+async function quickRegenerateVisual(kind: any, id: string, skipFetch: boolean = false) {
   const key = `${kind}_${id}`
   isQuickGenerating.value[key] = true
   try {
@@ -550,7 +552,7 @@ async function quickRegenerateVisual(kind: VisualKind, id: string, skipFetch: bo
   }
 }
 
-async function regenerateAll(kind: VisualKind) {
+async function regenerateAll(kind: any) {
   isBatchGenerating.value[kind] = true
   let items: any[] = []
   if (kind === 'cover' && debugData.value?.adventure) items = [debugData.value.adventure]
@@ -787,6 +789,13 @@ const goBack = () => {
               @toggle-menu="toggleMenu"
               @handle-hover="handleHover"
               @clear-hover="clearHover"
+            />
+
+            <MapTab
+              v-if="activeTab === 'map'"
+              :debug-data="debugData"
+              :editor-scenes="editorScenes"
+              :visuals-cache-version="visualsCacheVersion"
             />
 
             <QuestTab

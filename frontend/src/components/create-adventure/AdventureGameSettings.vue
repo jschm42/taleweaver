@@ -143,6 +143,11 @@ function update(field: string, value: any) {
           />
         </div>
       </div>
+
+      <div v-if="modelValue.max_scenes > 15" class="flex gap-3 items-start p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[10px] text-amber-400 uppercase tracking-wider leading-relaxed">
+        <AlertTriangle class="w-4 h-4 shrink-0" />
+        <span>Large worlds (> 15 scenes) may feel sparse. Walkthrough steps, items, and NPCs do not automatically scale up due to AI model limits.</span>
+      </div>
     </div>
 
     <!-- Quest Generation -->
