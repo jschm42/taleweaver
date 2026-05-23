@@ -649,6 +649,19 @@ watch(
   { immediate: true }
 )
 
+async function handleUpdateQuests(newQuests: any[]) {
+  isSaving.value = true
+  try {
+    await adventureService.updateAdventure(props.adventureId, { quests: newQuests })
+    await fetchAdventure()
+    addNotification('Quests updated.', 'success')
+  } catch (error: any) {
+    addNotification(error instanceof Error ? error.message : 'Failed to update quests', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
 const goBack = () => {
   const from = route.query.from as string
   if (from) {
@@ -817,6 +830,7 @@ const goBack = () => {
             <QuestTab
               v-if="activeTab === 'quest'"
               :adventure="adventure"
+              @update-quests="handleUpdateQuests"
             />
 
             <AwardsTab

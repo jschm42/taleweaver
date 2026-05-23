@@ -428,6 +428,10 @@ class AdventureTemplateUpdate(BaseModel):
     award_generation_enabled: Optional[bool] = None
     min_awards: Optional[int] = None
     max_awards: Optional[int] = None
+    quests: Optional[list[dict[str, Any]]] = None
+    min_quests: Optional[int] = None
+    max_quests: Optional[int] = None
+    quest_generation_enabled: Optional[bool] = None
     plot: Optional[str] = None
     rules: Optional[str] = None
     walkthrough: Optional[str] = None
@@ -481,4 +485,26 @@ class TraitGenerationRequest(BaseModel):
 class TraitGenerationResponse(BaseModel):
     goal: str
     character: str
+
+
+class QuestDescriptionGenerationRequest(BaseModel):
+    title: str
+    is_main: bool
+    other_quests: list[dict] = []
+
+
+class QuestDescriptionGenerationResponse(BaseModel):
+    description: str
+
+
+class QuestGenerationRequest(BaseModel):
+    is_main: bool
+    other_quests: list[dict] = []
+
+
+class QuestGenerationResponse(BaseModel):
+    title: str
+    description: str
+
+
 

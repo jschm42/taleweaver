@@ -465,3 +465,45 @@ STORY_IDEA_GENERATION_USER_PROMPT_TEMPLATE = (
     "Current Title: {title}\n"
     "Current Story Idea: {story_idea}\n"
 )
+
+
+# --- Quest Generation ---
+
+QUEST_DESCRIPTION_GENERATION_SYSTEM_PROMPT = (
+    "You are a creative RPG quest writer. Your goal is to write a concise, compelling "
+    "description for a quest based on its title, type, the adventure theme/plot, "
+    "and existing quests to avoid duplicates or narrative overlap.\n\n"
+    "JSON STRUCTURE:\n"
+    "Respond with a single JSON object containing:\n"
+    "- 'description': A short, clear description explaining what the protagonist needs to do (max 400 chars)."
+)
+
+QUEST_DESCRIPTION_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Quest Title: {title}\n"
+    "Quest Type: {quest_type} Quest\n"
+    "Adventure Title: {adventure_title}\n"
+    "Adventure Plot/Context: {adventure_plot}\n"
+    "Adventure Tone: {adventure_tone}\n"
+    "Other Quests (Avoid overlap/repetition):\n{other_quests_text}\n"
+)
+
+
+QUEST_GENERATION_SYSTEM_PROMPT = (
+    "You are a creative RPG quest designer. Your goal is to design a brand new quest "
+    "matching the tone, theme, and plot of the adventure. You must avoid repeating or duplicating "
+    "any of the existing quests.\n\n"
+    "JSON STRUCTURE:\n"
+    "Respond with a single JSON object containing:\n"
+    "- 'title': A short, engaging quest title (max 50 chars).\n"
+    "- 'description': A short, clear description explaining what the protagonist needs to do (max 400 chars)."
+)
+
+QUEST_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Quest Type: {quest_type} Quest\n"
+    "Adventure Title: {adventure_title}\n"
+    "Adventure Plot/Context: {adventure_plot}\n"
+    "Adventure Tone: {adventure_tone}\n"
+    "Other Quests (Avoid overlap/repetition):\n{other_quests_text}\n"
+)
+
+

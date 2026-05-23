@@ -2666,6 +2666,129 @@ async def test_update_adventure_frontend_payload(client: AsyncClient):
     assert resp2.status_code == 200, resp2.text
 
 
+async def test_update_adventure_quests_crud(client: AsyncClient):
+    """Patching an adventure template with custom quests list should successfully persist and return them."""
+    ids = await _create_adventure(client, "Quests CRUD Test")
+    adv_id = ids["adventure_id"]
+
+    quests_payload = [
+        {
+            "id": "quest_1",
+            "title": "Main Quest Test",
+            "description": "This is a main quest description",
+            "exp_reward": 100,
+            "is_main": True,
+            "status": "open"
+        },
+        {
+            "id": "quest_2",
+            "title": "Side Quest Test",
+            "description": "This is a side quest description",
+            "exp_reward": 50,
+            "is_main": False,
+            "status": "open"
+        }
+    ]
+
+    # PATCH to update the quests
+    resp = await client.patch(
+        f"/api/adventures/{adv_id}",
+        json={"quests": quests_payload}
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "quests" in data
+    assert len(data["quests"]) == 2
+    assert data["quests"][0]["id"] == "quest_1"
+    assert data["quests"][0]["is_main"] is True
+    assert data["quests"][1]["id"] == "quest_2"
+    assert data["quests"][1]["is_main"] is False
+
+    # Verify they persist in database
+    get_resp = await client.get(f"/api/adventures/{adv_id}")
+    assert get_resp.status_code == 200, get_resp.text
+    get_data = get_resp.json()
+    assert len(get_data.get("quests") or []) == 2
+
+
+async def test_generate_quest_description_endpoint(client: AsyncClient, monkeypatch):
+    """Calling generate-quest-description endpoint formats context and returns LLM generated description."""
+    ids = await _create_adventure(client, "Quest Gen Adventure")
+    adv_id = ids["adventure_id"]
+
+    from backend.api.routes.adventures.schemas import QuestDescriptionGenerationResponse
+
+    async def fake_execute(self, system_prompt, user_prompt, response_model, model, **kwargs):
+        assert "Quest Title: Explore the Crypt" in user_prompt
+        assert "Quest Type: Main Quest" in user_prompt
+        assert "Adventure Title: Quest Gen Adventure" in user_prompt
+        assert "- [Side] Find the key: Locate the brass key in the study." in user_prompt
+        return QuestDescriptionGenerationResponse(
+            description="The hero must delve deep into the crypt of the ancient kings and retrieve the lost crown."
+        )
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.editor.GameMasterLLM.aexecute_complex_task",
+        fake_execute
+    )
+
+    payload = {
+        "title": "Explore the Crypt",
+        "is_main": True,
+        "other_quests": [
+            {"id": "quest_2", "title": "Find the key", "description": "Locate the brass key in the study.", "is_main": False}
+        ]
+    }
+
+    resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/generate-quest-description",
+        json=payload
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["description"] == "The hero must delve deep into the crypt of the ancient kings and retrieve the lost crown."
+
+
+async def test_generate_new_quest_endpoint(client: AsyncClient, monkeypatch):
+    """Calling generate-new-quest endpoint formats context and returns LLM generated quest title and description."""
+    ids = await _create_adventure(client, "Quest Gen Adventure")
+    adv_id = ids["adventure_id"]
+
+    from backend.api.routes.adventures.schemas import QuestGenerationResponse
+
+    async def fake_execute(self, system_prompt, user_prompt, response_model, model, **kwargs):
+        assert "Quest Type: Main Quest" in user_prompt
+        assert "Adventure Title: Quest Gen Adventure" in user_prompt
+        assert "- [Side] Find the key: Locate the brass key in the study." in user_prompt
+        return QuestGenerationResponse(
+            title="Slay the Dragon",
+            description="The hero must journey to the volcano and slay the red dragon."
+        )
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.editor.GameMasterLLM.aexecute_complex_task",
+        fake_execute
+    )
+
+    payload = {
+        "is_main": True,
+        "other_quests": [
+            {"id": "quest_2", "title": "Find the key", "description": "Locate the brass key in the study.", "is_main": False}
+        ]
+    }
+
+    resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/generate-new-quest",
+        json=payload
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["title"] == "Slay the Dragon"
+    assert data["description"] == "The hero must journey to the volcano and slay the red dragon."
+
+
+
+
 
 
 

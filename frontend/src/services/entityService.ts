@@ -55,4 +55,38 @@ export const entityService = {
     }
     return await res.json()
   },
+
+  async generateQuestDescription(adventureId: string, title: string, isMain: boolean, otherQuests: any[]): Promise<{ description: string }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-quest-description`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        title,
+        is_main: isMain,
+        other_quests: otherQuests
+      }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to generate quest description')
+    }
+    return await res.json()
+  },
+
+  async generateNewQuest(adventureId: string, isMain: boolean, otherQuests: any[]): Promise<{ title: string, description: string }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-new-quest`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        is_main: isMain,
+        other_quests: otherQuests
+      }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to generate new quest')
+    }
+    return await res.json()
+  },
 }
+

@@ -6,11 +6,26 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.routes.adventures.schemas import AdventureTemplateDebugResponse, TraitGenerationRequest, TraitGenerationResponse
+from backend.api.routes.adventures.schemas import (
+    AdventureTemplateDebugResponse,
+    TraitGenerationRequest,
+    TraitGenerationResponse,
+    QuestDescriptionGenerationRequest,
+    QuestDescriptionGenerationResponse,
+    QuestGenerationRequest,
+    QuestGenerationResponse,
+)
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
-from backend.core.prompts import TRAIT_GENERATION_SYSTEM_PROMPT, TRAIT_GENERATION_USER_PROMPT_TEMPLATE
+from backend.core.prompts import (
+    TRAIT_GENERATION_SYSTEM_PROMPT,
+    TRAIT_GENERATION_USER_PROMPT_TEMPLATE,
+    QUEST_DESCRIPTION_GENERATION_SYSTEM_PROMPT,
+    QUEST_DESCRIPTION_GENERATION_USER_PROMPT_TEMPLATE,
+    QUEST_GENERATION_SYSTEM_PROMPT,
+    QUEST_GENERATION_USER_PROMPT_TEMPLATE,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.api.routes.adventures.sessions import _backfill_avatar_items_from_template_entities
@@ -269,4 +284,113 @@ async def generate_entity_traits(
     except Exception as e:
         logger.error(f"Failed to generate traits: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{template_id}/editor/generate-quest-description", response_model=QuestDescriptionGenerationResponse)
+async def generate_quest_description(
+    template_id: str,
+    payload: QuestDescriptionGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = select(AdventureTemplate).where(AdventureTemplate.id == template_id)
+    res = await db.execute(stmt)
+    adv = res.scalars().first()
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+
+    llm_settings = current_user.llm_settings or {}
+    provider = llm_settings.get("small_model_provider") or "openai"
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+    
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+    
+    # Format other quests to prevent duplication
+    other_quests_text = ""
+    if payload.other_quests:
+        lines = []
+        for q in payload.other_quests:
+            q_title = q.get("title") or "Unnamed Quest"
+            q_desc = q.get("description") or "No description."
+            q_type = "Main" if q.get("is_main") else "Side"
+            lines.append(f"- [{q_type}] {q_title}: {q_desc}")
+        other_quests_text = "\n".join(lines)
+    else:
+        other_quests_text = "No other quests defined yet."
+
+    user_prompt = QUEST_DESCRIPTION_GENERATION_USER_PROMPT_TEMPLATE.format(
+        title=payload.title,
+        quest_type="Main" if payload.is_main else "Side",
+        adventure_title=adv.title or "Untitled Adventure",
+        adventure_plot=adv.plot or adv.original_prompt or "No description provided.",
+        adventure_tone=adv.selected_tone or "Standard",
+        other_quests_text=other_quests_text,
+    )
+    
+    try:
+        result = await gm.aexecute_complex_task(
+            system_prompt=QUEST_DESCRIPTION_GENERATION_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            response_model=QuestDescriptionGenerationResponse,
+            model=model
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Failed to generate quest description: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{template_id}/editor/generate-new-quest", response_model=QuestGenerationResponse)
+async def generate_new_quest(
+    template_id: str,
+    payload: QuestGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = select(AdventureTemplate).where(AdventureTemplate.id == template_id)
+    res = await db.execute(stmt)
+    adv = res.scalars().first()
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+
+    llm_settings = current_user.llm_settings or {}
+    provider = llm_settings.get("small_model_provider") or "openai"
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+    
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+    
+    # Format other quests to prevent duplication
+    other_quests_text = ""
+    if payload.other_quests:
+        lines = []
+        for q in payload.other_quests:
+            q_title = q.get("title") or "Unnamed Quest"
+            q_desc = q.get("description") or "No description."
+            q_type = "Main" if q.get("is_main") else "Side"
+            lines.append(f"- [{q_type}] {q_title}: {q_desc}")
+        other_quests_text = "\n".join(lines)
+    else:
+        other_quests_text = "No other quests defined yet."
+
+    user_prompt = QUEST_GENERATION_USER_PROMPT_TEMPLATE.format(
+        quest_type="Main" if payload.is_main else "Side",
+        adventure_title=adv.title or "Untitled Adventure",
+        adventure_plot=adv.plot or adv.original_prompt or "No description provided.",
+        adventure_tone=adv.selected_tone or "Standard",
+        other_quests_text=other_quests_text,
+    )
+    
+    try:
+        result = await gm.aexecute_complex_task(
+            system_prompt=QUEST_GENERATION_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            response_model=QuestGenerationResponse,
+            model=model
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Failed to generate new quest: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
