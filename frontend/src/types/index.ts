@@ -181,6 +181,7 @@ export interface CreateAdventurePayload {
   selected_tone?: CatalogTile | string | null
   min_scenes?: number
   max_scenes?: number
+  max_items?: number
   container_generation_enabled?: boolean
   max_containers?: number
   text_log_generation_enabled?: boolean

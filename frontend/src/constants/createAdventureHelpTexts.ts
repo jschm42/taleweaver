@@ -8,7 +8,9 @@ export const CREATE_ADVENTURE_HELP_TEXTS = {
   sceneComplexity:
     'Sets the scene range for world generation. More scenes create larger adventures but may increase generation time.',
   questGeneration:
-    'Toggle automatic quest generation. Min and max define how many quests are produced (up to 20).',
+    'Toggle automatic quest generation. Min and max define how many quests are produced (up to 30).',
+  itemCount:
+    'Defines the maximum number of generated objects/items in the world. Use lower values for faster generation and cleaner inventories.',
   containerGeneration:
     'Allows generation of container objects that can hold nested items. Max Containers limits how many may appear.',
   textLogGeneration:

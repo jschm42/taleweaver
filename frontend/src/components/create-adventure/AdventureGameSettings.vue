@@ -16,6 +16,7 @@ const props = defineProps<{
     quest_generation_enabled: boolean
     min_quests: number
     max_quests: number
+    max_items: number
     container_generation_enabled: boolean
     max_containers: number
     text_log_generation_enabled: boolean
@@ -138,7 +139,7 @@ function update(field: string, value: any) {
             type="range" 
             :value="modelValue.max_scenes"
             @input="update('max_scenes', Number(($event.target as HTMLInputElement).value))"
-            :min="modelValue.min_scenes" max="20" class="w-full accent-blue-500" 
+            :min="modelValue.min_scenes" max="50" class="w-full accent-blue-500" 
           />
         </div>
       </div>
@@ -187,10 +188,38 @@ function update(field: string, value: any) {
             :value="modelValue.max_quests"
             @input="update('max_quests', Number(($event.target as HTMLInputElement).value))"
             :min="modelValue.min_quests"
-            max="20"
+            max="30"
             class="w-full accent-violet-500"
           />
         </div>
+      </div>
+    </div>
+
+    <!-- Item Count -->
+    <div class="p-6 bg-lime-500/5 border border-lime-500/10 rounded-2xl space-y-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-lime-500/20 flex items-center justify-center text-lime-400">
+            <Box class="w-5 h-5" />
+          </div>
+          <span class="text-xs font-black text-white/80 uppercase tracking-widest">Item Count</span>
+        </div>
+        <InfoPopoverButton title="Item Count" :text="CREATE_ADVENTURE_HELP_TEXTS.itemCount" />
+      </div>
+
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Items</label>
+          <span class="text-xs font-mono text-lime-300">{{ modelValue.max_items }}</span>
+        </div>
+        <input
+          type="range"
+          :value="modelValue.max_items"
+          @input="update('max_items', Number(($event.target as HTMLInputElement).value))"
+          min="1"
+          max="100"
+          class="w-full accent-lime-500"
+        />
       </div>
     </div>
 

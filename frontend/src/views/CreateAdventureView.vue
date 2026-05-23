@@ -38,6 +38,7 @@ const form = ref({
   quest_generation_enabled: true,
   min_quests: 3,
   max_quests: 5,
+  max_items: 30,
   container_generation_enabled: true,
   max_containers: 8,
   text_log_generation_enabled: true,

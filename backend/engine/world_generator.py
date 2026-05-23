@@ -343,6 +343,7 @@ class WorldGenerator:
         quest_generation_enabled: bool = True,
         min_quests: int = 3,
         max_quests: int = 5,
+        max_items: int = 30,
         award_generation_enabled: bool = True,
         min_awards: int = 3,
         max_awards: int = 5,
@@ -415,8 +416,8 @@ class WorldGenerator:
             system_prompt += "\n\nQUEST GENERATION OVERRIDE: Do not generate any quests for this adventure."
 
         quest_requirement = ""
-        clamped_min_quests = max(1, min(20, int(min_quests)))
-        clamped_max_quests = max(clamped_min_quests, min(20, int(max_quests)))
+        clamped_min_quests = max(1, min(30, int(min_quests)))
+        clamped_max_quests = max(clamped_min_quests, min(30, int(max_quests)))
         if quest_generation_enabled:
             quest_requirement = (
                 f"\n- Generate between {clamped_min_quests} and {clamped_max_quests} total quests that fit the narrative context."
@@ -457,6 +458,12 @@ class WorldGenerator:
                 "\n\nTEXT LOGS (READABLE OBJECTS):\n"
                 "- Do not generate any READABLE objects."
             )
+
+        clamped_max_items = max(1, min(100, int(max_items)))
+        item_requirement = (
+            "\n\nITEM COUNT LIMIT:\n"
+            f"- Generate no more than {clamped_max_items} total objects/items in `objects`."
+        )
 
         cover_guidance = ""
         if cover_source_manifest:
@@ -515,6 +522,7 @@ class WorldGenerator:
             text_log_requirement=text_log_requirement,
         )
         user_prompt += container_requirement
+        user_prompt += item_requirement
 
         
         # 1. Update Status
@@ -554,6 +562,7 @@ class WorldGenerator:
                 "quest_generation_enabled": quest_generation_enabled,
                 "min_quests": clamped_min_quests,
                 "max_quests": clamped_max_quests,
+                "max_items": clamped_max_items,
             },
         )
 

@@ -38,6 +38,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     quest_generation_enabled: bool = True
     min_quests: int = 3
     max_quests: int = 5
+    max_items: int = 30
     container_generation_enabled: bool = True
     max_containers: int = 8
     text_log_generation_enabled: bool = True
@@ -92,15 +93,30 @@ class CreateAdventureTemplatePayload(BaseModel):
     def validate_max_text_logs(cls, value: int) -> int:
         return max(0, min(30, int(value)))
 
+    @field_validator("min_scenes")
+    @classmethod
+    def validate_min_scenes(cls, value: int) -> int:
+        return max(1, min(50, int(value)))
+
+    @field_validator("max_scenes")
+    @classmethod
+    def validate_max_scenes(cls, value: int) -> int:
+        return max(1, min(50, int(value)))
+
     @field_validator("min_quests")
     @classmethod
     def validate_min_quests(cls, value: int) -> int:
-        return max(1, min(20, int(value)))
+        return max(1, min(30, int(value)))
 
     @field_validator("max_quests")
     @classmethod
     def validate_max_quests(cls, value: int) -> int:
-        return max(1, min(20, int(value)))
+        return max(1, min(30, int(value)))
+
+    @field_validator("max_items")
+    @classmethod
+    def validate_max_items(cls, value: int) -> int:
+        return max(1, min(100, int(value)))
 
     @model_validator(mode='after')
     def validate_scene_range(self) -> 'CreateAdventureTemplatePayload':
