@@ -844,6 +844,10 @@ class WorldGenerator:
         if selected_image_styles is None and adventure:
             selected_image_styles = adventure.selected_image_styles
 
+        def _get_base_slug(entity_id: str) -> str:
+            import re
+            return re.sub(r'(_COPY)?(_\d+)?$', '', entity_id, flags=re.IGNORECASE)
+
         def _resolve_source_asset_image(
             entity_type: str,
             source_asset_id: Optional[str] = None,
@@ -926,6 +930,12 @@ class WorldGenerator:
         starting_inv_ids: set[str] = set()
         protagonist_item_defs: dict[str, dict[str, Any]] = {}
         avatar = None
+
+        # Duplication media caches for current run
+        processed_npcs: list[dict] = []
+        npc_image_cache: dict[str, str] = {}
+        processed_objects: list[dict] = []
+        object_image_cache: dict[str, str] = {}
         
         # 0. Sync Quests and Narrative Meta
         if adventure:
@@ -1295,8 +1305,25 @@ class WorldGenerator:
                 continue
             seen_entity_ids.add(n["id"])
             
+            # Check if this NPC is a duplicate of a previously processed NPC
+            duplicate_image_url = None
+            for prev in processed_npcs:
+                # 1. Compare base slugs
+                if _get_base_slug(prev["id"]) == _get_base_slug(n["id"]):
+                    duplicate_image_url = npc_image_cache.get(prev["id"])
+                    break
+                # 2. Compare name and description
+                if (prev["name"].lower().strip(), prev["description"].lower().strip()) == (n["name"].lower().strip(), n["description"].lower().strip()):
+                    duplicate_image_url = npc_image_cache.get(prev["id"])
+                    break
+                # 3. Compare source_asset_id
+                if n.get("source_asset_id") and prev.get("source_asset_id") == n.get("source_asset_id"):
+                    duplicate_image_url = npc_image_cache.get(prev["id"])
+                    break
+            
             image_url = (
-                (existing_images or {}).get(n["id"])
+                duplicate_image_url
+                or (existing_images or {}).get(n["id"])
                 or _resolve_source_asset_image("npc", n.get("source_asset_id"))
                 or n.get("image_url")
             )
@@ -1342,6 +1369,10 @@ class WorldGenerator:
                         template_id, n["id"], os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
                         category="NPC"
                     )
+
+            if image_url:
+                npc_image_cache[n["id"]] = image_url
+            processed_npcs.append(n)
 
             db.add(WorldEntity(
                 id=n["id"],
@@ -1502,8 +1533,25 @@ class WorldGenerator:
             stamina_change = _extract_numeric_effect(o, source_item, "stamina_change", "restore_stamina", "stamina_restore", "stamina", "energy")
             mana_change = _extract_numeric_effect(o, source_item, "mana_change", "restore_mana", "mana_restore", "mana")
             
+            # Check if this object is a duplicate of a previously processed object
+            duplicate_image_url = None
+            for prev in processed_objects:
+                # 1. Compare base slugs
+                if _get_base_slug(prev["id"]) == _get_base_slug(o["id"]):
+                    duplicate_image_url = object_image_cache.get(prev["id"])
+                    break
+                # 2. Compare name and description
+                if (prev["name"].lower().strip(), prev["description"].lower().strip()) == (o["name"].lower().strip(), o["description"].lower().strip()):
+                    duplicate_image_url = object_image_cache.get(prev["id"])
+                    break
+                # 3. Compare source_asset_id
+                if o.get("source_asset_id") and prev.get("source_asset_id") == o.get("source_asset_id"):
+                    duplicate_image_url = object_image_cache.get(prev["id"])
+                    break
+
             image_url = (
-                (existing_images or {}).get(o["id"])
+                duplicate_image_url
+                or (existing_images or {}).get(o["id"])
                 or _resolve_source_asset_image("object", o.get("source_asset_id"))
                 or o.get("image_url")
             )
@@ -1610,6 +1658,10 @@ class WorldGenerator:
                     new_equip = dict(avatar.equipment)
                     new_equip[starting_slot] = o["id"]
                     avatar.equipment = new_equip  # type: ignore
+
+            if image_url:
+                object_image_cache[o["id"]] = image_url
+            processed_objects.append(o)
 
             db.add(
                 WorldEntity(
