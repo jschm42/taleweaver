@@ -48,7 +48,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "MULTIPLE ENEMY/ITEM DUPLICATION:\n"
     "You are allowed and encouraged to generate multiple similar or identical NPC enemies (e.g. multiple rats in a rat-infested cellar) or multiple consumable items (e.g. multiple health potions) when it makes sense for the narrative.\n"
     "For duplicates, define them as separate entries in 'npcs' or 'objects' with unique slug IDs (e.g. RAT_1, RAT_2, RAT_3; HEALTH_POTION_1, HEALTH_POTION_2).\n"
-    "You can slightly vary their spatial_positions and stats (hp, stamina, mana) if needed. You do not need to request different visuals for duplicates; the engine will automatically reuse/copy the generated image from the first occurrence.\n\n"
+    "You can slightly vary their spatial_positions and stats (hp, stamina, mana, items) if needed. You do not need to request different visuals for duplicates; the engine will automatically reuse/copy the generated image from the first occurrence.\n\n"
     "AWARD & QUEST GENERATION:\n"
     "Generate varied quests and awards that match the story context.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
