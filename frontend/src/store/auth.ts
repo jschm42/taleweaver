@@ -10,6 +10,7 @@ export interface User {
   earned_awards?: any[] | null
   game_log?: any[] | null
   adventure_count?: number
+  total_xp?: number
 }
 
 export const authState = reactive({

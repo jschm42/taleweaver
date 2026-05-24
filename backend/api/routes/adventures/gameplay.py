@@ -377,9 +377,35 @@ async def unlock_container_with_code(
 
     entity_states = dict(state.entity_states or {})
     entry = dict(entity_states.get(entity.id) or {})
+    
+    # Check if already unlocked to avoid double XP
+    was_locked = entry.get("locked") if "locked" in entry else True
+
     entry["locked"] = False
     entity_states[entity.id] = entry
     state.entity_states = entity_states
+    
+    if was_locked:
+        cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+        avatar = cv_res.scalars().first()
+        if avatar:
+            xp_reward = metadata_json.get("exp_reward") or metadata_json.get("xp_reward") or 100
+            avatar.exp = (avatar.exp or 0) + xp_reward
+            db.add(
+                ChatMessage(
+                    session_id=state.session_id,
+                    role="system",
+                    content=f"Unlocked {entity.name} with the correct code!",
+                )
+            )
+            db.add(
+                ChatMessage(
+                    session_id=state.session_id,
+                    role="system",
+                    content=f"you gained {xp_reward} XP",
+                )
+            )
+            
     await db.commit()
 
     return {"status": "ok", "entity_id": entity.id, "locked": False}

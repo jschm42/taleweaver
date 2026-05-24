@@ -40,6 +40,8 @@ class UserResponse(BaseModel):
     is_admin: bool = False
     game_log: Optional[list] = None
     has_imported_defaults: bool = False
+    adventure_count: Optional[int] = 0
+    total_xp: Optional[int] = 0
 
 class SetupRootRequest(BaseModel):
     username: str
@@ -97,6 +99,8 @@ async def read_users_me(
 
     from backend.engine.adventure_importer import AdventureTemplateImporter
     from backend.models.game_session import GameSession
+    from backend.models.avatar import Avatar
+    from sqlalchemy import func
     
     # 1. Trigger background import of defaults if never done
     if not current_user.has_imported_defaults:
@@ -120,6 +124,30 @@ async def read_users_me(
     )
     adventure_count = len(result.scalars().all())
 
+    # Calculate total XP across all user's avatars
+    xp_res = await db.execute(
+        select(func.sum(Avatar.exp)).where(Avatar.user_id == current_user.id)
+    )
+    total_xp = xp_res.scalar() or 0
+
+    # Query game sessions to get the XP for completed/game-over games
+    sessions_query = await db.execute(
+        select(GameSession.id, Avatar.exp)
+        .join(Avatar, GameSession.avatar_id == Avatar.id)
+        .where(GameSession.user_id == current_user.id)
+    )
+    session_xp_map = {row[0]: row[1] for row in sessions_query.all()}
+
+    # Enrich game log with XP
+    enriched_game_log = []
+    for entry in (current_user.game_log or []):
+        s_id = entry.get("session_id")
+        xp_val = session_xp_map.get(s_id, 0)
+        enriched_game_log.append({
+            **entry,
+            "xp": xp_val
+        })
+
     # Auto-heal legacy malformed media URL values like /data/data/users/...
     profile_image_url = current_user.profile_image_url
     if profile_image_url:
@@ -140,8 +168,10 @@ async def read_users_me(
         "bio": current_user.bio,
         "default_language": current_user.default_language,
         "earned_awards": current_user.earned_awards or [],
+        "is_admin": current_user.role == "admin",
         "adventure_count": adventure_count,
-        "game_log": current_user.game_log or [],
+        "total_xp": total_xp,
+        "game_log": enriched_game_log,
         "has_imported_defaults": current_user.has_imported_defaults
     }
     return user_data

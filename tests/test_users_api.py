@@ -97,3 +97,65 @@ async def test_generate_profile_image_prefers_request_bio_prompt(monkeypatch: py
     assert captured["model"] == "test-simple-vision"
     assert captured["provider"] == "ollama"
     assert response.json()["profile_image_url"] == "/data/users/generated_override.png"
+
+
+async def test_auth_me_returns_xp_and_counts(client: AsyncClient) -> None:
+    from backend.models.avatar import Avatar
+    from backend.models.game_session import GameSession
+
+    # 1. Create a user
+    username = "xp_user"
+    async with TestSessionLocal() as session:
+        user = User(
+            username=username,
+            hashed_password=get_password_hash("pw"),
+            role="user"
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        user_id = user.id
+
+        # 2. Create an avatar with some XP
+        avatar = Avatar(
+            user_id=user_id,
+            name="Hero",
+            exp=350
+        )
+        session.add(avatar)
+        await session.commit()
+        await session.refresh(avatar)
+        avatar_id = avatar.id
+
+        # 3. Create a game session for this user and avatar
+        game_session = GameSession(
+            user_id=user_id,
+            avatar_id=avatar_id,
+            adventure_title="Epic Quest",
+            status="completed",
+        )
+        session.add(game_session)
+        await session.commit()
+        await session.refresh(game_session)
+        
+        # Populate the game_log on the user manually to simulate finalization
+        user.game_log = [{
+            "session_id": game_session.id,
+            "adventure_title": "Epic Quest",
+            "status": "completed",
+            "outcome_note": "You won!",
+            "completed_at": "2026-05-24T12:00:00Z"
+        }]
+        await session.commit()
+
+    # 4. Make requests to /api/auth/me
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': username})}"}
+    response = await client.get("/api/auth/me", headers=headers)
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_xp"] == 350
+    assert data["adventure_count"] == 1
+    assert len(data["game_log"]) == 1
+    assert data["game_log"][0]["xp"] == 350
+

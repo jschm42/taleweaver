@@ -1,45 +1,51 @@
 <template>
   <div class="profile-container custom-scrollbar">
     <div class="profile-card glassmorphism animate-page-in">
-      <header class="profile-header">
-        <div class="header-main">
-          <div class="avatar-wrapper group">
-            <div class="avatar-container relative">
-              <img :src="userAvatar" class="user-avatar" alt="User" />
-              <!-- Generation Loading Spinner -->
-              <div v-if="isGeneratingAvatar" class="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full backdrop-blur-sm z-10">
-                <i class="ra ra-crystal-ball text-4xl text-white animate-spin"></i>
+      <div class="profile-dashboard">
+        
+        <!-- Left Side: Identity, Bio, Settings (Sidebar) -->
+        <aside class="profile-sidebar">
+          <div class="avatar-section">
+            <div class="avatar-wrapper group">
+              <div class="avatar-container relative">
+                <img :src="userAvatar" class="user-avatar" alt="User" />
+                <!-- Generation Loading Spinner -->
+                <div v-if="isGeneratingAvatar" class="absolute inset-0 bg-black/60 flex items-center justify-center rounded-full backdrop-blur-sm z-10">
+                  <i class="ra ra-crystal-ball text-4xl text-white animate-spin"></i>
+                </div>
+                <div class="avatar-overlay opacity-0 group-hover:opacity-100 transition-all duration-300">
+                  <button @click="triggerAvatarUpload" class="avatar-action-btn" title="Upload Avatar">
+                    <i class="ra ra-plain-dagger rotate-45"></i>
+                  </button>
+                  <button 
+                    v-if="canGenerateProfileImage"
+                    @click="generateAvatar" 
+                    :disabled="isGeneratingAvatar" 
+                    class="avatar-action-btn" 
+                    title="Generate with AI"
+                  >
+                    <i :class="['ra ra-crystal-ball', { 'animate-spin': isGeneratingAvatar }]"></i>
+                  </button>
+                </div>
               </div>
-              <div class="avatar-overlay opacity-0 group-hover:opacity-100 transition-all duration-300">
-                <button @click="triggerAvatarUpload" class="avatar-action-btn" title="Upload Avatar">
-                  <i class="ra ra-plain-dagger rotate-45"></i>
-                </button>
-                <button 
-                  v-if="canGenerateProfileImage"
-                  @click="generateAvatar" 
-                  :disabled="isGeneratingAvatar" 
-                  class="avatar-action-btn" 
-                  title="Generate with AI"
-                >
-                  <i :class="['ra ra-crystal-ball', { 'animate-spin': isGeneratingAvatar }]"></i>
-                </button>
-              </div>
-            </div>
-            <input type="file" ref="avatarInput" class="hidden" accept="image/*" @change="onAvatarFileSelected" />
-          </div>
-          
-          <div class="user-meta">
-            <div class="user-identity">
-              <h2>{{ user?.username || 'Adventurer Profile' }}</h2>
-              <span class="user-role">{{ user?.role || 'Player' }}</span>
+              <input type="file" ref="avatarInput" class="hidden" accept="image/*" @change="onAvatarFileSelected" />
             </div>
             
+            <div class="user-identity text-center">
+              <h2>{{ user?.username || 'Adventurer' }}</h2>
+              <span class="user-role">{{ user?.role || 'Player' }}</span>
+            </div>
+          </div>
+
+          <!-- Bio Chronicle Card -->
+          <div class="glass-panel bio-card">
+            <h4><i class="ra ra-quill-ink"></i> Chronicle Entry</h4>
             <div class="bio-container">
               <div v-if="!isEditingBio" class="bio-display group">
                 <p v-if="user?.bio" class="bio-text italic text-slate-400">"{{ user.bio }}"</p>
                 <p v-else class="bio-text text-slate-500 italic opacity-50">No chronicle entry yet...</p>
                 <button @click="startEditBio" class="edit-bio-btn opacity-0 group-hover:opacity-100 transition-opacity">
-                  <i class="ra ra-quill-ink"></i> Edit Bio
+                  <i class="ra ra-quill-ink"></i> Edit
                 </button>
               </div>
               <div v-else class="bio-editor space-y-3">
@@ -49,115 +55,132 @@
                   class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-emerald-500/50 transition-all shadow-inner"
                   placeholder="Tell your story..."
                 ></textarea>
-                <div class="flex justify-between items-center">
-                  <button @click="generateBio" :disabled="isGeneratingBio" class="text-xs font-black uppercase tracking-widest text-emerald-500/60 hover:text-emerald-400 flex items-center gap-2">
+                <div class="flex justify-between items-center gap-2">
+                  <button @click="generateBio" :disabled="isGeneratingBio" class="text-xxs font-black uppercase tracking-widest text-emerald-500/60 hover:text-emerald-400 flex items-center gap-1">
                     <i :class="['ra ra-crystal-ball', { 'animate-spin': isGeneratingBio }]"></i>
-                    {{ isGeneratingBio ? 'Weaving...' : 'AI Lore Weaver' }}
+                    {{ isGeneratingBio ? 'Weaving...' : 'AI Lore' }}
                   </button>
-                  <div class="flex gap-3">
+                  <div class="flex gap-2">
                     <button @click="cancelEditBio" class="text-xxs font-black uppercase tracking-widest text-slate-500 hover:text-white">Discard</button>
-                    <button @click="saveBio" :disabled="isSavingBio" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-900/20">
-                      {{ isSavingBio ? 'Saving...' : 'Save Entry' }}
+                    <button @click="saveBio" :disabled="isSavingBio" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-900/20">
+                      Save
                     </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </header>
 
-      <div class="profile-body">
-        <div class="stats-overview">
-          <div class="stat-item">
-            <div class="stat-icon"><i class="ra ra-trophy"></i></div>
-            <div class="stat-details">
-              <span class="stat-value">{{ earnedAwards.length }}</span>
-              <span class="stat-label">Awards Earned</span>
-            </div>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat-item">
-            <div class="stat-icon"><i class="ra ra-scroll"></i></div>
-            <div class="stat-details">
-              <span class="stat-value">{{ user?.adventure_count || 0 }}</span>
-              <span class="stat-label">Adventures Played</span>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Bable Fish Default Settings -->
-        <div class="settings-section mb-12">
-          <div class="flex items-center justify-between p-6 bg-cyan-500/5 border border-cyan-500/10 rounded-[30px] hover:bg-cyan-500/10 transition-all group">
-            <div class="flex items-center gap-5">
-              <div class="stat-icon bg-cyan-500/10 text-cyan-400">
-                <i class="ra ra-fish"></i>
+          <!-- Bable Fish Default Settings -->
+          <div class="glass-panel language-card">
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-3">
+                <div class="lang-icon bg-cyan-500/10 text-cyan-400">
+                  <i class="ra ra-fish"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-black uppercase tracking-widest text-cyan-400">Bable Fish</h4>
+                  <p class="text-[9px] text-slate-500 uppercase font-bold tracking-wider italic">Primary translator tongue</p>
+                </div>
               </div>
-              <div>
-                <h4 class="text-sm font-black uppercase tracking-widest text-cyan-400">Default Bable Fish Language</h4>
-                <p class="text-xxs text-slate-500 mt-1 uppercase font-bold tracking-wider italic">Your universal translator's primary tongue</p>
+              
+              <div class="flex items-center gap-2">
+                <select 
+                  v-model="selectedLanguage" 
+                  @change="saveDefaultLanguage"
+                  :disabled="isSavingLanguage"
+                  class="bg-black/60 border border-cyan-500/30 rounded-xl px-3 py-1.5 text-xs font-bold text-white outline-none focus:border-cyan-400 transition-all cursor-pointer w-full"
+                >
+                  <option v-for="lang in languages" :key="lang.code" :value="lang.code">
+                    {{ lang.name }}
+                  </option>
+                </select>
+                <i v-if="isSavingLanguage" class="ra ra-cycle animate-spin text-cyan-400 text-xs"></i>
               </div>
             </div>
+          </div>
+        </aside>
+
+        <!-- Right Side: Stats, Awards, Chronicle (Main Content) -->
+        <main class="profile-main">
+          
+          <!-- Stats Overview Card -->
+          <div class="stats-overview">
+            <div class="stat-item">
+              <div class="stat-icon"><i class="ra ra-trophy"></i></div>
+              <div class="stat-details">
+                <span class="stat-value">{{ earnedAwards.length }}</span>
+                <span class="stat-label">Awards</span>
+              </div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <div class="stat-icon"><i class="ra ra-scroll"></i></div>
+              <div class="stat-details">
+                <span class="stat-value">{{ user?.adventure_count || 0 }}</span>
+                <span class="stat-label">Adventures</span>
+              </div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <div class="stat-icon"><i class="ra ra-sparkles"></i></div>
+              <div class="stat-details">
+                <span class="stat-value">{{ user?.total_xp || 0 }}</span>
+                <span class="stat-label">Total XP</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trophy Room -->
+          <div class="awards-section">
+            <h3><span class="section-icon">🏆</span> Trophy Room</h3>
             
-            <div class="flex items-center gap-4">
-              <select 
-                v-model="selectedLanguage" 
-                @change="saveDefaultLanguage"
-                :disabled="isSavingLanguage"
-                class="bg-black/60 border border-cyan-500/30 rounded-xl px-4 py-2 text-xs font-bold text-white outline-none focus:border-cyan-400 transition-all cursor-pointer min-w-[140px]"
-              >
-                <option v-for="lang in languages" :key="lang.code" :value="lang.code">
-                  {{ lang.name }}
-                </option>
-              </select>
-              <i v-if="isSavingLanguage" class="ra ra-cycle animate-spin text-cyan-400 text-xs"></i>
+            <div v-if="earnedAwards.length === 0" class="empty-trophy">
+              <i class="ra ra-trophy empty-icon"></i>
+              <p>Your trophy room is currently empty.</p>
+              <p class="hint">Earn awards by completing heroic deeds in adventures!</p>
+            </div>
+
+            <div v-else class="trophy-grid">
+              <AwardTile 
+                v-for="award in earnedAwards" 
+                :key="(award.earned_at || '') + award.key"
+                :award="award"
+              />
             </div>
           </div>
-        </div>
 
-        <div class="awards-section">
-          <h3><span class="section-icon">🏆</span> Trophy Room</h3>
-          
-          <div v-if="earnedAwards.length === 0" class="empty-trophy">
-            <i class="ra ra-trophy empty-icon"></i>
-            <p>Your trophy room is currently empty.</p>
-            <p class="hint">Earn awards by completing heroic deeds in adventures!</p>
-          </div>
+          <!-- Chronicle of Deeds -->
+          <div class="history-section">
+            <h3><span class="section-icon">📜</span> Chronicle of Deeds</h3>
+            
+            <div v-if="!gameLog.length" class="empty-history text-center py-12 bg-white/5 rounded-3xl border border-white/5">
+              <i class="ra ra-scroll text-4xl text-white/5 block mb-3"></i>
+              <p class="text-slate-500 italic text-xs">No historical records found in the archives.</p>
+            </div>
 
-          <div v-else class="trophy-grid">
-            <AwardTile 
-              v-for="award in earnedAwards" 
-              :key="(award.earned_at || '') + award.key"
-              :award="award"
-            />
-          </div>
-        </div>
-
-        <div class="history-section mt-16 pt-16 border-t border-white/5">
-          <h3><span class="section-icon">📜</span> Chronicle of Deeds</h3>
-          
-          <div v-if="!gameLog.length" class="empty-history text-center py-16 bg-white/5 rounded-[40px] border border-white/5">
-            <i class="ra ra-scroll text-5xl text-white/5 block mb-4"></i>
-            <p class="text-slate-500 italic text-sm">No historical records found in the archives.</p>
-          </div>
-
-          <div v-else class="history-grid">
-            <div v-for="(entry, idx) in gameLog" :key="idx" class="history-entry p-6 bg-black/40 rounded-3xl border border-white/5 hover:border-emerald-500/30 transition-all group">
-              <div class="flex justify-between items-start gap-4">
-                <div class="flex-grow">
-                  <div class="flex items-center gap-3 mb-2">
-                    <span :class="entry.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'" class="text-xxs font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border border-current/20">
-                      {{ entry.status === 'completed' ? 'Victory' : 'Defeat' }}
-                    </span>
-                    <span class="text-xxs text-slate-600 font-bold uppercase tracking-widest">{{ formatDate(entry.completed_at) }}</span>
+            <div v-else class="history-grid">
+              <div v-for="(entry, idx) in gameLog" :key="idx" class="history-entry p-4 bg-black/40 rounded-2xl border border-white/5 hover:border-emerald-500/30 transition-all group">
+                <div class="flex justify-between items-start gap-4">
+                  <div class="flex-grow">
+                    <div class="flex items-center gap-2 mb-2 flex-wrap">
+                      <span :class="entry.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'" class="text-[10px] font-black uppercase tracking-[0.15em] px-2 py-0.5 rounded-full border border-current/20">
+                        {{ entry.status === 'completed' ? 'Victory' : 'Defeat' }}
+                      </span>
+                      <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-black uppercase tracking-[0.15em] px-2 py-0.5 rounded-full">
+                        {{ entry.xp || 0 }} XP
+                      </span>
+                      <span class="text-[10px] text-slate-600 font-bold uppercase tracking-widest ml-auto">{{ formatDate(entry.completed_at) }}</span>
+                    </div>
+                    <h4 class="text-base font-bold text-white group-hover:text-emerald-400 transition-colors leading-snug">{{ entry.adventure_title }}</h4>
+                    <p class="text-xs text-slate-400 mt-2 italic line-clamp-2 leading-relaxed">"{{ entry.outcome_note }}"</p>
                   </div>
-                  <h4 class="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors leading-snug">{{ entry.adventure_title }}</h4>
-                  <p class="text-xs text-slate-400 mt-2 italic line-clamp-2 leading-relaxed">"{{ entry.outcome_note }}"</p>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </main>
+
       </div>
     </div>
 
@@ -425,7 +448,7 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 
 <style scoped>
 .profile-container {
-  padding: 2rem;
+  padding: 1.5rem;
   height: 100%;
   overflow-y: auto;
   width: 100%;
@@ -433,15 +456,27 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 
 .profile-card {
   width: 100%;
-  max-width: 1300px;
+  max-width: 1200px;
   margin: 0 auto;
-  background: linear-gradient(135deg, rgba(15, 15, 30, 0.4), rgba(5, 5, 10, 0.6));
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 40px;
+  background: linear-gradient(135deg, rgba(15, 15, 30, 0.45), rgba(5, 5, 10, 0.65));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 32px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.4);
+}
+
+.profile-dashboard {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .profile-dashboard {
+    grid-template-columns: 300px 1fr;
+  }
 }
 
 .animate-page-in {
@@ -449,20 +484,34 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 }
 
 @keyframes pageIn {
-  from { opacity: 0; transform: translateY(30px); }
+  from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.profile-header {
-  padding: 28px;
+/* Sidebar Styling */
+.profile-sidebar {
+  padding: 24px;
   background: rgba(255, 255, 255, 0.01);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.header-main {
+@media (min-width: 1024px) {
+  .profile-sidebar {
+    border-bottom: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+  }
+}
+
+.avatar-section {
   display: flex;
-  align-items: flex-start;
-  gap: 40px;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .avatar-wrapper {
@@ -471,13 +520,18 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 
 .avatar-container {
   position: relative;
-  width: 112px;
-  height: 112px;
-  border-radius: 40px;
+  width: 110px;
+  height: 110px;
+  border-radius: 36px;
   overflow: hidden;
   background: #000;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  border: 3px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.3s;
+}
+
+.avatar-container:hover {
+  border-color: #4edea3;
 }
 
 .user-avatar {
@@ -489,20 +543,20 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 .avatar-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .avatar-action-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   color: #fff;
   display: flex;
   align-items: center;
@@ -514,12 +568,7 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
 .avatar-action-btn:hover {
   background: #4edea3;
   color: #000;
-  transform: scale(1.1);
-}
-
-.user-meta {
-  flex-grow: 1;
-  padding-top: 10px;
+  transform: scale(1.08);
 }
 
 .user-identity h2 {
@@ -527,49 +576,71 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
   font-family: 'Outfit', sans-serif;
   color: #fff;
   font-weight: 800;
-  font-size: 1.55rem;
-  letter-spacing: -0.6px;
-  line-height: 1;
+  font-size: 1.35rem;
+  letter-spacing: -0.4px;
+  line-height: 1.2;
 }
 
 .user-role {
   display: inline-block;
-  margin-top: 10px;
-  font-size: 11px;
+  margin-top: 6px;
+  font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 0.5em;
+  letter-spacing: 0.4em;
   color: #4edea3;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
-.bio-container {
-  margin-top: 25px;
+.glass-panel {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 20px;
+  padding: 16px;
+  transition: all 0.3s;
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.glass-panel h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .bio-display {
   position: relative;
-  padding-right: 100px;
+  padding-bottom: 20px;
 }
 
 .bio-text {
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   line-height: 1.45;
-  max-width: 600px;
+  color: #cbd5e1;
 }
 
 .edit-bio-btn {
   position: absolute;
-  top: 0;
+  bottom: 0;
   right: 0;
   font-size: 9px;
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.15em;
   color: #64748b;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   transition: all 0.3s;
 }
 
@@ -577,21 +648,33 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
   color: #4edea3;
 }
 
-.profile-body {
-  padding: 28px;
-  width: 100%;
-}
-
-.stats-overview {
+.lang-icon {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
-  margin-bottom: 24px;
-  padding: 20px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+/* Main Content Panel Styling */
+.profile-main {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Stats Overview */
+.stats-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 16px;
   background: rgba(255, 255, 255, 0.015);
   border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 30px;
+  border-radius: 20px;
 }
 
 .stat-item {
@@ -599,140 +682,116 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .stat-divider {
   width: 1px;
-  height: 48px;
+  height: 36px;
   background: rgba(255, 255, 255, 0.05);
-  margin: 0 16px;
 }
 
 .stat-icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(78, 222, 163, 0.1);
-  border-radius: 14px;
+  border-radius: 12px;
   color: #4edea3;
-  font-size: 1rem;
+  font-size: 0.95rem;
+}
+
+.stat-item:last-child .stat-icon {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
 }
 
 .stat-value {
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 900;
   color: #fff;
   line-height: 1;
 }
 
 .stat-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
   color: #64748b;
-  margin-top: 8px;
-}
-
-.awards-section {
-  width: 100%;
-}
-
-.awards-section h3 {
-  margin-top: 0;
-  margin-bottom: 16px;
-  font-size: 0.86rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-  color: #94a3b8;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.empty-trophy {
-  padding: 56px 24px;
-  text-align: center;
-  background: rgba(255, 255, 255, 0.005);
-  border: 2px dashed rgba(255, 255, 255, 0.03);
-  border-radius: 50px;
-}
-
-.empty-icon {
-  font-size: 56px;
-  color: rgba(255, 255, 255, 0.02);
-  margin-bottom: 16px;
+  margin-top: 4px;
   display: block;
 }
 
-@media (max-width: 900px) {
-  .profile-header,
-  .profile-body {
-    padding: 24px;
-  }
-
-  .header-main {
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .user-identity h2 {
-    font-size: 1.25rem;
-  }
-
-  .stats-overview {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-  }
-
-  .stat-divider {
-    width: 100%;
-    height: 1px;
-    margin: 0;
-  }
+/* Trophies & Deeds Header */
+.awards-section h3,
+.history-section h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
+/* Empty States */
+.empty-trophy {
+  padding: 32px 16px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.005);
+  border: 1px dashed rgba(255, 255, 255, 0.03);
+  border-radius: 24px;
+}
+
+.empty-icon {
+  font-size: 36px;
+  color: rgba(255, 255, 255, 0.02);
+  margin-bottom: 12px;
+  display: block;
+}
+
+.empty-trophy p, .empty-history p {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.empty-trophy .hint {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+/* Trophy Grid */
 .trophy-grid {
-  display: grid !important;
-  grid-template-columns: repeat(1, 1fr) !important;
-  gap: 25px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
   width: 100%;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
   .trophy-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (min-width: 1200px) {
   .trophy-grid {
-    grid-template-columns: repeat(3, 1fr) !important;
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
-}
-
+/* Chronicle of Deeds */
 .history-grid {
   display: grid;
-  grid-template-columns: repeat(1, 1fr);
-  gap: 20px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   width: 100%;
 }
 
@@ -742,9 +801,30 @@ function addNotification(message: string, type: 'info' | 'success' | 'error' = '
   }
 }
 
+.history-entry {
+  transition: all 0.3s;
+}
+
+.history-entry:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+}
+
 /* Notifications Animations */
 .notification-enter-active, .notification-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .notification-enter-from { opacity: 0; transform: translateX(50px); }
 .notification-leave-to { opacity: 0; transform: scale(0.9); }
 </style>
-

@@ -2183,3 +2183,181 @@ async def test_wrong_container_access_code_is_rejected_server_side(setup_test_db
         assert event.new_inventory_items == []
         assert any(up.entity_id == "LOCKER" and up.locked is True for up in (event.updated_entities or []))
 
+
+async def test_quest_completion_accumulates_xp(setup_test_db, monkeypatch):
+    """Verifies that completing a quest adds its exp_reward to the avatar's exp total."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.rule_enforcement_mode = "chat"
+        adv.is_adventure_generator = False
+        
+        # Seed quest with 250 XP reward
+        state.quests = [{"id": "q-xp-test", "title": "XP Quest", "status": "open", "is_main": True, "exp_reward": 250}]
+        avatar.exp = 50
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        async def mock_progression(*args, **kwargs):
+            return AdventureGeneratorToolIntent(
+                completed_quest_ids=["q-xp-test"],
+            )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Quest complete!"))])
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=mock_progression)
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        async for _ in manager.process_turn("I complete the quest"):
+            pass
+
+        await db.refresh(avatar)
+        await db.refresh(state)
+
+        # 50 + 250 = 300 XP
+        assert avatar.exp == 300
+        assert (state.quests or [])[0].get("status") == "completed"
+
+        # Check ChatMessage system entry
+        sys_msgs = (
+            await db.execute(
+                select(ChatMessage).where(
+                    ChatMessage.session_id == "session-1",
+                    ChatMessage.role == "system",
+                )
+            )
+        ).scalars().all()
+        assert any("Quest completed: XP Quest" in m.content for m in sys_msgs)
+        assert any("you gained 250 XP" in m.content for m in sys_msgs)
+
+
+async def test_combat_defeat_adds_xp(setup_test_db, monkeypatch):
+    """Verifies that combat victory adds XP and generates SSE/chat events."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state, npc = await _seed_combat_npc(db)
+        npc.metadata_json = {"exp_reward": 75}
+        avatar.exp = 10
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        
+        # Start combat
+        async for _ in manager.process_turn(f"/fight {npc.id}"):
+            pass
+
+        # Force roll_attack to hit with lethal damage
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.roll_attack",
+            lambda *_args, **_kwargs: {
+                "hit_roll": 18,
+                "hit_modifier": 2,
+                "hit_total": 20,
+                "target_ac": 10,
+                "is_hit": True,
+                "damage_total": 50,  # Lethal for 40 hp npc
+                "damage_dice_total": 50,
+                "damage_rolls": [50],
+                "damage_bonus": 0,
+                "damage_dice_str": "1d6",
+            },
+        )
+
+        chunks = []
+        async for chunk in manager.process_turn("/attack"):
+            chunks.append(chunk)
+
+        await db.refresh(avatar)
+        # 10 + 75 = 85 XP
+        assert avatar.exp == 85
+
+        # Check ChatMessage
+        sys_msgs = (
+            await db.execute(
+                select(ChatMessage).where(
+                    ChatMessage.session_id == state.session_id,
+                    ChatMessage.role == "system",
+                )
+            )
+        ).scalars().all()
+        assert any(f"Defeated {npc.name}" in m.content for m in sys_msgs)
+        assert any("you gained 75 XP" in m.content for m in sys_msgs)
+
+
+async def test_container_code_unlock_adds_xp(setup_test_db):
+    """Verifies that unlocking a container via API or turn flow awards XP."""
+    from tests.conftest import TestSessionLocal
+    from backend.api.routes.adventures.gameplay import unlock_container_with_code, ContainerUnlockCodeRequest
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        avatar.exp = 100
+        
+        # Seed container requiring code
+        chest = WorldEntity(
+            id="CHEST_1",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Iron Chest",
+            description="A heavy chest.",
+            current_scene_id=state.current_scene_id,
+            item_type="CONTAINER",
+            is_portable=False,
+            is_hidden=False,
+            is_in_inventory=False,
+            metadata_json={"code_to_unlock": "1234", "locked": True, "exp_reward": 80},
+        )
+        db.add(chest)
+        await db.commit()
+
+        # 1. Test API Unlock
+        response = await unlock_container_with_code(
+            game_id=state.session_id,
+            entity_id="CHEST_1",
+            payload=ContainerUnlockCodeRequest(code="1234"),
+            db=db,
+            current_user=user
+        )
+        assert response["locked"] is False
+
+        await db.refresh(avatar)
+        # 100 + 80 = 180 XP
+        assert avatar.exp == 180
+
+        # Check system message
+        sys_msgs = (
+            await db.execute(
+                select(ChatMessage).where(
+                    ChatMessage.session_id == state.session_id,
+                    ChatMessage.role == "system",
+                )
+            )
+        ).scalars().all()
+        assert any("Unlocked Iron Chest with the correct code!" in m.content for m in sys_msgs)
+        assert any("you gained 80 XP" in m.content for m in sys_msgs)
+
+        # Reset for turn-based testing
+        avatar.exp = 100
+        state.entity_states = {}
+        await db.commit()
+
+        # 2. Test Turn flow unlock transition
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+        # Simulate LLM game event unlocking it
+        event = GameEvent(
+            updated_entities=[WorldEntityUpdate(entity_id="CHEST_1", locked=False)]
+        )
+        
+        await manager._apply_game_event(event)
+
+        await db.refresh(avatar)
+        # 100 + 80 = 180 XP
+        assert avatar.exp == 180
+

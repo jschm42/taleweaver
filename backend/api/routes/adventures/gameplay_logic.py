@@ -667,7 +667,6 @@ class GameTurnManager:
                 combat["active"] = False
                 combat["outcome"] = "victory"
                 combat["enemy"]["hp"] = 0
-                combat["status_note"] = "Combat won via debug command."
 
                 # Mirror normal victory behavior so debug wins can be used for loot testing.
                 enemy_id = combat["enemy"]["id"]
@@ -678,6 +677,11 @@ class GameTurnManager:
                     )
                 )
                 enemy_ent = enemy_res.scalars().first()
+
+                xp_gained = 0
+                if enemy_ent:
+                    xp_gained = self._award_combat_victory_xp(enemy_ent)
+                combat["status_note"] = f"Combat won via debug command. (+{xp_gained} XP)"
 
                 loot_items = await self._normalize_loot_items(
                     list(combat.get("enemy", {}).get("inventory") or (enemy_ent.inventory if enemy_ent else []) or [])
@@ -702,7 +706,7 @@ class GameTurnManager:
                     loot_msg = "Victory! Loot available. Use /loot take <item>, /loot leave <item>, /loot done"
                     self._append_combat_log(combat, loot_msg, "loot")
                 self._set_combat_state(combat)
-                debug_info = "DEBUG: Combat forced to VICTORY (loot phase enabled)."
+                debug_info = f"DEBUG: Combat forced to VICTORY (loot phase enabled). (+{xp_gained} XP)"
         
         elif cmd_args == "loose_fight":
             combat = self._read_combat_state()
@@ -2419,6 +2423,14 @@ class GameTurnManager:
 
         return "Loot commands: /loot take <item>, /loot leave <item>, /loot done"
 
+    def _award_combat_victory_xp(self, enemy_ent: WorldEntity) -> int:
+        metadata = dict(enemy_ent.metadata_json or {})
+        xp_gained = metadata.get("exp_reward") or metadata.get("xp_reward")
+        if xp_gained is None:
+            xp_gained = max(50, enemy_ent.max_hp or 100)
+        self.avatar.exp = (self.avatar.exp or 0) + xp_gained
+        return xp_gained
+
     async def _handle_combat_turn(self, user_msg: str) -> AsyncGenerator[str, None]:
         combat = self._read_combat_state()
         if not combat.get("active") and (combat.get("loot_pending") or combat.get("outcome")):
@@ -2566,7 +2578,8 @@ class GameTurnManager:
         if enemy_hp <= 0:
             combat["active"] = False
             combat["outcome"] = "victory"
-            combat["status_note"] = f"{enemy_ent.name} is defeated."
+            xp_gained = self._award_combat_victory_xp(enemy_ent)
+            combat["status_note"] = f"{enemy_ent.name} is defeated. (+{xp_gained} XP)"
             combat["loot_pending"] = True
             combat["loot_items"] = await self._normalize_loot_items(list(enemy.get("inventory") or enemy_ent.inventory or []))
             states = dict(self.state.entity_states or {})
@@ -2580,6 +2593,14 @@ class GameTurnManager:
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
             self._append_combat_log(combat, combat["status_note"], "outcome")
+            
+            msg = f"Defeated {enemy_ent.name}!"
+            xp_msg = f"you gained {xp_gained} XP"
+            await self._save_chat_message("system", msg)
+            await self._save_chat_message("system", xp_msg)
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': xp_msg})}\n\n"
+            
             if combat.get("loot_items"):
                 loot_msg = "Victory! Loot available. Use /loot take <item>, /loot leave <item>, /loot done"
                 self._append_combat_log(combat, loot_msg, "loot")
@@ -2595,7 +2616,8 @@ class GameTurnManager:
             if random.random() < 0.10: # 10% chance
                 combat["active"] = False
                 combat["outcome"] = "victory"
-                combat["status_note"] = f"{enemy_ent.name} flees in panic! You won the battle."
+                xp_gained = self._award_combat_victory_xp(enemy_ent)
+                combat["status_note"] = f"{enemy_ent.name} flees in panic! You won the battle. (+{xp_gained} XP)"
                 # Mark NPC as permanently defeated (fled = no re-engagement)
                 states = dict(self.state.entity_states or {})
                 if enemy_id not in states:
@@ -2611,6 +2633,12 @@ class GameTurnManager:
                     await self._spawn_scene_item(flee_item)
                 self._append_combat_log(combat, combat["status_note"], "outcome")
                 self._set_combat_state(combat)
+                msg = f"Defeated {enemy_ent.name}!"
+                xp_msg = f"you gained {xp_gained} XP"
+                await self._save_chat_message("system", msg)
+                await self._save_chat_message("system", xp_msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': xp_msg})}\n\n"
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': combat['status_note']})}\n\n"
                 async for chunk in self._emit_combat_aftermath_narration(combat):
                     yield chunk
@@ -3586,6 +3614,7 @@ class GameTurnManager:
         if event.updated_entities:
             for update in event.updated_entities:
                 eid = update.entity_id
+                ent_obj = None
                 if eid not in states:
                     states[eid] = {}
                 if update.name is not None:
@@ -3607,8 +3636,60 @@ class GameTurnManager:
                 if update.is_killable is not None:
                     states[eid]["is_killable"] = update.is_killable
                 if update.is_defeated is not None:
+                    was_defeated = self.state.entity_states.get(eid, {}).get("is_defeated", False)
+                    if not was_defeated and update.is_defeated is True:
+                        ent_res = await self.db.execute(
+                            select(WorldEntity).where(
+                                WorldEntity.id == eid,
+                                WorldEntity.session_id == self.game_id,
+                            )
+                        )
+                        ent_obj = ent_res.scalars().first()
+                        if ent_obj and ent_obj.entity_type == "NPC":
+                            xp_gained = self._award_combat_victory_xp(ent_obj)
+                            msg = f"Defeated {ent_obj.name}!"
+                            xp_msg = f"you gained {xp_gained} XP"
+                            await self._save_chat_message("system", msg)
+                            await self._save_chat_message("system", xp_msg)
+                            system_messages.append(msg)
+                            system_messages.append(xp_msg)
                     states[eid]["is_defeated"] = update.is_defeated
                 if update.locked is not None:
+                    was_locked = self.state.entity_states.get(eid, {}).get("locked")
+                    if was_locked is None:
+                        ent_res = await self.db.execute(
+                            select(WorldEntity).where(
+                                WorldEntity.id == eid,
+                                WorldEntity.session_id == self.game_id,
+                            )
+                        )
+                        ent_obj = ent_res.scalars().first()
+                        if ent_obj:
+                            metadata_json = dict(ent_obj.metadata_json or {})
+                            was_locked = bool(metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock"))
+                    
+                    if was_locked and update.locked is False:
+                        if ent_obj is None:
+                            ent_res = await self.db.execute(
+                                select(WorldEntity).where(
+                                    WorldEntity.id == eid,
+                                    WorldEntity.session_id == self.game_id,
+                                )
+                            )
+                            ent_obj = ent_res.scalars().first()
+                        
+                        if ent_obj and ent_obj.entity_type == "OBJECT" and str(ent_obj.item_type or "").upper() == "CONTAINER":
+                            metadata_json = dict(ent_obj.metadata_json or {})
+                            code_to_unlock = str(metadata_json.get("code_to_unlock") or "").strip()
+                            if code_to_unlock:
+                                xp_reward = metadata_json.get("exp_reward") or metadata_json.get("xp_reward") or 100
+                                self.avatar.exp = (self.avatar.exp or 0) + xp_reward
+                                msg = f"Unlocked {ent_obj.name} with the correct code!"
+                                xp_msg = f"you gained {xp_reward} XP"
+                                await self._save_chat_message("system", msg)
+                                await self._save_chat_message("system", xp_msg)
+                                system_messages.append(msg)
+                                system_messages.append(xp_msg)
                     states[eid]["locked"] = update.locked
                 if update.inventory is not None: 
                     states[eid]["inventory"] = [i.model_dump(exclude_none=True) for i in update.inventory]
@@ -3638,7 +3719,7 @@ class GameTurnManager:
             self._apply_gm_notes_update(event.remember_notes, event.forget_notes, bool(event.clear_notes))
 
         # Quest Updates
-        newly_completed_quests: list[str] = []
+        newly_completed_quests: list[dict] = []
         if event.completed_quest_ids:
             new_quests = deepcopy(self.state.quests or [])
             modified = False
@@ -3646,7 +3727,7 @@ class GameTurnManager:
                 for q in new_quests:
                     if q.get("id") == qid and q.get("status") != "completed":
                         q["status"] = "completed"
-                        newly_completed_quests.append(q.get("title") or qid)
+                        newly_completed_quests.append(q)
                         modified = True
             
             if modified:
@@ -3710,7 +3791,8 @@ class GameTurnManager:
                 for q in new_quests:
                     if q.get("id") == qid and q.get("status") != "completed":
                         q["status"] = "completed"
-                        newly_completed_quests.append(q.get("title") or qid)
+                        if not any(nq.get("id") == qid for nq in newly_completed_quests):
+                            newly_completed_quests.append(q)
                         logger.info("[Turn %s] Deterministic Quest Completion: %s", self.game_id, qid)
                         modified = True
             if modified:
@@ -3719,7 +3801,9 @@ class GameTurnManager:
 
         if newly_completed_quests:
             # Emit one system entry per newly completed quest so players get explicit feedback.
-            for quest_title in dict.fromkeys(newly_completed_quests):
+            for q in newly_completed_quests:
+                quest_title = q.get("title") or q.get("id")
+                xp_reward = int(q.get("exp_reward") or 0)
                 msg = f"Quest completed: {quest_title}"
                 self.db.add(
                     ChatMessage(
@@ -3729,6 +3813,18 @@ class GameTurnManager:
                     )
                 )
                 system_messages.append(msg)
+                
+                if xp_reward > 0:
+                    self.avatar.exp = (self.avatar.exp or 0) + xp_reward
+                    xp_msg = f"you gained {xp_reward} XP"
+                    self.db.add(
+                        ChatMessage(
+                            session_id=self.state.session_id,
+                            role="system",
+                            content=xp_msg,
+                        )
+                    )
+                    system_messages.append(xp_msg)
 
         # RPG Completion Logic: Check if all main quests are finished
         if state_dirty:
