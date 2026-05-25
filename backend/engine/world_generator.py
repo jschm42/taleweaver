@@ -86,7 +86,7 @@ def _validate_t2i_prerequisites(
         if not model:
             raise ValueError("Image generation is enabled for scenes, but advanced_model is missing.")
         provider = (t2i_settings.get("advanced_model_provider") or t2i_settings.get("provider", "openai")).lower()
-        if provider != "ollama":
+        if provider not in ("ollama", "stable_diffusion"):
             # Check environment and then DB
             if not settings.get_env_api_key(provider):
                 encrypted_api_keys = user.encrypted_api_keys or {}
@@ -98,7 +98,7 @@ def _validate_t2i_prerequisites(
         if not model:
             raise ValueError("Image generation is enabled for portraits/items, but simple_model is missing.")
         provider = (t2i_settings.get("simple_model_provider") or t2i_settings.get("provider", "openai")).lower()
-        if provider != "ollama":
+        if provider not in ("ollama", "stable_diffusion"):
             # Check environment and then DB
             if not settings.get_env_api_key(provider):
                 encrypted_api_keys = user.encrypted_api_keys or {}
@@ -1194,6 +1194,7 @@ class WorldGenerator:
                                 {"t2i_settings": user.t2i_settings},
                                 dict(user.encrypted_api_keys or {}),  # type: ignore
                                 style_instruction=style_instruction,
+                                use_advanced_model=((user.t2i_settings or {}).get("protagonist_model_quality", "advanced") == "advanced"),
                             ),
                             timeout=_image_generation_timeout_seconds(),
                         )
@@ -1349,6 +1350,7 @@ class WorldGenerator:
                                 {"t2i_settings": user.t2i_settings},
                                 dict(user.encrypted_api_keys or {}),  # type: ignore
                                 style_instruction=style_instruction,
+                                use_advanced_model=((user.t2i_settings or {}).get("profile_model_quality", "advanced") == "advanced"),
                             ),
                             timeout=_image_generation_timeout_seconds(),
                         )
@@ -1577,6 +1579,7 @@ class WorldGenerator:
                                 {"t2i_settings": user.t2i_settings},
                                 dict(user.encrypted_api_keys or {}),  # type: ignore
                                 style_instruction=style_instruction,
+                                use_advanced_model=((user.t2i_settings or {}).get("asset_model_quality", "simple") == "advanced"),
                             ),
                             timeout=float(settings.VISUAL_TIMEOUT),
                         )

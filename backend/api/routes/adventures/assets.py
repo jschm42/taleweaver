@@ -175,6 +175,7 @@ async def regenerate_visual(
     image_url = None
     user_config = {"t2i_settings": current_user.t2i_settings}
     api_keys = current_user.encrypted_api_keys
+    t2i = current_user.t2i_settings or {}
 
     # Resolve Style Instruction
     style_instruction = resolve_style_instruction(
@@ -217,7 +218,8 @@ async def regenerate_visual(
                     prompt=prompt,
                     adventure_id=template_id, entity_id=avatar.id, entity_type="PROTAGONIST",
                     user_config=user_config, api_keys=api_keys,
-                    style_instruction=style_instruction
+                    style_instruction=style_instruction,
+                    use_advanced_model=(t2i.get("protagonist_model_quality", "advanced") == "advanced")
                 ),
                 timeout=float(settings.VISUAL_TIMEOUT)
             )
@@ -239,7 +241,8 @@ async def regenerate_visual(
                 MediaEngine.generate_scene_image(
                     prompt=prompt,
                     adventure_id=template_id, user_config=user_config, api_keys=api_keys,
-                    style_instruction=style_instruction
+                    style_instruction=style_instruction,
+                    use_advanced_model=(t2i.get("scene_model_quality", "advanced") == "advanced")
                 ),
                 timeout=float(settings.VISUAL_TIMEOUT)
             )
@@ -262,7 +265,12 @@ async def regenerate_visual(
                     prompt=prompt,
                     adventure_id=template_id, entity_id=entity.id, entity_type=payload.target_type.upper(),
                     user_config=user_config, api_keys=api_keys,
-                    style_instruction=style_instruction
+                    style_instruction=style_instruction,
+                    use_advanced_model=(
+                        t2i.get("profile_model_quality", "advanced") == "advanced"
+                        if payload.target_type == "npc"
+                        else t2i.get("asset_model_quality", "simple") == "advanced"
+                    )
                 ),
                 timeout=float(settings.VISUAL_TIMEOUT)
             )

@@ -60,12 +60,14 @@ export const visualService = {
   async quickRegenerateVisual(
     adventureId: string,
     kind: VisualKind,
-    id: string
+    id: string,
+    signal?: AbortSignal
   ): Promise<void> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/visuals/regenerate`, {
       method: 'POST',
       headers: authHeaders(true),
       body: JSON.stringify({ target_type: kind, target_id: id, prompt: null }),
+      signal,
     })
     if (!res.ok) {
       const data = await res.json()
@@ -78,7 +80,8 @@ export const visualService = {
     kind: VisualKind,
     id: string,
     prompt: string | null,
-    useAdvancedModel: boolean
+    useAdvancedModel: boolean,
+    signal?: AbortSignal
   ): Promise<void> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/visuals/regenerate`, {
       method: 'POST',
@@ -89,6 +92,7 @@ export const visualService = {
         prompt: prompt?.trim() || null,
         use_advanced_model: useAdvancedModel,
       }),
+      signal,
     })
     if (!res.ok) throw new Error('Failed to regenerate.')
   },

@@ -76,11 +76,47 @@ class TestService {
    * Test a Text-to-Image model with the specified provider.
    * Generates and displays a test image.
    */
-  async testVision(key: string, model: string, provider: string, ollamaUrl: string) {
+  async testVision(
+    key: string,
+    model: string,
+    provider: string,
+    ollamaUrl: string,
+    stableDiffusionUrl?: string,
+    steps?: number | null,
+    cfgScale?: number | null,
+    width?: number | null,
+    height?: number | null,
+    samplerName?: string | null,
+    scheduler?: string | null,
+    minLongEdge?: number | null
+  ) {
     this.testResults.value[key] = { status: 'loading', message: 'Generating test image...' }
 
+    const cleanNum = (val: any) => {
+      if (val === null || val === undefined || val === '') return undefined
+      const num = Number(val)
+      return isNaN(num) ? undefined : num
+    }
+
+    const cleanStr = (val: any) => {
+      if (val === null || val === undefined || String(val).trim() === '') return undefined
+      return String(val).trim()
+    }
+
     try {
-      const data = await api.testVision({ model, provider, ollama_url: ollamaUrl })
+      const data = await api.testVision({
+        model,
+        provider,
+        ollama_url: cleanStr(ollamaUrl),
+        stable_diffusion_url: cleanStr(stableDiffusionUrl),
+        steps: cleanNum(steps),
+        cfg_scale: cleanNum(cfgScale),
+        sampler_name: cleanStr(samplerName),
+        scheduler: cleanStr(scheduler),
+        width: cleanNum(width),
+        height: cleanNum(height),
+        min_long_edge: cleanNum(minLongEdge)
+      })
 
       this.testResults.value[key] = {
         status: data.status === 'success' ? 'success' : 'error',

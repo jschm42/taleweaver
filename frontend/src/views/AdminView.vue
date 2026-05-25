@@ -70,6 +70,10 @@ const handleRefreshOllamaModels = async (ollamaUrl?: string) => {
   await settingsService.fetchOllamaModels(ollamaUrl)
 }
 
+const handleRefreshStableDiffusionModels = async (sdUrl?: string) => {
+  await settingsService.fetchStableDiffusionModels(sdUrl)
+}
+
 const handleSaveT2iSettings = async (payload: any) => {
   await settingsService.saveT2iSettings(payload)
 }
@@ -88,8 +92,21 @@ const handleTestLlm = async (key: string, model: string, provider: string) => {
   await testService.testLlm(key, model, provider, settingsService.llmForm.value.ollama_url)
 }
 
-const handleTestVision = async (key: string, model: string, provider: string) => {
-  await testService.testVision(key, model, provider, settingsService.t2iForm.value.ollama_url)
+const handleTestVision = async (payload: any) => {
+  await testService.testVision(
+    payload.key,
+    payload.model,
+    payload.provider,
+    payload.ollama_url,
+    payload.stable_diffusion_url,
+    payload.steps,
+    payload.cfg_scale,
+    payload.width,
+    payload.height,
+    payload.sampler_name,
+    payload.scheduler,
+    payload.min_long_edge
+  )
 }
 
 const handleTestTTS = async () => {
@@ -267,9 +284,11 @@ onMounted(() => {
           :available-constants="settingsService.availableConstants.value"
           :configured-keys="settingsService.configuredKeys.value"
           :is-submitting="settingsService.isSubmitting.value"
+          :is-loading-stable-diffusion-models="settingsService.isLoadingStableDiffusionModels.value"
           :test-results="testService.testResults.value"
           @save="handleSaveT2iSettings"
-          @test="({ key, model, provider }) => handleTestVision(key, model, provider)"
+          @test="handleTestVision"
+          @refresh-stable-diffusion-models="handleRefreshStableDiffusionModels"
           @switch-section="(s) => activeSection = s as Section"
         />
 

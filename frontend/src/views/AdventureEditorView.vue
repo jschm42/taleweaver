@@ -49,6 +49,12 @@ const ASSET_BASE = ''
 // Visuals state
 const isQuickGenerating = ref<Record<string, boolean>>({})
 const isBatchGenerating = ref<Record<string, boolean>>({})
+const activeAbortControllers = ref<Map<string, AbortController>>(new Map())
+const isGenerating = computed(() => {
+  return isRegenerating.value || 
+         Object.values(isQuickGenerating.value).some(Boolean) || 
+         Object.values(isBatchGenerating.value).some(Boolean)
+})
 
 const isSavingText = ref(false)
 const showEditModal = ref(false)
@@ -313,7 +319,17 @@ const editorObjects = computed<any[]>(() => {
   const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
   const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
   const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
-  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() !== 'READABLE')
+  return mergeUniqueById(source, inferred).filter((entity: any) => {
+    const type = String(entity?.item_type || '').toUpperCase()
+    return type !== 'READABLE' && type !== 'CONTAINER'
+  })
+})
+
+const editorContainers = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
+  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() === 'CONTAINER')
 })
 
 const editorTextLogs = computed<any[]>(() => {
@@ -557,18 +573,36 @@ function openUploadPicker(kind: any, id: string, label: string) {
 async function quickRegenerateVisual(kind: any, id: string, skipFetch: boolean = false) {
   const key = `${kind}_${id}`
   isQuickGenerating.value[key] = true
+  
+  if (activeAbortControllers.value.has(key)) {
+    activeAbortControllers.value.get(key)?.abort()
+  }
+  const controller = new AbortController()
+  activeAbortControllers.value.set(key, controller)
+  
   try {
-     await visualService.quickRegenerateVisual(props.adventureId, kind, id)
+     await visualService.quickRegenerateVisual(props.adventureId, kind, id, controller.signal)
     if (!skipFetch) await fetchDebugInfo()
   } catch (error: any) {
+    if (error.name === 'AbortError' || (error instanceof DOMException && error.name === 'AbortError')) {
+      console.log('Quick regen aborted for', key)
+      throw error
+    }
     console.error('Quick regen error:', error)
     addNotification(error.message, 'error')
   } finally {
     isQuickGenerating.value[key] = false
+    activeAbortControllers.value.delete(key)
   }
 }
 
-async function regenerateAll(kind: any) {
+async function regenerateAll(kind: any, missingOnly: boolean = false) {
+  if (!missingOnly) {
+    const kindLabel = kind === 'scene' ? 'locations' : kind === 'npc' ? 'inhabitants' : kind === 'container' ? 'containers' : kind === 'text-log' ? 'text logs' : 'mystical objects'
+    const ok = confirm(`Are you sure you want to regenerate all ${kindLabel} visuals? This will overwrite all existing images for these items.`)
+    if (!ok) return
+  }
+
   isBatchGenerating.value[kind] = true
   let items: any[] = []
   if (kind === 'cover' && debugData.value?.adventure) items = [debugData.value.adventure]
@@ -576,8 +610,22 @@ async function regenerateAll(kind: any) {
   if (kind === 'scene') items = editorScenes.value
   if (kind === 'npc') items = editorNpcs.value
   if (kind === 'object') items = editorObjects.value
+  if (kind === 'container') items = editorContainers.value
+  if (kind === 'text-log') items = editorTextLogs.value
+  
   for (const item of items) {
-    await quickRegenerateVisual(kind, item.id || props.adventureId, true)
+    if (missingOnly && item.image_url) {
+      continue
+    }
+    try {
+      const apiKind = (kind === 'container' || kind === 'text-log') ? 'object' : kind
+      await quickRegenerateVisual(apiKind, item.id || props.adventureId, true)
+    } catch (error: any) {
+      if (error.name === 'AbortError' || (error instanceof DOMException && error.name === 'AbortError')) {
+        addNotification('Batch generation stopped.', 'info')
+        break
+      }
+    }
   }
   await fetchDebugInfo()
   isBatchGenerating.value[kind] = false
@@ -587,22 +635,36 @@ async function regenerateVisual() {
   if (!selectedVisual.value || isRegenerating.value) return
   isRegenerating.value = true
   promptError.value = ''
+  
+  const key = `${selectedVisual.value.kind}_${selectedVisual.value.id}`
+  if (activeAbortControllers.value.has(key)) {
+    activeAbortControllers.value.get(key)?.abort()
+  }
+  const controller = new AbortController()
+  activeAbortControllers.value.set(key, controller)
+  
   try {
      await visualService.regenerateVisual(
        props.adventureId,
        selectedVisual.value.kind,
        selectedVisual.value.id,
        visualPrompt.value,
-       useAdvancedModel.value
+       useAdvancedModel.value,
+       controller.signal
      )
-    showPromptDialog.value = false
-    await fetchDebugInfo()
-    addNotification(`Visual for ${selectedVisual.value.label} re-woven.`, 'success')
+     showPromptDialog.value = false
+     await fetchDebugInfo()
+     addNotification(`Visual for ${selectedVisual.value.label} re-woven.`, 'success')
   } catch (error: any) {
+    if (error.name === 'AbortError' || (error instanceof DOMException && error.name === 'AbortError')) {
+      console.log('Regen aborted for', key)
+      return
+    }
     promptError.value = error.message
     addNotification(error.message, 'error')
   } finally {
     isRegenerating.value = false
+    activeAbortControllers.value.delete(key)
   }
 }
 
@@ -631,9 +693,35 @@ async function suggestPrompt() {
 }
 
 function cancelRegeneration() {
+  if (selectedVisual.value) {
+    const key = `${selectedVisual.value.kind}_${selectedVisual.value.id}`
+    if (activeAbortControllers.value.has(key)) {
+      activeAbortControllers.value.get(key)?.abort()
+    }
+  }
   isRegenerating.value = false
   showPromptDialog.value = false
   addNotification('Generation request abandoned.', 'info')
+}
+
+function stopAllGenerations() {
+  if (activeAbortControllers.value.size === 0) return
+  
+  for (const [key, controller] of activeAbortControllers.value.entries()) {
+    try {
+      controller.abort()
+    } catch (e) {
+      console.error('Failed to abort controller:', e)
+    }
+  }
+  activeAbortControllers.value.clear()
+  
+  isQuickGenerating.value = {}
+  isBatchGenerating.value = {}
+  isRegenerating.value = false
+  showPromptDialog.value = false
+  
+  addNotification('All visual generations stopped.', 'info')
 }
 
 watch(
@@ -684,7 +772,9 @@ const goBack = () => {
       :adventure="adventure" 
       :adventure-id="adventureId" 
       :cover-source-name="adventure?.cover_source_adventure_name || ''"
+      :is-generating="isGenerating"
       @go-back="goBack"
+      @stop-generation="stopAllGenerations"
     />
 
     <main class="flex-grow p-6 max-w-[1400px] mx-auto w-full relative z-10 pb-16">
@@ -765,11 +855,13 @@ const goBack = () => {
             <ItemsTab 
               v-if="activeTab === 'items'"
               :editor-objects="editorObjects"
+              :editor-containers="editorContainers"
               :editor-text-logs="editorTextLogs"
               :is-batch-generating="isBatchGenerating"
               :is-quick-generating="isQuickGenerating"
               :active-menu-id="activeMenuId"
               :rule-enforcement-mode="form.rule_enforcement_mode"
+              :visuals-cache-version="visualsCacheVersion"
               @quick-regen="quickRegenerateVisual"
               @regen-all="regenerateAll"
               @open-regen-dialog="openRegenerateDialog"
@@ -791,6 +883,7 @@ const goBack = () => {
               :active-menu-id="activeMenuId"
               :editor-npcs="editorNpcs"
               :rule-enforcement-mode="form.rule_enforcement_mode"
+              :visuals-cache-version="visualsCacheVersion"
               @quick-regen="quickRegenerateVisual"
               @regen-all="regenerateAll"
               @open-regen-dialog="openRegenerateDialog"
@@ -809,6 +902,7 @@ const goBack = () => {
               :is-batch-generating="isBatchGenerating"
               :is-quick-generating="isQuickGenerating"
               :active-menu-id="activeMenuId"
+              :visuals-cache-version="visualsCacheVersion"
               @quick-regen="quickRegenerateVisual"
               @regen-all="regenerateAll"
               @open-regen-dialog="openRegenerateDialog"

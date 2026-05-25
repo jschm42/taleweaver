@@ -216,7 +216,36 @@ async def _fetch_ollama_models(ollama_url: Optional[str]) -> list[str]:
         return []
 
 
-async def _build_available_constants(llm_settings: Optional[dict]) -> dict[str, Any]:
+async def _fetch_stable_diffusion_models(stable_diffusion_url: Optional[str]) -> list[str]:
+    """Return available Stable Diffusion model checkpoints from local Automatic1111/Forge daemon."""
+    base_url = (stable_diffusion_url or "http://127.0.0.1:7860").rstrip("/")
+    endpoint = f"{base_url}/sdapi/v1/sd-models"
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            response = await client.get(endpoint)
+        response.raise_for_status()
+        payload = response.json()
+
+        models: list[str] = ["default"]
+        if isinstance(payload, list):
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("title") or item.get("model_name") or "").strip()
+                if name:
+                    models.append(name)
+
+        unique_models = ["default"]
+        for m in sorted(set(models)):
+            if m != "default":
+                unique_models.append(m)
+        return unique_models
+    except (httpx.HTTPError, ValueError, TypeError):
+        logger.info("Could not fetch Stable Diffusion models from %s", endpoint)
+        return ["default"]
+
+
+async def _build_available_constants(llm_settings: Optional[dict], t2i_settings: Optional[dict] = None) -> dict[str, Any]:
     """Return available providers and model catalogs for the admin UI."""
     normalized_llm = _normalize_llm_settings(llm_settings)
     ollama_models = await _fetch_ollama_models(normalized_llm.get("ollama_url"))
@@ -224,12 +253,18 @@ async def _build_available_constants(llm_settings: Optional[dict]) -> dict[str, 
     predefined_llm_models = dict(PREDEFINED_LLM_MODELS)
     predefined_llm_models["ollama"] = ollama_models
 
+    normalized_t2i = _normalize_t2i_settings(t2i_settings)
+    sd_models = await _fetch_stable_diffusion_models(normalized_t2i.get("stable_diffusion_url"))
+
+    predefined_image_models = dict(PREDEFINED_IMAGE_MODELS)
+    predefined_image_models["stable_diffusion"] = sd_models
+
     return {
         "llm_providers": LLM_PROVIDERS,
         "image_providers": IMAGE_PROVIDERS,
         "tts_providers": TTS_PROVIDERS,
         "predefined_llm_models": predefined_llm_models,
-        "predefined_image_models": PREDEFINED_IMAGE_MODELS,
+        "predefined_image_models": predefined_image_models,
     }
 
 
@@ -420,13 +455,30 @@ def _normalize_t2i_settings(t2i_settings: Optional[dict]) -> dict:
         "advanced_model_provider": "openai",
         "provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
+        "stable_diffusion_url": "http://127.0.0.1:7860",
         "width": None,
         "height": None,
         "steps": None,
+        "cfg_scale": None,
+        "simple_steps": None,
+        "simple_cfg_scale": None,
+        "advanced_steps": None,
+        "advanced_cfg_scale": None,
+        "simple_sampler_name": None,
+        "simple_scheduler": None,
+        "advanced_sampler_name": None,
+        "advanced_scheduler": None,
+        "simple_min_long_edge": None,
+        "advanced_min_long_edge": None,
         "seed": None,
         "image_format": "jpeg",
         "image_quality": 85,
         "negative_prompt": None,
+        # Model usage quality per content type
+        "scene_model_quality": "advanced",
+        "profile_model_quality": "advanced",
+        "protagonist_model_quality": "advanced",
+        "asset_model_quality": "simple",
     }
     if not t2i_settings:
         return fallback
@@ -436,6 +488,33 @@ def _normalize_t2i_settings(t2i_settings: Optional[dict]) -> dict:
         normalized["simple_model_provider"] = normalized.get("provider") or "openai"
     if "advanced_model_provider" not in normalized:
         normalized["advanced_model_provider"] = normalized.get("provider") or "openai"
+
+    if "stable_diffusion_url" not in normalized:
+        normalized["stable_diffusion_url"] = "http://127.0.0.1:7860"
+    if "ollama_url" not in normalized:
+        normalized["ollama_url"] = "http://localhost:11434"
+    if "cfg_scale" not in normalized:
+        normalized["cfg_scale"] = None
+
+    for field in (
+        "simple_steps", "simple_cfg_scale", 
+        "advanced_steps", "advanced_cfg_scale",
+        "simple_sampler_name", "simple_scheduler",
+        "advanced_sampler_name", "advanced_scheduler",
+        "simple_min_long_edge", "advanced_min_long_edge"
+    ):
+        if field not in normalized:
+            normalized[field] = None
+
+    # Model usage quality defaults
+    for field, default in (
+        ("scene_model_quality", "advanced"),
+        ("profile_model_quality", "advanced"),
+        ("protagonist_model_quality", "advanced"),
+        ("asset_model_quality", "simple"),
+    ):
+        if field not in normalized:
+            normalized[field] = default
 
     # OpenRouter normalization
     if normalized.get("simple_model_provider") == "openrouter":
@@ -472,7 +551,7 @@ def _is_t2i_configured(user: User, db_keys: dict) -> bool:
     simple_model = t2i.get("simple_model")
 
     def has_key(provider):
-        if provider == "ollama":
+        if provider in ("ollama", "stable_diffusion"):
             return True
         return bool(settings.get_env_api_key(provider)) or (db_keys and provider in db_keys)
 
@@ -530,13 +609,29 @@ class T2ISettingsPayload(BaseModel):
     advanced_model_provider: str
     provider: str # Legacy
     ollama_url: Optional[str] = None
+    stable_diffusion_url: Optional[str] = None
     width: Optional[int] = None
     height: Optional[int] = None
     steps: Optional[int] = None
+    cfg_scale: Optional[float] = None
+    simple_steps: Optional[int] = None
+    simple_cfg_scale: Optional[float] = None
+    advanced_steps: Optional[int] = None
+    advanced_cfg_scale: Optional[float] = None
+    simple_sampler_name: Optional[str] = None
+    simple_scheduler: Optional[str] = None
+    advanced_sampler_name: Optional[str] = None
+    advanced_scheduler: Optional[str] = None
+    simple_min_long_edge: Optional[int] = None
+    advanced_min_long_edge: Optional[int] = None
     seed: Optional[int] = None
     image_format: Optional[str] = "jpeg"
     image_quality: Optional[int] = 85
     negative_prompt: Optional[str] = None
+    scene_model_quality: Optional[str] = "advanced"
+    profile_model_quality: Optional[str] = "advanced"
+    protagonist_model_quality: Optional[str] = "advanced"
+    asset_model_quality: Optional[str] = "simple"
 class GameSettingsPayload(BaseModel):
     clock_24h: bool = False
     date_format: str = "DD.MM.YY"
@@ -586,7 +681,7 @@ async def get_settings(
     # Common defaults if no user/settings
     default_llm = _normalize_llm_settings(None)
     default_t2i = _normalize_t2i_settings(None)
-    default_available_constants = await _build_available_constants(default_llm)
+    default_available_constants = await _build_available_constants(default_llm, default_t2i)
     
     def get_keys_status(db_keys):
         status = {}
@@ -619,7 +714,7 @@ async def get_settings(
         }
 
     normalized_llm_settings = _normalize_llm_settings(user.llm_settings)
-    available_constants = await _build_available_constants(normalized_llm_settings)
+    available_constants = await _build_available_constants(normalized_llm_settings, user.t2i_settings)
     
     return {
         "app_version": settings.APP_VERSION,
@@ -649,6 +744,11 @@ async def get_settings(
 async def get_ollama_models(ollama_url: Optional[str] = None):
     """Return installed Ollama model names for the configured Ollama endpoint."""
     return {"models": await _fetch_ollama_models(ollama_url)}
+
+@router.get("/stable-diffusion-models")
+async def get_stable_diffusion_models(stable_diffusion_url: Optional[str] = None):
+    """Return available Stable Diffusion checkpoints for the configured endpoint."""
+    return {"models": await _fetch_stable_diffusion_models(stable_diffusion_url)}
 
 @router.post("/keys")
 async def update_api_key(
@@ -815,6 +915,14 @@ class TestVisionPayload(BaseModel):
     model: str
     provider: str
     ollama_url: Optional[str] = None
+    stable_diffusion_url: Optional[str] = None
+    steps: Optional[int] = None
+    cfg_scale: Optional[float] = None
+    sampler_name: Optional[str] = None
+    scheduler: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    min_long_edge: Optional[int] = None
 
 @router.post("/test-vision")
 async def test_vision_connection(
@@ -826,16 +934,48 @@ async def test_vision_connection(
     user = await _resolve_global_settings_owner(db, current_user)
     provider_key = payload.provider.lower()
     
-    api_key = settings.get_env_api_key(provider_key)
-    if not api_key:
-        if not user.encrypted_api_keys or provider_key not in user.encrypted_api_keys:
-            return {"status": "error", "message": f"No API key for {payload.provider}"}
-        api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider_key])
+    api_key = None
+    if provider_key not in ("ollama", "stable_diffusion"):
+        api_key = settings.get_env_api_key(provider_key)
+        if not api_key:
+            if not user.encrypted_api_keys or provider_key not in user.encrypted_api_keys:
+                return {"status": "error", "message": f"No API key for {payload.provider}"}
+            api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider_key])
 
     try:
         test_dir = _safe_data_path("scratch", "test_connection")
         os.makedirs(test_dir, exist_ok=True)
-        provider_options = {"ollama_url": payload.ollama_url} if payload.ollama_url else {}
+        provider_options = {}
+        if payload.ollama_url:
+            provider_options["ollama_url"] = payload.ollama_url
+        if payload.stable_diffusion_url:
+            provider_options["stable_diffusion_url"] = payload.stable_diffusion_url
+        if payload.steps is not None:
+            provider_options["steps"] = payload.steps
+        if payload.cfg_scale is not None:
+            provider_options["cfg_scale"] = payload.cfg_scale
+        if payload.sampler_name:
+            provider_options["sampler_name"] = payload.sampler_name
+        if payload.scheduler:
+            provider_options["scheduler"] = payload.scheduler
+        
+        # Test vision generates a wizard portrait (CHARACTER/4:5 aspect ratio)
+        if provider_key in ("stable_diffusion", "ollama"):
+            min_long_edge = payload.min_long_edge or 1024
+            if not payload.width and not payload.height:
+                width, height = MediaEngine._resolve_sd_dimensions("CHARACTER", min_long_edge)
+                provider_options["width"] = width
+                provider_options["height"] = height
+            else:
+                if payload.width is not None:
+                    provider_options["width"] = payload.width
+                if payload.height is not None:
+                    provider_options["height"] = payload.height
+        else:
+            if payload.width is not None:
+                provider_options["width"] = payload.width
+            if payload.height is not None:
+                provider_options["height"] = payload.height
         
         img_url = await MediaEngine.generate_image(
             prompt="A Wizard portrait",
@@ -947,7 +1087,7 @@ async def generate_catalog_image(
         return {"status": "error", "message": "The 'Simple Model' for image generation is not configured. Please set it in Visual Preferences."}
         
     api_key = _resolve_provider_api_key(provider, user.encrypted_api_keys)
-    if provider != "ollama" and not api_key:
+    if provider not in ("ollama", "stable_diffusion") and not api_key:
         return {"status": "error", "message": f"No API key for {provider}"}
 
     try:

@@ -17,6 +17,7 @@ IMAGE_PROVIDERS = [
     {"id": "black_forest_labs", "name": "Black Forest Labs"},
     {"id": "google", "name": "Google Gemini"},
     {"id": "ollama", "name": "Ollama (Local)"},
+    {"id": "stable_diffusion", "name": "Stable Diffusion (Local)"},
 ]
 
 TTS_PROVIDERS = [
@@ -40,6 +41,7 @@ PREDEFINED_IMAGE_MODELS = {
     "black_forest_labs": ["flux-2-klein-4b", "flux-2-klein-9b", "flux-dev", "flux-pro", "flux-pro-1.1", "flux-2-flex", "flux-2-pro", "flux-2-max"],
     "google": ["gemini-3.1-flash-image-preview", "gemini-2.5-flash-image", "imagen-4.0-fast-generate-001", "imagen-4.0-generate-001"],
     "ollama": ["x/flux2-klein", "stable-diffusion-v1-5"],
+    "stable_diffusion": ["default"],
 }
 
 PREDEFINED_TTS_MODELS = {

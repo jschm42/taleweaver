@@ -381,6 +381,13 @@ export const api = {
     return request(url, { method: 'GET' })
   },
 
+  getStableDiffusionModels(sdUrl?: string): Promise<{ models: string[] }> {
+    const url = sdUrl
+      ? `/settings/stable-diffusion-models?stable_diffusion_url=${encodeURIComponent(sdUrl)}`
+      : '/settings/stable-diffusion-models'
+    return request(url, { method: 'GET' })
+  },
+
   /** Testing */
   testLlm(payload: any): Promise<any> {
     return request('/settings/test-llm', { method: 'POST', body: JSON.stringify(payload) })

@@ -200,6 +200,27 @@ def _sanitize_generation_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 class MediaEngine:
     @staticmethod
+    def _resolve_sd_dimensions(target_type: str, min_long_edge: Optional[int]) -> tuple[int, int]:
+        edge = min_long_edge or 1024
+        if edge <= 0:
+            edge = 1024
+            
+        t_type = (target_type or "").upper()
+        
+        def round_to_8(val: float) -> int:
+            return int(round(val / 8.0) * 8)
+            
+        if t_type == "COVER":
+            return round_to_8(edge), round_to_8(edge / 2.0)
+        elif t_type == "SCENE":
+            return round_to_8(edge), round_to_8(edge * 9.0 / 16.0)
+        elif t_type in ("NPC", "PROTAGONIST", "CHARACTER"):
+            return round_to_8(edge * 4.0 / 5.0), round_to_8(edge)
+        else:
+            # OBJECT, ITEM, etc.
+            return round_to_8(edge), round_to_8(edge)
+
+    @staticmethod
     async def _copy_static_svg_placeholder(
         target_dir: str,
         entity_id: str,
@@ -471,7 +492,7 @@ class MediaEngine:
         prompt = MediaEngine._apply_no_text_instruction(prompt)
         logger.info("Image prompt prepared (%s)", _safe_prompt_summary(prompt))
 
-        if provider_key != "ollama" and not api_key:
+        if provider_key not in ("ollama", "stable_diffusion") and not api_key:
             # Try to resolve from ENV if not passed
             api_key = settings.get_env_api_key(provider_key)
             if not api_key:
@@ -619,6 +640,28 @@ class MediaEngine:
                     target_dir=target_dir,
                     filename=filename,
                     provider_options=provider_options,
+                )
+
+            if provider_key == "stable_diffusion":
+                sd_url = (provider_options.get("stable_diffusion_url") or "http://127.0.0.1:7860")
+                image_format = provider_options.get("image_format", "jpeg")
+                image_quality = provider_options.get("image_quality", 85)
+                return await MediaEngine._generate_image_stable_diffusion_direct(
+                    prompt=prompt,
+                    model=model,
+                    stable_diffusion_url=sd_url,
+                    target_dir=target_dir,
+                    filename=filename,
+                    width=provider_options.get("width"),
+                    height=provider_options.get("height"),
+                    steps=provider_options.get("steps") if provider_options.get("steps") is not None else 4,
+                    cfg_scale=provider_options.get("cfg_scale") if provider_options.get("cfg_scale") is not None else 1.0,
+                    seed=provider_options.get("seed"),
+                    negative_prompt=provider_options.get("negative_prompt"),
+                    image_format=image_format,
+                    image_quality=image_quality,
+                    sampler_name=provider_options.get("sampler_name") or "Euler",
+                    scheduler=provider_options.get("scheduler") or "Normal",
                 )
 
             kwargs: dict[str, Any] = {
@@ -812,6 +855,85 @@ class MediaEngine:
             return None
 
     @staticmethod
+    async def _generate_image_stable_diffusion_direct(
+        prompt: str,
+        model: str,
+        stable_diffusion_url: str,
+        target_dir: str,
+        filename: Optional[str] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        steps: Optional[int] = None,
+        cfg_scale: Optional[float] = None,
+        seed: Optional[int] = None,
+        negative_prompt: Optional[str] = None,
+        image_format: str = "jpeg",
+        image_quality: int = 85,
+        sampler_name: Optional[str] = None,
+        scheduler: Optional[str] = None,
+    ) -> Optional[str]:
+        """Generate an image through Stable Diffusion's local HTTP API."""
+        try:
+            base = stable_diffusion_url.rstrip("/")
+            endpoint = f"{base}/sdapi/v1/txt2img"
+
+            payload: dict[str, Any] = {
+                "prompt": prompt,
+            }
+            if width is not None:
+                payload["width"] = width
+            if height is not None:
+                payload["height"] = height
+            if steps is not None:
+                payload["steps"] = steps
+            if cfg_scale is not None:
+                payload["cfg_scale"] = cfg_scale
+            if seed is not None:
+                payload["seed"] = seed
+            if negative_prompt:
+                payload["negative_prompt"] = negative_prompt
+            if sampler_name:
+                payload["sampler_name"] = sampler_name
+            if scheduler:
+                payload["scheduler"] = scheduler
+
+            if model and model != "default":
+                payload["override_settings"] = {
+                    "sd_model_checkpoint": model
+                }
+
+            response = await asyncio.to_thread(
+                requests.post,
+                endpoint,
+                json=payload,
+                timeout=settings.VISUAL_TIMEOUT
+            )
+            if response.status_code != 200:
+                logger.error(
+                    "Stable Diffusion direct image generation failed. status=%s",
+                    response.status_code,
+                )
+                return None
+
+            body = response.json()
+            images = body.get("images")
+            if not images or not isinstance(images, list):
+                logger.error("Stable Diffusion response did not include image list")
+                return None
+
+            b64_json = images[0]
+            return await MediaEngine._save_b64_image(
+                b64_json,
+                target_dir,
+                filename,
+                image_format=image_format,
+                quality=image_quality
+            )
+        except Exception:
+            logger.exception("Error during direct Stable Diffusion image generation")
+            return None
+
+    @staticmethod
     async def _save_b64_image(b64_data: str, target_dir: str, filename: Optional[str] = None, image_format: str = "jpeg", quality: int = 85) -> Optional[str]:
         """Decodes and saves a base64 image string."""
         try:
@@ -910,7 +1032,7 @@ class MediaEngine:
             raise ValueError("Missing image model configuration for scenes.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
-        if provider != "ollama" and not api_key:
+        if provider not in ("ollama", "stable_diffusion") and not api_key:
             logger.error("API key resolution failed for provider: %s (Advanced Model/Scenes)", provider)
             raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model). Please check your Visual Preferences in Admin settings.")
         
@@ -921,6 +1043,26 @@ class MediaEngine:
         safe_id = slugify(adventure_id)
         filename = f"{safe_id}_scene_{uuid.uuid4().hex[:8]}.{ext}"
         
+        # Resolve steps and cfg_scale for simple or advanced model
+        options = dict(t2i)
+        if use_advanced_model:
+            options["steps"] = t2i.get("advanced_steps")
+            options["cfg_scale"] = t2i.get("advanced_cfg_scale")
+            options["sampler_name"] = t2i.get("advanced_sampler_name")
+            options["scheduler"] = t2i.get("advanced_scheduler")
+            min_long_edge = t2i.get("advanced_min_long_edge")
+        else:
+            options["steps"] = t2i.get("simple_steps")
+            options["cfg_scale"] = t2i.get("simple_cfg_scale")
+            options["sampler_name"] = t2i.get("simple_sampler_name")
+            options["scheduler"] = t2i.get("simple_scheduler")
+            min_long_edge = t2i.get("simple_min_long_edge")
+
+        if provider in ("stable_diffusion", "ollama"):
+            width, height = MediaEngine._resolve_sd_dimensions("SCENE", min_long_edge)
+            options["width"] = width
+            options["height"] = height
+
         return await MediaEngine.generate_image(
             prompt=prompt, 
             model=model, 
@@ -929,14 +1071,13 @@ class MediaEngine:
             adventure_id=adventure_id,
             target_dir=target_dir, 
             filename=filename,
-            provider_options=t2i,
+            provider_options=options,
             style_instruction=style_instruction,
         )
 
     @staticmethod
     async def generate_entity_image(prompt: str, adventure_id: str, entity_id: str, entity_type: str, user_config: dict, api_keys: dict, style_instruction: Optional[str] = None, use_advanced_model: bool = False) -> Optional[str]:
         """High-level wrapper for NPC/Object generation (uses Simple Model by default)."""
-        _ = entity_type
         t2i = user_config.get("t2i_settings")
         if not t2i: 
             logger.warning("No T2I settings found in user_config")
@@ -955,7 +1096,7 @@ class MediaEngine:
             raise ValueError("Missing image model configuration for entities.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
-        if provider != "ollama" and not api_key:
+        if provider not in ("ollama", "stable_diffusion") and not api_key:
             logger.error("API key resolution failed for provider: %s (Simple Model/Entities)", provider)
             raise ValueError(f"Missing image configuration or API key for {provider} (Simple Model). Please check your Visual Preferences in Admin settings.")
         
@@ -967,6 +1108,26 @@ class MediaEngine:
         safe_ent_id = slugify(entity_id)
         filename = f"{safe_adv_id}_{safe_ent_id}_{uuid.uuid4().hex[:8]}.{ext}"
         
+        # Resolve steps and cfg_scale for simple or advanced model
+        options = dict(t2i)
+        if use_advanced_model:
+            options["steps"] = t2i.get("advanced_steps")
+            options["cfg_scale"] = t2i.get("advanced_cfg_scale")
+            options["sampler_name"] = t2i.get("advanced_sampler_name")
+            options["scheduler"] = t2i.get("advanced_scheduler")
+            min_long_edge = t2i.get("advanced_min_long_edge")
+        else:
+            options["steps"] = t2i.get("simple_steps")
+            options["cfg_scale"] = t2i.get("simple_cfg_scale")
+            options["sampler_name"] = t2i.get("simple_sampler_name")
+            options["scheduler"] = t2i.get("simple_scheduler")
+            min_long_edge = t2i.get("simple_min_long_edge")
+
+        if provider in ("stable_diffusion", "ollama"):
+            width, height = MediaEngine._resolve_sd_dimensions(entity_type, min_long_edge)
+            options["width"] = width
+            options["height"] = height
+
         return await MediaEngine.generate_image(
             prompt=prompt, 
             model=model, 
@@ -975,7 +1136,7 @@ class MediaEngine:
             adventure_id=adventure_id,
             target_dir=target_dir, 
             filename=filename,
-            provider_options=t2i,
+            provider_options=options,
             style_instruction=style_instruction,
         )
 
@@ -996,7 +1157,7 @@ class MediaEngine:
             raise ValueError("Missing image model configuration for adventure cover.")
 
         api_key = MediaEngine._resolve_api_key(provider, api_keys)
-        if provider != "ollama" and not api_key:
+        if provider not in ("ollama", "stable_diffusion") and not api_key:
             logger.error("API key resolution failed for provider: %s (Advanced Model/Cover)", provider)
             raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model/Cover). Please check your Visual Preferences in Admin settings.")
         
@@ -1011,6 +1172,19 @@ class MediaEngine:
             title=title, original_prompt=original_prompt
         )
         
+        # Resolve steps and cfg_scale for advanced model
+        options = dict(t2i)
+        options["steps"] = t2i.get("advanced_steps")
+        options["cfg_scale"] = t2i.get("advanced_cfg_scale")
+        options["sampler_name"] = t2i.get("advanced_sampler_name")
+        options["scheduler"] = t2i.get("advanced_scheduler")
+        min_long_edge = t2i.get("advanced_min_long_edge")
+
+        if provider in ("stable_diffusion", "ollama"):
+            width, height = MediaEngine._resolve_sd_dimensions("COVER", min_long_edge)
+            options["width"] = width
+            options["height"] = height
+
         return await MediaEngine.generate_image(
             prompt=prompt, 
             model=model, 
@@ -1019,7 +1193,7 @@ class MediaEngine:
             adventure_id=adventure_id,
             target_dir=target_dir, 
             filename=filename,
-            provider_options=t2i,
+            provider_options=options,
             style_instruction=style_instruction,
         )
 

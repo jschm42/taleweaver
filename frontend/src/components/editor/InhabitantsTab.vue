@@ -10,11 +10,12 @@ const props = defineProps<{
   activeMenuId: string | null
   editorNpcs: any[]
   ruleEnforcementMode: string
+  visualsCacheVersion: number
 }>()
 
 const emit = defineEmits<{
   (e: 'quick-regen', kind: string, id: string): void
-  (e: 'regen-all', kind: string): void
+  (e: 'regen-all', kind: string, missingOnly?: boolean): void
   (e: 'open-regen-dialog', kind: string, id: string, label: string): void
   (e: 'open-upload-picker', kind: string, id: string, label: string): void
   (e: 'download-asset', path: string, label: string): void
@@ -26,7 +27,7 @@ const emit = defineEmits<{
 
 function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) return ''
-  return imagePath
+  return `${imagePath}?v=${props.visualsCacheVersion}`
 }
 </script>
 
@@ -115,9 +116,14 @@ function buildVisualImageUrl(imagePath?: string | null) {
     <section v-if="editorNpcs.length" class="space-y-6">
       <div class="flex items-center justify-between">
         <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Notable Inhabitants ({{ editorNpcs.length }})</h3>
-        <button @click="emit('regen-all', 'npc')" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
-          <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
-        </button>
+        <div class="flex items-center gap-4">
+          <button @click="emit('regen-all', 'npc', true)" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Generate Missing
+          </button>
+          <button @click="emit('regen-all', 'npc', false)" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
+          </button>
+        </div>
       </div>
       <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
         <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="emit('handle-hover', { id: npc.id, name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats, inventory: npc.inventory }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl shadow-lg transition-all overflow-visible">

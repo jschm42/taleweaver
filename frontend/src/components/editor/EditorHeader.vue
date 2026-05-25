@@ -5,10 +5,12 @@ defineProps<{
   adventure: any
   adventureId: string
   coverSourceName: string
+  isGenerating?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'go-back'): void
+  (e: 'stop-generation'): void
 }>()
 </script>
 
@@ -36,5 +38,13 @@ const emit = defineEmits<{
       </div>
     </div>
     
+    <button
+      v-if="isGenerating"
+      @click="emit('stop-generation')"
+      class="ml-auto flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600/90 hover:bg-rose-500 border border-rose-500/30 hover:border-rose-400 transition-all duration-300 shadow-lg animate-pulse hover:animate-none active:scale-95 group"
+    >
+      <i class="ra ra-cancel text-white group-hover:rotate-90 transition-transform duration-300"></i>
+      <span class="text-xs font-black uppercase tracking-widest text-white">Stop Generation</span>
+    </button>
   </header>
 </template>

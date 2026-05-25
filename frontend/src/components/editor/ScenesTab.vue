@@ -7,10 +7,11 @@ const props = defineProps<{
   isBatchGenerating: Record<string, boolean>
   isQuickGenerating: Record<string, boolean>
   activeMenuId: string | null
+  visualsCacheVersion: number
 }>()
 
 const emit = defineEmits<{
-  (e: 'regen-all', kind: string): void
+  (e: 'regen-all', kind: string, missingOnly?: boolean): void
   (e: 'quick-regen', kind: string, id: string): void
   (e: 'open-regen-dialog', kind: string, id: string, label: string): void
   (e: 'open-upload-picker', kind: string, id: string, label: string): void
@@ -30,7 +31,7 @@ const scenes = computed<any[]>(() => {
 
 function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) return ''
-  return imagePath
+  return `${imagePath}?v=${props.visualsCacheVersion}`
 }
 </script>
 
@@ -38,9 +39,14 @@ function buildVisualImageUrl(imagePath?: string | null) {
   <section v-if="scenes.length" class="space-y-6 animate-page-in">
     <div class="flex items-center justify-between">
       <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">World Locations ({{ scenes.length }})</h3>
-      <button @click="emit('regen-all', 'scene')" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
-        <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Regenerate All
-      </button>
+      <div class="flex items-center gap-4">
+        <button @click="emit('regen-all', 'scene', true)" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+          <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Generate Missing
+        </button>
+        <button @click="emit('regen-all', 'scene', false)" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+          <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Regenerate All
+        </button>
+      </div>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
       <div v-for="(scene, idx) in scenes" :key="'scene_' + (scene.id || idx)" @mouseenter="emit('handle-hover', { id: scene.id, name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl shadow-xl transition-all overflow-visible">

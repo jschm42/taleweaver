@@ -54,13 +54,29 @@ class SettingsService {
     advanced_model_provider: 'openai',
     provider: 'openai',
     ollama_url: 'http://localhost:11434',
+    stable_diffusion_url: 'http://127.0.0.1:7860',
     width: null as number | null,
     height: null as number | null,
     steps: null as number | null,
+    cfg_scale: null as number | null,
+    simple_steps: null as number | null,
+    simple_cfg_scale: null as number | null,
+    advanced_steps: null as number | null,
+    advanced_cfg_scale: null as number | null,
+    simple_sampler_name: null as string | null,
+    simple_scheduler: null as string | null,
+    advanced_sampler_name: null as string | null,
+    advanced_scheduler: null as string | null,
+    simple_min_long_edge: null as number | null,
+    advanced_min_long_edge: null as number | null,
     seed: null as number | null,
     image_format: 'jpeg',
     image_quality: 85,
     negative_prompt: '',
+    scene_model_quality: 'advanced' as string,
+    profile_model_quality: 'advanced' as string,
+    protagonist_model_quality: 'advanced' as string,
+    asset_model_quality: 'simple' as string,
   })
 
   gameForm = ref({
@@ -93,6 +109,7 @@ class SettingsService {
   statusMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
   isHydratingSettings = ref(false)
   isLoadingOllamaModels = ref(false)
+  isLoadingStableDiffusionModels = ref(false)
 
   // ============ FETCHING & INITIALIZATION ============
 
@@ -142,6 +159,7 @@ class SettingsService {
       }
 
       await this.fetchOllamaModels(this.llmForm.value.ollama_url)
+      await this.fetchStableDiffusionModels(this.t2iForm.value.stable_diffusion_url)
     } catch (error) {
       console.error('[SettingsService] Failed to fetch settings:', error)
       this.statusMessage.value = {
@@ -178,6 +196,34 @@ class SettingsService {
       return []
     } finally {
       this.isLoadingOllamaModels.value = false
+    }
+  }
+
+  async fetchStableDiffusionModels(sdUrl?: string) {
+    this.isLoadingStableDiffusionModels.value = true
+    try {
+      const data = await api.getStableDiffusionModels(sdUrl)
+      const models = Array.isArray(data.models) ? data.models : []
+      this.availableConstants.value = {
+        ...this.availableConstants.value,
+        predefined_image_models: {
+          ...this.availableConstants.value.predefined_image_models,
+          stable_diffusion: models,
+        },
+      }
+      return models
+    } catch (error) {
+      console.error('[SettingsService] Failed to fetch Stable Diffusion models:', error)
+      this.availableConstants.value = {
+        ...this.availableConstants.value,
+        predefined_image_models: {
+          ...this.availableConstants.value.predefined_image_models,
+          stable_diffusion: ['default'],
+        },
+      }
+      return ['default']
+    } finally {
+      this.isLoadingStableDiffusionModels.value = false
     }
   }
 
@@ -266,7 +312,38 @@ class SettingsService {
    * Updates image generation models and quality settings.
    */
   async saveT2iSettings(payload: any) {
-    this.t2iForm.value = { ...payload }
+    const cleanNum = (val: any) => {
+      if (val === null || val === undefined || val === '') return null
+      const num = Number(val)
+      return isNaN(num) ? null : num
+    }
+
+    const cleanStr = (val: any) => {
+      if (val === null || val === undefined || String(val).trim() === '') return null
+      return String(val).trim()
+    }
+
+    const cleanedPayload = {
+      ...payload,
+      width: cleanNum(payload.width),
+      height: cleanNum(payload.height),
+      steps: cleanNum(payload.steps),
+      cfg_scale: cleanNum(payload.cfg_scale),
+      simple_steps: cleanNum(payload.simple_steps),
+      simple_cfg_scale: cleanNum(payload.simple_cfg_scale),
+      advanced_steps: cleanNum(payload.advanced_steps),
+      advanced_cfg_scale: cleanNum(payload.advanced_cfg_scale),
+      simple_sampler_name: cleanStr(payload.simple_sampler_name),
+      simple_scheduler: cleanStr(payload.simple_scheduler),
+      advanced_sampler_name: cleanStr(payload.advanced_sampler_name),
+      advanced_scheduler: cleanStr(payload.advanced_scheduler),
+      simple_min_long_edge: cleanNum(payload.simple_min_long_edge),
+      advanced_min_long_edge: cleanNum(payload.advanced_min_long_edge),
+      seed: cleanNum(payload.seed),
+      image_quality: cleanNum(payload.image_quality),
+    }
+
+    this.t2iForm.value = cleanedPayload
     this.isSubmitting.value = true
     this.statusMessage.value = null
 
