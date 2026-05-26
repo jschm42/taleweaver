@@ -107,8 +107,8 @@ def _sanitize_path_component(value: str) -> Optional[str]:
 
 
 def _ensure_within_data_dir(path: str) -> str:
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
+    data_root = os.path.realpath(settings.DATA_DIR)
+    resolved = os.path.realpath(path)
     try:
         if os.path.commonpath([resolved, data_root]) != data_root:
             raise ValueError("Resolved path escapes DATA_DIR.")
