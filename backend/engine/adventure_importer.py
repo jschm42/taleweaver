@@ -25,6 +25,17 @@ from backend.engine.media_engine import MediaEngine
 logger = logging.getLogger(__name__)
 
 
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
 class AdventureConflictError(Exception):
     """Raised when an adventure being imported already exists."""
     def __init__(self, title: str, existing_version: Optional[str], new_version: Optional[str], template_id: str):
@@ -58,7 +69,7 @@ class AdventureTemplateImporter:
         logger.info(f"Found {len(files)} potential adventures to import in {directory}")
         
         for filename in files:
-            file_path = os.path.join(directory, filename)
+            file_path = os.path.abspath(os.path.join(directory, filename))
             try:
                 success = await AdventureTemplateImporter.import_file(db, file_path, owner_id=owner_id, allow_session=allow_session)
                 if success and delete_after:
@@ -330,15 +341,18 @@ class AdventureTemplateImporter:
 
                 db.add(new_template)
                 
-                target_base_dir = os.path.join(settings.DATA_DIR, "adventures", "library", new_template_id)
+                target_base_dir = _ensure_within_data_dir(
+                    os.path.join(settings.DATA_DIR, "adventures", "library", new_template_id)
+                )
                 os.makedirs(target_base_dir, exist_ok=True)
                 
                 existing_images_mapping = {} # zip_path -> local_url
                 for zip_path in zip_file.namelist():
                     if zip_path.startswith("assets/"):
                         filename = os.path.basename(zip_path)
-                        if not filename: continue
-                        target_path = os.path.join(target_base_dir, filename)
+                        if not filename:
+                            continue
+                        target_path = _ensure_within_data_dir(os.path.join(target_base_dir, filename))
                         with open(target_path, "wb") as f:
                             f.write(zip_file.read(zip_path))
                         

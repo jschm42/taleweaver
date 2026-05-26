@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import random
 import re
 import time
@@ -72,6 +73,33 @@ TERMINAL_EPILOGUE_STATE_KEY = "__terminal_epilogue__"
 CHECKPOINT_REASON_SCENE_CHANGE = "SCENE_CHANGE"
 CHECKPOINT_REASON_QUEST_UPDATE = "QUEST_UPDATE"
 CHECKPOINT_REASON_AWARD_GRANTED = "AWARD_GRANTED"
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def _sanitize_path_component(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -466,15 +494,21 @@ class GameTurnManager:
                 
                 import os
                 session_id = self.state.session_id if self.state else self.game_id
-                agents_md_path = os.path.abspath(
-                    os.path.join(settings.DATA_DIR, "adventures", "sessions", session_id, "AGENTS.md")
-                )
-                link_path = agents_md_path.replace("\\", "/")
-                if not link_path.startswith("/"):
-                    link_path = "/" + link_path
+                safe_session_id = _sanitize_path_component(session_id)
+
+                agents_hint = "Agent issues log file is unavailable due to an invalid session path."
+                if safe_session_id:
+                    agents_md_path = _ensure_within_data_dir(
+                        os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_session_id, "AGENTS.md")
+                    )
+                    link_path = agents_md_path.replace("\\", "/")
+                    if not link_path.startswith("/"):
+                        link_path = "/" + link_path
+                    agents_hint = f"Agent issues log file: [AGENTS.md](file://{link_path}) (Path: `{agents_md_path}`)"
+
                 msg = (
                     "Autonomous Agent Gameplay Mode disabled. You are now back in control.\n\n"
-                    f"Agent issues log file: [AGENTS.md](file://{link_path}) (Path: `{agents_md_path}`)"
+                    f"{agents_hint}"
                 )
                 await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
@@ -2259,7 +2293,10 @@ class GameTurnManager:
                 import os
                 
                 item_type = item.get("item_type") or "PICKABLE"
-                target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", self.adventure.id, "entities")
+                safe_adventure_id = _sanitize_path_component(self.adventure.id) or "adventure"
+                target_dir = _ensure_within_data_dir(
+                    os.path.join(settings.DATA_DIR, "adventures", "library", safe_adventure_id, "entities")
+                )
                 image_url = await MediaEngine.generate_placeholder(
                     adventure_id=self.adventure.id,
                     entity_id=safe_id,
@@ -3492,7 +3529,10 @@ class GameTurnManager:
                         
                         item_type = item.item_type or "PICKABLE"
                         safe_id = re.sub(r"[^A-Za-z0-9_\-]", "_", item.id or f"LOOT_{uuid.uuid4().hex[:8]}")[:50]
-                        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", self.adventure.id, "entities")
+                        safe_adventure_id = _sanitize_path_component(self.adventure.id) or "adventure"
+                        target_dir = _ensure_within_data_dir(
+                            os.path.join(settings.DATA_DIR, "adventures", "library", safe_adventure_id, "entities")
+                        )
                         item.image_url = await MediaEngine.generate_placeholder(
                             adventure_id=self.adventure.id,
                             entity_id=safe_id,

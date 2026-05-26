@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,34 @@ from backend.models.world_entity import WorldEntity
 from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
 
 logger = logging.getLogger(__name__)
+
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
 
 class AgentDecision(BaseModel):
     thoughts: str = Field(description="Internal reasoning and goals based on the character persona, current situation, history, and walkthrough. Keep it concise.")
@@ -71,11 +100,18 @@ class AgentService:
 
         This function never creates new session directories to avoid stray folders from invalid IDs.
         """
-        session_dir = os.path.join(settings.DATA_DIR, "adventures", "sessions", session_id)
+        safe_session_id = _sanitize_path_component(session_id)
+        if not safe_session_id:
+            logger.warning("Agent issue log skipped: invalid session_id=%s", session_id)
+            return
+
+        session_dir = _ensure_within_data_dir(
+            os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_session_id)
+        )
         if not os.path.isdir(session_dir):
             logger.warning("Agent issue log skipped: session directory does not exist for session_id=%s", session_id)
             return
-        file_path = os.path.join(session_dir, "AGENTS.md")
+        file_path = _ensure_within_data_dir(os.path.join(session_dir, "AGENTS.md"))
         
         mode = "a" if os.path.exists(file_path) else "w"
         with open(file_path, mode, encoding="utf-8") as f:
