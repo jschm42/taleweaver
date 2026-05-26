@@ -133,7 +133,7 @@ async def test_player_only_context_filters_hidden_and_locked(setup_test_db):
         assert context["inventory_items"] == ["Rope"]
 
 
-async def test_generate_prompt_suggestions_persists_three_items(setup_test_db, monkeypatch):
+async def test_generate_prompt_suggestions_returns_and_persists_three_items(setup_test_db, monkeypatch):
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:

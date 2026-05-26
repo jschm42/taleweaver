@@ -69,6 +69,11 @@ GM_NOTES_PROMPT_MAX_ITEMS = 12
 GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS = 10
 TERMINAL_EPILOGUE_STATE_KEY = "__terminal_epilogue__"
 PROMPT_SUGGESTIONS_STATE_KEY = "__prompt_suggestions__"
+PROMPT_SUGGESTION_MAX_VISIBLE_NPCS = 12
+PROMPT_SUGGESTION_MAX_VISIBLE_OBJECTS = 16
+PROMPT_SUGGESTION_MAX_UNLOCKED_EXITS = 8
+PROMPT_SUGGESTION_MAX_INVENTORY_ITEMS = 16
+PROMPT_SUGGESTION_MAX_LAST_RESPONSE_CHARS = 1200
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -441,10 +446,10 @@ class GameTurnManager:
         return {
             "scene_label": scene_label,
             "scene_description": scene_description,
-            "visible_npcs": visible_npcs[:12],
-            "visible_objects": visible_objects[:16],
-            "unlocked_exits": unlocked_exits[:8],
-            "inventory_items": inventory_items[:16],
+            "visible_npcs": visible_npcs[:PROMPT_SUGGESTION_MAX_VISIBLE_NPCS],
+            "visible_objects": visible_objects[:PROMPT_SUGGESTION_MAX_VISIBLE_OBJECTS],
+            "unlocked_exits": unlocked_exits[:PROMPT_SUGGESTION_MAX_UNLOCKED_EXITS],
+            "inventory_items": inventory_items[:PROMPT_SUGGESTION_MAX_INVENTORY_ITEMS],
         }
 
     async def _load_last_assistant_message(self) -> str:
@@ -486,7 +491,7 @@ class GameTurnManager:
                 visible_objects=json.dumps(context["visible_objects"], ensure_ascii=False),
                 unlocked_exits=json.dumps(context["unlocked_exits"], ensure_ascii=False),
                 inventory_items=json.dumps(context["inventory_items"], ensure_ascii=False),
-                last_response=(last_response or "").strip()[:1200],
+                last_response=(last_response or "").strip()[:PROMPT_SUGGESTION_MAX_LAST_RESPONSE_CHARS],
             )
             raw = await llm.aexecute_simple_task(
                 prompts.PROMPT_SUGGESTION_SYSTEM_PROMPT,
