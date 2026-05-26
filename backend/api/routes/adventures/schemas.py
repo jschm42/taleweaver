@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal, Optional, Union
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.schemas.adventure import AdventureTemplateDebugResponse
 
@@ -368,6 +368,7 @@ class ChatResponse(BaseModel):
     status_note: Optional[str] = None
     input_locked: bool = False
     pending_terminal_epilogue: bool = False
+    prompt_suggestions: list[str] = Field(default_factory=list)
     full_world: Optional[AdventureTemplateDebugResponse] = None
 
 class AdventureTemplateImportPayload(BaseModel):
@@ -505,6 +506,4 @@ class QuestGenerationRequest(BaseModel):
 class QuestGenerationResponse(BaseModel):
     title: str
     description: str
-
-
 

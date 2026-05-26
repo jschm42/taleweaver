@@ -28,6 +28,7 @@ const props = defineProps<{
   sheet?: any
   gameId?: string
   currentSceneDescription?: string
+  promptSuggestions?: string[]
 }>()
 
 const { deleteMessage, agentPaused, agentStepByStep, runAgentTurn } = useGameSocket()
@@ -330,9 +331,9 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function handleSend(): void {
+function handleSend(forceText?: string): void {
   if (!canSendInput.value) return
-  const text = inputText.value.trim()
+  const text = (forceText ?? inputText.value).trim()
   if (!text) return
 
   if (text.startsWith('/debug log')) {
@@ -350,6 +351,17 @@ function handleSend(): void {
   emit('send', text)
   inputText.value = ''
   historyIndex.value = -1
+}
+
+function handleSuggestionSelect(suggestion: string): void {
+  if (!suggestion) return
+  inputText.value = suggestion
+  handleSend(suggestion)
+}
+
+function handleSuggestionShuffle(): void {
+  if (!canSendInput.value) return
+  emit('send', '/shuffle')
 }
 
 function handleKeydown(e: KeyboardEvent): void {
@@ -992,7 +1004,10 @@ onUnmounted(() => {
     <GameActionBar 
       :active-action-id="props.activeActionId" 
       :mode="props.mode"
+      :suggestions="props.promptSuggestions || []"
       :disabled="!!props.inputLocked || isPassRunning"
+      @use-suggestion="handleSuggestionSelect"
+      @shuffle-suggestions="handleSuggestionShuffle"
       @select-action="emit('selectAction', $event)" 
     />
 
@@ -1180,4 +1195,3 @@ onUnmounted(() => {
 .glow-map { animation: tool-glow-map 1s ease-in-out infinite; }
 .glow-quest { animation: tool-glow-quest 1s ease-in-out infinite; }
 </style>
-
