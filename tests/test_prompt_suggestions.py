@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+from backend.core.auth import get_password_hash
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
@@ -15,7 +16,7 @@ pytestmark = pytest.mark.asyncio
 async def _seed_prompt_context(db):
     user = User(
         username="suggest-player",
-        hashed_password="pw",
+        hashed_password=get_password_hash("pw"),
         role="user",
         llm_settings={
             "small_model": "gpt-4o-mini",

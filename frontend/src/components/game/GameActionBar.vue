@@ -34,6 +34,7 @@ const emit = defineEmits<{
         v-for="(suggestion, idx) in visibleSuggestions"
         :key="`${idx}-${suggestion}`"
         :disabled="props.disabled"
+        :aria-label="`Use suggestion: ${suggestion}`"
         class="group relative flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300 active:scale-95 border text-xs font-semibold"
         :class="[
           props.disabled
@@ -46,6 +47,7 @@ const emit = defineEmits<{
       </button>
       <button
         :disabled="props.disabled"
+        aria-label="Shuffle suggestion chips"
         class="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-700/80 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
         title="Shuffle suggestions"
         @click="emit('shuffleSuggestions')"

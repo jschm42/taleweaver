@@ -307,6 +307,7 @@ class GameTurnManager:
 
     @staticmethod
     def extract_prompt_suggestions(exit_states: Any) -> list[str]:
+        """Return up to three stored prompt suggestions from session exit_state payload."""
         if not isinstance(exit_states, dict):
             return []
         raw = exit_states.get(PROMPT_SUGGESTIONS_STATE_KEY)
@@ -398,6 +399,7 @@ class GameTurnManager:
         return self._normalize_prompt_suggestions(fallback)
 
     async def _build_player_only_suggestion_context(self) -> dict[str, Any]:
+        """Build a spoiler-safe suggestion context (visible NPCs/objects, unlocked exits, inventory)."""
         scene_res = await self.db.execute(
             select(WorldScene).where(
                 WorldScene.id == self.state.current_scene_id,
@@ -466,6 +468,7 @@ class GameTurnManager:
         return str(value or "").strip()
 
     async def _generate_prompt_suggestions(self, last_response: str) -> list[str]:
+        """Generate three short UI prompt suggestions, with deterministic fallback and state persistence."""
         context = await self._build_player_only_suggestion_context()
         fallback = self._fallback_prompt_suggestions(
             scene_label=context["scene_label"],
