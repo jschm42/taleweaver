@@ -4,6 +4,8 @@ import os
 import random
 import re
 
+from backend.core.config import settings
+
 
 class SVGPlaceholderGenerator:
     """
@@ -193,7 +195,15 @@ class SVGPlaceholderGenerator:
 
     def save(self, filepath: str, title: str = "", category: str = "") -> None:
         """Speichert das SVG in eine Datei."""
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, 'w', encoding='utf-8') as f:
+        data_root = os.path.abspath(settings.DATA_DIR)
+        resolved_path = os.path.abspath(filepath)
+        try:
+            if os.path.commonpath([resolved_path, data_root]) != data_root:
+                raise ValueError("Invalid filepath: path escapes DATA_DIR.")
+        except ValueError as exc:
+            raise ValueError("Invalid filepath: cannot resolve against DATA_DIR.") from exc
+
+        os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
+        with open(resolved_path, 'w', encoding='utf-8') as f:
             f.write(self.generate(title, category))
 
