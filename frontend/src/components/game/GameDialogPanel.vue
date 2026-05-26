@@ -25,6 +25,7 @@ const props = defineProps<{
   sheet?: any
   gameId?: string
   currentSceneDescription?: string
+  promptSuggestions?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -77,6 +78,7 @@ defineExpose({ appendText })
       :sheet="props.sheet"
       :game-id="props.gameId"
       :current-scene-description="props.currentSceneDescription"
+      :prompt-suggestions="props.promptSuggestions"
       @send="emit('send', $event)"
       @open-sheet="emit('openSheet')"
       @open-map="emit('openMap')"
@@ -101,4 +103,3 @@ defineExpose({ appendText })
     </div>
   </div>
 </template>
-

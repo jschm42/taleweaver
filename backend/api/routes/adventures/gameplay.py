@@ -125,6 +125,7 @@ async def get_chat_history(
         status_note=state.session.status_note if state.session else None,
         input_locked=input_locked,
         pending_terminal_epilogue=pending_terminal_epilogue,
+        prompt_suggestions=GameTurnManager.extract_prompt_suggestions(state.exit_states or {}),
     )
 
 @router.post("/{game_id}/chat")
@@ -234,6 +235,7 @@ async def run_agent_turn(
                         'sheet': await AdventureLogic.build_sheet_snapshot(manager.avatar, state, db),
                         'entities': await AdventureLogic.build_session_entities(db, state),
                         'combat': AdventureLogic.get_combat_snapshot(state),
+                        'prompt_suggestions': GameTurnManager.extract_prompt_suggestions(state.exit_states or {}),
                         **manager._build_terminal_flags_payload(),
                         'status': 'success',
                     })

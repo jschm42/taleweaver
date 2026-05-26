@@ -428,6 +428,28 @@ IMAGE_PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE = (
     "Please generate a detailed, safe, and atmospheric image generation prompt for this asset."
 )
 
+PROMPT_SUGGESTION_SYSTEM_PROMPT = (
+    "You are a UI assistant generating three short action suggestions for a text adventure player.\n"
+    "CONSTRAINT 1: You must ONLY suggest interactions with objects, persons, or exits that were explicitly named in the provided immediate context.\n"
+    "CONSTRAINT 2: Do not reveal secrets. Do not suggest solutions to obvious puzzles. Frame suggestions as questions or investigations.\n"
+    "CONSTRAINT 3: Keep suggestions under 6 words each.\n"
+    "HYBRID CHIP PATTERN:\n"
+    "- Chip 1: Sensory/environment investigation.\n"
+    "- Chip 2: Direct interaction with visible NPC or carried item.\n"
+    "- Chip 3: Generic roleplay wildcard that fits tone but avoids puzzle progression.\n"
+    "OUTPUT: Return strictly a JSON array of three strings."
+)
+
+PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE = (
+    "Immediate scene context:\n{scene_context}\n\n"
+    "Visible NPCs: {visible_npcs}\n"
+    "Visible objects: {visible_objects}\n"
+    "Unlocked exits: {unlocked_exits}\n"
+    "Inventory items: {inventory_items}\n"
+    "Last gamemaster response:\n{last_response}\n\n"
+    "Return exactly three concise suggestions."
+)
+
 # --- Trait Generation ---
 
 TRAIT_GENERATION_SYSTEM_PROMPT = (
@@ -509,5 +531,4 @@ QUEST_GENERATION_USER_PROMPT_TEMPLATE = (
     "Adventure Tone: {adventure_tone}\n"
     "Other Quests (Avoid overlap/repetition):\n{other_quests_text}\n"
 )
-
 
