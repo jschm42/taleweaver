@@ -1161,11 +1161,15 @@ class MediaEngine:
             logger.error("API key resolution failed for provider: %s (Advanced Model/Cover)", provider)
             raise ValueError(f"Missing image configuration or API key for {provider} (Advanced Model/Cover). Please check your Visual Preferences in Admin settings.")
         
-        target_dir = _safe_data_path("adventures", "library", adventure_id)
+        safe_adventure_id = _sanitize_path_component(adventure_id)
+        if not safe_adventure_id:
+            raise ValueError("Invalid adventure identifier.")
+
+        target_dir = _safe_data_path("adventures", "library", safe_adventure_id)
         ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
         
-        # Use adventure_id as prefix for clarity
-        safe_id = slugify(adventure_id)
+        # Use sanitized adventure_id as prefix for clarity
+        safe_id = safe_adventure_id
         filename = f"{safe_id}_cover_{uuid.uuid4().hex[:8]}.{ext}"
         
         prompt = prompts.ADVENTURE_COVER_PROMPT_TEMPLATE.format(
