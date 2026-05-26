@@ -1,16 +1,17 @@
+# TaleWeaver: Generative AI Roleplaying
+
+<!-- markdownlint-disable MD033 MD022 MD032 MD030 MD012 MD009 -->
+
 <p align="center">
   <img src="frontend/src/assets/svg/app-logo.svg" width="200" alt="TaleWeaver Logo">
   <br><em>Weave Infinite Adventures.</em>
 </p>
 
-
-# TaleWeaver: Generative AI Roleplaying
-
 > [!IMPORTANT]
 > **TaleWeaver is currently in active development.**
 > As an early beta release, you may encounter unexpected behavior or creative "hallucinations." We are constantly refining the engine. Contributions and feedback are highly welcome!
 
-**Welcome to the future of interactive storytelling.** TaleWeaver is not just another text adventure. It is a next-generation, browser-based RPG driven entirely by an **omniscient AI Gamemaster**. By combining state-of-the-art Large Language Models with cinematic Text-to-Speech (TTS), TaleWeaver dynamically generates worlds, characters, and storylines on the fly - reacting to your every decision. 
+**Welcome to the future of interactive storytelling.** TaleWeaver is not just another text adventure. It is a next-generation, browser-based RPG driven entirely by an **omniscient AI Gamemaster**. By combining state-of-the-art Large Language Models with cinematic Text-to-Speech (TTS), TaleWeaver dynamically generates worlds, characters, and storylines on the fly - reacting to your every decision.
 
 **With our immersive voice integration, playing TaleWeaver feels like directing and starring in your own playable audiobook.**
 

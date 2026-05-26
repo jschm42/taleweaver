@@ -499,9 +499,7 @@ export function useGameSocket(): UseGameSocket {
           }
         }
 
-        if (status.value === 'connecting') {
-          statusText.value = ''
-        }
+        statusText.value = ''
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -564,7 +562,7 @@ export function useGameSocket(): UseGameSocket {
       const decoder = new TextDecoder()
       let buffer = ''
 
-      while (true) {
+      while (!controller.signal.aborted) {
         const { value, done } = await reader.read()
         if (done) break
 
