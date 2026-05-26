@@ -692,7 +692,7 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
     await db.commit()
 
     # Remove session-bound files from disk.
-    safe_game_id = _sanitize_path_component(game_id)
+    safe_game_id = _sanitize_path_component(str(game_session.id))
     if safe_game_id:
         session_dir = _ensure_within_data_dir(
             os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_game_id)
