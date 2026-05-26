@@ -70,3 +70,28 @@ To understand the internal processes of TaleWeaver, refer to the following Merma
   * Avoid manual migrations via `ALTER TABLE` in the application code (e.g., in `database.py`), unless there is a very specific technical reason.
   * Always verify the migration by running `alembic upgrade head`.
 
+---
+
+## 6. Security & Input Validation (Path Traversal Prevention)
+
+* **Preventing "Uncontrolled data used in path expression" (CWE-22):**
+  * When handling file operations, never directly concatenate or trust user-supplied input (like usernames, template IDs, or filenames) to construct file paths.
+  * **Use Path Verification Helpers:** Always use helper functions like `_ensure_within_data_dir(path)` or `_safe_data_path(*parts)` to verify that any resolved target path strictly resides within the intended base directory (e.g., `settings.DATA_DIR`).
+    * Use `os.path.abspath` to resolve paths fully (resolving symbolic links and `..` segments) and `os.path.commonpath` to ensure the target is within the base directory:
+      ```python
+      def _ensure_within_data_dir(path: str) -> str:
+          data_root = os.path.abspath(settings.DATA_DIR)
+          resolved = os.path.abspath(path)
+          try:
+              if os.path.commonpath([resolved, data_root]) != data_root:
+                  raise ValueError("Resolved path escapes DATA_DIR.")
+          except ValueError as exc:
+              raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+          return resolved
+      ```
+  * **Input Sanitization & Validation:**
+    * Use alphanumeric regex validation for any variable path components (e.g. `re.match(r"^[A-Za-z0-9_-]{1,128}$", template_id)`).
+    * Strip path separators (`/`, `\`) or traversal sequences (`..`) from parameters.
+    * Use `os.path.basename` to extract only the filename when referencing uploaded files, or generate a random/UUID filename (e.g., `f"{uuid.uuid4()}.{ext}"`) rather than trusting the original name.
+
+
