@@ -68,6 +68,7 @@ async def lifespan(_app: FastAPI):
 
     # Auto-import adventures
     from backend.core.database import AsyncSessionLocal
+    from backend.api.routes.adventures.sessions import _cleanup_stale_empty_session_dirs
     from backend.engine.adventure_importer import AdventureTemplateImporter
     
     async with AsyncSessionLocal() as db:
@@ -86,6 +87,18 @@ async def lifespan(_app: FastAPI):
             os.path.join(settings.DATA_DIR, "imports", "adventures"),
             delete_after=True,
         )
+
+        # Best-effort cleanup for stale empty session directories at startup.
+        session_ids_res = await db.execute(select(backend.models.game_session.GameSession.id))
+        active_session_ids = {
+            sid for sid in session_ids_res.scalars().all() if isinstance(sid, str)
+        }
+        removed_dirs = _cleanup_stale_empty_session_dirs(
+            active_session_ids=active_session_ids,
+            max_age_days=max(0, int(getattr(settings, "SESSION_EMPTY_DIR_CLEANUP_DAYS", 7))),
+        )
+        if removed_dirs:
+            logger.info("Startup cleanup removed %s stale empty session directories.", removed_dirs)
 
     yield
 

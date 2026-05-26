@@ -6,6 +6,7 @@ sub-routes. All tests follow the Arrange-Act-Assert pattern.
 """
 import json
 import os
+import time
 import zipfile
 from io import BytesIO
 
@@ -2274,6 +2275,39 @@ async def test_list_session_checkpoints_returns_seeded_entries(client: AsyncClie
     assert len(data) == 1
     assert data[0]["trigger_reason"] == "SCENE_CHANGE"
     assert "Arrived" in data[0]["title"]
+
+
+async def test_list_sessions_cleans_up_stale_empty_orphan_dirs(client: AsyncClient, monkeypatch, tmp_path):
+    """Listing sessions should remove stale empty orphan directories but keep active session directories."""
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(settings, "DATA_DIR", str(data_dir))
+    monkeypatch.setattr(settings, "SESSION_EMPTY_DIR_CLEANUP_DAYS", 1)
+
+    ids = await _create_adventure(client, "Cleanup Session Quest")
+    active_game_id = ids["game_id"]
+
+    sessions_dir = data_dir / "adventures" / "sessions"
+    active_dir = sessions_dir / active_game_id
+    os.makedirs(active_dir, exist_ok=True)
+
+    stale_empty_dir = sessions_dir / "cleanup-stale-empty-test"
+    os.makedirs(stale_empty_dir, exist_ok=True)
+
+    stale_nonempty_dir = sessions_dir / "cleanup-stale-nonempty-test"
+    os.makedirs(stale_nonempty_dir, exist_ok=True)
+    (stale_nonempty_dir / "keep.txt").write_text("x", encoding="utf-8")
+
+    old_ts = time.time() - (2 * 24 * 60 * 60)
+    os.utime(stale_empty_dir, (old_ts, old_ts))
+    os.utime(stale_nonempty_dir, (old_ts, old_ts))
+    os.utime(active_dir, (old_ts, old_ts))
+
+    resp = await client.get("/api/adventures/sessions")
+    assert resp.status_code == 200, resp.text
+
+    assert not stale_empty_dir.exists()
+    assert stale_nonempty_dir.exists()
+    assert active_dir.exists()
 
 
 async def test_restore_session_checkpoint_rolls_back_state_and_prunes_messages(client: AsyncClient):

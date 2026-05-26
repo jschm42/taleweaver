@@ -68,6 +68,7 @@ class Settings(BaseSettings):
 
 
     DATA_DIR: str = "data"
+    SESSION_EMPTY_DIR_CLEANUP_DAYS: int = 7
     
     VISUAL_TIMEOUT: int = 300
     INTELLIGENCE_TIMEOUT: int = 60
