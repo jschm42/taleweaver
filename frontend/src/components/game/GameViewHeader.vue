@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
-import { FileText } from 'lucide-vue-next'
+import { FileText, History, PenLine } from 'lucide-vue-next'
 
 const props = defineProps<{
   title?: string | null
@@ -10,11 +10,13 @@ const props = defineProps<{
   gameTime: { dateShort: string; time: string } | null
   clockTick: boolean
   debugMode?: boolean
+  isCheckpointSaving?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'back'): void
   (e: 'edit-note'): void
+  (e: 'open-chronicles'): void
 }>()
 
 const handleBack = () => {
@@ -34,6 +36,15 @@ const handleBack = () => {
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 text-slate-100 group-hover:text-emerald-400 transition-colors">
             <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
           </svg>
+        </button>
+
+        <button
+          v-if="props.title"
+          @click="emit('open-chronicles')"
+          class="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-sky-500/10 hover:border-sky-500/40 text-sky-300/80 hover:text-sky-200 transition-all duration-300 backdrop-blur-md shadow-xl group shrink-0"
+          title="Open Chronicles Timeline"
+        >
+          <History class="w-5 h-5" />
         </button>
 
         <button
@@ -61,7 +72,16 @@ const handleBack = () => {
     </div>
 
     <div class="z-20 shrink-0 lg:w-1/4 flex justify-end">
-      <GameClockWidget :game-time="props.gameTime" :clock-tick="props.clockTick" />
+      <div class="flex items-center gap-3">
+        <div
+          v-if="props.isCheckpointSaving"
+          class="inline-flex items-center gap-2 rounded-full border border-emerald-400/35 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-emerald-300 animate-pulse"
+        >
+          <PenLine class="w-3.5 h-3.5" />
+          Saving...
+        </div>
+        <GameClockWidget :game-time="props.gameTime" :clock-tick="props.clockTick" />
+      </div>
     </div>
 
     <div v-if="props.debugMode" class="absolute top-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-1 bg-rose-600/80 backdrop-blur-md border border-rose-400/50 rounded-full text-[10px] font-black text-white uppercase tracking-[0.2em] animate-pulse shadow-lg">

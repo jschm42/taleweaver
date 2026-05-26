@@ -33,6 +33,7 @@ from backend.engine.command_parser import CommandParser
 from backend.engine.debug_engine import DebugEngine
 from backend.engine.map_engine import MapEngine
 from backend.engine.quest_manager import QuestManager
+from backend.engine.session_checkpoint_service import SessionCheckpointService
 from backend.engine.adventure_generator_service import AdventureGeneratorService
 from backend.engine.rule_engine import (
     RESOURCE_CAP,
@@ -68,6 +69,9 @@ GM_NOTES_MAX_ITEMS = 20
 GM_NOTES_PROMPT_MAX_ITEMS = 12
 GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS = 10
 TERMINAL_EPILOGUE_STATE_KEY = "__terminal_epilogue__"
+CHECKPOINT_REASON_SCENE_CHANGE = "SCENE_CHANGE"
+CHECKPOINT_REASON_QUEST_UPDATE = "QUEST_UPDATE"
+CHECKPOINT_REASON_AWARD_GRANTED = "AWARD_GRANTED"
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -178,6 +182,39 @@ class GameTurnManager:
         )
         self._combat_state_helper = TurnCombatStateHelper(self)
         self._llm_context_builder = TurnLlmContextBuilder(self)
+        self._pending_checkpoint_reasons: set[str] = set()
+        self._checkpoint_scene_label: str | None = None
+
+    def _queue_checkpoint(self, reason: str, *, scene_label: str | None = None) -> None:
+        self._pending_checkpoint_reasons.add(reason)
+        if scene_label:
+            self._checkpoint_scene_label = scene_label
+
+    async def _persist_pending_checkpoints(self) -> list[dict[str, Any]]:
+        if not self._pending_checkpoint_reasons or not self.state:
+            return []
+
+        checkpoint_events: list[dict[str, Any]] = []
+        reasons = sorted(self._pending_checkpoint_reasons)
+        for reason in reasons:
+            checkpoint = await SessionCheckpointService.create_checkpoint(
+                self.db,
+                self.state.session_id,
+                reason,
+                scene_label=self._checkpoint_scene_label,
+            )
+            checkpoint_events.append(
+                {
+                    "id": checkpoint.id,
+                    "trigger_reason": checkpoint.trigger_reason,
+                    "created_at": checkpoint.created_at.isoformat() if checkpoint.created_at else None,
+                }
+            )
+
+        await self.db.commit()
+        self._pending_checkpoint_reasons.clear()
+        self._checkpoint_scene_label = None
+        return checkpoint_events
 
     async def _unhide_entities_in_text(self, text: str) -> None:
         """Scan text for entity ID tokens like 'ID: TALKING_RAT' and set their
@@ -3333,7 +3370,13 @@ class GameTurnManager:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
         await self.db.commit()
-        
+
+        checkpoint_events = await self._persist_pending_checkpoints()
+        if checkpoint_events:
+            yield f"event: status\ndata: {json.dumps({'content': 'Saving chronicle...'})}\n\n"
+            for checkpoint_event in checkpoint_events:
+                yield f"event: checkpoint\ndata: {json.dumps(checkpoint_event)}\n\n"
+
         map_payload = await self._build_map_payload()
         
         # Fetch adventure for cover image fallback
@@ -3557,6 +3600,7 @@ class GameTurnManager:
                 msg = f"📍 You have entered: {scene_name}"
                 await self._save_chat_message("system", msg)
                 system_messages.append(msg)
+                self._queue_checkpoint(CHECKPOINT_REASON_SCENE_CHANGE, scene_label=scene_name)
 
                 MapEngine.register_visit(
                     world_map, 
@@ -3781,6 +3825,7 @@ class GameTurnManager:
             if modified:
                 self.user.earned_awards = user_awards
                 flag_modified(self.user, "earned_awards")
+                self._queue_checkpoint(CHECKPOINT_REASON_AWARD_GRANTED)
 
         # Deterministic Quest Sync (Post-LLM check)
         det_completed = QuestManager.evaluate_quests(self.avatar, self.state)
@@ -3800,6 +3845,7 @@ class GameTurnManager:
                 state_dirty = True
 
         if newly_completed_quests:
+            self._queue_checkpoint(CHECKPOINT_REASON_QUEST_UPDATE)
             # Emit one system entry per newly completed quest so players get explicit feedback.
             for q in newly_completed_quests:
                 quest_title = q.get("title") or q.get("id")

@@ -5,6 +5,7 @@ from .base import Base
 from .character import Character
 from .chat import ChatMessage
 from .game_session import GameSession
+from .session_checkpoint import SessionCheckpoint
 from .session_state import SessionState
 from .user import User
 from .world_entity import WorldEntity, WorldExit, WorldScene

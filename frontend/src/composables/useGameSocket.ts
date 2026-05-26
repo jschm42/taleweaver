@@ -38,8 +38,10 @@ export interface UseGameSocket {
   questGlow: Ref<boolean>
   agentPaused: Ref<boolean>
   agentStepByStep: Ref<boolean>
+  isCheckpointSaving: Ref<boolean>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
+  haltActiveOperations: () => void
   sendMessage: (content: string) => Promise<void>
   runAgentTurn: () => Promise<void>
   createTerminalEpilogue: () => Promise<void>
@@ -86,6 +88,19 @@ export function useGameSocket(): UseGameSocket {
   let activeChatController: AbortController | null = null
   const agentPaused = ref(false)
   const agentStepByStep = ref(localStorage.getItem('tw_agent_step_by_step') === 'true')
+  const isCheckpointSaving = ref(false)
+  let checkpointPulseTimer: number | null = null
+
+  function triggerCheckpointPulse(): void {
+    isCheckpointSaving.value = true
+    if (checkpointPulseTimer !== null) {
+      clearTimeout(checkpointPulseTimer)
+    }
+    checkpointPulseTimer = window.setTimeout(() => {
+      isCheckpointSaving.value = false
+      checkpointPulseTimer = null
+    }, 1400)
+  }
 
   watch(agentStepByStep, (val) => {
     localStorage.setItem('tw_agent_step_by_step', String(val))
@@ -253,6 +268,26 @@ export function useGameSocket(): UseGameSocket {
     currentGameId = ''
     status.value = 'disconnected'
     stopSyncTimer()
+    if (checkpointPulseTimer !== null) {
+      clearTimeout(checkpointPulseTimer)
+      checkpointPulseTimer = null
+    }
+    isCheckpointSaving.value = false
+  }
+
+  function haltActiveOperations(): void {
+    if (activeChatController) {
+      activeChatController.abort()
+      activeChatController = null
+    }
+    if (activeAgentController) {
+      activeAgentController.abort()
+      activeAgentController = null
+    }
+    if (status.value === 'connecting' || status.value === 'loading') {
+      status.value = 'connected'
+      statusText.value = ''
+    }
   }
 
   /**
@@ -427,6 +462,8 @@ export function useGameSocket(): UseGameSocket {
               status.value = 'connected'
               statusText.value = ''
             }
+          } else if (event === 'checkpoint') {
+            triggerCheckpointPulse()
           }
         }
       }
@@ -594,6 +631,8 @@ export function useGameSocket(): UseGameSocket {
             addNotification(detail, 'error')
             status.value = 'connected'
             statusText.value = ''
+          } else if (event === 'checkpoint') {
+            triggerCheckpointPulse()
           }
         }
       }
@@ -695,8 +734,10 @@ export function useGameSocket(): UseGameSocket {
     questGlow,
     agentPaused,
     agentStepByStep,
+    isCheckpointSaving,
     connect,
     disconnect,
+    haltActiveOperations,
     sendMessage,
     runAgentTurn,
     createTerminalEpilogue,

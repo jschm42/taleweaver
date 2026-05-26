@@ -69,3 +69,10 @@ def test_open_command_returns_trigger() -> None:
 def test_read_command_returns_trigger() -> None:
     response = CommandParser.parse_command(_avatar(), "/read Captain Log")
     assert response == "[TRIGGER_READ] Captain Log"
+
+
+def test_unknown_commands_are_rejected() -> None:
+    first_response = CommandParser.parse_command(_avatar(), "/foobar")
+    second_response = CommandParser.parse_command(_avatar(), "/legacy_command")
+    assert "Unknown command" in first_response
+    assert "Unknown command" in second_response
