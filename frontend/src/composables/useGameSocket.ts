@@ -32,6 +32,7 @@ export interface UseGameSocket {
   statusNote: Ref<string>
   inputLocked: Ref<boolean>
   pendingTerminalEpilogue: Ref<boolean>
+  promptSuggestions: Ref<string[]>
   debugLogs: Ref<{ timestamp: string, content: string }[]>
   inventoryGlow: Ref<boolean>
   mapGlow: Ref<boolean>
@@ -76,6 +77,7 @@ export function useGameSocket(): UseGameSocket {
   const statusNote = ref('')
   const inputLocked = ref(false)
   const pendingTerminalEpilogue = ref(false)
+  const promptSuggestions = ref<string[]>([])
   const debugLogs = ref<{ timestamp: string, content: string }[]>([])
   const inventoryGlow = ref(false)
   const mapGlow = ref(false)
@@ -175,6 +177,9 @@ export function useGameSocket(): UseGameSocket {
     }
     if (data.awards !== undefined) {
       awards.value = data.awards || []
+    }
+    if (data.prompt_suggestions !== undefined) {
+      promptSuggestions.value = Array.isArray(data.prompt_suggestions) ? data.prompt_suggestions : []
     }
 
     if (data.status_note !== undefined) {
@@ -290,7 +295,7 @@ export function useGameSocket(): UseGameSocket {
       return
     }
 
-    const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume']
+    const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume', '/shuffle', '/suggest', '/suggestions']
     const isSilent = silentCommands.some(cmd => content.toLowerCase().startsWith(cmd))
 
     if (content && !isSilent) _pushMessage('user', content)
@@ -689,6 +694,7 @@ export function useGameSocket(): UseGameSocket {
     statusNote,
     inputLocked,
     pendingTerminalEpilogue,
+    promptSuggestions,
     debugLogs,
     inventoryGlow,
     mapGlow,
@@ -708,4 +714,3 @@ export function useGameSocket(): UseGameSocket {
 
   return gameSocketSingleton
 }
-

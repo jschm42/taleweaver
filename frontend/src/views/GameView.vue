@@ -112,6 +112,7 @@ const {
   isCompleted,
   inputLocked,
   pendingTerminalEpilogue,
+  promptSuggestions,
   statusText,
   debugLogs,
   inventoryGlow,
@@ -880,6 +881,7 @@ watch(
         :sheet="sheet"
         :game-id="props.id"
         :current-scene-description="currentSceneDescription"
+        :prompt-suggestions="promptSuggestions"
         @send="handlePlayerInput"
         @open-sheet="showSheet = true"
         @open-map="showMap = true"
@@ -1087,5 +1089,4 @@ watch(
 }
 
 </style>
-
 
