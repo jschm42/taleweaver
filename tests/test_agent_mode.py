@@ -183,7 +183,10 @@ async def test_agent_turn_retry_and_deactivation_on_failure(mock_get_decision, a
         await db.close()
 
         # Clean old issues log if exists
-        session_dir = os.path.join(settings.DATA_DIR, "adventures", "sessions", game_id)
+        sessions_root = os.path.abspath(os.path.normpath(os.path.join(settings.DATA_DIR, "adventures", "sessions")))
+        session_dir = os.path.abspath(os.path.normpath(os.path.join(sessions_root, game_id)))
+        if os.path.commonpath([sessions_root, session_dir]) != sessions_root:
+            raise ValueError(f"Unsafe session path for game_id: {game_id}")
         agents_md_path = os.path.join(session_dir, "AGENTS.md")
         if os.path.exists(agents_md_path):
             os.remove(agents_md_path)
