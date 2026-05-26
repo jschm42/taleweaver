@@ -9,6 +9,8 @@ from backend.engine.media_engine import MediaEngine
 
 pytestmark = pytest.mark.asyncio
 
+TEST_TARGET_DIR = "adventures/library/test"
+
 
 class _FakeResponse:
     def __init__(self, status_code, json_data=None, content=b"", text=""):
@@ -45,7 +47,7 @@ async def test_generate_image_ollama_uses_litellm_payload(monkeypatch):
         model="x/flux2-klein",
         api_key=None,
         provider="ollama",
-        target_dir="/tmp",
+        target_dir=TEST_TARGET_DIR,
         filename="img.png",
         provider_options={"ollama_url": "http://localhost:11434"},
     )
@@ -76,7 +78,7 @@ async def test_generate_image_ollama_falls_back_to_direct_http(monkeypatch):
         model="x/flux2-klein",
         api_key=None,
         provider="ollama",
-        target_dir="/tmp",
+        target_dir=TEST_TARGET_DIR,
         provider_options={"ollama_url": "http://localhost:11434"},
     )
 
@@ -92,7 +94,7 @@ async def test_generate_image_requires_key_for_cloud_provider():
             model="openai/dall-e-3",
             api_key=None,
             provider="openai",
-            target_dir="/tmp",
+            target_dir=TEST_TARGET_DIR,
         )
 
 
@@ -126,7 +128,7 @@ async def test_generate_image_black_forest_labs_uses_direct_polling_flow(monkeyp
         model="black_forest_labs/flux-pro-1.1",
         api_key="bfl-key",
         provider="black_forest_labs",
-        target_dir="/tmp",
+        target_dir=TEST_TARGET_DIR,
         provider_options={"width": 1024, "height": 1024, "seed": 123, "safety_tolerance": 2},
     )
 
@@ -162,7 +164,7 @@ async def test_generate_image_ollama_raises_if_local_generation_fails(monkeypatc
             model="x/flux2-klein",
             api_key=None,
             provider="ollama",
-            target_dir="/tmp",
+            target_dir=TEST_TARGET_DIR,
             provider_options={"ollama_url": "http://localhost:11434"},
         )
 
@@ -175,7 +177,7 @@ async def test_generate_image_ollama_rejects_cloud_model_prefix():
             model="openai/dall-e-3",
             api_key=None,
             provider="ollama",
-            target_dir="/tmp",
+            target_dir=TEST_TARGET_DIR,
             provider_options={"ollama_url": "http://localhost:11434"},
         )
 
