@@ -195,15 +195,18 @@ class SVGPlaceholderGenerator:
 
     def save(self, filepath: str, title: str = "", category: str = "") -> None:
         """Speichert das SVG in eine Datei."""
-        data_root = os.path.abspath(settings.DATA_DIR)
-        resolved_path = os.path.abspath(filepath)
+        data_root = os.path.realpath(settings.DATA_DIR)
+        resolved_path = os.path.realpath(filepath)
         try:
             if os.path.commonpath([resolved_path, data_root]) != data_root:
                 raise ValueError("Invalid filepath: path escapes DATA_DIR.")
         except ValueError as exc:
             raise ValueError("Invalid filepath: cannot resolve against DATA_DIR.") from exc
 
-        os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
+        parent_dir = os.path.dirname(resolved_path)
+        if not parent_dir:
+            raise ValueError("Invalid filepath: missing parent directory.")
+        os.makedirs(parent_dir, exist_ok=True)
         with open(resolved_path, 'w', encoding='utf-8') as f:
             f.write(self.generate(title, category))
 
