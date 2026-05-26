@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import random
 import re
 import time
@@ -33,6 +34,7 @@ from backend.engine.command_parser import CommandParser
 from backend.engine.debug_engine import DebugEngine
 from backend.engine.map_engine import MapEngine
 from backend.engine.quest_manager import QuestManager
+from backend.engine.session_checkpoint_service import SessionCheckpointService
 from backend.engine.adventure_generator_service import AdventureGeneratorService
 from backend.engine.rule_engine import (
     RESOURCE_CAP,
@@ -74,6 +76,36 @@ PROMPT_SUGGESTION_MAX_VISIBLE_OBJECTS = 16
 PROMPT_SUGGESTION_MAX_UNLOCKED_EXITS = 8
 PROMPT_SUGGESTION_MAX_INVENTORY_ITEMS = 16
 PROMPT_SUGGESTION_MAX_LAST_RESPONSE_CHARS = 1200
+CHECKPOINT_REASON_SCENE_CHANGE = "SCENE_CHANGE"
+CHECKPOINT_REASON_QUEST_UPDATE = "QUEST_UPDATE"
+CHECKPOINT_REASON_AWARD_GRANTED = "AWARD_GRANTED"
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def _sanitize_path_component(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -184,6 +216,39 @@ class GameTurnManager:
         )
         self._combat_state_helper = TurnCombatStateHelper(self)
         self._llm_context_builder = TurnLlmContextBuilder(self)
+        self._pending_checkpoint_reasons: set[str] = set()
+        self._checkpoint_scene_label: str | None = None
+
+    def _queue_checkpoint(self, reason: str, *, scene_label: str | None = None) -> None:
+        self._pending_checkpoint_reasons.add(reason)
+        if scene_label:
+            self._checkpoint_scene_label = scene_label
+
+    async def _persist_pending_checkpoints(self) -> list[dict[str, Any]]:
+        if not self._pending_checkpoint_reasons or not self.state:
+            return []
+
+        checkpoint_events: list[dict[str, Any]] = []
+        reasons = sorted(self._pending_checkpoint_reasons)
+        for reason in reasons:
+            checkpoint = await SessionCheckpointService.create_checkpoint(
+                self.db,
+                self.state.session_id,
+                reason,
+                scene_label=self._checkpoint_scene_label,
+            )
+            checkpoint_events.append(
+                {
+                    "id": checkpoint.id,
+                    "trigger_reason": checkpoint.trigger_reason,
+                    "created_at": checkpoint.created_at.isoformat() if checkpoint.created_at else None,
+                }
+            )
+
+        await self.db.commit()
+        self._pending_checkpoint_reasons.clear()
+        self._checkpoint_scene_label = None
+        return checkpoint_events
 
     async def _unhide_entities_in_text(self, text: str) -> None:
         """Scan text for entity ID tokens like 'ID: TALKING_RAT' and set their
@@ -659,15 +724,21 @@ class GameTurnManager:
                 
                 import os
                 session_id = self.state.session_id if self.state else self.game_id
-                agents_md_path = os.path.abspath(
-                    os.path.join(settings.DATA_DIR, "adventures", "sessions", session_id, "AGENTS.md")
-                )
-                link_path = agents_md_path.replace("\\", "/")
-                if not link_path.startswith("/"):
-                    link_path = "/" + link_path
+                safe_session_id = _sanitize_path_component(session_id)
+
+                agents_hint = "Agent issues log file is unavailable due to an invalid session path."
+                if safe_session_id:
+                    agents_md_path = _ensure_within_data_dir(
+                        os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_session_id, "AGENTS.md")
+                    )
+                    link_path = agents_md_path.replace("\\", "/")
+                    if not link_path.startswith("/"):
+                        link_path = "/" + link_path
+                    agents_hint = f"Agent issues log file: [AGENTS.md](file://{link_path}) (Path: `{agents_md_path}`)"
+
                 msg = (
                     "Autonomous Agent Gameplay Mode disabled. You are now back in control.\n\n"
-                    f"Agent issues log file: [AGENTS.md](file://{link_path}) (Path: `{agents_md_path}`)"
+                    f"{agents_hint}"
                 )
                 await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
@@ -2460,7 +2531,10 @@ class GameTurnManager:
                 import os
                 
                 item_type = item.get("item_type") or "PICKABLE"
-                target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", self.adventure.id, "entities")
+                safe_adventure_id = _sanitize_path_component(self.adventure.id) or "adventure"
+                target_dir = _ensure_within_data_dir(
+                    os.path.join(settings.DATA_DIR, "adventures", "library", safe_adventure_id, "entities")
+                )
                 image_url = await MediaEngine.generate_placeholder(
                     adventure_id=self.adventure.id,
                     entity_id=safe_id,
@@ -3572,7 +3646,13 @@ class GameTurnManager:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
         await self.db.commit()
-        
+
+        checkpoint_events = await self._persist_pending_checkpoints()
+        if checkpoint_events:
+            yield f"event: status\ndata: {json.dumps({'content': 'Saving chronicle...'})}\n\n"
+            for checkpoint_event in checkpoint_events:
+                yield f"event: checkpoint\ndata: {json.dumps(checkpoint_event)}\n\n"
+
         map_payload = await self._build_map_payload()
         
         # Fetch adventure for cover image fallback
@@ -3689,7 +3769,10 @@ class GameTurnManager:
                         
                         item_type = item.item_type or "PICKABLE"
                         safe_id = re.sub(r"[^A-Za-z0-9_\-]", "_", item.id or f"LOOT_{uuid.uuid4().hex[:8]}")[:50]
-                        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", self.adventure.id, "entities")
+                        safe_adventure_id = _sanitize_path_component(self.adventure.id) or "adventure"
+                        target_dir = _ensure_within_data_dir(
+                            os.path.join(settings.DATA_DIR, "adventures", "library", safe_adventure_id, "entities")
+                        )
                         item.image_url = await MediaEngine.generate_placeholder(
                             adventure_id=self.adventure.id,
                             entity_id=safe_id,
@@ -3797,6 +3880,7 @@ class GameTurnManager:
                 msg = f"📍 You have entered: {scene_name}"
                 await self._save_chat_message("system", msg)
                 system_messages.append(msg)
+                self._queue_checkpoint(CHECKPOINT_REASON_SCENE_CHANGE, scene_label=scene_name)
 
                 MapEngine.register_visit(
                     world_map, 
@@ -4021,6 +4105,7 @@ class GameTurnManager:
             if modified:
                 self.user.earned_awards = user_awards
                 flag_modified(self.user, "earned_awards")
+                self._queue_checkpoint(CHECKPOINT_REASON_AWARD_GRANTED)
 
         # Deterministic Quest Sync (Post-LLM check)
         det_completed = QuestManager.evaluate_quests(self.avatar, self.state)
@@ -4040,6 +4125,7 @@ class GameTurnManager:
                 state_dirty = True
 
         if newly_completed_quests:
+            self._queue_checkpoint(CHECKPOINT_REASON_QUEST_UPDATE)
             # Emit one system entry per newly completed quest so players get explicit feedback.
             for q in newly_completed_quests:
                 quest_title = q.get("title") or q.get("id")

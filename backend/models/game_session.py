@@ -24,4 +24,5 @@ class GameSession(Base, TimestampMixin):
 
     # Relationships
     state = relationship("SessionState", back_populates="session", uselist=False, cascade="all, delete-orphan")
+    checkpoints = relationship("SessionCheckpoint", back_populates="session", cascade="all, delete-orphan")
 

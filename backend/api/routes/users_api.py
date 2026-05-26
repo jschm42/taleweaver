@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 import os
+import re
 import shutil
 from typing import Any, Optional, Union
 from uuid import uuid4
@@ -26,6 +27,8 @@ ADMIN_DEP = Depends(get_current_admin)
 USER_DEP = Depends(get_current_user)
 DB_DEP = Depends(get_db)
 UPLOAD_FILE_DEP = File(...)
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 class UserCreateRequest(BaseModel):
     username: str
@@ -53,6 +56,39 @@ def _normalize_public_data_url(url: str) -> str:
     while normalized.startswith("/data/data/"):
         normalized = normalized.replace("/data/data/", "/data/", 1)
     return normalized
+
+
+def _sanitize_path_component(value: str) -> Optional[str]:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
+
+
+def _sanitize_image_extension(filename: Optional[str]) -> str:
+    if not filename or "." not in filename:
+        return ".png"
+    ext = os.path.splitext(filename)[1].strip().lower()
+    if ext not in _SAFE_IMAGE_EXTENSIONS:
+        return ".png"
+    return ext
 
 
 def _resolve_provider_api_key(provider: str, api_keys_dict: Optional[dict[str, str]]) -> Optional[str]:
@@ -156,12 +192,16 @@ async def upload_my_profile_image(
     current_user: User = USER_DEP,
     db: AsyncSession = DB_DEP,
 ):
-    upload_dir = os.path.join(settings.DATA_DIR, "users")
+    safe_user_id = _sanitize_path_component(current_user.id)
+    if not safe_user_id:
+        raise HTTPException(status_code=400, detail="Invalid user identifier")
+
+    upload_dir = _ensure_within_data_dir(os.path.join(settings.DATA_DIR, "users"))
     os.makedirs(upload_dir, exist_ok=True)
-    
-    file_ext = os.path.splitext(file.filename)[1]
-    filename = f"{current_user.id}_{uuid4().hex[:8]}{file_ext}"
-    file_path = os.path.join(upload_dir, filename)
+
+    file_ext = _sanitize_image_extension(file.filename)
+    filename = f"{safe_user_id}_{uuid4().hex[:8]}{file_ext}"
+    file_path = _ensure_within_data_dir(os.path.join(upload_dir, filename))
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)

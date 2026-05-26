@@ -196,7 +196,14 @@ class SVGPlaceholderGenerator:
     def save(self, filepath: str, title: str = "", category: str = "") -> None:
         """Speichert das SVG in eine Datei."""
         data_root = os.path.realpath(settings.DATA_DIR)
-        resolved_path = os.path.realpath(filepath)
+        normalized_path = os.path.normpath(filepath)
+        filename = os.path.basename(normalized_path)
+        if not filename or filename in {".", ".."}:
+            raise ValueError("Invalid filepath: invalid filename.")
+        if any(sep in filename for sep in (os.sep, os.altsep) if sep):
+            raise ValueError("Invalid filepath: filename must be a single path component.")
+
+        resolved_path = os.path.realpath(normalized_path)
         try:
             if os.path.commonpath([resolved_path, data_root]) != data_root:
                 raise ValueError("Invalid filepath: path escapes DATA_DIR.")

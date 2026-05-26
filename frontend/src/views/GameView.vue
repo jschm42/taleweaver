@@ -26,6 +26,8 @@ import ContainerCodeModal from '@/components/game/ContainerCodeModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
+import ChroniclesModal from '@/components/game/ChroniclesModal.vue'
+import CheckpointRestoreConfirmModal from '@/components/game/CheckpointRestoreConfirmModal.vue'
 import ContextMenu from '@/components/game/ContextMenu.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
@@ -44,6 +46,7 @@ import { audioService } from '@/services/audioService'
 import { type GameSettings } from '@/services/gameViewService'
 import { gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
+import type { SessionCheckpoint } from '@/types'
 
 const props = defineProps<{
   id: string
@@ -57,6 +60,12 @@ const showQuests = ref(false)
 const showDebugLog = ref(false)
 const showNoteModal = ref(false)
 const isSavingNote = ref(false)
+const showChroniclesModal = ref(false)
+const showRestoreConfirmModal = ref(false)
+const isLoadingCheckpoints = ref(false)
+const restoringCheckpointId = ref<string | null>(null)
+const checkpoints = ref<SessionCheckpoint[]>([])
+const pendingRestoreCheckpoint = ref<SessionCheckpoint | null>(null)
 const showContainerModal = ref(false)
 const containerBusy = ref(false)
 const showContainerCodeModal = ref(false)
@@ -120,12 +129,62 @@ const {
   questGlow,
   agentPaused,
   agentStepByStep,
+  isCheckpointSaving,
   connect,
   disconnect,
+  haltActiveOperations,
   sendMessage,
   runAgentTurn,
   createTerminalEpilogue
 } = useGameSocket()
+
+const loadSessionCheckpoints = async () => {
+  isLoadingCheckpoints.value = true
+  try {
+    checkpoints.value = await api.listSessionCheckpoints(props.id)
+  } catch (error) {
+    addNotification('Failed to load Chronicles timeline.', 'error')
+  } finally {
+    isLoadingCheckpoints.value = false
+  }
+}
+
+const openChroniclesModal = async () => {
+  showChroniclesModal.value = true
+  await loadSessionCheckpoints()
+}
+
+const restoreCheckpoint = (checkpoint: SessionCheckpoint) => {
+  pendingRestoreCheckpoint.value = checkpoint
+  showRestoreConfirmModal.value = true
+}
+
+const closeRestoreConfirmModal = () => {
+  if (restoringCheckpointId.value) return
+  showRestoreConfirmModal.value = false
+  pendingRestoreCheckpoint.value = null
+}
+
+const confirmRestoreCheckpoint = async () => {
+  const checkpoint = pendingRestoreCheckpoint.value
+  if (!checkpoint) return
+
+  restoringCheckpointId.value = checkpoint.id
+  try {
+    haltActiveOperations()
+    audioService.stop()
+    const result = await api.restoreSessionCheckpoint(props.id, checkpoint.id)
+    await connect(props.id)
+    await loadSessionCheckpoints()
+    showRestoreConfirmModal.value = false
+    pendingRestoreCheckpoint.value = null
+    addNotification(`Timeline restored. Removed ${result.deleted_messages} future messages.`, 'success')
+  } catch (error) {
+    addNotification('Failed to restore checkpoint timeline.', 'error')
+  } finally {
+    restoringCheckpointId.value = null
+  }
+}
 
 const {
   showSuccess,
@@ -787,7 +846,9 @@ watch(
       :game-time="gameTime"
       :clock-tick="clockTick"
       :debug-mode="!!sheet?.debug_mode"
+      :is-checkpoint-saving="isCheckpointSaving"
       @back="goBack"
+      @open-chronicles="openChroniclesModal"
       @edit-note="showNoteModal = true"
     />
 
@@ -941,6 +1002,21 @@ watch(
       :is-saving="isSavingNote"
       @close="showNoteModal = false"
       @save="saveSessionNote"
+    />
+    <ChroniclesModal
+      :open="showChroniclesModal"
+      :checkpoints="checkpoints"
+      :loading="isLoadingCheckpoints"
+      :restoring-id="restoringCheckpointId"
+      @close="showChroniclesModal = false"
+      @restore="restoreCheckpoint"
+    />
+    <CheckpointRestoreConfirmModal
+      :open="showRestoreConfirmModal"
+      :checkpoint="pendingRestoreCheckpoint"
+      :busy="!!restoringCheckpointId"
+      @close="closeRestoreConfirmModal"
+      @confirm="confirmRestoreCheckpoint"
     />
     <SuccessScreen 
       :show="showSuccess" 

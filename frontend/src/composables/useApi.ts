@@ -7,6 +7,8 @@
 import type {
   CreateAdventurePayload,
   GameSession,
+  SessionCheckpoint,
+  RestoreCheckpointResult,
   AdventureImportPayload,
   CatalogTile,
   AdventureTemplateSummary,
@@ -497,6 +499,18 @@ export const api = {
     return request(`/adventures/sessions/${gameId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    })
+  },
+
+  /** Lists session timeline checkpoints (max newest five). */
+  listSessionCheckpoints(gameId: string): Promise<SessionCheckpoint[]> {
+    return request(`/adventures/sessions/${gameId}/checkpoints`)
+  },
+
+  /** Restores a session to the selected checkpoint and truncates future chat history. */
+  restoreSessionCheckpoint(gameId: string, checkpointId: string): Promise<RestoreCheckpointResult> {
+    return request(`/adventures/sessions/${gameId}/checkpoints/${checkpointId}/restore`, {
+      method: 'POST',
     })
   },
 

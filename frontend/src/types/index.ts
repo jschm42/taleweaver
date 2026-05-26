@@ -142,6 +142,21 @@ export interface GameSession {
   copied_from_id?: string | null
 }
 
+export interface SessionCheckpoint {
+  id: string
+  session_id: string
+  message_index: number
+  trigger_reason: 'SCENE_CHANGE' | 'QUEST_UPDATE' | 'AWARD_GRANTED'
+  title: string
+  created_at: string
+}
+
+export interface RestoreCheckpointResult {
+  status: 'restored'
+  checkpoint_id: string
+  deleted_messages: number
+}
+
 export interface AdventureTemplateSummary {
   template_id: string
   title: string

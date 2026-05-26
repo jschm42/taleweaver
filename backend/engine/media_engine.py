@@ -103,15 +103,13 @@ def _normalize_output_filename(filename: Optional[str], extension: str) -> str:
 
     # Keep only the final segment to prevent directory traversal.
     candidate = os.path.basename(candidate)
-    stem, original_ext = os.path.splitext(candidate)
+    stem, _original_ext = os.path.splitext(candidate)
     stem = _SAFE_FILENAME_RE.sub("_", stem).strip("._")
     if not stem:
         stem = str(uuid.uuid4())
 
-    normalized_ext = original_ext.lower().lstrip(".")
-    if normalized_ext not in {"png", "jpg", "jpeg"}:
-        normalized_ext = ext
-    return f"{stem}.{normalized_ext}"
+    # Always enforce trusted extension selected by server-side format.
+    return f"{stem}.{ext}"
 
 
 def _normalize_svg_filename(filename: Optional[str], default_stem: str) -> str:

@@ -16,6 +16,7 @@ from backend.api.routes.adventures.schemas import GameSessionResponse
 from backend.schemas.session import GameSessionUpdate
 from backend.engine.session_exporter import SessionExporter
 from backend.engine.session_importer import SessionImporter
+from backend.engine.session_checkpoint_service import SessionCheckpointService
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
@@ -23,12 +24,14 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
+from backend.models.session_checkpoint import SessionCheckpoint
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from sqlalchemy import delete
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.game_state import GameState
 from backend.models.world_map import WorldMap
+from backend.schemas.checkpoint import RestoreCheckpointResponse, SessionCheckpointResponse
 from backend.utils.text_utils import generate_session_id
 
 router = APIRouter(tags=["Sessions"])
@@ -670,6 +673,7 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
     avatar_id = game_session.avatar_id
 
     # Explicitly remove session-bound rows that may not be ORM-cascaded.
+    await db.execute(delete(SessionCheckpoint).where(SessionCheckpoint.session_id == game_id))
     await db.execute(delete(ChatMessage).where(ChatMessage.session_id == game_id))
     await db.execute(delete(SessionState).where(SessionState.session_id == game_id))
     await db.execute(delete(WorldEntity).where(WorldEntity.session_id == game_id))
@@ -1253,6 +1257,52 @@ async def update_session(
     await db.commit()
 
     return await _get_session_response(db, game_id, current_user.id)
+
+
+@router.get("/sessions/{game_id}/checkpoints", response_model=list[SessionCheckpointResponse])
+async def list_session_checkpoints(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[SessionCheckpointResponse]:
+    session_res = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    game_session = session_res.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    return await SessionCheckpointService.list_checkpoints(db, game_id)
+
+
+@router.post("/sessions/{game_id}/checkpoints/{checkpoint_id}/restore", response_model=RestoreCheckpointResponse)
+async def restore_session_checkpoint(
+    game_id: str,
+    checkpoint_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RestoreCheckpointResponse:
+    session_res = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    game_session = session_res.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    try:
+        deleted_messages = await SessionCheckpointService.restore_checkpoint(db, game_id, checkpoint_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Event-table pruning is intentionally deferred until a dedicated event store exists.
+    logger.info("Checkpoint restore for session %s pruned %s chat messages.", game_id, deleted_messages)
+    await db.commit()
+
+    return RestoreCheckpointResponse(
+        status="restored",
+        checkpoint_id=checkpoint_id,
+        deleted_messages=deleted_messages,
+    )
 
 
 @router.get("/sessions/{game_id}/export")
