@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -76,6 +77,23 @@ class TTSGeneratePayload(BaseModel):
     @classmethod
     def _validate_optional_text(cls, value: Any) -> Optional[str]:
         return cls._coerce_optional_text(value)
+
+    @staticmethod
+    def _coerce_optional_uuid(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        candidate = str(value).strip()
+        if not candidate:
+            return None
+        try:
+            return str(uuid.UUID(candidate))
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise ValueError("Must be a valid UUID.") from exc
+
+    @field_validator("adventure_id", "session_id", mode="before")
+    @classmethod
+    def _validate_optional_uuid(cls, value: Any) -> Optional[str]:
+        return cls._coerce_optional_uuid(value)
 
 @router.post("/generate")
 async def generate_tts(
