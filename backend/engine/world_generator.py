@@ -1595,7 +1595,7 @@ class WorldGenerator:
                 if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder for Items
                     item_type = str(o.get("item_type") or "PICKABLE").upper()
-                    safe_entity_id = slugify(str(o["id"])) or "entity"
+                    safe_entity_id = MediaEngine.sanitize_path_component(str(o["id"])) or "entity"
                     image_url = await MediaEngine.generate_placeholder(
                         template_id, safe_entity_id, os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
                         category=f"ITEM_{item_type}"
