@@ -81,6 +81,20 @@ def _slugify(value: str) -> str:
     return slug.strip("-") or "item"
 
 
+def _sanitize_filename_component(value: str) -> Optional[str]:
+    """Return a safe filename component for user-provided identifiers."""
+    candidate = _slugify(value)
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not re.fullmatch(r"[a-z0-9-]{1,64}", candidate):
+        return None
+    return candidate
+
+
 def _sanitize_path_component(value: str) -> Optional[str]:
     """Return a safe single path segment, or None when invalid."""
     candidate = (value or "").strip()
@@ -136,7 +150,9 @@ def _build_catalog_upload_path(catalog_type: str, target_id: str, original_filen
     os.makedirs(catalog_dir, exist_ok=True)
 
     ext = _sanitize_image_extension(original_filename)
-    safe_target_id = _slugify(target_id)
+    safe_target_id = _sanitize_filename_component(target_id)
+    if not safe_target_id:
+        raise ValueError("Invalid target id.")
     filename = f"{safe_target_id}_{uuid.uuid4().hex[:8]}.{ext}"
     return _ensure_within_data_dir(os.path.join(catalog_dir, filename))
 
