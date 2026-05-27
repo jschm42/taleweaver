@@ -39,6 +39,18 @@ def _safe_data_path(*parts: str) -> str:
     return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
 
 
+def _ensure_within_base_dir(path: str, base_dir: str) -> str:
+    """Validate that a path resolves inside base_dir and return absolute path."""
+    resolved_base = os.path.abspath(base_dir)
+    resolved_path = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved_path, resolved_base]) != resolved_base:
+            raise ValueError("Resolved path escapes base_dir.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against base_dir.") from exc
+    return resolved_path
+
+
 def restore_session_paths(data: Any, new_session_id: str) -> Any:
     """
     Recursively replaces relative assets/ paths with the new session's data paths.
@@ -294,7 +306,8 @@ class SessionImporter:
                         # Relativize destination path within the session directory
                         rel_path = zip_info.filename.replace("assets/", "", 1)
                         dest_path = os.path.join(new_session_dir, rel_path)
-                        safe_dest_path = _ensure_within_data_dir(dest_path)
+                        safe_dest_path = _ensure_within_base_dir(dest_path, new_session_dir)
+                        safe_dest_path = _ensure_within_data_dir(safe_dest_path)
 
                         os.makedirs(os.path.dirname(safe_dest_path), exist_ok=True)
                         with open(safe_dest_path, "wb") as f:

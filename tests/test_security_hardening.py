@@ -3,9 +3,11 @@ import os
 import pytest
 
 from backend.api.routes.adventures.assets import _build_uploaded_visual_path
+from backend.api.routes.adventures.agent_logic import _resolve_session_issue_log_path
 from backend.api.routes.config_api import _build_catalog_upload_path, _route_error_response
 from backend.core.config import settings
 from backend.engine.media_engine import _build_output_filepath
+from backend.engine.session_importer import _ensure_within_base_dir
 from backend.engine.tts_engine import _build_audio_output_path, _strip_vocal_tags
 
 
@@ -55,3 +57,19 @@ def test_route_error_response_hides_exception_details():
     response = _route_error_response("Catalog upload", "Upload failed.", RuntimeError("secret token leaked"))
 
     assert response == {"status": "error", "message": "Upload failed."}
+
+
+def test_resolve_session_issue_log_path_rejects_traversal(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+
+    with pytest.raises(ValueError):
+        _resolve_session_issue_log_path("../outside")
+
+
+def test_ensure_within_base_dir_rejects_escape(tmp_path):
+    base_dir = tmp_path / "adventures" / "sessions" / "session-1"
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    escaped = base_dir / ".." / ".." / "users" / "owned.txt"
+    with pytest.raises(ValueError):
+        _ensure_within_base_dir(str(escaped), str(base_dir))
