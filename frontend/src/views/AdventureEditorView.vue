@@ -76,6 +76,7 @@ const editForm = ref({
   item_to_unlock: '',
   inventory_json: '[]',
   text_log_content: '',
+  text_log_format: 'DOCUMENT',
 })
 
 const adventure = ref<any>(null)
@@ -436,9 +437,12 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     : null
 
   editEntityContext.value = { type, id }
+  const resolvedDescription = type === 'object'
+    ? fixNewlines(selectedObject?.description || currentDesc || '')
+    : fixNewlines(currentDesc || '')
   editForm.value = { 
     name: currentName || '', 
-    description: fixNewlines(currentDesc || ''),
+    description: resolvedDescription,
     teaser: fixNewlines(currentTeaser || ''),
     hp: hp ?? 0,
     stamina: stamina ?? 0,
@@ -453,6 +457,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     item_to_unlock: selectedObject?.item_to_unlock || '',
     inventory_json: JSON.stringify(selectedObject?.inventory || [], null, 2),
     text_log_content: fixNewlines(selectedObject?.metadata_json?.text_log_content || ''),
+    text_log_format: String(selectedObject?.metadata_json?.text_log_format || selectedObject?.text_log_format || 'DOCUMENT').trim().toUpperCase(),
   }
   showEditModal.value = true
 }
@@ -479,6 +484,15 @@ async function saveEntityText(data: any) {
     return
   }
 
+  if (
+    editEntityContext.value.type === 'object' &&
+    String(data.item_type || '').toUpperCase() === 'READABLE' &&
+    (data.description || '').length > 200
+  ) {
+    addNotification('Readable item descriptions must be 200 characters or less.', 'error')
+    return
+  }
+
   isSavingText.value = true
   promptError.value = ''
   try {
@@ -494,13 +508,15 @@ async function saveEntityText(data: any) {
       goal: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.goal : undefined,
       character: ['npc', 'protagonist'].includes(editEntityContext.value.type) ? data.character : undefined,
       is_killable: editEntityContext.value.type === 'npc' ? data.is_killable : undefined,
-      item_type: editEntityContext.value.type === 'object' ? data.item_type : undefined,
       is_portable: editEntityContext.value.type === 'object' ? data.is_portable : undefined,
       locked: editEntityContext.value.type === 'object' ? data.locked : undefined,
       code_to_unlock: editEntityContext.value.type === 'object' ? data.code_to_unlock : undefined,
       item_to_unlock: editEntityContext.value.type === 'object' ? data.item_to_unlock : undefined,
       inventory: editEntityContext.value.type === 'object' ? data.inventory : undefined,
       text_log_content: editEntityContext.value.type === 'object' ? data.text_log_content : undefined,
+      text_log_format: editEntityContext.value.type === 'object' && String(data.item_type || '').toUpperCase() === 'READABLE'
+        ? data.text_log_format
+        : undefined,
     })
     showEditModal.value = false
     editEntityContext.value = null
@@ -655,8 +671,8 @@ function isImageMissingForRegeneration(item: any): boolean {
   if (!raw) return true
   const lowered = raw.toLowerCase()
   // Legacy/broken paths and generated placeholders should count as missing.
-  if (lowered.startsWith('assets/')) return true
-  if (lowered.includes('placeholder_')) return true
+  if (lowered.startsWith('assets/') || lowered.startsWith('/assets/')) return true
+  if (lowered.includes('placeholder_') || lowered.includes('/placeholder-')) return true
   return false
 }
 

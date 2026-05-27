@@ -35,8 +35,8 @@ const hasMissingImage = (obj: any): boolean => {
   const raw = String(obj?.image_url || '').trim()
   if (!raw) return true
   const lowered = raw.toLowerCase()
-  if (lowered.startsWith('assets/')) return true
-  if (lowered.includes('placeholder_')) return true
+  if (lowered.startsWith('assets/') || lowered.startsWith('/assets/')) return true
+  if (lowered.includes('placeholder_') || lowered.includes('/placeholder-')) return true
   return false
 }
 
@@ -89,7 +89,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
               <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
               <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
               <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'object'}_image`)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-              <button @click="emit('open-text-edit', 'object', obj.id, obj.name, (obj.metadata_json?.text_log_content || obj.description || ''))" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
+              <button @click="emit('open-text-edit', 'object', obj.id, obj.name, (obj.description || ''))" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Details</button>
             </div>
           </div>
         </div>

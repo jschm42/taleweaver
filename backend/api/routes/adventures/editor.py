@@ -60,6 +60,7 @@ class EntityUpdateRequest(BaseModel):
     item_to_unlock: Optional[str] = None
     inventory: Optional[list] = None
     text_log_content: Optional[str] = None
+    text_log_format: Optional[str] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -353,8 +354,9 @@ async def update_editor_entity(
                 if payload.character is not None: ent.character = payload.character
                 if payload.is_killable is not None: ent.is_killable = payload.is_killable
             if ent.entity_type == "OBJECT":
-                if payload.item_type is not None:
-                    ent.item_type = str(payload.item_type).upper()
+                is_readable_object = str(ent.item_type or "").upper() == "READABLE"
+                if payload.description is not None and is_readable_object and len(payload.description) > 200:
+                    raise HTTPException(status_code=400, detail="description must be at most 200 characters for READABLE objects.")
                 if payload.is_portable is not None:
                     ent.is_portable = bool(payload.is_portable)
                 if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.locked is not None:
@@ -375,6 +377,14 @@ async def update_editor_entity(
                         raise HTTPException(status_code=400, detail="text_log_content must be at most 500 characters.")
                     metadata_json = dict(ent.metadata_json or {})
                     metadata_json["text_log_content"] = payload.text_log_content.strip()
+                    ent.metadata_json = metadata_json
+                if payload.text_log_format is not None:
+                    normalized_format = str(payload.text_log_format).strip().upper()
+                    allowed_formats = {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}
+                    if normalized_format not in allowed_formats:
+                        raise HTTPException(status_code=400, detail="text_log_format must be one of DOCUMENT, SCROLL, BOOK, SIGN.")
+                    metadata_json = dict(ent.metadata_json or {})
+                    metadata_json["text_log_format"] = normalized_format
                     ent.metadata_json = metadata_json
             
     await db.commit()

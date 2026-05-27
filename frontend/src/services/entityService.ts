@@ -20,6 +20,7 @@ export interface EntityEditData {
   item_to_unlock?: string
   inventory?: any[]
   text_log_content?: string
+  text_log_format?: string
 }
 
 /**

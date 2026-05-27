@@ -21,6 +21,7 @@ const props = defineProps<{
     item_to_unlock: string
     inventory_json: string
     text_log_content: string
+    text_log_format: string
   }
   ruleEnforcementMode: string
   isSaving: boolean
@@ -250,14 +251,11 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Item Type</label>
-                    <select v-model="localForm.item_type" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-amber-500/50 outline-none transition-all">
-                      <option value="PICKABLE">PICKABLE</option>
-                      <option value="WEAPON">WEAPON</option>
-                      <option value="ARMOR">ARMOR</option>
-                      <option value="CONSUMABLE">CONSUMABLE</option>
-                      <option value="CONTAINER">CONTAINER</option>
-                      <option value="STATIC">STATIC</option>
-                    </select>
+                    <input
+                      :value="String(localForm.item_type || '').toUpperCase()"
+                      disabled
+                      class="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-2 text-slate-300 font-bold uppercase tracking-widest cursor-not-allowed"
+                    />
                   </div>
                   <div class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Portable</label>
@@ -315,6 +313,15 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                 </div>
 
                 <div v-if="String(localForm.item_type || '').toUpperCase() === 'READABLE'" class="space-y-2">
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Text Log Format</label>
+                    <select v-model="localForm.text_log_format" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-cyan-500/50 outline-none transition-all">
+                      <option value="DOCUMENT">DOCUMENT</option>
+                      <option value="SCROLL">SCROLL</option>
+                      <option value="BOOK">BOOK</option>
+                      <option value="SIGN">SIGN</option>
+                    </select>
+                  </div>
                   <div class="flex justify-between items-center">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Text Log Content</label>
                     <span :class="['text-xs font-bold tracking-widest', (localForm.text_log_content || '').length > 500 ? 'text-red-500' : 'text-emerald-500/50']">
@@ -328,11 +335,11 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
               <div class="space-y-3">
                 <div class="flex justify-between items-center">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ context.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }}</label>
-                  <span v-if="['npc', 'protagonist'].includes(context.type)" :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > 400 ? 'text-red-500' : 'text-emerald-500/50']">
-                    {{ (localForm.description || '').length }} / 400
+                  <span v-if="['npc', 'protagonist'].includes(context.type) || (context.type === 'object' && String(localForm.item_type || '').toUpperCase() === 'READABLE')" :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > (context.type === 'object' ? 200 : 400) ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ (localForm.description || '').length }} / {{ context.type === 'object' ? 200 : 400 }}
                   </span>
                 </div>
-                <textarea v-model="localForm.description" :maxlength="['npc', 'protagonist'].includes(context.type) ? 400 : undefined" rows="8" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-lg text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"></textarea>
+                <textarea v-model="localForm.description" :maxlength="['npc', 'protagonist'].includes(context.type) ? 400 : (context.type === 'object' && String(localForm.item_type || '').toUpperCase() === 'READABLE' ? 200 : undefined)" :rows="context.type === 'object' ? 5 : 8" :class="['w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner', context.type === 'object' ? 'text-sm' : 'text-lg']"></textarea>
               </div>
             </div>
 
