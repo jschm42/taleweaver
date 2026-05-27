@@ -479,6 +479,44 @@ async def test_debug_includes_protagonist_profile_image(client: AsyncClient):
     assert debug_data["protagonist"]["profile_image"] == "/data/adventures/example/protagonist.png"
 
 
+async def test_editor_assets_recovers_missing_protagonist_from_manifest(client: AsyncClient):
+    """Editor assets should self-heal a missing template avatar using original_manifest.protagonist."""
+    ids = await _create_adventure(client, "Missing Protagonist Recovery")
+    adv_id = ids["adventure_id"]
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, adv_id)
+        assert adventure is not None
+        adventure.original_manifest = {
+            "protagonist": {
+                "name": "Recovered Hero",
+                "role": "Archivist",
+                "description": "Recovered from manifest.",
+                "profile_image": "/data/adventures/library/recovered/protagonist.png",
+                "hp": 111,
+                "stamina": 87,
+                "mana": 93,
+            }
+        }
+        await session.execute(delete(Avatar).where(Avatar.template_id == adv_id))
+        await session.commit()
+
+    assets_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    assert assets_resp.status_code == 200, assets_resp.text
+    assets_data = assets_resp.json()
+    assert assets_data.get("protagonist") is not None
+    assert assets_data["protagonist"]["name"] == "Recovered Hero"
+    assert assets_data["protagonist"]["role"] == "Archivist"
+
+    async with TestSessionLocal() as session:
+        avatar_res = await session.execute(
+            select(Avatar).where(Avatar.template_id == adv_id).limit(1)
+        )
+        restored = avatar_res.scalars().first()
+        assert restored is not None
+        assert restored.name == "Recovered Hero"
+
+
 async def test_debug_award_grants_all_adventure_awards():
     """The /debug award command should mark every adventure award as earned."""
     async with TestSessionLocal() as session:
@@ -901,6 +939,64 @@ async def test_upload_visual_updates_protagonist_image(client: AsyncClient):
     assert debug_resp.status_code == 200
     debug_data = debug_resp.json()
     assert debug_data["protagonist"]["profile_image"] == data["image_url"]
+
+
+async def test_upload_visual_updates_npc_in_current_adventure_only(client: AsyncClient):
+    """Uploading an NPC image must resolve the target within the selected template, even with duplicate IDs."""
+    ids_a = await _create_adventure(client, "Upload NPC Quest A")
+    ids_b = await _create_adventure(client, "Upload NPC Quest B")
+    npc_id = "NPC_SHARED"
+
+    async with TestSessionLocal() as session:
+        session.add(
+            WorldEntity(
+                id=npc_id,
+                template_id=ids_a["adventure_id"],
+                session_id=None,
+                entity_type="NPC",
+                name="NPC A",
+                description="Template A NPC",
+                current_scene_id="START",
+                image_url="/data/adventures/a/npc_old.png",
+            )
+        )
+        session.add(
+            WorldEntity(
+                id=npc_id,
+                template_id=ids_b["adventure_id"],
+                session_id=None,
+                entity_type="NPC",
+                name="NPC B",
+                description="Template B NPC",
+                current_scene_id="START",
+                image_url="/data/adventures/b/npc_old.png",
+            )
+        )
+        await session.commit()
+
+    image_bytes = _make_png_bytes(800, 1000)
+    resp = await client.post(
+        f"/api/adventures/{ids_a['adventure_id']}/visuals/upload",
+        data={"target_type": "npc", "target_id": npc_id},
+        files={"file": ("npc.png", image_bytes, "image/png")},
+    )
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "uploaded"
+    assert data["target_type"] == "npc"
+
+    debug_a = await client.get(f"/api/adventures/{ids_a['adventure_id']}/debug")
+    assert debug_a.status_code == 200, debug_a.text
+    npc_a = next((n for n in debug_a.json().get("npcs", []) if n.get("id") == npc_id), None)
+    assert npc_a is not None
+    assert npc_a.get("image_url") == data["image_url"]
+
+    debug_b = await client.get(f"/api/adventures/{ids_b['adventure_id']}/debug")
+    assert debug_b.status_code == 200, debug_b.text
+    npc_b = next((n for n in debug_b.json().get("npcs", []) if n.get("id") == npc_id), None)
+    assert npc_b is not None
+    assert npc_b.get("image_url") == "/data/adventures/b/npc_old.png"
 
 
 async def test_upload_visual_rejects_oversized_image(client: AsyncClient):

@@ -2,7 +2,7 @@ import logging
 import os
 import glob
 from copy import deepcopy
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -142,6 +142,77 @@ def _resolve_library_image_url(image_url: Optional[str], basename_matches: dict[
     fixed_local = os.path.abspath(matches[0])
     return _local_to_public_data_path(fixed_local)
 
+
+async def _get_template_avatar(db: AsyncSession, template_id: str) -> Optional[Avatar]:
+    avatar_res = await db.execute(
+        select(Avatar)
+        .where(Avatar.template_id == template_id)
+        .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+        .limit(1)
+    )
+    return avatar_res.scalars().first()
+
+
+async def _restore_missing_template_avatar(
+    db: AsyncSession,
+    template_id: str,
+    adventure: AdventureTemplate,
+) -> Optional[Avatar]:
+    manifest = adventure.original_manifest if isinstance(adventure.original_manifest, dict) else {}
+    prot = manifest.get("protagonist") if isinstance(manifest, dict) else None
+    if not isinstance(prot, dict):
+        return None
+
+    image_url = str(prot.get("profile_image") or "").strip() or None
+    if image_url:
+        image_url = AdventureLogic.resolve_existing_data_asset_url(image_url) or image_url
+
+    avatar = Avatar(
+        user_id=adventure.owner_id,
+        template_id=template_id,
+        name=str(prot.get("name") or "Hero"),
+        role=(str(prot.get("role") or "").strip() or "Protagonist"),
+        description=(str(prot.get("description") or "").strip() or None),
+        goal=(str(prot.get("goal") or "").strip() or None),
+        character=(str(prot.get("character") or "").strip() or None),
+        profile_image=image_url,
+        hp=int(prot.get("hp") or 200),
+        max_hp=int(prot.get("hp") or 200),
+        stamina=int(prot.get("stamina") or 200),
+        max_stamina=int(prot.get("stamina") or 200),
+        mana=int(prot.get("mana") or 200),
+        max_mana=int(prot.get("mana") or 200),
+        strength=int(prot.get("strength") or 10),
+        dexterity=int(prot.get("dexterity") or 10),
+        intelligence=int(prot.get("intelligence") or 10),
+        wisdom=int(prot.get("wisdom") or 10),
+        charisma=int(prot.get("charisma") or 10),
+        armor_class=int(prot.get("armor_class") or 10),
+        exp=int(prot.get("exp") or 0),
+        stats=dict(prot.get("stats") or {}),
+        inventory=list(prot.get("starting_inventory") or prot.get("inventory") or []),
+        equipment=dict(
+            prot.get("starting_equipment")
+            or {
+                "Head": None,
+                "Chest": None,
+                "Arms": None,
+                "Legs": None,
+                "Hands": None,
+                "Feet": None,
+                "Ring_1": None,
+                "Ring_2": None,
+                "Neck": None,
+                "MainHand": None,
+                "OffHand": None,
+            }
+        ),
+        status_effects=list(prot.get("status_effects") or []),
+    )
+    db.add(avatar)
+    await db.commit()
+    return avatar
+
 async def _build_adventure_editor_assets(template_id: str, db: AsyncSession) -> AdventureTemplateDebugResponse:
     """Builds full world/editor asset state for a specific adventure."""
     adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == template_id))
@@ -185,8 +256,9 @@ async def _build_adventure_editor_assets(template_id: str, db: AsyncSession) -> 
     for ent in entities:
         ent.image_url = _resolve_library_image_url(getattr(ent, "image_url", None), basename_matches)
 
-    avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
-    avatar = avatar_res.scalars().first()
+    avatar = await _get_template_avatar(db, template_id)
+    if not avatar:
+        avatar = await _restore_missing_template_avatar(db, template_id, adventure)
 
     # Backfill avatar inventory/equipment dicts from template entities so debug view shows full item data.
     if avatar:
@@ -238,8 +310,9 @@ async def update_editor_entity(
         if payload.teaser is not None: adv.teaser = payload.teaser
         if payload.description is not None: adv.original_prompt = payload.description
     elif payload.target_type == "protagonist":
-        av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
-        avatar = av_res.scalars().first()
+        avatar = await _get_template_avatar(db, template_id)
+        if not avatar:
+            avatar = await _restore_missing_template_avatar(db, template_id, adv)
         if avatar:
             if payload.name is not None: avatar.name = payload.name
             if payload.description is not None: avatar.description = payload.description

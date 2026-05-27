@@ -421,15 +421,40 @@ async def upload_visual(
         if target_type == "cover":
             adv.image_url = relative_url
         elif target_type == "protagonist":
-            av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+            av_res = await db.execute(
+                select(Avatar)
+                .where(Avatar.template_id == template_id)
+                .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+                .limit(1)
+            )
             avatar = av_res.scalars().first()
-            if avatar: avatar.profile_image = relative_url
+            if not avatar:
+                raise HTTPException(status_code=404, detail="Protagonist not found for this adventure")
+            avatar.profile_image = relative_url
         elif target_type == "scene":
-            scene = await db.get(WorldScene, target_id)
-            if scene: scene.image_url = relative_url
+            sc_res = await db.execute(
+                select(WorldScene).where(
+                    WorldScene.template_id == template_id,
+                    WorldScene.session_id.is_(None),
+                    WorldScene.id == target_id,
+                )
+            )
+            scene = sc_res.scalars().first()
+            if not scene:
+                raise HTTPException(status_code=404, detail="Scene not found for this adventure")
+            scene.image_url = relative_url
         elif target_type in ["npc", "object"]:
-            entity = await db.get(WorldEntity, target_id)
-            if entity: entity.image_url = relative_url
+            en_res = await db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.template_id == template_id,
+                    WorldEntity.session_id.is_(None),
+                    WorldEntity.id == target_id,
+                )
+            )
+            entity = en_res.scalars().first()
+            if not entity:
+                raise HTTPException(status_code=404, detail="Entity not found for this adventure")
+            entity.image_url = relative_url
             
         await db.commit()
         return {"status": "uploaded", "target_type": target_type, "image_url": relative_url}
