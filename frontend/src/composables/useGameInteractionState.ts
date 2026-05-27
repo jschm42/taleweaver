@@ -37,24 +37,31 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     if (!hoveredEntity.value) return {}
     const TOOLTIP_WIDTH = 384 // w-96 = 24rem = 384px
     const OFFSET = 20
+    const EDGE_GAP = 8
     const mx = mousePos.value.x
     const my = mousePos.value.y
-    const threshold = window.innerHeight * 0.5
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+
+    const availableBelow = Math.max(0, viewportHeight - my - OFFSET - EDGE_GAP)
+    const availableAbove = Math.max(0, my - OFFSET - EDGE_GAP)
+    const renderAbove = availableBelow < 260 && availableAbove > availableBelow
 
     // Flip left if tooltip would overflow right edge
-    const x = mx + OFFSET + TOOLTIP_WIDTH > window.innerWidth
+    const x = mx + OFFSET + TOOLTIP_WIDTH > viewportWidth
       ? mx - TOOLTIP_WIDTH - OFFSET
       : mx + OFFSET
 
     const style: Record<string, string> = {
-      left: `${Math.max(8, x)}px`,
+      left: `${Math.max(EDGE_GAP, x)}px`,
+      maxHeight: `${Math.max(180, (renderAbove ? availableAbove : availableBelow))}px`,
     }
 
-    if (my > threshold) {
-      style.bottom = `${window.innerHeight - my + 10}px`
+    if (renderAbove) {
+      style.bottom = `${Math.max(EDGE_GAP, viewportHeight - my + 10)}px`
       style.top = 'auto'
     } else {
-      style.top = `${my + 10}px`
+      style.top = `${Math.max(EDGE_GAP, my + 10)}px`
       style.bottom = 'auto'
     }
     return style

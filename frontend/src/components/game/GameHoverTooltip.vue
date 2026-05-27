@@ -29,7 +29,7 @@ const handleImageError = () => {
         class="fixed z-[999] pointer-events-none"
         :style="props.tooltipStyle"
       >
-        <div class="w-96 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
+        <div class="w-96 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-x-hidden overflow-y-auto flex flex-col animate-tooltip-in">
 
           <!-- Image (NPC only) -->
           <div v-if="hasRenderableImagePath(props.hoveredEntity.image_url) && !props.tooltipImageFailed" class="h-56 w-full relative shrink-0">
