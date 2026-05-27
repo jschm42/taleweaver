@@ -145,10 +145,11 @@ class AdventureLogic:
     @staticmethod
     def resolve_session_asset(state: Optional[SessionState], key: str, fallback: Optional[str] = None) -> Optional[str]:
         if not state:
-            return fallback
+            return AdventureLogic.resolve_existing_data_asset_url(fallback)
         snapshot = AdventureLogic.extract_asset_snapshot(state)
         value = snapshot.get(key)
-        return value if isinstance(value, str) and value else fallback
+        candidate = value if isinstance(value, str) and value else fallback
+        return AdventureLogic.resolve_existing_data_asset_url(candidate)
 
     @staticmethod
     def resolve_existing_data_asset_url(url: Optional[str]) -> Optional[str]:
@@ -475,12 +476,34 @@ class AdventureLogic:
         
         from backend.engine.stat_aggregator import calculate_total_stats
         total_stats = calculate_total_stats(avatar)
+
+        profile_image = AdventureLogic.resolve_session_asset(state, "protagonist", avatar.profile_image)
+        if not profile_image:
+            manifest_protagonist = session_manifest.get("protagonist") if isinstance(session_manifest, dict) else None
+            if isinstance(manifest_protagonist, dict):
+                profile_image = AdventureLogic.resolve_existing_data_asset_url(manifest_protagonist.get("profile_image"))
+        if not profile_image and state.template_id:
+            avatar_image_res = await db.execute(
+                select(Avatar.profile_image)
+                .where(
+                    Avatar.template_id == state.template_id,
+                    Avatar.profile_image.is_not(None),
+                    Avatar.profile_image != "",
+                )
+                .order_by(Avatar.updated_at.desc())
+                .limit(10)
+            )
+            for candidate in avatar_image_res.scalars().all():
+                resolved = AdventureLogic.resolve_existing_data_asset_url(candidate)
+                if resolved:
+                    profile_image = resolved
+                    break
         
         snapshot = {
             "name": avatar.name,
             "role": avatar.role,
             "description": avatar.description,
-            "profile_image": AdventureLogic.resolve_session_asset(state, "protagonist", avatar.profile_image),
+            "profile_image": profile_image,
             "hp": avatar.hp, 
             "max_hp": avatar.max_hp,
             "stamina": avatar.stamina, 

@@ -44,6 +44,9 @@ const {
   isSeeding,
   isDeleting,
   isDeletingSession,
+  isStartingSession,
+  startingSessionTemplateId,
+  startingSessionTitle,
   showImportWarning,
   importWarningType,
   importConflicts,
@@ -103,6 +106,7 @@ function playSession(gameId: string) {
 }
 
 async function startSession(templateId: string) {
+  if (isStartingSession.value) return
   await startSessionForTemplate(templateId, playSession)
 }
 
@@ -255,6 +259,8 @@ onUnmounted(() => {
               :pending-cards="pendingCards"
               :is-seeding="isSeeding"
               :loading-word-index="loadingWordIndex"
+              :is-starting-session="isStartingSession"
+              :starting-session-template-id="startingSessionTemplateId"
               @create="openCreateModal"
               @import-samples="handleImportSamplesClick"
               @remove-failed-pending="removeFailedPendingCard"
@@ -391,6 +397,27 @@ onUnmounted(() => {
         :error-msg="cloneProgressState.errorMsg"
         @close="cloneProgressState.isOpen = false"
       />
+
+      <div
+        v-if="isStartingSession"
+        class="fixed inset-0 z-[220] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center px-6"
+      >
+        <div class="w-full max-w-md rounded-2xl border border-white/15 bg-slate-900/95 p-7 shadow-2xl">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+              <i class="ra ra-cycle animate-spin text-emerald-400 text-xl"></i>
+            </div>
+            <div class="space-y-2">
+              <h3 class="text-lg font-black text-white tracking-tight">Session Is Starting</h3>
+              <p class="text-sm text-slate-300 leading-relaxed">
+                Assets are copied for <span class="font-bold text-emerald-300">{{ startingSessionTitle || 'Adventure' }}</span>.
+                Please wait a moment.
+              </p>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-bold">Preventing duplicate starts...</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </Teleport>
 
   </div>

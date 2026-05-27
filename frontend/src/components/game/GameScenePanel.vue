@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { getItemIcon, getImageUrl } from '@/utils/game_icons'
+import { getItemIcon, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 
 interface SceneHoverPayload {
   name: string
@@ -56,7 +56,7 @@ const hoverPayload = computed<any>(() => ({
           @error="(e) => {
             const target = e.target as HTMLImageElement
             if (target.src.includes('_thumb')) {
-              target.src = getImageUrl(sceneImage)
+              target.src = getOriginalImageUrl(sceneImage)
             } else {
               emit('imageError', sceneImage!)
             }

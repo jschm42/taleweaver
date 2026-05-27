@@ -41,7 +41,7 @@ import { useGameInteractionState } from '@/composables/useGameInteractionState'
 import { useGameSessionLifecycle } from '@/composables/useGameSessionLifecycle'
 import { useGameCommandFlow } from '@/composables/useGameCommandFlow'
 import { refreshUser } from '@/store/auth'
-import { getImageUrl } from '@/utils/game_icons'
+import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { type GameSettings } from '@/services/gameViewService'
 import { gameCommandService } from '@/services/gameCommandService'
@@ -839,7 +839,7 @@ watch(
         @error="(e) => {
           const target = e.target as HTMLImageElement
           if (target.src.includes('_thumb')) {
-            target.src = getImageUrl(adventureImage)
+            target.src = getOriginalImageUrl(adventureImage)
           } else {
             adventureImage = null
           }

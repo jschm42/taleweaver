@@ -41,7 +41,7 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
 
   const goBack = () => {
     disconnect()
-    router.push({ name: 'portal' })
+    router.push({ name: 'portal', query: { section: 'sessions' } })
   }
 
   const openDebugInspector = async () => {

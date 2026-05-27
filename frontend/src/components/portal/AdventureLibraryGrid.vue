@@ -10,6 +10,8 @@ defineProps<{
   pendingCards: any[]
   isSeeding: boolean
   loadingWordIndex: number
+  isStartingSession?: boolean
+  startingSessionTemplateId?: string | null
 }>()
 
 defineEmits<{
@@ -55,6 +57,8 @@ defineEmits<{
       v-for="entry in visibleTemplates"
       :key="entry.template_id"
       :template="entry"
+      :is-starting-session="isStartingSession"
+      :is-starting-this-template="startingSessionTemplateId === entry.template_id"
       @start-session="(id) => $emit('start-session', id)"
       @cover="(id) => $emit('cover', id)"
       @edit="(id) => $emit('edit', id)"

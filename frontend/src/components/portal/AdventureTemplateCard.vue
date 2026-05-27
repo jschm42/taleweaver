@@ -5,6 +5,8 @@ import { MoreHorizontal, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   template: AdventureTemplateSummary
+  isStartingSession?: boolean
+  isStartingThisTemplate?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -195,11 +197,17 @@ function dismissWarning() {
 
       <!-- Action Button -->
       <button
-        class="w-full py-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all border border-emerald-500/20 flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/5 group/btn"
+        class="w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-3 shadow-lg"
+        :class="props.isStartingSession
+          ? 'bg-slate-800/70 text-slate-400 border-slate-700 cursor-not-allowed shadow-slate-900/30'
+          : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20 shadow-emerald-500/5 group/btn'"
+        :disabled="props.isStartingSession"
         @click="emit('startSession', props.template.template_id)"
       >
-        <i class="ra ra-play text-sm transition-transform group-hover/btn:scale-110"></i>
-        Start New Game
+        <i
+          :class="props.isStartingSession ? 'ra ra-cycle animate-spin text-sm' : 'ra ra-play text-sm transition-transform group-hover/btn:scale-110'"
+        ></i>
+        {{ props.isStartingThisTemplate ? 'Starting Session...' : 'Start New Game' }}
       </button>
     </div>
   </article>

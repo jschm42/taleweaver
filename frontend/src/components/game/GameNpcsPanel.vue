@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getItemIcon, getImageUrl } from '@/utils/game_icons'
+import { getItemIcon, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import StatBar from './StatBar.vue'
 
 interface Entity {
@@ -64,7 +64,7 @@ const emit = defineEmits<{
             @error="(e) => {
               const target = e.target as HTMLImageElement
               if (target.src.includes('_thumb')) {
-                target.src = getImageUrl(ent.image_url)
+                target.src = getOriginalImageUrl(ent.image_url)
               } else {
                 emit('imageError', ent.image_url!)
               }

@@ -21,6 +21,9 @@ export interface UsePortalDataResult {
   isSeeding: Ref<boolean>
   isDeleting: Ref<boolean>
   isDeletingSession: Ref<boolean>
+  isStartingSession: Ref<boolean>
+  startingSessionTemplateId: Ref<string | null>
+  startingSessionTitle: Ref<string>
   showImportWarning: Ref<boolean>
   importWarningType: Ref<PortalImportWarningType>
   importConflicts: Ref<Array<{ title: string; already_exists: boolean }>>
@@ -190,6 +193,9 @@ export function usePortalData(): UsePortalDataResult {
   const isSeeding = ref(false)
   const isDeleting = ref(false)
   const isDeletingSession = ref(false)
+  const isStartingSession = ref(false)
+  const startingSessionTemplateId = ref<string | null>(null)
+  const startingSessionTitle = ref('')
 
   const importInput = ref<HTMLInputElement | null>(null)
 
@@ -316,12 +322,21 @@ export function usePortalData(): UsePortalDataResult {
     templateId: string,
     onStarted: (gameId: string) => void | Promise<void>,
   ) {
+    if (isStartingSession.value) return
+    const template = templates.value.find((entry) => entry.template_id === templateId)
+    isStartingSession.value = true
+    startingSessionTemplateId.value = templateId
+    startingSessionTitle.value = template?.title || 'Adventure'
     try {
       const result = await api.startSessionForTemplate(templateId)
       await fetchPortalData()
       await onStarted(result.game_id)
     } catch (error: any) {
       errorMsg.value = error?.message || 'Session could not be started.'
+    } finally {
+      isStartingSession.value = false
+      startingSessionTemplateId.value = null
+      startingSessionTitle.value = ''
     }
   }
 
@@ -733,6 +748,9 @@ export function usePortalData(): UsePortalDataResult {
     isSeeding,
     isDeleting,
     isDeletingSession,
+    isStartingSession,
+    startingSessionTemplateId,
+    startingSessionTitle,
     showImportWarning,
     importWarningType,
     importConflicts,
