@@ -84,6 +84,7 @@ const activeContainer = ref<{
   items: any[]
 } | null>(null)
 const activeCodeContainer = ref<{ id: string; name: string; source: 'scene' | 'inventory' } | null>(null)
+const dialogPanel = ref<any>(null)
 
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
@@ -252,6 +253,7 @@ const handleEntityClick = async (entity: any) => {
 
 const CONTAINER_OPEN_PREFIX = '[OPEN_CONTAINER] '
 const TEXT_LOG_OPEN_PREFIX = '[OPEN_TEXT_LOG] '
+const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -691,11 +693,19 @@ const {
   isActionInputBlocked,
   ruleMode: computed(() => sheet.value?.rule_enforcement_mode),
   npcMetadata,
+  npcEntities: npcs,
   handlePlayerInput,
   onAction: () => {
     if (showSheet.value) sheetDirty.value = true
   },
   onDirectAction: (action: string) => {
+    if (action.startsWith(PREFILL_SAY_TO_PREFIX)) {
+      const npcName = action.replace(PREFILL_SAY_TO_PREFIX, '').trim()
+      const prefill = npcName ? `/say to ${npcName}: ` : '/say to '
+      dialogPanel.value?.setInputText(prefill)
+      return true
+    }
+
     if (!action.startsWith(CONTAINER_OPEN_PREFIX)) {
       if (!action.startsWith(TEXT_LOG_OPEN_PREFIX)) {
         return false

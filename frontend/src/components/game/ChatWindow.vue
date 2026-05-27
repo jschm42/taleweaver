@@ -53,6 +53,7 @@ const emit = defineEmits<{
 }>()
 
 const inputText = ref('')
+const inputEl = ref<HTMLInputElement | null>(null)
 const fontSize = ref<'small' | 'medium' | 'large'>((localStorage.getItem('tw_chat_font_size') as any) || 'medium')
 const logEl = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
@@ -164,7 +165,17 @@ function appendText(text: string) {
   inputText.value = current ? `${current} ${text}` : text
 }
 
-defineExpose({ appendText })
+function setInputText(text: string) {
+  inputText.value = text
+  void nextTick(() => {
+    if (!inputEl.value) return
+    inputEl.value.focus()
+    const pos = inputText.value.length
+    inputEl.value.setSelectionRange(pos, pos)
+  })
+}
+
+defineExpose({ appendText, setInputText })
 
 const visibleStart = ref(0)
 const visibleEnd = ref(0)
@@ -1022,6 +1033,7 @@ onUnmounted(() => {
             </svg>
           </div>
           <input
+            ref="inputEl"
             v-model="inputText"
             type="text"
             :disabled="!canSendInput || audioService.isGenerating.value || props.sheet?.agent_active"

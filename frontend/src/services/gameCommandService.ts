@@ -20,6 +20,7 @@ export type ContextMenuModel = {
 
 const OPEN_CONTAINER_PREFIX = '[OPEN_CONTAINER] '
 const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
+const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -127,6 +128,7 @@ export const gameCommandService = {
       items.push({ label: 'Inspect', action: '/sheet' })
       items.push({ label: 'Rest', action: 'Rest' })
     } else if (entity?.entity_type === 'NPC') {
+      items.push({ label: 'Talk', action: `${PREFILL_SAY_TO_PREFIX}${entity.name || ''}` })
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
       const isDefeatedNpc = entity?.is_defeated === true || entity?.hp === 0
       if (!isDefeatedNpc && entity?.is_attackable !== false) {

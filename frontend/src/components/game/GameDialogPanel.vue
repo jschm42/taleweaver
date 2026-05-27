@@ -53,7 +53,11 @@ function appendText(text: string) {
   chatWindow.value?.appendText(text)
 }
 
-defineExpose({ appendText })
+function setInputText(text: string) {
+  chatWindow.value?.setInputText(text)
+}
+
+defineExpose({ appendText, setInputText })
 </script>
 
 <template>

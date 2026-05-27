@@ -13,6 +13,7 @@ type UseGameInteractionStateOptions = {
   isActionInputBlocked: Ref<boolean>
   ruleMode: Ref<string | undefined>
   npcMetadata: Ref<Record<string, any>>
+  npcEntities?: Ref<any[]>
   handlePlayerInput: (content: string) => Promise<void>
   onAction?: () => void
   onDirectAction?: (action: string) => boolean
@@ -23,6 +24,7 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     isActionInputBlocked,
     ruleMode,
     npcMetadata,
+    npcEntities,
     handlePlayerInput,
     onAction,
     onDirectAction,
@@ -82,12 +84,33 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
   }
 
   const handleChatNpcHover = (name: string, event: MouseEvent) => {
-    const metadata = npcMetadata.value[name]
-    if (metadata) {
-      tooltipImageFailed.value = false
-      hoveredEntity.value = normalizeHoverEntity({ ...metadata, entity_type: 'NPC' })
-      mousePos.value = { x: event.clientX, y: event.clientY }
+    const normalizedName = String(name || '').trim().toLowerCase()
+    if (!normalizedName) return
+
+    const fromEntities = (npcEntities?.value || []).find((entity: any) => {
+      const entityName = String(entity?.name || '').trim().toLowerCase()
+      const entityId = String(entity?.id || '').trim().toLowerCase()
+      return entityName === normalizedName || entityId === normalizedName
+    })
+
+    let metadata = npcMetadata.value[name]
+    if (!metadata) {
+      metadata = Object.entries(npcMetadata.value || {}).find(([key, value]) => {
+        const keyMatch = String(key || '').trim().toLowerCase() === normalizedName
+        const valueNameMatch = String((value as any)?.name || '').trim().toLowerCase() === normalizedName
+        return keyMatch || valueNameMatch
+      })?.[1]
     }
+
+    const mergedNpc = fromEntities
+      ? { ...(metadata || {}), ...fromEntities, entity_type: 'NPC' }
+      : metadata
+        ? { ...metadata, entity_type: 'NPC' }
+        : { name, entity_type: 'NPC' }
+
+    tooltipImageFailed.value = false
+    hoveredEntity.value = normalizeHoverEntity(mergedNpc)
+    mousePos.value = { x: event.clientX, y: event.clientY }
   }
 
   const onTooltipImageError = (): void => {
