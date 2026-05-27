@@ -87,7 +87,7 @@ const handleSpeakTextLog = () => {
 
           <div class="overflow-y-auto p-6 space-y-4">
             <div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
-              <p class="text-xl md:text-2xl text-amber-50/90 leading-relaxed whitespace-pre-wrap">{{ content || 'No text content found.' }}</p>
+              <p class="text-base md:text-lg text-amber-50/90 leading-relaxed whitespace-pre-wrap">{{ content || 'No text content found.' }}</p>
             </div>
           </div>
         </div>

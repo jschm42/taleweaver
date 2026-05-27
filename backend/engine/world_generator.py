@@ -143,6 +143,26 @@ def _uses_ollama_t2i(user: Optional[User]) -> bool:
     return (t2i_settings.get("provider") or "").lower() == "ollama"
 
 
+def _normalize_text_log_content(
+    raw_content: Any,
+    description_fallback: Any = "",
+    name_fallback: Any = "",
+) -> str:
+    """Normalize readable text while preserving paragraph breaks and enforcing length."""
+    content = str(raw_content or "")
+    if not content.strip():
+        content = str(description_fallback or "")
+
+    # Keep paragraph formatting stable across platforms and trim trailing spaces.
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
+    normalized_lines = [line.rstrip() for line in content.split("\n")]
+    normalized = "\n".join(normalized_lines).strip()
+    if not normalized:
+        safe_name = str(name_fallback or "This note").strip() or "This note"
+        normalized = f"{safe_name} contains faded but readable notes."
+    return normalized[:500]
+
+
 # --- Schemas for Structured LLM Output ---
 
 class WorldSceneSchema(BaseModel):
@@ -228,7 +248,7 @@ class WorldObjectSchema(BaseModel):
     mana_change: int = Field(..., description="Mana restoration when consumed. Use 0 if none.")
     
     inventory: list[str] = Field(..., description="List of object IDs inside this container object. Use [] if empty.")
-    text_log_content: str = Field("", description="Only for READABLE objects: visible text content, max 500 characters. Use empty string for non-readable items.")
+    text_log_content: str = Field("", description="Only for READABLE objects: visible text content, max 500 characters. Must be non-empty for READABLE objects. Paragraphs are allowed (use blank lines). Use empty string for non-readable items.")
     text_log_format: str = Field("", description="Only for READABLE objects: one of DOCUMENT, SCROLL, BOOK, SIGN. Use empty string for non-readable items.")
     source_asset_id: Optional[str] = Field(None, description="Optional source object ID to reuse an old item image.")
     
@@ -503,7 +523,8 @@ class WorldGenerator:
         else:
             base_text_log_instruction = (
                 "- For every READABLE object, provide `text_log_content` with at most 500 characters and `text_log_format` as DOCUMENT, SCROLL, BOOK, or SIGN.\n"
-                "- Keep text_log_content practical: hints, story fragments, warnings, clues."
+                "- `text_log_content` for READABLE objects MUST be non-empty (never \"\" and never omitted).\n"
+                "- Keep text_log_content practical: hints, story fragments, warnings, clues. Paragraph formatting is allowed; use blank lines between paragraphs when useful."
             )
             if min_text_logs is None and max_text_logs is None:
                 text_log_requirement = (
@@ -779,8 +800,11 @@ class WorldGenerator:
 
             for idx in readable_indices[:clamped_max_text_logs]:
                 obj = objects[idx]
-                raw_content = str(obj.get("text_log_content") or "").strip()
-                obj["text_log_content"] = raw_content[:500]
+                obj["text_log_content"] = _normalize_text_log_content(
+                    obj.get("text_log_content"),
+                    obj.get("description"),
+                    obj.get("name"),
+                )
                 text_log_format = str(obj.get("text_log_format") or "DOCUMENT").strip().upper()
                 if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
                     text_log_format = "DOCUMENT"
@@ -1617,7 +1641,11 @@ class WorldGenerator:
                 "image_url": image_url,
                 "item_type": o.get("item_type", "PICKABLE"),
                 "slot": item_slot,
-                "text_log_content": str(o.get("text_log_content") or "").strip()[:500],
+                "text_log_content": _normalize_text_log_content(
+                    o.get("text_log_content"),
+                    o.get("description"),
+                    o.get("name"),
+                ),
                 "text_log_format": str(o.get("text_log_format") or "").strip().upper() or None,
                 "stat_modifier_strength": stat_strength,
                 "stat_modifier_dexterity": stat_dexterity,
@@ -1640,7 +1668,11 @@ class WorldGenerator:
                 metadata_json["mana_change"] = mana_change
 
             if str(o.get("item_type") or "").upper() == "READABLE":
-                text_log_content = str(o.get("text_log_content") or "").strip()[:500]
+                text_log_content = _normalize_text_log_content(
+                    o.get("text_log_content"),
+                    o.get("description"),
+                    o.get("name"),
+                )
                 text_log_format = str(o.get("text_log_format") or "DOCUMENT").strip().upper()
                 if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
                     text_log_format = "DOCUMENT"
