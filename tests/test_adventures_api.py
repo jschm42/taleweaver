@@ -28,7 +28,7 @@ from backend.models.session_checkpoint import SessionCheckpoint
 from backend.models.session_state import SessionState as GameState
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from tests.conftest import TestSessionLocal
 
 pytestmark = pytest.mark.asyncio
@@ -2762,6 +2762,76 @@ async def test_start_session_ignores_session_bound_template_rows(client: AsyncCl
     assert list_resp.status_code == 200, list_resp.text
     game_ids = [row["game_id"] for row in list_resp.json()]
     assert len(game_ids) == len(set(game_ids))
+
+
+async def test_start_session_prefers_entry_scene_when_start_missing(client: AsyncClient):
+    """New sessions must begin at the logical entry scene when no START scene exists."""
+    ids = await _create_adventure(client, "Entry Scene Start Selection Quest")
+    template_id = ids["adventure_id"]
+
+    async with TestSessionLocal() as db:
+        # Remove baseline world rows and rebuild a tiny graph without START.
+        await db.execute(
+            delete(WorldExit).where(
+                WorldExit.template_id == template_id,
+                WorldExit.session_id.is_(None),
+            )
+        )
+        await db.execute(
+            delete(WorldEntity).where(
+                WorldEntity.template_id == template_id,
+                WorldEntity.session_id.is_(None),
+            )
+        )
+        await db.execute(
+            delete(WorldScene).where(
+                WorldScene.template_id == template_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+
+        db.add_all([
+            WorldScene(
+                id="FINAL_ROOM",
+                template_id=template_id,
+                session_id=None,
+                label="Final Room",
+                description="The destination.",
+                image_url=None,
+            ),
+            WorldScene(
+                id="INTRO_ROOM",
+                template_id=template_id,
+                session_id=None,
+                label="Intro Room",
+                description="The true entry.",
+                image_url=None,
+            ),
+        ])
+        db.add(
+            WorldExit(
+                template_id=template_id,
+                session_id=None,
+                from_scene_id="INTRO_ROOM",
+                to_scene_id="FINAL_ROOM",
+                label="Forward",
+                is_locked=False,
+                lock_description=None,
+            )
+        )
+        await db.commit()
+
+    start_resp = await client.post(f"/api/adventures/{template_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    async with TestSessionLocal() as db:
+        state_res = await db.execute(
+            select(SessionState).where(SessionState.session_id == game_id)
+        )
+        state = state_res.scalars().first()
+        assert state is not None
+        assert state.current_scene_id == "INTRO_ROOM"
 
 
 async def test_started_sessions_keep_snapshot_images_after_template_avatar_edit(client: AsyncClient):

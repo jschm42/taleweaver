@@ -578,16 +578,7 @@ async def start_session_for_template(
     db.add(avatar)
     await db.flush()
 
-    scene_res = await db.execute(
-        select(WorldScene.id)
-        .where(
-            WorldScene.template_id == template_id,
-            WorldScene.session_id.is_(None),
-        )
-        .order_by(WorldScene.id.asc())
-        .limit(1)
-    )
-    first_scene_id = scene_res.scalar_one_or_none() or "START"
+    first_scene_id = await AdventureLogic.resolve_initial_scene_id(db, template_id)
 
     new_session = GameSession(
         id=generate_session_id(adventure.title or template_id),

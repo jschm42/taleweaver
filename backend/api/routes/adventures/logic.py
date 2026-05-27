@@ -240,6 +240,52 @@ class AdventureLogic:
             return None
 
     @staticmethod
+    async def resolve_initial_scene_id(db: AsyncSession, template_id: Optional[str]) -> str:
+        """Resolve a stable initial scene for a fresh session.
+
+        Priority:
+        1) Scene with id "START" when present.
+        2) Entry scene(s) with no incoming exits (template baseline only).
+        3) Lexicographically first available scene id.
+        4) Fallback "START" when no scenes exist.
+        """
+        if not template_id:
+            return "START"
+
+        scene_res = await db.execute(
+            select(WorldScene.id)
+            .where(
+                WorldScene.template_id == template_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+        scene_ids = [sid for sid in scene_res.scalars().all() if isinstance(sid, str) and sid]
+        if not scene_ids:
+            return "START"
+
+        scene_set = set(scene_ids)
+        if "START" in scene_set:
+            return "START"
+
+        exit_res = await db.execute(
+            select(WorldExit.from_scene_id, WorldExit.to_scene_id)
+            .where(
+                WorldExit.template_id == template_id,
+                WorldExit.session_id.is_(None),
+            )
+        )
+        incoming_count: dict[str, int] = {sid: 0 for sid in scene_set}
+        for from_scene_id, to_scene_id in exit_res.all():
+            if from_scene_id in scene_set and to_scene_id in scene_set:
+                incoming_count[to_scene_id] = incoming_count.get(to_scene_id, 0) + 1
+
+        entry_scenes = sorted([sid for sid, count in incoming_count.items() if count == 0])
+        if entry_scenes:
+            return entry_scenes[0]
+
+        return sorted(scene_set)[0]
+
+    @staticmethod
     async def resolve_session_state(db: AsyncSession, session_or_template_id: str, user_id: Optional[str] = None) -> Optional[SessionState]:
         """Resolve a session state by session id first, then by template/adventure id."""
         direct_res = await db.execute(
@@ -280,8 +326,7 @@ class AdventureLogic:
                 return existing_for_candidate
             
             # Auto-healing logic
-            scene_res = await db.execute(select(WorldScene.id).where(WorldScene.template_id == session_candidate.template_id).order_by(WorldScene.id.asc()).limit(1))
-            first_scene_id = scene_res.scalar_one_or_none() or "START"
+            first_scene_id = await AdventureLogic.resolve_initial_scene_id(db, session_candidate.template_id)
             
             adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == session_candidate.template_id))
             adventure = adv_res.scalars().first()

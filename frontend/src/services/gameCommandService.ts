@@ -11,8 +11,6 @@ export type SpecialGameCommand =
 export type ContextMenuItem = {
   label: string
   action: string
-  icon: string
-  color: string
 }
 
 export type ContextMenuModel = {
@@ -26,6 +24,26 @@ const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
   return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
+}
+
+const isReadableEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'READABLE'
+}
+
+const isConsumableEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'CONSUMABLE'
+}
+
+const isPortableEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return entity.is_portable !== false
+}
+
+const isStationaryEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.movement_type || '').toUpperCase() === 'STATIONARY'
 }
 
 export const gameCommandService = {
@@ -100,42 +118,46 @@ export const gameCommandService = {
     return entity?.entity_type === 'OBJECT' && entity?.is_portable !== false && !isContainerEntity(entity)
   },
 
-  buildContextMenu(entity: any, ruleMode?: string): ContextMenuModel | null {
+  buildContextMenu(entity: any, _ruleMode?: string): ContextMenuModel | null {
     const items: ContextMenuItem[] = []
     let title = entity?.name || 'Action'
 
     if (entity?.id === 'PLAYER') {
       title = 'You'
-      items.push({ label: 'Inspect', action: '/sheet', icon: 'ra ra-player', color: 'text-cyan-400' })
-      items.push({ label: 'Rest', action: 'Take a rest', icon: 'ra ra-sleeping-bag', color: 'text-emerald-400' })
-      items.push({ label: 'Sing', action: 'Sing a song', icon: 'ra ra-music-spell', color: 'text-pink-400' })
-      items.push({ label: 'Dance', action: 'Start dancing', icon: 'ra ra-double-team', color: 'text-orange-400' })
+      items.push({ label: 'Inspect', action: '/sheet' })
+      items.push({ label: 'Rest', action: 'Rest' })
     } else if (entity?.entity_type === 'NPC') {
-      items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+      items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
       const isDefeatedNpc = entity?.is_defeated === true || entity?.hp === 0
-      if (!isDefeatedNpc) {
-        if (ruleMode === 'rpg' && entity?.is_attackable !== false) {
-          items.push({ label: 'Attack', action: `/attack ${entity.name}`, icon: 'ra ra-sword', color: 'text-red-400' })
-        }
-        items.push({ label: 'Speak', action: `/say Hello, ${entity.name}.`, icon: 'ra ra-speech-bubbles', color: 'text-blue-400' })
+      if (!isDefeatedNpc && entity?.is_attackable !== false) {
+        items.push({ label: 'Attack', action: `/attack ${entity.name}` })
       }
     } else if (entity?.entity_type === 'SCENE') {
-      items.push({ label: 'Look around', action: 'Look around', icon: 'ra ra-eye', color: 'text-indigo-400' })
-      items.push({ label: 'Search', action: 'Search the area', icon: 'ra ra-magnifying-glass', color: 'text-emerald-400' })
-      items.push({ label: 'Read signs/logs', action: '/read surroundings', icon: 'ra ra-book-cover', color: 'text-violet-400' })
+      items.push({ label: 'Search', action: 'Search the area' })
+      items.push({ label: 'Look around', action: 'Look around' })
     } else if (entity?.entity_type === 'OBJECT' || entity?.entity_type === 'ITEM') {
-      items.push({ label: 'Inspect', action: `/inspect ${entity.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
-      if (String(entity?.item_type || '').toUpperCase() === 'READABLE') {
-        items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${entity.id || entity.name}`, icon: 'ra ra-book', color: 'text-amber-300' })
+      items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
+
+      if (isPortableEntity(entity)) {
+        items.push({ label: 'Take', action: `/take ${entity.name}` })
       }
+
+      if (!isStationaryEntity(entity)) {
+        items.push({ label: 'Pull', action: `Pull ${entity.name}` })
+        items.push({ label: 'Push', action: `Push ${entity.name}` })
+      }
+
+      if (isConsumableEntity(entity)) {
+        items.push({ label: 'Consume', action: `/consume ${entity.name}` })
+      }
+
       if (isContainerEntity(entity)) {
-        items.push({ label: 'Open', action: `${OPEN_CONTAINER_PREFIX}${entity.id || entity.name}`, icon: 'ra ra-treasure-chest', color: 'text-emerald-400' })
+        items.push({ label: 'Open', action: `${OPEN_CONTAINER_PREFIX}${entity.id || entity.name}` })
       }
-      items.push({ label: 'Pick up', action: `/take ${entity.name}`, icon: 'ra ra-hand', color: 'text-amber-400' })
-      items.push({ label: 'Push', action: `Push ${entity.name}`, icon: 'ra ra-cog', color: 'text-slate-400' })
-      items.push({ label: 'Pull', action: `Pull ${entity.name}`, icon: 'ra ra-tread', color: 'text-slate-400' })
-      items.push({ label: 'Hit', action: `Hit ${entity.name}`, icon: 'ra ra-hammer', color: 'text-red-400' })
-      items.push({ label: 'Smell', action: `Smell ${entity.name}`, icon: 'ra ra-scent', color: 'text-pink-400' })
+
+      if (isReadableEntity(entity)) {
+        items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${entity.id || entity.name}` })
+      }
     }
 
     if (items.length === 0) return null
@@ -151,24 +173,24 @@ export const gameCommandService = {
 
     if (isEquippable) {
       if (isEquipped) {
-        items.push({ label: 'Unequip', action: `/unequip ${item.equipped_slot}`, icon: 'ra ra-hand', color: 'text-amber-400' })
+        items.push({ label: 'Unequip', action: `/unequip ${item.equipped_slot}` })
       } else {
-        items.push({ label: 'Equip', action: `/equip ${item.name}`, icon: 'ra ra-vest', color: 'text-emerald-400' })
+        items.push({ label: 'Equip', action: `/equip ${item.name}` })
       }
-    } else if (item.item_type === 'CONSUMABLE') {
-      items.push({ label: 'Consume', action: `/consume ${item.name}`, icon: 'ra ra-flask', color: 'text-emerald-400' })
+    } else if (isConsumableEntity(item)) {
+      items.push({ label: 'Consume', action: `/consume ${item.name}` })
     }
 
     if (isContainerEntity(item)) {
-      items.push({ label: 'Open', action: `${OPEN_CONTAINER_PREFIX}${item.id || item.name}`, icon: 'ra ra-treasure-chest', color: 'text-emerald-400' })
+      items.push({ label: 'Open', action: `${OPEN_CONTAINER_PREFIX}${item.id || item.name}` })
     }
 
-    if (String(item?.item_type || '').toUpperCase() === 'READABLE') {
-      items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${item.id || item.name}`, icon: 'ra ra-book', color: 'text-amber-300' })
+    if (isReadableEntity(item)) {
+      items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${item.id || item.name}` })
     }
 
-    items.push({ label: 'Drop', action: `/drop ${item.name}`, icon: 'ra ra-bottom-right', color: 'text-red-400' })
-    items.push({ label: 'Inspect', action: `/inspect ${item.name}`, icon: 'ra ra-scroll-unfurled', color: 'text-cyan-400' })
+    items.push({ label: 'Drop', action: `/drop ${item.name}` })
+    items.push({ label: 'Inspect', action: `/inspect ${item.name}` })
 
     return items.length > 0 ? { title, items } : null
   },

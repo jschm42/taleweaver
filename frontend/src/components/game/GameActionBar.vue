@@ -35,6 +35,7 @@ const emit = defineEmits<{
         :key="`${idx}-${suggestion}`"
         :disabled="props.disabled"
         :aria-label="`Use suggestion: ${suggestion}`"
+        :title="suggestion"
         class="group relative flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300 active:scale-95 border text-xs font-semibold"
         :class="[
           props.disabled
@@ -43,7 +44,7 @@ const emit = defineEmits<{
         ]"
         @click="emit('useSuggestion', suggestion)"
       >
-        {{ suggestion }}
+        <span class="max-w-[22rem] truncate">{{ suggestion }}</span>
       </button>
       <button
         :disabled="props.disabled"

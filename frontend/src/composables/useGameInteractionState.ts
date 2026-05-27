@@ -35,33 +35,39 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
 
   const tooltipStyle = computed(() => {
     if (!hoveredEntity.value) return {}
-    const TOOLTIP_WIDTH = 384 // w-96 = 24rem = 384px
     const OFFSET = 20
+    const VERTICAL_LIFT = 34
     const EDGE_GAP = 8
     const mx = mousePos.value.x
     const my = mousePos.value.y
     const viewportWidth = window.innerWidth
     const viewportHeight = window.innerHeight
+    const tooltipWidth = Math.max(280, Math.min(384, viewportWidth - EDGE_GAP * 2))
 
     const availableBelow = Math.max(0, viewportHeight - my - OFFSET - EDGE_GAP)
     const availableAbove = Math.max(0, my - OFFSET - EDGE_GAP)
-    const renderAbove = availableBelow < 260 && availableAbove > availableBelow
+    const renderAbove = availableBelow < 300 && availableAbove > availableBelow
 
     // Flip left if tooltip would overflow right edge
-    const x = mx + OFFSET + TOOLTIP_WIDTH > viewportWidth
-      ? mx - TOOLTIP_WIDTH - OFFSET
+    const x = mx + OFFSET + tooltipWidth > viewportWidth
+      ? mx - tooltipWidth - OFFSET
       : mx + OFFSET
 
+    const maxLeft = Math.max(EDGE_GAP, viewportWidth - tooltipWidth - EDGE_GAP)
+    const clampedLeft = Math.min(Math.max(EDGE_GAP, x), maxLeft)
+
     const style: Record<string, string> = {
-      left: `${Math.max(EDGE_GAP, x)}px`,
-      maxHeight: `${Math.max(180, (renderAbove ? availableAbove : availableBelow))}px`,
+      left: `${clampedLeft}px`,
+      width: `${tooltipWidth}px`,
+      maxWidth: `calc(100vw - ${EDGE_GAP * 2}px)`,
+      maxHeight: `${Math.max(220, (renderAbove ? availableAbove : availableBelow))}px`,
     }
 
     if (renderAbove) {
-      style.bottom = `${Math.max(EDGE_GAP, viewportHeight - my + 10)}px`
+      style.bottom = `${Math.max(EDGE_GAP, viewportHeight - my + 10 + VERTICAL_LIFT)}px`
       style.top = 'auto'
     } else {
-      style.top = `${Math.max(EDGE_GAP, my + 10)}px`
+      style.top = `${Math.max(EDGE_GAP, my + 10 - VERTICAL_LIFT)}px`
       style.bottom = 'auto'
     }
     return style

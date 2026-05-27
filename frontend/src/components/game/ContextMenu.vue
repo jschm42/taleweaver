@@ -4,8 +4,6 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 interface MenuItem {
   label: string
   action: string
-  icon?: string
-  color?: string
 }
 
 const props = defineProps<{
@@ -78,10 +76,9 @@ onMounted(() => {
     <button
       v-for="item in items"
       :key="item.label"
-      class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/10 transition-colors text-left group"
+      class="w-full flex items-center px-4 py-2.5 hover:bg-white/10 transition-colors text-left group"
       @click="emit('select', item)"
     >
-      <i v-if="item.icon" :class="[item.icon, item.color || 'text-slate-400', 'group-hover:scale-110 transition-transform w-4 text-center']"></i>
       <span class="text-xs font-bold text-slate-200 group-hover:text-white capitalize tracking-wide">{{ item.label }}</span>
     </button>
   </div>
