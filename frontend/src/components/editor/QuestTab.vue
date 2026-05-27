@@ -9,6 +9,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update-quests', quests: any[]): void
+  (e: 'notify', message: string, type?: 'error' | 'success' | 'info'): void
 }>()
 
 const quests = computed<any[]>(() => {
@@ -42,6 +43,8 @@ const modalQuest = ref<any>({
 
 // Auto generation state
 const isGeneratingDescription = ref(false)
+const showDeleteConfirmModal = ref(false)
+const pendingDeleteQuestId = ref<string | null>(null)
 
 async function generateDescription() {
   if (!props.adventure?.id || !modalQuest.value.title) return
@@ -58,7 +61,7 @@ async function generateDescription() {
     modalQuest.value.description = result.description
   } catch (error) {
     console.error('Failed to generate quest description:', error)
-    alert(error instanceof Error ? error.message : 'Failed to generate quest description')
+    emit('notify', error instanceof Error ? error.message : 'Failed to generate quest description', 'error')
   } finally {
     isGeneratingDescription.value = false
   }
@@ -80,7 +83,7 @@ async function generateFullQuest() {
     modalQuest.value.description = result.description
   } catch (error) {
     console.error('Failed to generate new quest:', error)
-    alert(error instanceof Error ? error.message : 'Failed to generate new quest')
+    emit('notify', error instanceof Error ? error.message : 'Failed to generate new quest', 'error')
   } finally {
     isGeneratingNewQuest.value = false
   }
@@ -107,7 +110,7 @@ async function autoGenerateNewQuest(isMain: boolean) {
     showModal.value = true
   } catch (error) {
     console.error('Failed to generate quest:', error)
-    alert(error instanceof Error ? error.message : 'Failed to generate quest')
+    emit('notify', error instanceof Error ? error.message : 'Failed to generate quest', 'error')
   } finally {
     isGeneratingNewQuest.value = false
   }
@@ -153,10 +156,23 @@ function saveQuest() {
 }
 
 function handleDelete(questId: string) {
-  if (confirm('Are you sure you want to delete this quest?')) {
-    const updatedList = quests.value.filter(q => q.id !== questId)
-    emit('update-quests', updatedList)
+  pendingDeleteQuestId.value = questId
+  showDeleteConfirmModal.value = true
+}
+
+function cancelDeleteQuest() {
+  showDeleteConfirmModal.value = false
+  pendingDeleteQuestId.value = null
+}
+
+function confirmDeleteQuest() {
+  if (!pendingDeleteQuestId.value) {
+    cancelDeleteQuest()
+    return
   }
+  const updatedList = quests.value.filter(q => q.id !== pendingDeleteQuestId.value)
+  emit('update-quests', updatedList)
+  cancelDeleteQuest()
 }
 </script>
 
@@ -376,6 +392,37 @@ function handleDelete(questId: string) {
                 Apply
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showDeleteConfirmModal" class="fixed inset-0 z-[220] flex items-center justify-center p-6 backdrop-blur-sm bg-slate-950/70" @click="cancelDeleteQuest">
+        <div class="modal-content w-full max-w-md bg-slate-900 border border-rose-500/20 rounded-3xl shadow-2xl overflow-hidden" @click.stop>
+          <div class="px-6 py-5 border-b border-white/10 flex items-start gap-3">
+            <div class="w-10 h-10 rounded-full border border-rose-400/40 bg-rose-500/15 flex items-center justify-center shrink-0">
+              <i class="ra ra-warning text-rose-300"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-black text-white uppercase tracking-wider">Delete Quest</h3>
+              <p class="text-xs text-slate-400 mt-1">This action cannot be undone.</p>
+            </div>
+          </div>
+
+          <div class="px-6 py-5">
+            <p class="text-sm text-slate-200">Are you sure you want to remove this quest from the log?</p>
+          </div>
+
+          <div class="px-6 py-4 border-t border-white/10 flex items-center justify-end gap-3">
+            <button class="px-4 py-2 rounded-lg border border-white/15 text-slate-300 text-sm font-bold hover:bg-white/5 transition-colors" @click="cancelDeleteQuest">
+              Cancel
+            </button>
+            <button class="px-4 py-2 rounded-lg bg-rose-500 text-white text-sm font-black uppercase tracking-wider hover:bg-rose-400 transition-colors" @click="confirmDeleteQuest">
+              Delete
+            </button>
           </div>
         </div>
       </div>

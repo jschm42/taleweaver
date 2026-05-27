@@ -94,6 +94,8 @@ const showPromptDialog = ref(false)
 const isRegenerating = ref(false)
 const isSuggestingPrompt = ref(false)
 const useAdvancedModel = ref(false)
+const showRegenerateAllConfirmDialog = ref(false)
+const pendingBatchRegeneration = ref<{ kind: string; missingOnly: boolean } | null>(null)
 const isUploading = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
 const visualsCacheVersion = ref(0)
@@ -596,13 +598,42 @@ async function quickRegenerateVisual(kind: any, id: string, skipFetch: boolean =
   }
 }
 
-async function regenerateAll(kind: any, missingOnly: boolean = false) {
+function requestRegenerateAll(kind: any, missingOnly: boolean = false) {
   if (!missingOnly) {
-    const kindLabel = kind === 'scene' ? 'locations' : kind === 'npc' ? 'inhabitants' : kind === 'container' ? 'containers' : kind === 'text-log' ? 'text logs' : 'mystical objects'
-    const ok = confirm(`Are you sure you want to regenerate all ${kindLabel} visuals? This will overwrite all existing images for these items.`)
-    if (!ok) return
+    pendingBatchRegeneration.value = { kind, missingOnly }
+    showRegenerateAllConfirmDialog.value = true
+    return
   }
+  void regenerateAll(kind, missingOnly)
+}
 
+function cancelRegenerateAllDialog() {
+  showRegenerateAllConfirmDialog.value = false
+  pendingBatchRegeneration.value = null
+}
+
+function confirmRegenerateAll() {
+  if (!pendingBatchRegeneration.value) {
+    cancelRegenerateAllDialog()
+    return
+  }
+  const { kind, missingOnly } = pendingBatchRegeneration.value
+  showRegenerateAllConfirmDialog.value = false
+  pendingBatchRegeneration.value = null
+  void regenerateAll(kind, missingOnly)
+}
+
+function getRegenerateKindLabel(kind: string): string {
+  if (kind === 'scene') return 'locations'
+  if (kind === 'npc') return 'inhabitants'
+  if (kind === 'container') return 'containers'
+  if (kind === 'text-log') return 'text logs'
+  if (kind === 'cover') return 'cover art'
+  if (kind === 'protagonist') return 'protagonist portraits'
+  return 'mystical objects'
+}
+
+async function regenerateAll(kind: any, missingOnly: boolean = false) {
   isBatchGenerating.value[kind] = true
   let items: any[] = []
   if (kind === 'cover' && debugData.value?.adventure) items = [debugData.value.adventure]
@@ -619,7 +650,7 @@ async function regenerateAll(kind: any, missingOnly: boolean = false) {
     }
     try {
       const apiKind = (kind === 'container' || kind === 'text-log') ? 'object' : kind
-      await quickRegenerateVisual(apiKind, item.id || props.adventureId, true)
+      await quickRegenerateVisual(apiKind, item.id || props.adventureId)
     } catch (error: any) {
       if (error.name === 'AbortError' || (error instanceof DOMException && error.name === 'AbortError')) {
         addNotification('Batch generation stopped.', 'info')
@@ -863,7 +894,7 @@ const goBack = () => {
               :rule-enforcement-mode="form.rule_enforcement_mode"
               :visuals-cache-version="visualsCacheVersion"
               @quick-regen="quickRegenerateVisual"
-              @regen-all="regenerateAll"
+              @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
               @open-upload-picker="openUploadPicker"
               @download-asset="downloadVisualAsset"
@@ -885,7 +916,7 @@ const goBack = () => {
               :rule-enforcement-mode="form.rule_enforcement_mode"
               :visuals-cache-version="visualsCacheVersion"
               @quick-regen="quickRegenerateVisual"
-              @regen-all="regenerateAll"
+              @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
               @open-upload-picker="openUploadPicker"
               @download-asset="downloadVisualAsset"
@@ -904,7 +935,7 @@ const goBack = () => {
               :active-menu-id="activeMenuId"
               :visuals-cache-version="visualsCacheVersion"
               @quick-regen="quickRegenerateVisual"
-              @regen-all="regenerateAll"
+              @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
               @open-upload-picker="openUploadPicker"
               @download-asset="downloadVisualAsset"
@@ -925,6 +956,7 @@ const goBack = () => {
               v-if="activeTab === 'quest'"
               :adventure="adventure"
               @update-quests="handleUpdateQuests"
+              @notify="addNotification"
             />
 
             <AwardsTab
@@ -1011,6 +1043,50 @@ const goBack = () => {
       :debug-data="debugData"
       @close="showDebug = false"
     />
+
+    <div
+      v-if="showRegenerateAllConfirmDialog"
+      class="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+      @click="cancelRegenerateAllDialog"
+    >
+      <div class="w-full max-w-lg rounded-2xl border border-amber-500/25 bg-slate-900 shadow-2xl overflow-hidden" @click.stop>
+        <div class="px-6 py-5 border-b border-white/10 flex items-start gap-3">
+          <div class="w-10 h-10 rounded-full border border-amber-400/40 bg-amber-500/15 flex items-center justify-center shrink-0">
+            <i class="ra ra-warning text-amber-300"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-black text-white">Confirm Visual Overwrite</h3>
+            <p class="text-xs text-slate-400 mt-1">This action will replace existing generated images.</p>
+          </div>
+        </div>
+
+        <div class="px-6 py-5 space-y-3">
+          <p class="text-sm text-slate-200">
+            Regenerate all
+            <span class="font-bold text-amber-300">{{ getRegenerateKindLabel(pendingBatchRegeneration?.kind || '') }}</span>
+            visuals now?
+          </p>
+          <p class="text-xs text-slate-400">
+            Existing images in this section will be overwritten one by one.
+          </p>
+        </div>
+
+        <div class="px-6 py-4 border-t border-white/10 flex items-center justify-end gap-3">
+          <button
+            class="px-4 py-2 rounded-lg border border-white/15 text-slate-300 text-sm font-bold hover:bg-white/5 transition-colors"
+            @click="cancelRegenerateAllDialog"
+          >
+            Cancel
+          </button>
+          <button
+            class="px-4 py-2 rounded-lg bg-amber-500 text-slate-950 text-sm font-black uppercase tracking-wider hover:bg-amber-400 transition-colors"
+            @click="confirmRegenerateAll"
+          >
+            Yes, regenerate all
+          </button>
+        </div>
+      </div>
+    </div>
 
     <NotificationToast 
       :notifications="notifications"
