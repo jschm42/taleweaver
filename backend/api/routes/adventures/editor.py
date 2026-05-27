@@ -1,6 +1,5 @@
 import logging
 import os
-import glob
 from copy import deepcopy
 from typing import Any, Literal, Optional, Union
 
@@ -128,20 +127,9 @@ def _resolve_library_image_url(image_url: Optional[str], basename_matches: dict[
     if os.path.exists(local_path):
         return raw
 
-    basename = os.path.basename(local_path)
-    if not basename:
-        return image_url
-
-    if basename not in basename_matches:
-        pattern = os.path.join(settings.DATA_DIR, "adventures", "library", "**", basename)
-        basename_matches[basename] = glob.glob(pattern, recursive=True)
-
-    matches = basename_matches.get(basename) or []
-    if len(matches) != 1:
-        return image_url
-
-    fixed_local = os.path.abspath(matches[0])
-    return _local_to_public_data_path(fixed_local)
+    # Intentionally do not remap missing assets by basename across adventures.
+    # Cross-adventure fallback causes confusing visuals when source adventures are deleted.
+    return image_url
 
 
 async def _get_template_avatar(db: AsyncSession, template_id: str) -> Optional[Avatar]:

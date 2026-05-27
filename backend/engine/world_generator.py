@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal, Optional, Union
 
@@ -910,6 +911,84 @@ class WorldGenerator:
             import re
             return re.sub(r'(_COPY)?(_\d+)?$', '', entity_id, flags=re.IGNORECASE)
 
+        def _public_data_url_to_local_path(url: Optional[str]) -> Optional[str]:
+            raw = str(url or "").strip()
+            if not raw.startswith("/data/"):
+                return None
+            rel = raw[len("/data/"):].lstrip("/").replace("/", os.sep)
+            local_path = os.path.abspath(os.path.join(settings.DATA_DIR, rel))
+            data_root = os.path.abspath(settings.DATA_DIR)
+            try:
+                if os.path.commonpath([local_path, data_root]) != data_root:
+                    return None
+            except ValueError:
+                return None
+            return local_path
+
+        def _local_path_to_public_data_url(local_path: str) -> Optional[str]:
+            data_root = os.path.abspath(settings.DATA_DIR)
+            resolved = os.path.abspath(local_path)
+            try:
+                if os.path.commonpath([resolved, data_root]) != data_root:
+                    return None
+            except ValueError:
+                return None
+            rel = os.path.relpath(resolved, data_root).replace("\\", "/")
+            return f"/data/{rel}"
+
+        def _copy_source_asset_to_current_adventure(
+            source_url: Optional[str],
+            *,
+            entity_type: str,
+            source_asset_id: Optional[str],
+        ) -> Optional[str]:
+            source_local = _public_data_url_to_local_path(source_url)
+            if not source_local or not os.path.isfile(source_local):
+                return None
+
+            target_root = os.path.abspath(
+                os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
+            )
+            try:
+                if os.path.commonpath([source_local, target_root]) == target_root:
+                    return source_url
+            except ValueError:
+                return None
+
+            safe_prefix = slugify(str(source_asset_id or entity_type)) or "source"
+            source_basename = os.path.basename(source_local)
+            target_dir = os.path.abspath(
+                os.path.join(target_root, "visuals", "reused", entity_type)
+            )
+            try:
+                if os.path.commonpath([target_dir, target_root]) != target_root:
+                    return None
+            except ValueError:
+                return None
+
+            os.makedirs(target_dir, exist_ok=True)
+            target_local = os.path.abspath(os.path.join(target_dir, f"{safe_prefix}_{source_basename}"))
+            try:
+                if os.path.commonpath([target_local, target_root]) != target_root:
+                    return None
+            except ValueError:
+                return None
+
+            if not os.path.isfile(target_local):
+                try:
+                    shutil.copy2(source_local, target_local)
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to localize reused source asset for %s/%s from %s: %s",
+                        template_id,
+                        entity_type,
+                        source_url,
+                        exc,
+                    )
+                    return None
+
+            return _local_path_to_public_data_url(target_local)
+
         def _resolve_source_asset_image(
             entity_type: str,
             source_asset_id: Optional[str] = None,
@@ -923,12 +1002,20 @@ class WorldGenerator:
                 return None
 
             if entity_type == "cover":
-                return source_assets.get("cover")
+                return _copy_source_asset_to_current_adventure(
+                    source_assets.get("cover"),
+                    entity_type=entity_type,
+                    source_asset_id=source_asset_id,
+                )
 
             if entity_type == "protagonist":
                 protagonist_asset = source_assets.get("protagonist") or {}
                 if source_asset_id == "PROTAGONIST" and protagonist_asset.get("image_url"):
-                    return protagonist_asset.get("image_url")
+                    return _copy_source_asset_to_current_adventure(
+                        protagonist_asset.get("image_url"),
+                        entity_type=entity_type,
+                        source_asset_id=source_asset_id,
+                    )
                 return None
 
             bucket_key = {"scene": "scenes", "npc": "npcs", "object": "objects"}.get(entity_type)
@@ -941,7 +1028,11 @@ class WorldGenerator:
 
             for asset in bucket:
                 if asset.get("id") == source_asset_id and asset.get("image_url"):
-                    return asset.get("image_url")
+                    return _copy_source_asset_to_current_adventure(
+                        asset.get("image_url"),
+                        entity_type=entity_type,
+                        source_asset_id=source_asset_id,
+                    )
 
             return None
 
