@@ -103,15 +103,13 @@ def _normalize_output_filename(filename: Optional[str], extension: str) -> str:
 
     # Keep only the final segment to prevent directory traversal.
     candidate = os.path.basename(candidate)
-    stem, original_ext = os.path.splitext(candidate)
+    stem, _original_ext = os.path.splitext(candidate)
     stem = _SAFE_FILENAME_RE.sub("_", stem).strip("._")
     if not stem:
         stem = str(uuid.uuid4())
 
-    normalized_ext = original_ext.lower().lstrip(".")
-    if normalized_ext not in {"png", "jpg", "jpeg"}:
-        normalized_ext = ext
-    return f"{stem}.{normalized_ext}"
+    # Always enforce trusted extension selected by server-side format.
+    return f"{stem}.{ext}"
 
 
 def _normalize_svg_filename(filename: Optional[str], default_stem: str) -> str:
@@ -235,7 +233,7 @@ class MediaEngine:
             logger.warning("Static SVG placeholder asset not found: %s", source_asset)
             return None
 
-        safe_target_dir = _ensure_within_data_dir(target_dir)
+        safe_target_dir = _resolve_output_dir(target_dir)
         os.makedirs(safe_target_dir, exist_ok=True)
 
         default_stem = f"placeholder_{entity_id}_{uuid.uuid4().hex[:6]}"
@@ -1211,13 +1209,14 @@ class MediaEngine:
         theme: Optional[str] = None
     ) -> str:
         """Generate placeholders using static SVG assets for NPC/items and PIL for other categories."""
+        safe_target_dir = target_dir
         try:
-            target_dir = _ensure_within_data_dir(target_dir)
-            os.makedirs(target_dir, exist_ok=True)
+            safe_target_dir = _resolve_output_dir(target_dir)
+            os.makedirs(safe_target_dir, exist_ok=True)
             cat = category.upper()
 
             static_svg_url = await MediaEngine._copy_static_svg_placeholder(
-                target_dir=target_dir,
+                target_dir=safe_target_dir,
                 entity_id=entity_id,
                 category=cat,
                 filename=filename,
@@ -1239,7 +1238,7 @@ class MediaEngine:
                 filename = f"placeholder_{entity_id}_{uuid.uuid4().hex[:6]}.{ext}"
             filename = _normalize_output_filename(filename, ext)
             
-            filepath = _ensure_within_data_dir(os.path.join(target_dir, filename))
+            filepath = _ensure_within_data_dir(os.path.join(safe_target_dir, filename))
             
             # Select strategy and theme based on category
             # Map theme string to ColorTheme enum
@@ -1256,7 +1255,7 @@ class MediaEngine:
                 width, height = 1200, 800
             elif cat in ["CHARACTER", "AVATAR"]:
                 # Avatars/characters still use the legacy SVG fallback.
-                return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
+                return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, safe_target_dir, filename, category)
             else:
                 strategy = OrganicGradientStrategy(theme=color_theme)
                 width, height = 800, 600
@@ -1281,14 +1280,14 @@ class MediaEngine:
             if cat == "NPC" or cat == "ITEM" or cat.startswith("ITEM_"):
                 return ""
             # Fallback to SVG for non-item/non-npc categories.
-            return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, target_dir, filename, category)
+            return await MediaEngine.generate_svg_placeholder(adventure_id, entity_id, safe_target_dir, filename, category)
 
     @staticmethod
     async def generate_svg_placeholder(
         adventure_id: str,
         entity_id: str,
         target_dir: str,
-        filename: str = "placeholder.svg",
+        filename: Optional[str] = "placeholder.svg",
         category: str = ""
     ) -> str:
         """
@@ -1297,13 +1296,12 @@ class MediaEngine:
         """
         _ = adventure_id
         try:
-            target_dir = _ensure_within_data_dir(target_dir)
-            os.makedirs(target_dir, exist_ok=True)
-            filename = os.path.basename(filename)
-            if not filename.endswith(".svg"):
-                filename += ".svg"
-            
-            filepath = _ensure_within_data_dir(os.path.join(target_dir, filename))
+            safe_target_dir = _resolve_output_dir(target_dir)
+            os.makedirs(safe_target_dir, exist_ok=True)
+            default_stem = f"placeholder_{entity_id}_{uuid.uuid4().hex[:6]}"
+            safe_filename = _normalize_svg_filename(filename, default_stem)
+
+            filepath = _ensure_within_data_dir(os.path.join(safe_target_dir, safe_filename))
             generator = SVGPlaceholderGenerator(width=1200, height=800, num_shapes=15)
             generator.save(filepath, title=entity_id, category=category)
             

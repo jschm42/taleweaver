@@ -6,6 +6,7 @@ sub-routes. All tests follow the Arrange-Act-Assert pattern.
 """
 import json
 import os
+import time
 import zipfile
 from io import BytesIO
 
@@ -17,11 +18,13 @@ from sqlalchemy import delete, func, select
 
 from backend.core.config import settings
 from backend.engine.debug_engine import DebugEngine
+from backend.engine.session_checkpoint_service import SessionCheckpointService
 from backend.api.routes.adventures.schemas import StoryIdeaSuggestionResponse
 from backend.models.adventure_template import AdventureTemplate as Adventure
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
+from backend.models.session_checkpoint import SessionCheckpoint
 from backend.models.session_state import SessionState as GameState
 from backend.models.session_state import SessionState
 from backend.models.user import User
@@ -2249,6 +2252,165 @@ async def test_delete_session_removes_session_folder(client: AsyncClient, monkey
     del_resp = await client.delete(f"/api/adventures/sessions/{game_id}")
     assert del_resp.status_code == 200, del_resp.text
     assert not session_dir.exists()
+
+
+async def test_list_session_checkpoints_returns_seeded_entries(client: AsyncClient):
+    ids = await _create_adventure(client, "Checkpoint List Quest")
+    game_id = ids["game_id"]
+
+    async with TestSessionLocal() as db:
+        session = await db.get(GameSession, game_id)
+        checkpoint = SessionCheckpoint(
+            session_id=game_id,
+            message_index=0,
+            trigger_reason="SCENE_CHANGE",
+            state_snapshot={"scene_label": "The Central Workbench"},
+        )
+        db.add(checkpoint)
+        await db.commit()
+
+    resp = await client.get(f"/api/adventures/sessions/{game_id}/checkpoints")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["trigger_reason"] == "SCENE_CHANGE"
+    assert "Arrived" in data[0]["title"]
+
+
+async def test_list_sessions_cleans_up_stale_empty_orphan_dirs(client: AsyncClient, monkeypatch, tmp_path):
+    """Listing sessions should remove stale empty orphan directories but keep active session directories."""
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(settings, "DATA_DIR", str(data_dir))
+    monkeypatch.setattr(settings, "SESSION_EMPTY_DIR_CLEANUP_DAYS", 1)
+
+    ids = await _create_adventure(client, "Cleanup Session Quest")
+    active_game_id = ids["game_id"]
+
+    sessions_dir = data_dir / "adventures" / "sessions"
+    active_dir = sessions_dir / active_game_id
+    os.makedirs(active_dir, exist_ok=True)
+
+    stale_empty_dir = sessions_dir / "cleanup-stale-empty-test"
+    os.makedirs(stale_empty_dir, exist_ok=True)
+
+    stale_nonempty_dir = sessions_dir / "cleanup-stale-nonempty-test"
+    os.makedirs(stale_nonempty_dir, exist_ok=True)
+    (stale_nonempty_dir / "keep.txt").write_text("x", encoding="utf-8")
+
+    old_ts = time.time() - (2 * 24 * 60 * 60)
+    os.utime(stale_empty_dir, (old_ts, old_ts))
+    os.utime(stale_nonempty_dir, (old_ts, old_ts))
+    os.utime(active_dir, (old_ts, old_ts))
+
+    resp = await client.get("/api/adventures/sessions")
+    assert resp.status_code == 200, resp.text
+
+    assert not stale_empty_dir.exists()
+    assert stale_nonempty_dir.exists()
+    assert active_dir.exists()
+
+
+async def test_restore_session_checkpoint_rolls_back_state_and_prunes_messages(client: AsyncClient):
+    ids = await _create_adventure(client, "Checkpoint Restore Quest")
+    game_id = ids["game_id"]
+
+    async with TestSessionLocal() as db:
+        session = await db.get(GameSession, game_id)
+        assert session is not None
+
+        state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
+        state = state_res.scalars().first()
+        assert state is not None
+
+        avatar = await db.get(Avatar, state.avatar_id)
+        assert avatar is not None
+
+        db.add(ChatMessage(session_id=game_id, role="system", content="Checkpoint anchor"))
+        db.add(ChatMessage(session_id=game_id, role="assistant", content="Future line one"))
+        db.add(ChatMessage(session_id=game_id, role="assistant", content="Future line two"))
+        await db.flush()
+
+        checkpoint = SessionCheckpoint(
+            session_id=game_id,
+            message_index=1,
+            trigger_reason="QUEST_UPDATE",
+            state_snapshot={
+                "avatar": {
+                    "hp": 88,
+                    "max_hp": avatar.max_hp,
+                    "stamina": avatar.stamina,
+                    "max_stamina": avatar.max_stamina,
+                    "mana": avatar.mana,
+                    "max_mana": avatar.max_mana,
+                    "exp": avatar.exp,
+                    "strength": avatar.strength,
+                    "intelligence": avatar.intelligence,
+                    "wisdom": avatar.wisdom,
+                    "dexterity": avatar.dexterity,
+                    "charisma": avatar.charisma,
+                    "armor_class": avatar.armor_class,
+                    "stats": avatar.stats or {},
+                    "inventory": avatar.inventory or [],
+                    "equipment": avatar.equipment or {},
+                    "status_effects": avatar.status_effects or [],
+                },
+                "session_state": {
+                    "current_scene_id": state.current_scene_id,
+                    "in_game_time": state.in_game_time,
+                    "time_system": state.time_system,
+                    "time_config": state.time_config or {},
+                    "inventory": state.inventory or [],
+                    "entity_states": state.entity_states or {},
+                    "exit_states": state.exit_states or {},
+                    "discovered_scenes": state.discovered_scenes or [],
+                    "quests": state.quests or [],
+                    "is_completed": state.is_completed,
+                    "scene_label": "Recovered Workshop",
+                },
+                "scene_label": "Recovered Workshop",
+            },
+        )
+        db.add(checkpoint)
+
+        avatar.hp = 5
+        state.current_scene_id = "BROKEN_SCENE"
+        await db.commit()
+
+        checkpoint_id = checkpoint.id
+
+    restore_resp = await client.post(
+        f"/api/adventures/sessions/{game_id}/checkpoints/{checkpoint_id}/restore"
+    )
+    assert restore_resp.status_code == 200, restore_resp.text
+    restore_payload = restore_resp.json()
+    assert restore_payload["status"] == "restored"
+    assert restore_payload["deleted_messages"] == 2
+
+    chat_resp = await client.get(f"/api/adventures/{game_id}/chat")
+    assert chat_resp.status_code == 200, chat_resp.text
+    chat_payload = chat_resp.json()
+    assert len(chat_payload["messages"]) == 1
+    assert chat_payload["messages"][0]["content"] == "Checkpoint anchor"
+    assert chat_payload["sheet"]["hp"] == 88
+
+
+async def test_session_checkpoints_keep_only_five_latest(client: AsyncClient):
+    ids = await _create_adventure(client, "Checkpoint Retention Quest")
+    game_id = ids["game_id"]
+
+    async with TestSessionLocal() as db:
+        for _ in range(7):
+            await SessionCheckpointService.create_checkpoint(
+                db,
+                game_id,
+                trigger_reason="QUEST_UPDATE",
+            )
+            await db.commit()
+
+    resp = await client.get(f"/api/adventures/sessions/{game_id}/checkpoints")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data) == 5
 
 
 async def test_started_session_persists_asset_snapshot(client: AsyncClient):

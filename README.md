@@ -1,16 +1,17 @@
+# TaleWeaver: Generative AI Roleplaying
+
+<!-- markdownlint-disable MD033 MD022 MD032 MD030 MD012 MD009 -->
+
 <p align="center">
   <img src="frontend/src/assets/svg/app-logo.svg" width="200" alt="TaleWeaver Logo">
   <br><em>Weave Infinite Adventures.</em>
 </p>
 
-
-# TaleWeaver: Generative AI Roleplaying
-
 > [!IMPORTANT]
 > **TaleWeaver is currently in active development.**
 > As an early beta release, you may encounter unexpected behavior or creative "hallucinations." We are constantly refining the engine. Contributions and feedback are highly welcome!
 
-**Welcome to the future of interactive storytelling.** TaleWeaver is not just another text adventure. It is a next-generation, browser-based RPG driven entirely by an **omniscient AI Gamemaster**. By combining state-of-the-art Large Language Models with cinematic Text-to-Speech (TTS), TaleWeaver dynamically generates worlds, characters, and storylines on the fly - reacting to your every decision. 
+**Welcome to the future of interactive storytelling.** TaleWeaver is not just another text adventure. It is a next-generation, browser-based RPG driven entirely by an **omniscient AI Gamemaster**. By combining state-of-the-art Large Language Models with cinematic Text-to-Speech (TTS), TaleWeaver dynamically generates worlds, characters, and storylines on the fly - reacting to your every decision.
 
 **With our immersive voice integration, playing TaleWeaver feels like directing and starring in your own playable audiobook.**
 
@@ -34,6 +35,11 @@
   <br><em><b>In-Game</b> - Immersive text adventure gameplay with dynamic AI interaction.</em>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/combat-dialog.jpg" width="600" alt="Combat Dialog">
+  <br><em><b>Combat Dialog</b> - Tactical combat interface with action choices and integrated loot resolution.</em>
+</p>
+
 ## 1. The Vision
 
 Instead of a static, predefined story, the AI acts as an intelligent, omniscient Gamemaster (GM). It generates worlds, puzzles, and storylines "on the fly," reacts dynamically to player decisions, and simultaneously manages a strict RPG rulebook in the background.
@@ -41,17 +47,20 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ## 2. Core Features
 
 ### 🧠 The Omniscient AI Gamemaster
-* **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly"[cite: 1]. No two playthroughs are ever the same.
-* **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.[cite: 1].
+* **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly". No two playthroughs are ever the same.
+* **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.
 
 ### 🎯 Quests & Meta-Progression
-* **Dynamic Objectives:** Follow main storylines or explore optional side quests. The AI Gamemaster evaluates your actions and dynamically updates your quest log[cite: 1, 6].
+* **Dynamic Objectives:** Follow main storylines or explore optional side quests. The AI Gamemaster evaluates your actions and dynamically updates your quest log.
 * **Achievement System:** Unlock custom, AI-generated awards (Bronze, Silver, Gold) for exceptional problem-solving and out-of-the-box thinking.
 
 ### ⚙️ Deep RPG Mechanics
-* **Strict Rule Enforcement:** While the narrative flows freely, a strict 2-pass RPG rulebook (Mechanics + Narrative) runs in the background[cite: 1, 6].
-* **State Management:** Manage Hitpoints, Stamina, and Mana, while reacting to plot-driven status effects (e.g., Poisoned, Blessed)[cite: 1].
-* **Loot & Inventory System:** Dedicated isolated inventory system with specific equipment slots (Head, Chest, Rings, etc.)[cite: 1].
+* **Strict Rule Enforcement:** While the narrative flows freely, a strict 2-pass RPG rulebook (Mechanics + Narrative) runs in the background.
+* **State Management:** Manage Hitpoints, Stamina, and Mana, while reacting to plot-driven status effects (e.g., Poisoned, Blessed).
+* **Loot & Inventory System:** Dedicated isolated inventory system with specific equipment slots (Head, Chest, Rings, etc.).
+* **Tactical Combat Dialog:** Dedicated combat modal with contextual actions (attack, run, rest, consume) plus integrated loot resolution flow.
+* **Container Gameplay:** Containers can be generated in scenes and inventory, support locked/unlocked states, and may require a code or item condition before access.
+* **Text-Log Discovery System:** Readable objects can contain structured text logs (document, scroll, book, sign) that can be opened directly from scene and inventory interactions.
 
 ### 🎧 The Playable Audiobook (Cinematic Audio)
 * **Next-Gen Voice Acting:** Powered by **Google Gemini 3.1 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth.
@@ -59,21 +68,34 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 
 ### 🗺️ Visuals & Sensory Immersion
 * **Dynamic Cartography:** Automatic rendering of hand-drawn style directed graph maps of your discovered scenes using rough.js and dagre[cite: 1].
-* **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages[cite: 1].
-* **Cinematic Audio:** Immersive TTS support powered by Google Gemini 1.5 Flash and ElevenLabs for high-budget audio drama pacing[cite: 1].
+* **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages.
+* **Cinematic Audio:** Immersive TTS support powered by Google Gemini 1.5 Flash and ElevenLabs for high-budget audio drama pacing.
 
 ### 🧠 Bring Your Own Model (BYOK) & Privacy First
 * **Cloud-Tier Intelligence:** Designed to harness the reasoning power of top-tier models (GPT-5, Claude 4.5, Gemini 3 Pro) via our LiteLLM adapter for flawless, complex world generation. You provide your own API key, meaning you have full control over your data and costs.
 * **Self-Hosted & Tenant-Ready:** Run the backend completely on your own hardware via Docker. Built on SQLite with UUID-based primary keys, your game progress and prompts remain local and private on your machine.
-* **Local Tinkering (Experimental):** While the core engine relies on high-tier models for complex JSON generation, we offer highly experimental support for local execution via **Ollama**[cite: 7]. Perfect for developers looking to push the boundaries of local inference, though not yet recommended for stable gameplay.
+* **Local Tinkering (Experimental):** While the core engine relies on high-tier models for complex JSON generation, we offer highly experimental support for local execution via **Ollama**. Perfect for developers looking to push the boundaries of local inference, though not yet recommended for stable gameplay.
 
 ### Persistent Game Progress & Memory
 * **Memory Feature:** The AI remembers all previous conversations and actions of the player within an adventure.
 * **Persistence:** Progress is permanently stored in the database, allowing sessions to be paused and resumed at any time.
+* **Continuous Auto-Save Milestones:** TaleWeaver now creates automatic checkpoints at major story milestones (scene changes, quest milestones, award events).
+* **Chronicles Timeline + Rollback:** Open the new Chronicles timeline in-game and restore to any recent checkpoint. Rollback performs a hard timeline rewind by restoring stored state and removing future messages after that checkpoint.
+* **Retention Policy:** To keep sessions fast and compact, only the five most recent checkpoints are retained per game session.
 
 ### Media & Immersion
 * Optional AI-generated images to enhance the aesthetic.
 * **Import/Export:** Adventures can be backed up or shared.
+* **Offline Image Generation:** Local providers are supported, including **Ollama** and **Stable Diffusion via Automatic1111/Forge API**.
+
+### Recent Feature Highlights
+* **Chronicles Checkpoints + Timeline Restore** (`617f682`): Added milestone-based auto-checkpoints, a dedicated in-game Chronicles timeline, and rollback restore flow for recent session states.
+* **Container Unlock Rules + Generated Containers** (`9e26e8c`, `39688df`, `0bb4c0f`): Added generated container entities with lock-state rules plus code/item-based unlock requirements.
+* **Text-Log Generation + Readable Inventory Integration** (`329c835`, `dabbee3`): Added generated text logs and richer readable-item handling with content/format support in inventory and scene flows.
+* **Session Notes + Combat Loot Handling** (`60214f6`): Added editable session notes in the game/portal flow and structured post-combat loot handling in the gameplay UI.
+* **Enhanced Import + Session Management** (`5c4cd9b`): Improved adventure import flow and session lifecycle behavior to make play sessions more robust.
+* **Ollama Model Management + Bulk Deletion Tools** (`f5f6576`): Added admin-facing Ollama model management plus portal actions for deleting all sessions/templates.
+* **Path Traversal Security Hardening** (`b6c17cc`, `62eb16e`, `15f0dc5`, `91b4fd2`, `3dccb87`, `f3cfb03`, `0559f8f`, `2761c7d`): Hardened path handling across API and media routes to mitigate uncontrolled path expression risks.
 
 ---
 
@@ -98,6 +120,7 @@ To get started with your first adventure, follow these simple steps:
 2.  **Explore the Library**: Browse the **Library** for pre-seeded adventures or imported blueprints.
 3.  **Generate a World**: If you want something unique, use the **World Generator** to create a completely new setting from a simple prompt in your preferred language (e.g., German, French, Italian).
 4.  **Begin Journey**: Select your adventure and click **Begin Journey** to start playing! (Your hero's stats and appearance are automatically initialized from the adventure's protagonist definition).
+5.  **Use Chronicles**: During gameplay, open **Chronicles Timeline** from the header to inspect auto-saved milestones and restore earlier points when needed.
 
 > [!TIP]
 > You can find several pre-made test adventures in the `/adventures` directory of this repository. For even more content, check out our **[Community Adventure Repository](https://github.com/jschm42/taleweaver-adventures)**! Use the **Import** button in the **Library** to load them and start playing immediately!
@@ -226,8 +249,11 @@ python scripts/generate_fernet_key.py
 # Apply database migrations
 python -m alembic upgrade head
 
+# Optional hard reset for local development (SQLite file lives in data/)
+# delete data/taleweaver.db and run migrations again
+
 # If a previous migration crashed and left temp tables behind, clean and retry:
-# python -c "import sqlite3; c=sqlite3.connect('taleweaver.db'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_adventures'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_users'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_avatars'); c.commit(); c.close()"
+# python -c "import sqlite3; c=sqlite3.connect('data/taleweaver.db'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_adventures'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_users'); c.execute('DROP TABLE IF EXISTS _alembic_tmp_avatars'); c.commit(); c.close()"
 # python -m alembic upgrade head
 
 # Start the FastAPI server (uses BACKEND_PORT from .env)
@@ -242,7 +268,7 @@ uvicorn backend.main:app --reload --port 8000
 
 Important: Run this command from the project root. Running it from inside the backend directory causes import errors like ModuleNotFoundError: No module named backend.
 
-If you see SQLite errors such as no such column after model changes, recreate the local database file taleweaver.db (or run your migration flow) so the schema matches the current models.
+If you see SQLite errors such as no such column after model changes, recreate the local database file data/taleweaver.db (or run your migration flow) so the schema matches the current models.
 
 The backend API will run on the port configured in `.env` (default: `http://localhost:8000`).
 The frontend will run on the port configured in `.env` (default: `http://localhost:5173`).
@@ -287,9 +313,11 @@ The frontend will typically run on `http://localhost:5173`.
 #### 3. First Launch
 Once both servers are running, open the frontend URL in your browser. You will be prompted in the settings/configuration UI to provide your LLM API key. This key is encrypted using AES and stored safely in your local SQLite database before you can start generating your first adventure.
 
-### Local Ollama Image Generation (Experimental)
+### Local Image Generation (Offline): Ollama + Stable Diffusion API
 
-TaleWeaver supports local image generation through Ollama as an additional `Visuals` provider.
+TaleWeaver supports offline image generation through local providers in `Configuration -> Visuals`.
+
+#### Option A: Ollama (Local, Experimental)
 
 1. Install and run Ollama.
 2. Pull an image model, for example:
@@ -304,9 +332,22 @@ ollama pull x/flux2-klein
 	- Set `Ollama URL` (default: `http://localhost:11434`).
 	- Optionally set `width`, `height`, `steps`, `seed`, and `negative_prompt`.
 
+#### Option B: Stable Diffusion API (Automatic1111/Forge)
+
+1. Start a local Automatic1111 or Forge WebUI instance with API enabled.
+2. Ensure the API is reachable (default: `http://127.0.0.1:7860`).
+3. In the frontend `Configuration -> Visuals` section:
+  - Set `Image Provider` to `Stable Diffusion (Local)`.
+  - Set `Stable Diffusion API URL` (default: `http://127.0.0.1:7860`).
+  - Click `Refresh Models` to load available checkpoints from the local API.
+  - Select `Simple Image Model` and `Advanced Image Model` from the fetched model list.
+  - Optionally set `width`, `height`, `steps`, `seed`, and `negative_prompt`.
+
 Notes:
 - No cloud API key is required for local Ollama image generation.
 - TaleWeaver first tries image generation via LiteLLM integration and falls back to direct Ollama HTTP calls when needed.
+- No cloud API key is required for local Stable Diffusion generation via Automatic1111/Forge.
+- TaleWeaver can query available local SD checkpoints and generate images over the local `sdapi` endpoints.
 
 ## 6. Automated Adventure Import
 

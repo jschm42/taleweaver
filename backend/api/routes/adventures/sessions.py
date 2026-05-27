@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import shutil
+import time
 import uuid
 from copy import deepcopy
 from typing import Any, Optional, Union
@@ -16,6 +17,7 @@ from backend.api.routes.adventures.schemas import GameSessionResponse
 from backend.schemas.session import GameSessionUpdate
 from backend.engine.session_exporter import SessionExporter
 from backend.engine.session_importer import SessionImporter
+from backend.engine.session_checkpoint_service import SessionCheckpointService
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
@@ -23,12 +25,14 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
+from backend.models.session_checkpoint import SessionCheckpoint
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from sqlalchemy import delete
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.game_state import GameState
 from backend.models.world_map import WorldMap
+from backend.schemas.checkpoint import RestoreCheckpointResponse, SessionCheckpointResponse
 from backend.utils.text_utils import generate_session_id
 
 router = APIRouter(tags=["Sessions"])
@@ -74,6 +78,51 @@ def _ensure_within_data_dir(path: str) -> str:
     except ValueError as exc:
         raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
     return resolved
+
+
+def _cleanup_stale_empty_session_dirs(active_session_ids: set[str], max_age_days: int) -> int:
+    """Remove orphaned empty session directories older than max_age_days."""
+    if max_age_days <= 0:
+        return 0
+
+    sessions_root = _ensure_within_data_dir(
+        os.path.join(settings.DATA_DIR, "adventures", "sessions")
+    )
+    if not os.path.isdir(sessions_root):
+        return 0
+
+    cutoff_ts = time.time() - (max_age_days * 24 * 60 * 60)
+    removed = 0
+
+    try:
+        entries = os.listdir(sessions_root)
+    except OSError:
+        logger.exception("Failed to list session directory root for stale cleanup.")
+        return 0
+
+    for entry in entries:
+        safe_id = _sanitize_path_component(entry)
+        if not safe_id:
+            continue
+        if safe_id in active_session_ids:
+            continue
+
+        candidate = _ensure_within_data_dir(os.path.join(sessions_root, safe_id))
+        if not os.path.isdir(candidate):
+            continue
+
+        try:
+            if os.listdir(candidate):
+                continue
+            if os.path.getmtime(candidate) >= cutoff_ts:
+                continue
+            os.rmdir(candidate)
+            removed += 1
+        except OSError:
+            # Ignore race conditions and permission errors; cleanup is best-effort.
+            continue
+
+    return removed
 
 
 def _copy_data_asset_to_session(
@@ -330,6 +379,15 @@ async def list_sessions(
     current_user: User = Depends(get_current_user),
 ) -> list:
     """Returns all game sessions for the current user."""
+    all_session_ids_res = await db.execute(select(GameSession.id))
+    all_session_ids = {sid for sid in all_session_ids_res.scalars().all() if isinstance(sid, str)}
+    removed_dirs = _cleanup_stale_empty_session_dirs(
+        active_session_ids=all_session_ids,
+        max_age_days=max(0, int(getattr(settings, "SESSION_EMPTY_DIR_CLEANUP_DAYS", 7))),
+    )
+    if removed_dirs:
+        logger.info("Removed %s stale empty session directories.", removed_dirs)
+
     result = await db.execute(
         select(GameSession, SessionState, AdventureTemplate, WorldScene.label, Avatar.profile_image)
         .outerjoin(SessionState, SessionState.session_id == GameSession.id)
@@ -670,6 +728,7 @@ async def delete_session(game_id: str, db: AsyncSession = Depends(get_db), curre
     avatar_id = game_session.avatar_id
 
     # Explicitly remove session-bound rows that may not be ORM-cascaded.
+    await db.execute(delete(SessionCheckpoint).where(SessionCheckpoint.session_id == game_id))
     await db.execute(delete(ChatMessage).where(ChatMessage.session_id == game_id))
     await db.execute(delete(SessionState).where(SessionState.session_id == game_id))
     await db.execute(delete(WorldEntity).where(WorldEntity.session_id == game_id))
@@ -1253,6 +1312,52 @@ async def update_session(
     await db.commit()
 
     return await _get_session_response(db, game_id, current_user.id)
+
+
+@router.get("/sessions/{game_id}/checkpoints", response_model=list[SessionCheckpointResponse])
+async def list_session_checkpoints(
+    game_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[SessionCheckpointResponse]:
+    session_res = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    game_session = session_res.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    return await SessionCheckpointService.list_checkpoints(db, game_id)
+
+
+@router.post("/sessions/{game_id}/checkpoints/{checkpoint_id}/restore", response_model=RestoreCheckpointResponse)
+async def restore_session_checkpoint(
+    game_id: str,
+    checkpoint_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RestoreCheckpointResponse:
+    session_res = await db.execute(
+        select(GameSession).where((GameSession.id == game_id) & (GameSession.user_id == current_user.id))
+    )
+    game_session = session_res.scalars().first()
+    if not game_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    try:
+        deleted_messages = await SessionCheckpointService.restore_checkpoint(db, game_id, checkpoint_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Event-table pruning is intentionally deferred until a dedicated event store exists.
+    logger.info("Checkpoint restore for session %s pruned %s chat messages.", game_id, deleted_messages)
+    await db.commit()
+
+    return RestoreCheckpointResponse(
+        status="restored",
+        checkpoint_id=checkpoint_id,
+        deleted_messages=deleted_messages,
+    )
 
 
 @router.get("/sessions/{game_id}/export")

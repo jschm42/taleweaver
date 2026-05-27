@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import random
 import re
 import time
@@ -33,6 +34,7 @@ from backend.engine.command_parser import CommandParser
 from backend.engine.debug_engine import DebugEngine
 from backend.engine.map_engine import MapEngine
 from backend.engine.quest_manager import QuestManager
+from backend.engine.session_checkpoint_service import SessionCheckpointService
 from backend.engine.adventure_generator_service import AdventureGeneratorService
 from backend.engine.rule_engine import (
     RESOURCE_CAP,
@@ -68,6 +70,48 @@ GM_NOTES_MAX_ITEMS = 20
 GM_NOTES_PROMPT_MAX_ITEMS = 12
 GM_CHAT_RULE_PASS_NPCS_MAX_ITEMS = 10
 TERMINAL_EPILOGUE_STATE_KEY = "__terminal_epilogue__"
+PROMPT_SUGGESTIONS_STATE_KEY = "__prompt_suggestions__"
+PROMPT_SUGGESTION_MAX_VISIBLE_NPCS = 12
+PROMPT_SUGGESTION_MAX_VISIBLE_OBJECTS = 16
+PROMPT_SUGGESTION_MAX_UNLOCKED_EXITS = 8
+PROMPT_SUGGESTION_MAX_INVENTORY_ITEMS = 16
+PROMPT_SUGGESTION_MAX_LAST_RESPONSE_CHARS = 1200
+CHECKPOINT_REASON_SCENE_CHANGE = "SCENE_CHANGE"
+CHECKPOINT_REASON_QUEST_UPDATE = "QUEST_UPDATE"
+CHECKPOINT_REASON_AWARD_GRANTED = "AWARD_GRANTED"
+PROMPT_SUGGESTIONS_STATE_KEY = "__prompt_suggestions__"
+PROMPT_SUGGESTION_MAX_VISIBLE_NPCS = 12
+PROMPT_SUGGESTION_MAX_VISIBLE_OBJECTS = 16
+PROMPT_SUGGESTION_MAX_UNLOCKED_EXITS = 8
+PROMPT_SUGGESTION_MAX_INVENTORY_ITEMS = 16
+PROMPT_SUGGESTION_MAX_LAST_RESPONSE_CHARS = 1200
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def _sanitize_path_component(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
+        return None
+    if candidate in {".", ".."} or ".." in candidate:
+        return None
+    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
+def _ensure_within_data_dir(path: str) -> str:
+    data_root = os.path.abspath(settings.DATA_DIR)
+    resolved = os.path.abspath(path)
+    try:
+        if os.path.commonpath([resolved, data_root]) != data_root:
+            raise ValueError("Resolved path escapes DATA_DIR.")
+    except ValueError as exc:
+        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
+    return resolved
 
 
 def _is_token_limit_error(exc: Exception) -> bool:
@@ -178,6 +222,39 @@ class GameTurnManager:
         )
         self._combat_state_helper = TurnCombatStateHelper(self)
         self._llm_context_builder = TurnLlmContextBuilder(self)
+        self._pending_checkpoint_reasons: set[str] = set()
+        self._checkpoint_scene_label: str | None = None
+
+    def _queue_checkpoint(self, reason: str, *, scene_label: str | None = None) -> None:
+        self._pending_checkpoint_reasons.add(reason)
+        if scene_label:
+            self._checkpoint_scene_label = scene_label
+
+    async def _persist_pending_checkpoints(self) -> list[dict[str, Any]]:
+        if not self._pending_checkpoint_reasons or not self.state:
+            return []
+
+        checkpoint_events: list[dict[str, Any]] = []
+        reasons = sorted(self._pending_checkpoint_reasons)
+        for reason in reasons:
+            checkpoint = await SessionCheckpointService.create_checkpoint(
+                self.db,
+                self.state.session_id,
+                reason,
+                scene_label=self._checkpoint_scene_label,
+            )
+            checkpoint_events.append(
+                {
+                    "id": checkpoint.id,
+                    "trigger_reason": checkpoint.trigger_reason,
+                    "created_at": checkpoint.created_at.isoformat() if checkpoint.created_at else None,
+                }
+            )
+
+        await self.db.commit()
+        self._pending_checkpoint_reasons.clear()
+        self._checkpoint_scene_label = None
+        return checkpoint_events
 
     async def _unhide_entities_in_text(self, text: str) -> None:
         """Scan text for entity ID tokens like 'ID: TALKING_RAT' and set their
@@ -299,6 +376,215 @@ class GameTurnManager:
     def _build_terminal_flags_payload(self) -> dict[str, Any]:
         return self._session_helper.build_terminal_flags_payload()
 
+    @staticmethod
+    def extract_prompt_suggestions(exit_states: Any) -> list[str]:
+        """Return up to three stored prompt suggestions from session exit_state payload."""
+        if not isinstance(exit_states, dict):
+            return []
+        raw = exit_states.get(PROMPT_SUGGESTIONS_STATE_KEY)
+        if not isinstance(raw, list):
+            return []
+        result: list[str] = []
+        for entry in raw:
+            if not isinstance(entry, str):
+                continue
+            cleaned = " ".join(entry.strip().split())
+            if cleaned:
+                result.append(cleaned)
+            if len(result) >= 3:
+                break
+        return result
+
+    @staticmethod
+    def _truncate_suggestion_words(text: str, max_words: int = 6) -> str:
+        words = [w for w in text.strip().split() if w]
+        if not words:
+            return ""
+        return " ".join(words[:max_words])
+
+    @classmethod
+    def _normalize_prompt_suggestions(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            cleaned = cls._truncate_suggestion_words(value)
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(cleaned)
+            if len(normalized) >= 3:
+                break
+        return normalized
+
+    @staticmethod
+    def _parse_json_string_array(raw: str) -> list[str]:
+        text = (raw or "").strip()
+        if not text:
+            return []
+        parsed: Any = None
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            match = re.search(r"\[[\s\S]*\]", text)
+            if not match:
+                return []
+            try:
+                parsed = json.loads(match.group(0))
+            except Exception:
+                return []
+        if not isinstance(parsed, list):
+            return []
+        return [entry for entry in parsed if isinstance(entry, str)]
+
+    def _build_prompt_suggestions_payload(self) -> dict[str, Any]:
+        return {"prompt_suggestions": self.extract_prompt_suggestions(self.state.exit_states or {})}
+
+    def _set_prompt_suggestions_state(self, suggestions: list[str]) -> None:
+        exit_states = dict(self.state.exit_states or {})
+        normalized = self._normalize_prompt_suggestions(suggestions)
+        if normalized:
+            exit_states[PROMPT_SUGGESTIONS_STATE_KEY] = normalized
+        else:
+            exit_states.pop(PROMPT_SUGGESTIONS_STATE_KEY, None)
+        self.state.exit_states = exit_states
+        flag_modified(self.state, "exit_states")
+
+    def _fallback_prompt_suggestions(
+        self,
+        *,
+        scene_label: str,
+        visible_objects: list[str],
+        visible_npcs: list[str],
+        inventory_items: list[str],
+    ) -> list[str]:
+        sensory_target = visible_objects[0] if visible_objects else scene_label or "the area"
+        interaction_target = visible_npcs[0] if visible_npcs else (inventory_items[0] if inventory_items else sensory_target)
+        fallback = [
+            f"Examine {sensory_target}".strip(),
+            f"Ask {interaction_target} carefully".strip(),
+            "Pause and read the room",
+        ]
+        return self._normalize_prompt_suggestions(fallback)
+
+    async def _build_player_only_suggestion_context(self) -> dict[str, Any]:
+        """Build a spoiler-safe suggestion context (visible NPCs/objects, unlocked exits, inventory)."""
+        scene_res = await self.db.execute(
+            select(WorldScene).where(
+                WorldScene.id == self.state.current_scene_id,
+                WorldScene.session_id == self.game_id,
+            )
+        )
+        current_scene = scene_res.scalars().first()
+        scene_label = current_scene.label if current_scene else self.state.current_scene_id or "Current Scene"
+        scene_description = current_scene.description if current_scene else ""
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.current_scene_id == self.state.current_scene_id,
+            )
+        )
+        entities = list(ent_res.scalars().all())
+        states = self.state.entity_states or {}
+        visible_npcs: list[str] = []
+        visible_objects: list[str] = []
+        for ent in entities:
+            ov = states.get(ent.id) or {}
+            is_hidden = bool(ov.get("is_hidden", ent.is_hidden))
+            is_in_inventory = bool(ov.get("is_in_inventory", ent.is_in_inventory))
+            if is_hidden or is_in_inventory:
+                continue
+            if (ent.entity_type or "").upper() == "NPC":
+                visible_npcs.append(ent.name)
+            elif (ent.entity_type or "").upper() == "OBJECT":
+                visible_objects.append(ent.name)
+
+        exits_res = await self.db.execute(
+            select(WorldExit).where(
+                WorldExit.session_id == self.game_id,
+                WorldExit.from_scene_id == self.state.current_scene_id,
+            )
+        )
+        unlocked_exits = [ex.label for ex in exits_res.scalars().all() if not ex.is_locked]
+
+        inventory_items = [
+            str(item.get("name") or item.get("id") or "").strip()
+            for item in (self.avatar.inventory or [])
+            if isinstance(item, dict) and str(item.get("name") or item.get("id") or "").strip()
+        ]
+
+        return {
+            "scene_label": scene_label,
+            "scene_description": scene_description,
+            "visible_npcs": visible_npcs[:PROMPT_SUGGESTION_MAX_VISIBLE_NPCS],
+            "visible_objects": visible_objects[:PROMPT_SUGGESTION_MAX_VISIBLE_OBJECTS],
+            "unlocked_exits": unlocked_exits[:PROMPT_SUGGESTION_MAX_UNLOCKED_EXITS],
+            "inventory_items": inventory_items[:PROMPT_SUGGESTION_MAX_INVENTORY_ITEMS],
+        }
+
+    async def _load_last_assistant_message(self) -> str:
+        res = await self.db.execute(
+            select(ChatMessage.content)
+            .where(
+                ChatMessage.session_id == self.state.session_id,
+                ChatMessage.role == "assistant",
+            )
+            .order_by(ChatMessage.created_at.desc())
+            .limit(1)
+        )
+        value = res.scalar_one_or_none()
+        return str(value or "").strip()
+
+    async def _generate_prompt_suggestions(self, last_response: str) -> list[str]:
+        """Generate three short UI prompt suggestions, with deterministic fallback and state persistence."""
+        context = await self._build_player_only_suggestion_context()
+        fallback = self._fallback_prompt_suggestions(
+            scene_label=context["scene_label"],
+            visible_objects=context["visible_objects"],
+            visible_npcs=context["visible_npcs"],
+            inventory_items=context["inventory_items"],
+        )
+        llm_settings = self.user.llm_settings or {}
+        provider = (
+            llm_settings.get("small_model_provider")
+            or llm_settings.get("complex_model_provider")
+            or llm_settings.get("preferred_provider")
+            or "openai"
+        )
+        model = llm_settings.get("small_model") or "gpt-4o-mini"
+
+        suggestions: list[str] = []
+        try:
+            llm = GameMasterLLM(self.user, provider=provider, model_category="small")
+            user_prompt = prompts.PROMPT_SUGGESTION_USER_PROMPT_TEMPLATE.format(
+                scene_context=f"{context['scene_label']}: {context['scene_description']}".strip(),
+                visible_npcs=json.dumps(context["visible_npcs"], ensure_ascii=False),
+                visible_objects=json.dumps(context["visible_objects"], ensure_ascii=False),
+                unlocked_exits=json.dumps(context["unlocked_exits"], ensure_ascii=False),
+                inventory_items=json.dumps(context["inventory_items"], ensure_ascii=False),
+                last_response=(last_response or "").strip()[:PROMPT_SUGGESTION_MAX_LAST_RESPONSE_CHARS],
+            )
+            raw = await llm.aexecute_simple_task(
+                prompts.PROMPT_SUGGESTION_SYSTEM_PROMPT,
+                user_prompt,
+                model,
+                adventure_id=self.state.template_id,
+                game_id=self.game_id,
+                operation="chat_turn",
+                phase="prompt_suggestions",
+            )
+            suggestions = self._normalize_prompt_suggestions(self._parse_json_string_array(raw))
+        except Exception as exc:
+            logger.warning("[Turn %s] Prompt suggestion generation failed: %s", self.game_id, exc)
+
+        if len(suggestions) < 3:
+            suggestions = self._normalize_prompt_suggestions(suggestions + fallback)
+        self._set_prompt_suggestions_state(suggestions[:3])
+        return suggestions[:3]
+
     def _apply_gm_notes_update(
         self,
         remember_notes: list[str] | None,
@@ -414,6 +700,21 @@ class GameTurnManager:
         if not user_msg:
             user_msg = "[LOOK AROUND]"
 
+        if user_msg.lower() in {"/shuffle", "/suggest", "/suggestions"}:
+            last_response = await self._load_last_assistant_message()
+            await self._generate_prompt_suggestions(last_response)
+            await self.db.commit()
+            final_data = jsonable_encoder({
+                'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+                'entities': await AdventureLogic.build_session_entities(self.db, self.state),
+                'combat': AdventureLogic.get_combat_snapshot(self.state),
+                **self._build_prompt_suggestions_payload(),
+                **self._build_terminal_flags_payload(),
+                'status': 'success',
+            })
+            yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+            return
+
         if user_msg.lower().startswith("/agent"):
             from backend.api.routes.adventures.agent_logic import AgentService
             cmd_args = user_msg[6:].strip().lower()
@@ -429,15 +730,21 @@ class GameTurnManager:
                 
                 import os
                 session_id = self.state.session_id if self.state else self.game_id
-                agents_md_path = os.path.abspath(
-                    os.path.join(settings.DATA_DIR, "adventures", "sessions", session_id, "AGENTS.md")
-                )
-                link_path = agents_md_path.replace("\\", "/")
-                if not link_path.startswith("/"):
-                    link_path = "/" + link_path
+                safe_session_id = _sanitize_path_component(session_id)
+
+                agents_hint = "Agent issues log file is unavailable due to an invalid session path."
+                if safe_session_id:
+                    agents_md_path = _ensure_within_data_dir(
+                        os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_session_id, "AGENTS.md")
+                    )
+                    link_path = agents_md_path.replace("\\", "/")
+                    if not link_path.startswith("/"):
+                        link_path = "/" + link_path
+                    agents_hint = f"Agent issues log file: [AGENTS.md](file://{link_path}) (Path: `{agents_md_path}`)"
+
                 msg = (
                     "Autonomous Agent Gameplay Mode disabled. You are now back in control.\n\n"
-                    f"Agent issues log file: [AGENTS.md](file://{link_path}) (Path: `{agents_md_path}`)"
+                    f"{agents_hint}"
                 )
                 await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
@@ -449,6 +756,7 @@ class GameTurnManager:
                 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
                 'entities': await AdventureLogic.build_session_entities(self.db, self.state),
                 'combat': AdventureLogic.get_combat_snapshot(self.state),
+                **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
                 'status': 'success',
             })
@@ -465,6 +773,7 @@ class GameTurnManager:
                 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
                 'entities': await AdventureLogic.build_session_entities(self.db, self.state),
                 'combat': AdventureLogic.get_combat_snapshot(self.state),
+                **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
                 'status': 'success',
             })
@@ -732,6 +1041,7 @@ class GameTurnManager:
                 'combat': AdventureLogic.get_combat_snapshot(self.state),
                 'awards': self.adventure.awards if self.adventure else [],
                 'game_over_reason': self.state.session.status_note if self.state.session else None,
+                **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
                 'status': 'success'
             })
@@ -758,6 +1068,7 @@ class GameTurnManager:
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
+            **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
             'status': 'success',
         })
@@ -777,6 +1088,7 @@ class GameTurnManager:
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'awards': self.adventure.awards,
             'game_over_reason': self.state.session.status_note if self.state.session else None,
+            **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
             'status': 'success'
         })
@@ -836,6 +1148,7 @@ class GameTurnManager:
             final_data = jsonable_encoder({
                 **map_payload,
                 'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+                **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
             })
             yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
@@ -1016,6 +1329,7 @@ class GameTurnManager:
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
+            **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
@@ -1482,6 +1796,7 @@ class GameTurnManager:
             'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': combat_snap,
+            **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
             'status_note': status_note or (self.state.session.status_note if self.state.session else None),
             'status': 'success'
@@ -2222,7 +2537,10 @@ class GameTurnManager:
                 import os
                 
                 item_type = item.get("item_type") or "PICKABLE"
-                target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", self.adventure.id, "entities")
+                safe_adventure_id = _sanitize_path_component(self.adventure.id) or "adventure"
+                target_dir = _ensure_within_data_dir(
+                    os.path.join(settings.DATA_DIR, "adventures", "library", safe_adventure_id, "entities")
+                )
                 image_url = await MediaEngine.generate_placeholder(
                     adventure_id=self.adventure.id,
                     entity_id=safe_id,
@@ -2410,6 +2728,7 @@ class GameTurnManager:
                 self.state.entity_states = {k: v for k, v in (self.state.entity_states or {}).items() if k != "__combat__"}
                 flag_modified(self.state, "entity_states")
                 # Force commit to ensure state is persisted before final event
+                await self._generate_prompt_suggestions(response_text)
                 await self.db.commit()
             else:
                 self._set_combat_state(combat)
@@ -3333,7 +3652,13 @@ class GameTurnManager:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 
         await self.db.commit()
-        
+
+        checkpoint_events = await self._persist_pending_checkpoints()
+        if checkpoint_events:
+            yield f"event: status\ndata: {json.dumps({'content': 'Saving chronicle...'})}\n\n"
+            for checkpoint_event in checkpoint_events:
+                yield f"event: checkpoint\ndata: {json.dumps(checkpoint_event)}\n\n"
+
         map_payload = await self._build_map_payload()
         
         # Fetch adventure for cover image fallback
@@ -3351,6 +3676,7 @@ class GameTurnManager:
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'quests': self.state.quests,
             'awards': await self._build_awards_payload(adventure),
+            **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
             'status': 'success'
         })
@@ -3449,7 +3775,10 @@ class GameTurnManager:
                         
                         item_type = item.item_type or "PICKABLE"
                         safe_id = re.sub(r"[^A-Za-z0-9_\-]", "_", item.id or f"LOOT_{uuid.uuid4().hex[:8]}")[:50]
-                        target_dir = os.path.join(settings.DATA_DIR, "adventures", "library", self.adventure.id, "entities")
+                        safe_adventure_id = _sanitize_path_component(self.adventure.id) or "adventure"
+                        target_dir = _ensure_within_data_dir(
+                            os.path.join(settings.DATA_DIR, "adventures", "library", safe_adventure_id, "entities")
+                        )
                         item.image_url = await MediaEngine.generate_placeholder(
                             adventure_id=self.adventure.id,
                             entity_id=safe_id,
@@ -3557,6 +3886,7 @@ class GameTurnManager:
                 msg = f"📍 You have entered: {scene_name}"
                 await self._save_chat_message("system", msg)
                 system_messages.append(msg)
+                self._queue_checkpoint(CHECKPOINT_REASON_SCENE_CHANGE, scene_label=scene_name)
 
                 MapEngine.register_visit(
                     world_map, 
@@ -3781,6 +4111,7 @@ class GameTurnManager:
             if modified:
                 self.user.earned_awards = user_awards
                 flag_modified(self.user, "earned_awards")
+                self._queue_checkpoint(CHECKPOINT_REASON_AWARD_GRANTED)
 
         # Deterministic Quest Sync (Post-LLM check)
         det_completed = QuestManager.evaluate_quests(self.avatar, self.state)
@@ -3800,6 +4131,7 @@ class GameTurnManager:
                 state_dirty = True
 
         if newly_completed_quests:
+            self._queue_checkpoint(CHECKPOINT_REASON_QUEST_UPDATE)
             # Emit one system entry per newly completed quest so players get explicit feedback.
             for q in newly_completed_quests:
                 quest_title = q.get("title") or q.get("id")
@@ -4281,4 +4613,3 @@ class GameTurnManager:
         self.user.game_log = current_log
         flag_modified(self.user, "game_log")
         logger.info(f"Session {self.game_id} finalized with status {status}")
-

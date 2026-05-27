@@ -49,7 +49,6 @@ def _ensure_within_data_dir(path: str) -> str:
         raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
     return resolved
 
-
 def _safe_data_path(*parts: str) -> str:
     """Build a safe path under DATA_DIR."""
     safe_parts: list[str] = []
@@ -72,7 +71,6 @@ def _resolve_session_issue_log_path(session_id: str) -> str:
         raise ValueError("Session directory does not exist.")
 
     return _ensure_within_data_dir(os.path.join(session_dir, "AGENTS.md"))
-
 class AgentDecision(BaseModel):
     thoughts: str = Field(description="Internal reasoning and goals based on the character persona, current situation, history, and walkthrough. Keep it concise.")
     action: str = Field(description="The next action or slash command to execute (e.g. '/inspect shelf', 'go north', '/say Hello, Merlin'). Do not use markdown bolds or style formatting.")

@@ -32,14 +32,17 @@ export interface UseGameSocket {
   statusNote: Ref<string>
   inputLocked: Ref<boolean>
   pendingTerminalEpilogue: Ref<boolean>
+  promptSuggestions: Ref<string[]>
   debugLogs: Ref<{ timestamp: string, content: string }[]>
   inventoryGlow: Ref<boolean>
   mapGlow: Ref<boolean>
   questGlow: Ref<boolean>
   agentPaused: Ref<boolean>
   agentStepByStep: Ref<boolean>
+  isCheckpointSaving: Ref<boolean>
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
+  haltActiveOperations: () => void
   sendMessage: (content: string) => Promise<void>
   runAgentTurn: () => Promise<void>
   createTerminalEpilogue: () => Promise<void>
@@ -76,6 +79,7 @@ export function useGameSocket(): UseGameSocket {
   const statusNote = ref('')
   const inputLocked = ref(false)
   const pendingTerminalEpilogue = ref(false)
+  const promptSuggestions = ref<string[]>([])
   const debugLogs = ref<{ timestamp: string, content: string }[]>([])
   const inventoryGlow = ref(false)
   const mapGlow = ref(false)
@@ -86,6 +90,19 @@ export function useGameSocket(): UseGameSocket {
   let activeChatController: AbortController | null = null
   const agentPaused = ref(false)
   const agentStepByStep = ref(localStorage.getItem('tw_agent_step_by_step') === 'true')
+  const isCheckpointSaving = ref(false)
+  let checkpointPulseTimer: number | null = null
+
+  function triggerCheckpointPulse(): void {
+    isCheckpointSaving.value = true
+    if (checkpointPulseTimer !== null) {
+      clearTimeout(checkpointPulseTimer)
+    }
+    checkpointPulseTimer = window.setTimeout(() => {
+      isCheckpointSaving.value = false
+      checkpointPulseTimer = null
+    }, 1400)
+  }
 
   watch(agentStepByStep, (val) => {
     localStorage.setItem('tw_agent_step_by_step', String(val))
@@ -176,6 +193,9 @@ export function useGameSocket(): UseGameSocket {
     if (data.awards !== undefined) {
       awards.value = data.awards || []
     }
+    if (data.prompt_suggestions !== undefined) {
+      promptSuggestions.value = Array.isArray(data.prompt_suggestions) ? data.prompt_suggestions : []
+    }
 
     if (data.status_note !== undefined) {
       statusNote.value = data.status_note || ''
@@ -253,6 +273,26 @@ export function useGameSocket(): UseGameSocket {
     currentGameId = ''
     status.value = 'disconnected'
     stopSyncTimer()
+    if (checkpointPulseTimer !== null) {
+      clearTimeout(checkpointPulseTimer)
+      checkpointPulseTimer = null
+    }
+    isCheckpointSaving.value = false
+  }
+
+  function haltActiveOperations(): void {
+    if (activeChatController) {
+      activeChatController.abort()
+      activeChatController = null
+    }
+    if (activeAgentController) {
+      activeAgentController.abort()
+      activeAgentController = null
+    }
+    if (status.value === 'connecting' || status.value === 'loading') {
+      status.value = 'connected'
+      statusText.value = ''
+    }
   }
 
   /**
@@ -290,7 +330,7 @@ export function useGameSocket(): UseGameSocket {
       return
     }
 
-    const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume']
+    const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume', '/shuffle', '/suggest', '/suggestions']
     const isSilent = silentCommands.some(cmd => content.toLowerCase().startsWith(cmd))
 
     if (content && !isSilent) _pushMessage('user', content)
@@ -427,6 +467,8 @@ export function useGameSocket(): UseGameSocket {
               status.value = 'connected'
               statusText.value = ''
             }
+          } else if (event === 'checkpoint') {
+            triggerCheckpointPulse()
           }
         }
       }
@@ -462,9 +504,7 @@ export function useGameSocket(): UseGameSocket {
           }
         }
 
-        if (status.value === 'connecting') {
-          statusText.value = ''
-        }
+        statusText.value = ''
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -527,7 +567,7 @@ export function useGameSocket(): UseGameSocket {
       const decoder = new TextDecoder()
       let buffer = ''
 
-      while (true) {
+      while (!controller.signal.aborted) {
         const { value, done } = await reader.read()
         if (done) break
 
@@ -594,6 +634,8 @@ export function useGameSocket(): UseGameSocket {
             addNotification(detail, 'error')
             status.value = 'connected'
             statusText.value = ''
+          } else if (event === 'checkpoint') {
+            triggerCheckpointPulse()
           }
         }
       }
@@ -689,14 +731,17 @@ export function useGameSocket(): UseGameSocket {
     statusNote,
     inputLocked,
     pendingTerminalEpilogue,
+    promptSuggestions,
     debugLogs,
     inventoryGlow,
     mapGlow,
     questGlow,
     agentPaused,
     agentStepByStep,
+    isCheckpointSaving,
     connect,
     disconnect,
+    haltActiveOperations,
     sendMessage,
     runAgentTurn,
     createTerminalEpilogue,
@@ -708,4 +753,3 @@ export function useGameSocket(): UseGameSocket {
 
   return gameSocketSingleton
 }
-
