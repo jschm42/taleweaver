@@ -3363,6 +3363,20 @@ class GameTurnManager:
                     return
                 raise
 
+            # Guardrail: avoid accidental teleports from hypothetical/planned statements.
+            if progression_intent.new_scene_id:
+                allowed_open_destinations = {
+                    str(ex.get("to_scene_id") or "").strip()
+                    for ex in reduced_exits
+                    if not bool(ex.get("is_locked")) and str(ex.get("to_scene_id") or "").strip()
+                }
+                if progression_intent.new_scene_id not in allowed_open_destinations:
+                    progression_intent.new_scene_id = None
+                    progression_intent.exit_label = None
+                elif not self._is_explicit_scene_transition_request(user_msg):
+                    progression_intent.new_scene_id = None
+                    progression_intent.exit_label = None
+
             log_structured_event(
                 "gm.turn.pipeline.pass",
                 adventure_id=self.adventure.id,
@@ -4338,6 +4352,37 @@ class GameTurnManager:
             r"\bplease retry\b",
         )
         return any(re.search(p, text) for p in retry_patterns)
+
+    def _is_explicit_scene_transition_request(self, user_msg: str) -> bool:
+        text = (user_msg or "").strip().lower()
+        if not text:
+            return False
+
+        # Ignore hypothetical/planning phrasing that should not immediately move the player.
+        hypothetical_patterns = (
+            r"\bif\b",
+            r"\bwould\b",
+            r"\bcould\b",
+            r"\bmight\b",
+            r"\bmaybe\b",
+            r"\bplan\b",
+            r"\bint(en)?d\b",
+            r"\bwenn\b",
+            r"\bfalls\b",
+            r"\bvielleicht\b",
+            r"\bwürde\b",
+            r"\bkönnte\b",
+        )
+        if any(re.search(p, text) for p in hypothetical_patterns):
+            return False
+
+        movement_patterns = (
+            r"\b(go|going|move|moving|walk|walking|run|running|head|enter|proceed|travel|leave)\b",
+            r"\b(go to|walk to|move to|head to|enter the|step into)\b",
+            r"\b(gehe|geh|laufe|renne|betrete|bewege|reise|verlasse)\b",
+            r"\b(gehe in|gehe zu|betrete den|betrete die|ins|in den|in die)\b",
+        )
+        return any(re.search(p, text) for p in movement_patterns)
 
     def _set_last_ag_generation_request(self, request: AdventureGenerationRequest) -> None:
         exit_states = dict(self.state.exit_states or {})

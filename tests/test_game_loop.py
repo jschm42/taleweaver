@@ -14,7 +14,7 @@ from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 pytestmark = pytest.mark.asyncio
 
@@ -241,6 +241,56 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
         # Assert
         await db.refresh(state)
         assert state.current_scene_id == "CELLAR"
+
+
+async def test_chat_progression_does_not_move_on_hypothetical_text(setup_test_db, monkeypatch):
+    """Chat progression must ignore hypothetical movement phrasing for scene transitions."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.is_adventure_generator = False
+
+        db.add_all(
+            [
+                WorldScene(id="START", label="Start", description="Start room", session_id="session-1", template_id=adv.id),
+                WorldScene(id="CELLAR", label="Cellar", description="Cellar room", session_id="session-1", template_id=adv.id),
+                WorldExit(
+                    id="EXIT_START_CELLAR",
+                    from_scene_id="START",
+                    to_scene_id="CELLAR",
+                    label="Stairs down",
+                    is_locked=False,
+                    session_id="session-1",
+                    template_id=adv.id,
+                ),
+            ]
+        )
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+
+        async def _mock_progression_or_narration(*_args, **kwargs):
+            if kwargs.get("response_model") is AdventureGeneratorToolIntent:
+                return AdventureGeneratorToolIntent(new_scene_id="CELLAR", exit_label="Stairs down")
+            return AdventureGeneratorToolIntent()
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=_mock_progression_or_narration)
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You stay where you are."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        async for _ in manager.process_turn("Wenn ich in den Keller gehe, was passiert?"):
+            pass
+
+        await db.refresh(state)
+        assert state.current_scene_id == "START"
 
 
 async def test_rule_pass_payload_is_compact_and_scene_split(setup_test_db, monkeypatch):

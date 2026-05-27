@@ -163,7 +163,9 @@ class TurnLlmContextBuilder:
             time_config=self.manager.state.time_config or self.manager.adventure.time_config,
             is_adventure_generator=self.manager.adventure.is_adventure_generator,
             location_detail_level="full",
-            other_npcs=other_npcs,
+            # Keep off-scene NPC metadata out of narration context to avoid
+            # unintended dialogue from NPCs that are not physically present.
+            other_npcs=None,
             scene_map=scene_map,
             hidden_entities=hidden_entities,
         )[0]["content"]
