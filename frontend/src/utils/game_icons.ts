@@ -34,19 +34,40 @@ export const getTypeColor = (type?: string) => {
 
 export const getImageUrl = (path?: string | null, options?: { thumbnail?: boolean }) => {
   if (!path) return ''
-  if (isPlaceholderImagePath(path)) return ''
+  const normalizedPath = normalizeGameImagePath(path)
+  if (!normalizedPath || isPlaceholderImagePath(normalizedPath)) return ''
   
-  let finalPath = path
+  let finalPath = normalizedPath
   if (options?.thumbnail) {
-    const extIdx = path.lastIndexOf('.')
+    const extIdx = normalizedPath.lastIndexOf('.')
     if (extIdx !== -1) {
-      finalPath = path.substring(0, extIdx) + '_thumb' + path.substring(extIdx)
+      finalPath = normalizedPath.substring(0, extIdx) + '_thumb' + normalizedPath.substring(extIdx)
     }
   }
 
   const cacheVersion = localStorage.getItem('tw_visual_cache_version') || '0'
   const separator = finalPath.includes('?') ? '&' : '?'
   return `${finalPath}${separator}v=${cacheVersion}`
+}
+
+const normalizeGameImagePath = (path?: string | null): string => {
+  if (!path) return ''
+  const trimmed = path.trim()
+  if (!trimmed) return ''
+
+  // Preserve fully-qualified and special browser URLs.
+  if (/^(https?:|data:|blob:)/i.test(trimmed)) {
+    return trimmed
+  }
+  if (trimmed.startsWith('/data/')) {
+    return trimmed
+  }
+
+  // Legacy backend payloads may provide relative data-root paths.
+  if (trimmed.startsWith('/')) {
+    return `/data${trimmed}`
+  }
+  return `/data/${trimmed.replace(/^\/+/, '')}`
 }
 
 export const isPlaceholderImagePath = (path?: string | null): boolean => {

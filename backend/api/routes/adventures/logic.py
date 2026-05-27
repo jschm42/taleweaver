@@ -1,4 +1,6 @@
 import logging
+import os
+import glob
 from copy import deepcopy
 from datetime import datetime
 from typing import Any, Optional, Union
@@ -149,10 +151,53 @@ class AdventureLogic:
         return value if isinstance(value, str) and value else fallback
 
     @staticmethod
+    def resolve_existing_data_asset_url(url: Optional[str]) -> Optional[str]:
+        """Best-effort repair for stale /data URLs that no longer match current folders."""
+        if not isinstance(url, str):
+            return url
+        candidate = url.strip()
+        if not candidate or not candidate.startswith("/data/"):
+            return candidate
+
+        rel = candidate.replace("/data/", "", 1).lstrip("/")
+        abs_path = os.path.abspath(os.path.join(settings.DATA_DIR, rel))
+        data_root = os.path.abspath(settings.DATA_DIR)
+        try:
+            if os.path.commonpath([abs_path, data_root]) == data_root and os.path.isfile(abs_path):
+                return candidate
+        except ValueError:
+            return candidate
+
+        filename = os.path.basename(abs_path)
+        if not filename:
+            return candidate
+
+        for root in (
+            os.path.join(settings.DATA_DIR, "adventures", "library"),
+            os.path.join(settings.DATA_DIR, "adventures", "sessions"),
+        ):
+            root_abs = os.path.abspath(root)
+            if not os.path.isdir(root_abs):
+                continue
+            for alt in glob.iglob(os.path.join(root_abs, "**", filename), recursive=True):
+                alt_abs = os.path.abspath(alt)
+                try:
+                    if os.path.commonpath([alt_abs, data_root]) != data_root:
+                        continue
+                except ValueError:
+                    continue
+                if os.path.isfile(alt_abs):
+                    rel_alt = os.path.relpath(alt_abs, data_root).replace("\\", "/")
+                    return f"/data/{rel_alt}"
+        return candidate
+
+    @staticmethod
     async def resolve_scene_image(db: AsyncSession, state: SessionState, scene_id: str) -> Optional[str]:
         """Resolves the image for a scene, prioritizing session overrides then template defaults."""
         # 1. Try session override (e.g. generated image)
-        img = AdventureLogic.resolve_session_asset(state, scene_id)
+        img = AdventureLogic.resolve_existing_data_asset_url(
+            AdventureLogic.resolve_session_asset(state, scene_id)
+        )
         if img:
             return img
             
@@ -161,7 +206,7 @@ class AdventureLogic:
             WorldScene.id == scene_id,
             or_(WorldScene.session_id == state.session_id, WorldScene.template_id == state.template_id)
         ))
-        return res.scalars().first()
+        return AdventureLogic.resolve_existing_data_asset_url(res.scalars().first())
 
     @staticmethod
     def resolve_start_datetime(manifest: dict[str, Optional[Any]], state: Optional[SessionState] = None) -> Optional[str]:
@@ -282,6 +327,7 @@ class AdventureLogic:
             eid = ent.get("id")
             if eid in session_overrides:
                 ent.update(session_overrides[eid])
+            ent["image_url"] = AdventureLogic.resolve_existing_data_asset_url(ent.get("image_url"))
             if ent.get("current_scene_id") != state.current_scene_id:
                 continue
             if ent.get("is_hidden") or ent.get("is_in_inventory"):

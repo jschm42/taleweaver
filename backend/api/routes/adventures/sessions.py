@@ -4,6 +4,7 @@ import re
 import shutil
 import time
 import uuid
+import glob
 from copy import deepcopy
 from typing import Any, Optional, Union
 
@@ -54,6 +55,25 @@ _SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 
+def _normalize_data_asset_url(source_url: Optional[str]) -> Optional[str]:
+    """Normalize legacy relative asset URLs to the canonical /data/... form."""
+    if not isinstance(source_url, str):
+        return source_url
+
+    candidate = source_url.strip()
+    if not candidate:
+        return candidate
+
+    lowered = candidate.lower()
+    if lowered.startswith(("http://", "https://", "data:", "blob:")):
+        return candidate
+    if candidate.startswith("/data/"):
+        return candidate
+    if candidate.startswith("/"):
+        return f"/data{candidate}"
+    return f"/data/{candidate.lstrip('/')}"
+
+
 def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -78,6 +98,29 @@ def _ensure_within_data_dir(path: str) -> str:
     except ValueError as exc:
         raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
     return resolved
+
+
+def _find_existing_data_asset_path(filename: str) -> Optional[str]:
+    if not filename:
+        return None
+
+    search_roots = [
+        _ensure_within_data_dir(os.path.join(settings.DATA_DIR, "adventures", "library")),
+        _ensure_within_data_dir(os.path.join(settings.DATA_DIR, "adventures", "sessions")),
+    ]
+
+    for root in search_roots:
+        if not os.path.isdir(root):
+            continue
+        pattern = os.path.join(root, "**", filename)
+        for candidate in glob.iglob(pattern, recursive=True):
+            try:
+                resolved = _ensure_within_data_dir(candidate)
+            except ValueError:
+                continue
+            if os.path.isfile(resolved):
+                return resolved
+    return None
 
 
 def _cleanup_stale_empty_session_dirs(active_session_ids: set[str], max_age_days: int) -> int:
@@ -132,10 +175,11 @@ def _copy_data_asset_to_session(
     cache: dict[str, str],
 ) -> Optional[str]:
     """Copy /data assets into the concrete session folder and return a rewritten URL."""
-    if not isinstance(source_url, str) or not source_url.startswith("/data/"):
+    normalized_source_url = _normalize_data_asset_url(source_url)
+    if not isinstance(normalized_source_url, str) or not normalized_source_url.startswith("/data/"):
         return source_url
 
-    cached = cache.get(source_url)
+    cached = cache.get(normalized_source_url)
     if cached:
         return cached
 
@@ -145,16 +189,19 @@ def _copy_data_asset_to_session(
         logger.warning("Skipping asset copy due to invalid session/bucket: %s / %s", session_id, bucket)
         return source_url
 
-    rel_path = source_url.replace("/data/", "", 1).lstrip("/")
+    rel_path = normalized_source_url.replace("/data/", "", 1).lstrip("/")
     try:
         source_path = _ensure_within_data_dir(os.path.join(settings.DATA_DIR, rel_path))
     except ValueError:
-        logger.warning("Skipping asset copy for unsafe source URL: %s", source_url)
+        logger.warning("Skipping asset copy for unsafe source URL: %s", normalized_source_url)
         return source_url
 
     if not os.path.isfile(source_path):
-        logger.warning("Skipping asset copy because source file does not exist: %s", source_path)
-        return source_url
+        fallback_path = _find_existing_data_asset_path(os.path.basename(source_path))
+        if not fallback_path:
+            logger.warning("Skipping asset copy because source file does not exist: %s", source_path)
+            return normalized_source_url
+        source_path = fallback_path
 
     ext = os.path.splitext(source_path)[1].lower()
     if ext not in _SAFE_IMAGE_EXTENSIONS:
@@ -176,7 +223,7 @@ def _copy_data_asset_to_session(
 
     rel_target_path = os.path.relpath(target_path, settings.DATA_DIR).replace("\\", "/")
     target_url = f"/data/{rel_target_path}"
-    cache[source_url] = target_url
+    cache[normalized_source_url] = target_url
     return target_url
 
 
