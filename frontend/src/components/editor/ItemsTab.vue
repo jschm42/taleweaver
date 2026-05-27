@@ -31,6 +31,15 @@ const isContainerLocked = (obj: any): boolean => {
   return Boolean(metadata.code_to_unlock || metadata.item_to_unlock)
 }
 
+const hasMissingImage = (obj: any): boolean => {
+  const raw = String(obj?.image_url || '').trim()
+  if (!raw) return true
+  const lowered = raw.toLowerCase()
+  if (lowered.startsWith('assets/')) return true
+  if (lowered.includes('placeholder_')) return true
+  return false
+}
+
 function buildVisualImageUrl(imagePath?: string | null) {
   if (!imagePath) return ''
   return `${imagePath}?v=${props.visualsCacheVersion}`
@@ -59,6 +68,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
+            <div v-if="hasMissingImage(obj)" class="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-10">MISSING</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -106,6 +116,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
+            <div v-if="hasMissingImage(obj)" class="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-10">MISSING</div>
             <div v-if="isContainerLocked(obj)" class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100 z-10">LOCKED</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -152,6 +163,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
+            <div v-if="hasMissingImage(obj)" class="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-10">MISSING</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>

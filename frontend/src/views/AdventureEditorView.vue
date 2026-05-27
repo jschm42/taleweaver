@@ -650,6 +650,16 @@ function getRegenerateKindLabel(kind: string): string {
   return 'mystical objects'
 }
 
+function isImageMissingForRegeneration(item: any): boolean {
+  const raw = String(item?.image_url || '').trim()
+  if (!raw) return true
+  const lowered = raw.toLowerCase()
+  // Legacy/broken paths and generated placeholders should count as missing.
+  if (lowered.startsWith('assets/')) return true
+  if (lowered.includes('placeholder_')) return true
+  return false
+}
+
 async function regenerateAll(kind: any, missingOnly: boolean = false) {
   isBatchGenerating.value[kind] = true
   let items: any[] = []
@@ -660,22 +670,39 @@ async function regenerateAll(kind: any, missingOnly: boolean = false) {
   if (kind === 'object') items = editorObjects.value
   if (kind === 'container') items = editorContainers.value
   if (kind === 'text-log') items = editorTextLogs.value
+
+  const targets = missingOnly
+    ? items.filter((item: any) => isImageMissingForRegeneration(item))
+    : items
+
+  if (targets.length === 0) {
+    addNotification(`No ${getRegenerateKindLabel(kind)} are missing images.`, 'info')
+    isBatchGenerating.value[kind] = false
+    return
+  }
+
+  let successCount = 0
+  let errorCount = 0
   
-  for (const item of items) {
-    if (missingOnly && item.image_url) {
-      continue
-    }
+  for (const item of targets) {
     try {
       const apiKind = (kind === 'container' || kind === 'text-log') ? 'object' : kind
       await quickRegenerateVisual(apiKind, item.id || props.adventureId)
+      successCount += 1
     } catch (error: any) {
       if (error.name === 'AbortError' || (error instanceof DOMException && error.name === 'AbortError')) {
         addNotification('Batch generation stopped.', 'info')
         break
       }
+      errorCount += 1
     }
   }
   await fetchDebugInfo()
+  if (errorCount > 0) {
+    addNotification(`Generated ${successCount} ${getRegenerateKindLabel(kind)} image(s), ${errorCount} failed.`, 'error')
+  } else {
+    addNotification(`Generated ${successCount} ${getRegenerateKindLabel(kind)} image(s).`, 'success')
+  }
   isBatchGenerating.value[kind] = false
 }
 
