@@ -115,7 +115,7 @@ def _local_to_public_data_path(path: str) -> str:
     return f"/data/{rel}"
 
 
-def _resolve_library_image_url(image_url: Optional[str], basename_matches: dict[str, list[str]]) -> Optional[str]:
+def _resolve_library_image_url(image_url: Optional[str]) -> Optional[str]:
     raw = str(image_url or "").strip()
     if not raw:
         return image_url
@@ -239,11 +239,10 @@ async def _build_adventure_editor_assets(template_id: str, db: AsyncSession) -> 
     entities = entity_res.scalars().all()
 
     # Heal stale library image URLs (e.g. slug changed after import/reuse) without failing the editor UI.
-    basename_matches: dict[str, list[str]] = {}
     for scene in scenes:
-        scene.image_url = _resolve_library_image_url(getattr(scene, "image_url", None), basename_matches)
+        scene.image_url = _resolve_library_image_url(getattr(scene, "image_url", None))
     for ent in entities:
-        ent.image_url = _resolve_library_image_url(getattr(ent, "image_url", None), basename_matches)
+        ent.image_url = _resolve_library_image_url(getattr(ent, "image_url", None))
 
     avatar = await _get_template_avatar(db, template_id)
     if not avatar:

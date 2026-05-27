@@ -57,7 +57,7 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
 <template>
   <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col relative group">
     <!-- Top Cover Area -->
-    <div class="aspect-[3/2] relative bg-black/30 border-b border-white/5">
+    <div class="aspect-[3/2] relative bg-black/30">
       <div class="absolute inset-0 overflow-hidden rounded-t-xl">
         <!-- Ribbon for Game Over / Completed -->
         <div v-if="props.session.status === 'game_over'" class="absolute -right-12 top-6 bg-red-600 text-white text-xs font-black uppercase tracking-[0.2em] py-1.5 w-48 text-center rotate-45 shadow-lg z-10">
@@ -76,6 +76,8 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
           No Cover
         </div>
       </div>
+
+      <div class="card-image-fray pointer-events-none absolute inset-x-0 bottom-0 h-24"></div>
       
       <!-- Status Badge -->
       <div class="absolute top-3 left-3">
@@ -169,7 +171,7 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
     </div>
 
     <!-- Content Area -->
-    <div class="p-6 flex flex-col gap-6">
+    <div class="p-6 pt-5 flex flex-col gap-6 relative z-10">
       <div class="min-w-0">
         <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight flex items-center gap-2">
           <span class="truncate">{{ props.session.adventure_title }}</span>
@@ -252,4 +254,16 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
     </div>
   </article>
 </template>
+
+<style scoped>
+.card-image-fray {
+  background: linear-gradient(
+    to bottom,
+    rgba(2, 6, 23, 0) 0%,
+    rgba(2, 6, 23, 0.22) 48%,
+    rgba(2, 6, 23, 0.58) 76%,
+    rgba(2, 6, 23, 0.9) 100%
+  );
+}
+</style>
 

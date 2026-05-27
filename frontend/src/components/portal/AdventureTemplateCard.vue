@@ -80,7 +80,7 @@ function dismissWarning() {
 <template>
   <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col relative group">
     <!-- Top Cover Area -->
-    <div class="aspect-[3/2] relative bg-black/30 border-b border-white/5">
+    <div class="aspect-[3/2] relative bg-black/30">
       <div class="absolute inset-0 overflow-hidden rounded-t-xl">
         <img
           v-if="props.template.image_url"
@@ -92,6 +92,8 @@ function dismissWarning() {
           No Cover
         </div>
       </div>
+
+      <div class="card-image-fray pointer-events-none absolute inset-x-0 bottom-0 h-24"></div>
 
       <!-- Tone Badge -->
       <div v-if="props.template.selected_tone" class="absolute top-3 left-3">
@@ -184,7 +186,7 @@ function dismissWarning() {
     </div>
 
     <!-- Content Area -->
-    <div class="p-6 flex flex-col gap-4 flex-1">
+    <div class="p-6 pt-5 flex flex-col gap-4 flex-1 relative z-10">
       <div class="space-y-2 flex-1">
         <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
         <div v-if="props.template.version" class="flex items-center gap-1.5 opacity-60">
@@ -212,4 +214,16 @@ function dismissWarning() {
     </div>
   </article>
 </template>
+
+<style scoped>
+.card-image-fray {
+  background: linear-gradient(
+    to bottom,
+    rgba(2, 6, 23, 0) 0%,
+    rgba(2, 6, 23, 0.22) 48%,
+    rgba(2, 6, 23, 0.58) 76%,
+    rgba(2, 6, 23, 0.9) 100%
+  );
+}
+</style>
 
