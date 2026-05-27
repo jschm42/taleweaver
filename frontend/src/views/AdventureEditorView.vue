@@ -97,6 +97,7 @@ const useAdvancedModel = ref(false)
 const showRegenerateAllConfirmDialog = ref(false)
 const pendingBatchRegeneration = ref<{ kind: string; missingOnly: boolean } | null>(null)
 const isUploading = ref(false)
+const isSettingStartScene = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
 const visualsCacheVersion = ref(0)
 const hoveredEntity = ref<any>(null)
@@ -410,6 +411,22 @@ async function fetchDebugInfo() {
     console.error('Failed to fetch debug info:', error)
     debugData.value = null
     errorMsg.value = 'Failed to load world assets/debug data.'
+  }
+}
+
+async function setStartScene(sceneId: string) {
+  const normalizedSceneId = String(sceneId || '').trim()
+  if (!normalizedSceneId || isSettingStartScene.value) return
+  isSettingStartScene.value = true
+  try {
+    await adventureService.updateEditorStartScene(props.adventureId, normalizedSceneId)
+    await fetchDebugInfo()
+    addNotification('Start scene updated.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to set start scene.', 'error')
+  } finally {
+    isSettingStartScene.value = false
+    activeMenuId.value = null
   }
 }
 
@@ -934,12 +951,14 @@ const goBack = () => {
               :is-quick-generating="isQuickGenerating"
               :active-menu-id="activeMenuId"
               :visuals-cache-version="visualsCacheVersion"
+              :is-setting-start-scene="isSettingStartScene"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
               @open-upload-picker="openUploadPicker"
               @download-asset="downloadVisualAsset"
               @open-text-edit="openTextEdit"
+              @set-start-scene="setStartScene"
               @toggle-menu="toggleMenu"
               @handle-hover="handleHover"
               @clear-hover="clearHover"

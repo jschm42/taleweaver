@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { getImageUrl, getOriginalImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 
 const props = defineProps<{
   editorScenes: any[]
@@ -8,6 +9,7 @@ const props = defineProps<{
   isQuickGenerating: Record<string, boolean>
   activeMenuId: string | null
   visualsCacheVersion: number
+  isSettingStartScene?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -20,6 +22,7 @@ const emit = defineEmits<{
   (e: 'toggle-menu', id: string, event: MouseEvent): void
   (e: 'handle-hover', entity: any, event: MouseEvent): void
   (e: 'clear-hover'): void
+  (e: 'set-start-scene', sceneId: string): void
 }>()
 
 const scenes = computed<any[]>(() => {
@@ -29,9 +32,60 @@ const scenes = computed<any[]>(() => {
   return Array.isArray(source) ? source : []
 })
 
-function buildVisualImageUrl(imagePath?: string | null) {
-  if (!imagePath) return ''
-  return `${imagePath}?v=${props.visualsCacheVersion}`
+const failedSceneImages = ref<Record<string, boolean>>({})
+const sceneImageOverrides = ref<Record<string, string>>({})
+
+function getSceneKey(scene: any, idx: number): string {
+  return String(scene?.id || idx)
+}
+
+function onSceneImageError(scene: any, idx: number) {
+  const key = getSceneKey(scene, idx)
+  const fallbackSrc = getOriginalImageUrl(scene?.image_url)
+  const currentSrc = sceneImageOverrides.value[key] || getImageUrl(scene?.image_url, { thumbnail: true })
+  if (currentSrc.includes('_thumb') && fallbackSrc) {
+    sceneImageOverrides.value[key] = fallbackSrc
+    return
+  }
+  failedSceneImages.value[key] = true
+}
+
+function shouldShowSceneImage(scene: any, idx: number): boolean {
+  if (!hasRenderableImagePath(scene?.image_url)) return false
+  return !failedSceneImages.value[getSceneKey(scene, idx)]
+}
+
+function getSceneImageSrc(scene: any, idx: number): string {
+  const key = getSceneKey(scene, idx)
+  const override = sceneImageOverrides.value[key]
+  if (override) return override
+  return getImageUrl(scene?.image_url, { thumbnail: true })
+}
+
+watch(
+  () => [props.visualsCacheVersion, scenes.value.length],
+  () => {
+    failedSceneImages.value = {}
+    sceneImageOverrides.value = {}
+  }
+)
+
+function normalizeSceneId(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+const startSceneId = computed<string>(() => {
+  const adventureStart = props.debugData?.adventure?.start_scene_id || props.debugData?.adventure?.scene_id
+  const normalizedAdventureStart = normalizeSceneId(adventureStart)
+  if (normalizedAdventureStart) {
+    return normalizedAdventureStart
+  }
+  const fallbackFirstScene = scenes.value[0]?.id
+  return normalizeSceneId(fallbackFirstScene)
+})
+
+function isStartScene(scene: any): boolean {
+  return normalizeSceneId(scene?.id) === startSceneId.value
 }
 </script>
 
@@ -50,8 +104,17 @@ function buildVisualImageUrl(imagePath?: string | null) {
     </div>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
       <div v-for="(scene, idx) in scenes" :key="'scene_' + (scene.id || idx)" @mouseenter="emit('handle-hover', { id: scene.id, name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl shadow-xl transition-all overflow-visible">
+        <div v-if="isStartScene(scene)" class="absolute top-3 left-3 z-40 inline-flex items-center gap-1 rounded-full bg-amber-400/90 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow-lg">
+          <span>★</span>
+          <span>Start</span>
+        </div>
         <div class="absolute inset-0 rounded-2xl overflow-hidden">
-          <img v-if="scene.image_url" :src="buildVisualImageUrl(scene.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+          <img
+            v-if="shouldShowSceneImage(scene, idx)"
+            :src="getSceneImageSrc(scene, idx)"
+            @error="onSceneImageError(scene, idx)"
+            class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+          />
           <div v-if="isQuickGenerating['scene_' + scene.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
             <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
           </div>
@@ -69,6 +132,16 @@ function buildVisualImageUrl(imagePath?: string | null) {
             </div>
           </button>
           <div v-if="activeMenuId === scene.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+            <button
+              @click="emit('set-start-scene', scene.id)"
+              :disabled="isStartScene(scene) || isSettingStartScene"
+              class="w-full px-4 py-2 text-left text-xs font-bold transition-all"
+              :class="isStartScene(scene) || isSettingStartScene
+                ? 'text-slate-500 cursor-not-allowed'
+                : 'text-amber-300 hover:bg-amber-500 hover:text-white'"
+            >
+              {{ isStartScene(scene) ? 'Start Scene' : 'Set As Start Scene' }}
+            </button>
             <button @click="emit('quick-regen', 'scene', scene.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
             <button @click="emit('open-regen-dialog', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
             <button @click="emit('open-upload-picker', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Illustration</button>

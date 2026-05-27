@@ -29,6 +29,15 @@ const nodeBounds = ref<Record<string, { x: number, y: number, w: number, h: numb
 const edgeMidpoints = ref<Array<{ from: string, to: string, x: number, y: number, label: string }>>([])
 const hoveredEdge = ref<{ label: string, x: number, y: number } | null>(null)
 
+const startSceneId = computed(() => {
+  const adventureStart = props.debugData?.adventure?.start_scene_id || props.debugData?.adventure?.scene_id
+  if (typeof adventureStart === 'string' && adventureStart.trim()) {
+    return safeId(adventureStart)
+  }
+  const firstSceneId = props.editorScenes[0]?.id
+  return typeof firstSceneId === 'string' && firstSceneId.trim() ? safeId(firstSceneId) : ''
+})
+
 // Zoom & Pan State
 const zoom = ref(1)
 const offset = ref({ x: 0, y: 0 })
@@ -219,10 +228,9 @@ async function renderMap() {
   })
 
   // 2. Draw Nodes
-  const firstSceneId = props.editorScenes[0]?.id
   g.nodes().forEach(id => {
     const node = g.node(id)
-    const isStart = safeId(firstSceneId) === id
+    const isStart = startSceneId.value === id
     const x = node.x - node.width / 2 + margin
     const y = node.y - node.height / 2 + margin
     const w = node.width

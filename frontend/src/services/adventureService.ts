@@ -39,6 +39,7 @@ export interface Adventure {
   cover_source_adventure_name?: string | null
   cover_similarity_percent?: number
   allow_reuse_source_assets?: boolean
+  start_scene_id?: string
 }
 
 export interface AdventureFormData {
@@ -134,6 +135,15 @@ export const adventureService = {
     })
     if (!res.ok) throw new Error('Failed to save changes.')
     return res.json()
+  },
+
+  async updateEditorStartScene(adventureId: string, sceneId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/start-scene`, {
+      method: 'PATCH',
+      headers: authHeaders(true),
+      body: JSON.stringify({ scene_id: sceneId }),
+    })
+    if (!res.ok) throw new Error('Failed to set start scene.')
   },
 
   async clearCreationError(adventureId: string): Promise<void> {

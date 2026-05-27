@@ -2834,6 +2834,93 @@ async def test_start_session_prefers_entry_scene_when_start_missing(client: Asyn
         assert state.current_scene_id == "INTRO_ROOM"
 
 
+async def test_start_session_honors_manifest_start_scene_id_when_graph_has_no_entry(client: AsyncClient):
+    """Explicit manifest start_scene_id must take precedence when all scenes have incoming exits."""
+    ids = await _create_adventure(client, "Manifest Start Scene Priority Quest")
+    template_id = ids["adventure_id"]
+
+    async with TestSessionLocal() as db:
+        adv_res = await db.execute(select(Adventure).where(Adventure.id == template_id))
+        adventure = adv_res.scalars().first()
+        assert adventure is not None
+
+        manifest = dict(adventure.original_manifest or {})
+        manifest["start_scene_id"] = "LOBBY"
+        adventure.original_manifest = manifest
+
+        # Remove baseline world rows and rebuild a bidirectional graph.
+        await db.execute(
+            delete(WorldExit).where(
+                WorldExit.template_id == template_id,
+                WorldExit.session_id.is_(None),
+            )
+        )
+        await db.execute(
+            delete(WorldEntity).where(
+                WorldEntity.template_id == template_id,
+                WorldEntity.session_id.is_(None),
+            )
+        )
+        await db.execute(
+            delete(WorldScene).where(
+                WorldScene.template_id == template_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+
+        db.add_all([
+            WorldScene(
+                id="LOBBY",
+                template_id=template_id,
+                session_id=None,
+                label="Lobby",
+                description="The intended start.",
+                image_url=None,
+            ),
+            WorldScene(
+                id="ASSESSMENT_ROOM",
+                template_id=template_id,
+                session_id=None,
+                label="Assessment Room",
+                description="Alternative scene.",
+                image_url=None,
+            ),
+        ])
+        db.add_all([
+            WorldExit(
+                template_id=template_id,
+                session_id=None,
+                from_scene_id="LOBBY",
+                to_scene_id="ASSESSMENT_ROOM",
+                label="Forward",
+                is_locked=False,
+                lock_description=None,
+            ),
+            WorldExit(
+                template_id=template_id,
+                session_id=None,
+                from_scene_id="ASSESSMENT_ROOM",
+                to_scene_id="LOBBY",
+                label="Back",
+                is_locked=False,
+                lock_description=None,
+            ),
+        ])
+        await db.commit()
+
+    start_resp = await client.post(f"/api/adventures/{template_id}/sessions/start")
+    assert start_resp.status_code == 201, start_resp.text
+    game_id = start_resp.json()["game_id"]
+
+    async with TestSessionLocal() as db:
+        state_res = await db.execute(
+            select(SessionState).where(SessionState.session_id == game_id)
+        )
+        state = state_res.scalars().first()
+        assert state is not None
+        assert state.current_scene_id == "LOBBY"
+
+
 async def test_started_sessions_keep_snapshot_images_after_template_avatar_edit(client: AsyncClient):
     """Started sessions keep their snapshot cover/protagonist images after later template edits."""
     ids = await _create_adventure(client, "Snapshot Image Isolation Quest")
@@ -3036,6 +3123,63 @@ async def test_generate_new_quest_endpoint(client: AsyncClient, monkeypatch):
     data = resp.json()
     assert data["title"] == "Slay the Dragon"
     assert data["description"] == "The hero must journey to the volcano and slay the red dragon."
+
+
+async def test_editor_start_scene_endpoint_updates_manifest_and_assets(client: AsyncClient):
+    """Setting start scene from editor should persist in manifest and be reflected in editor assets."""
+    ids = await _create_adventure(client, "Set Start Scene Adventure")
+    adv_id = ids["adventure_id"]
+
+    async with TestSessionLocal() as db:
+        await db.execute(
+            delete(WorldExit).where(
+                WorldExit.template_id == adv_id,
+                WorldExit.session_id.is_(None),
+            )
+        )
+        await db.execute(
+            delete(WorldScene).where(
+                WorldScene.template_id == adv_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+        db.add_all([
+            WorldScene(
+                id="LOBBY",
+                template_id=adv_id,
+                session_id=None,
+                label="Lobby",
+                description="Lobby scene.",
+                image_url=None,
+            ),
+            WorldScene(
+                id="ASSESSMENT_ROOM",
+                template_id=adv_id,
+                session_id=None,
+                label="Assessment Room",
+                description="Assessment scene.",
+                image_url=None,
+            ),
+        ])
+        await db.commit()
+
+    set_resp = await client.patch(
+        f"/api/adventures/{adv_id}/editor/start-scene",
+        json={"scene_id": "ASSESSMENT_ROOM"},
+    )
+    assert set_resp.status_code == 200, set_resp.text
+    assert set_resp.json().get("start_scene_id") == "ASSESSMENT_ROOM"
+
+    assets_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    assert assets_resp.status_code == 200, assets_resp.text
+    assets_payload = assets_resp.json()
+    assert assets_payload.get("adventure", {}).get("start_scene_id") == "ASSESSMENT_ROOM"
+
+    async with TestSessionLocal() as db:
+        adv_res = await db.execute(select(Adventure).where(Adventure.id == adv_id))
+        adventure = adv_res.scalars().first()
+        assert adventure is not None
+        assert (adventure.original_manifest or {}).get("start_scene_id") == "ASSESSMENT_ROOM"
 
 
 

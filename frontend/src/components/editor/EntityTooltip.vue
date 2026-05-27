@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { getItemIcon } from '@/utils/game_icons'
+import { ref, watch } from 'vue'
+import { getItemIcon, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 
-defineProps<{
+const props = defineProps<{
   hoveredEntity: any | null
   activeMenuId: string | null
   mousePos: { x: number; y: number }
@@ -11,6 +12,29 @@ defineProps<{
   buildVisualImageUrl: (path: string) => string
   fixNewlines: (text: string) => string
 }>()
+
+const tooltipImageSrc = ref('')
+const tooltipImageFailed = ref(false)
+
+watch(
+  () => props.hoveredEntity?.image_url,
+  (nextImagePath) => {
+    tooltipImageFailed.value = false
+    tooltipImageSrc.value = getImageUrl(nextImagePath, { thumbnail: true })
+  },
+  { immediate: true }
+)
+
+function onTooltipImageError() {
+  if (tooltipImageSrc.value.includes('_thumb')) {
+    const fallbackSrc = getOriginalImageUrl(props.hoveredEntity?.image_url)
+    if (fallbackSrc && fallbackSrc !== tooltipImageSrc.value) {
+      tooltipImageSrc.value = fallbackSrc
+      return
+    }
+  }
+  tooltipImageFailed.value = true
+}
 </script>
 
 <template>
@@ -27,8 +51,8 @@ defineProps<{
       >
         <div class="w-64 max-h-[85vh] bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl backdrop-blur-xl overflow-y-auto flex flex-col animate-tooltip-in scrollbar-hide">
           <!-- Image Area -->
-          <div v-if="hoveredEntity.image_url" class="h-48 w-full relative">
-            <img :src="buildVisualImageUrl(hoveredEntity.image_url)" class="absolute inset-0 w-full h-full object-cover object-center" />
+          <div v-if="hoveredEntity.image_url && !tooltipImageFailed" class="h-48 w-full relative">
+            <img :src="tooltipImageSrc" @error="onTooltipImageError" class="absolute inset-0 w-full h-full object-cover object-center" />
             <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
           </div>
 
@@ -79,7 +103,7 @@ defineProps<{
               <div class="flex flex-wrap gap-1.5">
                 <div v-for="item in hoveredEntity.inventory" :key="item.id" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/40 border border-white/5">
                   <div class="w-4 h-4 rounded-sm overflow-hidden shrink-0 border border-white/10">
-                    <img v-if="item.image_url" :src="buildVisualImageUrl(item.image_url)" class="w-full h-full object-cover" />
+                    <img v-if="item.image_url" :src="getImageUrl(item.image_url, { thumbnail: true })" class="w-full h-full object-cover" />
                     <div v-else class="w-full h-full flex items-center justify-center bg-slate-800">
                       <i :class="['ra text-[8px]', getItemIcon(item.item_type), 'text-slate-500']"></i>
                     </div>

@@ -1,4 +1,7 @@
 import logging
+import os
+import glob
+from copy import deepcopy
 from typing import Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,6 +19,7 @@ from backend.api.routes.adventures.schemas import (
     QuestGenerationResponse,
 )
 from backend.core.auth import get_current_user
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import (
@@ -29,6 +33,8 @@ from backend.core.prompts import (
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.api.routes.adventures.sessions import _backfill_avatar_items_from_template_entities
+from backend.api.routes.adventures.logic import AdventureLogic
+from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -54,6 +60,10 @@ class EntityUpdateRequest(BaseModel):
     item_to_unlock: Optional[str] = None
     inventory: Optional[list] = None
     text_log_content: Optional[str] = None
+
+
+class StartSceneUpdateRequest(BaseModel):
+    scene_id: str
 
 def _serialize_model(obj):
     if not obj: return None
@@ -91,12 +101,58 @@ def _is_npc_entity(ent):
 def _is_object_entity(ent):
     return ent.entity_type == "OBJECT"
 
+
+def _public_data_to_local_path(path: str) -> Optional[str]:
+    raw = str(path or "").strip()
+    if not raw.startswith("/data/"):
+        return None
+    rel = raw[len("/data/"):].lstrip("/").replace("/", os.sep)
+    return os.path.abspath(os.path.join(settings.DATA_DIR, rel))
+
+
+def _local_to_public_data_path(path: str) -> str:
+    rel = os.path.relpath(path, settings.DATA_DIR).replace("\\", "/")
+    return f"/data/{rel}"
+
+
+def _resolve_library_image_url(image_url: Optional[str], basename_matches: dict[str, list[str]]) -> Optional[str]:
+    raw = str(image_url or "").strip()
+    if not raw:
+        return image_url
+
+    local_path = _public_data_to_local_path(raw)
+    if not local_path:
+        return image_url
+
+    if os.path.exists(local_path):
+        return raw
+
+    basename = os.path.basename(local_path)
+    if not basename:
+        return image_url
+
+    if basename not in basename_matches:
+        pattern = os.path.join(settings.DATA_DIR, "adventures", "library", "**", basename)
+        basename_matches[basename] = glob.glob(pattern, recursive=True)
+
+    matches = basename_matches.get(basename) or []
+    if len(matches) != 1:
+        return image_url
+
+    fixed_local = os.path.abspath(matches[0])
+    return _local_to_public_data_path(fixed_local)
+
 async def _build_adventure_editor_assets(template_id: str, db: AsyncSession) -> AdventureTemplateDebugResponse:
     """Builds full world/editor asset state for a specific adventure."""
     adv_res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == template_id))
     adventure = adv_res.scalars().first()
     if not adventure:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+
+    try:
+        await MediaEngine.ensure_thumbnails(template_id)
+    except Exception as exc:
+        logger.warning("Thumbnail ensure failed for adventure %s: %s", template_id, exc)
         
     scene_res = await db.execute(
         select(WorldScene).where(
@@ -122,6 +178,13 @@ async def _build_adventure_editor_assets(template_id: str, db: AsyncSession) -> 
     )
     entities = entity_res.scalars().all()
 
+    # Heal stale library image URLs (e.g. slug changed after import/reuse) without failing the editor UI.
+    basename_matches: dict[str, list[str]] = {}
+    for scene in scenes:
+        scene.image_url = _resolve_library_image_url(getattr(scene, "image_url", None), basename_matches)
+    for ent in entities:
+        ent.image_url = _resolve_library_image_url(getattr(ent, "image_url", None), basename_matches)
+
     avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
     avatar = avatar_res.scalars().first()
 
@@ -136,8 +199,11 @@ async def _build_adventure_editor_assets(template_id: str, db: AsyncSession) -> 
     db_objects = [_serialize_model(ent) for ent in entities if _is_object_entity(ent)]
     db_exits = [_serialize_model(ex) for ex in exits]
 
+    adventure_payload = _serialize_model(adventure) or {}
+    adventure_payload["start_scene_id"] = await AdventureLogic.resolve_initial_scene_id(db, template_id)
+
     return AdventureTemplateDebugResponse(
-        adventure=_serialize_model(adventure),
+        adventure=adventure_payload,
         protagonist=_serialize_model(avatar) if avatar else None,
         scenes=db_scenes,
         npcs=db_npcs,
@@ -240,6 +306,40 @@ async def update_editor_entity(
             
     await db.commit()
     return {"status": "success"}
+
+
+@router.patch("/{template_id}/editor/start-scene")
+async def update_editor_start_scene(
+    template_id: str,
+    payload: StartSceneUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+
+    scene_id = str(payload.scene_id or "").strip()
+    if not scene_id:
+        raise HTTPException(status_code=400, detail="scene_id is required")
+
+    sc_res = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+            WorldScene.id == scene_id,
+        )
+    )
+    scene = sc_res.scalars().first()
+    if not scene:
+        raise HTTPException(status_code=400, detail="scene_id does not exist in this adventure")
+
+    manifest = deepcopy(adv.original_manifest or {})
+    manifest["start_scene_id"] = scene_id
+    adv.original_manifest = manifest
+
+    await db.commit()
+    return {"status": "success", "start_scene_id": scene_id}
 
 @router.post("/{template_id}/editor/generate-traits", response_model=TraitGenerationResponse)
 async def generate_entity_traits(

@@ -36,18 +36,45 @@ export const getImageUrl = (path?: string | null, options?: { thumbnail?: boolea
   if (!path) return ''
   const normalizedPath = normalizeGameImagePath(path)
   if (!normalizedPath || isPlaceholderImagePath(normalizedPath)) return ''
-  
-  let finalPath = normalizedPath
+
+  const queryIdx = normalizedPath.indexOf('?')
+  const basePath = queryIdx >= 0 ? normalizedPath.slice(0, queryIdx) : normalizedPath
+  const existingQuery = queryIdx >= 0 ? normalizedPath.slice(queryIdx) : ''
+
+  let finalBasePath = basePath
   if (options?.thumbnail) {
-    const extIdx = normalizedPath.lastIndexOf('.')
-    if (extIdx !== -1) {
-      finalPath = normalizedPath.substring(0, extIdx) + '_thumb' + normalizedPath.substring(extIdx)
+    const extIdx = basePath.lastIndexOf('.')
+    if (extIdx !== -1 && !basePath.substring(0, extIdx).endsWith('_thumb')) {
+      finalBasePath = basePath.substring(0, extIdx) + '_thumb' + basePath.substring(extIdx)
     }
   }
+
+  const finalPath = `${finalBasePath}${existingQuery}`
 
   const cacheVersion = localStorage.getItem('tw_visual_cache_version') || '0'
   const separator = finalPath.includes('?') ? '&' : '?'
   return `${finalPath}${separator}v=${cacheVersion}`
+}
+
+export const getOriginalImageUrl = (path?: string | null): string => {
+  if (!path) return ''
+  const normalizedPath = normalizeGameImagePath(path)
+  if (!normalizedPath || isPlaceholderImagePath(normalizedPath)) return ''
+
+  const queryIdx = normalizedPath.indexOf('?')
+  const basePath = queryIdx >= 0 ? normalizedPath.slice(0, queryIdx) : normalizedPath
+  const existingQuery = queryIdx >= 0 ? normalizedPath.slice(queryIdx) : ''
+
+  const extIdx = basePath.lastIndexOf('.')
+  const originalBasePath =
+    extIdx !== -1 && basePath.substring(0, extIdx).endsWith('_thumb')
+      ? `${basePath.substring(0, extIdx - 6)}${basePath.substring(extIdx)}`
+      : basePath
+
+  const originalPath = `${originalBasePath}${existingQuery}`
+  const cacheVersion = localStorage.getItem('tw_visual_cache_version') || '0'
+  const separator = originalPath.includes('?') ? '&' : '?'
+  return `${originalPath}${separator}v=${cacheVersion}`
 }
 
 const normalizeGameImagePath = (path?: string | null): string => {

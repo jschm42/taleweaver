@@ -244,10 +244,12 @@ class AdventureLogic:
         """Resolve a stable initial scene for a fresh session.
 
         Priority:
-        1) Scene with id "START" when present.
-        2) Entry scene(s) with no incoming exits (template baseline only).
-        3) Lexicographically first available scene id.
-        4) Fallback "START" when no scenes exist.
+        1) Explicit scene from template manifest (`start_scene_id`, `scene_id`, `current_scene_id`).
+        2) First scene in template manifest order.
+        3) Scene with id "START" when present.
+        4) Entry scene(s) with no incoming exits (template baseline only).
+        5) Lexicographically first available scene id.
+        6) Fallback "START" when no scenes exist.
         """
         if not template_id:
             return "START"
@@ -264,6 +266,33 @@ class AdventureLogic:
             return "START"
 
         scene_set = set(scene_ids)
+
+        adv_res = await db.execute(
+            select(AdventureTemplate.original_manifest).where(AdventureTemplate.id == template_id)
+        )
+        original_manifest = adv_res.scalar_one_or_none()
+        if isinstance(original_manifest, dict):
+            explicit_start = (
+                original_manifest.get("start_scene_id")
+                or original_manifest.get("scene_id")
+                or original_manifest.get("current_scene_id")
+            )
+            if isinstance(explicit_start, str):
+                normalized_explicit_start = explicit_start.strip()
+                if normalized_explicit_start in scene_set:
+                    return normalized_explicit_start
+
+            manifest_scenes = original_manifest.get("scenes")
+            if isinstance(manifest_scenes, list):
+                for entry in manifest_scenes:
+                    if not isinstance(entry, dict):
+                        continue
+                    candidate = entry.get("id")
+                    if isinstance(candidate, str):
+                        normalized_candidate = candidate.strip()
+                        if normalized_candidate in scene_set:
+                            return normalized_candidate
+
         if "START" in scene_set:
             return "START"
 
