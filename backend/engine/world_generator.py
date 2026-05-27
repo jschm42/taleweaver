@@ -163,6 +163,22 @@ def _normalize_text_log_content(
     return normalized[:500]
 
 
+def _normalize_container_unlock_requirements(
+    raw_code: Any,
+    raw_item: Any,
+) -> tuple[str, str]:
+    """Normalize container unlock requirement fields without forcing locks."""
+    code_to_unlock = str(raw_code or "").strip()
+    item_to_unlock = str(raw_item or "").strip().upper()
+
+    if code_to_unlock:
+        code_to_unlock = code_to_unlock[:32]
+    if item_to_unlock:
+        item_to_unlock = slugify(item_to_unlock).upper().replace("-", "_")[:64]
+
+    return code_to_unlock, item_to_unlock
+
+
 # --- Schemas for Structured LLM Output ---
 
 class WorldSceneSchema(BaseModel):
@@ -231,8 +247,8 @@ class WorldObjectSchema(BaseModel):
         )
     )
     is_portable: bool = Field(..., description="Whether the item can be picked up. False for STATIC objects.")
-    code_to_unlock: str = Field("", description="Optional deterministic access code for locked containers, e.g. ALPHA or 4711.")
-    item_to_unlock: str = Field("", description="Optional deterministic item ID required to unlock this container.")
+    code_to_unlock: str = Field("", description="Deterministic access code for locked containers, e.g. ALPHA or 4711. May be empty for open containers.")
+    item_to_unlock: str = Field("", description="Deterministic item ID required to unlock this container. May be empty for open containers.")
     combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. Use [] if none.")
     reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Use empty string if none.")
     
@@ -493,25 +509,37 @@ class WorldGenerator:
                 container_requirement = (
                     "\n\nCONTAINER ITEMS:\n"
                     "- Generate a suitable number of container items (typically between 2 and 6) if the scenes require them.\n"
-                    "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+                    "- CONTAINER objects may be open or locked depending on story needs.\n"
+                    "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
+                    "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
+                    "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method."
                 )
             elif min_containers is not None and max_containers is None:
                 container_requirement = (
                     "\n\nCONTAINER ITEMS:\n"
                     f"- Generate at least {max(0, min_containers)} container items.\n"
-                    "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+                    "- CONTAINER objects may be open or locked depending on story needs.\n"
+                    "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
+                    "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
+                    "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method."
                 )
             elif min_containers is None and max_containers is not None:
                 container_requirement = (
                     "\n\nCONTAINER ITEMS:\n"
                     f"- You may generate CONTAINER objects, but never more than {max(0, max_containers)}.\n"
-                    "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+                    "- CONTAINER objects may be open or locked depending on story needs.\n"
+                    "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
+                    "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
+                    "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method."
                 )
             else:
                 container_requirement = (
                     "\n\nCONTAINER ITEMS:\n"
                     f"- Generate between {max(0, min_containers)} and {max(0, max_containers)} container items.\n"
-                    "- CONTAINER objects may contain items in `inventory` and can optionally set `code_to_unlock` and/or `item_to_unlock`."
+                    "- CONTAINER objects may be open or locked depending on story needs.\n"
+                    "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
+                    "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
+                    "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method."
                 )
 
         # Text log requirement
@@ -779,6 +807,15 @@ class WorldGenerator:
                 obj["inventory"] = []
                 obj["code_to_unlock"] = ""
                 obj["item_to_unlock"] = ""
+
+        for idx in container_indices[:clamped_max_containers]:
+            obj = objects[idx]
+            code_to_unlock, item_to_unlock = _normalize_container_unlock_requirements(
+                obj.get("code_to_unlock"),
+                obj.get("item_to_unlock"),
+            )
+            obj["code_to_unlock"] = code_to_unlock
+            obj["item_to_unlock"] = item_to_unlock
 
         readable_indices = [
             idx for idx, obj in enumerate(objects)
@@ -1619,7 +1656,7 @@ class WorldGenerator:
                 if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder for Items
                     item_type = str(o.get("item_type") or "PICKABLE").upper()
-                    safe_entity_id = MediaEngine.sanitize_path_component(str(o["id"])) or "entity"
+                    safe_entity_id = slugify(str(o.get("id") or "")) or "entity"
                     image_url = await MediaEngine.generate_placeholder(
                         template_id, safe_entity_id, os.path.join(settings.DATA_DIR, "adventures", "library", template_id, "entities"),
                         category=f"ITEM_{item_type}"
@@ -1680,8 +1717,10 @@ class WorldGenerator:
                 metadata_json["text_log_format"] = text_log_format
 
             if str(o.get("item_type") or "").upper() == "CONTAINER":
-                code_to_unlock = str(o.get("code_to_unlock") or "").strip()
-                item_to_unlock = str(o.get("item_to_unlock") or "").strip().upper()
+                code_to_unlock, item_to_unlock = _normalize_container_unlock_requirements(
+                    o.get("code_to_unlock"),
+                    o.get("item_to_unlock"),
+                )
                 metadata_json["code_to_unlock"] = code_to_unlock
                 metadata_json["item_to_unlock"] = item_to_unlock
                 metadata_json["locked"] = bool(code_to_unlock or item_to_unlock)
