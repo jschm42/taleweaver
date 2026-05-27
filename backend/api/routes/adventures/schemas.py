@@ -448,6 +448,7 @@ class AdventureTemplateUpdate(BaseModel):
     allow_dynamic_items: Optional[bool] = None
     can_damage_npcs: Optional[bool] = None
     npcs_can_damage_protagonist: Optional[bool] = None
+    is_adventure_generator: Optional[bool] = None
 
     @field_validator("title")
     @classmethod

@@ -1253,6 +1253,25 @@ async def test_update_adventure_strict_rules(client: AsyncClient):
     assert resp.json()["strict_rules"] is False
 
 
+async def test_update_adventure_generator_flag(client: AsyncClient):
+    """Patching is_adventure_generator persists the adventure generator mode flag."""
+    ids = await _create_adventure(client, "Generator Toggle Quest")
+
+    enable_resp = await client.patch(
+        f"/api/adventures/{ids['adventure_id']}",
+        json={"is_adventure_generator": True},
+    )
+    assert enable_resp.status_code == 200, enable_resp.text
+    assert enable_resp.json()["is_adventure_generator"] is True
+
+    disable_resp = await client.patch(
+        f"/api/adventures/{ids['adventure_id']}",
+        json={"is_adventure_generator": False},
+    )
+    assert disable_resp.status_code == 200, disable_resp.text
+    assert disable_resp.json()["is_adventure_generator"] is False
+
+
 async def test_update_adventure_not_found(client: AsyncClient):
     """Patching a non-existent adventure returns 404."""
     resp = await client.patch(
