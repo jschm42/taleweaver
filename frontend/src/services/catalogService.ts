@@ -2,6 +2,10 @@ import { ref } from 'vue'
 import { api } from '@/composables/useApi'
 import type { CatalogTile } from '@/types'
 
+type CatalogGenerationState = {
+  modal_generating: boolean
+} & Record<string, boolean>
+
 /**
  * CatalogService manages image styles and narrative tones catalogs:
  * - Fetching catalogs from backend
@@ -18,7 +22,7 @@ class CatalogService {
   toneCatalog = ref<CatalogTile[]>([])
   isSubmitting = ref(false)
   statusMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
-  isGeneratingItem = ref<Record<string, boolean>>({})
+  isGeneratingItem = ref<CatalogGenerationState>({ modal_generating: false })
 
   // ============ HYDRATION ============
 

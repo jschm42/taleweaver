@@ -17,6 +17,7 @@ import type {
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
+import { apiFetch, buildApiUrl } from '@/services/http'
 
 interface SettingsResponse {
   app_version?: string
@@ -36,8 +37,6 @@ interface SettingsResponse {
 // the relative proxy can lead to empty responses on initial load). In
 // production we keep the relative `/api` base so the server can serve the
 // frontend and backend from the same origin.
-const BASE = '/api'
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   
@@ -50,9 +49,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   try {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await apiFetch(path, {
       ...init,
       headers,
+      timeoutMs: 20000,
     })
     
     // If we get here, the server at least responded
@@ -110,9 +110,10 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
   }
 
   try {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await apiFetch(path, {
       ...init,
       headers,
+      timeoutMs: 20000,
     })
     
     configState.isBackendReachable = true
@@ -295,12 +296,12 @@ export const api = {
 
   /** Returns the URL for exporting an adventure as ADZ. */
   exportAdzUrl(adventureId: string): string {
-    return `${BASE}/adventures/${adventureId}/export/adz`
+    return buildApiUrl(`/adventures/${adventureId}/export/adz`)
   },
 
   /** Returns the URL for exporting an adventure as ADV (JSON blueprint). */
   exportAdvUrl(adventureId: string): string {
-    return `${BASE}/adventures/${adventureId}/export/adv`
+    return buildApiUrl(`/adventures/${adventureId}/export/adv`)
   },
 
   /** Downloads the adventure as ADZ (ZIP) bundle. */
@@ -405,10 +406,10 @@ export const api = {
   },
 
   async uploadCatalogImage(formData: FormData): Promise<any> {
-    const res = await fetch(`${BASE}/settings/catalog/upload`, {
+    const res = await apiFetch('/settings/catalog/upload', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${authState.token}` },
       body: formData,
+      timeoutMs: 20000,
     })
     if (!res.ok) throw new Error('Upload failed')
     return res.json()

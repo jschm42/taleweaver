@@ -1,6 +1,5 @@
 import os
 import logging
-import re
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,62 +14,22 @@ from backend.models.user import User
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity
+from backend.utils.path_security import ensure_within_data_dir, safe_data_path, sanitize_path_component
 from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
 
 logger = logging.getLogger(__name__)
 
-_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-
-
-def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
-    """Return a safe single path component, or None when invalid."""
-    if value is None:
-        return None
-    candidate = str(value).strip()
-    if not candidate:
-        return None
-    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
-        return None
-    if candidate in {".", ".."} or ".." in candidate:
-        return None
-    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
-        return None
-    return candidate
-
-
-def _ensure_within_data_dir(path: str) -> str:
-    """Validate that a path resolves inside DATA_DIR and return its absolute form."""
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
-
-def _safe_data_path(*parts: str) -> str:
-    """Build a safe path under DATA_DIR."""
-    safe_parts: list[str] = []
-    for part in parts:
-        safe_part = _sanitize_path_component(part)
-        if not safe_part:
-            raise ValueError("Invalid path component.")
-        safe_parts.append(safe_part)
-    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *safe_parts))
-
-
 def _resolve_session_issue_log_path(session_id: str) -> str:
     """Return the validated AGENTS.md path for a concrete session id."""
-    safe_session_id = _sanitize_path_component(session_id)
+    safe_session_id = sanitize_path_component(session_id)
     if not safe_session_id:
         raise ValueError("Invalid session identifier.")
 
-    session_dir = _safe_data_path("adventures", "sessions", safe_session_id)
+    session_dir = safe_data_path("adventures", "sessions", safe_session_id)
     if not os.path.isdir(session_dir):
         raise ValueError("Session directory does not exist.")
 
-    return _ensure_within_data_dir(os.path.join(session_dir, "AGENTS.md"))
+    return ensure_within_data_dir(os.path.join(session_dir, "AGENTS.md"))
 class AgentDecision(BaseModel):
     thoughts: str = Field(description="Internal reasoning and goals based on the character persona, current situation, history, and walkthrough. Keep it concise.")
     action: str = Field(description="The next action or slash command to execute (e.g. '/inspect shelf', 'go north', '/say Hello, Merlin'). Do not use markdown bolds or style formatting.")

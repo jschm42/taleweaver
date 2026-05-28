@@ -21,24 +21,49 @@
 ## 📸 Gallery
 
 <p align="center">
-  <img src="docs/screenshots/library.jpg" width="600" alt="Adventure Library">
+  <a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="600" alt="Adventure Library"></a>
   <br><em><b>Adventure Portal</b> - Manage your stories and explore new worlds.</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/generator.jpg" width="600" alt="World Generator">
+  <a href="docs/screenshots/generator.jpg"><img src="docs/screenshots/generator.jpg" width="600" alt="World Generator"></a>
   <br><em><b>World Generator</b> - AI-driven world building and story generation.</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/gameplay.jpg" width="600" alt="Gamesession">
+  <a href="docs/screenshots/gameplay.jpg"><img src="docs/screenshots/gameplay.jpg" width="600" alt="Gamesession"></a>
   <br><em><b>In-Game</b> - Immersive text adventure gameplay with dynamic AI interaction.</em>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/combat-dialog.jpg" width="600" alt="Combat Dialog">
+  <a href="docs/screenshots/combat-dialog.jpg"><img src="docs/screenshots/combat-dialog.jpg" width="600" alt="Combat Dialog"></a>
   <br><em><b>Combat Dialog</b> - Tactical combat interface with action choices and integrated loot resolution.</em>
 </p>
+
+### Mini Gallery Example (3x3)
+
+<p align="center">
+  Placeholder grid for GitHub README. Replace each `src` path with your final screenshots.
+</p>
+
+<table align="center">
+  <tr>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 01"></a></td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 02"></a></td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 03"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 07"></a></td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 08"></a></td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 09"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 13"></a></td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 14"></a></td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 15"></a></td>
+  </tr>
+  
+</table>
 
 ## 1. The Vision
 
@@ -142,6 +167,17 @@ Models like `Gemini 1.5 Flash` or `GPT-4o-mini` are excellent for quick chat res
 
 ---
 
+## Font Licenses (Frontend)
+
+The frontend ships local font and icon assets from third-party packages.
+All license texts are included in:
+
+- `frontend/public/assets/fonts/licenses`
+
+See `frontend/public/assets/fonts/licenses/README.txt` for the mapping between font files and their license documents.
+
+---
+
 ## 3. Architecture & Concepts
 
 ### LLM Abstraction & Secure Key Management
@@ -174,6 +210,9 @@ chmod +x setup.sh
 ### 🐳 Running with Docker (Recommended)
 
 The easiest way to get TaleWeaver up and running is using Docker. This method packages both the frontend and backend into a single container and handles all dependencies automatically.
+
+The backend container uses a production ASGI runtime: **Gunicorn** with **Uvicorn workers**.
+You can tune process behavior using environment variables such as `WEB_CONCURRENCY`, `GUNICORN_TIMEOUT`, and `GUNICORN_GRACEFUL_TIMEOUT`.
 
 #### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) installed and running.

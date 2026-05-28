@@ -2,15 +2,18 @@
 import { ref, watch } from 'vue'
 import type { CatalogTile } from '@/types'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   isOpen: boolean
   isEditingExisting: boolean
   item: CatalogTile
   index: number | null
   type: 'styles' | 'tones'
-  isGenerating: boolean
-  isSubmitting: boolean
-}>()
+  isGenerating?: boolean
+  isSubmitting?: boolean
+}>(), {
+  isGenerating: false,
+  isSubmitting: false,
+})
 
 const emit = defineEmits<{
   (e: 'close'): void

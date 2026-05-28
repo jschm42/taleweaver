@@ -3,23 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' %VITE_CSP_STYLE_INLINE%; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
     <link rel="icon" type="image/svg+xml" href="/src/assets/svg/app-logo.svg" />
     <title>TaleWeaver | AI Reality Weaver</title>
-
-    <!-- Pixel-art font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
-      rel="stylesheet"
-    />
-
-    <!-- RPG Awesome icon font (CDN) -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/rpg-awesome@0.2.0/css/rpg-awesome.min.css"
-      crossorigin="anonymous"
-    />
+    <link rel="stylesheet" href="/assets/fonts/rpg-awesome.min.css" />
   </head>
   <body>
     <div id="app"></div>

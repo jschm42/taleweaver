@@ -31,7 +31,7 @@ const props = defineProps<{
 <style scoped>
 @font-face {
   font-family: 'OrbitronClock';
-  src: url('@/assets/fonts/Orbitron-VariableFont_wght.ttf') format('truetype');
+  src: url('/assets/fonts/Orbitron-VariableFont_wght.ttf') format('truetype');
   font-weight: 100 900;
   font-style: normal;
 }

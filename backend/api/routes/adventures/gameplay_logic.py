@@ -56,6 +56,8 @@ from backend.models.chat import ChatMessage
 from backend.models.session_state import SessionState
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.utils.path_security import ensure_within_data_dir as _ensure_within_data_dir
+from backend.utils.path_security import sanitize_path_component as _sanitize_path_component
 
 logger = logging.getLogger(__name__)
 
@@ -85,33 +87,6 @@ PROMPT_SUGGESTION_MAX_VISIBLE_OBJECTS = 16
 PROMPT_SUGGESTION_MAX_UNLOCKED_EXITS = 8
 PROMPT_SUGGESTION_MAX_INVENTORY_ITEMS = 16
 PROMPT_SUGGESTION_MAX_LAST_RESPONSE_CHARS = 1200
-_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-
-
-def _sanitize_path_component(value: str | None) -> str | None:
-    if value is None:
-        return None
-    candidate = str(value).strip()
-    if not candidate:
-        return None
-    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
-        return None
-    if candidate in {".", ".."} or ".." in candidate:
-        return None
-    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
-        return None
-    return candidate
-
-
-def _ensure_within_data_dir(path: str) -> str:
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
 
 
 def _is_token_limit_error(exc: Exception) -> bool:

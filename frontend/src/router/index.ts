@@ -1,11 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import PortalView from '@/views/PortalView.vue'
-import AdminView from '@/views/AdminView.vue'
-import GameView from '@/views/GameView.vue'
-import CreateAdventureView from '@/views/CreateAdventureView.vue'
-import LoginView from '@/views/LoginView.vue'
-import SetupView from '@/views/SetupView.vue'
-import ErrorView from '@/views/ErrorView.vue'
 import { authState } from '@/store/auth'
 
 const router = createRouter({
@@ -14,22 +7,22 @@ const router = createRouter({
     {
       path: '/',
       name: 'portal',
-      component: PortalView,
+      component: () => import('@/views/PortalView.vue'),
     },
     {
       path: '/admin',
       name: 'admin',
-      component: AdminView,
+      component: () => import('@/views/AdminView.vue'),
     },
     {
       path: '/adventures/new',
       name: 'adventure-create',
-      component: CreateAdventureView,
+      component: () => import('@/views/CreateAdventureView.vue'),
     },
     {
       path: '/game/:id',
       name: 'game',
-      component: GameView,
+      component: () => import('@/views/GameView.vue'),
       // Pass the route params as props to the component easily
       props: true, 
     },
@@ -42,17 +35,17 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: LoginView,
+      component: () => import('@/views/LoginView.vue'),
     },
     {
       path: '/setup',
       name: 'setup',
-      component: SetupView,
+      component: () => import('@/views/SetupView.vue'),
     },
     {
       path: '/error',
       name: 'error',
-      component: ErrorView,
+      component: () => import('@/views/ErrorView.vue'),
     },
   ],
 })

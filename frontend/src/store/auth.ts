@@ -1,4 +1,24 @@
 import { reactive } from 'vue'
+import { apiFetch } from '@/services/http'
+
+const ACCESS_TOKEN_KEY = 'access_token'
+
+function loadAccessToken(): string | null {
+  const sessionToken = sessionStorage.getItem(ACCESS_TOKEN_KEY)
+  if (sessionToken) {
+    return sessionToken
+  }
+
+  const legacyToken = localStorage.getItem(ACCESS_TOKEN_KEY)
+  if (legacyToken) {
+    // One-time migration away from persistent browser storage.
+    sessionStorage.setItem(ACCESS_TOKEN_KEY, legacyToken)
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+    return legacyToken
+  }
+
+  return null
+}
 
 export interface User {
   id: string
@@ -15,33 +35,33 @@ export interface User {
 
 export const authState = reactive({
   user: null as User | null,
-  token: localStorage.getItem('access_token') || null,
+  token: loadAccessToken(),
   isAuthenticated: false,
   isInitialized: false
 })
 
 export function setToken(token: string) {
   authState.token = token
-  localStorage.setItem('access_token', token)
+  sessionStorage.setItem(ACCESS_TOKEN_KEY, token)
 }
 
 export function clearAuth() {
   authState.user = null
   authState.token = null
   authState.isAuthenticated = false
-  localStorage.removeItem('access_token')
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
 }
 
 export async function refreshUser() {
   if (!authState.token) return
-  
-  const BASE = '/api'
+
   try {
-    const res = await fetch(`${BASE}/auth/me`, {
-      headers: {
-        'Authorization': `Bearer ${authState.token}`
-      }
+    const res = await apiFetch('/auth/me', {
+      method: 'GET',
+      timeoutMs: 12000,
     })
+
     if (res.ok) {
       const userData = await res.json()
       authState.user = userData

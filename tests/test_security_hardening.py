@@ -45,12 +45,12 @@ def test_build_catalog_upload_path_rejects_path_traversal(tmp_path, monkeypatch)
 def test_build_uploaded_visual_path_sanitizes_target_and_extension(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
 
-    result = _build_uploaded_visual_path("template_1", "protagonist", "Hero ../Name", "portrait.exe")
+    result = _build_uploaded_visual_path("template_1", "protagonist", "exe")
 
     assert result.startswith(str(tmp_path))
     assert "/protagonist/" in result.replace("\\", "/")
     assert result.endswith(".png")
-    assert os.path.basename(result).startswith("hero-name_")
+    assert os.path.basename(result).startswith("protagonist_")
 
 
 def test_route_error_response_hides_exception_details():

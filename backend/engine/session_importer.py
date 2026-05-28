@@ -18,25 +18,19 @@ from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
+from backend.utils.path_security import ensure_within_data_dir, safe_data_path
 
 logger = logging.getLogger(__name__)
 
 
 def _ensure_within_data_dir(path: str) -> str:
     """Validate that a path resolves inside DATA_DIR and return absolute path."""
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
+    return ensure_within_data_dir(path)
 
 
 def _safe_data_path(*parts: str) -> str:
     """Build a safe path rooted at DATA_DIR."""
-    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
+    return safe_data_path(*parts)
 
 
 def _ensure_within_base_dir(path: str, base_dir: str) -> str:
