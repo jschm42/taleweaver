@@ -20,11 +20,11 @@ from backend.models.user import User
 router = APIRouter(prefix="/tts", tags=["TTS"])
 logger = logging.getLogger(__name__)
 SUPPORTED_TTS_MODELS = {
-    "gemini-3.1-flash-tts-preview",
     "gemini-2.5-flash-preview-tts",
 }
 
 TTS_MODEL_ALIASES = {
+    "gemini-3.1-flash-tts-preview": "gemini-2.5-flash-preview-tts",
     "gemini-2.5-flash-tts-preview": "gemini-2.5-flash-preview-tts",
     "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
 }
@@ -138,11 +138,11 @@ async def generate_tts(
     
     style = tts_settings.get("sample_context")
     speed = float(tts_settings.get("speech_rate", 1.0))
-    model = str(tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview") or "").strip()
+    model = str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip()
     model = TTS_MODEL_ALIASES.get(model, model)
     if provider == "google" and model not in SUPPORTED_TTS_MODELS:
-        logger.warning("Unsupported Google TTS model '%s' configured; falling back to gemini-3.1-flash-tts-preview.", model)
-        model = "gemini-3.1-flash-tts-preview"
+        logger.warning("Unsupported Google TTS model '%s' configured; falling back to gemini-2.5-flash-preview-tts.", model)
+        model = "gemini-2.5-flash-preview-tts"
     
     # Log provider and model
     logger.info("TTS provider: %s, model: %s", provider, model)
@@ -253,7 +253,10 @@ async def test_tts_connection_v2(
         elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
         use_vocal_tags=tts_settings.get("use_vocal_tags", True),
         api_key=api_key,
-        model_name=tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview"),
+        model_name=TTS_MODEL_ALIASES.get(
+            str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
+            "gemini-2.5-flash-preview-tts",
+        ),
         speed=float(tts_settings.get("speech_rate", 1.0)),
     )
     if not audio_url:

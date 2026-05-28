@@ -26,8 +26,8 @@ const VOICE_LIST = [
 ]
 
 const GEMINI_TTS_MODELS = [
-  { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash TTS (Preview)' },
   { id: 'gemini-2.5-flash-preview-tts', name: 'Gemini 2.5 Flash TTS (Preview)' },
+  { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash TTS (Legacy Preview)' },
 ]
 
 async function fetchElevenLabsModels() {
@@ -77,7 +77,7 @@ watch(() => localForm.value.provider, (newProvider) => {
       localForm.value.selected_model = 'eleven_multilingual_v2'
     }
   } else if (newProvider === 'google' && !localForm.value.selected_model.startsWith('gemini-')) {
-    localForm.value.selected_model = 'gemini-3.1-flash-tts-preview'
+    localForm.value.selected_model = 'gemini-2.5-flash-preview-tts'
   }
 })
 

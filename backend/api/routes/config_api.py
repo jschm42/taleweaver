@@ -13,11 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 SUPPORTED_TTS_MODELS = {
-    "gemini-3.1-flash-tts-preview",
     "gemini-2.5-flash-preview-tts",
 }
 
 TTS_MODEL_ALIASES = {
+    "gemini-3.1-flash-tts-preview": "gemini-2.5-flash-preview-tts",
     "gemini-2.5-flash-tts-preview": "gemini-2.5-flash-preview-tts",
     "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
 }
@@ -407,7 +407,7 @@ def _normalize_tts_settings(tts_settings: Optional[dict]) -> dict:
     fallback = {
         "enabled": False,
         "provider": "google",
-        "selected_model": "gemini-3.1-flash-tts-preview",
+        "selected_model": "gemini-2.5-flash-preview-tts",
         "voice_list": full_voice_list,
         "voice_catalog": full_voice_catalog,
         "selected_voice": "Puck",
@@ -662,7 +662,7 @@ class GameSettingsPayload(BaseModel):
 class TTSSettingsPayload(BaseModel):
     enabled: bool = False
     provider: str = "google"
-    selected_model: str = "gemini-3.1-flash-tts-preview"
+    selected_model: str = "gemini-2.5-flash-preview-tts"
     selected_voice: str = "Puck"
     elevenlabs_voice_id: str = ""
     use_vocal_tags: bool = True
@@ -1047,7 +1047,10 @@ async def test_tts_connection(
             elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
             use_vocal_tags=tts_settings.get("use_vocal_tags", True),
             api_key=api_key,
-            model_name=tts_settings.get("selected_model", "gemini-3.1-flash-tts-preview"),
+            model_name=TTS_MODEL_ALIASES.get(
+                str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
+                "gemini-2.5-flash-preview-tts",
+            ),
         )
         if not audio_url:
             return {"status": "error", "message": "Failed to generate test audio."}
