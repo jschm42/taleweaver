@@ -1,5 +1,5 @@
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant' | 'system' | 'thought'
   content: string
   timestamp: Date
   itemIds?: string[]
@@ -277,7 +277,7 @@ export interface AdventureImportPayload {
 
 /** WebSocket message types received from the server. */
 export type WsIncoming =
-  | { role: 'assistant' | 'system'; content: string }
+  | { role: 'assistant' | 'system' | 'thought'; content: string }
   | { type: 'sheet_update'; data: CharacterSheet }
   | { type: 'game_over'; reason: string }
   | { type: 'map_update'; map_data?: WorldMapData }
