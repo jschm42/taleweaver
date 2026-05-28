@@ -167,6 +167,17 @@ Models like `Gemini 1.5 Flash` or `GPT-4o-mini` are excellent for quick chat res
 
 ---
 
+## Font Licenses (Frontend)
+
+The frontend ships local font and icon assets from third-party packages.
+All license texts are included in:
+
+- `frontend/public/assets/fonts/licenses`
+
+See `frontend/public/assets/fonts/licenses/README.txt` for the mapping between font files and their license documents.
+
+---
+
 ## 3. Architecture & Concepts
 
 ### LLM Abstraction & Secure Key Management

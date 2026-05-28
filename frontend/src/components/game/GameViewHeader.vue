@@ -91,8 +91,6 @@ const handleBack = () => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Acme&display=swap');
-
 .adventure-title {
   font-family: 'Acme', sans-serif;
 }
