@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import DOMPurify from 'dompurify'
 import { configState } from '@/store/config'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
@@ -600,31 +601,44 @@ function displayMessageContent(msg: ChatMessage): string {
   return fixNewlines(content)
 }
 
+function renderMessageHtml(text: string, isSystemMessage: boolean): string {
+  const normalized = normalizeLineBreaks(text)
+  const escaped = escapeHtml(normalized)
+  const withVoiceTags = formatVoiceTags(escaped)
+  const withBolds = formatBolds(withVoiceTags)
+  const enriched = isSystemMessage ? colorizeStatNames(withBolds) : withBolds
+
+  return DOMPurify.sanitize(enriched, {
+    ALLOWED_TAGS: ['span', 'strong', 'img', 'div', 'br'],
+    ALLOWED_ATTR: ['class', 'data-npc-name', 'src', 'alt'],
+  })
+}
+
 /**
  * Colorizes stat names and their +/- modifiers in system messages to match
  * the character sheet's stat theme colors.
  */
 function colorizeStatNames(text: string): string {
-  const statColors: Record<string, string> = {
-    'Strength':    'color: #f59e0b',  // amber
-    'Dexterity':   'color: #06b6d4',  // cyan
-    'Intelligence':'color: #8b5cf6',  // violet
-    'Wisdom':      'color: #3b82f6',  // blue
-    'Charisma':    'color: #ec4899',  // pink
-    'Armor Class': 'color: #94a3b8',  // slate
-    'HP':          'color: #e11d48',  // crimson/red
-    'Stamina':     'color: #10b981',  // emerald/green
-    'Mana':        'color: #2563eb',  // sapphire/blue
+  const statClassMap: Record<string, string> = {
+    'Strength': 'sys-stat-strength',
+    'Dexterity': 'sys-stat-dexterity',
+    'Intelligence': 'sys-stat-intelligence',
+    'Wisdom': 'sys-stat-wisdom',
+    'Charisma': 'sys-stat-charisma',
+    'Armor Class': 'sys-stat-armor-class',
+    'HP': 'sys-stat-hp',
+    'Stamina': 'sys-stat-stamina',
+    'Mana': 'sys-stat-mana',
   }
 
   // Match patterns like "+5 Strength" or "-3 Dexterity" or just "Strength"
-  for (const [stat, style] of Object.entries(statColors)) {
+  for (const [stat, statClass] of Object.entries(statClassMap)) {
     // With numeric modifier: "+5 Strength" or "-3 Strength"
     const modifierPattern = new RegExp(`([+-]\\d+)\\s+(${stat})`, 'g')
     text = text.replace(modifierPattern, (_match, num: string, name: string) => {
-      const numVal = parseInt(num)
-      const numStyle = numVal > 0 ? 'color: #4ade80; font-weight: 700' : 'color: #f87171; font-weight: 700'
-      return `<span style="${numStyle}">${num}</span> <span style="${style}; font-weight: 700">${name}</span>`
+      const numVal = parseInt(num, 10)
+      const modifierClass = numVal > 0 ? 'sys-stat-modifier-positive' : 'sys-stat-modifier-negative'
+      return `<span class="${modifierClass}">${num}</span> <span class="sys-stat-label ${statClass}">${name}</span>`
     })
   }
 
@@ -854,7 +868,7 @@ onUnmounted(() => {
           ]"
         >
           <template v-for="(part, pIdx) in parseContent(displayMessageContent(msg))" :key="pIdx">
-            <span v-if="part.type === 'text'" v-html="msg.role === 'system' ? colorizeStatNames(formatBolds(formatVoiceTags(normalizeLineBreaks(part.value)))) : formatBolds(formatVoiceTags(normalizeLineBreaks(part.value)))"></span>
+            <span v-if="part.type === 'text'" v-html="renderMessageHtml(part.value, msg.role === 'system')"></span>
             <div v-else-if="part.type === 'image'" class="my-4 rounded-xl overflow-hidden border border-white/10 shadow-lg">
               <img :src="part.url" :alt="part.alt" class="w-full max-h-80 object-cover" />
               <div v-if="part.alt" class="px-3 py-1.5 bg-black/40 text-xxs text-slate-400 font-bold uppercase tracking-widest">{{ part.alt }}</div>
@@ -1152,6 +1166,30 @@ onUnmounted(() => {
   font-size: 0.9375rem; /* 15px */
   line-height: 1;
 }
+
+:deep(.sys-stat-label) {
+  font-weight: 700;
+}
+
+:deep(.sys-stat-modifier-positive) {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+:deep(.sys-stat-modifier-negative) {
+  color: #f87171;
+  font-weight: 700;
+}
+
+:deep(.sys-stat-strength) { color: #f59e0b; }
+:deep(.sys-stat-dexterity) { color: #06b6d4; }
+:deep(.sys-stat-intelligence) { color: #8b5cf6; }
+:deep(.sys-stat-wisdom) { color: #3b82f6; }
+:deep(.sys-stat-charisma) { color: #ec4899; }
+:deep(.sys-stat-armor-class) { color: #94a3b8; }
+:deep(.sys-stat-hp) { color: #e11d48; }
+:deep(.sys-stat-stamina) { color: #10b981; }
+:deep(.sys-stat-mana) { color: #2563eb; }
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;

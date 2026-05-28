@@ -28,6 +28,10 @@ const triggerFileUpload = (index: number) => {
   const input = document.getElementById(`${props.type}-upload-${index}`) as HTMLInputElement
   input?.click()
 }
+
+const isItemGenerating = (index: number): boolean => {
+  return props.isGeneratingItem[`${props.type}_${index}`] ?? false
+}
 </script>
 
 <template>
@@ -69,8 +73,8 @@ const triggerFileUpload = (index: number) => {
           
           <!-- Overlay Buttons -->
           <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-            <button @click="emit('generateImage', { item, index })" :disabled="isGeneratingItem[type + '_' + index]" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg disabled:opacity-50" :title="'Quick Generate using ' + simpleModel">
-              <i v-if="isGeneratingItem[type + '_' + index]" class="ra ra-cycle animate-spin"></i>
+            <button @click="emit('generateImage', { item, index })" :disabled="isItemGenerating(index)" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg disabled:opacity-50" :title="'Quick Generate using ' + simpleModel">
+              <i v-if="isItemGenerating(index)" class="ra ra-cycle animate-spin"></i>
               <i v-else class="ra ra-cycle"></i>
             </button>
             <button @click="emit('openPrompt', { item, index })" class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg">
@@ -80,7 +84,7 @@ const triggerFileUpload = (index: number) => {
           </div>
 
           <!-- Loading Overlay -->
-          <div v-if="isGeneratingItem[type + '_' + index]" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+          <div v-if="isItemGenerating(index)" class="absolute inset-0 bg-black/60 flex items-center justify-center">
             <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500"></div>
           </div>
         </div>

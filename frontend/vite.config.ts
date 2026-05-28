@@ -3,11 +3,11 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig(({ mode }) => {
-  // Load env file from project root
-  const env = loadEnv(mode, fileURLToPath(new URL('../', import.meta.url)), '')
-  
-  const backendPort = env.BACKEND_PORT || '8000'
-  const frontendPort = parseInt(env.FRONTEND_PORT || '5173')
+  const frontendEnv = loadEnv(mode, fileURLToPath(new URL('./', import.meta.url)), '')
+  const repoEnv = loadEnv(mode, fileURLToPath(new URL('../', import.meta.url)), '')
+
+  const backendPort = frontendEnv.BACKEND_PORT || repoEnv.BACKEND_PORT || '8000'
+  const frontendPort = parseInt(frontendEnv.FRONTEND_PORT || repoEnv.FRONTEND_PORT || '5173', 10)
 
   return {
     plugins: [vue()],

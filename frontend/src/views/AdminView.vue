@@ -364,7 +364,7 @@ onMounted(() => {
       :item="editingItem"
       :index="editingIndex"
       :type="catalogModalType"
-      :is-generating="catalogService.isGeneratingItem.value.modal_generating"
+      :is-generating="!!catalogService.isGeneratingItem.value.modal_generating"
       :is-submitting="catalogService.isSubmitting.value"
       @close="isCatalogModalOpen = false"
       @save="(item) => handleSaveCatalogItem(item)"
