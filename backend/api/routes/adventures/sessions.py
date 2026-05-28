@@ -34,6 +34,12 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.game_state import GameState
 from backend.models.world_map import WorldMap
 from backend.schemas.checkpoint import RestoreCheckpointResponse, SessionCheckpointResponse
+from backend.utils.path_security import (
+    data_url_to_local_path,
+    ensure_within_data_dir as ensure_within_data_dir_shared,
+    local_path_to_data_url,
+    sanitize_path_component as sanitize_path_component_shared,
+)
 from backend.utils.text_utils import generate_session_id
 
 router = APIRouter(tags=["Sessions"])
@@ -75,29 +81,11 @@ def _normalize_data_asset_url(source_url: Optional[str]) -> Optional[str]:
 
 
 def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
-    if value is None:
-        return None
-    candidate = str(value).strip()
-    if not candidate:
-        return None
-    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
-        return None
-    if candidate in {".", ".."} or ".." in candidate:
-        return None
-    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
-        return None
-    return candidate
+    return sanitize_path_component_shared(value)
 
 
 def _ensure_within_data_dir(path: str) -> str:
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
+    return ensure_within_data_dir_shared(path)
 
 
 def _find_existing_data_asset_path(filename: str) -> Optional[str]:
@@ -189,10 +177,8 @@ def _copy_data_asset_to_session(
         logger.warning("Skipping asset copy due to invalid session/bucket: %s / %s", session_id, bucket)
         return source_url
 
-    rel_path = normalized_source_url.replace("/data/", "", 1).lstrip("/")
-    try:
-        source_path = _ensure_within_data_dir(os.path.join(settings.DATA_DIR, rel_path))
-    except ValueError:
+    source_path = data_url_to_local_path(normalized_source_url)
+    if not source_path:
         logger.warning("Skipping asset copy for unsafe source URL: %s", normalized_source_url)
         return source_url
 
@@ -221,8 +207,7 @@ def _copy_data_asset_to_session(
         logger.exception("Failed copying asset to session folder: %s -> %s", source_path, target_path)
         return source_url
 
-    rel_target_path = os.path.relpath(target_path, settings.DATA_DIR).replace("\\", "/")
-    target_url = f"/data/{rel_target_path}"
+    target_url = local_path_to_data_url(target_path)
     cache[normalized_source_url] = target_url
     return target_url
 

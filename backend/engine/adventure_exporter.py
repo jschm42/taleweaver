@@ -13,6 +13,7 @@ from backend.core.config import settings
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.utils.path_security import data_url_to_local_path
 
 logger = logging.getLogger(__name__)
 
@@ -403,13 +404,9 @@ class AdventureExporter:
         # Update manifest to point to relative paths in the zip
         def localize_path(path):
             if not path or not path.startswith("/data/"): return path
-            
-            # Convert URL to local path relative to DATA_DIR
-            # URL format is /data/path/to/file.ext
-            rel_path = path.replace("/data/", "", 1).lstrip("/")
-            try:
-                local_full = _ensure_within_data_dir(os.path.join(settings.DATA_DIR, rel_path))
-            except ValueError:
+
+            local_full = data_url_to_local_path(path)
+            if not local_full:
                 logger.warning("Skipping unsafe asset path during ADZ export: %s", path)
                 return path
             

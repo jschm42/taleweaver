@@ -244,6 +244,30 @@ async def test_save_llm_settings_persists_play_agent_model(client: AsyncClient):
 async def test_get_settings_uses_installed_ollama_models(client: AsyncClient, monkeypatch):
     """Settings constants should expose installed Ollama models for LLM selection."""
 
+    llm_payload = {
+        "small_model": "llama3.2",
+        "small_model_provider": "ollama",
+        "small_max_tokens": 2048,
+        "small_enable_thinking": False,
+        "small_max_thinking_tokens": 1024,
+        "complex_model": "qwen2.5",
+        "complex_model_provider": "ollama",
+        "complex_max_tokens": 4096,
+        "complex_enable_thinking": False,
+        "complex_max_thinking_tokens": 1024,
+        "generator_model": "qwen2.5",
+        "generator_model_provider": "ollama",
+        "generator_max_tokens": 4096,
+        "generator_enable_thinking": False,
+        "generator_max_thinking_tokens": 1024,
+        "play_agent_model": "llama3.2",
+        "play_agent_model_provider": "ollama",
+        "preferred_provider": "ollama",
+        "ollama_url": "http://localhost:11434",
+    }
+    save_resp = await client.post("/api/settings/llm", json=llm_payload)
+    assert save_resp.status_code == 200
+
     async def fake_fetch_models(_ollama_url: Optional[str]):
         return ["llama3.2:latest", "qwen2.5:14b"]
 
@@ -253,6 +277,44 @@ async def test_get_settings_uses_installed_ollama_models(client: AsyncClient, mo
     assert resp.status_code == 200
     models = resp.json()["available_constants"]["predefined_llm_models"]["ollama"]
     assert models == ["llama3.2:latest", "qwen2.5:14b"]
+
+
+async def test_get_settings_does_not_fetch_ollama_models_when_not_configured(client: AsyncClient, monkeypatch):
+    """Settings constants should not query Ollama when no LLM provider uses Ollama."""
+
+    llm_payload = {
+        "small_model": "gpt-5.4-mini",
+        "small_model_provider": "openai",
+        "small_max_tokens": 2048,
+        "small_enable_thinking": False,
+        "small_max_thinking_tokens": 1024,
+        "complex_model": "gpt-5.4-mini",
+        "complex_model_provider": "openai",
+        "complex_max_tokens": 4096,
+        "complex_enable_thinking": False,
+        "complex_max_thinking_tokens": 1024,
+        "generator_model": "gpt-5.4-mini",
+        "generator_model_provider": "openai",
+        "generator_max_tokens": 4096,
+        "generator_enable_thinking": False,
+        "generator_max_thinking_tokens": 1024,
+        "play_agent_model": "gpt-5.4-mini",
+        "play_agent_model_provider": "openai",
+        "preferred_provider": "openai",
+        "ollama_url": "http://localhost:11434",
+    }
+    save_resp = await client.post("/api/settings/llm", json=llm_payload)
+    assert save_resp.status_code == 200
+
+    async def fail_if_called(_ollama_url: Optional[str]):
+        raise AssertionError("_fetch_ollama_models should not be called")
+
+    monkeypatch.setattr(config_api, "_fetch_ollama_models", fail_if_called)
+
+    resp = await client.get("/api/settings")
+    assert resp.status_code == 200
+    models = resp.json()["available_constants"]["predefined_llm_models"]["ollama"]
+    assert models == config_api.PREDEFINED_LLM_MODELS["ollama"]
 
 
 async def test_get_ollama_models_endpoint(client: AsyncClient, monkeypatch):

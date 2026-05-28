@@ -17,6 +17,7 @@ from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
+from backend.utils.path_security import data_url_to_local_path
 
 logger = logging.getLogger(__name__)
 SESSION_MANIFEST_SNAPSHOT_KEY = "__manifest_snapshot__"
@@ -160,8 +161,9 @@ class AdventureLogic:
         if not candidate or not candidate.startswith("/data/"):
             return candidate
 
-        rel = candidate.replace("/data/", "", 1).lstrip("/")
-        abs_path = os.path.abspath(os.path.join(settings.DATA_DIR, rel))
+        abs_path = data_url_to_local_path(candidate)
+        if not abs_path:
+            return candidate
         data_root = os.path.abspath(settings.DATA_DIR)
         try:
             if os.path.commonpath([abs_path, data_root]) == data_root and os.path.isfile(abs_path):

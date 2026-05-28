@@ -76,12 +76,14 @@ To understand the internal processes of TaleWeaver, refer to the following Merma
 
 * **Preventing "Uncontrolled data used in path expression" (CWE-22):**
   * When handling file operations, never directly concatenate or trust user-supplied input (like usernames, template IDs, or filenames) to construct file paths.
-  * **Use Path Verification Helpers:** Always use helper functions like `_ensure_within_data_dir(path)` or `_safe_data_path(*parts)` to verify that any resolved target path strictly resides within the intended base directory (e.g., `settings.DATA_DIR`).
-    * Use `os.path.abspath` to resolve paths fully (resolving symbolic links and `..` segments) and `os.path.commonpath` to ensure the target is within the base directory:
+  * **Mandatory Central Helper:** For new code and refactors, use `backend.utils.path_security` (`ensure_within_data_dir`, `safe_data_path`, `data_url_to_local_path`, `local_path_to_data_url`) instead of ad-hoc path validation.
+  * **No Direct Sink Calls With Untrusted Paths:** `open`, `shutil.copy*`, `os.makedirs`, `os.remove`, and similar filesystem sinks must only receive paths returned by validated helper functions.
+  * **Use Path Verification Helpers:** Any resolved target path must be verified to reside within the intended base directory (e.g., `settings.DATA_DIR`).
+    * Use `os.path.realpath` and `os.path.commonpath` to ensure the target remains inside the base directory, including symlink-safe resolution:
       ```python
       def _ensure_within_data_dir(path: str) -> str:
-          data_root = os.path.abspath(settings.DATA_DIR)
-          resolved = os.path.abspath(path)
+          data_root = os.path.realpath(settings.DATA_DIR)
+          resolved = os.path.realpath(path)
           try:
               if os.path.commonpath([resolved, data_root]) != data_root:
                   raise ValueError("Resolved path escapes DATA_DIR.")
@@ -93,3 +95,4 @@ To understand the internal processes of TaleWeaver, refer to the following Merma
     * Use alphanumeric regex validation for any variable path components (e.g. `re.match(r"^[A-Za-z0-9_-]{1,128}$", template_id)`).
     * Strip path separators (`/`, `\`) or traversal sequences (`..`) from parameters.
     * Use `os.path.basename` to extract only the filename when referencing uploaded files, or generate a random/UUID filename (e.g., `f"{uuid.uuid4()}.{ext}"`) rather than trusting the original name.
+  * **Agent Compliance Rule (Required):** If an agent touches path-building/file-write code, it must run and pass the security-focused tests (`tests/test_security_hardening.py`) and include a short note in the PR/summary stating which helper functions were used.
