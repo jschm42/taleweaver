@@ -45,10 +45,11 @@ export function useGameSessionLifecycle(options: UseGameSessionLifecycleOptions)
       if (settings) {
         gameSettings.value = settings
       }
-      if (routeId.value) {
-        await connectWithRouteFallback(routeId.value)
-      }
     })()
+
+    if (routeId.value) {
+      void connectWithRouteFallback(routeId.value)
+    }
 
     window.addEventListener('keydown', handleGlobalKeydown)
   })

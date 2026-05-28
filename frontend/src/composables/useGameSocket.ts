@@ -278,6 +278,26 @@ export function useGameSocket(): UseGameSocket {
       checkpointPulseTimer = null
     }
     isCheckpointSaving.value = false
+
+    // Clear all session-specific states
+    messages.value = []
+    sheet.value = null
+    mapData.value = null
+    nodes.value = {}
+    npcMetadata.value = {}
+    currentSceneImage.value = null
+    entities.value = []
+    combat.value = null
+    quests.value = []
+    awards.value = []
+    adventureImage.value = null
+    statusNote.value = ''
+    gameOverReason.value = ''
+    statusText.value = ''
+    inputLocked.value = false
+    pendingTerminalEpilogue.value = false
+    promptSuggestions.value = []
+    debugLogs.value = []
   }
 
   function haltActiveOperations(): void {

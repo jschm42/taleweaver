@@ -31,6 +31,7 @@ const showSetupWarningModal = ref(false)
 const hasCheckedSetup = ref(false)
 const showDeleteAllAdventuresConfirm = ref(false)
 const showDeleteAllSessionsConfirm = ref(false)
+const isResuming = ref(false)
 
 const {
   templates,
@@ -101,8 +102,36 @@ watch(importInput, () => undefined)
 
 const isAdmin = computed(() => authState.user?.role === 'admin')
 
-function playSession(gameId: string) {
-  router.push({ name: 'game', params: { id: gameId } })
+async function playSession(gameId: string) {
+  if (isStartingSession.value) {
+    const template = templates.value.find((t) => t.template_id === startingSessionTemplateId.value)
+    await router.push({
+      name: 'game',
+      params: { id: gameId },
+      query: { title: template?.title || '', is_new: 'true' }
+    })
+    return
+  }
+
+  isStartingSession.value = true
+  isResuming.value = true
+  const session = sessions.value.find((s) => s.game_id === gameId)
+  startingSessionTitle.value = session?.adventure_title || 'Adventure'
+
+  // Smooth loading delay so the transition feels premium
+  await new Promise((resolve) => setTimeout(resolve, 600))
+
+  try {
+    await router.push({
+      name: 'game',
+      params: { id: gameId },
+      query: { title: session?.adventure_title || '', resuming: 'true' }
+    })
+  } finally {
+    isStartingSession.value = false
+    startingSessionTitle.value = ''
+    isResuming.value = false
+  }
 }
 
 async function startSession(templateId: string) {
@@ -408,12 +437,16 @@ onUnmounted(() => {
               <i class="ra ra-cycle animate-spin text-emerald-400 text-xl"></i>
             </div>
             <div class="space-y-2">
-              <h3 class="text-lg font-black text-white tracking-tight">Session Is Starting</h3>
+              <h3 class="text-lg font-black text-white tracking-tight">
+                {{ isResuming ? 'Resuming Session' : 'Session Is Starting' }}
+              </h3>
               <p class="text-sm text-slate-300 leading-relaxed">
-                Assets are copied for <span class="font-bold text-emerald-300">{{ startingSessionTitle || 'Adventure' }}</span>.
+                {{ isResuming ? 'Loading assets for' : 'Assets are copied for' }} <span class="font-bold text-emerald-300">{{ startingSessionTitle || 'Adventure' }}</span>.
                 Please wait a moment.
               </p>
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-bold">Preventing duplicate starts...</p>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-bold">
+                {{ isResuming ? 'Establishing connection...' : 'Preventing duplicate starts...' }}
+              </p>
             </div>
           </div>
         </div>

@@ -6,7 +6,7 @@
  * intercepting commands and showing the character sheet + world map.
  */
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
 import QuestsModal from '@/components/game/QuestsModal.vue'
@@ -53,6 +53,7 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+const route = useRoute()
 const showSheet = ref(false)
 const sheetDirty = ref(false)
 const showMap = ref(false)
@@ -138,6 +139,14 @@ const {
   runAgentTurn,
   createTerminalEpilogue
 } = useGameSocket()
+
+const displayAdventureTitle = computed(() => {
+  return sheet.value?.adventure_title || (route.query.title as string) || 'your adventure'
+})
+
+const isNewSession = computed(() => {
+  return route.query.is_new === 'true'
+})
 
 const loadSessionCheckpoints = async () => {
   isLoadingCheckpoints.value = true
@@ -1140,6 +1149,34 @@ watch(
         @close="contextMenu = null"
         @select="handleMenuSelect"
       />
+    </Teleport>
+
+    <!-- RESUMING/LOADING OVERLAY -->
+    <Teleport to="body">
+      <div
+        v-if="status === 'loading'"
+        class="fixed inset-0 z-[220] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center px-6"
+      >
+        <div class="w-full max-w-md rounded-2xl border border-white/15 bg-slate-900/95 p-7 shadow-2xl animate-fade-in">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+              <i class="ra ra-cycle animate-spin text-emerald-400 text-xl"></i>
+            </div>
+            <div class="space-y-2">
+              <h3 class="text-lg font-black text-white tracking-tight">
+                {{ isNewSession ? 'Session Is Starting' : 'Resuming Session' }}
+              </h3>
+              <p class="text-sm text-slate-300 leading-relaxed">
+                {{ isNewSession ? 'Assets are copied for' : 'Loading assets for' }} <span class="font-bold text-emerald-300">{{ displayAdventureTitle }}</span>.
+                Please wait a moment.
+              </p>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-bold">
+                {{ isNewSession ? 'Preventing duplicate starts...' : 'Establishing connection...' }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </Teleport>
 
   
