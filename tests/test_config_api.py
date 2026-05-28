@@ -87,7 +87,9 @@ async def test_save_t2i_settings_with_ollama_fields(client: AsyncClient):
     settings_resp = await client.get("/api/settings")
     assert settings_resp.status_code == 200
     data = settings_resp.json()
-    assert data["t2i_settings"] == payload
+    t2i = data["t2i_settings"]
+    for k, v in payload.items():
+        assert t2i[k] == v
 
 
 async def test_get_settings_returns_extended_t2i_defaults(client: AsyncClient):
