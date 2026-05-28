@@ -316,7 +316,7 @@ async def test_stream_simple_task_openai_non_prefixed_model_sets_provider(monkey
 
 
 @pytest.mark.asyncio
-async def test_aexecute_complex_task_gemini_injects_schema_into_sent_system_prompt(monkeypatch):
+async def test_aexecute_complex_task_fallback_injects_schema_into_sent_system_prompt(monkeypatch):
     class _MiniSchema(BaseModel):
         required: str
 
@@ -350,11 +350,56 @@ async def test_aexecute_complex_task_gemini_injects_schema_into_sent_system_prom
         system_prompt="sys",
         user_prompt="prompt",
         response_model=_MiniSchema,
-        model="gemini-2.5-flash",
+        model="claude-3-5-sonnet",
     )
 
     assert out.required == "ok"
     assert "SCHEMA:" in captured["messages"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_aexecute_complex_task_gemini_direct_uses_structured_outputs(monkeypatch):
+    class _MiniSchema(BaseModel):
+        required: str
+
+    user = _make_user(encrypted_api_keys={"google": "encrypted-placeholder"})
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    router = GameMasterLLM(user, provider="google")
+
+    captured = {}
+
+    class _Msg:
+        content = '{"required":"ok"}'
+
+    class _Choice:
+        message = _Msg()
+        finish_reason = "stop"
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.aexecute_complex_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        response_model=_MiniSchema,
+        model="gemini-3.1-pro-preview",
+    )
+
+    assert out.required == "ok"
+    # Direct Gemini should pass response_model directly as response_format
+    assert captured["response_format"] == _MiniSchema
+    # Should not inject SCHEMA: into prompt
+    assert "SCHEMA:" not in captured["messages"][0]["content"]
 
 
 @pytest.mark.asyncio
@@ -390,5 +435,5 @@ async def test_aexecute_complex_task_surfaces_schema_validation_failure(monkeypa
             system_prompt="sys",
             user_prompt="prompt",
             response_model=_MiniSchema,
-            model="gemini-2.5-flash",
+            model="claude-3-5-sonnet",
         )

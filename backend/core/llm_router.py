@@ -605,7 +605,8 @@ class GameMasterLLM:
         # Many non-OpenAI providers (including DeepSeek on some platforms) do not support 
         # complex Pydantic models in response_format (structured outputs).
         # We fall back to standard JSON mode with prompt-injected schemas for these.
-        use_json_mode_fallback = is_gemini or is_anthropic or is_deepseek or is_openrouter
+        # Direct Gemini (not via OpenRouter) supports response_schema perfectly and does not need fallback.
+        use_json_mode_fallback = is_anthropic or is_deepseek or is_openrouter
 
         if use_json_mode_fallback:
             # Inject schema into prompt since we are bypassing strict tool enforcement
@@ -745,7 +746,8 @@ class GameMasterLLM:
         is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
         is_openrouter = self.provider == "openrouter" or (self.api_key and self.api_key.startswith("sk-or-v1"))
 
-        use_json_mode_fallback = is_gemini or is_anthropic or is_deepseek or is_openrouter
+        # Direct Gemini (not via OpenRouter) supports response_schema perfectly and does not need fallback.
+        use_json_mode_fallback = is_anthropic or is_deepseek or is_openrouter
 
         if use_json_mode_fallback:
             # Inject schema into prompt since we are bypassing strict enforcement
