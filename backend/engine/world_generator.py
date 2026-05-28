@@ -843,12 +843,15 @@ class WorldGenerator:
 
             for idx in readable_indices[:clamped_max_text_logs]:
                 obj = objects[idx]
+                _obj_meta = obj.get("metadata_json") or {}
                 obj["text_log_content"] = _normalize_text_log_content(
-                    obj.get("text_log_content"),
+                    obj.get("text_log_content") or _obj_meta.get("text_log_content"),
                     obj.get("description"),
                     obj.get("name"),
                 )
-                text_log_format = str(obj.get("text_log_format") or "DOCUMENT").strip().upper()
+                text_log_format = str(
+                    obj.get("text_log_format") or _obj_meta.get("text_log_format") or "DOCUMENT"
+                ).strip().upper()
                 if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
                     text_log_format = "DOCUMENT"
                 obj["text_log_format"] = text_log_format
@@ -1783,12 +1786,15 @@ class WorldGenerator:
                 metadata_json["mana_change"] = mana_change
 
             if str(o.get("item_type") or "").upper() == "READABLE":
+                _meta = o.get("metadata_json") or {}
                 text_log_content = _normalize_text_log_content(
-                    o.get("text_log_content"),
+                    o.get("text_log_content") or _meta.get("text_log_content"),
                     o.get("description"),
                     o.get("name"),
                 )
-                text_log_format = str(o.get("text_log_format") or "DOCUMENT").strip().upper()
+                text_log_format = str(
+                    o.get("text_log_format") or _meta.get("text_log_format") or "DOCUMENT"
+                ).strip().upper()
                 if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
                     text_log_format = "DOCUMENT"
                 metadata_json["text_log_content"] = text_log_content

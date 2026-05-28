@@ -3600,7 +3600,7 @@ class GameTurnManager:
                     if not move.to_scene_id:
                         continue
                     eid = move.entity_id
-                    ent_name = "Someone"
+                    ent_name = eid  # fallback: entity id, not the generic "Someone"
                     # Try local entities first, then all entities
                     match = next((e for e in entities if e.id == eid), None)
                     if not match:
@@ -3657,7 +3657,7 @@ class GameTurnManager:
 
             if game_event.spawned_items:
                 for item in game_event.spawned_items:
-                    msg_text = f"Added {item.name} to your inventory."
+                    msg_text = f"{item.name} appeared in the scene."
                     await self._save_chat_message("system", msg_text)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg_text})}\n\n"
 

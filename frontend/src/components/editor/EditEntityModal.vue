@@ -87,8 +87,8 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="show && context" class="fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl bg-slate-950/60">
-        <div class="modal-content w-full max-w-2xl bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden">
-          <div class="p-10 space-y-8">
+        <div class="modal-content w-full max-w-2xl bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+          <div class="p-6 space-y-5 overflow-y-auto flex-1">
             <div class="flex justify-between items-center">
               <div class="space-y-1">
                 <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">Editing {{ context.type }}</h3>
@@ -102,7 +102,7 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
             <div class="space-y-6">
               <div class="space-y-3">
                 <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Entity Name</label>
-                <input v-model="localForm.name" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-2xl font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" />
+                <input v-model="localForm.name" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xl font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" />
               
               <!-- Stats Inputs -->
               <div v-if="['protagonist', 'npc'].includes(context.type) && ruleEnforcementMode !== 'chat'" class="grid grid-cols-3 gap-4">
@@ -161,7 +161,7 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.goal || '').length }} / 200
                     </span>
                   </div>
-                  <textarea v-model="localForm.goal" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What drives the protagonist? (e.g. 'Seeks revenge for family's death')"></textarea>
+                  <textarea v-model="localForm.goal" maxlength="200" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What drives the protagonist? (e.g. 'Seeks revenge for family's death')"></textarea>
                   <button 
                     v-if="localForm.description"
                     @click="handleGenerateTraits('goal')" 
@@ -179,7 +179,7 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.character || '').length }} / 200
                     </span>
                   </div>
-                  <textarea v-model="localForm.character" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does the protagonist behave? (e.g. 'Sarcastic but loyal, prone to rash decisions')"></textarea>
+                  <textarea v-model="localForm.character" maxlength="200" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does the protagonist behave? (e.g. 'Sarcastic but loyal, prone to rash decisions')"></textarea>
                   <button 
                     v-if="localForm.description"
                     @click="handleGenerateTraits('character')" 
@@ -200,7 +200,7 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.goal || '').length }} / 200
                     </span>
                   </div>
-                  <textarea v-model="localForm.goal" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What does this NPC want? (e.g. 'Wants to steal the player's gold')"></textarea>
+                  <textarea v-model="localForm.goal" maxlength="200" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What does this NPC want? (e.g. 'Wants to steal the player's gold')"></textarea>
                   <button 
                     v-if="localForm.description"
                     @click="handleGenerateTraits('goal')" 
@@ -218,7 +218,7 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.character || '').length }} / 200
                     </span>
                   </div>
-                  <textarea v-model="localForm.character" maxlength="200" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does this NPC behave? (e.g. 'Grumpy and stubborn')"></textarea>
+                  <textarea v-model="localForm.character" maxlength="200" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does this NPC behave? (e.g. 'Grumpy and stubborn')"></textarea>
                   <button 
                     v-if="localForm.description"
                     @click="handleGenerateTraits('character')" 
@@ -308,7 +308,7 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
 
                 <div v-if="String(localForm.item_type || '').toUpperCase() === 'CONTAINER'" class="space-y-2">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Contained Items (JSON Array)</label>
-                  <textarea v-model="localForm.inventory_json" rows="4" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-amber-500/50 outline-none transition-all" placeholder='["ITEM_KEY", {"id":"ITEM_MAP","name":"Old Map","item_type":"PICKABLE"}]'></textarea>
+                  <textarea v-model="localForm.inventory_json" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-amber-500/50 outline-none transition-all" placeholder='["ITEM_KEY", {"id":"ITEM_MAP","name":"Old Map","item_type":"PICKABLE"}]'></textarea>
                   <p class="text-[10px] text-slate-500 uppercase tracking-wider">Supports item IDs and inline item objects.</p>
                 </div>
 
@@ -328,7 +328,7 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.text_log_content || '').length }} / 500
                     </span>
                   </div>
-                  <textarea v-model="localForm.text_log_content" maxlength="500" rows="5" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all" placeholder="Readable note text shown to the player."></textarea>
+                  <textarea v-model="localForm.text_log_content" maxlength="500" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all" placeholder="Readable note text shown to the player."></textarea>
                 </div>
               </div>
 
@@ -339,13 +339,13 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                     {{ (localForm.description || '').length }} / {{ context.type === 'object' ? 200 : 400 }}
                   </span>
                 </div>
-                <textarea v-model="localForm.description" :maxlength="['npc', 'protagonist'].includes(context.type) ? 400 : (context.type === 'object' && String(localForm.item_type || '').toUpperCase() === 'READABLE' ? 200 : undefined)" :rows="context.type === 'object' ? 5 : 8" :class="['w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner', context.type === 'object' ? 'text-sm' : 'text-lg']"></textarea>
+                <textarea v-model="localForm.description" :maxlength="['npc', 'protagonist'].includes(context.type) ? 400 : (context.type === 'object' && String(localForm.item_type || '').toUpperCase() === 'READABLE' ? 200 : undefined)" :rows="context.type === 'object' ? 3 : 4" :class="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner', context.type === 'object' ? 'text-sm' : 'text-base']"></textarea>
               </div>
             </div>
 
-            <div class="flex justify-end gap-6 pt-4">
-              <button @click="emit('close')" class="px-8 py-3 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
-              <button @click="handleSave" :disabled="isSaving" class="px-10 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
+            <div class="flex justify-end gap-4 pt-3 border-t border-white/5 mt-2">
+              <button @click="emit('close')" class="px-6 py-2.5 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
+              <button @click="handleSave" :disabled="isSaving" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>{{ isSaving ? 'Saving...' : 'Apply Changes' }}</span>
               </button>

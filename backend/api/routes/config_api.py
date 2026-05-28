@@ -269,7 +269,14 @@ async def _build_available_constants(llm_settings: Optional[dict], t2i_settings:
             predefined_llm_models["ollama"] = ollama_models
 
     normalized_t2i = _normalize_t2i_settings(t2i_settings)
-    sd_models = await _fetch_stable_diffusion_models(normalized_t2i.get("stable_diffusion_url"))
+    uses_stable_diffusion = (
+        normalized_t2i.get("simple_model_provider") == "stable_diffusion"
+        or normalized_t2i.get("advanced_model_provider") == "stable_diffusion"
+    )
+    if uses_stable_diffusion:
+        sd_models = await _fetch_stable_diffusion_models(normalized_t2i.get("stable_diffusion_url"))
+    else:
+        sd_models = ["default"]
 
     predefined_image_models = dict(PREDEFINED_IMAGE_MODELS)
     predefined_image_models["stable_diffusion"] = sd_models

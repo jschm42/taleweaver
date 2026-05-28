@@ -526,6 +526,25 @@ class TTSEngine:
                             retry_after_seconds=delay,
                         )
 
+                    if response.status_code >= 500:
+                        base_delay = float(getattr(settings, "TTS_RATE_LIMIT_BASE_DELAY_SECONDS", 2.0))
+                        max_delay = float(getattr(settings, "TTS_RATE_LIMIT_MAX_DELAY_SECONDS", 30.0))
+                        delay = min(base_delay * (2 ** max(0, attempt - 1)), max_delay)
+                        logger.warning(
+                            "Gemini TTS server error (%s), attempt %d/%d, retrying in %.1fs (model=%s).",
+                            response.status_code,
+                            attempt,
+                            max_attempts,
+                            delay,
+                            model_name,
+                        )
+                        if attempt < max_attempts:
+                            await asyncio.sleep(delay)
+                            continue
+                        # Final attempt — log and raise
+                        logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)
+                        response.raise_for_status()
+
                     if response.status_code != 200:
                         logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)
                     response.raise_for_status()

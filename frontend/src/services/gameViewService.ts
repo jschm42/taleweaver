@@ -33,6 +33,13 @@ export const gameViewService = {
   async fetchGameSettings(): Promise<GameSettings | null> {
     try {
       const settings = await api.getSettings()
+
+      // Sync TTS enabled state so in-game TTS controls (TextLogModal etc.) show correctly
+      if ((settings as any)?.tts_settings !== undefined) {
+        const { configState } = await import('@/store/config')
+        configState.isTtsEnabled = !!(settings as any).tts_settings?.enabled
+      }
+
       if (settings?.game_settings) {
         return settings.game_settings as GameSettings
       }
@@ -42,6 +49,7 @@ export const gameViewService = {
       return null
     }
   },
+
 
   async fetchFullWorldDebug(gameId: string): Promise<any | null> {
     try {
