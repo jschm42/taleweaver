@@ -38,11 +38,30 @@ git fetch origin main
 Write-Host "[*] Resetting to origin/main..." -ForegroundColor Yellow
 git reset --hard origin/main
 
-Write-Host "[*] Cleaning untracked files (excluding this script)..." -ForegroundColor Yellow
-# We exclude this script so it doesn't delete itself during the clean process
-git clean -fdx -e verify_installation.ps1
+Write-Host "[*] Cleaning untracked files (excluding this script and nginx/ssl)..." -ForegroundColor Yellow
+# We exclude this script and nginx/ssl so we don't delete existing SSL certificates
+git clean -fdx -e verify_installation.ps1 -e nginx/ssl/
 
-# 1b. Apply Test Fixes (Hotpatching for verification)
+# 1b. Ensure SSL certificates exist for Nginx (Docker runs rely on them)
+if (-not (Test-Path "nginx/ssl/nginx.crt")) {
+    Write-Host "[*] SSL certificate missing. Generating self-signed SSL certificate..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Force -Path "nginx/ssl" | Out-Null
+    # Try using local openssl
+    $opensslPath = Get-Command openssl -ErrorAction SilentlyContinue
+    if ($opensslPath) {
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout nginx/ssl/nginx.key -out nginx/ssl/nginx.crt -subj '/CN=localhost'
+    } else {
+        # Fallback to docker
+        $dockerPath = Get-Command docker -ErrorAction SilentlyContinue
+        if ($dockerPath) {
+            docker run --rm -v "$((Get-Location).Path)\nginx\ssl:/export" alpine sh -c "apk add --no-cache openssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /export/nginx.key -out /export/nginx.crt -subj '/CN=localhost'"
+        } else {
+            Write-Host "[!] Warning: openssl and docker are not available. Cannot generate SSL certificates." -ForegroundColor Red
+        }
+    }
+}
+
+# 1c. Apply Test Fixes (Hotpatching for verification)
 Write-Host "[*] Applying test fixes (hotpatching)..." -ForegroundColor Yellow
 
 # Fix conftest.py (missing yield)

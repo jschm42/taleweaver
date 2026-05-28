@@ -42,11 +42,28 @@ git fetch origin main
 echo "[*] Resetting to origin/main..."
 git reset --hard origin/main
 
-echo "[*] Cleaning untracked files (excluding this script)..."
-# Exclude this script so it doesn't delete itself during the clean process
-git clean -fdx -e verify_installation.sh
+echo "[*] Cleaning untracked files (excluding this script and nginx/ssl)..."
+# Exclude this script and nginx/ssl so we don't delete existing SSL certificates
+git clean -fdx -e verify_installation.sh -e nginx/ssl/
 
-# 1b. Apply Test Fixes (Hotpatching for verification)
+# 1b. Ensure SSL certificates exist for Nginx (Docker runs rely on them)
+if [ ! -f nginx/ssl/nginx.crt ]; then
+    echo "[*] SSL certificate missing. Generating self-signed SSL certificate..."
+    mkdir -p nginx/ssl
+    # Check if openssl is installed locally, else use Docker to generate it
+    if command -v openssl &> /dev/null; then
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout nginx/ssl/nginx.key -out nginx/ssl/nginx.crt -subj '/CN=localhost'
+    else
+        # Fallback to docker if openssl is not installed
+        if command -v docker &> /dev/null; then
+            docker run --rm -v "$(pwd)/nginx/ssl:/export" alpine sh -c "apk add --no-cache openssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /export/nginx.key -out /export/nginx.crt -subj '/CN=localhost'"
+        else
+            echo "[!] Warning: openssl and docker are not available. Cannot generate SSL certificates."
+        fi
+    fi
+fi
+
+# 1c. Apply Test Fixes (Hotpatching for verification)
 echo "[*] Applying test fixes (hotpatching)..."
 
 # Fix conftest.py (missing yield)
