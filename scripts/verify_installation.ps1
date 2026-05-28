@@ -2,6 +2,10 @@
 
 $ErrorActionPreference = "Stop"
 
+# Change directory to the repository root directory
+Set-Location (Split-Path -Parent $MyInvocation.MyCommand.Path)
+Set-Location ..
+
 Write-Host "`n###############################################################################" -ForegroundColor Red
 Write-Host "#                                 WARNING!!!                                  #" -ForegroundColor Red
 Write-Host "#                                                                             #" -ForegroundColor Red

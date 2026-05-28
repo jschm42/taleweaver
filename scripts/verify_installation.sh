@@ -4,6 +4,9 @@
 
 set -e
 
+# Change directory to the repository root directory
+cd "$(dirname "$0")/.."
+
 echo ""
 echo "###############################################################################"
 echo "#                                 WARNING!!!                                  #"
