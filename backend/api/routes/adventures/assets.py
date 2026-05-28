@@ -20,6 +20,7 @@ from backend.core.style_catalog import resolve_style_instruction, resolve_tone_i
 from backend.engine.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
+from backend.utils.path_security import ensure_within_data_dir, safe_data_path, sanitize_path_component
 from typing import Any
 from io import BytesIO
 from PIL import Image
@@ -37,7 +38,6 @@ _ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 router = APIRouter(prefix="/{template_id}/visuals", tags=["Assets"])
 logger = logging.getLogger(__name__)
-_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 _ALLOWED_VISUAL_TARGET_TYPES = {"cover", "scene", "npc", "object", "protagonist"}
 
@@ -88,39 +88,6 @@ def _build_visual_prompt(
     raise HTTPException(status_code=400, detail="Unsupported visual target type.")
 
 
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
-    return slug.strip("-") or "item"
-
-
-def _sanitize_path_component(value: str) -> Optional[str]:
-    candidate = (value or "").strip()
-    if not candidate:
-        return None
-    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
-        return None
-    if candidate in {".", ".."} or ".." in candidate:
-        return None
-    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
-        return None
-    return candidate
-
-
-def _ensure_within_data_dir(path: str) -> str:
-    data_root = os.path.realpath(settings.DATA_DIR)
-    resolved = os.path.realpath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
-
-
-def _safe_data_path(*parts: str) -> str:
-    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
-
-
 def _sanitize_image_extension(filename: Optional[str]) -> str:
     if not filename or "." not in filename:
         return "png"
@@ -128,28 +95,51 @@ def _sanitize_image_extension(filename: Optional[str]) -> str:
     return ext if ext in _SAFE_IMAGE_EXTENSIONS else "png"
 
 
-def _build_uploaded_visual_path(template_id: str, target_type: str, target_id: str, original_filename: Optional[str]) -> str:
-    safe_template_id = _sanitize_path_component(template_id)
+def _extension_from_content_type(content_type: Optional[str]) -> str:
+    ext_by_type = {
+        "image/png": "png",
+        "image/jpeg": "jpg",
+        "image/webp": "webp",
+    }
+    return ext_by_type.get((content_type or "").strip().lower(), "png")
+
+
+def _sanitize_filename_token(value: Optional[str]) -> Optional[str]:
+    candidate = (value or "").strip()
+    if not candidate:
+        return None
+    token = re.sub(r"[^A-Za-z0-9_-]+", "-", candidate).strip("-")
+    return token[:96] or None
+
+
+def _build_uploaded_visual_path(
+    template_id: str,
+    target_type: str,
+    file_ext: str,
+    trusted_target_token: Optional[str] = None,
+) -> str:
+    safe_template_id = sanitize_path_component(template_id)
     if not safe_template_id:
         raise ValueError("Invalid adventure template identifier.")
 
-    safe_target_type = _sanitize_path_component(target_type)
+    safe_target_type = sanitize_path_component(target_type)
     if safe_target_type not in _ALLOWED_VISUAL_TARGET_TYPES:
         raise ValueError("Invalid visual target type.")
 
-    base_storage_path = _safe_data_path("adventures", "library", safe_template_id, "visuals")
-    file_ext = _sanitize_image_extension(original_filename)
-    safe_target_id = _slugify(target_id)
+    safe_file_ext = _sanitize_image_extension(file_ext)
+    base_storage_path = safe_data_path("adventures", "library", safe_template_id, "visuals")
 
     if safe_target_type == "cover":
         storage_path = base_storage_path
-        filename = f"cover_{safe_target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
+        filename = f"cover_{uuid.uuid4().hex}.{safe_file_ext}"
     else:
-        storage_path = _ensure_within_data_dir(os.path.join(base_storage_path, safe_target_type))
-        filename = f"{safe_target_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
+        storage_path = ensure_within_data_dir(os.path.join(base_storage_path, safe_target_type))
+        safe_token = _sanitize_filename_token(trusted_target_token)
+        filename_prefix = safe_token or safe_target_type
+        filename = f"{filename_prefix}_{uuid.uuid4().hex}.{safe_file_ext}"
 
     os.makedirs(storage_path, exist_ok=True)
-    return _ensure_within_data_dir(os.path.join(storage_path, filename))
+    return ensure_within_data_dir(os.path.join(storage_path, filename))
 
 class RegenerateVisualRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
@@ -411,16 +401,12 @@ async def upload_visual(
                 ),
             )
 
-        full_path = _build_uploaded_visual_path(template_id, target_type, target_id, file.filename)
-        with open(full_path, "wb") as f:
-            f.write(content)
+        avatar = None
+        scene = None
+        entity = None
+        trusted_target_token: Optional[str] = None
 
-        rel_path = os.path.relpath(full_path, settings.DATA_DIR).replace("\\", "/")
-        relative_url = f"/data/{rel_path}"
-        
-        if target_type == "cover":
-            adv.image_url = relative_url
-        elif target_type == "protagonist":
+        if target_type == "protagonist":
             av_res = await db.execute(
                 select(Avatar)
                 .where(Avatar.template_id == template_id)
@@ -430,7 +416,7 @@ async def upload_visual(
             avatar = av_res.scalars().first()
             if not avatar:
                 raise HTTPException(status_code=404, detail="Protagonist not found for this adventure")
-            avatar.profile_image = relative_url
+            trusted_target_token = avatar.id
         elif target_type == "scene":
             sc_res = await db.execute(
                 select(WorldScene).where(
@@ -442,7 +428,7 @@ async def upload_visual(
             scene = sc_res.scalars().first()
             if not scene:
                 raise HTTPException(status_code=404, detail="Scene not found for this adventure")
-            scene.image_url = relative_url
+            trusted_target_token = scene.id
         elif target_type in ["npc", "object"]:
             en_res = await db.execute(
                 select(WorldEntity).where(
@@ -452,6 +438,33 @@ async def upload_visual(
                 )
             )
             entity = en_res.scalars().first()
+            if not entity:
+                raise HTTPException(status_code=404, detail="Entity not found for this adventure")
+            trusted_target_token = entity.id
+
+        full_path = _build_uploaded_visual_path(
+            adv.id,
+            target_type,
+            _extension_from_content_type(file.content_type),
+            trusted_target_token=trusted_target_token,
+        )
+        with open(full_path, "wb") as f:
+            f.write(content)
+
+        rel_path = os.path.relpath(full_path, settings.DATA_DIR).replace("\\", "/")
+        relative_url = f"/data/{rel_path}"
+        
+        if target_type == "cover":
+            adv.image_url = relative_url
+        elif target_type == "protagonist":
+            if not avatar:
+                raise HTTPException(status_code=404, detail="Protagonist not found for this adventure")
+            avatar.profile_image = relative_url
+        elif target_type == "scene":
+            if not scene:
+                raise HTTPException(status_code=404, detail="Scene not found for this adventure")
+            scene.image_url = relative_url
+        elif target_type in ["npc", "object"]:
             if not entity:
                 raise HTTPException(status_code=404, detail="Entity not found for this adventure")
             entity.image_url = relative_url

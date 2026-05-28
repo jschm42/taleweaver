@@ -39,6 +39,7 @@ from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_L
 from backend.engine.media_engine import MediaEngine
 from backend.engine.tts_engine import TTSEngine
 from backend.models.user import User
+from backend.utils.path_security import ensure_within_data_dir, safe_data_path, sanitize_path_component
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 print(f"DEBUG: Loading config_api module, router prefix: {router.prefix}")
@@ -46,7 +47,6 @@ print(f"DEBUG: Loading config_api module, router prefix: {router.prefix}")
 DEFAULT_SMALL_MAX_TOKENS = 12288
 DEFAULT_COMPLEX_MAX_TOKENS = 24576
 DEFAULT_GENERATOR_MAX_TOKENS = 32768
-_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 _ALLOWED_CATALOG_TYPES = {"styles", "tones"}
 
@@ -97,33 +97,17 @@ def _sanitize_filename_component(value: str) -> Optional[str]:
 
 def _sanitize_path_component(value: str) -> Optional[str]:
     """Return a safe single path segment, or None when invalid."""
-    candidate = (value or "").strip()
-    if not candidate:
-        return None
-    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
-        return None
-    if candidate in {".", ".."} or ".." in candidate:
-        return None
-    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
-        return None
-    return candidate
+    return sanitize_path_component(value)
 
 
 def _ensure_within_data_dir(path: str) -> str:
     """Validate that path resolves inside DATA_DIR and return absolute path."""
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
+    return ensure_within_data_dir(path)
 
 
 def _safe_data_path(*parts: str) -> str:
     """Build a safe path rooted at DATA_DIR."""
-    return _ensure_within_data_dir(os.path.join(settings.DATA_DIR, *parts))
+    return safe_data_path(*parts)
 
 
 def _sanitize_image_extension(filename: Optional[str]) -> str:

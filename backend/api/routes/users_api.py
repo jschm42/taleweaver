@@ -1,7 +1,5 @@
 from __future__ import annotations
 import logging
-import os
-import re
 import shutil
 from typing import Any, Optional, Union
 from uuid import uuid4
@@ -19,6 +17,7 @@ from backend.core.llm_router import GameMasterLLM
 from backend.core.security import encryption_util
 from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
+from backend.utils.path_security import ensure_within_data_dir, local_path_to_data_url, safe_data_path, sanitize_path_component
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -27,7 +26,6 @@ ADMIN_DEP = Depends(get_current_admin)
 USER_DEP = Depends(get_current_user)
 DB_DEP = Depends(get_db)
 UPLOAD_FILE_DEP = File(...)
-_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _SAFE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 class UserCreateRequest(BaseModel):
@@ -59,27 +57,11 @@ def _normalize_public_data_url(url: str) -> str:
 
 
 def _sanitize_path_component(value: str) -> Optional[str]:
-    candidate = str(value or "").strip()
-    if not candidate:
-        return None
-    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
-        return None
-    if candidate in {".", ".."} or ".." in candidate:
-        return None
-    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
-        return None
-    return candidate
+    return sanitize_path_component(value)
 
 
 def _ensure_within_data_dir(path: str) -> str:
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
+    return ensure_within_data_dir(path)
 
 
 def _sanitize_image_extension(filename: Optional[str]) -> str:
@@ -196,7 +178,7 @@ async def upload_my_profile_image(
     if not safe_user_id:
         raise HTTPException(status_code=400, detail="Invalid user identifier")
 
-    upload_dir = _ensure_within_data_dir(os.path.join(settings.DATA_DIR, "users"))
+    upload_dir = safe_data_path("users")
     os.makedirs(upload_dir, exist_ok=True)
 
     file_ext = _sanitize_image_extension(file.filename)
@@ -205,8 +187,8 @@ async def upload_my_profile_image(
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
-    current_user.profile_image_url = f"/data/users/{filename}"
+
+    current_user.profile_image_url = local_path_to_data_url(file_path)
     await db.commit()
     await db.refresh(current_user)
     return current_user
@@ -260,10 +242,12 @@ async def generate_my_profile_image(
     prompt_source = payload.bio if payload and payload.bio is not None else current_user.bio
     prompt = (prompt_source or "").strip() or "A fantasy roleplaying avatar"
         
-    # Use absolute path so MediaEngine doesn't prepend DATA_DIR again for relative values.
-    target_dir = os.path.abspath(os.path.join(settings.DATA_DIR, "users"))
+    target_dir = safe_data_path("users")
+    safe_user_id = _sanitize_path_component(current_user.id)
+    if not safe_user_id:
+        raise HTTPException(status_code=400, detail="Invalid user identifier")
     ext = "jpg" if (t2i.get("image_format") or "jpeg").lower() == "jpeg" else "png"
-    filename = f"{current_user.id}_{uuid4().hex[:8]}.{ext}"
+    filename = f"{safe_user_id}_{uuid4().hex[:8]}.{ext}"
     
     try:
         logger.info(

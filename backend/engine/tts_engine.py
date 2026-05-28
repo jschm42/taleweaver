@@ -6,13 +6,13 @@ import logging
 import math
 import os
 import random
-import re
 import struct
 import uuid
 
 import httpx
 
 from backend.core.config import settings
+from backend.utils.path_security import ensure_within_data_dir, local_path_to_data_url, safe_data_path, sanitize_path_component
 
 logger = logging.getLogger(__name__)
 
@@ -204,37 +204,6 @@ def _parse_l16_sample_rate(mime_type: str) -> int:
     return default_rate
 
 
-_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-
-
-def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
-    """Return a safe single path component, or None when invalid."""
-    if value is None:
-        return None
-    candidate = str(value).strip()
-    if not candidate:
-        return None
-    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
-        return None
-    if candidate in {".", ".."} or ".." in candidate:
-        return None
-    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
-        return None
-    return candidate
-
-
-def _ensure_within_data_dir(path: str) -> str:
-    """Validate that a path resolves inside DATA_DIR and return its absolute form."""
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
-
-
 def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[str] = None) -> str:
     """Return target directory for generated audio.
 
@@ -242,18 +211,18 @@ def _resolve_audio_output_dir(adventure_id: Optional[str], session_id: Optional[
     Otherwise, keep legacy global fallback for compatibility.
     """
     _ = adventure_id
-    safe_session_id = _sanitize_path_component(session_id)
+    safe_session_id = sanitize_path_component(session_id)
     if session_id and not safe_session_id:
         logger.warning("Invalid session_id for audio output path; using global audio fallback.")
     if safe_session_id:
-        return os.path.join(settings.DATA_DIR, "adventures", "sessions", safe_session_id, "tts")
-    return os.path.join(settings.DATA_DIR, "audio")
+        return safe_data_path("adventures", "sessions", safe_session_id, "tts")
+    return safe_data_path("audio")
 
 
 def _resolve_audio_public_url(adventure_id: Optional[str], filename: str, session_id: Optional[str] = None) -> str:
     """Return static URL for generated audio based on storage location."""
     _ = adventure_id
-    safe_session_id = _sanitize_path_component(session_id)
+    safe_session_id = sanitize_path_component(session_id)
     if safe_session_id:
         return f"/data/adventures/sessions/{safe_session_id}/tts/{filename}"
     return f"/data/audio/{filename}"
@@ -261,10 +230,7 @@ def _resolve_audio_public_url(adventure_id: Optional[str], filename: str, sessio
 
 def _public_url_from_filepath(filepath: str) -> str:
     """Build a stable /data URL from the actual file path on disk."""
-    data_root = os.path.abspath(settings.DATA_DIR)
-    abs_path = _ensure_within_data_dir(filepath)
-    rel_path = os.path.relpath(abs_path, data_root)
-    return f"/data/{rel_path.replace(os.sep, '/')}"
+    return local_path_to_data_url(filepath)
 
 
 def _build_audio_output_path(
@@ -278,10 +244,10 @@ def _build_audio_output_path(
     if normalized_ext not in {"mp3", "wav", "ogg"}:
         normalized_ext = "wav"
 
-    audio_dir = _ensure_within_data_dir(_resolve_audio_output_dir(adventure_id, session_id=session_id))
+    audio_dir = ensure_within_data_dir(_resolve_audio_output_dir(adventure_id, session_id=session_id))
     os.makedirs(audio_dir, exist_ok=True)
     filename = f"{uuid.uuid4()}.{normalized_ext}"
-    return _ensure_within_data_dir(os.path.join(audio_dir, filename))
+    return ensure_within_data_dir(os.path.join(audio_dir, filename))
 
 class TTSEngine:
     """
