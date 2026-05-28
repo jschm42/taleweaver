@@ -2702,8 +2702,8 @@ class GameTurnManager:
                 # Aggressively clear combat state by creating a new filtered dict
                 self.state.entity_states = {k: v for k, v in (self.state.entity_states or {}).items() if k != "__combat__"}
                 flag_modified(self.state, "entity_states")
-                # Force commit to ensure state is persisted before final event
-                await self._generate_prompt_suggestions(response_text)
+                last_msg = await self._load_last_assistant_message()
+                await self._generate_prompt_suggestions(last_msg)
                 await self.db.commit()
             else:
                 self._set_combat_state(combat)
@@ -3891,41 +3891,63 @@ class GameTurnManager:
         
         state_dirty = False
         if event.new_scene_id and event.new_scene_id != self.state.current_scene_id:
-            old_scene_id = self.state.current_scene_id
-            self.state.current_scene_id = event.new_scene_id
-            state_dirty = True
-            
-            # Map Update
-            try:
-                world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
-                # 1. Register exit between scenes
-                MapEngine.register_exit(world_map, old_scene_id, event.new_scene_id, exit_label=event.exit_label or "")
-                # 2. Register visit to the new scene
-                # Use session snapshot for scene data
-                scene_res = await self.db.execute(
-                    select(WorldScene).where(
-                        WorldScene.id == event.new_scene_id,
-                        WorldScene.session_id == self.state.session_id,
-                    )
+            # Enforce that the target scene is adjacent (connected by a WorldExit from the current scene)
+            exit_res = await self.db.execute(
+                select(WorldExit).where(
+                    WorldExit.session_id == self.state.session_id,
+                    WorldExit.from_scene_id == self.state.current_scene_id,
+                    WorldExit.to_scene_id == event.new_scene_id,
                 )
-                new_scene_db = scene_res.scalars().first()
-                
-                # Add system message for scene change
-                scene_name = new_scene_db.label if new_scene_db else (event.scene_label or "a new location")
-                msg = f"📍 You have entered: {scene_name}"
-                await self._save_chat_message("system", msg)
-                system_messages.append(msg)
-                self._queue_checkpoint(CHECKPOINT_REASON_SCENE_CHANGE, scene_label=scene_name)
+            )
+            valid_exit = exit_res.scalars().first()
+            if not valid_exit:
+                blocked_msg = f"Movement blocked: The destination '{event.new_scene_id}' is not adjacent to your current location."
+                await self._save_chat_message("system", blocked_msg)
+                system_messages.append(blocked_msg)
 
-                MapEngine.register_visit(
-                    world_map, 
-                    event.new_scene_id, 
-                    label=new_scene_db.label if new_scene_db else event.scene_label,
-                    description=new_scene_db.description if new_scene_db else None,
-                    image_url=new_scene_db.image_url if new_scene_db else None
+                logger.warning(
+                    f"[Turn {self.game_id}] Blocked invalid/non-adjacent scene transition: "
+                    f"{self.state.current_scene_id} -> {event.new_scene_id}"
                 )
-            except Exception as e:
-                logger.error(f"Map update failed during turn: {e}")
+                event.new_scene_id = None
+                event.scene_label = None
+                event.exit_label = None
+            else:
+                old_scene_id = self.state.current_scene_id
+                self.state.current_scene_id = event.new_scene_id
+                state_dirty = True
+                
+                # Map Update
+                try:
+                    world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
+                    # 1. Register exit between scenes
+                    MapEngine.register_exit(world_map, old_scene_id, event.new_scene_id, exit_label=event.exit_label or "")
+                    # 2. Register visit to the new scene
+                    # Use session snapshot for scene data
+                    scene_res = await self.db.execute(
+                        select(WorldScene).where(
+                            WorldScene.id == event.new_scene_id,
+                            WorldScene.session_id == self.state.session_id,
+                        )
+                    )
+                    new_scene_db = scene_res.scalars().first()
+                    
+                    # Add system message for scene change
+                    scene_name = new_scene_db.label if new_scene_db else (event.scene_label or "a new location")
+                    msg = f"📍 You have entered: {scene_name}"
+                    await self._save_chat_message("system", msg)
+                    system_messages.append(msg)
+                    self._queue_checkpoint(CHECKPOINT_REASON_SCENE_CHANGE, scene_label=scene_name)
+
+                    MapEngine.register_visit(
+                        world_map, 
+                        event.new_scene_id, 
+                        label=new_scene_db.label if new_scene_db else event.scene_label,
+                        description=new_scene_db.description if new_scene_db else None,
+                        image_url=new_scene_db.image_url if new_scene_db else None
+                    )
+                except Exception as e:
+                    logger.error(f"Map update failed during turn: {e}")
             
         # Entity State Overrides (Movement, Stats, Visibility)
         states = dict(self.state.entity_states or {})

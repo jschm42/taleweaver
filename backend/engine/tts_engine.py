@@ -283,7 +283,7 @@ class TTSEngine:
             logger.error("No API key provided for %s TTS.", provider)
             return None
 
-        safe_session_id = _sanitize_path_component(session_id)
+        safe_session_id = sanitize_path_component(session_id)
         if session_id and not safe_session_id:
             logger.warning("Invalid session_id for TTS output path; using adventure-level fallback.")
 

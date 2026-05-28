@@ -215,6 +215,17 @@ async def test_game_loop_scene_change(setup_test_db, monkeypatch):
     async with TestSessionLocal() as db:
         user, adv, avatar, state = await _seed_game_context(db)
         
+        # Seed WorldExit to allow adjacent transition to CELLAR
+        db.add(WorldExit(
+            session_id="session-1",
+            template_id=adv.id,
+            from_scene_id="START",
+            to_scene_id="CELLAR",
+            label="Stairs down",
+            is_locked=False,
+        ))
+        await db.commit()
+        
         mock_llm_instance = MagicMock()
         mock_event = GameEvent(
             narrative_description="You descend into the cellar.",
@@ -2406,8 +2417,56 @@ async def test_container_code_unlock_adds_xp(setup_test_db):
         )
         
         await manager._apply_game_event(event)
-
         await db.refresh(avatar)
         # 100 + 80 = 180 XP
         assert avatar.exp == 180
+ 
+ 
+async def test_game_loop_adjacent_only_scene_transitions(setup_test_db, monkeypatch):
+    """Verifies that scene transitions are allowed to adjacent scenes and blocked otherwise."""
+    from tests.conftest import TestSessionLocal
+    
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        
+        # Seed WorldExit: START -> CELLAR (adjacent)
+        db.add(WorldExit(
+            session_id="session-1",
+            template_id=adv.id,
+            from_scene_id="START",
+            to_scene_id="CELLAR",
+            label="cellar door",
+            is_locked=False,
+        ))
+        await db.commit()
+        
+        manager = GameTurnManager(db, "session-1", user)
+        await manager.initialize()
+        
+        # 1. Attempt valid adjacent transition
+        event_valid = GameEvent(new_scene_id="CELLAR")
+        await manager._apply_game_event(event_valid)
+        await db.refresh(state)
+        assert state.current_scene_id == "CELLAR"
+        
+        # 2. Attempt invalid non-adjacent transition (to VAULT)
+        event_invalid = GameEvent(new_scene_id="VAULT")
+        await manager._apply_game_event(event_invalid)
+        await db.refresh(state)
+        # Should stay in CELLAR
+        assert state.current_scene_id == "CELLAR"
+        
+        # Check that transition fields in event_invalid were cleared
+        assert event_invalid.new_scene_id is None
+        
+        # Check system message in DB
+        res = await db.execute(
+            select(ChatMessage).where(
+                ChatMessage.session_id == "session-1",
+                ChatMessage.role == "system",
+            )
+        )
+        sys_msgs = [m.content for m in res.scalars().all()]
+        assert any("Movement blocked: The destination 'VAULT' is not adjacent" in msg for msg in sys_msgs)
+
 
