@@ -261,8 +261,12 @@ async function renderMap() {
     if (points && points.length > 1) {
       const flatPoints: [number, number][] = points.map(p => [p.x + margin, p.y + margin])
       
+      const isLocked = props.mapData!.edges.some(re => 
+        (safeId(re.from) === e.v && safeId(re.to) === e.w && re.is_locked) ||
+        (safeId(re.from) === e.w && safeId(re.to) === e.v && re.is_locked)
+      )
       const rawEdge = props.mapData!.edges.find(re => safeId(re.from) === e.v && safeId(re.to) === e.w)
-      const options = rawEdge?.is_locked ? lockedEdgeOptions : edgeOptions
+      const options = isLocked ? lockedEdgeOptions : edgeOptions
       const isBidirectional = edge.isBidirectional
       
       const simplified = flatPoints.length > 4 
@@ -282,16 +286,23 @@ async function renderMap() {
 
       // Store midpoint for hover detection
       const label = edge.labels?.join(' / ') || rawEdge?.label
+      const midIdx = Math.floor(points.length / 2)
+      const midPoint = points[midIdx]
+      const midX = midPoint.x + margin
+      const midY = midPoint.y + margin
+
       if (label) {
-        const midIdx = Math.floor(points.length / 2)
-        const midPoint = points[midIdx]
         edgeMidpoints.value.push({
           from: e.v,
           to: e.w,
-          x: midPoint.x + margin,
-          y: midPoint.y + margin,
+          x: midX,
+          y: midY,
           label: label
         })
+      }
+
+      if (isLocked) {
+        drawLockIcon(ctx, midX, midY)
       }
     }
   })
@@ -360,6 +371,50 @@ function drawArrowHead(rc: any, p1: [number, number], p2: [number, number], opti
     fillStyle: 'solid',
     roughness: 0.2
   })
+}
+
+/**
+ * Helper to draw a small RPG-style lock icon at the midpoint of a locked edge.
+ */
+function drawLockIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.save()
+  
+  // Draw Shackle (arch)
+  ctx.beginPath()
+  ctx.arc(x, y - 2, 4, Math.PI, 0, false)
+  ctx.lineWidth = 2
+  ctx.strokeStyle = '#ffd97d' // Amber/yellow matching path stroke
+  ctx.stroke()
+  
+  // Draw Body (rounded rectangle)
+  ctx.fillStyle = '#b45309' // Darker amber/brown for body
+  ctx.strokeStyle = '#ffd97d'
+  ctx.lineWidth = 1.5
+  
+  const bodyW = 12
+  const bodyH = 8
+  const bodyX = x - bodyW / 2
+  const bodyY = y - 2
+  
+  ctx.beginPath()
+  ctx.rect(bodyX, bodyY, bodyW, bodyH)
+  ctx.fill()
+  ctx.stroke()
+  
+  // Draw keyhole
+  ctx.beginPath()
+  ctx.arc(x, bodyY + 3, 1.2, 0, Math.PI * 2)
+  ctx.fillStyle = '#020617' // dark background slate
+  ctx.fill()
+  
+  ctx.beginPath()
+  ctx.moveTo(x, bodyY + 4)
+  ctx.lineTo(x, bodyY + 6)
+  ctx.strokeStyle = '#020617'
+  ctx.lineWidth = 1
+  ctx.stroke()
+  
+  ctx.restore()
 }
 
 /**

@@ -3438,6 +3438,36 @@ class GameTurnManager:
                 if delta:
                     response_text += delta
                     yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
+
+            # Check if this was a look around action, and append exits list if so
+            user_msg_lower = user_msg.lower().strip()
+            is_lookaround = (
+                "look around" in user_msg_lower or
+                user_msg == "[LOOK AROUND]" or
+                user_msg_lower in {"/lookaround", "/look", "look"}
+            )
+            if is_lookaround:
+                exits_res = await self.db.execute(
+                    select(WorldExit).where(
+                        WorldExit.from_scene_id == self.state.current_scene_id,
+                        WorldExit.session_id == self.game_id
+                    )
+                )
+                exits = exits_res.scalars().all()
+                if exits:
+                    exits_str_list = []
+                    for ex in exits:
+                        label = ex.label or ex.to_scene_id
+                        if ex.is_locked:
+                            exits_str_list.append(f"{label} (locked)")
+                        else:
+                            exits_str_list.append(label)
+                    
+                    header = "Ausgänge" if (language and "de" in language.lower()) else "Exits"
+                    exits_suffix = f"\n\n{header}: {', '.join(exits_str_list)}"
+                    response_text += exits_suffix
+                    yield f"event: chunk\ndata: {json.dumps({'content': exits_suffix})}\n\n"
+
         except Exception as e:
             user_safe_error = _friendly_llm_error_message(e)
             if user_safe_error:

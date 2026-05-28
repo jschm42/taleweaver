@@ -142,6 +142,47 @@ function drawArrowHead(
   )
 }
 
+function drawLockIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.save()
+  
+  // Draw Shackle (arch)
+  ctx.beginPath()
+  ctx.arc(x, y - 2, 4, Math.PI, 0, false)
+  ctx.lineWidth = 2
+  ctx.strokeStyle = '#ffd97d' // Amber/yellow matching path stroke
+  ctx.stroke()
+  
+  // Draw Body (rounded rectangle)
+  ctx.fillStyle = '#b45309' // Darker amber/brown for body
+  ctx.strokeStyle = '#ffd97d'
+  ctx.lineWidth = 1.5
+  
+  const bodyW = 12
+  const bodyH = 8
+  const bodyX = x - bodyW / 2
+  const bodyY = y - 2
+  
+  ctx.beginPath()
+  ctx.rect(bodyX, bodyY, bodyW, bodyH)
+  ctx.fill()
+  ctx.stroke()
+  
+  // Draw keyhole
+  ctx.beginPath()
+  ctx.arc(x, bodyY + 3, 1.2, 0, Math.PI * 2)
+  ctx.fillStyle = '#020617' // dark background slate
+  ctx.fill()
+  
+  ctx.beginPath()
+  ctx.moveTo(x, bodyY + 4)
+  ctx.lineTo(x, bodyY + 6)
+  ctx.strokeStyle = '#020617'
+  ctx.lineWidth = 1
+  ctx.stroke()
+  
+  ctx.restore()
+}
+
 function renderMap() {
   if (!canvasRef.value || !hasMapData.value) return
 
@@ -181,13 +222,20 @@ function renderMap() {
     if (!points || points.length < 2) continue
 
     const polyline: [number, number][] = points.map((point: any) => [point.x + margin, point.y + margin])
-    const options = edge.is_locked ? lockedEdgeOptions : edgeOptions
+    const isLocked = !!edge.is_locked
+    const options = isLocked ? lockedEdgeOptions : edgeOptions
     const simplified = polyline.length > 4
       ? [polyline[0], polyline[Math.floor(polyline.length / 2)], polyline[polyline.length - 1]]
       : polyline
 
     roughCanvas.curve(simplified, options)
     drawArrowHead(roughCanvas, polyline[polyline.length - 2], polyline[polyline.length - 1], options)
+
+    if (isLocked) {
+      const midIdx = Math.floor(points.length / 2)
+      const midPoint = points[midIdx]
+      drawLockIcon(context, midPoint.x + margin, midPoint.y + margin)
+    }
   }
 
   const currentId = currentSceneId.value ? safeId(currentSceneId.value) : null

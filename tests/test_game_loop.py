@@ -2470,3 +2470,91 @@ async def test_game_loop_adjacent_only_scene_transitions(setup_test_db, monkeypa
         assert any("Movement blocked: The destination 'VAULT' is not adjacent" in msg for msg in sys_msgs)
 
 
+async def test_game_loop_lookaround_exits(setup_test_db, monkeypatch):
+    """Verifies that performing a lookaround command appends adjacent exits with their lock status to the response."""
+    import json
+    from tests.conftest import TestSessionLocal
+    
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        
+        # Seed exits from START:
+        # 1. Locked exit
+        db.add(WorldExit(
+            session_id="session-1",
+            template_id=adv.id,
+            from_scene_id="START",
+            to_scene_id="CELLAR",
+            label="Iron Door",
+            is_locked=True,
+        ))
+        # 2. Open exit
+        db.add(WorldExit(
+            session_id="session-1",
+            template_id=adv.id,
+            from_scene_id="START",
+            to_scene_id="HALL",
+            label="Wooden Door",
+            is_locked=False,
+        ))
+        await db.commit()
+        
+        # Mock LLM
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="You inspect the room.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
+            scene_change=None,
+            requested_skill_checks=[]
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+        
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="The room is dark."))])
+            
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        
+        # Test 1: look around (natural language)
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("look around"):
+            chunks.append(chunk)
+            
+        # Parse SSE events from chunk
+        # Yield is in format: f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
+        full_text = ""
+        for chunk in chunks:
+            if "event: chunk" in chunk:
+                # Extract content
+                data_line = [line for line in chunk.split("\n") if line.startswith("data:")][0]
+                content = json.loads(data_line[5:])["content"]
+                full_text += content
+                
+        assert "The room is dark." in full_text
+        assert "Exits:" in full_text
+        assert "Iron Door (locked)" in full_text
+        assert "Wooden Door" in full_text
+        assert "Wooden Door (locked)" not in full_text
+
+        # Test 2: German look around
+        chunks_de = []
+        async for chunk in manager.process_turn("look around", language="de"):
+            chunks_de.append(chunk)
+            
+        full_text_de = ""
+        for chunk in chunks_de:
+            if "event: chunk" in chunk:
+                data_line = [line for line in chunk.split("\n") if line.startswith("data:")][0]
+                content = json.loads(data_line[5:])["content"]
+                full_text_de += content
+                
+        assert "Ausgänge:" in full_text_de
+        assert "Iron Door (locked)" in full_text_de
+        assert "Wooden Door" in full_text_de
+
+
