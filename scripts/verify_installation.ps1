@@ -43,20 +43,32 @@ Write-Host "[*] Cleaning untracked files (excluding this script and nginx/ssl)..
 git clean -fdx -e verify_installation.ps1 -e nginx/ssl/
 
 # 1b. Ensure SSL certificates exist for Nginx (Docker runs rely on them)
-if (-not (Test-Path "nginx/ssl/nginx.crt")) {
+if (-not (Test-Path "nginx/ssl/nginx.crt") -or -not (Test-Path "nginx/ssl/nginx.key")) {
     Write-Host "[*] SSL certificate missing. Generating self-signed SSL certificate..." -ForegroundColor Yellow
     New-Item -ItemType Directory -Force -Path "nginx/ssl" | Out-Null
-    # Try using local openssl
+    $genSuccess = $false
+    # Try using local openssl first (if available)
     $opensslPath = Get-Command openssl -ErrorAction SilentlyContinue
     if ($opensslPath) {
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout nginx/ssl/nginx.key -out nginx/ssl/nginx.crt -subj '/CN=localhost'
-    } else {
-        # Fallback to docker
+        try {
+            openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout nginx/ssl/nginx.key -out nginx/ssl/nginx.crt -subj '/CN=localhost' 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $genSuccess = $true
+            }
+        } catch {
+            # Ignore and fallback
+        }
+    }
+
+    # Fallback to docker if local openssl failed or was unavailable
+    if (-not $genSuccess) {
         $dockerPath = Get-Command docker -ErrorAction SilentlyContinue
         if ($dockerPath) {
+            Write-Host "[*] Local openssl failed or was unavailable. Generating with Docker..." -ForegroundColor Yellow
             docker run --rm -v "$((Get-Location).Path)\nginx\ssl:/export" alpine sh -c "apk add --no-cache openssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /export/nginx.key -out /export/nginx.crt -subj '/CN=localhost'"
         } else {
-            Write-Host "[!] Warning: openssl and docker are not available. Cannot generate SSL certificates." -ForegroundColor Red
+            Write-Host "[!] Error: Failed to generate SSL certificates. Please ensure you have write permissions or docker is running." -ForegroundColor Red
+            exit 1
         }
     }
 }
