@@ -19,6 +19,11 @@ from backend.core.tts_voices import GOOGLE_TTS_VOICE_NAMES
 from backend.models.adventure_template import AdventureTemplate, GenerationCancelled
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.utils.path_security import (
+    data_url_to_local_path,
+    ensure_within_data_dir,
+    local_path_to_data_url,
+)
 from backend.utils.text_utils import slugify
 
 logger = logging.getLogger(__name__)
@@ -912,29 +917,13 @@ class WorldGenerator:
             return re.sub(r'(_COPY)?(_\d+)?$', '', entity_id, flags=re.IGNORECASE)
 
         def _public_data_url_to_local_path(url: Optional[str]) -> Optional[str]:
-            raw = str(url or "").strip()
-            if not raw.startswith("/data/"):
-                return None
-            rel = raw[len("/data/"):].lstrip("/").replace("/", os.sep)
-            local_path = os.path.abspath(os.path.join(settings.DATA_DIR, rel))
-            data_root = os.path.abspath(settings.DATA_DIR)
-            try:
-                if os.path.commonpath([local_path, data_root]) != data_root:
-                    return None
-            except ValueError:
-                return None
-            return local_path
+            return data_url_to_local_path(url)
 
         def _local_path_to_public_data_url(local_path: str) -> Optional[str]:
-            data_root = os.path.abspath(settings.DATA_DIR)
-            resolved = os.path.abspath(local_path)
             try:
-                if os.path.commonpath([resolved, data_root]) != data_root:
-                    return None
+                return local_path_to_data_url(local_path)
             except ValueError:
                 return None
-            rel = os.path.relpath(resolved, data_root).replace("\\", "/")
-            return f"/data/{rel}"
 
         def _copy_source_asset_to_current_adventure(
             source_url: Optional[str],
@@ -946,8 +935,8 @@ class WorldGenerator:
             if not source_local or not os.path.isfile(source_local):
                 return None
 
-            target_root = os.path.abspath(
-                os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
+            target_root = ensure_within_data_dir(
+                os.path.join(settings.DATA_DIR, "adventures", "library", str(template_id))
             )
             try:
                 if os.path.commonpath([source_local, target_root]) == target_root:
@@ -957,20 +946,18 @@ class WorldGenerator:
 
             safe_prefix = slugify(str(source_asset_id or entity_type)) or "source"
             source_basename = os.path.basename(source_local)
-            target_dir = os.path.abspath(
-                os.path.join(target_root, "visuals", "reused", entity_type)
-            )
             try:
-                if os.path.commonpath([target_dir, target_root]) != target_root:
-                    return None
+                target_dir = ensure_within_data_dir(
+                    os.path.join(target_root, "visuals", "reused", str(entity_type))
+                )
             except ValueError:
                 return None
 
             os.makedirs(target_dir, exist_ok=True)
-            target_local = os.path.abspath(os.path.join(target_dir, f"{safe_prefix}_{source_basename}"))
             try:
-                if os.path.commonpath([target_local, target_root]) != target_root:
-                    return None
+                target_local = ensure_within_data_dir(
+                    os.path.join(target_dir, f"{safe_prefix}_{source_basename}")
+                )
             except ValueError:
                 return None
 

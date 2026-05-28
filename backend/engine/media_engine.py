@@ -27,6 +27,11 @@ from backend.utils.image_generator import (
     OrganicGradientStrategy,
     PlaceholderImageGenerator,
 )
+from backend.utils.path_security import (
+    ensure_within_data_dir as ensure_within_data_dir_shared,
+    local_path_to_data_url,
+    sanitize_path_component as sanitize_path_component_shared,
+)
 from backend.utils.svg_generator import SVGPlaceholderGenerator
 from backend.utils.text_utils import slugify
 
@@ -57,30 +62,12 @@ _ITEM_PLACEHOLDER_ASSET_BY_TYPE = {
 
 def _sanitize_path_component(value: Optional[str]) -> Optional[str]:
     """Return a safe single path component, or None when invalid."""
-    if value is None:
-        return None
-    candidate = str(value).strip()
-    if not candidate:
-        return None
-    if any(sep in candidate for sep in (os.sep, os.altsep) if sep):
-        return None
-    if candidate in {".", ".."} or ".." in candidate:
-        return None
-    if not _SAFE_PATH_COMPONENT_RE.fullmatch(candidate):
-        return None
-    return candidate
+    return sanitize_path_component_shared(value)
 
 
 def _ensure_within_data_dir(path: str) -> str:
     """Validate that a path resolves inside DATA_DIR and return its absolute form."""
-    data_root = os.path.abspath(settings.DATA_DIR)
-    resolved = os.path.abspath(path)
-    try:
-        if os.path.commonpath([resolved, data_root]) != data_root:
-            raise ValueError("Resolved path escapes DATA_DIR.")
-    except ValueError as exc:
-        raise ValueError("Invalid path: cannot resolve against DATA_DIR.") from exc
-    return resolved
+    return ensure_within_data_dir_shared(path)
 
 
 def _safe_data_path(*parts: str) -> str:
@@ -153,13 +140,22 @@ def _resolve_output_dir(target_dir: str) -> str:
 
     safe_parts: list[str] = []
     for part in re.split(r"[\\/]+", candidate):
+        if not part:
+            continue
         safe_part = _sanitize_path_component(part)
         if not safe_part:
-            continue
+            raise ValueError("Invalid target directory.")
         safe_parts.append(safe_part)
     if not safe_parts:
         raise ValueError("Invalid target directory.")
     return _safe_data_path(*safe_parts)
+
+
+def _write_binary_file(filepath: str, payload: bytes) -> None:
+    """Persist bytes to a validated DATA_DIR file path."""
+    safe_filepath = _ensure_within_data_dir(filepath)
+    with open(safe_filepath, "wb") as file_handle:
+        file_handle.write(payload)
 
 
 def _build_output_filepath(target_dir: str, filename: Optional[str], extension: str) -> str:
@@ -961,14 +957,12 @@ class MediaEngine:
                 # Image.save is CPU bound, wrap in to_thread
                 await asyncio.to_thread(img.save, filepath, "JPEG", quality=quality, optimize=True)
             else:
-                with open(filepath, "wb") as f:
-                    f.write(image_bytes)
+                _write_binary_file(filepath, image_bytes)
             
             # Generate thumbnail
             await MediaEngine._generate_thumbnail(filepath)
 
-            rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
-            return f"/data/{rel_path}"
+            return local_path_to_data_url(filepath)
         except (ValueError, OSError, TypeError):
             logger.exception("Error saving b64 image")
             return None
@@ -990,14 +984,12 @@ class MediaEngine:
                     # Image.save is CPU bound, wrap in to_thread
                     await asyncio.to_thread(img.save, filepath, "JPEG", quality=quality, optimize=True)
                 else:
-                    with open(filepath, "wb") as f:
-                        f.write(response.content)
+                    _write_binary_file(filepath, response.content)
                 
                 # Generate thumbnail
                 await MediaEngine._generate_thumbnail(filepath)
 
-                rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
-                return f"/data/{rel_path}"
+                return local_path_to_data_url(filepath)
             else:
                 logger.error(
                     "Failed to download image from %s, status: %s",

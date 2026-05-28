@@ -36,6 +36,7 @@ from backend.api.routes.adventures.logic import AdventureLogic
 from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
+from backend.utils.path_security import data_url_to_local_path, local_path_to_data_url
 
 router = APIRouter(tags=["Editor"])
 logger = logging.getLogger(__name__)
@@ -103,16 +104,11 @@ def _is_object_entity(ent):
 
 
 def _public_data_to_local_path(path: str) -> Optional[str]:
-    raw = str(path or "").strip()
-    if not raw.startswith("/data/"):
-        return None
-    rel = raw[len("/data/"):].lstrip("/").replace("/", os.sep)
-    return os.path.abspath(os.path.join(settings.DATA_DIR, rel))
+    return data_url_to_local_path(path)
 
 
 def _local_to_public_data_path(path: str) -> str:
-    rel = os.path.relpath(path, settings.DATA_DIR).replace("\\", "/")
-    return f"/data/{rel}"
+    return local_path_to_data_url(path)
 
 
 def _resolve_library_image_url(image_url: Optional[str]) -> Optional[str]:

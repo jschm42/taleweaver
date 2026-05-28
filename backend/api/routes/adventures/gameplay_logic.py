@@ -3216,7 +3216,11 @@ class GameTurnManager:
                 game_event.attack_results = attack_results
 
             # 3. Apply Changes
-            pre_inventory_ids = {item.get("id") for item in (self.avatar.inventory or []) if item.get("id")}
+            pre_inventory_ids = {
+                item.get("id")
+                for item in (self.avatar.inventory or [])
+                if isinstance(item, dict) and item.get("id")
+            }
             try:
                 guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
                 for gm in guardrail_messages:
@@ -3628,7 +3632,14 @@ class GameTurnManager:
                 for update in game_event.updated_inventory_items:
                     # Find old name for the message
                     old_name = update.name
-                    match = next((i for i in (self.avatar.inventory or []) if i.get("id") == update.id), None)
+                    match = next(
+                        (
+                            i
+                            for i in (self.avatar.inventory or [])
+                            if isinstance(i, dict) and i.get("id") == update.id
+                        ),
+                        None,
+                    )
                     if match:
                         old_name = match.get("name", update.name)
                     
@@ -3651,7 +3662,14 @@ class GameTurnManager:
                     item_name = item_id
                     
                     # 1. Look in avatar's current inventory (which still has items before commit)
-                    match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item_id), None)
+                    match = next(
+                        (
+                            i
+                            for i in (self.avatar.inventory or [])
+                            if isinstance(i, dict) and i.get("id") == item_id
+                        ),
+                        None,
+                    )
                     if match:
                         item_name = match.get("name", item_id)
                     else:
@@ -3766,7 +3784,18 @@ class GameTurnManager:
         if event.new_inventory_items:
             filtered_inventory_items = []
             for item in event.new_inventory_items:
-                match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None) if item.id else None
+                match = (
+                    next(
+                        (
+                            i
+                            for i in (self.avatar.inventory or [])
+                            if isinstance(i, dict) and i.get("id") == item.id
+                        ),
+                        None,
+                    )
+                    if item.id
+                    else None
+                )
 
                 if item.id and item.id in existing_item_ids and _is_consumable(item):
                     if not item.image_url and isinstance(match, dict) and match.get("image_url"):
@@ -3836,7 +3865,18 @@ class GameTurnManager:
         if event.spawned_items:
             filtered_spawned_items = []
             for item in event.spawned_items:
-                match = next((i for i in (self.avatar.inventory or []) if i.get("id") == item.id), None) if item.id else None
+                match = (
+                    next(
+                        (
+                            i
+                            for i in (self.avatar.inventory or [])
+                            if isinstance(i, dict) and i.get("id") == item.id
+                        ),
+                        None,
+                    )
+                    if item.id
+                    else None
+                )
                 # Allow if it's a replacement for an item being removed
                 is_replacement = event.removed_inventory_item_ids and item.id in event.removed_inventory_item_ids
                 if item.id and item.id in existing_item_ids and not is_replacement and _is_consumable(item):

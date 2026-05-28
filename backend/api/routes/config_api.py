@@ -264,10 +264,25 @@ async def _fetch_stable_diffusion_models(stable_diffusion_url: Optional[str]) ->
 async def _build_available_constants(llm_settings: Optional[dict], t2i_settings: Optional[dict] = None) -> dict[str, Any]:
     """Return available providers and model catalogs for the admin UI."""
     normalized_llm = _normalize_llm_settings(llm_settings)
-    ollama_models = await _fetch_ollama_models(normalized_llm.get("ollama_url"))
+
+    def _uses_ollama_llm(settings_payload: dict[str, Any]) -> bool:
+        provider_fields = (
+            "small_model_provider",
+            "complex_model_provider",
+            "generator_model_provider",
+            "play_agent_model_provider",
+            "preferred_provider",
+        )
+        return any(
+            str(settings_payload.get(field) or "").strip().lower() == "ollama"
+            for field in provider_fields
+        )
 
     predefined_llm_models = dict(PREDEFINED_LLM_MODELS)
-    predefined_llm_models["ollama"] = ollama_models
+    if _uses_ollama_llm(normalized_llm):
+        ollama_models = await _fetch_ollama_models(normalized_llm.get("ollama_url"))
+        if ollama_models:
+            predefined_llm_models["ollama"] = ollama_models
 
     normalized_t2i = _normalize_t2i_settings(t2i_settings)
     sd_models = await _fetch_stable_diffusion_models(normalized_t2i.get("stable_diffusion_url"))
