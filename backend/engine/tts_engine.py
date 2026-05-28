@@ -32,6 +32,10 @@ class TTSRateLimitError(RuntimeError):
         self.retry_after_seconds = retry_after_seconds
 
 
+class TTSModelSwitchSuggestionError(RuntimeError):
+    """Raised when a specific TTS model repeatedly fails and user action is recommended."""
+
+
 def _parse_retry_after_seconds(response: httpx.Response) -> Optional[float]:
     header = response.headers.get("Retry-After")
     if not header:
@@ -456,9 +460,6 @@ class TTSEngine:
 
         user_content = "\n\n".join(prompt_sections)
 
-        # Note: Using generateContent with responseModalities: ["AUDIO"]
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-
         speech_config: dict = {
             "voiceConfig": {
                 "prebuiltVoiceConfig": {
@@ -466,16 +467,6 @@ class TTSEngine:
                 }
             }
         }
-
-        # Log the prompt for debugging
-        logger.info("[TTS DEBUG] Final Prompt sent to %s:\n%s", model_name, user_content)
-
-        logger.info(
-            "TTS request model=%s voice=%s include_style=%s",
-            model_name,
-            voice,
-            include_style_context,
-        )
 
         payload = {
             "contents": [
@@ -500,8 +491,18 @@ class TTSEngine:
             max_attempts = int(getattr(settings, "TTS_RATE_LIMIT_MAX_RETRIES", 5))
             max_attempts = max(1, min(max_attempts, 10))
             data: Optional[dict] = None
-
             async with httpx.AsyncClient() as client:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+
+                # Log the prompt and request details for debugging.
+                logger.info("[TTS DEBUG] Final Prompt sent to %s:\n%s", model_name, user_content)
+                logger.info(
+                    "TTS request model=%s voice=%s include_style=%s",
+                    model_name,
+                    voice,
+                    include_style_context,
+                )
+
                 for attempt in range(1, max_attempts + 1):
                     await _wait_for_tts_request_slot()
                     response = await client.post(url, json=payload, timeout=timeout)
@@ -541,8 +542,13 @@ class TTSEngine:
                         if attempt < max_attempts:
                             await asyncio.sleep(delay)
                             continue
-                        # Final attempt — log and raise
+
                         logger.error("Gemini TTS Error %s: %s", response.status_code, response.text)
+                        if model_name == "gemini-3.1-flash-tts-preview":
+                            raise TTSModelSwitchSuggestionError(
+                                "Gemini 3.1 Flash TTS ist derzeit serverseitig instabil (mehrfache 5xx-Fehler). "
+                                "Bitte wechsle auf 'gemini-2.5-flash-preview-tts' und versuche es erneut."
+                            )
                         response.raise_for_status()
 
                     if response.status_code != 200:
@@ -552,7 +558,8 @@ class TTSEngine:
                     break
 
             if data is None:
-                raise TTSRateLimitError("Gemini TTS rate limit reached.")
+                logger.error("No successful Gemini TTS response received (model=%s).", model_name)
+                return None
 
             candidates = data.get("candidates", [])
             if not candidates:
@@ -628,6 +635,8 @@ class TTSEngine:
                 model_name,
             )
             raise TTSTimeoutError("Timed out while generating speech.") from exc
+        except TTSModelSwitchSuggestionError:
+            raise
         except (httpx.HTTPError, OSError, ValueError, TypeError):
             logger.exception("Failed to generate speech with Gemini")
             return None

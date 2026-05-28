@@ -27,7 +27,7 @@ const VOICE_LIST = [
 
 const GEMINI_TTS_MODELS = [
   { id: 'gemini-2.5-flash-preview-tts', name: 'Gemini 2.5 Flash TTS (Preview)' },
-  { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash TTS (Legacy Preview)' },
+  { id: 'gemini-3.1-flash-tts-preview', name: 'Gemini 3.1 Flash TTS (Preview)' },
 ]
 
 async function fetchElevenLabsModels() {

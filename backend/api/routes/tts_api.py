@@ -11,7 +11,7 @@ from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.security import encryption_util
-from backend.engine.tts_engine import TTSEngine, TTSRateLimitError, TTSTimeoutError
+from backend.engine.tts_engine import TTSEngine, TTSModelSwitchSuggestionError, TTSRateLimitError, TTSTimeoutError
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
@@ -20,11 +20,11 @@ from backend.models.user import User
 router = APIRouter(prefix="/tts", tags=["TTS"])
 logger = logging.getLogger(__name__)
 SUPPORTED_TTS_MODELS = {
+    "gemini-3.1-flash-tts-preview",
     "gemini-2.5-flash-preview-tts",
 }
 
 TTS_MODEL_ALIASES = {
-    "gemini-3.1-flash-tts-preview": "gemini-2.5-flash-preview-tts",
     "gemini-2.5-flash-tts-preview": "gemini-2.5-flash-preview-tts",
     "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
 }
@@ -206,6 +206,8 @@ async def generate_tts(
             status_code=504,
             detail="TTS generation timed out. Try a shorter narration block or retry.",
         ) from exc
+    except TTSModelSwitchSuggestionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except TTSRateLimitError as exc:
         retry_after = exc.retry_after_seconds
         detail = "TTS rate limit reached. Please retry in a moment."
@@ -246,19 +248,24 @@ async def test_tts_connection_v2(
     if use_vocal_tags:
         test_text = "[excited] Tale Weaver connection test successful!"
 
-    audio_url = await TTSEngine.generate_speech(
-        text=test_text,
-        provider=provider,
-        voice=tts_settings.get("selected_voice", "Puck"),
-        elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
-        use_vocal_tags=tts_settings.get("use_vocal_tags", True),
-        api_key=api_key,
-        model_name=TTS_MODEL_ALIASES.get(
-            str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
-            "gemini-2.5-flash-preview-tts",
-        ),
-        speed=float(tts_settings.get("speech_rate", 1.0)),
-    )
+    try:
+        audio_url = await TTSEngine.generate_speech(
+            text=test_text,
+            provider=provider,
+            voice=tts_settings.get("selected_voice", "Puck"),
+            elevenlabs_voice_id=tts_settings.get("elevenlabs_voice_id", ""),
+            use_vocal_tags=tts_settings.get("use_vocal_tags", True),
+            api_key=api_key,
+            model_name=(
+                TTS_MODEL_ALIASES.get(
+                    str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
+                    str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
+                )
+            ),
+            speed=float(tts_settings.get("speech_rate", 1.0)),
+        )
+    except TTSModelSwitchSuggestionError as exc:
+        return {"status": "error", "message": str(exc)}
     if not audio_url:
         return {"status": "error", "message": "Failed to generate test audio."}
     return {"status": "success", "audio_url": audio_url}

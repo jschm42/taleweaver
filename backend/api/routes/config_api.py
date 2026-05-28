@@ -13,11 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 SUPPORTED_TTS_MODELS = {
+    "gemini-3.1-flash-tts-preview",
     "gemini-2.5-flash-preview-tts",
 }
 
 TTS_MODEL_ALIASES = {
-    "gemini-3.1-flash-tts-preview": "gemini-2.5-flash-preview-tts",
     "gemini-2.5-flash-tts-preview": "gemini-2.5-flash-preview-tts",
     "gemini-2.5-flash-tts": "gemini-2.5-flash-preview-tts",
 }
@@ -37,7 +37,7 @@ from backend.core.models_config import (
 from backend.core.security import encryption_util
 from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_LIST
 from backend.engine.media_engine import MediaEngine
-from backend.engine.tts_engine import TTSEngine
+from backend.engine.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.models.user import User
 from backend.utils.path_security import ensure_within_data_dir, safe_data_path, sanitize_path_component
 
@@ -1049,12 +1049,14 @@ async def test_tts_connection(
             api_key=api_key,
             model_name=TTS_MODEL_ALIASES.get(
                 str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
-                "gemini-2.5-flash-preview-tts",
+                str(tts_settings.get("selected_model", "gemini-2.5-flash-preview-tts") or "").strip(),
             ),
         )
         if not audio_url:
             return {"status": "error", "message": "Failed to generate test audio."}
         return {"status": "success", "audio_url": audio_url}
+    except TTSModelSwitchSuggestionError as exc:
+        return {"status": "error", "message": str(exc)}
     except (ValueError, RuntimeError, TypeError) as exc:
         return _route_error_response(
             "TTS connection test",
