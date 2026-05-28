@@ -211,6 +211,9 @@ chmod +x setup.sh
 
 The easiest way to get TaleWeaver up and running is using Docker. This method packages both the frontend and backend into a single container and handles all dependencies automatically.
 
+The backend container uses a production ASGI runtime: **Gunicorn** with **Uvicorn workers**.
+You can tune process behavior using environment variables such as `WEB_CONCURRENCY`, `GUNICORN_TIMEOUT`, and `GUNICORN_GRACEFUL_TIMEOUT`.
+
 #### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) installed and running.
 - [Docker Compose](https://docs.docker.com/compose/install/) (usually included with Docker Desktop).

@@ -7,5 +7,14 @@ set -e
 echo "[entrypoint] Running database migrations..."
 python -m alembic upgrade head
 
-echo "[entrypoint] Starting TaleWeaver backend..."
-exec uvicorn backend.main:app --host 0.0.0.0 --port 8000
+WORKERS="${WEB_CONCURRENCY:-2}"
+TIMEOUT="${GUNICORN_TIMEOUT:-120}"
+GRACEFUL_TIMEOUT="${GUNICORN_GRACEFUL_TIMEOUT:-30}"
+
+echo "[entrypoint] Starting TaleWeaver backend with Gunicorn (${WORKERS} workers)..."
+exec gunicorn backend.main:app \
+	--worker-class uvicorn.workers.UvicornWorker \
+	--workers "${WORKERS}" \
+	--bind 0.0.0.0:8000 \
+	--timeout "${TIMEOUT}" \
+	--graceful-timeout "${GRACEFUL_TIMEOUT}"
