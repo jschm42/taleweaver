@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
 
   const backendPort = frontendEnv.BACKEND_PORT || repoEnv.BACKEND_PORT || '8000'
   const frontendPort = parseInt(frontendEnv.FRONTEND_PORT || repoEnv.FRONTEND_PORT || '5173', 10)
-  const cspHeader = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+  const cspHeader = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://api.dicebear.com; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
   return {
     plugins: [vue()],
