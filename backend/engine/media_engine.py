@@ -154,6 +154,11 @@ def _resolve_output_dir(target_dir: str) -> str:
 def _write_binary_file(filepath: str, payload: bytes) -> None:
     """Persist bytes to a validated DATA_DIR file path."""
     safe_filepath = _ensure_within_data_dir(filepath)
+    parent_dir = os.path.dirname(safe_filepath)
+    if not parent_dir:
+        raise ValueError("Invalid filepath: missing parent directory.")
+    safe_parent_dir = _ensure_within_data_dir(parent_dir)
+    os.makedirs(safe_parent_dir, exist_ok=True)
     with open(safe_filepath, "wb") as file_handle:
         file_handle.write(payload)
 
@@ -257,8 +262,9 @@ class MediaEngine:
     async def _generate_thumbnail(filepath: str, max_size: int = 480):
         """Creates a thumbnail for the given image file if it doesn't exist."""
         try:
-            base, ext = os.path.splitext(filepath)
-            thumb_path = f"{base}_thumb{ext}"
+            safe_filepath = _ensure_within_data_dir(filepath)
+            base, ext = os.path.splitext(safe_filepath)
+            thumb_path = _ensure_within_data_dir(f"{base}_thumb{ext}")
             
             # Avoid re-generating if it already exists
             if os.path.exists(thumb_path):
@@ -266,7 +272,7 @@ class MediaEngine:
 
             # Use to_thread for blocking PIL operations
             def _resize():
-                with Image.open(filepath) as img:
+                with Image.open(safe_filepath) as img:
                     # Maintain aspect ratio
                     img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
                     # For JPEGs, ensure RGB mode

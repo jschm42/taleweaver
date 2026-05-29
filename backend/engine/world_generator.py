@@ -935,20 +935,28 @@ class WorldGenerator:
             source_asset_id: Optional[str],
         ) -> Optional[str]:
             source_local = _public_data_url_to_local_path(source_url)
-            if not source_local or not os.path.isfile(source_local):
+            if not source_local:
+                return None
+
+            try:
+                safe_source_local = ensure_within_data_dir(source_local)
+            except ValueError:
+                return None
+
+            if not os.path.isfile(safe_source_local):
                 return None
 
             target_root = ensure_within_data_dir(
                 os.path.join(settings.DATA_DIR, "adventures", "library", str(template_id))
             )
             try:
-                if os.path.commonpath([source_local, target_root]) == target_root:
+                if os.path.commonpath([safe_source_local, target_root]) == target_root:
                     return source_url
             except ValueError:
                 return None
 
             safe_prefix = slugify(str(source_asset_id or entity_type)) or "source"
-            source_basename = os.path.basename(source_local)
+            source_basename = os.path.basename(safe_source_local)
             try:
                 target_dir = ensure_within_data_dir(
                     os.path.join(target_root, "visuals", "reused", str(entity_type))
@@ -956,17 +964,18 @@ class WorldGenerator:
             except ValueError:
                 return None
 
-            os.makedirs(target_dir, exist_ok=True)
+            safe_target_dir = ensure_within_data_dir(target_dir)
+            os.makedirs(safe_target_dir, exist_ok=True)
             try:
                 target_local = ensure_within_data_dir(
-                    os.path.join(target_dir, f"{safe_prefix}_{source_basename}")
+                    os.path.join(safe_target_dir, f"{safe_prefix}_{source_basename}")
                 )
             except ValueError:
                 return None
 
             if not os.path.isfile(target_local):
                 try:
-                    shutil.copy2(source_local, target_local)
+                    shutil.copy2(safe_source_local, target_local)
                 except Exception as exc:
                     logger.warning(
                         "Failed to localize reused source asset for %s/%s from %s: %s",

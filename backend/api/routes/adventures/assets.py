@@ -138,8 +138,9 @@ def _build_uploaded_visual_path(
         filename_prefix = safe_token or safe_target_type
         filename = f"{filename_prefix}_{uuid.uuid4().hex}.{safe_file_ext}"
 
-    os.makedirs(storage_path, exist_ok=True)
-    return ensure_within_data_dir(os.path.join(storage_path, filename))
+    safe_storage_path = ensure_within_data_dir(storage_path)
+    os.makedirs(safe_storage_path, exist_ok=True)
+    return ensure_within_data_dir(os.path.join(safe_storage_path, filename))
 
 class RegenerateVisualRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]

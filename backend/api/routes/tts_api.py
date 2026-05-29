@@ -264,8 +264,11 @@ async def test_tts_connection_v2(
             ),
             speed=float(tts_settings.get("speech_rate", 1.0)),
         )
-    except TTSModelSwitchSuggestionError as exc:
-        return {"status": "error", "message": str(exc)}
+    except TTSModelSwitchSuggestionError:
+        return {
+            "status": "error",
+            "message": "The selected TTS model is currently unavailable. Please choose a different model and try again.",
+        }
     if not audio_url:
         return {"status": "error", "message": "Failed to generate test audio."}
     return {"status": "success", "audio_url": audio_url}

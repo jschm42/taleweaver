@@ -13,6 +13,7 @@ from backend.models.world_entity import WorldEntity
 from backend.api.routes.adventures.sessions import start_session_for_template
 from backend.api.routes.adventures.agent_logic import AgentService, AgentDecision
 from backend.core.config import settings
+from backend.utils.path_security import ensure_within_data_dir, safe_data_path
 
 pytestmark = pytest.mark.asyncio
 
@@ -183,11 +184,8 @@ async def test_agent_turn_retry_and_deactivation_on_failure(mock_get_decision, a
         await db.close()
 
         # Clean old issues log if exists
-        sessions_root = os.path.abspath(os.path.normpath(os.path.join(settings.DATA_DIR, "adventures", "sessions")))
-        session_dir = os.path.abspath(os.path.normpath(os.path.join(sessions_root, game_id)))
-        if os.path.commonpath([sessions_root, session_dir]) != sessions_root:
-            raise ValueError(f"Unsafe session path for game_id: {game_id}")
-        agents_md_path = os.path.join(session_dir, "AGENTS.md")
+        session_dir = safe_data_path("adventures", "sessions", game_id)
+        agents_md_path = ensure_within_data_dir(os.path.join(session_dir, "AGENTS.md"))
         if os.path.exists(agents_md_path):
             os.remove(agents_md_path)
 
