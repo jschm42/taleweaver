@@ -1590,6 +1590,154 @@ class GameTurnManager:
 
         return [reason or f"{container_name} stays locked."]
 
+    async def _enforce_quest_and_award_guardrails(self, event: GameEvent) -> None:
+        """
+        Validates that any quest completed or award granted in this turn
+        does not require interaction with an entity (NPC or Object) that is
+        physically inaccessible to the player.
+        """
+        if not event.completed_quest_ids and not event.earned_award_keys:
+            return
+
+        # Fetch all session entities to know their location/state
+        entity_res = await self.db.execute(
+            select(WorldEntity).where(WorldEntity.session_id == self.game_id)
+        )
+        all_entities = list(entity_res.scalars().all())
+
+        # Build a set of accessible entity IDs and names.
+        # An entity is accessible if it is in the current scene, or in the player's inventory/equipment,
+        # or if it is being spawned/added to inventory in this turn.
+        accessible_entity_ids: set[str] = set()
+        accessible_entity_names: set[str] = set()
+
+        def mark_accessible(ent_id: str | None, ent_name: str | None) -> None:
+            if ent_id:
+                accessible_entity_ids.add(ent_id.lower().strip())
+            if ent_name:
+                accessible_entity_names.add(ent_name.lower().strip())
+
+        current_scene_id = self.state.current_scene_id
+
+        # 1. Database-backed check
+        for entity in all_entities:
+            # Check if present in the current scene
+            if entity.current_scene_id == current_scene_id:
+                mark_accessible(entity.id, entity.name)
+            
+            # Check if NPC in current scene has items in inventory
+            if entity.entity_type == "NPC" and entity.current_scene_id == current_scene_id:
+                npc_inv = entity.inventory or []
+                for item in npc_inv:
+                    if isinstance(item, dict):
+                        mark_accessible(item.get("id"), item.get("name"))
+
+            # Check if marked as in player's inventory in DB
+            if entity.is_in_inventory:
+                mark_accessible(entity.id, entity.name)
+
+        # 2. Check avatar's active inventory & equipment list
+        if self.avatar.inventory:
+            for item in self.avatar.inventory:
+                if isinstance(item, dict):
+                    mark_accessible(item.get("id"), item.get("name"))
+        
+        if self.avatar.equipment:
+            for slot, item in self.avatar.equipment.items():
+                if isinstance(item, dict):
+                    mark_accessible(item.get("id"), item.get("name"))
+
+        # 3. Check event updates (newly added/spawned/moved)
+        if event.new_inventory_items:
+            for item in event.new_inventory_items:
+                mark_accessible(item.id, item.name)
+
+        if event.spawned_items:
+            for item in event.spawned_items:
+                mark_accessible(item.id, item.name)
+
+        if event.moved_entities:
+            for move in event.moved_entities:
+                if move.to_scene_id == current_scene_id:
+                    matching_ent = next((e for e in all_entities if e.id == move.entity_id), None)
+                    ent_name = matching_ent.name if matching_ent else None
+                    mark_accessible(move.entity_id, ent_name)
+
+        # Helper to check if a text (e.g. goal, requirement, description) mentions
+        # an inaccessible entity.
+        def has_inaccessible_entity_dependency(text: str | None) -> bool:
+            if not text:
+                return False
+            
+            text_lower = text.lower()
+            for entity in all_entities:
+                ent_id = entity.id
+                ent_name = entity.name
+                if not ent_id and not ent_name:
+                    continue
+                
+                # Check if this specific entity is mentioned in the requirement/goal text
+                # We use word boundaries to prevent partial matches (e.g. "key" in "keyboard")
+                mentioned = False
+                if ent_id:
+                    pattern_id = r'\b' + re.escape(ent_id.lower()) + r'\b'
+                    if re.search(pattern_id, text_lower):
+                        mentioned = True
+                if not mentioned and ent_name:
+                    pattern_name = r'\b' + re.escape(ent_name.lower()) + r'\b'
+                    if re.search(pattern_name, text_lower):
+                        mentioned = True
+                
+                if mentioned:
+                    # Entity is mentioned. Is it accessible?
+                    is_accessible = False
+                    if ent_id and ent_id.lower().strip() in accessible_entity_ids:
+                        is_accessible = True
+                    elif ent_name and ent_name.lower().strip() in accessible_entity_names:
+                        is_accessible = True
+                    
+                    if not is_accessible:
+                        logger.info(
+                            "[Quest/Award Guardrail] Blocked because text '%s' mentions inaccessible entity '%s' (%s)",
+                            text, ent_name or "", ent_id or ""
+                        )
+                        return True
+            return False
+
+        # Validate completed quests
+        if event.completed_quest_ids:
+            validated_quest_ids = []
+            for qid in event.completed_quest_ids:
+                quest = next((q for q in (self.state.quests or []) if q.get("id") == qid), None)
+                if not quest:
+                    validated_quest_ids.append(qid)
+                    continue
+                
+                goal = quest.get("goal")
+                desc = quest.get("description")
+                if has_inaccessible_entity_dependency(goal) or has_inaccessible_entity_dependency(desc):
+                    logger.info("[Quest Guardrail] Blocked completion of quest '%s' due to inaccessible entity dependency.", qid)
+                    continue
+                validated_quest_ids.append(qid)
+            event.completed_quest_ids = validated_quest_ids
+
+        # Validate earned awards
+        if event.earned_award_keys:
+            validated_award_keys = []
+            for key in event.earned_award_keys:
+                award = next((aw for aw in (self.adventure.awards or []) if aw.get("key") == key), None)
+                if not award:
+                    validated_award_keys.append(key)
+                    continue
+                
+                req = award.get("requirement")
+                desc = award.get("description")
+                if has_inaccessible_entity_dependency(req) or has_inaccessible_entity_dependency(desc):
+                    logger.info("[Award Guardrail] Blocked award '%s' due to inaccessible entity dependency.", key)
+                    continue
+                validated_award_keys.append(key)
+            event.earned_award_keys = validated_award_keys
+
     async def _resolve_container_target(self, hint: str) -> tuple[WorldEntity | None, dict[str, Any] | None, int | None]:
         normalized_hint = (hint or "").strip().lower()
         if not normalized_hint:
@@ -3541,6 +3689,7 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                await self._enforce_quest_and_award_guardrails(game_event)
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"
@@ -3728,6 +3877,7 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                await self._enforce_quest_and_award_guardrails(game_event)
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': sm})}\n\n"

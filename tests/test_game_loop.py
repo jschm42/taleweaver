@@ -2510,6 +2510,81 @@ async def test_wrong_container_access_code_is_rejected_server_side(setup_test_db
         assert any(up.entity_id == "LOCKER" and up.locked is True for up in (event.updated_entities or []))
 
 
+async def test_quest_and_award_accessibility_guardrail(setup_test_db):
+    from tests.conftest import TestSessionLocal
+    from backend.models.world_entity import WorldEntity
+    from backend.engine.rule_engine import GameEvent
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        
+        # Seed the slang dictionary item in another room (MEN_RESTROOM)
+        dictionary = WorldEntity(
+            id="DINER_SLANG_DICTIONARY",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Diner Slang Dictionary",
+            description="A slang dictionary.",
+            current_scene_id="MEN_RESTROOM",  # different scene!
+            is_portable=True,
+            is_hidden=False,
+            is_in_inventory=False,
+        )
+        db.add(dictionary)
+        
+        # Seed quest and award in state/adventure
+        state.quests = [
+            {
+                "id": "TRANSLATE_SLANG",
+                "title": "Slang 101",
+                "description": "Betty left notes. Find a translation guide.",
+                "goal": "Read DINER_SLANG_DICTIONARY.",
+                "status": "open"
+            }
+        ]
+        adv.awards = [
+            {
+                "key": "SLANG_MASTER",
+                "title": "Slang Master",
+                "description": "Found and studied the diner slang dictionary.",
+                "tier": "bronze",
+                "requirement": "Read DINER_SLANG_DICTIONARY.",
+                "is_earned": False
+            }
+        ]
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        # Simulate LLM trying to complete the quest and grant the award
+        # while the player is in START (not MEN_RESTROOM) and does not have the item.
+        event = GameEvent(
+            completed_quest_ids=["TRANSLATE_SLANG"],
+            earned_award_keys=["SLANG_MASTER"],
+        )
+
+        await manager._enforce_quest_and_award_guardrails(event)
+
+        # Assert that both are blocked (removed from the event)
+        assert event.completed_quest_ids == []
+        assert event.earned_award_keys == []
+
+        # Now make the dictionary accessible (move it to START, the current scene)
+        dictionary.current_scene_id = state.current_scene_id
+        await db.commit()
+
+        event2 = GameEvent(
+            completed_quest_ids=["TRANSLATE_SLANG"],
+            earned_award_keys=["SLANG_MASTER"],
+        )
+        await manager._enforce_quest_and_award_guardrails(event2)
+
+        # Assert that both are allowed now
+        assert event2.completed_quest_ids == ["TRANSLATE_SLANG"]
+        assert event2.earned_award_keys == ["SLANG_MASTER"]
+
+
 async def test_quest_completion_accumulates_xp(setup_test_db, monkeypatch):
     """Verifies that completing a quest adds its exp_reward to the avatar's exp total."""
     from tests.conftest import TestSessionLocal
