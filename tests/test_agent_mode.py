@@ -187,9 +187,9 @@ async def test_agent_turn_retry_and_deactivation_on_failure(mock_get_decision, a
         session_dir = os.path.abspath(os.path.normpath(os.path.join(sessions_root, game_id)))
         if os.path.commonpath([sessions_root, session_dir]) != sessions_root:
             raise ValueError(f"Unsafe session path for game_id: {game_id}")
-        agents_md_path = os.path.abspath(os.path.normpath(os.path.join(session_dir, "AGENTS.md")))
-        if os.path.commonpath([session_dir, agents_md_path]) != session_dir:
-            raise ValueError(f"Unsafe AGENTS.md path for game_id: {game_id}")
+        from backend.utils.path_security import ensure_within_base_dir
+
+        agents_md_path = ensure_within_base_dir(os.path.join(session_dir, "AGENTS.md"), session_dir)
         if os.path.exists(agents_md_path):
             os.remove(agents_md_path)
 
