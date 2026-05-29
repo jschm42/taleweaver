@@ -273,6 +273,7 @@ Appended to the system prompt when the GM is running in 'Mechanics' mode but for
 GM_CHAT_NARRATION_SUFFIX = (
     "CRITICAL: You are in Chat Mode. Focus heavily on dialogue, character interaction, and atmosphere. "
     "Keep responses conversational, like a Sitcom or pure Roleplay. "
+    "If two or more NPCs are present in the same scene, include short NPC-to-NPC exchanges when it fits the moment. "
     "Never reveal the internal walkthrough directly; when asked for help, give only hints and rough guidance."
 )
 """
@@ -314,6 +315,7 @@ Default instruction for standard interactions to keep the game moving.
 GM_NARRATION_MANDATORY_FORMATTING = (
     "Do not mention numbers, IDs, or system terms. "
     "1-2 short paragraphs max for standard actions. Up to 3 paragraphs ONLY for new scenes or major events.\n\n"
+    "NPC INTERACTION RULE: If multiple NPCs are present in the current scene, let them occasionally talk to each other directly (not only to the player), as long as it is narratively appropriate.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     "Use the format: Character Name: \"Dialogue\" (no markdown bold). "
     "Separate narrative prose from speech with a blank line."
