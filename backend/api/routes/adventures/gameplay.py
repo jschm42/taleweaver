@@ -116,7 +116,10 @@ async def get_chat_history(
                 **aw,
                 "is_earned": any(
                     ea.get("key") == aw.get("key")
-                    and ea.get("template_id") == (adventure.id if adventure else state.template_id)
+                    and (
+                        ea.get("template_id") == (adventure.id if adventure else state.template_id)
+                        or ea.get("adventure_id") == (adventure.id if adventure else state.template_id)
+                    )
                     for ea in (current_user.earned_awards or [])
                 ),
             }

@@ -44,8 +44,13 @@ class AgentService:
         if not state.entity_states:
             state.entity_states = {}
         if "__agent__" not in state.entity_states:
-            state.entity_states["__agent__"] = {"active": False, "failure_count": 0}
-        return state.entity_states["__agent__"]
+            state.entity_states["__agent__"] = {"active": False, "failure_count": 0, "monkey_mode": False}
+        agent_state = state.entity_states["__agent__"]
+        if "monkey_mode" not in agent_state:
+            agent_state["monkey_mode"] = False
+            state.entity_states["__agent__"] = agent_state
+            flag_modified(state, "entity_states")
+        return agent_state
 
     @staticmethod
     def set_agent_active(state: SessionState, active: bool) -> None:
@@ -54,6 +59,14 @@ class AgentService:
         agent_state["active"] = active
         if active:
             agent_state["failure_count"] = 0
+        state.entity_states["__agent__"] = agent_state
+        flag_modified(state, "entity_states")
+
+    @staticmethod
+    def set_monkey_mode(state: SessionState, enabled: bool) -> None:
+        """Enable/disable monkey mode for the autonomous play-agent in this session."""
+        agent_state = AgentService.get_agent_state(state)
+        agent_state["monkey_mode"] = enabled
         state.entity_states["__agent__"] = agent_state
         flag_modified(state, "entity_states")
 
@@ -137,6 +150,23 @@ class AgentService:
         
         walkthrough_text = state.walkthrough or adventure.walkthrough or "No walkthrough available for this adventure."
         
+        agent_state = AgentService.get_agent_state(state)
+        monkey_mode = bool(agent_state.get("monkey_mode", False))
+
+        objective_block = (
+            "Your objective is to play through the adventure as efficiently and quickly as possible, adhering to the walkthrough step-by-step while remaining in character.\n"
+            "Analyze the current room, NPCs, items, exits, and quests. If the current state matches a step in the walkthrough, take that action.\n"
+        )
+        if monkey_mode:
+            objective_block = (
+                "MONKEY MODE (ROBUSTNESS TEST) IS ACTIVE.\n"
+                "Your objective is to stress-test the engine by intentionally trying edge cases and bad inputs.\n"
+                "Prefer actions that may fail or challenge validation (unknown commands, malformed commands, contradictory actions, context-inappropriate remarks, impossible interactions).\n"
+                "Vary behavior turn-to-turn. Sometimes produce nonsense or irrelevant remarks as the action text to test guardrails.\n"
+                "Do NOT include harmful, hateful, sexual, or illegal content. Stay safe, but be chaotic.\n"
+                "If nothing obvious to break exists, attempt unusual command formats or semantically invalid actions anyway.\n"
+            )
+
         system_prompt = (
             "You are playing an interactive text adventure game as the protagonist, staying fully in character.\n"
             f"Character Name: {avatar.name}\n"
@@ -176,8 +206,7 @@ class AgentService:
             "--- OFFICIAL ADVENTURE WALKTHROUGH/SOLUTION ---\n"
             f"{walkthrough_text}\n\n"
             "--- AGENT OBJECTIVES ---\n"
-            "Your objective is to play through the adventure as efficiently and quickly as possible, adhering to the walkthrough step-by-step while remaining in character.\n"
-            "Analyze the current room, NPCs, items, exits, and quests. If the current state matches a step in the walkthrough, take that action.\n"
+            f"{objective_block}"
             "Respond ONLY with a JSON object matching the schema exactly. Do not wrap in markdown or include extra text."
         )
 

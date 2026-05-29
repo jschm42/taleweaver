@@ -46,6 +46,7 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
         # Check default inactive
         agent_state = AgentService.get_agent_state(manager.state)
         assert agent_state.get("active") is False
+        assert agent_state.get("monkey_mode") is False
 
         # Turn agent ON
         chunks = []
@@ -62,6 +63,7 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
         full_sse = "".join(chunks)
         assert "Autonomous Agent Gameplay Mode enabled" in full_sse
         assert '"agent_active":true' in full_sse.replace(" ", "")
+        assert '"agent_monkey_mode":false' in full_sse.replace(" ", "")
 
         # Turn agent OFF
         chunks = []
@@ -74,6 +76,80 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
             assert AgentService.get_agent_state(state).get("active") is False
             
         assert '"agent_active":false' in "".join(chunks).replace(" ", "")
+
+        # Toggle monkey mode ON/OFF via slash command
+        chunks = []
+        async for chunk in manager.process_turn("/agent monkey on"):
+            chunks.append(chunk)
+
+        async with TestSessionLocal() as verify_db:
+            state_res = await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))
+            state = state_res.scalars().first()
+            assert AgentService.get_agent_state(state).get("monkey_mode") is True
+
+        assert '"agent_monkey_mode":true' in "".join(chunks).replace(" ", "")
+        assert "Monkey Mode enabled" in "".join(chunks)
+
+        chunks = []
+        async for chunk in manager.process_turn("/agent monkey off"):
+            chunks.append(chunk)
+
+        async with TestSessionLocal() as verify_db:
+            state_res = await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))
+            state = state_res.scalars().first()
+            assert AgentService.get_agent_state(state).get("monkey_mode") is False
+
+        assert '"agent_monkey_mode":false' in "".join(chunks).replace(" ", "")
+        assert "Monkey Mode disabled" in "".join(chunks)
+
+
+async def test_agent_on_uses_monkey_mode_default_from_settings(auth_client, setup_test_db):
+    """/agent on should initialize monkey mode from persisted llm settings."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        user.llm_settings = {
+            "small_model": "gpt-4o-mini",
+            "small_model_provider": "openai",
+            "complex_model": "gpt-4o",
+            "complex_model_provider": "openai",
+            "generator_model": "gpt-4o",
+            "generator_model_provider": "openai",
+            "play_agent_model": "gpt-4o-mini",
+            "play_agent_model_provider": "openai",
+            "play_agent_monkey_mode": True,
+            "preferred_provider": "openai",
+            "ollama_url": "http://localhost:11434",
+        }
+
+        adv = AdventureTemplate(
+            id="agent-monkey-default-test", owner_id=user.id, title="Agent Monkey Default Test", is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+        await db.refresh(user)
+
+        result = await start_session_for_template("agent-monkey-default-test", db, user)
+        game_id = result["game_id"]
+
+        from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+
+        manager = GameTurnManager(db, game_id, user)
+        assert await manager.initialize()
+
+        chunks = []
+        async for chunk in manager.process_turn("/agent on"):
+            chunks.append(chunk)
+
+        async with TestSessionLocal() as verify_db:
+            state_res = await verify_db.execute(select(SessionState).where(SessionState.session_id == game_id))
+            state = state_res.scalars().first()
+            assert AgentService.get_agent_state(state).get("active") is True
+            assert AgentService.get_agent_state(state).get("monkey_mode") is True
+
+        assert "Monkey Mode is active by default from settings" in "".join(chunks)
 
 
 async def test_agent_turn_endpoint_validation(auth_client, setup_test_db):
@@ -308,6 +384,66 @@ async def test_agent_prompt_includes_scene_items_and_take_name_guidance(setup_te
     assert "`/push <target>` or `/pull <target>`" in prompt
     assert "`/rest`" in prompt
     assert "MODAL CONTENT MIRRORING" in prompt
+
+
+async def test_agent_prompt_switches_to_monkey_mode_objective(setup_test_db, monkeypatch):
+    """Agent prompt should include monkey mode objective block when enabled in session state."""
+    from tests.conftest import TestSessionLocal
+
+    captured: dict[str, str] = {}
+
+    class FakeLLM:
+        async def aexecute_complex_task(self, **kwargs):
+            captured["system_prompt"] = kwargs.get("system_prompt", "")
+            return AgentDecision(
+                thoughts="Let's test weird inputs.",
+                action="/foobar ???",
+                is_stuck_or_bug=False,
+                issue_description="",
+            )
+
+    async def fake_build_context(self, user_msg: str, language=None):
+        _ = user_msg
+        _ = language
+        return SimpleNamespace(
+            mechanics_system_prompt="Mechanics context",
+            small_model_provider="ollama",
+            small_model="llama3.2",
+        )
+
+    monkeypatch.setattr("backend.api.routes.adventures.agent_logic.TurnLlmContextBuilder.build_context", fake_build_context)
+    monkeypatch.setattr("backend.api.routes.adventures.agent_logic.GameMasterLLM", lambda *args, **kwargs: FakeLLM())
+
+    async with TestSessionLocal() as db:
+        user = User(username="agent_monkey_user", hashed_password="hash", role="admin")
+        db.add(user)
+        await db.flush()
+
+        adv = AdventureTemplate(
+            id="agent-monkey-test", owner_id=user.id, title="Agent Monkey Test", is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+
+        result = await start_session_for_template("agent-monkey-test", db, user)
+        game_id = result["game_id"]
+
+        state_res = await db.execute(select(SessionState).where(SessionState.session_id == game_id))
+        state = state_res.scalars().first()
+        assert state is not None
+
+        AgentService.set_monkey_mode(state, True)
+        await db.commit()
+
+        manager = SimpleNamespace()
+        avatar = await db.get(Avatar, state.avatar_id)
+        assert avatar is not None
+        decision = await AgentService.get_decision(db, game_id, user, state, avatar, adv, manager)
+        _ = decision
+
+    prompt = captured.get("system_prompt", "")
+    assert "MONKEY MODE (ROBUSTNESS TEST) IS ACTIVE" in prompt
+    assert "intentionally trying edge cases and bad inputs" in prompt
 
 
 def test_log_issue_does_not_create_unknown_session_folder(tmp_path, monkeypatch):

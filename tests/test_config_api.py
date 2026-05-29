@@ -214,6 +214,7 @@ async def test_get_settings_returns_llm_ollama_default(client: AsyncClient):
     assert llm["complex_max_tokens"] == 24576
     assert llm["play_agent_model"] == ""
     assert llm["play_agent_model_provider"] == "openai"
+    assert llm["play_agent_monkey_mode"] is False
     assert llm["preferred_provider"] == "openai"
     assert llm["ollama_url"] == "http://localhost:11434"
 
@@ -229,6 +230,7 @@ async def test_save_llm_settings_persists_play_agent_model(client: AsyncClient):
         "generator_model_provider": "openai",
         "play_agent_model": "gpt-5.3",
         "play_agent_model_provider": "openai",
+        "play_agent_monkey_mode": True,
         "preferred_provider": "openai",
         "ollama_url": "http://localhost:11434",
     }
@@ -241,6 +243,7 @@ async def test_save_llm_settings_persists_play_agent_model(client: AsyncClient):
     llm = settings_resp.json()["llm_settings"]
     assert llm["play_agent_model"] == "gpt-5.3"
     assert llm["play_agent_model_provider"] == "openai"
+    assert llm["play_agent_monkey_mode"] is True
 
 
 async def test_get_settings_uses_installed_ollama_models(client: AsyncClient, monkeypatch):

@@ -452,7 +452,15 @@ async def list_sessions(
             quest_count=len((s.quests if s else (a.quests if a else None)) or []),
             completed_quest_count=len([q for q in ((s.quests if s else (a.quests if a else None)) or []) if q.get("status") == "completed"]),
             award_count=len((a.awards if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("awards")) or []),
-            earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if any(ea.get("key") == aw.get("key") and ea.get("template_id") == a.id for ea in user_earned_awards)]),
+            earned_award_count=len([
+                aw
+                for aw in ((a.awards if a else None) or [])
+                if any(
+                    ea.get("key") == aw.get("key")
+                    and (ea.get("template_id") == a.id or ea.get("adventure_id") == a.id)
+                    for ea in user_earned_awards
+                )
+            ]),
             created_at=g.created_at,
             status=g.status,
             status_note=g.status_note,
@@ -1305,7 +1313,15 @@ async def _get_session_response(db: AsyncSession, game_id: str, current_user_id:
         quest_count=len((s.quests if s else (a.quests if a else None)) or []),
         completed_quest_count=len([q for q in ((s.quests if s else (a.quests if a else None)) or []) if q.get("status") == "completed"]),
         award_count=len((a.awards if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("awards")) or []),
-        earned_award_count=len([aw for aw in ((a.awards if a else None) or []) if any(ea.get("key") == aw.get("key") and ea.get("template_id") == a.id for ea in user_earned_awards)]),
+        earned_award_count=len([
+            aw
+            for aw in ((a.awards if a else None) or [])
+            if any(
+                ea.get("key") == aw.get("key")
+                and (ea.get("template_id") == a.id or ea.get("adventure_id") == a.id)
+                for ea in user_earned_awards
+            )
+        ]),
         created_at=g.created_at,
         status=g.status,
         status_note=g.status_note,

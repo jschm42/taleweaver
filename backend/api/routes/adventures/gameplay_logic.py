@@ -742,9 +742,14 @@ class GameTurnManager:
             from backend.api.routes.adventures.agent_logic import AgentService
             cmd_args = user_msg[6:].strip().lower()
             if cmd_args == "on":
+                llm_settings = self.user.llm_settings or {}
+                monkey_mode_default = bool(llm_settings.get("play_agent_monkey_mode", False))
                 AgentService.set_agent_active(self.state, True)
+                AgentService.set_monkey_mode(self.state, monkey_mode_default)
                 await self.db.commit()
                 msg = "Autonomous Agent Gameplay Mode enabled. The AI will now play the game on your behalf."
+                if monkey_mode_default:
+                    msg += " Monkey Mode is active by default from settings."
                 await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             elif cmd_args == "off":
@@ -771,8 +776,23 @@ class GameTurnManager:
                 )
                 await self._save_chat_message("system", msg)
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            elif cmd_args == "monkey on":
+                AgentService.set_monkey_mode(self.state, True)
+                await self.db.commit()
+                msg = (
+                    "Play-Agent Monkey Mode enabled. The agent will now deliberately try invalid, chaotic, "
+                    "or context-inappropriate actions to stress-test engine robustness."
+                )
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+            elif cmd_args == "monkey off":
+                AgentService.set_monkey_mode(self.state, False)
+                await self.db.commit()
+                msg = "Play-Agent Monkey Mode disabled. The agent will return to normal walkthrough-driven behavior."
+                await self._save_chat_message("system", msg)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             else:
-                msg = "Usage: /agent on | /agent off"
+                msg = "Usage: /agent on | /agent off | /agent monkey on | /agent monkey off"
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
 
             final_data = jsonable_encoder({
@@ -3798,7 +3818,10 @@ class GameTurnManager:
                 **aw,
                 "is_earned": any(
                     ea.get("key") == aw.get("key")
-                    and ea.get("template_id") == (adventure.id if adventure else self.state.template_id)
+                    and (
+                        ea.get("template_id") == (adventure.id if adventure else self.state.template_id)
+                        or ea.get("adventure_id") == (adventure.id if adventure else self.state.template_id)
+                    )
                     for ea in (self.user.earned_awards or [])
                 ),
             }

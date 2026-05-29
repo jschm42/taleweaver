@@ -406,7 +406,11 @@ async def get_adventure(
     if not adv:
         raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
     
-    user_earned_keys = {ea.get("key") for ea in (current_user.earned_awards or []) if ea.get("template_id") == adv.id}
+    user_earned_keys = {
+        ea.get("key")
+        for ea in (current_user.earned_awards or [])
+        if ea.get("template_id") == adv.id or ea.get("adventure_id") == adv.id
+    }
     enriched_awards = [{**aw, "is_earned": aw.get("key") in user_earned_keys} for aw in (adv.awards or [])]
     
     response_data = AdventureTemplateResponse.model_validate(adv).model_dump()
@@ -856,7 +860,11 @@ async def update_adventure(
     await db.refresh(adv)
     
     # Enrich awards for response
-    user_earned_keys = {ea.get("key") for ea in (current_user.earned_awards or []) if ea.get("template_id") == adv.id}
+    user_earned_keys = {
+        ea.get("key")
+        for ea in (current_user.earned_awards or [])
+        if ea.get("template_id") == adv.id or ea.get("adventure_id") == adv.id
+    }
     enriched_awards = [{**aw, "is_earned": aw.get("key") in user_earned_keys} for aw in (adv.awards or [])]
     
     response_data = AdventureTemplateResponse.model_validate(adv).model_dump()

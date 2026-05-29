@@ -40,6 +40,7 @@ export interface CharacterSheet {
   is_debug_enabled?: boolean
   debug_mode?: boolean
   agent_active?: boolean
+  agent_monkey_mode?: boolean
 }
 
 export interface InventoryItem {

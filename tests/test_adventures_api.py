@@ -628,6 +628,46 @@ async def test_get_chat_history_includes_awards(client: AsyncClient):
     assert data["awards"][0]["key"] == "a-snapshot"
 
 
+async def test_get_chat_history_marks_award_earned_with_adventure_id(client: AsyncClient):
+    """Award is_earned should work when user history stores only adventure_id."""
+    ids = await _create_adventure(client, "Awards Earned Alias Quest")
+
+    async with TestSessionLocal() as session:
+        adventure = await session.get(Adventure, ids["adventure_id"])
+        assert adventure is not None
+        adventure.awards = [
+            {
+                "key": "health-inspector",
+                "title": "Health Inspector",
+                "description": "Diagnose all contaminated food stores.",
+                "tier": "silver",
+                "requirement": "Complete sanitation pass",
+                "is_earned": False,
+            }
+        ]
+
+        game_session = await session.get(GameSession, ids["game_id"])
+        assert game_session is not None
+        user = await session.get(User, game_session.user_id)
+        assert user is not None
+        user.earned_awards = [
+            {
+                "key": "health-inspector",
+                "title": "Health Inspector",
+                "adventure_id": ids["adventure_id"],
+                "earned_at": "2026-01-01T00:00:00",
+            }
+        ]
+        await session.commit()
+
+    chat_resp = await client.get(f"/api/adventures/{ids['game_id']}/chat")
+    assert chat_resp.status_code == 200
+    data = chat_resp.json()
+    assert len(data["awards"]) == 1
+    assert data["awards"][0]["key"] == "health-inspector"
+    assert data["awards"][0]["is_earned"] is True
+
+
 async def test_get_chat_history_accepts_adventure_id_alias(client: AsyncClient):
     """GET /chat should resolve adventure/template ids to the latest session for that user."""
     ids = await _create_adventure(client, "Alias Route Quest")

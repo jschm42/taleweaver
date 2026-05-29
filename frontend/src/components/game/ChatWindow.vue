@@ -161,6 +161,12 @@ const showImage = (path?: string | null) => {
   return !!path && !brokenImages.value[path]
 }
 
+const agentMonkeyMode = computed(() => Boolean(props.sheet?.agent_monkey_mode))
+
+const handleMonkeyModeToggle = () => {
+  emit('send', agentMonkeyMode.value ? '/agent monkey off' : '/agent monkey on')
+}
+
 function appendText(text: string) {
   const current = inputText.value.trim()
   inputText.value = current ? `${current} ${text}` : text
@@ -973,6 +979,17 @@ onUnmounted(() => {
         <span>{{ agentPaused ? 'Autonomous Agent Mode is paused.' : 'Autonomous Agent Mode is active. The AI is playing the game.' }}</span>
       </div>
       <div class="flex items-center gap-2.5 select-none shrink-0">
+        <!-- Monkey Mode Toggle -->
+        <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider" :class="agentMonkeyMode ? 'text-amber-200 hover:text-amber-100' : 'text-indigo-300 hover:text-indigo-200'">
+          <input
+            type="checkbox"
+            :checked="agentMonkeyMode"
+            class="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-amber-600 focus:ring-amber-500/50 focus:ring-offset-slate-950 focus:ring-1"
+            @change="handleMonkeyModeToggle"
+          />
+          Monkey
+        </label>
+
         <!-- Step by Step Toggle -->
         <label class="flex items-center gap-1.5 cursor-pointer text-[10px] font-black uppercase tracking-wider text-indigo-300 hover:text-indigo-200">
           <input 
