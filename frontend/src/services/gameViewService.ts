@@ -32,7 +32,7 @@ function getWalkthroughUnavailable(currentXp: number): WalkthroughData {
 export const gameViewService = {
   async fetchGameSettings(): Promise<GameSettings | null> {
     try {
-      const settings = await api.getSettings()
+      const settings = await api.getSettings({ includeAvailableConstants: false })
 
       // Sync TTS enabled state so in-game TTS controls (TextLogModal etc.) show correctly
       if ((settings as any)?.tts_settings !== undefined) {

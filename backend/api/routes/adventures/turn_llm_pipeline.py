@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import prompts
 from backend.core.llm_logger import log_structured_event
 from backend.engine.memory_manager import MemoryManager
@@ -94,13 +95,22 @@ class TurnLlmContextBuilder:
                 ent.is_hidden = ov["is_hidden"]
             if "is_in_inventory" in ov:
                 ent.is_in_inventory = ov["is_in_inventory"]
+            if "inventory" in ov:
+                ent.inventory = ov["inventory"]
             ent.is_defeated = bool(ov.get("is_defeated", False))
+
+        container_payloads = [
+            {"item_type": e.item_type, "inventory": e.inventory}
+            for e in all_entities
+        ]
+        contained_item_ids = AdventureLogic.collect_container_item_ids(container_payloads)
 
         scene_entities_all = [
             e
             for e in all_entities
             if e.current_scene_id == self.manager.state.current_scene_id
             and not getattr(e, "is_in_inventory", False)
+            and str(e.id or "") not in contained_item_ids
         ]
         entities = [e for e in scene_entities_all if not getattr(e, "is_hidden", False)]
         hidden_entities = [e for e in scene_entities_all if getattr(e, "is_hidden", False)]

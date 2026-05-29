@@ -288,6 +288,39 @@ class GameTurnManager:
             or normalized in {"[look around]", "/lookaround", "/look", "look"}
         )
 
+    @staticmethod
+    def _replace_entity_ids_with_names(text: str, id_to_name: dict[str, str]) -> str:
+        """Replace leaked entity-id tokens (e.g. FREEZER_KEY) with display names."""
+        if not text or not id_to_name:
+            return text
+
+        valid_pairs: dict[str, str] = {}
+        for raw_id, raw_name in (id_to_name or {}).items():
+            entity_id = str(raw_id or "").strip()
+            entity_name = str(raw_name or "").strip()
+            if not entity_id or not entity_name:
+                continue
+            if entity_id == entity_name:
+                continue
+            valid_pairs[entity_id] = entity_name
+
+        if not valid_pairs:
+            return text
+
+        pattern = re.compile(
+            r"(?<![A-Za-z0-9_])(" + "|".join(re.escape(k) for k in sorted(valid_pairs.keys(), key=len, reverse=True)) + r")(?![A-Za-z0-9_])"
+        )
+
+        def _replace(match: re.Match[str]) -> str:
+            token = match.group(1)
+            prefix = text[max(0, match.start() - 4):match.start()]
+            # Preserve explicit technical markers used by debug/unhide logic.
+            if prefix.upper().endswith("ID: "):
+                return token
+            return valid_pairs.get(token, token)
+
+        return pattern.sub(_replace, text)
+
     async def _build_scene_exits_context_json(self) -> str:
         exits_res = await self.db.execute(
             select(WorldExit).where(
@@ -3708,6 +3741,23 @@ class GameTurnManager:
                 game_event.game_over = True
                 game_event.status_note = str(goe)
 
+        # Push a state snapshot before narration so scene/entity images can update immediately on scene changes.
+        await self.db.flush()
+        pre_narration_state = jsonable_encoder({
+            'map_data': await self._build_map_payload(),
+            'nodes': await AdventureLogic.get_all_scene_metadata(self.db, self.state.template_id, session_id=self.state.session_id),
+            'npc_metadata': await AdventureLogic.get_npc_metadata(self.db, self.state.template_id, session_id=self.state.session_id),
+            'image_url': await AdventureLogic.resolve_scene_image(self.db, self.state, self.state.current_scene_id),
+            'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+            'entities': await AdventureLogic.build_session_entities(self.db, self.state),
+            'combat': AdventureLogic.get_combat_snapshot(self.state),
+            'quests': self.state.quests,
+            **self._build_prompt_suggestions_payload(),
+            **self._build_terminal_flags_payload(),
+            'status': 'success',
+        })
+        yield f"event: state\ndata: {json.dumps(pre_narration_state)}\n\n"
+
         # Pass 2: Narration
         yield f"event: status\ndata: {json.dumps({'content': 'Generating narrative...'})}\n\n"
         try:
@@ -3843,6 +3893,22 @@ class GameTurnManager:
 
             response_text = fallback
             yield f"event: chunk\ndata: {json.dumps({'content': fallback})}\n\n"
+
+        id_to_name: dict[str, str] = {}
+        for entity in all_entities:
+            entity_id = str(getattr(entity, "id", "") or "").strip()
+            entity_name = str(getattr(entity, "name", "") or "").strip()
+            if entity_id and entity_name:
+                id_to_name[entity_id] = entity_name
+
+        if isinstance(game_event, GameEvent) and game_event.updated_entities:
+            for update in game_event.updated_entities:
+                update_id = str(getattr(update, "entity_id", "") or "").strip()
+                update_name = str(getattr(update, "name", "") or "").strip()
+                if update_id and update_name:
+                    id_to_name[update_id] = update_name
+
+        response_text = self._replace_entity_ids_with_names(response_text, id_to_name)
 
         # Finalize
         assistant_chat = ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text)

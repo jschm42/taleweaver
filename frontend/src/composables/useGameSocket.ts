@@ -439,6 +439,9 @@ export function useGameSocket(): UseGameSocket {
               timestamp: new Date().toLocaleTimeString(),
               content: data.content
             })
+          } else if (event === 'state') {
+            // Early turn snapshot: refresh scene/entities before narration streams in.
+            applySessionSnapshot(data, false)
           } else if (event === 'system') {
             const role = data.role || 'system'
             // If the backend included a user_msg_id (debug command flow), attach it to the
@@ -620,6 +623,9 @@ export function useGameSocket(): UseGameSocket {
               timestamp: new Date().toLocaleTimeString(),
               content: data.content
             })
+          } else if (event === 'state') {
+            // Early turn snapshot: refresh scene/entities before narration streams in.
+            applySessionSnapshot(data, false)
           } else if (event === 'thought') {
             _pushMessage('thought' as any, data.content)
           } else if (event === 'player_action') {

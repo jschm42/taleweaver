@@ -15,6 +15,7 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity
 from backend.utils.path_security import ensure_within_data_dir, safe_data_path, sanitize_path_component
+from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,17 @@ class AgentService:
         )
         scene_entities = scene_items_res.scalars().all()
         states = state.entity_states or {}
+        container_payloads: list[dict[str, Any]] = []
+        for entity in scene_entities:
+            entity_state = states.get(entity.id, {}) if isinstance(states, dict) else {}
+            container_payloads.append(
+                {
+                    "item_type": entity_state.get("item_type", entity.item_type),
+                    "inventory": entity_state.get("inventory", entity.inventory),
+                }
+            )
+        contained_item_ids = AdventureLogic.collect_container_item_ids(container_payloads)
+
         visible_scene_item_names: list[str] = []
         for entity in scene_entities:
             entity_state = states.get(entity.id, {}) if isinstance(states, dict) else {}
@@ -142,6 +154,8 @@ class AgentService:
             if current_scene_id != state.current_scene_id:
                 continue
             if is_hidden or is_in_inventory:
+                continue
+            if str(entity.id or "") in contained_item_ids:
                 continue
             if entity.name:
                 visible_scene_item_names.append(entity.name)

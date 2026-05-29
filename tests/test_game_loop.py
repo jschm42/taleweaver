@@ -586,6 +586,25 @@ async def test_adventure_generator_runs_mechanics_in_chat_mode(setup_test_db, mo
         assert mock_llm_instance.aexecute_complex_task.await_count == 1
 
 
+async def test_replace_entity_ids_with_names_rewrites_plain_tokens():
+    text = "Du setzt das FREEZER_RELEASE_WHEEL in die Zugangsplatte ein."
+    replaced = GameTurnManager._replace_entity_ids_with_names(
+        text,
+        {"FREEZER_RELEASE_WHEEL": "Freezer Release Wheel"},
+    )
+    assert "FREEZER_RELEASE_WHEEL" not in replaced
+    assert "Freezer Release Wheel" in replaced
+
+
+async def test_replace_entity_ids_with_names_keeps_debug_id_markers():
+    text = "ID: FREEZER_RELEASE_WHEEL ist sichtbar geworden."
+    replaced = GameTurnManager._replace_entity_ids_with_names(
+        text,
+        {"FREEZER_RELEASE_WHEEL": "Freezer Release Wheel"},
+    )
+    assert replaced == text
+
+
 async def test_adventure_generator_chat_mode_uses_tool_intent_pass(setup_test_db, monkeypatch):
     """Adventure-generator in chat mode should process tool intents without strict GameEvent mechanics."""
     from tests.conftest import TestSessionLocal
@@ -1766,6 +1785,58 @@ async def test_combat_loot_done_spawns_visible_scene_loot_with_stale_overrides(s
 
         visible_entities = await AdventureLogic.build_session_entities(db, state)
         assert any(ent.get("id") == "RAT_TOOTH" for ent in visible_entities)
+
+
+async def test_build_session_entities_hides_items_inside_container_inventory(setup_test_db):
+    from backend.api.routes.adventures.logic import AdventureLogic
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        _user, _adv, _avatar, state = await _seed_game_context(db)
+
+        db.add_all([
+            WorldEntity(
+                id="TRASH_CAN",
+                session_id=state.session_id,
+                entity_type="OBJECT",
+                name="Overflowing Trash Can",
+                description="A plastic bin full of greasy napkins.",
+                current_scene_id=state.current_scene_id,
+                item_type="CONTAINER",
+                is_hidden=False,
+                is_in_inventory=False,
+                is_portable=False,
+                inventory=["CRUMPLED_RECEIPT"],
+            ),
+            WorldEntity(
+                id="CRUMPLED_RECEIPT",
+                session_id=state.session_id,
+                entity_type="OBJECT",
+                name="Crumpled Receipt",
+                description="A greasy piece of thermal paper.",
+                current_scene_id=state.current_scene_id,
+                image_url="/data/adventures/test/crumpled-receipt.png",
+                item_type="READABLE",
+                is_hidden=False,
+                is_in_inventory=False,
+                is_portable=True,
+                inventory=[],
+            ),
+        ])
+        await db.commit()
+
+        visible_entities = await AdventureLogic.build_session_entities(db, state)
+        visible_ids = {str(ent.get("id")) for ent in visible_entities}
+        assert "TRASH_CAN" in visible_ids
+        assert "CRUMPLED_RECEIPT" not in visible_ids
+
+        trash_can = next(ent for ent in visible_entities if str(ent.get("id")) == "TRASH_CAN")
+        inventory_entries = trash_can.get("inventory") or []
+        assert len(inventory_entries) == 1
+        nested_item = inventory_entries[0]
+        assert nested_item.get("id") == "CRUMPLED_RECEIPT"
+        assert nested_item.get("name") == "Crumpled Receipt"
+        assert nested_item.get("image_url")
 
 
 async def test_debug_win_fight_uses_loot_phase_mechanism(setup_test_db, monkeypatch):

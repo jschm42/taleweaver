@@ -87,8 +87,9 @@ class TTSGeneratePayload(BaseModel):
             return None
         try:
             return str(uuid.UUID(candidate))
-        except (ValueError, AttributeError, TypeError) as exc:
-            raise ValueError("Must be a valid UUID.") from exc
+        except (ValueError, AttributeError, TypeError):
+            # Keep backward compatibility for non-UUID template/route ids.
+            return candidate
 
     @field_validator("adventure_id", "session_id", mode="before")
     @classmethod

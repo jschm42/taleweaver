@@ -279,49 +279,7 @@ class AudioService {
     return new Blob([blob], { type: inferredMimeType })
   }
 
-  private async playAudioBlob(blob: Blob): Promise<void> {
-    if (!blob.size) {
-      throw new Error('Audio payload is empty')
-    }
-
-    if (this.audioContext?.state === 'running') {
-      // Prefer Web Audio API: decodeAudioData + BufferSource.
-      // This completely avoids HTMLAudioElement.play() autoplay restrictions
-      // and correctly handles sample-rate resampling (e.g. 24 kHz WAV in a
-      // 44.1/48 kHz AudioContext) without distortion.
-      const arrayBuffer = await blob.arrayBuffer()
-      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
-
-      await new Promise<void>((resolve, reject) => {
-        if (!this.audioContext) { resolve(); return }
-
-        const source = this.audioContext.createBufferSource()
-        source.buffer = audioBuffer
-        // For WAV (Gemini 2.5 PCM), allow only a very small speed-up to avoid
-        // chipmunk-like pitch artifacts.
-        const isWav = (blob.type || '').toLowerCase().includes('wav')
-        const requestedRate = this.getSafeSpeechRate()
-        const wavSafeRate = Math.min(1.1, Math.max(1.0, requestedRate))
-        source.playbackRate.value = isWav ? wavSafeRate : requestedRate
-        source.connect(this.audioContext.destination)
-        this.currentBufferSource = source
-
-        source.onended = () => {
-          this.currentBufferSource = null
-          resolve()
-        }
-
-        try {
-          source.start()
-        } catch (err) {
-          this.currentBufferSource = null
-          reject(err)
-        }
-      })
-      return
-    }
-
-    // Fallback: HTMLAudioElement (only reached before any user gesture).
+  private async playAudioBlobWithHtmlAudio(blob: Blob): Promise<void> {
     this.currentObjectUrl = URL.createObjectURL(blob)
     this.currentAudio = new Audio(this.currentObjectUrl)
     this.currentAudio.muted = false
@@ -357,6 +315,60 @@ class AudioService {
 
       this.currentAudio.play().catch(reject)
     })
+  }
+
+  private async playAudioBlob(blob: Blob): Promise<void> {
+    if (!blob.size) {
+      throw new Error('Audio payload is empty')
+    }
+
+    if (this.audioContext?.state === 'running') {
+      // Prefer Web Audio API: decodeAudioData + BufferSource.
+      // This completely avoids HTMLAudioElement.play() autoplay restrictions
+      // and correctly handles sample-rate resampling (e.g. 24 kHz WAV in a
+      // 44.1/48 kHz AudioContext) without distortion.
+      try {
+        const arrayBuffer = await blob.arrayBuffer()
+        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
+
+        await new Promise<void>((resolve, reject) => {
+          if (!this.audioContext) { resolve(); return }
+
+          const source = this.audioContext.createBufferSource()
+          source.buffer = audioBuffer
+          // For WAV (Gemini 2.5 PCM), allow only a very small speed-up to avoid
+          // chipmunk-like pitch artifacts.
+          const isWav = (blob.type || '').toLowerCase().includes('wav')
+          const requestedRate = this.getSafeSpeechRate()
+          const wavSafeRate = Math.min(1.1, Math.max(1.0, requestedRate))
+          source.playbackRate.value = isWav ? wavSafeRate : requestedRate
+          source.connect(this.audioContext.destination)
+          this.currentBufferSource = source
+
+          source.onended = () => {
+            this.currentBufferSource = null
+            resolve()
+          }
+
+          try {
+            source.start()
+          } catch (err) {
+            this.currentBufferSource = null
+            reject(err)
+          }
+        })
+        return
+      } catch (err) {
+        this.logDebug('WebAudio decode failed; falling back to HTMLAudio', {
+          error: String(err),
+          blobType: blob.type,
+          blobSize: blob.size,
+        })
+      }
+    }
+
+    // Fallback: HTMLAudioElement (before any user gesture OR when WebAudio decode fails).
+    await this.playAudioBlobWithHtmlAudio(blob)
   }
 
   private normalizeText(value: unknown): string {
@@ -638,7 +650,15 @@ class AudioService {
           continue
         }
 
-        await this.playAudioBlob(currentAudioBlob)
+        try {
+          await this.playAudioBlob(currentAudioBlob)
+        } catch (err) {
+          // Continue with following chunks if one segment fails during playback.
+          this.logDebug('TTS chunk playback failed; continuing with next chunk', {
+            index,
+            error: String(err),
+          })
+        }
       }
 
       this.isGenerating.value = false

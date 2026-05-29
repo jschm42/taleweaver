@@ -95,14 +95,15 @@ const stateChanged = ref(false)
 
 const handleInventoryClick = (item: any) => {
   if (!item) return
-  stateChanged.value = true
   
   // Strict check: must have a slot assigned or wearable_slots defined
   const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
   
   if (isEquippable) {
+    stateChanged.value = true
     emit('equip', item.name)
   } else if (item.item_type === 'CONSUMABLE') {
+    stateChanged.value = true
     emit('consume', item.name)
   } else if (String(item.item_type || '').toUpperCase() === 'CONTAINER') {
     emit('openContainer', item)

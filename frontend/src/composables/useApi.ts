@@ -281,8 +281,12 @@ export const api = {
     return request(`/settings/keys/${provider}`, { method: 'DELETE' })
   },
 
-  /** Retrieves full settings payload including generation catalogs. */
-  getSettings(): Promise<SettingsResponse> {
+  /** Retrieves settings; callers can skip dynamic model discovery for lightweight reads. */
+  getSettings(options?: { includeAvailableConstants?: boolean }): Promise<SettingsResponse> {
+    const includeConstants = options?.includeAvailableConstants
+    if (includeConstants === false) {
+      return request('/settings?include_available_constants=false')
+    }
     return request('/settings')
   },
 

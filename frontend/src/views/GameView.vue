@@ -750,9 +750,9 @@ const handleConsumeFromSheet = async (name: string) => {
 }
 
 const handleSheetChanged = async () => {
+  // Closing/viewing the sheet must never trigger an autonomous GM turn.
+  // Player-initiated actions already send explicit commands.
   sheetDirty.value = false
-  if (!gameActionService.shouldRunRulePass(isActionInputBlocked.value, sheet.value?.rule_enforcement_mode)) return
-  await sendMessage('/rule-pass')
 }
 
 const handleCombatAttack = async () => {

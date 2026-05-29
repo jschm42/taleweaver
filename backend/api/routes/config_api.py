@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import time
 import uuid
 from typing import Any, Optional
 
@@ -11,6 +12,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+_MODEL_FETCH_LOG_COOLDOWN_SECONDS = 300.0
+_MODEL_FETCH_LAST_LOGGED_AT: dict[str, float] = {}
 
 SUPPORTED_TTS_MODELS = {
     "gemini-3.1-flash-tts-preview",
@@ -227,7 +231,7 @@ async def _fetch_ollama_models(ollama_url: Optional[str]) -> list[str]:
 
         return sorted(set(models))
     except (httpx.HTTPError, ValueError, TypeError):
-        logger.info("Could not fetch Ollama models from %s", endpoint)
+        _log_model_fetch_failure_once_per_interval("ollama", endpoint)
         return []
 
 
@@ -256,8 +260,24 @@ async def _fetch_stable_diffusion_models(stable_diffusion_url: Optional[str]) ->
                 unique_models.append(m)
         return unique_models
     except (httpx.HTTPError, ValueError, TypeError):
-        logger.info("Could not fetch Stable Diffusion models from %s", endpoint)
+        _log_model_fetch_failure_once_per_interval("stable_diffusion", endpoint)
         return ["default"]
+
+
+def _log_model_fetch_failure_once_per_interval(provider: str, endpoint: str) -> None:
+    """Rate-limit model-fetch failure logs to avoid flooding app logs while polling settings."""
+    now = time.monotonic()
+    last_logged = _MODEL_FETCH_LAST_LOGGED_AT.get(provider)
+    if last_logged is not None and (now - last_logged) < _MODEL_FETCH_LOG_COOLDOWN_SECONDS:
+        return
+
+    _MODEL_FETCH_LAST_LOGGED_AT[provider] = now
+    logger.info(
+        "Could not fetch %s models from %s (suppressing repeated messages for %.0fs)",
+        "Stable Diffusion" if provider == "stable_diffusion" else "Ollama",
+        endpoint,
+        _MODEL_FETCH_LOG_COOLDOWN_SECONDS,
+    )
 
 
 async def _build_available_constants(llm_settings: Optional[dict], t2i_settings: Optional[dict] = None) -> dict[str, Any]:
@@ -714,6 +734,7 @@ class CatalogGeneratePayload(BaseModel):
 
 @router.get("")
 async def get_settings(
+    include_available_constants: bool = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -723,7 +744,17 @@ async def get_settings(
     # Common defaults if no user/settings
     default_llm = _normalize_llm_settings(None)
     default_t2i = _normalize_t2i_settings(None)
-    default_available_constants = await _build_available_constants(default_llm, default_t2i)
+    default_available_constants = (
+        await _build_available_constants(default_llm, default_t2i)
+        if include_available_constants
+        else {
+            "llm_providers": LLM_PROVIDERS,
+            "image_providers": IMAGE_PROVIDERS,
+            "tts_providers": TTS_PROVIDERS,
+            "predefined_llm_models": dict(PREDEFINED_LLM_MODELS),
+            "predefined_image_models": dict(PREDEFINED_IMAGE_MODELS),
+        }
+    )
     
     def get_keys_status(db_keys):
         status = {}
@@ -756,7 +787,17 @@ async def get_settings(
         }
 
     normalized_llm_settings = _normalize_llm_settings(user.llm_settings)
-    available_constants = await _build_available_constants(normalized_llm_settings, user.t2i_settings)
+    available_constants = (
+        await _build_available_constants(normalized_llm_settings, user.t2i_settings)
+        if include_available_constants
+        else {
+            "llm_providers": LLM_PROVIDERS,
+            "image_providers": IMAGE_PROVIDERS,
+            "tts_providers": TTS_PROVIDERS,
+            "predefined_llm_models": dict(PREDEFINED_LLM_MODELS),
+            "predefined_image_models": dict(PREDEFINED_IMAGE_MODELS),
+        }
+    )
     
     return {
         "app_version": settings.APP_VERSION,

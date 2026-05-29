@@ -19,7 +19,7 @@ export async function refreshConfig() {
   }
 
   try {
-    const data = await api.getSettings()
+    const data = await api.getSettings({ includeAvailableConstants: false })
     if (data.app_version) {
       configState.appVersion = data.app_version
     }

@@ -399,18 +399,90 @@ class AdventureLogic:
         ]
 
         session_overrides = state.entity_states or {}
-        entities: list[dict[str, Any]] = []
+        merged_entities: list[dict[str, Any]] = []
         for ent in base_entities:
             eid = ent.get("id")
             if eid in session_overrides:
                 ent.update(session_overrides[eid])
             ent["image_url"] = AdventureLogic.resolve_existing_data_asset_url(ent.get("image_url"))
+            merged_entities.append(ent)
+
+        entity_lookup: dict[str, dict[str, Any]] = {
+            str(ent.get("id")): ent
+            for ent in merged_entities
+            if ent.get("id")
+        }
+        contained_item_ids = AdventureLogic.collect_container_item_ids(merged_entities)
+        entities: list[dict[str, Any]] = []
+        for ent in merged_entities:
             if ent.get("current_scene_id") != state.current_scene_id:
                 continue
             if ent.get("is_hidden") or ent.get("is_in_inventory"):
                 continue
+            if str(ent.get("id") or "") in contained_item_ids:
+                continue
+            if str(ent.get("item_type") or "").upper() == "CONTAINER":
+                ent = dict(ent)
+                ent["inventory"] = AdventureLogic.hydrate_container_inventory(ent.get("inventory"), entity_lookup)
             entities.append(ent)
         return entities
+
+    @staticmethod
+    def extract_inventory_entity_ids(inventory: Any) -> set[str]:
+        """Extracts entity IDs from mixed inventory payloads (string IDs or dict items)."""
+        if not isinstance(inventory, list):
+            return set()
+
+        item_ids: set[str] = set()
+        for entry in inventory:
+            item_id = ""
+            if isinstance(entry, str):
+                item_id = entry.strip()
+            elif isinstance(entry, dict):
+                raw_id = entry.get("id")
+                if isinstance(raw_id, str):
+                    item_id = raw_id.strip()
+
+            if item_id:
+                item_ids.add(item_id)
+
+        return item_ids
+
+    @staticmethod
+    def collect_container_item_ids(entities: list[dict[str, Any]]) -> set[str]:
+        """Returns IDs of entities stored inside container objects."""
+        contained_ids: set[str] = set()
+        for entity in entities:
+            if str(entity.get("item_type") or "").upper() != "CONTAINER":
+                continue
+            contained_ids.update(AdventureLogic.extract_inventory_entity_ids(entity.get("inventory")))
+        return contained_ids
+
+    @staticmethod
+    def hydrate_container_inventory(inventory: Any, entity_lookup: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        """Expands container inventory refs into item payloads used by the UI modal."""
+        if not isinstance(inventory, list):
+            return []
+
+        hydrated: list[dict[str, Any]] = []
+        for entry in inventory:
+            if isinstance(entry, dict):
+                item = dict(entry)
+                item["image_url"] = AdventureLogic.resolve_existing_data_asset_url(item.get("image_url"))
+                hydrated.append(item)
+                continue
+
+            if isinstance(entry, str):
+                item_id = entry.strip()
+                if not item_id:
+                    continue
+                resolved = entity_lookup.get(item_id)
+                if resolved:
+                    hydrated.append(dict(resolved))
+                else:
+                    hydrated.append({"id": item_id, "name": item_id})
+
+        return hydrated
 
     @staticmethod
     async def build_sheet_snapshot(avatar: Avatar, state: SessionState, db: AsyncSession) -> dict:
