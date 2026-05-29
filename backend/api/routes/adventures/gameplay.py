@@ -141,11 +141,19 @@ async def post_chat_message(
         turn_id = uuid4().hex
 
         async def _stream_with_turn_id(source: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
-            async for chunk in source:
-                if isinstance(chunk, str) and chunk.startswith("event:"):
-                    yield f"id: {turn_id}\n{chunk}"
-                else:
-                    yield chunk
+            try:
+                async for chunk in source:
+                    if isinstance(chunk, str) and chunk.startswith("event:"):
+                        yield f"id: {turn_id}\n{chunk}"
+                    else:
+                        yield chunk
+            except Exception as exc:
+                logger.exception("Chat stream failed for session %s", game_id, exc_info=exc)
+                yield (
+                    f"id: {turn_id}\n"
+                    "event: error\n"
+                    f"data: {json.dumps({'detail': 'Unable to process this turn.'})}\n\n"
+                )
 
         return StreamingResponse(
             _stream_with_turn_id(
@@ -193,6 +201,7 @@ async def run_agent_turn(
             state = manager.state
 
             try:
+                decision_err = False
                 try:
                     decision = await AgentService.get_decision(
                         db, game_id, current_user, state, manager.avatar, manager.adventure, manager
@@ -204,10 +213,14 @@ async def run_agent_turn(
                 except Exception as exc:
                     logger.exception("Agent decision failed")
                     decision = None
-                    decision_err = str(exc)
+                    decision_err = True
 
                 if not decision or decision.is_stuck_or_bug:
-                    desc = decision.issue_description if decision else f"Exception: {decision_err}"
+                    desc = decision.issue_description if decision else (
+                        "Agent decision generation failed due to an internal error."
+                        if decision_err
+                        else "Agent did not return a valid decision."
+                    )
                     thoughts = decision.thoughts if decision else "Failed to get decision thoughts."
                     action = decision.action if decision else "None"
                     

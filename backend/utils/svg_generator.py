@@ -4,7 +4,7 @@ import os
 import random
 import re
 
-from backend.core.config import settings
+from backend.utils.path_security import ensure_within_data_dir
 
 
 class SVGPlaceholderGenerator:
@@ -195,7 +195,6 @@ class SVGPlaceholderGenerator:
 
     def save(self, filepath: str, title: str = "", category: str = "") -> None:
         """Speichert das SVG in eine Datei."""
-        data_root = os.path.realpath(settings.DATA_DIR)
         normalized_path = os.path.normpath(filepath)
         filename = os.path.basename(normalized_path)
         if not filename or filename in {".", ".."}:
@@ -203,17 +202,13 @@ class SVGPlaceholderGenerator:
         if any(sep in filename for sep in (os.sep, os.altsep) if sep):
             raise ValueError("Invalid filepath: filename must be a single path component.")
 
-        resolved_path = os.path.realpath(normalized_path)
-        try:
-            if os.path.commonpath([resolved_path, data_root]) != data_root:
-                raise ValueError("Invalid filepath: path escapes DATA_DIR.")
-        except ValueError as exc:
-            raise ValueError("Invalid filepath: cannot resolve against DATA_DIR.") from exc
+        resolved_path = ensure_within_data_dir(normalized_path)
 
         parent_dir = os.path.dirname(resolved_path)
         if not parent_dir:
             raise ValueError("Invalid filepath: missing parent directory.")
-        os.makedirs(parent_dir, exist_ok=True)
+        safe_parent_dir = ensure_within_data_dir(parent_dir)
+        os.makedirs(safe_parent_dir, exist_ok=True)
         with open(resolved_path, 'w', encoding='utf-8') as f:
             f.write(self.generate(title, category))
 

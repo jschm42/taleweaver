@@ -1055,8 +1055,11 @@ async def test_tts_connection(
         if not audio_url:
             return {"status": "error", "message": "Failed to generate test audio."}
         return {"status": "success", "audio_url": audio_url}
-    except TTSModelSwitchSuggestionError as exc:
-        return {"status": "error", "message": str(exc)}
+    except TTSModelSwitchSuggestionError:
+        return {
+            "status": "error",
+            "message": "The selected TTS model is currently unavailable. Please choose a different model and try again.",
+        }
     except (ValueError, RuntimeError, TypeError) as exc:
         return _route_error_response(
             "TTS connection test",
@@ -1171,11 +1174,12 @@ async def upload_catalog_image(
     _ = current_user
     try:
         filepath = _build_catalog_upload_path(catalog_type, target_id, file.filename)
-        
-        with open(filepath, "wb") as f:
+
+        safe_filepath = _ensure_within_data_dir(filepath)
+        with open(safe_filepath, "wb") as f:
             f.write(await file.read())
-            
-        rel_path = os.path.relpath(filepath, settings.DATA_DIR).replace("\\", "/")
+
+        rel_path = os.path.relpath(safe_filepath, settings.DATA_DIR).replace("\\", "/")
         return {"status": "success", "image_url": f"/data/{rel_path}"}
     except (ValueError, RuntimeError, TypeError) as exc:
         return _route_error_response(
