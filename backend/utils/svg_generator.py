@@ -4,7 +4,7 @@ import os
 import random
 import re
 
-from backend.utils.path_security import ensure_within_data_dir
+from backend.utils.path_security import ensure_within_base_dir, ensure_within_data_dir
 
 
 class SVGPlaceholderGenerator:
@@ -208,7 +208,8 @@ class SVGPlaceholderGenerator:
         if not parent_dir:
             raise ValueError("Invalid filepath: missing parent directory.")
         safe_parent_dir = ensure_within_data_dir(parent_dir)
+        safe_resolved_path = ensure_within_base_dir(resolved_path, safe_parent_dir)
         os.makedirs(safe_parent_dir, exist_ok=True)
-        with open(resolved_path, 'w', encoding='utf-8') as f:
+        with open(safe_resolved_path, 'w', encoding='utf-8') as f:
             f.write(self.generate(title, category))
 

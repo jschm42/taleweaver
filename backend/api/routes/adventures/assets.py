@@ -20,7 +20,12 @@ from backend.core.style_catalog import resolve_style_instruction, resolve_tone_i
 from backend.engine.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.utils.path_security import ensure_within_data_dir, safe_data_path, sanitize_path_component
+from backend.utils.path_security import (
+    ensure_within_base_dir,
+    ensure_within_data_dir,
+    safe_data_path,
+    sanitize_path_component,
+)
 from typing import Any
 from io import BytesIO
 from PIL import Image
@@ -133,14 +138,15 @@ def _build_uploaded_visual_path(
         storage_path = base_storage_path
         filename = f"cover_{uuid.uuid4().hex}.{safe_file_ext}"
     else:
-        storage_path = ensure_within_data_dir(os.path.join(base_storage_path, safe_target_type))
+        storage_path = safe_data_path("adventures", "library", safe_template_id, "visuals", safe_target_type)
         safe_token = _sanitize_filename_token(trusted_target_token)
         filename_prefix = safe_token or safe_target_type
         filename = f"{filename_prefix}_{uuid.uuid4().hex}.{safe_file_ext}"
 
     safe_storage_path = ensure_within_data_dir(storage_path)
     os.makedirs(safe_storage_path, exist_ok=True)
-    return ensure_within_data_dir(os.path.join(safe_storage_path, filename))
+    candidate_path = ensure_within_data_dir(os.path.join(safe_storage_path, filename))
+    return ensure_within_base_dir(candidate_path, safe_storage_path)
 
 class RegenerateVisualRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
@@ -449,6 +455,8 @@ async def upload_visual(
             _extension_from_content_type(file.content_type),
             trusted_target_token=trusted_target_token,
         )
+        safe_parent_dir = ensure_within_data_dir(os.path.dirname(full_path))
+        full_path = ensure_within_base_dir(full_path, safe_parent_dir)
         with open(full_path, "wb") as f:
             f.write(content)
 

@@ -21,8 +21,10 @@ from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.utils.path_security import (
     data_url_to_local_path,
+    ensure_within_base_dir,
     ensure_within_data_dir,
     local_path_to_data_url,
+    sanitize_relative_segment,
 )
 from backend.utils.text_utils import slugify
 
@@ -957,6 +959,9 @@ class WorldGenerator:
 
             safe_prefix = slugify(str(source_asset_id or entity_type)) or "source"
             source_basename = os.path.basename(safe_source_local)
+            safe_source_basename = sanitize_relative_segment(source_basename)
+            if not safe_source_basename:
+                return None
             try:
                 target_dir = ensure_within_data_dir(
                     os.path.join(target_root, "visuals", "reused", str(entity_type))
@@ -968,8 +973,13 @@ class WorldGenerator:
             os.makedirs(safe_target_dir, exist_ok=True)
             try:
                 target_local = ensure_within_data_dir(
-                    os.path.join(safe_target_dir, f"{safe_prefix}_{source_basename}")
+                    os.path.join(safe_target_dir, f"{safe_prefix}_{safe_source_basename}")
                 )
+            except ValueError:
+                return None
+
+            try:
+                target_local = ensure_within_base_dir(target_local, safe_target_dir)
             except ValueError:
                 return None
 

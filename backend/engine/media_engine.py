@@ -28,8 +28,10 @@ from backend.utils.image_generator import (
     PlaceholderImageGenerator,
 )
 from backend.utils.path_security import (
+    ensure_within_base_dir,
     ensure_within_data_dir as ensure_within_data_dir_shared,
     local_path_to_data_url,
+    sanitize_relative_segment,
     sanitize_path_component as sanitize_path_component_shared,
 )
 from backend.utils.svg_generator import SVGPlaceholderGenerator
@@ -158,6 +160,10 @@ def _write_binary_file(filepath: str, payload: bytes) -> None:
     if not parent_dir:
         raise ValueError("Invalid filepath: missing parent directory.")
     safe_parent_dir = _ensure_within_data_dir(parent_dir)
+    safe_filename = sanitize_relative_segment(os.path.basename(safe_filepath))
+    if not safe_filename:
+        raise ValueError("Invalid filepath: invalid filename.")
+    safe_filepath = ensure_within_base_dir(os.path.join(safe_parent_dir, safe_filename), safe_parent_dir)
     os.makedirs(safe_parent_dir, exist_ok=True)
     with open(safe_filepath, "wb") as file_handle:
         file_handle.write(payload)
@@ -263,8 +269,13 @@ class MediaEngine:
         """Creates a thumbnail for the given image file if it doesn't exist."""
         try:
             safe_filepath = _ensure_within_data_dir(filepath)
-            base, ext = os.path.splitext(safe_filepath)
-            thumb_path = _ensure_within_data_dir(f"{base}_thumb{ext}")
+            source_stem, ext = os.path.splitext(os.path.basename(safe_filepath))
+            safe_thumb_name = sanitize_relative_segment(f"{source_stem}_thumb{ext}")
+            if not safe_thumb_name:
+                raise ValueError("Invalid thumbnail filename.")
+            thumb_path = _ensure_within_data_dir(
+                os.path.join(os.path.dirname(safe_filepath), safe_thumb_name)
+            )
             
             # Avoid re-generating if it already exists
             if os.path.exists(thumb_path):

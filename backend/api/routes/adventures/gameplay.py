@@ -155,18 +155,26 @@ async def post_chat_message(
                     f"data: {json.dumps({'detail': 'Unable to process this turn.'})}\n\n"
                 )
 
+        try:
+            turn_stream = manager.process_turn(
+                payload.content,
+                auto_visualize=payload.auto_visualize,
+                language=payload.language,
+            )
+        except Exception:
+            logger.exception("Failed to initialize chat stream for session %s", game_id)
+            raise HTTPException(status_code=500, detail="Unable to process this turn.")
+
         return StreamingResponse(
-            _stream_with_turn_id(
-                manager.process_turn(payload.content, auto_visualize=payload.auto_visualize, language=payload.language)
-            ),
+            _stream_with_turn_id(turn_stream),
             media_type="text/event-stream",
             headers={"X-Taleweaver-Turn-Id": turn_id},
         )
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to start chat turn for session %s", game_id)
-        raise HTTPException(status_code=500, detail="Unable to process this turn.") from exc
+        raise HTTPException(status_code=500, detail="Unable to process this turn.")
 
 
 @router.post("/{game_id}/agent/turn")

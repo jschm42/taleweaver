@@ -39,7 +39,12 @@ from backend.core.tts_voices import GOOGLE_TTS_VOICE_CATALOG, GOOGLE_TTS_VOICE_L
 from backend.engine.media_engine import MediaEngine
 from backend.engine.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.models.user import User
-from backend.utils.path_security import ensure_within_data_dir, safe_data_path, sanitize_path_component
+from backend.utils.path_security import (
+    ensure_within_base_dir,
+    ensure_within_data_dir,
+    safe_data_path,
+    sanitize_path_component,
+)
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 print(f"DEBUG: Loading config_api module, router prefix: {router.prefix}")
@@ -49,6 +54,11 @@ DEFAULT_COMPLEX_MAX_TOKENS = 24576
 DEFAULT_GENERATOR_MAX_TOKENS = 32768
 _SAFE_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 _ALLOWED_CATALOG_TYPES = {"styles", "tones"}
+_CATALOG_EXT_BY_CONTENT_TYPE = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+}
 
 
 async def _resolve_global_settings_owner(db: AsyncSession, fallback_user: User) -> User:
@@ -116,6 +126,11 @@ def _sanitize_image_extension(filename: Optional[str]) -> str:
         return "png"
     ext = filename.rsplit(".", 1)[-1].strip().lower()
     return ext if ext in _SAFE_IMAGE_EXTENSIONS else "png"
+
+
+def _extension_from_content_type(content_type: Optional[str]) -> str:
+    """Resolve a safe image extension from content type with png fallback."""
+    return _CATALOG_EXT_BY_CONTENT_TYPE.get((content_type or "").strip().lower(), "png")
 
 
 def _route_error_response(operation: str, message: str, exc: Exception) -> dict[str, str]:
@@ -1173,9 +1188,12 @@ async def upload_catalog_image(
     _ = db
     _ = current_user
     try:
-        filepath = _build_catalog_upload_path(catalog_type, target_id, file.filename)
+        safe_ext = _extension_from_content_type(file.content_type)
+        filepath = _build_catalog_upload_path(catalog_type, target_id, f"upload.{safe_ext}")
 
         safe_filepath = _ensure_within_data_dir(filepath)
+        safe_parent_dir = _ensure_within_data_dir(os.path.dirname(safe_filepath))
+        safe_filepath = ensure_within_base_dir(safe_filepath, safe_parent_dir)
         with open(safe_filepath, "wb") as f:
             f.write(await file.read())
 

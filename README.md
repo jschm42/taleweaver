@@ -25,44 +25,26 @@
   <br><em><b>Adventure Portal</b> - Manage your stories and explore new worlds.</em>
 </p>
 
-<p align="center">
-  <a href="docs/screenshots/generator.jpg"><img src="docs/screenshots/generator.jpg" width="600" alt="World Generator"></a>
-  <br><em><b>World Generator</b> - AI-driven world building and story generation.</em>
-</p>
 
-<p align="center">
-  <a href="docs/screenshots/gameplay.jpg"><img src="docs/screenshots/gameplay.jpg" width="600" alt="Gamesession"></a>
-  <br><em><b>In-Game</b> - Immersive text adventure gameplay with dynamic AI interaction.</em>
-</p>
-
-<p align="center">
-  <a href="docs/screenshots/combat-dialog.jpg"><img src="docs/screenshots/combat-dialog.jpg" width="600" alt="Combat Dialog"></a>
-  <br><em><b>Combat Dialog</b> - Tactical combat interface with action choices and integrated loot resolution.</em>
-</p>
-
-### Mini Gallery Example (3x3)
-
-<p align="center">
-  Placeholder grid for GitHub README. Replace each `src` path with your final screenshots.
-</p>
+### Full Screenshot Gallery
 
 <table align="center">
   <tr>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 01"></a></td>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 02"></a></td>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 03"></a></td>
+    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/small/library.jpg" width="180" alt="Adventure Library"></a></td>
+    <td><a href="docs/screenshots/generator.jpg"><img src="docs/screenshots/small/generator.jpg" width="180" alt="World Generator"></a></td>
+    <td><a href="docs/screenshots/gameplay.jpg"><img src="docs/screenshots/small/gameplay.jpg" width="180" alt="Gameplay"></a></td>
+    <td><a href="docs/screenshots/combat-dialog.jpg"><img src="docs/screenshots/small/combat-dialog.jpg" width="180" alt="Combat Dialog"></a></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 07"></a></td>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 08"></a></td>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 09"></a></td>
+    <td><a href="docs/screenshots/loot-dialog.jpg"><img src="docs/screenshots/small/loot-dialog.jpg" width="180" alt="Loot Dialog"></a></td>
+    <td><a href="docs/screenshots/editor-scenes.jpg"><img src="docs/screenshots/small/editor-scenes.jpg" width="180" alt="Editor Scenes"></a></td>
+    <td><a href="docs/screenshots/editor-npcs.jpg"><img src="docs/screenshots/small/editor-npcs.jpg" width="180" alt="Editor NPCs"></a></td>
+    <td><a href="docs/screenshots/editor-items.jpg"><img src="docs/screenshots/small/editor-items.jpg" width="180" alt="Editor Items"></a></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 13"></a></td>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 14"></a></td>
-    <td><a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="140" alt="Gallery Tile 15"></a></td>
+    <td><a href="docs/screenshots/editor-map.jpg"><img src="docs/screenshots/small/editor-map.jpg" width="180" alt="Editor Map"></a></td>
+    <td><a href="docs/screenshots/character-sheet.jpg"><img src="docs/screenshots/small/character-sheet.jpg" width="180" alt="Character Sheet"></a></td>
   </tr>
-  
 </table>
 
 ## 1. The Vision
