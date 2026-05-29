@@ -422,6 +422,61 @@ async def test_chat_progression_does_not_move_on_hypothetical_text(setup_test_db
         assert state.current_scene_id == "START"
 
 
+async def test_chat_progression_does_not_move_on_non_movement_text_even_if_llm_flags_transition(setup_test_db, monkeypatch):
+    """Scene transition must not happen on non-movement text, even when intent classifier returns true."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        adv.strict_rules = False
+        adv.is_adventure_generator = False
+
+        db.add_all(
+            [
+                WorldScene(id="START", label="Parking Lot", description="Rainy asphalt", session_id="session-1", template_id=adv.id),
+                WorldScene(id="DINER_ENTRANCE", label="Diner Entrance", description="A neon-lit doorway", session_id="session-1", template_id=adv.id),
+                WorldExit(
+                    id="EXIT_PARKING_DINER",
+                    from_scene_id="START",
+                    to_scene_id="DINER_ENTRANCE",
+                    label="Glass doors",
+                    is_locked=False,
+                    session_id="session-1",
+                    template_id=adv.id,
+                ),
+            ]
+        )
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+
+        async def _mock_progression(*_args, **kwargs):
+            if kwargs.get("response_model") is AdventureGeneratorToolIntent:
+                return AdventureGeneratorToolIntent(new_scene_id="DINER_ENTRANCE", exit_label="Glass doors")
+            return AdventureGeneratorToolIntent()
+
+        mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=_mock_progression)
+        mock_llm_instance.aexecute_simple_task = AsyncMock(return_value='{"explicit_transition": true}')
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You stay on the parking lot, gathering your thoughts."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("I steady my breath and look at the rain."):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+        output = "".join(chunks)
+
+        assert state.current_scene_id == "START"
+        assert "You have entered" not in output
+
+
 async def test_rule_pass_payload_is_compact_and_scene_split(setup_test_db, monkeypatch):
     """Mechanics payload should be compact/filtered while narration keeps full scene detail."""
     from tests.conftest import TestSessionLocal
