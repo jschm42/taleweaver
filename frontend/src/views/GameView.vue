@@ -991,6 +991,7 @@ watch(
       @unequip="handleUnequipFromSheet"
       @consume="handleConsumeFromSheet"
       @open-container="openContainerFromInventoryItem"
+      @read-item="openTextLogFromEntity"
       @changed="handleSheetChanged"
       @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
       @item-leave="hoveredEntity = null"

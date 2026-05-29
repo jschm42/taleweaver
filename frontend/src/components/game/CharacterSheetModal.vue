@@ -18,6 +18,7 @@ const emit = defineEmits<{
   unequip: [slot: string]
   consume: [name: string]
   openContainer: [item: any]
+  readItem: [item: any]
   changed: []
   itemContextmenu: [item: any, event: MouseEvent]
 }>()
@@ -107,13 +108,15 @@ const handleInventoryClick = (item: any) => {
     emit('consume', item.name)
   } else if (String(item.item_type || '').toUpperCase() === 'CONTAINER') {
     emit('openContainer', item)
+  } else if (String(item.item_type || '').toUpperCase() === 'READABLE') {
+    emit('readItem', item)
   }
 }
 
 const isInteractable = (item: any) => {
   if (!item) return false
   const isEquippable = !!item.slot || (item.wearable_slots && item.wearable_slots.length > 0)
-  return isEquippable || item.item_type === 'CONSUMABLE' || String(item.item_type || '').toUpperCase() === 'CONTAINER'
+  return isEquippable || item.item_type === 'CONSUMABLE' || String(item.item_type || '').toUpperCase() === 'CONTAINER' || String(item.item_type || '').toUpperCase() === 'READABLE'
 }
 
 const handleUnequip = (slot: string) => {
@@ -267,6 +270,10 @@ const onClose = () => {
                         @contextmenu.prevent="inventoryList[idx-1] && emit('itemContextmenu', { ...inventoryList[idx-1], entity_type: 'ITEM' }, $event)"
                       >
                         <template v-if="inventoryList[idx-1]">
+                          <div v-if="String(inventoryList[idx-1].item_type || '').toUpperCase() === 'READABLE'" class="absolute top-1 left-1 z-20 px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border leading-none scale-90 origin-top-left"
+                               :class="Boolean(inventoryList[idx-1].is_read) ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-200 border-amber-500/30'">
+                            {{ Boolean(inventoryList[idx-1].is_read) ? 'READ' : 'NOTE' }}
+                          </div>
                           <div v-if="showImage(inventoryList[idx-1].image_url)" class="w-full h-full p-2">
                             <img :src="getImageUrl(inventoryList[idx-1].image_url)" class="w-full h-full object-cover object-top rounded-lg transition-transform group-hover:scale-110" @error="handleImageError(inventoryList[idx-1].image_url)" />
                           </div>

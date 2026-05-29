@@ -154,16 +154,16 @@ class AdventureGeneratorToolIntent(BaseModel):
     hp_change: int = 0
     stamina_change: int = 0
     mana_change: int = 0
-    new_inventory_items: list[InventoryItem] = []
+    new_inventory_items: Optional[list[InventoryItem]] = None
     removed_inventory_item_ids: Optional[list[str]] = None
-    updated_inventory_items: list[InventoryItem] = []
+    updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
     completed_quest_ids: Optional[list[str]] = None
     earned_award_keys: Optional[list[str]] = None
     remember_notes: Optional[list[str]] = None
     forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
-    new_status_effects: list[str] = []
+    new_status_effects: Optional[list[str]] = None
     game_over: bool = False
     game_completed: bool = False
     status_note: Optional[str] = None
@@ -192,10 +192,10 @@ class GameEvent(BaseModel):
     hp_change: int = 0
     stamina_change: int = 0
     mana_change: int = 0
-    new_status_effects: list[str] = []
-    new_inventory_items: list[InventoryItem] = []
+    new_status_effects: Optional[list[str]] = None
+    new_inventory_items: Optional[list[InventoryItem]] = None
     removed_inventory_item_ids: Optional[list[str]] = Field(None, validation_alias=AliasChoices("removed_inventory_item_ids", "removed_item_ids", "removed_items"))
-    updated_inventory_items: list[InventoryItem] = []
+    updated_inventory_items: Optional[list[InventoryItem]] = None
     spawned_items: Optional[list[InventoryItem]] = None
     
     # Mapping & Navigation
