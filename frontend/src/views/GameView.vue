@@ -1120,6 +1120,7 @@ watch(
 
     <TextLogModal
       :open="showTextLogModal"
+      :game-id="props.id"
       :title="activeTextLog?.title || 'Text Log'"
       :format="activeTextLog?.format || 'DOCUMENT'"
       :content="activeTextLog?.content || ''"

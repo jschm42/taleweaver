@@ -350,6 +350,16 @@ class TerminalEpilogueResponse(BaseModel):
     input_locked: bool = False
     pending_terminal_epilogue: bool = False
 
+
+class TranslateTextRequest(BaseModel):
+    text: str
+    language: Optional[str] = None
+
+
+class TranslateTextResponse(BaseModel):
+    translated_text: str
+    language: str
+
 class ChatResponse(BaseModel):
     messages: list[dict[str, Any]]
     sheet: dict[str, Any]

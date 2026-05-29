@@ -222,6 +222,14 @@ export const api = {
     return request(`/adventures/${gameId}/text-logs/${encodeURIComponent(entityId)}/read`, { method: 'POST' })
   },
 
+  /** Translates text using the session's configured small model into the requested target language. */
+  translateSessionText(gameId: string, payload: { text: string; language: string }): Promise<{ translated_text: string; language: string }> {
+    return request(`/adventures/${gameId}/translate-text`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
   /** Attempts to unlock one container with a submitted access code. */
   unlockContainerWithCode(gameId: string, entityId: string, code: string): Promise<{ status: string; entity_id: string; locked: boolean }> {
     return request(`/adventures/${gameId}/containers/${encodeURIComponent(entityId)}/unlock-code`, {

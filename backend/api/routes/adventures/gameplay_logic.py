@@ -278,6 +278,54 @@ class GameTurnManager:
     def _compact_json(payload: object) -> str:
         return TurnProgressionBuilder.compact_json(payload)
 
+    @staticmethod
+    def _is_lookaround_request(user_msg: str) -> bool:
+        normalized = (user_msg or "").strip().lower()
+        if not normalized:
+            return False
+        return (
+            "look around" in normalized
+            or normalized in {"[look around]", "/lookaround", "/look", "look"}
+        )
+
+    async def _build_scene_exits_context_json(self) -> str:
+        exits_res = await self.db.execute(
+            select(WorldExit).where(
+                WorldExit.from_scene_id == self.state.current_scene_id,
+                WorldExit.session_id == self.game_id,
+            )
+        )
+        exits = list(exits_res.scalars().all())
+        if not exits:
+            return "[]"
+
+        destination_ids = [str(ex.to_scene_id) for ex in exits if ex.to_scene_id]
+        destination_label_map: dict[str, str] = {}
+        if destination_ids:
+            scenes_res = await self.db.execute(
+                select(WorldScene).where(
+                    WorldScene.session_id == self.game_id,
+                    WorldScene.id.in_(destination_ids),
+                )
+            )
+            destination_label_map = {
+                str(scene.id): (scene.label or str(scene.id))
+                for scene in scenes_res.scalars().all()
+            }
+
+        exit_refs: list[dict[str, Any]] = []
+        for ex in exits:
+            exit_refs.append(
+                {
+                    "label": (ex.label or "").strip(),
+                    "destination_scene_id": str(ex.to_scene_id or "").strip(),
+                    "destination_scene_label": destination_label_map.get(str(ex.to_scene_id), str(ex.to_scene_id or "")),
+                    "is_locked": bool(ex.is_locked),
+                }
+            )
+
+        return self._compact_json(exit_refs)
+
     def _build_mechanics_awards(self) -> list[dict]:
         return self._progression.build_mechanics_awards()
 
@@ -2951,6 +2999,7 @@ class GameTurnManager:
     async def _run_llm_cycle(self, user_msg: str, auto_visualize: bool, language: str | None = None) -> AsyncGenerator[str, None]:
         _ = auto_visualize
         cycle_start = time.perf_counter()
+        scene_id_before_turn = self.state.current_scene_id
         ctx = await self._llm_context_builder.build_context(user_msg=user_msg, language=language)
         history = ctx.history
         entities = ctx.entities
@@ -3417,6 +3466,30 @@ class GameTurnManager:
             # Add a strong reminder at the end if enabled to ensure the LLM doesn't ignore it
             narration_prompt += "\n\nREMINDER: Use emotional vocal tags like [Laughs] or [Sighs] where appropriate to give your narration life."
 
+        scene_changed_this_turn = self.state.current_scene_id != scene_id_before_turn
+        if self._is_lookaround_request(user_msg) or scene_changed_this_turn:
+            exits_json = await self._build_scene_exits_context_json()
+            exit_count = 0
+            try:
+                parsed_exits = json.loads(exits_json)
+                if isinstance(parsed_exits, list):
+                    exit_count = len(parsed_exits)
+            except Exception:
+                exit_count = 0
+
+            sentence_instruction = (
+                "Use exactly 1 sentence for the exit paragraph, and do not use contrast/addition connectors like 'on the other side' or 'additionally'."
+                if exit_count == 1
+                else "Keep it short (max 2 sentences)."
+            )
+            narration_prompt += (
+                "\n\nEXIT DESCRIPTION TASK (MANDATORY): "
+                "If exits are available, add exactly one compact paragraph at the end that narratively describes visible exits and where they lead. "
+                f"Do not use headers, labels, lists, or bullet points. {sentence_instruction} "
+                "If an exit is locked, mention it naturally. Use the same language and tone as the rest of your narration."
+                f"\nCURRENT SCENE EXITS: {exits_json}"
+            )
+
 
         if run_chat_progression_pass:
             narration_prompt += "\n\n" + prompts.GM_CHAT_NARRATION_SUFFIX
@@ -3438,35 +3511,6 @@ class GameTurnManager:
                 if delta:
                     response_text += delta
                     yield f"event: chunk\ndata: {json.dumps({'content': delta})}\n\n"
-
-            # Check if this was a look around action, and append exits list if so
-            user_msg_lower = user_msg.lower().strip()
-            is_lookaround = (
-                "look around" in user_msg_lower or
-                user_msg == "[LOOK AROUND]" or
-                user_msg_lower in {"/lookaround", "/look", "look"}
-            )
-            if is_lookaround:
-                exits_res = await self.db.execute(
-                    select(WorldExit).where(
-                        WorldExit.from_scene_id == self.state.current_scene_id,
-                        WorldExit.session_id == self.game_id
-                    )
-                )
-                exits = exits_res.scalars().all()
-                if exits:
-                    exits_str_list = []
-                    for ex in exits:
-                        label = ex.label or ex.to_scene_id
-                        if ex.is_locked:
-                            exits_str_list.append(f"{label} (locked)")
-                        else:
-                            exits_str_list.append(label)
-                    
-                    header = "Ausgänge" if (language and "de" in language.lower()) else "Exits"
-                    exits_suffix = f"\n\n{header}: {', '.join(exits_str_list)}"
-                    response_text += exits_suffix
-                    yield f"event: chunk\ndata: {json.dumps({'content': exits_suffix})}\n\n"
 
         except Exception as e:
             user_safe_error = _friendly_llm_error_message(e)

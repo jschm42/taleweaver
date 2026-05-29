@@ -16,9 +16,12 @@ from backend.api.routes.adventures.schemas import (
     ChatResponse,
     TerminalEpilogueRequest,
     TerminalEpilogueResponse,
+    TranslateTextRequest,
+    TranslateTextResponse,
 )
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
+from backend.core.llm_router import GameMasterLLM
 from backend.engine.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -302,6 +305,69 @@ async def create_terminal_epilogue(
     """Creates the one-time terminal epilogue for completed or game-over sessions."""
     manager = GameTurnManager(db, game_id, current_user)
     return await cast(Any, manager).create_terminal_epilogue(language=payload.language)
+
+
+@router.post("/{game_id}/translate-text", response_model=TranslateTextResponse)
+async def translate_text(
+    game_id: str,
+    payload: TranslateTextRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Translates arbitrary session text into the requested language (Bable Fish target)."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    source_text = str(payload.text or "").strip()
+    if not source_text:
+        raise HTTPException(status_code=400, detail="Text is required.")
+
+    target_language = str(payload.language or "").strip()
+    if not target_language:
+        raise HTTPException(status_code=400, detail="Target language is required.")
+
+    llm_settings = current_user.llm_settings or {}
+    small_model_provider = (
+        llm_settings.get("small_model_provider")
+        or llm_settings.get("complex_model_provider")
+        or llm_settings.get("preferred_provider")
+        or "openai"
+    )
+    small_model = llm_settings.get("small_model") or "gpt-4o-mini"
+
+    try:
+        llm = GameMasterLLM(current_user, provider=small_model_provider, model_category="small")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    system_prompt = (
+        "You are Bable Fish, a precise translation engine for RPG text logs. "
+        "Translate the provided text into the target language while preserving meaning, tone, and line breaks. "
+        "Return ONLY the translated text, with no explanations or wrappers."
+    )
+    user_prompt = f"TARGET LANGUAGE: {target_language}\n\nTEXT TO TRANSLATE:\n{source_text}"
+
+    try:
+        translated = await llm.aexecute_simple_task(
+            system_prompt,
+            user_prompt,
+            small_model,
+            adventure_id=state.template_id,
+            game_id=state.session_id,
+            operation="translate_text_log",
+            phase="translation",
+            metadata={"target_language": target_language},
+        )
+    except Exception as exc:
+        logger.exception("Text translation failed for session %s", game_id, exc_info=exc)
+        raise HTTPException(status_code=502, detail="Translation failed.") from exc
+
+    cleaned = str(translated or "").strip()
+    if cleaned.startswith("```") and cleaned.endswith("```"):
+        cleaned = cleaned.strip("`").strip()
+
+    return TranslateTextResponse(translated_text=cleaned or source_text, language=target_language)
 
 @router.get("/{game_id}/walkthrough")
 async def get_walkthrough(

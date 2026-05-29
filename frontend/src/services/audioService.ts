@@ -11,6 +11,7 @@ type SpeakOptions = {
   npcMetadata?: Record<string, any>
   segmentedVoices?: boolean
   interruptCurrent?: boolean
+  useTextChunking?: boolean
 }
 
 class AudioService {
@@ -502,6 +503,7 @@ class AudioService {
       tone,
       npcMetadata,
       interruptCurrent = true,
+      useTextChunking,
     } = options
 
     // Direct/manual speak interrupts current playback. Queued speak is serialized.
@@ -516,8 +518,9 @@ class AudioService {
     const normalizedTitle = this.normalizeOptionalText(title)
     const normalizedSceneName = this.normalizeOptionalText(sceneName)
     const normalizedTone = this.normalizeOptionalText(tone)
-    this.logDebug('Starting speak sequence', { textLength: ttsText.length, useChunking: this.useTextChunking.value })
-    const segments = this.buildFallbackSegments(ttsText, this.useTextChunking.value)
+    const shouldUseChunking = typeof useTextChunking === 'boolean' ? useTextChunking : this.useTextChunking.value
+    this.logDebug('Starting speak sequence', { textLength: ttsText.length, useChunking: shouldUseChunking })
+    const segments = this.buildFallbackSegments(ttsText, shouldUseChunking)
     const requests = this.buildSegmentRequests(segments, npcMetadata)
 
     this.logDebug('TTS plan', {

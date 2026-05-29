@@ -745,6 +745,37 @@ async def test_terminal_epilogue_game_over_locks_input(client: AsyncClient, monk
     assert chat_payload["input_locked"] is True
 
 
+async def test_translate_text_endpoint_uses_bable_fish_language(client: AsyncClient, monkeypatch):
+    """POST /translate-text should translate content into the requested Bable Fish target language."""
+    ids = await _create_adventure(client, "Translate Text Log Quest")
+
+    async def fake_translate(
+        self,
+        system_prompt,
+        user_prompt,
+        model,
+        **kwargs,
+    ):
+        assert "TARGET LANGUAGE: German" in user_prompt
+        assert "Read me please." in user_prompt
+        return "Lies mich bitte."
+
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.gameplay.GameMasterLLM.aexecute_simple_task",
+        fake_translate,
+    )
+
+    resp = await client.post(
+        f"/api/adventures/{ids['game_id']}/translate-text",
+        json={"text": "Read me please.", "language": "German"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["translated_text"] == "Lies mich bitte."
+    assert payload["language"] == "German"
+
+
 async def test_regenerate_visual_updates_protagonist_image(client: AsyncClient, monkeypatch):
     """Regenerating the protagonist uses the default prompt when none is provided."""
     async def fake_generate_world(*args, **kwargs):

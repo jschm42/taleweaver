@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@fontsource/acme": "^5.2.7",
+    "@fontsource/caveat": "^5.2.8",
     "@fontsource/newsreader": "^5.2.10",
     "@fontsource/press-start-2p": "^5.2.7",
     "@types/dagre": "^0.7.54",
