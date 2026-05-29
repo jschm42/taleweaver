@@ -21,8 +21,8 @@
 ## 📸 Gallery
 
 <p align="center">
-  <a href="docs/screenshots/library.jpg"><img src="docs/screenshots/library.jpg" width="600" alt="Adventure Library"></a>
-  <br><em><b>Adventure Portal</b> - Manage your stories and explore new worlds.</em>
+  <a href="docs/screenshots/gameplay.jpg"><img src="docs/screenshots/gameplay.jpg" width="600" alt="Gameplay"></a>
+  <br><em><b>Adventure Gameplay</b> - Generative AI Roleplaying.</em>
 </p>
 
 
