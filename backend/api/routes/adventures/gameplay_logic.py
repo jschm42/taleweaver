@@ -935,6 +935,27 @@ class GameTurnManager:
                     yield chunk
                 return
 
+        blocked_message = await self._guard_non_visible_inspect_or_search(user_msg)
+        if blocked_message:
+            if actual_user_input:
+                await self._save_chat_message("user", actual_user_input)
+                await self.db.flush()
+
+            await self._save_chat_message("system", blocked_message)
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': blocked_message})}\n\n"
+
+            await self.db.commit()
+            final_data = jsonable_encoder({
+                'sheet': await AdventureLogic.build_sheet_snapshot(self.avatar, self.state, self.db),
+                'entities': await AdventureLogic.build_session_entities(self.db, self.state),
+                'combat': AdventureLogic.get_combat_snapshot(self.state),
+                **self._build_prompt_suggestions_payload(),
+                **self._build_terminal_flags_payload(),
+                'status': 'success',
+            })
+            yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+            return
+
         # Core Turn Logic
         turn_start = time.perf_counter()
         logger.debug(f"[Turn {self.game_id}] Starting turn for user '{self.user.username}' with input: {user_msg}")
@@ -1789,6 +1810,222 @@ class GameTurnManager:
         if hp is None:
             hp = npc.hp
         return isinstance(hp, int) and hp <= 0
+
+    @staticmethod
+    def _normalize_target_token(value: str) -> str:
+        """Normalize a target hint for resilient matching across spacing and punctuation variants."""
+        return re.sub(r"[^a-z0-9]+", "", (value or "").strip().lower())
+
+    @staticmethod
+    def _sanitize_inspect_or_search_target(raw_target: str) -> str | None:
+        """Normalize extracted inspect/search target and drop generic area references."""
+        target = (raw_target or "").strip().strip("\"'")
+        target = re.sub(r"^[\s:,-]+|[\s\.,!?:;]+$", "", target)
+        if not target:
+            return None
+
+        generic_targets = {
+            "around",
+            "area",
+            "surroundings",
+            "the surroundings",
+            "the area",
+            "room",
+            "the room",
+            "umgebung",
+            "bereich",
+            "raum",
+        }
+        if target.lower() in generic_targets:
+            return None
+        return target
+
+    async def _extract_inspect_or_search_target(self, user_msg: str) -> str | None:
+        """Extract inspect/search target via lightweight intent detection without language-specific keyword regex."""
+        text = " ".join((user_msg or "").strip().split())
+        if not text:
+            return None
+
+        lower_text = text.lower()
+        if lower_text.startswith("/inspect") or lower_text.startswith("/search"):
+            direct_target = text.split(" ", 1)[1].strip() if " " in text else ""
+            return self._sanitize_inspect_or_search_target(direct_target)
+
+        llm_settings = self.user.llm_settings or {}
+        small_model_provider = (
+            llm_settings.get("small_model_provider")
+            or llm_settings.get("complex_model_provider")
+            or llm_settings.get("preferred_provider")
+            or "openai"
+        )
+        small_model = llm_settings.get("small_model") or "gpt-4o-mini"
+
+        intent_system_prompt = (
+            "You classify the player's intent for a text-adventure turn. "
+            "Return ONLY strict JSON with schema: "
+            "{\"action\":\"inspect\"|\"search\"|\"other\",\"target\":string|null}. "
+            "Use action=inspect/search only if the player clearly intends to inspect or search a specific target. "
+            "For generic look-around or unrelated actions, return action=other and target=null."
+        )
+
+        try:
+            llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
+            raw_intent = await llm.aexecute_simple_task(
+                intent_system_prompt,
+                text,
+                small_model,
+                adventure_id=self.adventure.id,
+                game_id=self.game_id,
+                operation="chat_turn",
+                phase="inspect_search_intent_guard",
+            )
+            parsed = self._parse_json_object(raw_intent)
+            if not parsed:
+                return None
+
+            action = str(parsed.get("action") or "").strip().lower()
+            if action not in {"inspect", "search"}:
+                return None
+
+            raw_target = parsed.get("target")
+            if raw_target is None:
+                return None
+            return self._sanitize_inspect_or_search_target(str(raw_target))
+        except Exception as exc:
+            logger.debug("[Turn %s] Inspect/search intent guard skipped: %s", self.game_id, exc)
+            return None
+
+    async def _collect_inspect_search_visibility_tokens(self) -> tuple[set[str], set[str]]:
+        """Collect allowed and disallowed normalized tokens for inspect/search target checks."""
+        allowed_tokens: set[str] = set()
+        disallowed_tokens: set[str] = set()
+
+        def _add_token(bucket: set[str], raw: Any) -> None:
+            token = self._normalize_target_token(str(raw or ""))
+            if token:
+                bucket.add(token)
+
+        states = self.state.entity_states or {}
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+            )
+        )
+        entities = list(ent_res.scalars().all())
+
+        for ent in entities:
+            ent_state = states.get(ent.id, {}) if isinstance(states, dict) else {}
+            current_scene_id = ent_state.get("current_scene_id", ent.current_scene_id)
+            is_hidden = bool(ent_state.get("is_hidden", ent.is_hidden))
+            is_in_inventory = bool(ent_state.get("is_in_inventory", ent.is_in_inventory))
+
+            is_allowed_entity = current_scene_id == self.state.current_scene_id and not is_hidden and not is_in_inventory
+            _add_token(allowed_tokens if is_allowed_entity else disallowed_tokens, ent.id)
+            _add_token(allowed_tokens if is_allowed_entity else disallowed_tokens, ent.name)
+
+            if (ent.entity_type or "").upper() != "NPC":
+                continue
+
+            npc_inventory = ent_state.get("inventory", ent.inventory or [])
+            if not isinstance(npc_inventory, list):
+                npc_inventory = []
+
+            inventory_bucket = allowed_tokens if (current_scene_id == self.state.current_scene_id and not is_hidden) else disallowed_tokens
+            for item in npc_inventory:
+                if not isinstance(item, dict):
+                    continue
+                _add_token(inventory_bucket, item.get("id"))
+                _add_token(inventory_bucket, item.get("name"))
+
+        for item in (self.avatar.inventory or []):
+            if not isinstance(item, dict):
+                continue
+            _add_token(allowed_tokens, item.get("id"))
+            _add_token(allowed_tokens, item.get("name"))
+
+        disallowed_tokens.difference_update(allowed_tokens)
+        return allowed_tokens, disallowed_tokens
+
+    async def _is_inspect_or_search_target_visible(self, target_hint: str) -> bool:
+        """Allow inspect/search targets only from current scene, local NPC inventory, or avatar inventory."""
+        normalized_hint = self._normalize_target_token(target_hint)
+        if not normalized_hint:
+            return True
+
+        allowed_tokens: set[str] = set()
+
+        def _add_token(raw: Any) -> None:
+            token = self._normalize_target_token(str(raw or ""))
+            if token:
+                allowed_tokens.add(token)
+
+        states = self.state.entity_states or {}
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+            )
+        )
+        entities = list(ent_res.scalars().all())
+
+        for ent in entities:
+            ent_state = states.get(ent.id, {}) if isinstance(states, dict) else {}
+            current_scene_id = ent_state.get("current_scene_id", ent.current_scene_id)
+            is_hidden = bool(ent_state.get("is_hidden", ent.is_hidden))
+            is_in_inventory = bool(ent_state.get("is_in_inventory", ent.is_in_inventory))
+
+            if current_scene_id != self.state.current_scene_id or is_hidden:
+                continue
+
+            if not is_in_inventory:
+                _add_token(ent.id)
+                _add_token(ent.name)
+
+            if (ent.entity_type or "").upper() != "NPC":
+                continue
+
+            npc_inventory = ent_state.get("inventory", ent.inventory or [])
+            if not isinstance(npc_inventory, list):
+                npc_inventory = []
+
+            for item in npc_inventory:
+                if not isinstance(item, dict):
+                    continue
+                _add_token(item.get("id"))
+                _add_token(item.get("name"))
+
+        for item in (self.avatar.inventory or []):
+            if not isinstance(item, dict):
+                continue
+            _add_token(item.get("id"))
+            _add_token(item.get("name"))
+
+        if normalized_hint in allowed_tokens:
+            return True
+
+        return any(tok and tok in normalized_hint for tok in allowed_tokens if len(tok) >= 3)
+
+    async def _guard_non_visible_inspect_or_search(self, user_msg: str) -> str | None:
+        """Return a blocking system message if the player targets an unseen object for inspect/search."""
+        normalized_message = self._normalize_target_token(user_msg)
+        if not normalized_message:
+            return None
+
+        _allowed_tokens, disallowed_tokens = await self._collect_inspect_search_visibility_tokens()
+        if not any(tok in normalized_message for tok in disallowed_tokens if len(tok) >= 3):
+            return None
+
+        target_hint = await self._extract_inspect_or_search_target(user_msg)
+        if not target_hint:
+            return None
+
+        is_visible = await self._is_inspect_or_search_target_visible(target_hint)
+        if is_visible:
+            return None
+
+        return (
+            f"You cannot inspect or search '{target_hint}' right now. "
+            "Only objects in the current scene and items from your inventory or local NPC inventories are available."
+        )
 
     def _entity_stat(self, ent: WorldEntity, stat_key: str, fallback: int = 0) -> int:
         states = self.state.entity_states or {}
@@ -3049,7 +3286,7 @@ class GameTurnManager:
             pending_confirmation = self._get_pending_ag_image_confirmation()
             if pending_confirmation:
                 handled_generator_confirmation = True
-                decision = self._parse_ag_image_confirmation_decision(user_msg)
+                decision = await self._parse_ag_image_confirmation_decision(user_msg)
                 pending_request = AdventureGenerationRequest.model_validate(
                     pending_confirmation.get("request") or {}
                 )
@@ -3342,7 +3579,7 @@ class GameTurnManager:
 
             if (
                 not game_event.requested_adventure_generation
-                and self._is_generation_retry_request(user_msg)
+                and await self._is_generation_retry_request(user_msg)
             ):
                 last_request = self._get_last_ag_generation_request()
                 if last_request:
@@ -3421,7 +3658,7 @@ class GameTurnManager:
                 if progression_intent.new_scene_id not in allowed_open_destinations:
                     progression_intent.new_scene_id = None
                     progression_intent.exit_label = None
-                elif not self._is_explicit_scene_transition_request(user_msg):
+                elif not await self._is_explicit_scene_transition_request(user_msg):
                     progression_intent.new_scene_id = None
                     progression_intent.exit_label = None
 
@@ -4435,10 +4672,51 @@ class GameTurnManager:
             self.state.exit_states = exit_states
             flag_modified(self.state, "exit_states")
 
-    def _parse_ag_image_confirmation_decision(self, user_msg: str) -> str:
+    async def _classify_short_intent(self, user_msg: str, system_prompt: str, phase: str) -> dict[str, Any] | None:
+        """Run a tiny intent classification call and parse a strict JSON object response."""
+        text = (user_msg or "").strip()
+        if not text:
+            return None
+
+        llm_settings = self.user.llm_settings or {}
+        small_model_provider = (
+            llm_settings.get("small_model_provider")
+            or llm_settings.get("complex_model_provider")
+            or llm_settings.get("preferred_provider")
+            or "openai"
+        )
+        small_model = llm_settings.get("small_model") or "gpt-4o-mini"
+
+        try:
+            llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
+            raw = await llm.aexecute_simple_task(
+                system_prompt,
+                text,
+                small_model,
+                adventure_id=self.adventure.id,
+                game_id=self.game_id,
+                operation="chat_turn",
+                phase=phase,
+            )
+            parsed = self._parse_json_object(raw)
+            return parsed if isinstance(parsed, dict) else None
+        except Exception as exc:
+            logger.debug("[Turn %s] Intent classifier skipped (%s): %s", self.game_id, phase, exc)
+            return None
+
+    async def _parse_ag_image_confirmation_decision(self, user_msg: str) -> str:
         text = (user_msg or "").strip().lower()
         if not text:
             return "unknown"
+
+        intent_prompt = (
+            "Classify the user's response to an image-mode confirmation question. "
+            "Return ONLY strict JSON with schema: {\"decision\":\"with_images\"|\"without_images\"|\"cancel\"|\"unknown\"}."
+        )
+        parsed = await self._classify_short_intent(user_msg, intent_prompt, "ag_image_confirmation_intent")
+        decision = str((parsed or {}).get("decision") or "").strip().lower()
+        if decision in {"with_images", "without_images", "cancel", "unknown"}:
+            return decision
 
         without_images_patterns = [
             r"\bohne\b",
@@ -4471,10 +4749,20 @@ class GameTurnManager:
             return "with_images"
         return "unknown"
 
-    def _is_generation_retry_request(self, user_msg: str) -> bool:
+    async def _is_generation_retry_request(self, user_msg: str) -> bool:
         text = (user_msg or "").strip().lower()
         if not text:
             return False
+
+        intent_prompt = (
+            "Determine if the user asks to retry the last generation attempt. "
+            "Return ONLY strict JSON with schema: {\"retry\": true|false}."
+        )
+        parsed = await self._classify_short_intent(user_msg, intent_prompt, "ag_retry_intent")
+        retry_val = (parsed or {}).get("retry")
+        if isinstance(retry_val, bool):
+            return retry_val
+
         retry_patterns = (
             r"\bnochmal\b",
             r"\bnoch einmal\b",
@@ -4487,10 +4775,20 @@ class GameTurnManager:
         )
         return any(re.search(p, text) for p in retry_patterns)
 
-    def _is_explicit_scene_transition_request(self, user_msg: str) -> bool:
+    async def _is_explicit_scene_transition_request(self, user_msg: str) -> bool:
         text = (user_msg or "").strip().lower()
         if not text:
             return False
+
+        intent_prompt = (
+            "Decide whether the user is explicitly requesting immediate physical movement to another scene now "
+            "(not hypothetical/planning talk). "
+            "Return ONLY strict JSON with schema: {\"explicit_transition\": true|false}."
+        )
+        parsed = await self._classify_short_intent(user_msg, intent_prompt, "scene_transition_intent")
+        transition_val = (parsed or {}).get("explicit_transition")
+        if isinstance(transition_val, bool):
+            return transition_val
 
         # Ignore hypothetical/planning phrasing that should not immediately move the player.
         hypothetical_patterns = (

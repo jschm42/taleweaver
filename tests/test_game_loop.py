@@ -112,6 +112,123 @@ async def test_game_loop_standard_turn(setup_test_db, monkeypatch):
         user_msg = res.scalars().first()
         assert user_msg.content == "I look around"
 
+
+async def test_off_scene_inspect_target_is_blocked_before_llm(setup_test_db, monkeypatch):
+    """Inspecting an object from another scene must be rejected before the GM LLM is called."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        user.earned_awards = []
+        adv.awards = [{"key": "health-inspector", "title": "Health Inspector", "tier": "bronze"}]
+
+        db.add(WorldScene(
+            id="NEXT",
+            session_id="session-1",
+            label="Back Alley",
+            description="A cramped alley behind the diner.",
+        ))
+        db.add(WorldEntity(
+            id="TRASHCAN",
+            session_id="session-1",
+            entity_type="OBJECT",
+            name="trashcan",
+            description="A rusty trashcan in the next scene.",
+            current_scene_id="NEXT",
+            is_hidden=False,
+            is_in_inventory=False,
+        ))
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_simple_task = AsyncMock(return_value='{"action":"inspect","target":"trashcan"}')
+        mock_llm_instance.aexecute_complex_task = AsyncMock(
+            return_value=GameEvent(
+                narrative_description="Should never run.",
+                earned_award_keys=["health-inspector"],
+            )
+        )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Should never stream."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("untersuche trashcan"):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+        await db.refresh(user)
+
+        all_output = "".join(chunks).lower()
+        assert "cannot inspect or search" in all_output
+        assert "award achievement" not in all_output
+        assert state.in_game_time == 0
+        assert user.earned_awards == []
+        assert mock_llm_instance.aexecute_simple_task.await_count == 1
+        assert mock_llm_instance.aexecute_complex_task.await_count == 0
+        assert mock_llm_instance.stream_simple_task.await_count == 0
+
+
+async def test_off_scene_name_mention_without_inspect_intent_is_not_blocked(setup_test_db, monkeypatch):
+    """Mentioning an off-scene object in unrelated text should not be blocked by the inspect/search guard."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+        user.earned_awards = []
+        adv.awards = [{"key": "health-inspector", "title": "Health Inspector", "tier": "bronze"}]
+
+        db.add(WorldScene(
+            id="NEXT",
+            session_id="session-1",
+            label="Back Alley",
+            description="A cramped alley behind the diner.",
+        ))
+        db.add(WorldEntity(
+            id="TRASHCAN",
+            session_id="session-1",
+            entity_type="OBJECT",
+            name="trashcan",
+            description="A rusty trashcan in the next scene.",
+            current_scene_id="NEXT",
+            is_hidden=False,
+            is_in_inventory=False,
+        ))
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.aexecute_simple_task = AsyncMock(return_value='{"action":"other","target":null}')
+        mock_llm_instance.aexecute_complex_task = AsyncMock(
+            return_value=GameEvent(
+                narrative_description="No direct interaction.",
+                earned_award_keys=[],
+            )
+        )
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You pause and think."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("Ich denke gerade an die trashcan, aber mache nichts."):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+
+        all_output = "".join(chunks).lower()
+        assert "cannot inspect or search" not in all_output
+        assert state.in_game_time == 5
+        assert mock_llm_instance.aexecute_simple_task.await_count == 1
+        assert mock_llm_instance.aexecute_complex_task.await_count == 1
+        assert mock_llm_instance.stream_simple_task.await_count == 1
+
 async def test_game_loop_session_overrides_template(setup_test_db, monkeypatch):
     """Verifies that the GameMaster receives plot/rules from SessionState, not AdventureTemplate."""
     from backend.engine.memory_manager import MemoryManager

@@ -96,3 +96,23 @@ To understand the internal processes of TaleWeaver, refer to the following Merma
     * Strip path separators (`/`, `\`) or traversal sequences (`..`) from parameters.
     * Use `os.path.basename` to extract only the filename when referencing uploaded files, or generate a random/UUID filename (e.g., `f"{uuid.uuid4()}.{ext}"`) rather than trusting the original name.
   * **Agent Compliance Rule (Required):** If an agent touches path-building/file-write code, it must run and pass the security-focused tests (`tests/test_security_hardening.py`) and include a short note in the PR/summary stating which helper functions were used.
+
+---
+
+## 7. Gameplay Guardrails (Scene Visibility & Language-Agnostic Intents)
+
+* **No Language-Keyword Gating For Core Mechanics:**
+  * Do **not** gate gameplay-critical decisions (inspect/search target validation, scene transition, generation confirmation/retry) behind hardcoded language keywords.
+  * Prefer intent classification (LLM or parser abstraction) that works across languages and phrasing variants.
+* **Server-Side Visibility Authority (Required):**
+  * The backend must be the final authority on what the GM can act on.
+  * For inspect/search, only allow targets that are currently visible/accessible: current scene entities, protagonist inventory, and inventory of NPCs present in the current scene.
+  * If a target is outside this scope, block the action before downstream GM/mechanics processing.
+* **Fail-Safe Behavior:**
+  * If intent extraction is uncertain or unavailable, fall back to deterministic safeguards and prefer the safe outcome (no state-advancing side effects).
+* **Agent Compliance Rule (Required):**
+  * If an agent changes gameplay intent-routing or visibility guard logic, it must run targeted regression tests in `tests/test_game_loop.py` that cover:
+    * blocking off-scene inspect/search exploits,
+    * not blocking unrelated mention-only text,
+    * preserving hypothetical (non-explicit) scene-transition behavior,
+    * preserving generator confirmation/retry behavior.
