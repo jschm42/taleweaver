@@ -3,6 +3,7 @@
 # ruff: noqa: ARG001,F841,PLR0133
 
 from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -888,6 +889,7 @@ async def test_chat_mode_runs_progression_pass_and_keeps_progress_unchanged(setu
 
 async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, monkeypatch):
     """Lightweight chat progression pass should update quests and awards."""
+    import json
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -939,6 +941,10 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
         mock_llm_instance.aexecute_complex_task = AsyncMock(side_effect=mock_progression)
         mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
         monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+        monkeypatch.setattr(
+            "backend.api.routes.adventures.gameplay_logic.SessionCheckpointService.create_checkpoint",
+            AsyncMock(return_value=SimpleNamespace(id=1, trigger_reason="AWARD_GRANTED", created_at=None)),
+        )
 
         manager = GameTurnManager(db, "session-1", user)
         chunks = []
@@ -951,6 +957,7 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
         assert mock_llm_instance.aexecute_complex_task.await_count == 1
         assert mock_llm_instance.stream_simple_task.await_count == 1
         assert any("accomplishment" in c for c in chunks)
+        assert any("Award Achievement: Heroic Heart" in c for c in chunks)
         assert (state.quests or [])[0].get("status") == "completed"
         earned = user.earned_awards or []
         assert any(
@@ -958,6 +965,21 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
             and (ea.get("template_id") == adv.id or ea.get("adventure_id") == adv.id)
             for ea in earned
         )
+
+        final_payload = None
+        for chunk in chunks:
+            if "event: final" not in chunk:
+                continue
+            data_line = next((line for line in chunk.split("\n") if line.startswith("data:")), None)
+            if data_line:
+                final_payload = json.loads(data_line[5:])
+                break
+
+        assert final_payload is not None
+        awards = final_payload.get("awards") or []
+        heroic_award = next((aw for aw in awards if aw.get("key") == "heroic-heart"), None)
+        assert heroic_award is not None
+        assert heroic_award.get("is_earned") is True
 
 
 async def test_deterministic_quest_completion_marks_inactive_quest_and_emits_system_message(setup_test_db, monkeypatch):

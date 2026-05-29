@@ -63,6 +63,7 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
         full_sse = "".join(chunks)
         assert "Autonomous Agent Gameplay Mode enabled" in full_sse
         assert '"agent_active":true' in full_sse.replace(" ", "")
+        assert '"agent_monkey_mode":false' in full_sse.replace(" ", "")
 
         # Turn agent OFF
         chunks = []
@@ -86,6 +87,7 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
             state = state_res.scalars().first()
             assert AgentService.get_agent_state(state).get("monkey_mode") is True
 
+        assert '"agent_monkey_mode":true' in "".join(chunks).replace(" ", "")
         assert "Monkey Mode enabled" in "".join(chunks)
 
         chunks = []
@@ -97,6 +99,7 @@ async def test_agent_toggle_commands(auth_client, setup_test_db):
             state = state_res.scalars().first()
             assert AgentService.get_agent_state(state).get("monkey_mode") is False
 
+        assert '"agent_monkey_mode":false' in "".join(chunks).replace(" ", "")
         assert "Monkey Mode disabled" in "".join(chunks)
 
 

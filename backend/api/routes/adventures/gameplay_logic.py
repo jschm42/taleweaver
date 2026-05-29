@@ -3774,7 +3774,10 @@ class GameTurnManager:
                 **aw,
                 "is_earned": any(
                     ea.get("key") == aw.get("key")
-                    and ea.get("template_id") == (adventure.id if adventure else self.state.template_id)
+                    and (
+                        ea.get("template_id") == (adventure.id if adventure else self.state.template_id)
+                        or ea.get("adventure_id") == (adventure.id if adventure else self.state.template_id)
+                    )
                     for ea in (self.user.earned_awards or [])
                 ),
             }
