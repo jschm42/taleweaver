@@ -408,6 +408,22 @@ const handleSave = () => {
 
         <p class="text-xxs text-slate-500">Used when Autonomous Agent Mode is active. Falls back to the Simple Model if left empty.</p>
 
+        <div class="pt-4 border-t border-slate-900">
+          <div class="flex items-start justify-between gap-4 p-4 bg-amber-500/10 rounded-xl border border-amber-500/30">
+            <div>
+              <label class="block text-sm font-semibold text-amber-200">Monkey Mode Default</label>
+              <p class="text-xxs text-amber-300/80 mt-1">
+                If enabled, /agent on starts directly in chaos-testing mode. The play-agent will intentionally try invalid,
+                nonsensical, or rule-breaking actions to stress-test engine robustness.
+              </p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" v-model="localForm.play_agent_monkey_mode" class="sr-only peer">
+              <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500 peer-checked:after:bg-white"></div>
+            </label>
+          </div>
+        </div>
+
         <div v-if="testResults.play_agent" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.play_agent.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.play_agent.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">

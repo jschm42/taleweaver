@@ -42,6 +42,7 @@ class SettingsService {
 
     play_agent_model: '',
     play_agent_model_provider: 'openai',
+    play_agent_monkey_mode: false,
 
     preferred_provider: 'openai',
     ollama_url: 'http://localhost:11434',

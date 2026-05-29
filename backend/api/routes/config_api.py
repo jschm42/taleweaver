@@ -325,6 +325,7 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         "generator_max_thinking_tokens": 2048,
         "play_agent_model": "",
         "play_agent_model_provider": "openai",
+        "play_agent_monkey_mode": False,
         "preferred_provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
     }
@@ -401,6 +402,9 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
     if not normalized.get("play_agent_model") and normalized.get("small_model"):
         normalized["play_agent_model"] = normalized.get("small_model")
         normalized["play_agent_model_provider"] = normalized.get("small_model_provider")
+
+    if "play_agent_monkey_mode" not in normalized:
+        normalized["play_agent_monkey_mode"] = False
 
     # OpenRouter normalization
     if normalized.get("small_model_provider") == "openrouter":
@@ -635,6 +639,7 @@ class SettingsPayload(BaseModel):
 
     play_agent_model: Optional[str] = ""
     play_agent_model_provider: Optional[str] = "openai"
+    play_agent_monkey_mode: bool = False
     
     preferred_provider: str # Legacy
     ollama_url: Optional[str] = None
