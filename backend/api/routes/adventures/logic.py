@@ -17,7 +17,7 @@ from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
-from backend.utils.path_security import data_url_to_local_path
+from backend.utils.path_security import data_url_to_local_path, local_path_to_data_url
 
 logger = logging.getLogger(__name__)
 SESSION_MANIFEST_SNAPSHOT_KEY = "__manifest_snapshot__"
@@ -193,6 +193,31 @@ class AdventureLogic:
                     rel_alt = os.path.relpath(alt_abs, data_root).replace("\\", "/")
                     return f"/data/{rel_alt}"
         return candidate
+
+    @staticmethod
+    def heal_template_avatar_profile_image(template_id: Optional[str], profile_image: Optional[str]) -> Optional[str]:
+        """Heals template avatar profile image if it points to a deleted session path."""
+        if not template_id or not profile_image:
+            return profile_image
+
+        if "/adventures/sessions/" in profile_image:
+            abs_path = data_url_to_local_path(profile_image)
+            if abs_path and os.path.isfile(abs_path):
+                return profile_image
+
+            library_dir = os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
+            if os.path.isdir(library_dir):
+                for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+                    candidate_path = os.path.join(library_dir, f"PROTAGONIST{ext}")
+                    if os.path.isfile(candidate_path):
+                        return local_path_to_data_url(candidate_path)
+
+                pattern = os.path.join(library_dir, "*PROTAGONIST*")
+                for match in glob.glob(pattern):
+                    if os.path.isfile(match):
+                        return local_path_to_data_url(match)
+
+        return profile_image
 
     @staticmethod
     async def resolve_scene_image(db: AsyncSession, state: SessionState, scene_id: str) -> Optional[str]:
@@ -552,6 +577,10 @@ class AdventureLogic:
         total_stats = calculate_total_stats(avatar)
 
         profile_image = AdventureLogic.resolve_session_asset(state, "protagonist", avatar.profile_image)
+        if profile_image and "/adventures/sessions/" in profile_image:
+            abs_path = data_url_to_local_path(profile_image)
+            if not abs_path or not os.path.isfile(abs_path):
+                profile_image = AdventureLogic.heal_template_avatar_profile_image(state.template_id, profile_image)
         if not profile_image:
             manifest_protagonist = session_manifest.get("protagonist") if isinstance(session_manifest, dict) else None
             if isinstance(manifest_protagonist, dict):

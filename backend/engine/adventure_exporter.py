@@ -169,7 +169,12 @@ class AdventureExporter:
         entity_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id))
         entities = entity_res.scalars().all()
 
-        avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+        avatar_res = await db.execute(
+            select(Avatar)
+            .where(Avatar.template_id == template_id)
+            .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+            .limit(1)
+        )
         avatar = avatar_res.scalars().first()
 
         # Clean up / migrate legacy templates on the fly:

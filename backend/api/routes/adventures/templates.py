@@ -179,9 +179,53 @@ async def _materialize_initial_session_from_template(
         game_session.adventure_image_url = copied_cover
 
     if avatar:
-        copied_protagonist = _copy_data_asset_to_session(session_id, "protagonist", avatar.profile_image, asset_copy_cache)
+        # Heal template avatar image on the fly if corrupted
+        healed_image = AdventureLogic.heal_template_avatar_profile_image(template_id, avatar.profile_image)
+        if healed_image != avatar.profile_image:
+            avatar.profile_image = healed_image
+            db.add(avatar)
+            await db.flush()
+
+        # Clone the template avatar to create a session-specific avatar,
+        # so that we do not modify the original template avatar's data or image path.
+        session_avatar = Avatar(
+            user_id=avatar.user_id,
+            template_id=template_id,
+            name=avatar.name,
+            role=avatar.role,
+            description=avatar.description,
+            goal=avatar.goal,
+            character=avatar.character,
+            profile_image=avatar.profile_image,
+            hp=avatar.hp,
+            max_hp=avatar.max_hp,
+            stamina=avatar.stamina,
+            max_stamina=avatar.max_stamina,
+            mana=avatar.mana,
+            max_mana=avatar.max_mana,
+            strength=avatar.strength,
+            dexterity=avatar.dexterity,
+            intelligence=avatar.intelligence,
+            wisdom=avatar.wisdom,
+            charisma=avatar.charisma,
+            armor_class=avatar.armor_class,
+            stats=deepcopy(avatar.stats or {}),
+            inventory=deepcopy(avatar.inventory or []),
+            equipment=deepcopy(avatar.equipment or {}),
+            status_effects=deepcopy(avatar.status_effects or []),
+        )
+        db.add(session_avatar)
+        await db.flush()
+
+        # Link session and state to the cloned session avatar
+        game_session.avatar_id = session_avatar.id
+        if session_state:
+            session_state.avatar_id = session_avatar.id
+
+        # Copy the protagonist image for the session avatar
+        copied_protagonist = _copy_data_asset_to_session(session_id, "protagonist", session_avatar.profile_image, asset_copy_cache)
         if copied_protagonist:
-            avatar.profile_image = copied_protagonist
+            session_avatar.profile_image = copied_protagonist
 
     existing_scene_res = await db.execute(select(WorldScene.id).where(WorldScene.session_id == session_id).limit(1))
     has_session_scenes = existing_scene_res.scalar_one_or_none() is not None
@@ -808,7 +852,12 @@ async def reset_adventure(
     # Restore protagonist image from manifest protagonist data.
     prot_def = manifest.get("protagonist", {})
     if prot_def:
-        av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+        av_res = await db.execute(
+            select(Avatar)
+            .where(Avatar.template_id == template_id)
+            .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+            .limit(1)
+        )
         avatar = av_res.scalars().first()
         if avatar:
             # Restore static fields; preserve generated profile_image.
@@ -1244,7 +1293,12 @@ async def export_adventure_session(
 ):
     """Exports a minimal session payload for the template (useful for import/preview)."""
     # Find template-level avatar if present
-    av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+    av_res = await db.execute(
+        select(Avatar)
+        .where(Avatar.template_id == template_id)
+        .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+        .limit(1)
+    )
     avatar = av_res.scalars().first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar not found for template.")

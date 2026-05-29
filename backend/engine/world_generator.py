@@ -756,7 +756,12 @@ class WorldGenerator:
 
             src_adv = await db.get(AdventureTemplate, cover_source_adventure_id)
             if src_adv:
-                src_avatar_res = await db.execute(select(Avatar).where(Avatar.template_id == cover_source_adventure_id))
+                src_avatar_res = await db.execute(
+                    select(Avatar)
+                    .where(Avatar.template_id == cover_source_adventure_id)
+                    .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+                    .limit(1)
+                )
                 src_avatar = src_avatar_res.scalars().first()
 
                 src_scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == cover_source_adventure_id))
@@ -1231,7 +1236,12 @@ class WorldGenerator:
         prot = manifest_dict.get("protagonist", {})
         if prot and adventure:
             from backend.models.avatar import Avatar
-            av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+            av_res = await db.execute(
+                select(Avatar)
+                .where(Avatar.template_id == template_id)
+                .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+                .limit(1)
+            )
             avatar = av_res.scalars().first()
             
             # Map of ID -> Slot for starting equipment

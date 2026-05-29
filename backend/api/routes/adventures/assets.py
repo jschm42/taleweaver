@@ -199,7 +199,12 @@ async def regenerate_visual(
             if image_url: adv.image_url = image_url
 
         elif payload.target_type == "protagonist":
-            av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+            av_res = await db.execute(
+                select(Avatar)
+                .where(Avatar.template_id == template_id)
+                .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+                .limit(1)
+            )
             avatar = av_res.scalars().first()
             if not avatar: raise HTTPException(status_code=404, detail="Protagonist not found")
             
@@ -308,7 +313,12 @@ async def suggest_prompt(
         name = adv.title
         description = adv.teaser or adv.original_prompt or ""
     elif payload.target_type == "protagonist":
-        av_res = await db.execute(select(Avatar).where(Avatar.template_id == template_id))
+        av_res = await db.execute(
+            select(Avatar)
+            .where(Avatar.template_id == template_id)
+            .order_by(Avatar.created_at.asc(), Avatar.id.asc())
+            .limit(1)
+        )
         avatar = av_res.scalars().first()
         if avatar:
             name = avatar.name

@@ -495,6 +495,13 @@ async def start_session_for_template(
     template_avatar = av_res.scalars().first()
     
     if template_avatar:
+        # Heal template avatar image on the fly if corrupted
+        healed_image = AdventureLogic.heal_template_avatar_profile_image(template_id, template_avatar.profile_image)
+        if healed_image != template_avatar.profile_image:
+            template_avatar.profile_image = healed_image
+            db.add(template_avatar)
+            await db.flush()
+
         # Clone template avatar for this session
         avatar = Avatar(
             user_id=current_user.id,
