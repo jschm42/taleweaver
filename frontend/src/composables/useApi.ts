@@ -19,6 +19,16 @@ import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
 import { apiFetch, buildApiUrl } from '@/services/http'
 
+class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 interface SettingsResponse {
   app_version?: string
   keys: Record<string, { masked: string; is_env: boolean }>
@@ -87,14 +97,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         configState.lastErrorMessage = `Server Error (${res.status}): ${detail}`
       }
 
-      throw new Error(`API ${res.status}: ${detail}`)
+      throw new ApiError(res.status, detail)
     }
     // 204 No Content has no body
     if (res.status === 204) return undefined as T
     return res.json() as Promise<T>
   } catch (err: any) {
     // If it's not already an API error (thrown above), it's likely a network error
-    if (!(err.message.startsWith('API '))) {
+    if (!(err instanceof ApiError)) {
       configState.isBackendReachable = false
       configState.lastErrorMessage = err.message || 'Network Error'
     }
@@ -139,11 +149,11 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
         configState.lastErrorMessage = `Server Error (${res.status}): ${detail}`
       }
 
-      throw new Error(`API ${res.status}: ${detail}`)
+      throw new ApiError(res.status, detail)
     }
     return res.blob()
   } catch (err: any) {
-    if (!(err.message.startsWith('API '))) {
+    if (!(err instanceof ApiError)) {
       configState.isBackendReachable = false
       configState.lastErrorMessage = err.message || 'Network Error'
     }

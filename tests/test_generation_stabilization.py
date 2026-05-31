@@ -110,6 +110,76 @@ async def test_deepseek_fallback_suppresses_thinking_for_structured_json(monkeyp
     assert "thinking" not in captured
     assert captured["max_tokens"] == 100
 
+
+@pytest.mark.asyncio
+async def test_deepseek_fallback_retries_when_only_reasoning_content_is_returned(monkeypatch):
+    """DeepSeek JSON fallback should retry once if the provider leaves content blank and fills only reasoning_content."""
+    user = _make_user(encrypted_api_keys={"deepseek": "key"})
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-deepseek")
+    router = GameMasterLLM(user, provider="deepseek")
+
+    calls = []
+
+    class _MsgBlank:
+        content = "                "
+        reasoning_content = "I will answer with JSON next time."
+        provider_specific_fields = {"reasoning_content": "I will answer with JSON next time."}
+
+    class _ChoiceBlank:
+        message = _MsgBlank()
+        finish_reason = "stop"
+
+    class _RespBlank:
+        choices = [_ChoiceBlank()]
+
+        @staticmethod
+        def model_dump():
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "                ",
+                            "reasoning_content": "I will answer with JSON next time.",
+                        }
+                    }
+                ]
+            }
+
+    class _MsgOk:
+        content = '{"name": "Deep", "age": 2}'
+
+    class _ChoiceOk:
+        message = _MsgOk()
+        finish_reason = "stop"
+
+    class _RespOk:
+        choices = [_ChoiceOk()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return _RespBlank()
+        return _RespOk()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.aexecute_complex_task(
+        system_prompt="Base sys",
+        user_prompt="prompt",
+        response_model=MockSchema,
+        model="deepseek-v4-flash",
+    )
+
+    assert out.name == "Deep"
+    assert out.age == 2
+    assert len(calls) == 2
+    assert "RETRY INSTRUCTION" in calls[1]["messages"][0]["content"]
+    assert calls[1]["response_format"] == {"type": "json_object"}
+
 @pytest.mark.asyncio
 async def test_anthropic_fallback_injects_schema(monkeypatch):
     """Test that Anthropic uses the prompt-injected JSON mode fallback."""

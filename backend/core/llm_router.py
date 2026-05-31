@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from copy import deepcopy
 from typing import Any, Optional, TypeVar
 
 import litellm
@@ -133,6 +134,79 @@ class GameMasterLLM:
             return content[first_json_char : last_json_char + 1]
             
         return content
+
+    @staticmethod
+    def _extract_reasoning_content(message: Any) -> str:
+        """Extract provider-specific reasoning text from a LiteLLM message object or dict."""
+        if message is None:
+            return ""
+
+        direct = getattr(message, "reasoning_content", None)
+        if isinstance(direct, str) and direct.strip():
+            return direct
+
+        if isinstance(message, dict):
+            direct = message.get("reasoning_content")
+            if isinstance(direct, str) and direct.strip():
+                return direct
+            provider_specific = message.get("provider_specific_fields") or {}
+        else:
+            provider_specific = getattr(message, "provider_specific_fields", None) or {}
+
+        nested = provider_specific.get("reasoning_content") if isinstance(provider_specific, dict) else None
+        if isinstance(nested, str) and nested.strip():
+            return nested
+        return ""
+
+    @staticmethod
+    def _build_blank_content_retry_kwargs(kwargs: dict) -> dict:
+        """Return retry kwargs that explicitly force JSON into the assistant content channel."""
+        retry_kwargs = deepcopy(kwargs)
+        retry_messages = [dict(message) for message in retry_kwargs.get("messages", [])]
+        if retry_messages:
+            retry_messages[0]["content"] = (
+                f"{retry_messages[0].get('content', '')}"
+                "\n\nRETRY INSTRUCTION: Your previous reply left the assistant content empty or whitespace-only. "
+                "Reply again with the final JSON object in the assistant content field itself. "
+                "Do not put the answer only into reasoning_content. "
+                "Do not include any explanation, prose, or markdown."
+            )
+        retry_kwargs["messages"] = retry_messages
+        return retry_kwargs
+
+    async def _retry_blank_json_content_async(self, kwargs: dict, response: Any):
+        """Retry once when JSON-mode providers return only reasoning_content and an empty content channel."""
+        try:
+            message = response.choices[0].message
+        except (AttributeError, IndexError, TypeError):
+            return response
+
+        reasoning_content = self._extract_reasoning_content(message)
+        if not reasoning_content:
+            return response
+
+        logger.warning(
+            "LLM returned empty assistant content but reasoning_content was populated. Retrying once with explicit content-channel instruction."
+        )
+        retry_kwargs = self._build_blank_content_retry_kwargs(kwargs)
+        return await self._acompletion_with_openrouter_fallback(retry_kwargs)
+
+    def _retry_blank_json_content(self, kwargs: dict, response: Any):
+        """Sync variant of retry for empty content with populated reasoning_content."""
+        try:
+            message = response.choices[0].message
+        except (AttributeError, IndexError, TypeError):
+            return response
+
+        reasoning_content = self._extract_reasoning_content(message)
+        if not reasoning_content:
+            return response
+
+        logger.warning(
+            "LLM returned empty assistant content but reasoning_content was populated. Retrying once with explicit content-channel instruction."
+        )
+        retry_kwargs = self._build_blank_content_retry_kwargs(kwargs)
+        return self._completion_with_openrouter_fallback(retry_kwargs)
 
     @staticmethod
     def _is_supported_bool_value(value: Any) -> bool:
@@ -665,6 +739,9 @@ class GameMasterLLM:
         response = await self._acompletion_with_openrouter_fallback(kwargs)
         
         content = response.choices[0].message.content
+        if use_json_mode_fallback and (content is None or not str(content).strip()):
+            response = await self._retry_blank_json_content_async(kwargs, response)
+            content = response.choices[0].message.content
         
         log_llm_interaction(
             model=model,
@@ -817,6 +894,9 @@ class GameMasterLLM:
         response = self._completion_with_openrouter_fallback(kwargs)
         
         content = response.choices[0].message.content
+        if use_json_mode_fallback and (content is None or not str(content).strip()):
+            response = self._retry_blank_json_content(kwargs, response)
+            content = response.choices[0].message.content
         
         log_llm_interaction(
             model=model,
