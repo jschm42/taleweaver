@@ -11,9 +11,12 @@ const route = useRoute()
 
 async function checkAuth() {
   // Always check bootstrap status first to know if we need setup
-  let bootstrap = { has_admin: false, has_users: false }
+  let bootstrap = { has_admin: false, has_users: false, app_version: '' }
   try {
     bootstrap = await api.getBootstrapStatus()
+    if (bootstrap.app_version) {
+      configState.appVersion = bootstrap.app_version
+    }
   } catch (e) {
     console.error('Failed to get bootstrap status:', e)
     // If we can't get bootstrap status, it's likely a connectivity issue

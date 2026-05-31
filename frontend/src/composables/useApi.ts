@@ -444,7 +444,7 @@ export const api = {
     return request('/auth/me')
   },
 
-  getBootstrapStatus(): Promise<{ has_admin: boolean; has_users: boolean }> {
+  getBootstrapStatus(): Promise<{ has_admin: boolean; has_users: boolean; app_version: string }> {
     return request('/auth/bootstrap-status')
   },
 

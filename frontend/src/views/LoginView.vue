@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState, setToken } from '@/store/auth'
-import { configState } from '@/store/config'
+import { configState, refreshConfig } from '@/store/config'
 
 const router = useRouter()
 const username = ref('')
@@ -26,6 +26,13 @@ async function handleLogin() {
     authState.user = user
     authState.isAuthenticated = true
     authState.isInitialized = true
+    
+    // Fetch settings/config since we now have a token
+    try {
+      await refreshConfig()
+    } catch (confErr) {
+      console.error('Failed to refresh config after login:', confErr)
+    }
     
     router.push('/')
   } catch (err: any) {

@@ -16,6 +16,7 @@ from backend.core.auth import (
     get_password_hash,
 )
 from backend.core.database import get_db
+from backend.core.config import settings
 from backend.models.user import User
 
 router = APIRouter()
@@ -51,6 +52,7 @@ class SetupRootRequest(BaseModel):
 class BootstrapStatusResponse(BaseModel):
     has_admin: bool
     has_users: bool
+    app_version: str
 
 @router.post("/auth/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
@@ -203,4 +205,5 @@ async def get_bootstrap_status(db: AsyncSession = Depends(get_db)):
     return BootstrapStatusResponse(
         has_admin=admin_result.scalars().first() is not None,
         has_users=user_result.first() is not None,
+        app_version=settings.APP_VERSION,
     )
