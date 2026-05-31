@@ -139,6 +139,8 @@ class MemoryManager:
                             status_parts.append(f"code:{e.code_to_unlock}")
                         if getattr(e, "item_to_unlock", None):
                             status_parts.append(f"item:{e.item_to_unlock}")
+                        if getattr(e, "rule_to_unlock", None):
+                            status_parts.append(f"rule:{e.rule_to_unlock}")
                     status_req = f"({','.join(status_parts)})" if status_parts else ""
                     exit_list.append(f"{e.label}->{e.to_scene_id}{status}{status_req}")
                 location_context += "EXITS: " + "; ".join(exit_list) + "\n"
@@ -154,6 +156,8 @@ class MemoryManager:
                             desc_parts.append(f"code_to_unlock: {e.code_to_unlock}")
                         if getattr(e, "item_to_unlock", None):
                             desc_parts.append(f"item_to_unlock: {e.item_to_unlock}")
+                        if getattr(e, "rule_to_unlock", None):
+                            desc_parts.append(f"rule_to_unlock: {e.rule_to_unlock}")
                     desc = f" ({', '.join(desc_parts)})" if desc_parts else ""
                     exit_list.append(f"- {e.label} to {e.to_scene_id} {status}{desc}")
 

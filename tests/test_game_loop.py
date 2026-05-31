@@ -3136,3 +3136,106 @@ async def test_exit_lock_guardrail_correct_item(setup_test_db):
         assert any(up.to_scene_id == "CELLAR" and up.is_locked is False for up in event.updated_exits)
 
 
+async def test_exit_rule_unlock_passes(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        
+        # Seed locked exit with rule_to_unlock
+        db.add(WorldExit(
+            session_id=state.session_id,
+            from_scene_id=state.current_scene_id,
+            to_scene_id="CELLAR",
+            label="Narrative Gate",
+            is_locked=True,
+            code_to_unlock=None,
+            item_to_unlock=None,
+            rule_to_unlock="Protagonist defeats NPC_2"
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        # CASE 1: Player tries to traverse, but GM does NOT unlock it (is_being_unlocked is False). It should fail!
+        event_fail = GameEvent(
+            new_scene_id="CELLAR",
+        )
+        reasons_fail = await manager._enforce_exit_unlock_guardrails(event_fail, "I try to walk through narrative gate")
+        assert any("is locked" in r for r in reasons_fail)
+        assert event_fail.new_scene_id is None
+
+        # CASE 2: GM explicitly unlocks it (is_being_unlocked is True). It should succeed!
+        event_ok = GameEvent(
+            new_scene_id="CELLAR",
+            updated_exits=[ExitUpdate(from_scene_id=state.current_scene_id, to_scene_id="CELLAR", is_locked=False)]
+        )
+        reasons_ok = await manager._enforce_exit_unlock_guardrails(event_ok, "I defeated the NPC, let me through")
+        assert not reasons_ok
+        assert event_ok.new_scene_id == "CELLAR"
+
+
+async def test_container_rule_unlock_passes(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        
+        # Seed locked container object with rule_to_unlock
+        db.add(WorldEntity(
+            id="MAGIC_CHEST",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Magic Chest",
+            description="A glowing wooden chest",
+            current_scene_id=state.current_scene_id,
+            item_type="CONTAINER",
+            metadata_json={
+                "code_to_unlock": "",
+                "item_to_unlock": "",
+                "rule_to_unlock": "Protagonist overpersuades NPC_1",
+                "locked": True,
+            }
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        # Check that is_container_locked returns True initially
+        chest_res = await db.execute(select(WorldEntity).where(WorldEntity.session_id == state.session_id, WorldEntity.id == "MAGIC_CHEST"))
+        chest = chest_res.scalars().first()
+        assert manager._is_container_locked(chest, None) is True
+
+        # CASE 1: GM unlocks container (updated_entities has locked=False). It should succeed!
+        event = GameEvent(
+            updated_entities=[WorldEntityUpdate(entity_id="MAGIC_CHEST", locked=False)]
+        )
+        reasons = await manager._enforce_container_unlock_guardrails(event, "I persuaded the librarian to let me open the chest")
+        assert not reasons
+
+
+def test_mutual_exclusivity_normalization():
+    from backend.engine.world_generator import _normalize_unlock_requirements
+
+    # Priority 1: code wins over item and rule
+    code, item, rule = _normalize_unlock_requirements("1234", "KEY_CARD", "narrative rule")
+    assert code == "1234"
+    assert item == ""
+    assert rule == ""
+
+    # Priority 2: item wins over rule
+    code, item, rule = _normalize_unlock_requirements("", "KEY_CARD", "narrative rule")
+    assert code == ""
+    assert item == "KEY_CARD"
+    assert rule == ""
+
+    # Priority 3: rule is chosen if code and item are empty
+    code, item, rule = _normalize_unlock_requirements("", "", "narrative rule")
+    assert code == ""
+    assert item == ""
+    assert rule == "narrative rule"
+
+
+

@@ -58,6 +58,7 @@ class EntityUpdateRequest(BaseModel):
     locked: Optional[bool] = None
     code_to_unlock: Optional[str] = None
     item_to_unlock: Optional[str] = None
+    rule_to_unlock: Optional[str] = None
     inventory: Optional[list] = None
     text_log_content: Optional[str] = None
     text_log_format: Optional[str] = None
@@ -90,10 +91,11 @@ def _serialize_model(obj):
             metadata_json = dict(obj.metadata_json or {})
             data["code_to_unlock"] = str(metadata_json.get("code_to_unlock") or "")
             data["item_to_unlock"] = str(metadata_json.get("item_to_unlock") or "")
+            data["rule_to_unlock"] = str(metadata_json.get("rule_to_unlock") or "")
             if isinstance(metadata_json.get("locked"), bool):
                 data["locked"] = metadata_json.get("locked")
             else:
-                data["locked"] = bool(metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock"))
+                data["locked"] = bool(metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock") or metadata_json.get("rule_to_unlock"))
     return data
 
 def _is_npc_entity(ent):
@@ -323,9 +325,41 @@ async def update_editor_entity(
         if world_exit:
             if payload.name is not None: world_exit.label = payload.name
             if payload.locked is not None: world_exit.is_locked = bool(payload.locked)
-            if payload.code_to_unlock is not None: world_exit.code_to_unlock = str(payload.code_to_unlock or "").strip()
-            if payload.item_to_unlock is not None: world_exit.item_to_unlock = str(payload.item_to_unlock or "").strip().upper()
             if payload.description is not None: world_exit.lock_description = payload.description
+            
+            # Enforce mutual exclusivity and priority on exit lock attributes
+            if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.rule_to_unlock is not None:
+                code = world_exit.code_to_unlock or ""
+                item = world_exit.item_to_unlock or ""
+                rule = world_exit.rule_to_unlock or ""
+                if payload.code_to_unlock is not None:
+                    code = str(payload.code_to_unlock or "").strip()
+                if payload.item_to_unlock is not None:
+                    item = str(payload.item_to_unlock or "").strip().upper()
+                if payload.rule_to_unlock is not None:
+                    rule = str(payload.rule_to_unlock or "").strip()
+
+                if code:
+                    code = code[:32]
+                    item = ""
+                    rule = ""
+                elif item:
+                    from backend.utils.text_utils import slugify
+                    item = slugify(item).upper().replace("-", "_")[:64]
+                    code = ""
+                    rule = ""
+                elif rule:
+                    rule = rule[:500]
+                    code = ""
+                    item = ""
+                else:
+                    code = ""
+                    item = ""
+                    rule = ""
+
+                world_exit.code_to_unlock = code
+                world_exit.item_to_unlock = item
+                world_exit.rule_to_unlock = rule
     else:
         en_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.id == payload.target_id))
         ent = en_res.scalars().first()
@@ -351,14 +385,45 @@ async def update_editor_entity(
                     raise HTTPException(status_code=400, detail="description must be at most 200 characters for READABLE objects.")
                 if payload.is_portable is not None:
                     ent.is_portable = bool(payload.is_portable)
-                if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.locked is not None:
+                if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.rule_to_unlock is not None or payload.locked is not None:
                     metadata_json = dict(ent.metadata_json or {})
+                    code = metadata_json.get("code_to_unlock") or ""
+                    item = metadata_json.get("item_to_unlock") or ""
+                    rule = metadata_json.get("rule_to_unlock") or ""
+                    
                     if payload.code_to_unlock is not None:
-                        metadata_json["code_to_unlock"] = str(payload.code_to_unlock or "").strip()
+                        code = str(payload.code_to_unlock or "").strip()
                     if payload.item_to_unlock is not None:
-                        metadata_json["item_to_unlock"] = str(payload.item_to_unlock or "").strip().upper()
+                        item = str(payload.item_to_unlock or "").strip().upper()
+                    if payload.rule_to_unlock is not None:
+                        rule = str(payload.rule_to_unlock or "").strip()
+
+                    if code:
+                        code = code[:32]
+                        item = ""
+                        rule = ""
+                    elif item:
+                        from backend.utils.text_utils import slugify
+                        item = slugify(item).upper().replace("-", "_")[:64]
+                        code = ""
+                        rule = ""
+                    elif rule:
+                        rule = rule[:500]
+                        code = ""
+                        item = ""
+                    else:
+                        code = ""
+                        item = ""
+                        rule = ""
+
+                    metadata_json["code_to_unlock"] = code
+                    metadata_json["item_to_unlock"] = item
+                    metadata_json["rule_to_unlock"] = rule
                     if payload.locked is not None:
                         metadata_json["locked"] = bool(payload.locked)
+                    else:
+                        metadata_json["locked"] = bool(code or item or rule)
+                    
                     ent.metadata_json = metadata_json
                     # Legacy free-text unlock rules are deprecated in favor of deterministic attributes.
                     ent.unlock_rule = None

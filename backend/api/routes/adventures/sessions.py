@@ -647,7 +647,7 @@ async def start_session_for_template(
             initial_entity_states[ent.id] = {"locked": locked}
             continue
 
-        if metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock"):
+        if metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock") or metadata_json.get("rule_to_unlock"):
             initial_entity_states[ent.id] = {"locked": True}
 
     new_state = SessionState(
@@ -700,7 +700,8 @@ async def start_session_for_template(
             session_id=new_session.id, template_id=None,
             from_scene_id=e.from_scene_id, to_scene_id=e.to_scene_id,
             label=e.label, is_locked=e.is_locked, lock_description=e.lock_description,
-            code_to_unlock=e.code_to_unlock, item_to_unlock=e.item_to_unlock
+            code_to_unlock=e.code_to_unlock, item_to_unlock=e.item_to_unlock,
+            rule_to_unlock=e.rule_to_unlock
         )
         db.add(new_e)
         
@@ -1082,7 +1083,8 @@ async def copy_session(
             is_locked=e.is_locked,
             lock_description=e.lock_description,
             code_to_unlock=e.code_to_unlock,
-            item_to_unlock=e.item_to_unlock
+            item_to_unlock=e.item_to_unlock,
+            rule_to_unlock=e.rule_to_unlock
         )
         db.add(cloned_exit)
 

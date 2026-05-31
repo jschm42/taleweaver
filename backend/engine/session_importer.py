@@ -231,6 +231,7 @@ class SessionImporter:
                         lock_description=ex.get("lock_description"),
                         code_to_unlock=ex.get("code_to_unlock"),
                         item_to_unlock=ex.get("item_to_unlock"),
+                        rule_to_unlock=ex.get("rule_to_unlock"),
                     )
                     db.add(world_ex)
 

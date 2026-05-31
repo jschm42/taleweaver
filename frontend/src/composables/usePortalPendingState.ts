@@ -44,6 +44,9 @@ function prettifyStatus(status: string): string {
   if (lower.includes('finalizing')) return 'Finalizing...'
   if (lower.includes('cancelled')) return 'Cancelled'
 
+  // Image generation phases — pass through the full dynamic text (e.g. "Envisioning Portrait 2/5: Jack...")
+  if (lower.includes('envisioning')) return status
+
   const spaced = status
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/_/g, ' ')

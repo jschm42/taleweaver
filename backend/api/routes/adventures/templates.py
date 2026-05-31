@@ -268,6 +268,7 @@ async def _materialize_initial_session_from_template(
                     lock_description=exit_row.lock_description,
                     code_to_unlock=exit_row.code_to_unlock,
                     item_to_unlock=exit_row.item_to_unlock,
+                    rule_to_unlock=exit_row.rule_to_unlock,
                 )
             )
 
@@ -825,10 +826,29 @@ async def reset_adventure(
         if item_type == "CONTAINER":
             code_to_unlock = str(obj_def.get("code_to_unlock") or "").strip()
             item_to_unlock = str(obj_def.get("item_to_unlock") or "").strip().upper()
+            rule_to_unlock = str(obj_def.get("rule_to_unlock") or "").strip()
+            if code_to_unlock:
+                code_to_unlock = code_to_unlock[:32]
+                item_to_unlock = ""
+                rule_to_unlock = ""
+            elif item_to_unlock:
+                from backend.utils.text_utils import slugify
+                item_to_unlock = slugify(item_to_unlock).upper().replace("-", "_")[:64]
+                code_to_unlock = ""
+                rule_to_unlock = ""
+            elif rule_to_unlock:
+                rule_to_unlock = rule_to_unlock[:500]
+                code_to_unlock = ""
+                item_to_unlock = ""
+            else:
+                code_to_unlock = ""
+                item_to_unlock = ""
+                rule_to_unlock = ""
             metadata_json = {
                 "code_to_unlock": code_to_unlock,
                 "item_to_unlock": item_to_unlock,
-                "locked": bool(code_to_unlock or item_to_unlock),
+                "rule_to_unlock": rule_to_unlock,
+                "locked": bool(code_to_unlock or item_to_unlock or rule_to_unlock),
             }
         db.add(WorldEntity(
             id=obj_id,

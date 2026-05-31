@@ -40,6 +40,7 @@ class WorldExit(Base, TimestampMixin):
     lock_description = Column(String(255), nullable=True) # e.g. "The door is bolted from the other side."
     code_to_unlock = Column(String(50), nullable=True)
     item_to_unlock = Column(String(50), nullable=True)
+    rule_to_unlock = Column(String(500), nullable=True)
     adventure_id = synonym("template_id")
 
 class WorldEntity(Base, TimestampMixin):

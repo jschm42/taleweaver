@@ -116,7 +116,12 @@ def _validate_t2i_prerequisites(
 
 
 async def _publish_generation_status(db: AsyncSession, adventure: Optional[AdventureTemplate], status: str) -> None:
-    """Publish live status text via the active session without committing mid-generation."""
+    """Publish live status text and commit so that concurrent polling requests can see the update.
+
+    Using commit() (not flush()) is intentional: the status endpoint runs in a separate
+    SQLAlchemy session and cannot see un-committed rows.  Committing here is safe because
+    generation status is idempotent and can always be overwritten by the next step.
+    """
     if not adventure:
         return
         
@@ -126,7 +131,9 @@ async def _publish_generation_status(db: AsyncSession, adventure: Optional[Adven
         raise GenerationCancelled("Generation was cancelled by the user.")
         
     adventure.creation_status = status  # type: ignore
-    await db.flush()
+    await db.commit()
+    # Re-attach so the caller can still use the object after the commit.
+    await db.refresh(adventure)
 
 
 async def _publish_generation_status_with_callback(
@@ -171,20 +178,34 @@ def _normalize_text_log_content(
     return normalized[:500]
 
 
-def _normalize_container_unlock_requirements(
+def _normalize_unlock_requirements(
     raw_code: Any,
     raw_item: Any,
-) -> tuple[str, str]:
-    """Normalize container unlock requirement fields without forcing locks."""
+    raw_rule: Any,
+) -> tuple[str, str, str]:
+    """Normalize unlock requirements and enforce mutual exclusivity (code > item > rule)."""
     code_to_unlock = str(raw_code or "").strip()
     item_to_unlock = str(raw_item or "").strip().upper()
+    rule_to_unlock = str(raw_rule or "").strip()
 
     if code_to_unlock:
         code_to_unlock = code_to_unlock[:32]
-    if item_to_unlock:
+        item_to_unlock = ""
+        rule_to_unlock = ""
+    elif item_to_unlock:
         item_to_unlock = slugify(item_to_unlock).upper().replace("-", "_")[:64]
+        code_to_unlock = ""
+        rule_to_unlock = ""
+    elif rule_to_unlock:
+        rule_to_unlock = rule_to_unlock[:500]
+        code_to_unlock = ""
+        item_to_unlock = ""
+    else:
+        code_to_unlock = ""
+        item_to_unlock = ""
+        rule_to_unlock = ""
 
-    return code_to_unlock, item_to_unlock
+    return code_to_unlock, item_to_unlock, rule_to_unlock
 
 
 # --- Schemas for Structured LLM Output ---
@@ -205,6 +226,7 @@ class WorldExitSchema(BaseModel):
     lock_description: str = Field(..., description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.")
     code_to_unlock: str = Field("", description="Deterministic access code for the lock, e.g. 4711. Keep empty if no code is required.")
     item_to_unlock: str = Field("", description="The ID of the item needed to unlock this path, e.g. IRON_KEY. Keep empty if no item is required.")
+    rule_to_unlock: str = Field("", description="A soft narrative rule for unlocking, e.g. 'Protagonist overpersuades NPC_1 to open the door'. Keep empty if no soft rule is required.")
     
     model_config = {"extra": "forbid"}
 
@@ -259,6 +281,7 @@ class WorldObjectSchema(BaseModel):
     is_portable: bool = Field(..., description="Whether the item can be picked up. False for STATIC objects.")
     code_to_unlock: str = Field("", description="Deterministic access code for locked containers, e.g. ALPHA or 4711. May be empty for open containers.")
     item_to_unlock: str = Field("", description="Deterministic item ID required to unlock this container. May be empty for open containers.")
+    rule_to_unlock: str = Field("", description="A soft narrative rule for unlocking locked containers, e.g. 'Protagonist defeats NPC_2'. May be empty for open containers.")
     combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. Use [] if none.")
     reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Use empty string if none.")
     
@@ -815,6 +838,7 @@ class WorldGenerator:
                 obj["inventory"] = []
                 obj["code_to_unlock"] = ""
                 obj["item_to_unlock"] = ""
+                obj["rule_to_unlock"] = ""
         elif len(container_indices) > clamped_max_containers:
             for idx in container_indices[clamped_max_containers:]:
                 obj = objects[idx]
@@ -822,15 +846,18 @@ class WorldGenerator:
                 obj["inventory"] = []
                 obj["code_to_unlock"] = ""
                 obj["item_to_unlock"] = ""
+                obj["rule_to_unlock"] = ""
 
         for idx in container_indices[:clamped_max_containers]:
             obj = objects[idx]
-            code_to_unlock, item_to_unlock = _normalize_container_unlock_requirements(
+            code_to_unlock, item_to_unlock, rule_to_unlock = _normalize_unlock_requirements(
                 obj.get("code_to_unlock"),
                 obj.get("item_to_unlock"),
+                obj.get("rule_to_unlock"),
             )
             obj["code_to_unlock"] = code_to_unlock
             obj["item_to_unlock"] = item_to_unlock
+            obj["rule_to_unlock"] = rule_to_unlock
 
         readable_indices = [
             idx for idx, obj in enumerate(objects)
@@ -1370,8 +1397,11 @@ class WorldGenerator:
                                 style_instruction=style_instruction,
                                 use_advanced_model=((user.t2i_settings or {}).get("protagonist_model_quality", "advanced") == "advanced"),
                             ),
-                            timeout=_image_generation_timeout_seconds(),
+                            timeout=float(settings.VISUAL_TIMEOUT),
                         )
+                    except asyncio.TimeoutError:
+                        logger.warning("Protagonist image generation timed out after %ss for %s", settings.VISUAL_TIMEOUT, template_id)
+                        image_url = None
                     except Exception as exc:
                         if is_image_moderation_error(exc):
                             moderation_count += 1
@@ -1459,9 +1489,10 @@ class WorldGenerator:
             
         # Persist Exits
         for e in manifest_dict.get("exits", []):
-            code_to_unlock, item_to_unlock = _normalize_container_unlock_requirements(
+            code_to_unlock, item_to_unlock, rule_to_unlock = _normalize_unlock_requirements(
                 e.get("code_to_unlock"),
-                e.get("item_to_unlock")
+                e.get("item_to_unlock"),
+                e.get("rule_to_unlock"),
             )
             db.add(WorldExit(
                 template_id=template_id,
@@ -1471,7 +1502,8 @@ class WorldGenerator:
                 is_locked=e["is_locked"],
                 lock_description=e.get("lock_description"),
                 code_to_unlock=code_to_unlock,
-                item_to_unlock=item_to_unlock
+                item_to_unlock=item_to_unlock,
+                rule_to_unlock=rule_to_unlock
             ))
         
         await db.commit() # Save scenes and exits
@@ -1532,10 +1564,10 @@ class WorldGenerator:
                                 style_instruction=style_instruction,
                                 use_advanced_model=((user.t2i_settings or {}).get("profile_model_quality", "advanced") == "advanced"),
                             ),
-                            timeout=_image_generation_timeout_seconds(),
+                            timeout=float(settings.VISUAL_TIMEOUT),
                         )
-                    except asyncio.TimeoutError as exc:
-                        logger.warning("NPC image generation timed out for %s/%s: %s", template_id, n['id'], exc)
+                    except asyncio.TimeoutError:
+                        logger.warning("NPC image generation timed out after %ss for %s/%s", settings.VISUAL_TIMEOUT, template_id, n['id'])
                         image_url = None
                     except Exception as exc:
                         if is_image_moderation_error(exc):
@@ -1838,13 +1870,15 @@ class WorldGenerator:
                 metadata_json["text_log_format"] = text_log_format
 
             if str(o.get("item_type") or "").upper() == "CONTAINER":
-                code_to_unlock, item_to_unlock = _normalize_container_unlock_requirements(
+                code_to_unlock, item_to_unlock, rule_to_unlock = _normalize_unlock_requirements(
                     o.get("code_to_unlock"),
                     o.get("item_to_unlock"),
+                    o.get("rule_to_unlock"),
                 )
                 metadata_json["code_to_unlock"] = code_to_unlock
                 metadata_json["item_to_unlock"] = item_to_unlock
-                metadata_json["locked"] = bool(code_to_unlock or item_to_unlock)
+                metadata_json["rule_to_unlock"] = rule_to_unlock
+                metadata_json["locked"] = bool(code_to_unlock or item_to_unlock or rule_to_unlock)
 
             if avatar and is_in_avatar_inv:
                 if is_starting_inv:

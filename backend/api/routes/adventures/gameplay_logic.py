@@ -1439,10 +1439,11 @@ class GameTurnManager:
     def _is_container_locked(self, scene_container: WorldEntity | None, inventory_container: dict[str, Any] | None) -> bool:
         states = self.state.entity_states or {}
 
-        def _requirements_from_metadata(metadata: dict[str, Any]) -> tuple[str, str]:
+        def _requirements_from_metadata(metadata: dict[str, Any]) -> tuple[str, str, str]:
             return (
                 str(metadata.get("code_to_unlock") or "").strip(),
                 str(metadata.get("item_to_unlock") or "").strip().upper(),
+                str(metadata.get("rule_to_unlock") or "").strip(),
             )
 
         if scene_container:
@@ -1450,8 +1451,8 @@ class GameTurnManager:
             if isinstance(state_locked, bool):
                 return state_locked
             metadata_json = dict(getattr(scene_container, "metadata_json", None) or {})
-            code_to_unlock, item_to_unlock = _requirements_from_metadata(metadata_json)
-            return bool(code_to_unlock or item_to_unlock)
+            code_to_unlock, item_to_unlock, rule_to_unlock = _requirements_from_metadata(metadata_json)
+            return bool(code_to_unlock or item_to_unlock or rule_to_unlock)
 
         if inventory_container:
             inv_id = str(inventory_container.get("id") or "").strip()
@@ -1465,8 +1466,8 @@ class GameTurnManager:
             metadata_json = inventory_container.get("metadata_json")
             if not isinstance(metadata_json, dict):
                 metadata_json = {}
-            code_to_unlock, item_to_unlock = _requirements_from_metadata(metadata_json)
-            return bool(code_to_unlock or item_to_unlock)
+            code_to_unlock, item_to_unlock, rule_to_unlock = _requirements_from_metadata(metadata_json)
+            return bool(code_to_unlock or item_to_unlock or rule_to_unlock)
 
         return False
 
@@ -1480,12 +1481,12 @@ class GameTurnManager:
         match = re.search(r"\b(\d{3,8})\b", text)
         return match.group(1) if match else None
 
-    async def _resolve_container_from_free_text(self, text: str) -> tuple[str, str, str, str, bool] | None:
+    async def _resolve_container_from_free_text(self, text: str) -> tuple[str, str, str, str, str, bool] | None:
         lowered = (text or "").strip().lower()
         if not lowered:
             return None
 
-        best_match: tuple[int, str, str, str, str, bool] | None = None
+        best_match: tuple[int, str, str, str, str, str, bool] | None = None
 
         scene_res = await self.db.execute(
             select(WorldEntity).where(
@@ -1508,7 +1509,8 @@ class GameTurnManager:
             metadata_json = dict(ent.metadata_json or {})
             code_to_unlock = str(metadata_json.get("code_to_unlock") or "").strip()
             item_to_unlock = str(metadata_json.get("item_to_unlock") or "").strip().upper()
-            candidate = (len(token), cid, cname or cid, code_to_unlock, item_to_unlock, locked)
+            rule_to_unlock = str(metadata_json.get("rule_to_unlock") or "").strip()
+            candidate = (len(token), cid, cname or cid, code_to_unlock, item_to_unlock, rule_to_unlock, locked)
             if best_match is None or candidate[0] > best_match[0]:
                 best_match = candidate
 
@@ -1527,15 +1529,16 @@ class GameTurnManager:
                 metadata_json = {}
             code_to_unlock = str(metadata_json.get("code_to_unlock") or "").strip()
             item_to_unlock = str(metadata_json.get("item_to_unlock") or "").strip().upper()
-            candidate = (len(token), cid or cname, cname or cid or "container", code_to_unlock, item_to_unlock, locked)
+            rule_to_unlock = str(metadata_json.get("rule_to_unlock") or "").strip()
+            candidate = (len(token), cid or cname, cname or cid or "container", code_to_unlock, item_to_unlock, rule_to_unlock, locked)
             if best_match is None or candidate[0] > best_match[0]:
                 best_match = candidate
 
         if not best_match:
             return None
 
-        _, cid, cname, code_to_unlock, item_to_unlock, locked = best_match
-        return cid, cname, code_to_unlock, item_to_unlock, locked
+        _, cid, cname, code_to_unlock, item_to_unlock, rule_to_unlock, locked = best_match
+        return cid, cname, code_to_unlock, item_to_unlock, rule_to_unlock, locked
 
     async def _enforce_container_unlock_guardrails(self, event: GameEvent, user_msg: str) -> list[str]:
         lowered = (user_msg or "").strip().lower()
@@ -1546,7 +1549,7 @@ class GameTurnManager:
         if not resolved:
             return []
 
-        container_id, container_name, required_code, required_item_id, is_locked = resolved
+        container_id, container_name, required_code, required_item_id, required_rule, is_locked = resolved
         if not is_locked:
             return []
 
@@ -1622,11 +1625,17 @@ class GameTurnManager:
 
             required_code = str(ex.code_to_unlock or "").strip()
             required_item_id = str(ex.item_to_unlock or "").strip().upper()
+            required_rule = str(ex.rule_to_unlock or "").strip()
 
             unlock_allowed = True
             reason = ""
 
-            if required_code:
+            if required_rule:
+                if not is_being_unlocked:
+                    unlock_allowed = False
+                    reason = f"{ex.label} is locked."
+
+            if unlock_allowed and required_code:
                 code_match = re.search(r"(?:code|pin|access)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
                 attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
                 if not attempted_code or attempted_code.lower() != required_code.lower():

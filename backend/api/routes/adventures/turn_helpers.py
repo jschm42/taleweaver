@@ -126,6 +126,7 @@ class TurnProgressionBuilder:
                     "is_locked": ex.is_locked,
                     "code_to_unlock": getattr(ex, "code_to_unlock", None),
                     "item_to_unlock": getattr(ex, "item_to_unlock", None),
+                    "rule_to_unlock": getattr(ex, "rule_to_unlock", None),
                 }
             )
         return reduced_exits

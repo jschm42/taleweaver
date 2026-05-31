@@ -230,6 +230,11 @@ async def apply_sqlite_compat_migrations() -> None:
                 "ALTER TABLE world_exits ADD COLUMN item_to_unlock TEXT"
             )
             logger.info("SQLite migration: added world_exits.item_to_unlock")
+        if "rule_to_unlock" not in exit_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_exits ADD COLUMN rule_to_unlock TEXT"
+            )
+            logger.info("SQLite migration: added world_exits.rule_to_unlock")
 
         # Async Generation Status
         if "is_ready" not in adventure_cols:
