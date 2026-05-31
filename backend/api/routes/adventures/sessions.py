@@ -699,7 +699,8 @@ async def start_session_for_template(
         new_e = WorldExit(
             session_id=new_session.id, template_id=None,
             from_scene_id=e.from_scene_id, to_scene_id=e.to_scene_id,
-            label=e.label, is_locked=e.is_locked, lock_description=e.lock_description
+            label=e.label, is_locked=e.is_locked, lock_description=e.lock_description,
+            code_to_unlock=e.code_to_unlock, item_to_unlock=e.item_to_unlock
         )
         db.add(new_e)
         
@@ -1079,7 +1080,9 @@ async def copy_session(
             to_scene_id=e.to_scene_id,
             label=e.label,
             is_locked=e.is_locked,
-            lock_description=e.lock_description
+            lock_description=e.lock_description,
+            code_to_unlock=e.code_to_unlock,
+            item_to_unlock=e.item_to_unlock
         )
         db.add(cloned_exit)
 

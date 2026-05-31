@@ -2998,3 +2998,141 @@ async def test_game_loop_scene_change_auto_appends_narrative_exits(setup_test_db
         assert "Garden" in prompt_scene_change
 
 
+async def test_exit_lock_guardrail_wrong_code(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        
+        # Seed locked exit with code
+        db.add(WorldExit(
+            session_id=state.session_id,
+            from_scene_id=state.current_scene_id,
+            to_scene_id="CELLAR",
+            label="Digital Security Door",
+            is_locked=True,
+            code_to_unlock="4711",
+            item_to_unlock=None,
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        # Simulate LLM trying to transition to CELLAR
+        event = GameEvent(
+            new_scene_id="CELLAR",
+            updated_exits=[ExitUpdate(from_scene_id=state.current_scene_id, to_scene_id="CELLAR", is_locked=False)],
+            completed_quest_ids=["ENTER_CELLAR"],
+        )
+
+        reasons = await manager._enforce_exit_unlock_guardrails(event, "I try to use code 1234 on the digital security door")
+
+        assert any("Access code rejected" in r for r in reasons)
+        assert event.new_scene_id is None
+        assert event.completed_quest_ids == []
+        assert any(up.to_scene_id == "CELLAR" and up.is_locked is True for up in event.updated_exits)
+
+
+async def test_exit_lock_guardrail_correct_code(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        
+        # Seed locked exit with code
+        db.add(WorldExit(
+            session_id=state.session_id,
+            from_scene_id=state.current_scene_id,
+            to_scene_id="CELLAR",
+            label="Digital Security Door",
+            is_locked=True,
+            code_to_unlock="4711",
+            item_to_unlock=None,
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        event = GameEvent(
+            new_scene_id="CELLAR",
+            completed_quest_ids=["ENTER_CELLAR"],
+        )
+
+        reasons = await manager._enforce_exit_unlock_guardrails(event, "I enter code 4711 on the digital security door")
+
+        assert not reasons
+        assert event.new_scene_id == "CELLAR"
+        assert event.completed_quest_ids == ["ENTER_CELLAR"]
+        assert any(up.to_scene_id == "CELLAR" and up.is_locked is False for up in event.updated_exits)
+
+
+async def test_exit_lock_guardrail_missing_item(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        
+        # Seed locked exit with item
+        db.add(WorldExit(
+            session_id=state.session_id,
+            from_scene_id=state.current_scene_id,
+            to_scene_id="CELLAR",
+            label="Heavy Steel Gate",
+            is_locked=True,
+            code_to_unlock=None,
+            item_to_unlock="CELLAR_KEY",
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        event = GameEvent(
+            new_scene_id="CELLAR",
+            updated_exits=[ExitUpdate(from_scene_id=state.current_scene_id, to_scene_id="CELLAR", is_locked=False)],
+        )
+
+        reasons = await manager._enforce_exit_unlock_guardrails(event, "I open the heavy steel gate")
+
+        assert any("You need CELLAR_KEY" in r for r in reasons)
+        assert event.new_scene_id is None
+        assert any(up.to_scene_id == "CELLAR" and up.is_locked is True for up in event.updated_exits)
+
+
+async def test_exit_lock_guardrail_correct_item(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed_game_context(db)
+        
+        # Give item to player
+        avatar.inventory = [{"id": "CELLAR_KEY", "name": "Cellar Key", "item_type": "KEY"}]
+        
+        # Seed locked exit with item
+        db.add(WorldExit(
+            session_id=state.session_id,
+            from_scene_id=state.current_scene_id,
+            to_scene_id="CELLAR",
+            label="Heavy Steel Gate",
+            is_locked=True,
+            code_to_unlock=None,
+            item_to_unlock="CELLAR_KEY",
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        event = GameEvent(
+            new_scene_id="CELLAR",
+        )
+
+        reasons = await manager._enforce_exit_unlock_guardrails(event, "I unlock the heavy steel gate with my cellar key")
+
+        assert not reasons
+        assert event.new_scene_id == "CELLAR"
+        assert any(up.to_scene_id == "CELLAR" and up.is_locked is False for up in event.updated_exits)
+
+

@@ -203,6 +203,8 @@ class WorldExitSchema(BaseModel):
     label: str = Field(..., description="How to describe the transition, e.g., 'a narrow stone staircase'")
     is_locked: bool = Field(..., description="Whether the path is initially blocked.")
     lock_description: str = Field(..., description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.")
+    code_to_unlock: str = Field("", description="Deterministic access code for the lock, e.g. 4711. Keep empty if no code is required.")
+    item_to_unlock: str = Field("", description="The ID of the item needed to unlock this path, e.g. IRON_KEY. Keep empty if no item is required.")
     
     model_config = {"extra": "forbid"}
 
@@ -1457,13 +1459,19 @@ class WorldGenerator:
             
         # Persist Exits
         for e in manifest_dict.get("exits", []):
+            code_to_unlock, item_to_unlock = _normalize_container_unlock_requirements(
+                e.get("code_to_unlock"),
+                e.get("item_to_unlock")
+            )
             db.add(WorldExit(
                 template_id=template_id,
                 from_scene_id=e["from_scene_id"],
                 to_scene_id=e["to_scene_id"],
                 label=e["label"],
                 is_locked=e["is_locked"],
-                lock_description=e.get("lock_description")
+                lock_description=e.get("lock_description"),
+                code_to_unlock=code_to_unlock,
+                item_to_unlock=item_to_unlock
             ))
         
         await db.commit() # Save scenes and exits

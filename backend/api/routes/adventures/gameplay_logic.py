@@ -1590,6 +1590,103 @@ class GameTurnManager:
 
         return [reason or f"{container_name} stays locked."]
 
+    async def _enforce_exit_unlock_guardrails(self, event: GameEvent, user_msg: str) -> list[str]:
+        lowered = (user_msg or "").strip().lower()
+        if not lowered:
+            return []
+
+        exit_res = await self.db.execute(
+            select(WorldExit).where(
+                WorldExit.session_id == self.game_id,
+                WorldExit.from_scene_id == self.state.current_scene_id,
+            )
+        )
+        scene_exits = list(exit_res.scalars().all())
+
+        reasons = []
+        for ex in scene_exits:
+            if not ex.is_locked:
+                continue
+
+            # Is the GM trying to unlock it, or is the player trying to traverse it?
+            is_being_unlocked = False
+            for up in (event.updated_exits or []):
+                if up.from_scene_id == ex.from_scene_id and up.to_scene_id == ex.to_scene_id and not up.is_locked:
+                    is_being_unlocked = True
+                    break
+
+            is_being_traversed = event.new_scene_id == ex.to_scene_id
+
+            if not (is_being_unlocked or is_being_traversed):
+                continue
+
+            required_code = str(ex.code_to_unlock or "").strip()
+            required_item_id = str(ex.item_to_unlock or "").strip().upper()
+
+            unlock_allowed = True
+            reason = ""
+
+            if required_code:
+                code_match = re.search(r"(?:code|pin|access)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
+                attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
+                if not attempted_code or attempted_code.lower() != required_code.lower():
+                    unlock_allowed = False
+                    reason = f"Access code rejected for {ex.label}. The lock remains engaged."
+
+            if unlock_allowed and required_item_id:
+                inventory_ids = {
+                    str(item.get("id") or "").strip().upper()
+                    for item in (self.avatar.inventory or [])
+                    if isinstance(item, dict)
+                }
+                if required_item_id.upper() not in inventory_ids:
+                    unlock_allowed = False
+                    reason = f"You need {required_item_id} to unlock {ex.label}."
+
+            if not unlock_allowed:
+                # Force stays locked in event.updated_exits
+                sanitized_updates: list[ExitUpdate] = []
+                for up in (event.updated_exits or []):
+                    if up.from_scene_id == ex.from_scene_id and up.to_scene_id == ex.to_scene_id:
+                        continue
+                    sanitized_updates.append(up)
+                sanitized_updates.append(ExitUpdate(from_scene_id=ex.from_scene_id, to_scene_id=ex.to_scene_id, is_locked=True))
+                event.updated_exits = sanitized_updates
+
+                # Block movement
+                if event.new_scene_id == ex.to_scene_id:
+                    event.new_scene_id = None
+                    event.exit_label = None
+                    event.scene_label = None
+
+                # Clear quest completions and awards since the movement/interaction failed
+                event.completed_quest_ids = []
+                event.earned_award_keys = []
+                event.new_inventory_items = []
+                event.updated_inventory_items = []
+                event.removed_inventory_item_ids = []
+                event.spawned_items = []
+
+                reasons.append(reason or f"{ex.label} stays locked.")
+            else:
+                # Automatically add unlock status to event.updated_exits so the DB updates
+                if not event.updated_exits:
+                    event.updated_exits = []
+                already_present = False
+                for up in event.updated_exits:
+                    if up.from_scene_id == ex.from_scene_id and up.to_scene_id == ex.to_scene_id:
+                        up.is_locked = False
+                        already_present = True
+                        break
+                if not already_present:
+                    event.updated_exits.append(ExitUpdate(
+                        from_scene_id=ex.from_scene_id,
+                        to_scene_id=ex.to_scene_id,
+                        is_locked=False
+                    ))
+
+        return reasons
+
     async def _enforce_quest_and_award_guardrails(self, event: GameEvent) -> None:
         """
         Validates that any quest completed or award granted in this turn
@@ -3689,6 +3786,11 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                exit_guardrail_messages = await self._enforce_exit_unlock_guardrails(game_event, user_msg)
+                for gm in exit_guardrail_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 await self._enforce_quest_and_award_guardrails(game_event)
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
@@ -3835,7 +3937,10 @@ class GameTurnManager:
                 allowed_open_destinations = {
                     str(ex.get("to_scene_id") or "").strip()
                     for ex in reduced_exits
-                    if not bool(ex.get("is_locked")) and str(ex.get("to_scene_id") or "").strip()
+                    if (not bool(ex.get("is_locked")) or any(
+                        up.to_scene_id == ex.get("to_scene_id") and not up.is_locked
+                        for up in (progression_intent.updated_exits or [])
+                    )) and str(ex.get("to_scene_id") or "").strip()
                 }
                 if progression_intent.new_scene_id not in allowed_open_destinations:
                     progression_intent.new_scene_id = None
@@ -3874,6 +3979,11 @@ class GameTurnManager:
             try:
                 guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
                 for gm in guardrail_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
+                exit_guardrail_messages = await self._enforce_exit_unlock_guardrails(game_event, user_msg)
+                for gm in exit_guardrail_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
@@ -4795,6 +4905,17 @@ class GameTurnManager:
                         up_exit.to_scene_id, 
                         is_locked=up_exit.is_locked
                     )
+                    # Update DB row
+                    exit_res = await self.db.execute(
+                        select(WorldExit).where(
+                            WorldExit.session_id == self.state.session_id,
+                            WorldExit.from_scene_id == up_exit.from_scene_id,
+                            WorldExit.to_scene_id == up_exit.to_scene_id,
+                        )
+                    )
+                    exit_db = exit_res.scalars().first()
+                    if exit_db:
+                        exit_db.is_locked = up_exit.is_locked
             except Exception as e:
                 logger.error(f"Manual map exit update failed: {e}")
 

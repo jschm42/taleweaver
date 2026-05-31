@@ -266,6 +266,8 @@ async def _materialize_initial_session_from_template(
                     label=exit_row.label,
                     is_locked=exit_row.is_locked,
                     lock_description=exit_row.lock_description,
+                    code_to_unlock=exit_row.code_to_unlock,
+                    item_to_unlock=exit_row.item_to_unlock,
                 )
             )
 

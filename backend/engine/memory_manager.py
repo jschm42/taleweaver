@@ -133,13 +133,28 @@ class MemoryManager:
                 exit_list = []
                 for e in exits:
                     status = "[LOCKED]" if e.is_locked else "[OPEN]"
-                    exit_list.append(f"{e.label}->{e.to_scene_id}{status}")
+                    status_parts = []
+                    if e.is_locked:
+                        if getattr(e, "code_to_unlock", None):
+                            status_parts.append(f"code:{e.code_to_unlock}")
+                        if getattr(e, "item_to_unlock", None):
+                            status_parts.append(f"item:{e.item_to_unlock}")
+                    status_req = f"({','.join(status_parts)})" if status_parts else ""
+                    exit_list.append(f"{e.label}->{e.to_scene_id}{status}{status_req}")
                 location_context += "EXITS: " + "; ".join(exit_list) + "\n"
             else:
                 exit_list = []
                 for e in exits:
                     status = "[LOCKED]" if e.is_locked else "[OPEN]"
-                    desc = f" ({e.lock_description})" if e.is_locked and e.lock_description else ""
+                    desc_parts = []
+                    if e.is_locked:
+                        if e.lock_description:
+                            desc_parts.append(e.lock_description)
+                        if getattr(e, "code_to_unlock", None):
+                            desc_parts.append(f"code_to_unlock: {e.code_to_unlock}")
+                        if getattr(e, "item_to_unlock", None):
+                            desc_parts.append(f"item_to_unlock: {e.item_to_unlock}")
+                    desc = f" ({', '.join(desc_parts)})" if desc_parts else ""
                     exit_list.append(f"- {e.label} to {e.to_scene_id} {status}{desc}")
 
                 location_context += "AVAILABLE EXITS:\n" + "\n".join(exit_list) + "\n"

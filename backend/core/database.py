@@ -217,6 +217,20 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added world_scenes.image_url")
 
+        # Exits locks migration
+        exit_cols_result = await conn.exec_driver_sql("PRAGMA table_info(world_exits)")
+        exit_cols = {row[1] for row in exit_cols_result.fetchall()}
+        if "code_to_unlock" not in exit_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_exits ADD COLUMN code_to_unlock TEXT"
+            )
+            logger.info("SQLite migration: added world_exits.code_to_unlock")
+        if "item_to_unlock" not in exit_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE world_exits ADD COLUMN item_to_unlock TEXT"
+            )
+            logger.info("SQLite migration: added world_exits.item_to_unlock")
+
         # Async Generation Status
         if "is_ready" not in adventure_cols:
             await conn.exec_driver_sql(

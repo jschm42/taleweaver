@@ -42,7 +42,7 @@ router = APIRouter(tags=["Editor"])
 logger = logging.getLogger(__name__)
 
 class EntityUpdateRequest(BaseModel):
-    target_type: Literal["cover", "scene", "npc", "object", "protagonist"]
+    target_type: Literal["cover", "scene", "npc", "object", "protagonist", "exit"]
     target_id: str
     name: Optional[str] = None
     teaser: Optional[str] = None
@@ -317,6 +317,15 @@ async def update_editor_entity(
         if scene:
             if payload.name is not None: scene.label = payload.name
             if payload.description is not None: scene.description = payload.description
+    elif payload.target_type == "exit":
+        ex_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id, WorldExit.id == payload.target_id))
+        world_exit = ex_res.scalars().first()
+        if world_exit:
+            if payload.name is not None: world_exit.label = payload.name
+            if payload.locked is not None: world_exit.is_locked = bool(payload.locked)
+            if payload.code_to_unlock is not None: world_exit.code_to_unlock = str(payload.code_to_unlock or "").strip()
+            if payload.item_to_unlock is not None: world_exit.item_to_unlock = str(payload.item_to_unlock or "").strip().upper()
+            if payload.description is not None: world_exit.lock_description = payload.description
     else:
         en_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.id == payload.target_id))
         ent = en_res.scalars().first()
