@@ -296,3 +296,66 @@ async def test_npc_inventory_sync_and_name_fallback_spawning(setup_test_db, monk
         marge_state = (state.entity_states or {}).get("MARGE")
         assert marge_state is not None
         assert marge_state["inventory"] == []
+
+
+async def test_npc_memory_visibility(setup_test_db, monkeypatch):
+    """Verifies that only visible NPCs in the current scene are remembered and passed to the GM."""
+    from tests.conftest import TestSessionLocal
+    from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
+    
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state, npc = await _seed_npc_context(db)
+        
+        # Add another NPC that starts in LIVING_ROOM (not visited yet)
+        other_npc = WorldEntity(
+            id="BOB",
+            session_id="session-npc",
+            entity_type="NPC",
+            name="Bob",
+            description="A distant NPC.",
+            current_scene_id="LIVING_ROOM",
+            is_hidden=False,
+            is_in_inventory=False
+        )
+        db.add(other_npc)
+        await db.commit()
+        
+        # Instantiate the GameTurnManager
+        manager = GameTurnManager(db, "session-npc", user)
+        await manager.initialize()
+        
+        # Build context
+        builder = TurnLlmContextBuilder(manager)
+        ctx = await builder.build_context(user_msg="Inspect kitchen", language=None)
+        
+        # Verify Marge is remembered because she is in the current scene (KITCHEN)
+        await db.refresh(state)
+        marge_state = (state.entity_states or {}).get("MARGE")
+        assert marge_state is not None
+        assert marge_state.get("remembered") is True
+        
+        # Verify Bob is NOT remembered because the player has not visited LIVING_ROOM
+        bob_state = (state.entity_states or {}).get("BOB")
+        assert bob_state is None or not bob_state.get("remembered")
+        
+        # Since Bob is in another scene and not remembered, Bob should NOT be in the build_context output
+        assert "Marge" in ctx.mechanics_system_prompt
+        assert "Bob" not in ctx.mechanics_system_prompt
+        
+        # Now, move the protagonist to LIVING_ROOM
+        state.current_scene_id = "LIVING_ROOM"
+        await db.commit()
+        
+        # Build context again
+        ctx2 = await builder.build_context(user_msg="Inspect living room", language=None)
+        
+        # Verify Bob is now remembered
+        await db.refresh(state)
+        bob_state = (state.entity_states or {}).get("BOB")
+        assert bob_state is not None
+        assert bob_state.get("remembered") is True
+        
+        # Since Marge is in KITCHEN (other scene) but was remembered, she should be in other_npcs context
+        # So BOTH Marge and Bob should be in the mechanics system prompt!
+        assert "Marge" in ctx2.mechanics_system_prompt
+        assert "Bob" in ctx2.mechanics_system_prompt

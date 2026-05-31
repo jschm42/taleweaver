@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.core import prompts
@@ -115,12 +116,30 @@ class TurnLlmContextBuilder:
         entities = [e for e in scene_entities_all if not getattr(e, "is_hidden", False)]
         hidden_entities = [e for e in scene_entities_all if getattr(e, "is_hidden", False)]
 
+        # Mark visible NPCs in the current scene as remembered in session state
+        scene_npcs = [e for e in entities if e.entity_type == "NPC"]
+        if scene_npcs:
+            overrides = dict(self.manager.state.entity_states or {})
+            state_modified = False
+            for npc in scene_npcs:
+                if npc.id not in overrides:
+                    overrides[npc.id] = {}
+                if not isinstance(overrides[npc.id], dict):
+                    overrides[npc.id] = {}
+                if not overrides[npc.id].get("remembered"):
+                    overrides[npc.id]["remembered"] = True
+                    state_modified = True
+            if state_modified:
+                self.manager.state.entity_states = overrides
+                flag_modified(self.manager.state, "entity_states")
+
         other_npcs = [
             e
             for e in all_entities
             if e.current_scene_id != self.manager.state.current_scene_id
             and e.entity_type == "NPC"
             and not getattr(e, "is_hidden", False)
+            and (self.manager.state.entity_states or {}).get(e.id, {}).get("remembered")
         ]
 
         all_scenes_res = await self.manager.db.execute(
