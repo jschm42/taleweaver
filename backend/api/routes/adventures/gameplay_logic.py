@@ -144,6 +144,16 @@ def _is_service_unavailable_error(exc: Exception) -> bool:
     return any(p in text for p in patterns)
 
 
+def _is_invalid_llm_payload_error(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    patterns = (
+        "no content returned from llm for complex task",
+        "failed to parse llm response as json",
+        "does not match expected schema",
+    )
+    return any(p in text for p in patterns)
+
+
 def _friendly_llm_error_message(exc: Exception) -> str | None:
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
@@ -153,6 +163,8 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
         return "The Game Master took too long to respond. Please try again."
     if _is_service_unavailable_error(exc):
         return "The Game Master is temporarily unavailable. Please try again shortly."
+    if _is_invalid_llm_payload_error(exc):
+        return "The selected model returned an invalid response. Please try again or choose a different model."
     return None
 
 
@@ -169,6 +181,8 @@ def _llm_error_type(exc: Exception) -> str | None:
         return "timeout"
     if _is_service_unavailable_error(exc):
         return "service_unavailable"
+    if _is_invalid_llm_payload_error(exc):
+        return "invalid_payload"
     return None
 
 class GameTurnManager:

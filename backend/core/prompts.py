@@ -40,6 +40,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "Use locked containers frequently for security/value-themed names (e.g. safe, lockbox, strongbox, vault, sealed crate, lootbox with lock).\n"
     "For locked containers, you can specify one of `code_to_unlock`, `item_to_unlock`, or a soft narrative `rule_to_unlock` (e.g. 'Protagonist defeats NPC_2'). For open containers, keep all three empty. These three fields are mutually exclusive: if you set one, do not set the other two.\n"
     "Similarly, for locked exits, you can specify one of `code_to_unlock`, `item_to_unlock`, or a soft narrative `rule_to_unlock` in the exit object. For open exits, keep all three empty. These three fields are mutually exclusive: if you set one, do not set the other two.\n"
+    "Every exit object is directional: `from_scene_id` -> `to_scene_id` describes exactly one travel direction. If the player should be able to go there and back, you MUST create two separate exit objects, one per direction. Only emit a single exit object when the path is intentionally one-way (for example a collapsing bridge, a drop, or a gate that slams shut behind the player).\n"
     "For every locked container, place at least one discoverable hint or puzzle clue in the world that explains how to unlock it (code clue, key location clue, or explicit riddle).\n"
     "For NPCs, assign an 'npc_type': HUMANOID, ANIMAL, MONSTER, BEING.\n"
     "Every NPC MUST also have a 'goal' and a 'character' description (both strings).\n\n"
@@ -73,6 +74,7 @@ WORLD_GENERATION_USER_PROMPT_TEMPLATE = (
     "- Set top-level combat flags exactly as requested: can_damage_npcs={can_damage_npcs}, npcs_can_damage_protagonist={npcs_can_damage_protagonist}.\n"
 
     "- Create a complex network of exits and interesting entities connecting these locations.\n"
+    "- Treat exits as strictly directional edges. For a normal two-way passage, emit both directions as separate exit objects; for a genuine one-way transition, emit only the allowed direction.\n"
     "TTS DIRECTION:\n"
     "- Generate 'tts_director_notes' that define the vocal style (tone, pace, emphasis) for the narrator to match the adventure's theme.\n\n"
     "{cover_guidance}"

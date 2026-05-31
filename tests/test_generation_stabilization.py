@@ -62,6 +62,54 @@ async def test_deepseek_fallback_injects_schema(monkeypatch):
     assert captured["response_format"] == {"type": "json_object"}
     assert captured["custom_llm_provider"] == "deepseek"
 
+
+@pytest.mark.asyncio
+async def test_deepseek_fallback_suppresses_thinking_for_structured_json(monkeypatch):
+    """DeepSeek JSON fallback should not send thinking params that can consume the reply channel."""
+    user = _make_user(
+        llm_settings={
+            "small_enable_thinking": True,
+            "small_max_tokens": 100,
+            "small_max_thinking_tokens": 50,
+        },
+        encrypted_api_keys={"deepseek": "key"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-deepseek")
+    router = GameMasterLLM(user, provider="deepseek")
+
+    captured = {}
+
+    async def fake_acompletion(**kwargs):
+        captured.update(kwargs)
+
+        class _Msg:
+            content = '{"name": "Deep", "age": 1}'
+
+        class _Choice:
+            message = _Msg()
+            finish_reason = "stop"
+
+        class _Resp:
+            choices = [_Choice()]
+
+            @staticmethod
+            def model_dump():
+                return {}
+
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    await router.aexecute_complex_task(
+        system_prompt="Base sys",
+        user_prompt="prompt",
+        response_model=MockSchema,
+        model="deepseek-v4-flash",
+    )
+
+    assert "thinking" not in captured
+    assert captured["max_tokens"] == 100
+
 @pytest.mark.asyncio
 async def test_anthropic_fallback_injects_schema(monkeypatch):
     """Test that Anthropic uses the prompt-injected JSON mode fallback."""

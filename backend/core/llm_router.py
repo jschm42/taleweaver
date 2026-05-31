@@ -619,13 +619,16 @@ class GameMasterLLM:
             )
             messages[0]["content"] = system_prompt
 
+        allow_thinking = not use_json_mode_fallback
+
         kwargs = {
             "model": normalized_model,
             "messages": messages,
             "response_format": {"type": "json_object"} if use_json_mode_fallback else response_model,
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
+            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking and allow_thinking else 0),
         }
-        self._apply_thinking_settings(kwargs)
+        if allow_thinking:
+            self._apply_thinking_settings(kwargs)
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)
@@ -691,6 +694,11 @@ class GameMasterLLM:
             
         try:
             content = self._clean_json_string(content)
+            if not content:
+                logger.error("LLM returned content that was empty after JSON cleanup. Raw response: %s", response.model_dump())
+                if finish_reason == "length":
+                    raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
+                raise ValueError("No content returned from LLM for complex task.")
             data = json.loads(content)
             if isinstance(data, list) and len(data) > 0:
                 logger.warning(f"LLM returned a list for {response_model.__name__}. Taking first element.")
@@ -760,13 +768,16 @@ class GameMasterLLM:
             )
             messages[0]["content"] = system_prompt
 
+        allow_thinking = not use_json_mode_fallback
+
         kwargs = {
             "model": normalized_model,
             "messages": messages,
             "response_format": {"type": "json_object"} if use_json_mode_fallback else response_model,
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
+            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking and allow_thinking else 0),
         }
-        self._apply_thinking_settings(kwargs)
+        if allow_thinking:
+            self._apply_thinking_settings(kwargs)
 
         if self.provider == "ollama":
             self._validate_ollama_model(model)
@@ -835,6 +846,11 @@ class GameMasterLLM:
             
         try:
             content = self._clean_json_string(content)
+            if not content:
+                logger.error("LLM returned content that was empty after JSON cleanup. Raw response: %s", response.model_dump())
+                if finish_reason == "length":
+                    raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
+                raise ValueError("No content returned from LLM for complex task.")
             data = json.loads(content)
             return response_model(**data)
         except json.JSONDecodeError as exc:

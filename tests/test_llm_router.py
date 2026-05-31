@@ -437,3 +437,40 @@ async def test_aexecute_complex_task_surfaces_schema_validation_failure(monkeypa
             response_model=_MiniSchema,
             model="claude-3-5-sonnet",
         )
+
+
+@pytest.mark.asyncio
+async def test_aexecute_complex_task_treats_empty_cleaned_content_as_no_content(monkeypatch):
+    class _MiniSchema(BaseModel):
+        required: str
+
+    user = _make_user(encrypted_api_keys={"openai": "encrypted-placeholder"})
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-test")
+    router = GameMasterLLM(user, provider="openai")
+
+    class _Msg:
+        content = "```json\n```"
+
+    class _Choice:
+        message = _Msg()
+        finish_reason = "stop"
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    with pytest.raises(ValueError, match="No content returned from LLM for complex task"):
+        await router.aexecute_complex_task(
+            system_prompt="sys",
+            user_prompt="prompt",
+            response_model=_MiniSchema,
+            model="claude-3-5-sonnet",
+        )

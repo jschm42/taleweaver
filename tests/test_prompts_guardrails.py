@@ -88,3 +88,14 @@ def test_world_and_gm_prompts_include_puzzle_contract_and_patterns() -> None:
     for prompt_text in prompt_targets:
         assert puzzle_contract in prompt_text
         assert puzzle_patterns in prompt_text
+
+
+def test_world_generation_prompts_define_directional_exit_contract() -> None:
+    system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
+    user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE
+
+    assert "Every exit object is directional" in system_prompt
+    assert "you MUST create two separate exit objects" in system_prompt
+    assert "Only emit a single exit object when the path is intentionally one-way" in system_prompt
+    assert "Treat exits as strictly directional edges" in user_prompt
+    assert "For a normal two-way passage, emit both directions as separate exit objects" in user_prompt
