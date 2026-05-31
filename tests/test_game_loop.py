@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
-from backend.engine.rule_engine import AdventureGeneratorToolIntent, GameEvent, InventoryItem, WorldEntityUpdate
+from backend.engine.rule_engine import AdventureGeneratorToolIntent, ExitUpdate, GameEvent, InventoryItem, WorldEntityUpdate
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -3062,7 +3062,7 @@ async def test_exit_lock_guardrail_wrong_code(setup_test_db):
 
         reasons = await manager._enforce_exit_unlock_guardrails(event, "I try to use code 1234 on the digital security door")
 
-        assert any("Access code rejected" in r for r in reasons)
+        assert any("cold red blink" in r for r in reasons)
         assert event.new_scene_id is None
         assert event.completed_quest_ids == []
         assert any(up.to_scene_id == "CELLAR" and up.is_locked is True for up in event.updated_exits)

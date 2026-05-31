@@ -5,6 +5,7 @@ const props = defineProps<{
   open: boolean
   title: string
   busy?: boolean
+  errorMessage?: string
 }>()
 
 const emit = defineEmits<{

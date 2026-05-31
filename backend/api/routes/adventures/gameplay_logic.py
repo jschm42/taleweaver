@@ -41,6 +41,7 @@ from backend.engine.rule_engine import (
     AdventureGenerationRequest,
     AdventureGeneratorToolIntent,
     AttackResult,
+    ExitUpdate,
     GameEvent,
     GameOverException,
     RuleEngine,
@@ -1654,7 +1655,7 @@ class GameTurnManager:
                 attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
                 if not attempted_code or attempted_code.lower() != required_code.lower():
                     unlock_allowed = False
-                    reason = f"Access code rejected for {ex.label}. The lock remains engaged."
+                    reason = f"{ex.label} answers with a cold red blink. That code won't open the way."
 
             if unlock_allowed and required_item_id:
                 inventory_ids = {
