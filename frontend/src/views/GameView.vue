@@ -7,10 +7,12 @@
  */
 import { ref, watch, computed, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+const containerCodeErrorMessage = ref('')
 import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
 import QuestsModal from '@/components/game/QuestsModal.vue'
 import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
+  containerCodeErrorMessage.value = ''
 import GameOverScreen from '@/components/game/GameOverScreen.vue'
 import SuccessScreen from '@/components/game/SuccessScreen.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
@@ -35,7 +37,7 @@ import { api } from '@/composables/useApi'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
-import { useGameProgressState } from '@/composables/useGameProgressState'
+    containerCodeErrorMessage.value = error?.message || "The lock gives a mocking click. That code won't open this container."
 import { useGameUiFeedback } from '@/composables/useGameUiFeedback'
 import { useGameInteractionState } from '@/composables/useGameInteractionState'
 import { useGameSessionLifecycle } from '@/composables/useGameSessionLifecycle'
@@ -485,8 +487,11 @@ const closeContainerModal = () => {
   activeContainer.value = null
 }
 
+const containerCodeErrorMessage = ref('')
+
 const closeContainerCodeModal = () => {
   showContainerCodeModal.value = false
+  containerCodeErrorMessage.value = ''
   activeCodeContainer.value = null
 }
 
@@ -496,6 +501,7 @@ const submitContainerCode = async (code: string) => {
   if (!containerId) return
 
   containerCodeBusy.value = true
+  containerCodeErrorMessage.value = ''
   try {
     await api.unlockContainerWithCode(props.id, containerId, code)
     markContainerUnlockedLocally(containerId)
@@ -511,7 +517,7 @@ const submitContainerCode = async (code: string) => {
       if (container) openContainerFromInventoryItem(container)
     }
   } catch (error: any) {
-    addNotification(error?.message || 'Invalid access code.', 'error')
+    containerCodeErrorMessage.value = error?.message || "The lock gives a mocking click. That code won't open this container."
   } finally {
     containerCodeBusy.value = false
   }
@@ -1115,6 +1121,7 @@ watch(
       :open="showContainerCodeModal"
       :title="activeCodeContainer?.name || 'Container'"
       :busy="containerCodeBusy"
+      :error-message="containerCodeErrorMessage"
       @close="closeContainerCodeModal"
       @submit="submitContainerCode"
     />

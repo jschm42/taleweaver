@@ -35,6 +35,7 @@ router = APIRouter(tags=["Gameplay"])
 logger = logging.getLogger(__name__)
 
 TERMINAL_EPILOGUE_STATE_KEY = "__terminal_epilogue__"
+INVALID_CONTAINER_CODE_MESSAGE = "The lock gives a mocking click. That code won't open this container."
 
 
 class ContainerUnlockCodeRequest(BaseModel):
@@ -465,7 +466,7 @@ async def unlock_container_with_code(
     if not submitted_code:
         raise HTTPException(status_code=400, detail="Code is required.")
     if submitted_code.lower() != expected_code.lower():
-        raise HTTPException(status_code=403, detail="Invalid access code.")
+        raise HTTPException(status_code=403, detail=INVALID_CONTAINER_CODE_MESSAGE)
 
     entity_states = dict(state.entity_states or {})
     entry = dict(entity_states.get(entity.id) or {})

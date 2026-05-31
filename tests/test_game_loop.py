@@ -2527,7 +2527,7 @@ async def test_wrong_container_access_code_is_rejected_server_side(setup_test_db
 
         messages = await manager._enforce_container_unlock_guardrails(event, "use code 1111 on maintenance locker")
 
-        assert any("Access code rejected" in msg for msg in messages)
+        assert any("mocking click" in msg for msg in messages)
         assert event.completed_quest_ids == []
         assert event.new_inventory_items == []
         assert any(up.entity_id == "LOCKER" and up.locked is True for up in (event.updated_entities or []))
@@ -2717,6 +2717,7 @@ async def test_combat_defeat_adds_xp(setup_test_db, monkeypatch):
 async def test_container_code_unlock_adds_xp(setup_test_db):
     """Verifies that unlocking a container via API or turn flow awards XP."""
     from tests.conftest import TestSessionLocal
+    from fastapi import HTTPException
     from backend.api.routes.adventures.gameplay import unlock_container_with_code, ContainerUnlockCodeRequest
 
     async with TestSessionLocal() as db:
@@ -2765,6 +2766,16 @@ async def test_container_code_unlock_adds_xp(setup_test_db):
         ).scalars().all()
         assert any("Unlocked Iron Chest with the correct code!" in m.content for m in sys_msgs)
         assert any("you gained 80 XP" in m.content for m in sys_msgs)
+
+        with pytest.raises(HTTPException, match="mocking click") as exc_info:
+            await unlock_container_with_code(
+                game_id=state.session_id,
+                entity_id="CHEST_1",
+                payload=ContainerUnlockCodeRequest(code="9999"),
+                db=db,
+                current_user=user
+            )
+        assert exc_info.value.status_code == 403
 
         # Reset for turn-based testing
         avatar.exp = 100

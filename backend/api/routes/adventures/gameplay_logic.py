@@ -1575,7 +1575,7 @@ class GameTurnManager:
             attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
             if not attempted_code or attempted_code.lower() != required_code.lower():
                 unlock_allowed = False
-                reason = f"Access code rejected for {container_name}. The lock remains engaged."
+                reason = f"{container_name} gives a mocking click. That code won't do the trick."
 
         if unlock_allowed and required_item_id:
             inventory_ids = {

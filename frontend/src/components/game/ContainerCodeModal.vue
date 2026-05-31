@@ -53,6 +53,9 @@ const onSubmit = () => {
               placeholder="Enter code"
               @keyup.enter="onSubmit"
             />
+            <p v-if="errorMessage" class="text-sm text-amber-300 leading-relaxed">
+              {{ errorMessage }}
+            </p>
           </div>
 
           <div class="px-6 pb-6 pt-2 flex gap-3 justify-end border-t border-slate-800/80">
