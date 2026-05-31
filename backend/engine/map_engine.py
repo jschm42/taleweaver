@@ -157,21 +157,24 @@ class MapEngine:
                     "description": "An unexplored area...",
                     "is_unknown": True
                 }
-                
-                # Also add the edge if it doesn't exist in the map_dict yet
-                edge_exists = any(
-                    MapEngine._safe_id(e["from"]) == current_safe_id and 
-                    MapEngine._safe_id(e["to"]) == target_safe_id 
-                    for e in edges
-                )
-                
-                if not edge_exists:
-                    edges.append({
-                        "from": current_scene_id,
-                        "to": target_raw_id,
-                        "label": ex.label or "",
-                        "is_locked": ex.is_locked
-                    })
+
+            # Always expose outgoing edges from the current scene, even when the
+            # target scene is already known. Otherwise return-path arrows only
+            # appear after the player traverses them once and register_exit persists
+            # the edge into the stored map.
+            edge_exists = any(
+                MapEngine._safe_id(e["from"]) == current_safe_id and
+                MapEngine._safe_id(e["to"]) == target_safe_id
+                for e in edges
+            )
+
+            if not edge_exists:
+                edges.append({
+                    "from": current_scene_id,
+                    "to": target_raw_id,
+                    "label": ex.label or "",
+                    "is_locked": ex.is_locked
+                })
 
         map_dict["nodes"] = nodes
         map_dict["edges"] = edges
