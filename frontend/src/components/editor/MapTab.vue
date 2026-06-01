@@ -46,6 +46,7 @@ const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
 
 const margin = 100
+const EXIT_CIRCLE_EDGE_OFFSET = 30
 
 function resetView() {
   zoom.value = 1
@@ -185,12 +186,15 @@ const exitCircles = computed(() => {
 
     // Circle at the end of the edge (pointing to 'to' scene)
     const endPoint = points[points.length - 1]
+    const beforeEndPoint = points[points.length - 2]
+    const endCirclePoint = movePointToward(endPoint, beforeEndPoint, EXIT_CIRCLE_EDGE_OFFSET)
+    const fromNode = layoutData.value!.nodes.find(n => n.id === edge.from)
     const toNode = layoutData.value!.nodes.find(n => n.id === edge.to)
     circles.push({
       id: `exit-end-${edgeIdx}`,
-      x: endPoint.x + margin,
-      y: endPoint.y + margin,
-      from: edge.from,
+      x: endCirclePoint.x + margin,
+      y: endCirclePoint.y + margin,
+      from: fromNode?.label || edge.from,
       to: toNode?.label || edge.to,
       label: edge.label || `Exit to ${toNode?.label || edge.to}`,
       isLocked: edge.isLocked,
@@ -200,12 +204,13 @@ const exitCircles = computed(() => {
     // If bidirectional, also add a circle at the start of the edge (pointing back to 'from' scene)
     if (edge.isBidirectional) {
       const startPoint = points[0]
-      const fromNode = layoutData.value!.nodes.find(n => n.id === edge.from)
+      const afterStartPoint = points[1]
+      const startCirclePoint = movePointToward(startPoint, afterStartPoint, EXIT_CIRCLE_EDGE_OFFSET)
       circles.push({
         id: `exit-start-${edgeIdx}`,
-        x: startPoint.x + margin,
-        y: startPoint.y + margin,
-        from: edge.to,
+        x: startCirclePoint.x + margin,
+        y: startCirclePoint.y + margin,
+        from: toNode?.label || edge.to,
         to: fromNode?.label || edge.from,
         label: edge.label || `Exit to ${fromNode?.label || edge.from}`,
         isLocked: edge.isLocked,
@@ -216,6 +221,24 @@ const exitCircles = computed(() => {
 
   return circles
 })
+
+function movePointToward(
+  anchor: { x: number; y: number },
+  toward: { x: number; y: number } | undefined,
+  distance: number
+) {
+  if (!toward || distance <= 0) return anchor
+  const dx = toward.x - anchor.x
+  const dy = toward.y - anchor.y
+  const length = Math.hypot(dx, dy)
+  if (!Number.isFinite(length) || length <= 0.0001) return anchor
+  const step = Math.min(distance, length - 0.5)
+  if (step <= 0) return anchor
+  return {
+    x: anchor.x + (dx / length) * step,
+    y: anchor.y + (dy / length) * step
+  }
+}
 
 function getEdgePath(points: Array<{ x: number, y: number }>) {
   if (!points || points.length === 0) return ''
