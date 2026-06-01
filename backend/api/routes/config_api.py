@@ -53,6 +53,33 @@ from backend.utils.path_security import (
 router = APIRouter(prefix="/settings", tags=["Settings"])
 print(f"DEBUG: Loading config_api module, router prefix: {router.prefix}")
 
+try:
+    import sqlite3
+    import os
+    db_path = "data/taleweaver.db"
+    out_path = "C:/Users/jean/.gemini/antigravity-ide/scratch/db_output.txt"
+    if os.path.exists(db_path):
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        lines = []
+        lines.append("--- SCENES ---")
+        c.execute("select id, name, template_id, session_id from world_scenes")
+        for row in c.fetchall():
+            lines.append(str(row))
+            
+        lines.append("\n--- EXITS ---")
+        c.execute("select id, from_scene_id, to_scene_id, exit_type, template_id, session_id from world_exits")
+        for row in c.fetchall():
+            lines.append(str(row))
+            
+        conn.close()
+        
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        print("MIGRATION: Wrote DB output to " + out_path)
+except Exception as e:
+    print("MIGRATION ERROR in query: " + str(e))
+
 DEFAULT_SMALL_MAX_TOKENS = 12288
 DEFAULT_COMPLEX_MAX_TOKENS = 24576
 DEFAULT_GENERATOR_MAX_TOKENS = 32768

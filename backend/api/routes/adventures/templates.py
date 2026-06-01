@@ -264,6 +264,7 @@ async def _materialize_initial_session_from_template(
                     from_scene_id=exit_row.from_scene_id,
                     to_scene_id=exit_row.to_scene_id,
                     label=exit_row.label,
+                    exit_type=exit_row.exit_type,
                     is_locked=exit_row.is_locked,
                     lock_description=exit_row.lock_description,
                     code_to_unlock=exit_row.code_to_unlock,
@@ -664,6 +665,89 @@ async def create_adventure(
                     bg_adv.creation_status = "Generating world structure"
                     await bg_db.commit()
                 
+                # In cover mode, if a category is on "auto" (min=None, max=None), derive tight
+                # bounds from the source manifest so the cover has approximately the same
+                # asset density as the original adventure.
+                eff_min_scenes = payload.min_scenes
+                eff_max_scenes = payload.max_scenes
+                eff_min_items = payload.min_items
+                eff_max_items = payload.max_items
+                eff_min_containers = payload.min_containers
+                eff_max_containers = payload.max_containers
+                eff_min_text_logs = payload.min_text_logs
+                eff_max_text_logs = payload.max_text_logs
+                eff_min_quests = payload.min_quests
+                eff_max_quests = payload.max_quests
+                eff_min_awards = payload.min_awards
+                eff_max_awards = payload.max_awards
+
+                if cover_source_manifest:
+                    src_scenes = cover_source_manifest.get("scenes") or []
+                    src_npcs = cover_source_manifest.get("npcs") or []
+                    src_objects = cover_source_manifest.get("objects") or []
+                    src_quests = cover_source_manifest.get("quests") or []
+                    src_awards = cover_source_manifest.get("awards") or []
+
+                    src_scene_count = len(src_scenes)
+                    src_npc_count = len(src_npcs)  # noqa: F841 – kept for future use
+                    src_object_count = len(src_objects)
+                    src_container_count = sum(
+                        1 for o in src_objects
+                        if isinstance(o, dict) and str(o.get("item_type", "")).upper() == "CONTAINER"
+                    )
+                    src_readable_count = sum(
+                        1 for o in src_objects
+                        if isinstance(o, dict) and str(o.get("item_type", "")).upper() == "READABLE"
+                    )
+                    src_quest_count = len(src_quests)
+                    src_award_count = len(src_awards)
+
+                    def _cover_bounds(src_count: int, hard_min: int = 1) -> tuple[int, int]:
+                        """Return (min, max) that bracket src_count by ±1, clamped to hard_min."""
+                        lo = max(hard_min, src_count - 1)
+                        hi = max(lo, src_count + 1)
+                        return lo, hi
+
+                    if payload.min_scenes is None and payload.max_scenes is None and src_scene_count > 0:
+                        eff_min_scenes, eff_max_scenes = _cover_bounds(src_scene_count, hard_min=1)
+
+                    if payload.min_items is None and payload.max_items is None and src_object_count > 0:
+                        eff_min_items, eff_max_items = _cover_bounds(src_object_count, hard_min=1)
+
+                    if (
+                        payload.container_generation_enabled
+                        and payload.min_containers is None
+                        and payload.max_containers is None
+                        and src_container_count > 0
+                    ):
+                        eff_min_containers, eff_max_containers = _cover_bounds(src_container_count, hard_min=0)
+
+                    if (
+                        payload.text_log_generation_enabled
+                        and payload.min_text_logs is None
+                        and payload.max_text_logs is None
+                        and src_readable_count > 0
+                    ):
+                        eff_min_text_logs, eff_max_text_logs = _cover_bounds(src_readable_count, hard_min=0)
+
+                    if (
+                        payload.quest_generation_enabled
+                        and not chat_mode
+                        and payload.min_quests is None
+                        and payload.max_quests is None
+                        and src_quest_count > 0
+                    ):
+                        eff_min_quests, eff_max_quests = _cover_bounds(src_quest_count, hard_min=1)
+
+                    if (
+                        payload.award_generation_enabled
+                        and not chat_mode
+                        and payload.min_awards is None
+                        and payload.max_awards is None
+                        and src_award_count > 0
+                    ):
+                        eff_min_awards, eff_max_awards = _cover_bounds(src_award_count, hard_min=1)
+
                 await WorldGenerator.generate_world(
                     db=bg_db,
                     user=bg_user,
@@ -674,22 +758,22 @@ async def create_adventure(
                     generate_npc_images=payload.generate_npc_images,
                     generate_item_images=payload.generate_item_images,
                     automatic_npc_voice_assignment=payload.automatic_npc_voice_assignment,
-                    min_scenes=payload.min_scenes,
-                    max_scenes=payload.max_scenes,
+                    min_scenes=eff_min_scenes,
+                    max_scenes=eff_max_scenes,
                     container_generation_enabled=payload.container_generation_enabled,
-                    min_containers=payload.min_containers,
-                    max_containers=payload.max_containers,
+                    min_containers=eff_min_containers,
+                    max_containers=eff_max_containers,
                     text_log_generation_enabled=bool(payload.text_log_generation_enabled),
-                    min_text_logs=payload.min_text_logs,
-                    max_text_logs=payload.max_text_logs,
+                    min_text_logs=eff_min_text_logs,
+                    max_text_logs=eff_max_text_logs,
                     quest_generation_enabled=(not chat_mode) and bool(payload.quest_generation_enabled),
-                    min_quests=payload.min_quests,
-                    max_quests=payload.max_quests,
-                    min_items=payload.min_items,
-                    max_items=payload.max_items,
+                    min_quests=eff_min_quests,
+                    max_quests=eff_max_quests,
+                    min_items=eff_min_items,
+                    max_items=eff_max_items,
                     award_generation_enabled=False if chat_mode else payload.award_generation_enabled,
-                    min_awards=payload.min_awards,
-                    max_awards=payload.max_awards,
+                    min_awards=eff_min_awards,
+                    max_awards=eff_max_awards,
                     can_damage_npcs=payload.can_damage_npcs,
                     npcs_can_damage_protagonist=payload.npcs_can_damage_protagonist,
                     selected_image_styles=adv.selected_image_styles,

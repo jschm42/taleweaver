@@ -79,10 +79,11 @@ class MapEngine:
         from_scene: str, 
         to_scene: str, 
         exit_label: str = "", 
-        is_locked: bool = False
+        is_locked: bool = False,
+        exit_type: str = "one_way"
     ) -> None:
         """
-        Adds a directed edge between two scenes. 
+        Adds a directed or bidirectional edge between two scenes. 
         Normalizes IDs and prevents self-loops.
         """
         if not (from_scene and to_scene):
@@ -102,10 +103,20 @@ class MapEngine:
         # Check for existing
         for idx, e in enumerate(edges):
             # Compare normalized IDs
-            if MapEngine._safe_id(e["from"]) == src_id and MapEngine._safe_id(e["to"]) == dst_id:
+            existing_from = MapEngine._safe_id(e["from"])
+            existing_to = MapEngine._safe_id(e["to"])
+            
+            # Match A -> B or (if bidirectional) B -> A
+            is_match = (existing_from == src_id and existing_to == dst_id) or (
+                (exit_type == "bidirectional" or e.get("exit_type") == "bidirectional")
+                and existing_from == dst_id and existing_to == src_id
+            )
+            
+            if is_match:
                 # Update existing edge (e.g. label or lock status)
                 edges[idx]["label"] = exit_label
                 edges[idx]["is_locked"] = is_locked
+                edges[idx]["exit_type"] = exit_type
                 world_map.edges = edges
                 flag_modified(world_map, "edges")
                 return
@@ -115,7 +126,8 @@ class MapEngine:
             "from": from_scene, 
             "to": to_scene, 
             "label": exit_label,
-            "is_locked": is_locked
+            "is_locked": is_locked,
+            "exit_type": exit_type
         })
         world_map.edges = edges
         flag_modified(world_map, "edges")
@@ -136,17 +148,17 @@ class MapEngine:
         nodes = map_dict.get("nodes", {})
         edges = map_dict.get("edges", [])
         
-        # Find all exits starting from the current scene
-        # We need to handle both raw IDs and safe IDs if they differ
+        # Find all exits starting from or ending at the current scene (if bidirectional)
         current_safe_id = MapEngine._safe_id(current_scene_id)
         
         for ex in exits:
-            # Check if this exit starts from our current scene
-            # We compare raw IDs because WorldExit stores raw IDs
-            if ex.from_scene_id != current_scene_id:
+            is_from_current = (ex.from_scene_id == current_scene_id)
+            is_to_current = (ex.to_scene_id == current_scene_id and ex.exit_type == "bidirectional")
+            
+            if not (is_from_current or is_to_current):
                 continue
                 
-            target_raw_id = ex.to_scene_id
+            target_raw_id = ex.to_scene_id if is_from_current else ex.from_scene_id
             target_safe_id = MapEngine._safe_id(target_raw_id)
             
             # If the target node is not yet in our visited nodes, add it as unknown
@@ -158,22 +170,20 @@ class MapEngine:
                     "is_unknown": True
                 }
 
-            # Always expose outgoing edges from the current scene, even when the
-            # target scene is already known. Otherwise return-path arrows only
-            # appear after the player traverses them once and register_exit persists
-            # the edge into the stored map.
+            # Check if this edge already exists
             edge_exists = any(
-                MapEngine._safe_id(e["from"]) == current_safe_id and
-                MapEngine._safe_id(e["to"]) == target_safe_id
+                (MapEngine._safe_id(e["from"]) == current_safe_id and MapEngine._safe_id(e["to"]) == target_safe_id) or
+                (ex.exit_type == "bidirectional" and MapEngine._safe_id(e["from"]) == target_safe_id and MapEngine._safe_id(e["to"]) == current_safe_id)
                 for e in edges
             )
 
             if not edge_exists:
                 edges.append({
-                    "from": current_scene_id,
-                    "to": target_raw_id,
+                    "from": current_scene_id if is_from_current else target_raw_id,
+                    "to": target_raw_id if is_from_current else current_scene_id,
                     "label": ex.label or "",
-                    "is_locked": ex.is_locked
+                    "is_locked": ex.is_locked,
+                    "exit_type": ex.exit_type
                 })
 
         map_dict["nodes"] = nodes

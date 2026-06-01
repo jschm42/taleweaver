@@ -222,6 +222,15 @@ class WorldExitSchema(BaseModel):
     from_scene_id: str = Field(..., description="The ID of the source scene.")
     to_scene_id: str = Field(..., description="The ID of the destination scene.")
     label: str = Field(..., description="How to describe the transition, e.g., 'a narrow stone staircase'")
+    is_bidirectional: bool = Field(
+        True,
+        description=(
+            "Whether the player can traverse this exit in BOTH directions. "
+            "Set True for normal passages (doors, corridors, stairs) — the engine will automatically "
+            "create the reverse exit. "
+            "Set False ONLY for genuinely one-way paths (a collapsing bridge, a drop, a gate that slams shut)."
+        ),
+    )
     is_locked: bool = Field(..., description="Whether the path is initially blocked.")
     lock_description: str = Field(..., description="If locked, why? e.g. 'a heavy iron padlock'. Use empty string if not locked.")
     code_to_unlock: str = Field("", description="Deterministic access code for the lock, e.g. 4711. Keep empty if no code is required.")
@@ -1488,24 +1497,50 @@ class WorldGenerator:
             ))
             
         # Persist Exits
+        # Track (from, to) pairs to deduplicate reverse exits that the LLM may still emit.
+        seen_exit_pairs: set[tuple[str, str]] = set()
         for e in manifest_dict.get("exits", []):
+            from_id = e["from_scene_id"]
+            to_id = e["to_scene_id"]
+            is_bidirectional = bool(e.get("is_bidirectional", False))
+
             code_to_unlock, item_to_unlock, rule_to_unlock = _normalize_unlock_requirements(
                 e.get("code_to_unlock"),
                 e.get("item_to_unlock"),
                 e.get("rule_to_unlock"),
             )
-            db.add(WorldExit(
-                template_id=template_id,
-                from_scene_id=e["from_scene_id"],
-                to_scene_id=e["to_scene_id"],
-                label=e["label"],
-                exit_type=e.get("exit_type", "one_way"),
-                is_locked=e["is_locked"],
-                lock_description=e.get("lock_description"),
-                code_to_unlock=code_to_unlock,
-                item_to_unlock=item_to_unlock,
-                rule_to_unlock=rule_to_unlock
-            ))
+
+            # Forward direction
+            if (from_id, to_id) not in seen_exit_pairs:
+                seen_exit_pairs.add((from_id, to_id))
+                db.add(WorldExit(
+                    template_id=template_id,
+                    from_scene_id=from_id,
+                    to_scene_id=to_id,
+                    label=e["label"],
+                    exit_type="bidirectional" if is_bidirectional else "one_way",
+                    is_locked=e["is_locked"],
+                    lock_description=e.get("lock_description"),
+                    code_to_unlock=code_to_unlock,
+                    item_to_unlock=item_to_unlock,
+                    rule_to_unlock=rule_to_unlock,
+                ))
+
+            # Reverse direction — only for bidirectional exits and only if not already defined
+            if is_bidirectional and (to_id, from_id) not in seen_exit_pairs:
+                seen_exit_pairs.add((to_id, from_id))
+                db.add(WorldExit(
+                    template_id=template_id,
+                    from_scene_id=to_id,
+                    to_scene_id=from_id,
+                    label=e["label"],
+                    exit_type="bidirectional",
+                    is_locked=e["is_locked"],
+                    lock_description=e.get("lock_description"),
+                    code_to_unlock=code_to_unlock,
+                    item_to_unlock=item_to_unlock,
+                    rule_to_unlock=rule_to_unlock,
+                ))
         
         await db.commit() # Save scenes and exits
         adventure = await db.get(AdventureTemplate, template_id)

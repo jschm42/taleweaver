@@ -1,10 +1,9 @@
 <script setup lang="ts">
 /**
  * MapTab — Renders the adventure template scenes as an interactive world map.
- * Reuses Dagre for graph layouts and Rough.js for a hand-drawn sketch aesthetic.
+ * Reuses Dagre for graph layouts and SVG/HTML rendering for visual excellence.
  */
 import { watch, ref, nextTick, onMounted, computed } from 'vue'
-import rough from 'roughjs'
 import dagre from 'dagre'
 import mapSvg from '@/assets/svg/fantasy-rpg-map.svg'
 import { visualService } from '@/services/visualService'
@@ -15,7 +14,6 @@ const props = defineProps<{
   visualsCacheVersion?: number
 }>()
 
-const canvasRef = ref<HTMLCanvasElement | null>(null)
 const mapContainer = ref<HTMLDivElement | null>(null)
 
 // Tooltip State
@@ -23,11 +21,14 @@ const hoveredNodeId = ref<string | null>(null)
 const hoveredNode = ref<any | null>(null)
 const tooltipPos = ref({ x: 0, y: 0 })
 
-// Node positions for hit testing
-const nodeBounds = ref<Record<string, { x: number, y: number, w: number, h: number }>>({})
-// Edge midpoints for hit testing
-const edgeMidpoints = ref<Array<{ from: string, to: string, x: number, y: number, label: string }>>([])
-const hoveredEdge = ref<{ label: string, x: number, y: number } | null>(null)
+// Exit Tooltip State
+const hoveredExit = ref<{
+  label: string
+  from: string
+  to: string
+  isLocked: boolean
+} | null>(null)
+const hoveredExitPos = ref({ x: 0, y: 0 })
 
 const startSceneId = computed(() => {
   const adventureStart = props.debugData?.adventure?.start_scene_id || props.debugData?.adventure?.scene_id
@@ -44,14 +45,13 @@ const offset = ref({ x: 0, y: 0 })
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
 
+const margin = 100
+
 function resetView() {
   zoom.value = 1
   offset.value = { x: 0, y: 0 }
 }
 
-/**
- * Normalizes an ID to match the backend safe_id logic.
- */
 function safeId(raw: string): string {
   if (!raw) return ''
   return raw.replace(/-/g, '_')
@@ -61,336 +61,178 @@ function safeId(raw: string): string {
             .toUpperCase()
 }
 
-/**
- * Uses Dagre to calculate a clean layout for the directed graph.
- */
-function calculateLayout() {
-  if (!props.editorScenes || props.editorScenes.length === 0) return null
+// Reactive layout structure
+const layoutData = ref<{
+  nodes: Array<{
+    id: string
+    label: string
+    x: number
+    y: number
+    width: number
+    height: number
+    isStart: boolean
+    imageUrl: string | null
+    description: string
+  }>
+  edges: Array<{
+    from: string
+    to: string
+    points: Array<{ x: number, y: number }>
+    label: string
+    isLocked: boolean
+    exitType: string
+    isBidirectional: boolean
+  }>
+  width: number
+  height: number
+} | null>(null)
+
+function updateLayout() {
+  if (!props.editorScenes || props.editorScenes.length === 0) {
+    layoutData.value = null
+    return
+  }
 
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'LR', nodesep: 60, edgesep: 20, ranksep: 120, ranker: 'network-simplex' })
+  g.setGraph({ rankdir: 'LR', nodesep: 80, edgesep: 40, ranksep: 140 })
   g.setDefaultEdgeLabel(() => ({}))
 
   // 1. Add all scenes as nodes
   props.editorScenes.forEach(scene => {
     const id = safeId(scene.id)
-    g.setNode(id, { 
-      label: scene.label || scene.name || scene.id, 
-      width: 160, 
-      height: 70 
-    })
+    g.setNode(id, { width: 160, height: 120 })
   })
 
   // 2. Add edges (exits)
   const exits = props.debugData?.exits || []
-  const mergedEdges: Array<{ from: string, to: string, isBidirectional: boolean, labels: string[], is_locked: boolean }> = []
-
   exits.forEach((edge: any) => {
     const fromId = safeId(edge.from_scene_id)
     const toId = safeId(edge.to_scene_id)
-    
-    // Skip if nodes don't exist in the current template
     if (!g.hasNode(fromId) || !g.hasNode(toId)) return
+    
+    g.setEdge(fromId, toId, {
+      label: edge.label || '',
+      isLocked: !!edge.is_locked,
+      exitType: edge.exit_type || 'one_way'
+    })
+  })
 
-    const existing = mergedEdges.find(me => me.from === toId && me.to === fromId)
-    if (existing) {
-      existing.isBidirectional = true
-      if (edge.label && !existing.labels.includes(edge.label)) {
-        existing.labels.push(edge.label)
-      }
-      if (edge.is_locked) {
-        existing.is_locked = true
-      }
-    } else {
-      mergedEdges.push({
-        from: fromId,
-        to: toId,
-        isBidirectional: false,
-        labels: edge.label ? [edge.label] : [],
-        is_locked: !!edge.is_locked
+  dagre.layout(g)
+
+  const graphInfo = g.graph()
+
+  const nodes = g.nodes().map(id => {
+    const node = g.node(id)
+    const originalScene = props.editorScenes.find(s => safeId(s.id) === id) || {}
+    const isStart = startSceneId.value === id
+
+    return {
+      id,
+      label: originalScene.label || originalScene.name || id,
+      x: node.x,
+      y: node.y,
+      width: node.width,
+      height: node.height,
+      isStart,
+      imageUrl: originalScene.image_url || null,
+      description: originalScene.description || ''
+    }
+  })
+
+  const edges = g.edges().map(e => {
+    const edge = g.edge(e)
+    const rawExit = (props.debugData?.exits || []).find((re: any) => 
+      (safeId(re.from_scene_id) === e.v && safeId(re.to_scene_id) === e.w) ||
+      (safeId(re.from_scene_id) === e.w && safeId(re.to_scene_id) === e.v)
+    ) || {}
+    const exitType = edge.exitType || rawExit.exit_type || 'one_way'
+    return {
+      from: e.v,
+      to: e.w,
+      points: edge.points || [],
+      label: edge.label || rawExit.label || '',
+      isLocked: edge.isLocked || !!rawExit.is_locked,
+      exitType,
+      isBidirectional: exitType === 'bidirectional'
+    }
+  })
+
+  layoutData.value = {
+    nodes,
+    edges,
+    width: graphInfo.width || 800,
+    height: graphInfo.height || 600
+  }
+}
+
+// Compute exit circles positions at the ends of paths
+const exitCircles = computed(() => {
+  if (!layoutData.value) return []
+  const circles: Array<{
+    id: string
+    x: number
+    y: number
+    from: string
+    to: string
+    label: string
+    isLocked: boolean
+    exitType: string
+  }> = []
+
+  layoutData.value.edges.forEach((edge, edgeIdx) => {
+    const points = edge.points
+    if (!points || points.length < 2) return
+
+    // Circle at the end of the edge (pointing to 'to' scene)
+    const endPoint = points[points.length - 1]
+    const toNode = layoutData.value!.nodes.find(n => n.id === edge.to)
+    circles.push({
+      id: `exit-end-${edgeIdx}`,
+      x: endPoint.x + margin,
+      y: endPoint.y + margin,
+      from: edge.from,
+      to: toNode?.label || edge.to,
+      label: edge.label || `Exit to ${toNode?.label || edge.to}`,
+      isLocked: edge.isLocked,
+      exitType: edge.exitType
+    })
+
+    // If bidirectional, also add a circle at the start of the edge (pointing back to 'from' scene)
+    if (edge.isBidirectional) {
+      const startPoint = points[0]
+      const fromNode = layoutData.value!.nodes.find(n => n.id === edge.from)
+      circles.push({
+        id: `exit-start-${edgeIdx}`,
+        x: startPoint.x + margin,
+        y: startPoint.y + margin,
+        from: edge.to,
+        to: fromNode?.label || edge.from,
+        label: edge.label || `Exit to ${fromNode?.label || edge.from}`,
+        isLocked: edge.isLocked,
+        exitType: edge.exitType
       })
     }
   })
 
-  mergedEdges.forEach(me => {
-    g.setEdge(me.from, me.to, { isBidirectional: me.isBidirectional, labels: me.labels, is_locked: me.is_locked })
-  })
+  return circles
+})
 
-  dagre.layout(g)
-  return g
+function getEdgePath(points: Array<{ x: number, y: number }>) {
+  if (!points || points.length === 0) return ''
+  return `M ${points[0].x + margin} ${points[0].y + margin} ` +
+         points.slice(1).map(p => `L ${p.x + margin} ${p.y + margin}`).join(' ')
 }
 
-/**
- * Renders the sketchy map using Rough.js on a Canvas.
- */
-async function renderMap() {
-  if (!canvasRef.value || !props.editorScenes.length) return
-
-  const canvas = canvasRef.value
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  const g = calculateLayout()
-  if (!g) return
-
-  const rc = rough.canvas(canvas)
-  
-  // Reset hit testing data
-  nodeBounds.value = {}
-  edgeMidpoints.value = []
-
-  // Determine canvas size based on graph size
-  const graphInfo = g.graph()
-  const margin = 100
-  const width = (graphInfo.width || 800) + margin * 2
-  const height = (graphInfo.height || 600) + margin * 2
-  
-  canvas.width = width
-  canvas.height = height
-  
-  ctx.clearRect(0, 0, width, height)
-
-  // Sketching settings
-  const nodeOptions = {
-    roughness: 1.5,
-    stroke: '#8b6914',
-    strokeWidth: 2,
-    fill: '#3d1f00',
-    fillStyle: 'hachure' as const,
-    fillWeight: 1.5,
-    hachureAngle: 60,
-    hachureGap: 4
-  }
-
-  const startNodeOptions = {
-    ...nodeOptions,
-    stroke: '#c9a84c',
-    strokeWidth: 3,
-    fill: '#1a5c2a',
-    roughness: 2,
-    fillWeight: 3
-  }
-
-  const edgeOptions = {
-    roughness: 0.3,
-    stroke: '#ffd97d',
-    strokeWidth: 1.5
-  }
-
-  const lockedEdgeOptions = {
-    ...edgeOptions,
-    strokeDasharray: [5, 5],
-    opacity: 0.5
-  }
-
-  const exits = props.debugData?.exits || []
-
-  // 1. Draw Edges
-  g.edges().forEach(e => {
-    const edge = g.edge(e)
-    const points = edge.points
-    if (points && points.length > 1) {
-      const flatPoints: [number, number][] = points.map(p => [p.x + margin, p.y + margin])
-      
-      const isLocked = !!edge.is_locked
-      const options = isLocked ? lockedEdgeOptions : edgeOptions
-      const isBidirectional = edge.isBidirectional
-      
-      const simplified = flatPoints.length > 4 
-        ? [flatPoints[0], flatPoints[Math.floor(flatPoints.length/2)], flatPoints[flatPoints.length-1]]
-        : flatPoints
-      rc.curve(simplified, options)
-
-      // Arrow head at THE END
-      if (flatPoints.length >= 2) {
-        drawArrowHead(rc, flatPoints[flatPoints.length - 2], flatPoints[flatPoints.length - 1], options)
-      }
-
-      // Arrow head at THE START (If bidirectional)
-      if (isBidirectional && flatPoints.length >= 2) {
-        drawArrowHead(rc, flatPoints[1], flatPoints[0], options)
-      }
-
-      // Store midpoint for hover detection
-      const label = edge.labels?.join(' / ')
-      const midIdx = Math.floor(points.length / 2)
-      const midPoint = points[midIdx]
-      const midX = midPoint.x + margin
-      const midY = midPoint.y + margin
-
-      if (label) {
-        edgeMidpoints.value.push({
-          from: e.v,
-          to: e.w,
-          x: midX,
-          y: midY,
-          label: label
-        })
-      }
-
-      if (isLocked) {
-        drawLockIcon(ctx, midX, midY)
-      }
-    }
-  })
-
-  // 2. Draw Nodes
-  g.nodes().forEach(id => {
-    const node = g.node(id)
-    const isStart = startSceneId.value === id
-    const x = node.x - node.width / 2 + margin
-    const y = node.y - node.height / 2 + margin
-    const w = node.width
-    const h = node.height
-
-    nodeBounds.value[id] = { x, y, w, h }
-
-    const options = isStart ? startNodeOptions : nodeOptions
-    rc.rectangle(x, y, w, h, options)
-
-    // Text Label
-    ctx.font = isStart ? 'bold 15px Acme, sans-serif' : '14px Acme, sans-serif'
-    ctx.fillStyle = '#f5e6c8'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    
-    const label = isStart ? `${node.label} 🚩` : node.label
-    
-    const words = label.split(' ')
-    if (words.length > 3 && label.length > 20) {
-      const mid = Math.floor(words.length / 2)
-      const line1 = words.slice(0, mid).join(' ')
-      const line2 = words.slice(mid).join(' ')
-      ctx.fillText(line1, node.x + margin, node.y + margin - 10)
-      ctx.fillText(line2, node.x + margin, node.y + margin + 10)
-    } else {
-      ctx.fillText(label, node.x + margin, node.y + margin)
-    }
-  })
-}
-
-/**
- * Helper to draw a sketchy arrow head pointing from p1 to p2.
- */
-function drawArrowHead(rc: any, p1: [number, number], p2: [number, number], options: any) {
-  const angle = Math.atan2(p2[1] - p1[1], p2[0] - p1[0])
-  const headLen = 12
-  const h1x = p2[0] - headLen * Math.cos(angle - Math.PI / 6)
-  const h1y = p2[1] - headLen * Math.sin(angle - Math.PI / 6)
-  const h2x = p2[0] - headLen * Math.cos(angle + Math.PI / 6)
-  const h2y = p2[1] - headLen * Math.sin(angle + Math.PI / 6)
-  
-  rc.polygon([[p2[0], p2[1]], [h1x, h1y], [h2x, h2y]], {
-    ...options,
-    fill: options.stroke,
-    fillStyle: 'solid',
-    roughness: 0.2
-  })
-}
-
-/**
- * Helper to draw a small RPG-style lock icon at the midpoint of a locked edge.
- */
-function drawLockIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  ctx.save()
-  
-  // Draw Shackle (arch)
-  ctx.beginPath()
-  ctx.arc(x, y - 2, 4, Math.PI, 0, false)
-  ctx.lineWidth = 2
-  ctx.strokeStyle = '#ffd97d' // Amber/yellow matching path stroke
-  ctx.stroke()
-  
-  // Draw Body (rounded rectangle)
-  ctx.fillStyle = '#b45309' // Darker amber/brown for body
-  ctx.strokeStyle = '#ffd97d'
-  ctx.lineWidth = 1.5
-  
-  const bodyW = 12
-  const bodyH = 8
-  const bodyX = x - bodyW / 2
-  const bodyY = y - 2
-  
-  ctx.beginPath()
-  ctx.rect(bodyX, bodyY, bodyW, bodyH)
-  ctx.fill()
-  ctx.stroke()
-  
-  // Draw keyhole
-  ctx.beginPath()
-  ctx.arc(x, bodyY + 3, 1.2, 0, Math.PI * 2)
-  ctx.fillStyle = '#020617' // dark background slate
-  ctx.fill()
-  
-  ctx.beginPath()
-  ctx.moveTo(x, bodyY + 4)
-  ctx.lineTo(x, bodyY + 6)
-  ctx.strokeStyle = '#020617'
-  ctx.lineWidth = 1
-  ctx.stroke()
-  
-  ctx.restore()
-}
-
-/**
- * Hit testing for interactivity.
- */
 function handleMouseMove(e: MouseEvent) {
-  if (!canvasRef.value) return
-  
-  // Update Panning
   if (isPanning.value) {
     offset.value.x += e.clientX - lastMousePos.value.x
     offset.value.y += e.clientY - lastMousePos.value.y
     lastMousePos.value = { x: e.clientX, y: e.clientY }
-    return
-  }
-  lastMousePos.value = { x: e.clientX, y: e.clientY }
-
-  const rect = canvasRef.value.getBoundingClientRect()
-  
-  const x = (e.clientX - rect.left) / zoom.value
-  const y = (e.clientY - rect.top) / zoom.value
-
-  let foundNodeId: string | null = null
-  for (const [id, bounds] of Object.entries(nodeBounds.value)) {
-    if (x >= bounds.x && x <= bounds.x + bounds.w && y >= bounds.y && y <= bounds.y + bounds.h) {
-      foundNodeId = id
-      break
-    }
-  }
-
-  // Check for edges if no node is found
-  let foundEdge = null
-  if (!foundNodeId) {
-    for (const em of edgeMidpoints.value) {
-      const dist = Math.sqrt(Math.pow(x - em.x, 2) + Math.pow(y - em.y, 2))
-      if (dist < 30) {
-        foundEdge = { label: em.label, x: e.clientX, y: e.clientY }
-        break
-      }
-    }
-  }
-  hoveredEdge.value = foundEdge
-
-  if (foundNodeId !== hoveredNodeId.value) {
-    hoveredNodeId.value = foundNodeId
-    if (foundNodeId) {
-      const originalScene = props.editorScenes.find(s => safeId(s.id) === foundNodeId)
-      if (originalScene) {
-        hoveredNode.value = originalScene
-      }
-      tooltipPos.value = { x: e.clientX, y: e.clientY }
-    } else {
-      hoveredNode.value = null
-    }
-  } else if (foundNodeId) {
-    tooltipPos.value = { x: e.clientX, y: e.clientY }
   }
 }
 
 function handleMouseDown(e: MouseEvent) {
-  if (e.button === 0) { // Left click for pan
+  if (e.button === 0) {
     isPanning.value = true
     lastMousePos.value = { x: e.clientX, y: e.clientY }
   }
@@ -403,22 +245,54 @@ function handleMouseUp() {
 function handleWheel(e: WheelEvent) {
   e.preventDefault()
   const delta = e.deltaY > 0 ? 0.9 : 1.1
-  const newZoom = Math.max(0.2, Math.min(3, zoom.value * delta))
-  zoom.value = newZoom
+  zoom.value = Math.max(0.2, Math.min(3, zoom.value * delta))
 }
 
 function buildImageUrl(path?: string | null) {
   return visualService.buildImageUrl(path, props.visualsCacheVersion || 0)
 }
 
-watch(() => [props.editorScenes, props.debugData], async () => {
-  await nextTick()
-  renderMap()
+// Handlers for node tooltips
+function handleNodeMouseEnter(node: any, event: MouseEvent) {
+  hoveredNodeId.value = node.id
+  hoveredNode.value = node
+  tooltipPos.value = { x: event.clientX, y: event.clientY }
+}
+
+function handleNodeMouseLeave() {
+  hoveredNodeId.value = null
+  hoveredNode.value = null
+}
+
+function handleNodeMouseMove(event: MouseEvent) {
+  tooltipPos.value = { x: event.clientX, y: event.clientY }
+}
+
+// Handlers for exit tooltips
+function handleExitMouseEnter(exit: any, event: MouseEvent) {
+  hoveredExit.value = {
+    label: exit.label,
+    from: exit.from,
+    to: exit.to,
+    isLocked: exit.isLocked
+  }
+  hoveredExitPos.value = { x: event.clientX, y: event.clientY }
+}
+
+function handleExitMouseLeave() {
+  hoveredExit.value = null
+}
+
+function handleExitMouseMove(event: MouseEvent) {
+  hoveredExitPos.value = { x: event.clientX, y: event.clientY }
+}
+
+watch(() => [props.editorScenes, props.debugData], () => {
+  updateLayout()
 }, { deep: true })
 
-onMounted(async () => {
-  await nextTick()
-  renderMap()
+onMounted(() => {
+  updateLayout()
 })
 </script>
 
@@ -481,24 +355,176 @@ onMounted(async () => {
         <p class="text-sm mt-1">Add scenes in the Scenes tab to generate the map.</p>
       </div>
 
-      <!-- Map Render canvas -->
+      <!-- Map Render HTML layer -->
       <div
         v-else
-        class="w-full h-full flex items-center justify-center relative z-10"
+        class="w-full h-full flex items-center justify-center relative z-10 select-none overflow-hidden"
         @wheel="handleWheel"
         @mousedown="handleMouseDown"
         @mousemove="handleMouseMove"
         @mouseup="handleMouseUp"
         @mouseleave="handleMouseUp"
       >
-        <canvas 
-          ref="canvasRef" 
-          class="max-w-none cursor-grab active:cursor-grabbing will-change-transform"
+        <!-- Viewport container that gets translated/zoomed -->
+        <div 
+          class="relative origin-center will-change-transform cursor-grab active:cursor-grabbing"
           :style="{ 
+            width: (layoutData?.width || 800) + margin * 2 + 'px',
+            height: (layoutData?.height || 600) + margin * 2 + 'px',
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
             transformOrigin: 'center center'
           }"
-        />
+        >
+          <!-- SVG overlay for connections/edges -->
+          <svg 
+            class="absolute inset-0 pointer-events-none z-0"
+            :width="(layoutData?.width || 800) + margin * 2"
+            :height="(layoutData?.height || 600) + margin * 2"
+          >
+            <defs>
+              <marker 
+                id="arrow-end" 
+                viewBox="0 0 10 10" 
+                refX="8" 
+                refY="5" 
+                markerWidth="6" 
+                markerHeight="6" 
+                orient="auto"
+              >
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#ffd97d" />
+              </marker>
+              <marker 
+                id="arrow-start" 
+                viewBox="0 0 10 10" 
+                refX="2" 
+                refY="5" 
+                markerWidth="6" 
+                markerHeight="6" 
+                orient="auto"
+              >
+                <path d="M 10 1 L 0 5 L 10 9 z" fill="#ffd97d" />
+              </marker>
+            </defs>
+
+            <!-- Draw SVG edge paths -->
+            <g v-if="layoutData">
+              <path
+                v-for="(edge, idx) in layoutData.edges"
+                :key="idx"
+                :d="getEdgePath(edge.points)"
+                stroke="#ffd97d"
+                :stroke-width="edge.isLocked ? 2 : 2.5"
+                :stroke-dasharray="edge.isLocked ? '6,6' : 'none'"
+                fill="none"
+                class="transition-opacity duration-300"
+                :class="{ 'opacity-60': edge.isLocked }"
+                marker-end="url(#arrow-end)"
+                :marker-start="edge.isBidirectional ? 'url(#arrow-start)' : 'none'"
+              />
+            </g>
+          </svg>
+
+          <!-- Node HTML Cards -->
+          <div v-if="layoutData" class="absolute inset-0 pointer-events-none z-10">
+            <div
+              v-for="node in layoutData.nodes"
+              :key="node.id"
+              class="absolute pointer-events-auto cursor-pointer group"
+              :style="{
+                left: (node.x - node.width / 2 + margin) + 'px',
+                top: (node.y - node.height / 2 + margin) + 'px',
+                width: node.width + 'px',
+                height: node.height + 'px'
+              }"
+              @mouseenter="handleNodeMouseEnter(node, $event)"
+              @mouseleave="handleNodeMouseLeave"
+              @mousemove="handleNodeMouseMove($event)"
+            >
+              <!-- Modern node card with scene thumbnail -->
+              <div 
+                class="w-full h-full rounded-2xl border bg-slate-900 overflow-hidden flex flex-col transition-all duration-300 shadow-lg group-hover:scale-105 group-hover:shadow-2xl"
+                :class="[
+                  node.isStart 
+                    ? 'border-emerald-500 shadow-emerald-950/50 shadow-md ring-2 ring-emerald-500/30' 
+                    : 'border-slate-700 hover:border-amber-500/50'
+                ]"
+              >
+                <!-- Thumbnail area -->
+                <div class="flex-grow relative bg-slate-950 overflow-hidden">
+                  <img 
+                    v-if="node.imageUrl" 
+                    :src="buildImageUrl(node.imageUrl)" 
+                    class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                  />
+                  <div 
+                    v-else 
+                    class="w-full h-full flex items-center justify-center bg-slate-850 text-slate-650"
+                  >
+                    <i class="ra ra-compass text-3xl opacity-40"></i>
+                  </div>
+                  <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/20 to-transparent"></div>
+                  
+                  <!-- Start scene indicator badge -->
+                  <span 
+                    v-if="node.isStart" 
+                    class="absolute top-2 right-2 bg-emerald-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md z-20"
+                  >
+                    <span class="w-1.5 h-1.5 rounded-full bg-black"></span> Start
+                  </span>
+                </div>
+
+                <!-- Text label bar -->
+                <div 
+                  class="h-10 px-3 flex items-center justify-between shrink-0 bg-slate-900/95 border-t border-slate-800"
+                  :class="{ 'bg-emerald-950/30 border-emerald-900/40': node.isStart }"
+                >
+                  <span 
+                    class="text-[11px] font-bold truncate tracking-wide"
+                    :class="[
+                      node.isStart 
+                        ? 'text-emerald-400' 
+                        : 'text-slate-200'
+                    ]"
+                  >
+                    {{ node.label }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Exit Interactive Circles at ends of paths -->
+          <div v-if="layoutData" class="absolute inset-0 pointer-events-none z-20">
+            <div 
+              v-for="exit in exitCircles"
+              :key="exit.id"
+              class="absolute pointer-events-auto"
+              :style="{
+                left: (exit.x - 12) + 'px',
+                top: (exit.y - 12) + 'px',
+                width: '24px',
+                height: '24px'
+              }"
+              @mouseenter="handleExitMouseEnter(exit, $event)"
+              @mouseleave="handleExitMouseLeave"
+              @mousemove="handleExitMouseMove($event)"
+            >
+              <button 
+                class="w-full h-full rounded-full border flex items-center justify-center transition-all duration-300 shadow-md transform hover:scale-125"
+                :class="[
+                  exit.isLocked
+                    ? 'bg-amber-950 border-amber-500 text-amber-400 hover:bg-amber-900'
+                    : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-emerald-500 hover:text-emerald-400'
+                ]"
+              >
+                <svg v-if="exit.isLocked" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span v-else class="text-[7px] font-black uppercase font-mono">exit</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Background SVG Overlay -->
@@ -519,10 +545,10 @@ onMounted(async () => {
       <div class="absolute bottom-4 left-4 right-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pointer-events-none z-20">
         <div class="flex gap-4 text-xxs text-slate-400 bg-slate-900/80 px-4 py-2 border border-white/5 rounded-xl backdrop-blur-md">
           <span class="flex items-center gap-1.5">
-            <span class="inline-block w-2.5 h-2.5 rounded bg-emerald-800 border border-emerald-500"></span> Start Scene
+            <span class="inline-block w-2.5 h-2.5 rounded bg-emerald-950 border border-emerald-500"></span> Start Scene
           </span>
           <span class="flex items-center gap-1.5">
-            <span class="inline-block w-2.5 h-2.5 rounded bg-[#3d1f00] border border-[#8b6914]"></span> Regular Scene
+            <span class="inline-block w-2.5 h-2.5 rounded bg-slate-900 border border-slate-700"></span> Regular Scene
           </span>
           <span class="flex items-center gap-1.5">
             <span class="inline-block w-2.5 h-1 border-t-2 border-dashed border-[#ffd97d]/50"></span> Locked Exit
@@ -530,7 +556,7 @@ onMounted(async () => {
         </div>
 
         <div class="text-[10px] text-slate-500 bg-slate-900/60 px-3 py-1.5 border border-white/5 rounded-lg backdrop-blur-sm uppercase tracking-wider">
-          Drag to pan • Scroll to zoom • Hover for info
+          Drag to pan • Scroll to zoom • Hover room or exit for details
         </div>
       </div>
 
@@ -544,8 +570,8 @@ onMounted(async () => {
           >
             <div class="w-72 bg-slate-900/95 border border-slate-700 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col animate-tooltip-in">
               <!-- Scene Image -->
-              <div v-if="hoveredNode.image_url" class="h-40 w-full relative">
-                <img :src="buildImageUrl(hoveredNode.image_url)" class="absolute inset-0 w-full h-full object-cover" />
+              <div v-if="hoveredNode.imageUrl" class="h-40 w-full relative">
+                <img :src="buildImageUrl(hoveredNode.imageUrl)" class="absolute inset-0 w-full h-full object-cover" />
                 <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
               </div>
 
@@ -566,17 +592,32 @@ onMounted(async () => {
         </Transition>
       </Teleport>
 
-      <!-- Edge Hover Label -->
+      <!-- EXIT HOVER TOOLTIP -->
       <Teleport to="body">
-        <Transition name="fade">
+        <Transition name="tooltip">
           <div 
-            v-if="hoveredEdge" 
-            class="fixed z-[110] pointer-events-none px-3 py-1.5 bg-slate-900/90 border border-amber-500/50 rounded-lg shadow-xl backdrop-blur-sm animate-tooltip-in"
-            :style="{ left: (hoveredEdge.x + 15) + 'px', top: (hoveredEdge.y - 30) + 'px' }"
+            v-if="hoveredExit" 
+            class="fixed z-[110] pointer-events-none transition-all duration-75"
+            :style="{ left: (hoveredExitPos.x + 20) + 'px', top: (hoveredExitPos.y - 40) + 'px' }"
           >
-            <div class="flex items-center gap-2">
-              <i class="ra ra-trail text-amber-400 text-xs"></i>
-              <span class="text-xs font-bold text-amber-200 uppercase tracking-tight">{{ hoveredEdge.label }}</span>
+            <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col p-4 animate-tooltip-in">
+              <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
+                <span class="text-xs font-black uppercase text-slate-400 tracking-wider">Exit Connection</span>
+                <span 
+                  class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tight"
+                  :class="hoveredExit.isLocked ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'"
+                >
+                  {{ hoveredExit.isLocked ? 'Locked' : 'Unlocked' }}
+                </span>
+              </div>
+              <p class="text-xs font-bold text-white mb-1 uppercase tracking-tight">{{ hoveredExit.label }}</p>
+              <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
+                <span>{{ hoveredExit.from }}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+                <span class="text-white">{{ hoveredExit.to }}</span>
+              </div>
             </div>
           </div>
         </Transition>
@@ -590,26 +631,26 @@ onMounted(async () => {
   background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
 }
 
-.tooltip-enter-active, .tooltip-leave-active { transition: opacity 0.2s, transform 0.2s; }
-.tooltip-enter-from, .tooltip-leave-to { opacity: 0; transform: scale(0.95) translateY(5px); }
+.tooltip-enter-active, .tooltip-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.tooltip-enter-from, .tooltip-leave-to { opacity: 0; transform: scale(0.96) translateY(4px); }
 
 .animate-tooltip-in {
-  animation: toolTipIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: toolTipIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes toolTipIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.9); }
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .fade-enter-active, .fade-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity 0.2s ease;
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
 
-canvas {
-  filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+svg {
+  filter: drop-shadow(0 0 8px rgba(0,0,0,0.5));
 }
 </style>
