@@ -2754,7 +2754,7 @@ class GameTurnManager:
                 self._append_combat_log(combat, response_text, "aftermath")
                 self._set_combat_state(combat)
 
-    async def _handle_fight_start(self, user_msg: str) -> AsyncGenerator[str, None]:
+    async def _handle_fight_start(self, user_msg: str, initiated_by_enemy: bool = False) -> AsyncGenerator[str, None]:
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
             msg = "Turn-based combat is only available in RPG mode."
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
@@ -2762,7 +2762,14 @@ class GameTurnManager:
                 yield chunk
             return
 
-        if not bool(getattr(self.adventure, "can_damage_npcs", True)):
+        if initiated_by_enemy:
+            if not bool(getattr(self.adventure, "npcs_can_damage_protagonist", True)):
+                msg = "Combat auto-start blocked: NPC damage to the protagonist is disabled for this adventure."
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                async for chunk in self._emit_combat_final(msg):
+                    yield chunk
+                return
+        elif not bool(getattr(self.adventure, "can_damage_npcs", True)):
             msg = "Combat is disabled for this adventure: the protagonist cannot damage NPCs."
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             async for chunk in self._emit_combat_final(msg):
@@ -2872,7 +2879,10 @@ class GameTurnManager:
             async for chunk in self._resolve_enemy_turn():
                 yield chunk
 
-        msg = f"Combat started against {target.name}."
+        if initiated_by_enemy:
+            msg = f"{target.name} attacks as you enter the scene. Combat starts immediately."
+        else:
+            msg = f"Combat started against {target.name}."
         yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
         async for chunk in self._emit_combat_final(msg):
             yield chunk
@@ -2883,25 +2893,38 @@ class GameTurnManager:
             return False
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
             return False
-        if not bool(getattr(self.adventure, "can_damage_npcs", True)):
-            return False
         if not game_event.requested_attacks:
             return False
 
+        enemy_initiated = False
         target_hint = ""
         for req in game_event.requested_attacks:
-            if req.target_id and req.target_id.upper() != "PLAYER":
-                target_hint = req.target_id
+            attacker_id = str(req.attacker_id or "").strip()
+            target_id = str(req.target_id or "").strip()
+            attacker_is_player = attacker_id.upper() == "PLAYER"
+            target_is_player = target_id.upper() == "PLAYER"
+
+            if attacker_id and not attacker_is_player and target_is_player:
+                enemy_initiated = True
+                target_hint = attacker_id
                 break
-            if req.attacker_id and req.attacker_id.upper() != "PLAYER":
-                target_hint = req.attacker_id
-                break
+
+            if not target_hint and target_id and not target_is_player:
+                target_hint = target_id
+            if not target_hint and attacker_id and not attacker_is_player:
+                target_hint = attacker_id
+
+        if enemy_initiated:
+            if not bool(getattr(self.adventure, "npcs_can_damage_protagonist", True)):
+                return False
+        elif not bool(getattr(self.adventure, "can_damage_npcs", True)):
+            return False
 
         target = await self._find_fight_target(target_hint)
         if not target:
             return False
 
-        async for _chunk in self._handle_fight_start(f"/fight {target.id}"):
+        async for _chunk in self._handle_fight_start(f"/fight {target.id}", initiated_by_enemy=enemy_initiated):
             pass
         return True
 

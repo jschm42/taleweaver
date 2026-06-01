@@ -2205,6 +2205,97 @@ async def test_combat_auto_triggers_from_gm_requested_attacks(setup_test_db, mon
         assert combat.get("enemy", {}).get("id") == "RAT_ENEMY"
 
 
+async def test_enemy_requested_attacks_auto_trigger_even_when_player_damage_disabled(setup_test_db, monkeypatch):
+    from backend.engine.rule_engine import AttackRequest
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        adv.can_damage_npcs = False
+        adv.npcs_can_damage_protagonist = True
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="A monster springs from the shadows.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
+            requested_attacks=[
+                AttackRequest(
+                    attacker_id="RAT_ENEMY",
+                    target_id="PLAYER",
+                    hit_stat="dexterity",
+                    damage_dice="1d6",
+                    reason="Ambush strike",
+                )
+            ],
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+
+        async def mock_stream(*_args, **_kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="ignored"))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("I enter the nest"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__")
+        assert combat is not None
+        assert combat.get("active") is True
+        assert combat.get("enemy", {}).get("id") == "RAT_ENEMY"
+
+
+async def test_enemy_requested_attacks_do_not_auto_trigger_when_npc_damage_disabled(setup_test_db, monkeypatch):
+    from backend.engine.rule_engine import AttackRequest
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state, _npc = await _seed_combat_npc(db)
+        adv.npcs_can_damage_protagonist = False
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="A monster snarls and lunges.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
+            requested_attacks=[
+                AttackRequest(
+                    attacker_id="RAT_ENEMY",
+                    target_id="PLAYER",
+                    hit_stat="dexterity",
+                    damage_dice="1d6",
+                    reason="Lunge",
+                )
+            ],
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+
+        async def mock_stream(*_args, **_kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="ignored"))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        async for _ in manager.process_turn("I step into the lair"):
+            pass
+
+        await db.refresh(state)
+        combat = (state.entity_states or {}).get("__combat__")
+        assert combat is None
+
+
 async def test_combat_special_event_damage_updates_player_hp_snapshot(setup_test_db, monkeypatch):
     from tests.conftest import TestSessionLocal
 
