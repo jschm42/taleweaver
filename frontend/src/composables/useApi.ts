@@ -18,6 +18,7 @@ import type {
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
 import { apiFetch, buildApiUrl } from '@/services/http'
+import type { ApiFetchInit } from '@/services/http'
 
 class ApiError extends Error {
   status: number
@@ -47,7 +48,7 @@ interface SettingsResponse {
 // the relative proxy can lead to empty responses on initial load). In
 // production we keep the relative `/api` base so the server can serve the
 // frontend and backend from the same origin.
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: ApiFetchInit): Promise<T> {
   const headers = new Headers(init?.headers)
   
   if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) {
@@ -62,7 +63,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await apiFetch(path, {
       ...init,
       headers,
-      timeoutMs: 20000,
+      timeoutMs: init?.timeoutMs ?? 20000,
     })
     
     // If we get here, the server at least responded
@@ -112,7 +113,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+async function requestBlob(path: string, init?: ApiFetchInit): Promise<Blob> {
   const headers = new Headers(init?.headers)
   
   if (authState.token) {
@@ -123,7 +124,7 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
     const res = await apiFetch(path, {
       ...init,
       headers,
-      timeoutMs: 20000,
+      timeoutMs: init?.timeoutMs ?? 20000,
     })
     
     configState.isBackendReachable = true
@@ -260,7 +261,7 @@ export const api = {
 
   /** Generates or improves title and story idea from user input. */
   suggestStoryIdea(payload: StoryIdeaSuggestionPayload): Promise<StoryIdeaSuggestionResponse> {
-    return request('/adventures/story-idea/suggest', { method: 'POST', body: JSON.stringify(payload) })
+    return request('/adventures/story-idea/suggest', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 60000 })
   },
 
   /** Returns a single adventure template details by ID. */
@@ -345,6 +346,7 @@ export const api = {
     return request(url, {
       method: 'POST',
       body: formData,
+      timeoutMs: 60000,
     })
   },
 
@@ -357,6 +359,7 @@ export const api = {
     return request(url, {
       method: 'POST',
       body: formData,
+      timeoutMs: 60000,
     })
   },
 
@@ -388,11 +391,11 @@ export const api = {
   },
 
   generateTTS(payload: { text: string; scene_description?: string; adventure_id?: string; session_id?: string; title?: string; scene_name?: string; tone?: string; voice_override?: string; speaker_voices?: Record<string, string>; director_notes?: string }): Promise<{ audio_url: string }> {
-    return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload) })
+    return request('/tts/generate', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 120000 })
   },
 
   testTTS(): Promise<{ status: string; audio_url?: string; message?: string }> {
-    return request('/tts/test-connection', { method: 'POST' })
+    return request('/tts/test-connection', { method: 'POST', timeoutMs: 60000 })
   },
 
   getElevenLabsModels(): Promise<Array<{ model_id: string, name: string }>> {
@@ -403,28 +406,28 @@ export const api = {
     const url = ollamaUrl
       ? `/settings/ollama-models?ollama_url=${encodeURIComponent(ollamaUrl)}`
       : '/settings/ollama-models'
-    return request(url, { method: 'GET' })
+    return request(url, { method: 'GET', timeoutMs: 30000 })
   },
 
   getStableDiffusionModels(sdUrl?: string): Promise<{ models: string[] }> {
     const url = sdUrl
       ? `/settings/stable-diffusion-models?stable_diffusion_url=${encodeURIComponent(sdUrl)}`
       : '/settings/stable-diffusion-models'
-    return request(url, { method: 'GET' })
+    return request(url, { method: 'GET', timeoutMs: 30000 })
   },
 
   /** Testing */
   testLlm(payload: any): Promise<any> {
-    return request('/settings/test-llm', { method: 'POST', body: JSON.stringify(payload) })
+    return request('/settings/test-llm', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 60000 })
   },
 
   testVision(payload: any): Promise<any> {
-    return request('/settings/test-vision', { method: 'POST', body: JSON.stringify(payload) })
+    return request('/settings/test-vision', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 180000 })
   },
 
   /** Catalog */
   generateCatalogImage(payload: any): Promise<any> {
-    return request('/settings/catalog/generate', { method: 'POST', body: JSON.stringify(payload) })
+    return request('/settings/catalog/generate', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 180000 })
   },
 
   async uploadCatalogImage(formData: FormData): Promise<any> {
@@ -509,7 +512,7 @@ export const api = {
     const body = bio !== undefined ? JSON.stringify({ bio }) : undefined
     
     try {
-      const response = await request('/users/me/profile-image/generate', { method: 'POST', body })
+      const response = await request('/users/me/profile-image/generate', { method: 'POST', body, timeoutMs: 180000 })
       return response
     } catch (error) {
       console.error('API generateMyProfileImage error:', error)
@@ -549,6 +552,7 @@ export const api = {
     return request('/adventures/sessions/import', {
       method: 'POST',
       body: formData,
+      timeoutMs: 60000,
     })
   }
 }

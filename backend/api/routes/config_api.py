@@ -216,7 +216,7 @@ async def _fetch_ollama_models(ollama_url: Optional[str]) -> list[str]:
     base_url = (ollama_url or "http://localhost:11434").rstrip("/")
     endpoint = f"{base_url}/api/tags"
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(endpoint)
         response.raise_for_status()
         payload = response.json()
@@ -240,7 +240,7 @@ async def _fetch_stable_diffusion_models(stable_diffusion_url: Optional[str]) ->
     base_url = (stable_diffusion_url or "http://127.0.0.1:7860").rstrip("/")
     endpoint = f"{base_url}/sdapi/v1/sd-models"
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(endpoint)
         response.raise_for_status()
         payload = response.json()
