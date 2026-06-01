@@ -325,8 +325,15 @@ const editorObjects = computed<any[]>(() => {
   const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
   return mergeUniqueById(source, inferred).filter((entity: any) => {
     const type = String(entity?.item_type || '').toUpperCase()
-    return type !== 'READABLE' && type !== 'CONTAINER'
+    return type !== 'READABLE' && type !== 'CONTAINER' && type !== 'SWITCH'
   })
+})
+
+const editorSwitches = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
+  return mergeUniqueById(source, inferred).filter((entity: any) => String(entity?.item_type || '').toUpperCase() === 'SWITCH')
 })
 
 const editorContainers = computed<any[]>(() => {
@@ -433,7 +440,7 @@ async function setStartScene(sceneId: string) {
 
 function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
   const selectedObject = type === 'object'
-    ? ([...(editorObjects.value || []), ...(editorTextLogs.value || [])]).find((entry: any) => String(entry.id) === String(id))
+    ? ([...(editorObjects.value || []), ...(editorTextLogs.value || []), ...(editorSwitches.value || [])]).find((entry: any) => String(entry.id) === String(id))
     : null
 
   editEntityContext.value = { type, id }
@@ -660,6 +667,7 @@ function getRegenerateKindLabel(kind: string): string {
   if (kind === 'scene') return 'locations'
   if (kind === 'npc') return 'inhabitants'
   if (kind === 'container') return 'containers'
+  if (kind === 'switch') return 'switches'
   if (kind === 'text-log') return 'text logs'
   if (kind === 'cover') return 'cover art'
   if (kind === 'protagonist') return 'protagonist portraits'
@@ -685,6 +693,7 @@ async function regenerateAll(kind: any, missingOnly: boolean = false) {
   if (kind === 'npc') items = editorNpcs.value
   if (kind === 'object') items = editorObjects.value
   if (kind === 'container') items = editorContainers.value
+  if (kind === 'switch') items = editorSwitches.value
   if (kind === 'text-log') items = editorTextLogs.value
 
   const targets = missingOnly
@@ -702,7 +711,7 @@ async function regenerateAll(kind: any, missingOnly: boolean = false) {
   
   for (const item of targets) {
     try {
-      const apiKind = (kind === 'container' || kind === 'text-log') ? 'object' : kind
+      const apiKind = (kind === 'container' || kind === 'text-log' || kind === 'switch') ? 'object' : kind
       await quickRegenerateVisual(apiKind, item.id || props.adventureId)
       successCount += 1
     } catch (error: any) {
@@ -946,6 +955,7 @@ const goBack = () => {
             <ItemsTab 
               v-if="activeTab === 'items'"
               :editor-objects="editorObjects"
+              :editor-switches="editorSwitches"
               :editor-containers="editorContainers"
               :editor-text-logs="editorTextLogs"
               :is-batch-generating="isBatchGenerating"

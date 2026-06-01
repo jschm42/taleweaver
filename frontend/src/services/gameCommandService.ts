@@ -42,6 +42,11 @@ const isPortableEntity = (entity: any): boolean => {
   return entity.is_portable !== false
 }
 
+const isSwitchEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'SWITCH'
+}
+
 const isStationaryEntity = (entity: any): boolean => {
   if (!entity) return false
   return String(entity.movement_type || '').toUpperCase() === 'STATIONARY'
@@ -76,7 +81,15 @@ export const gameCommandService = {
 
   isAllowedCombatCommand(content: string): boolean {
     const msg = content.trim().toLowerCase()
-    return msg === 'attack' || msg === '/attack' || msg === 'run' || msg === '/run' || msg.startsWith('/consume ')
+    return (
+      msg === 'attack'
+      || msg === '/attack'
+      || msg.startsWith('attack ')
+      || msg.startsWith('/attack ')
+      || msg === 'run'
+      || msg === '/run'
+      || msg.startsWith('/consume ')
+    )
   },
 
   resolveEntityActionCommand(actionId: string, entity: any): { command: string | null; errorMessage: string | null } {
@@ -116,7 +129,7 @@ export const gameCommandService = {
   },
 
   shouldAutoTakeOnEntityClick(entity: any): boolean {
-    return entity?.entity_type === 'OBJECT' && entity?.is_portable !== false && !isContainerEntity(entity)
+    return entity?.entity_type === 'OBJECT' && entity?.is_portable !== false && !isContainerEntity(entity) && !isSwitchEntity(entity)
   },
 
   buildContextMenu(entity: any, _ruleMode?: string): ContextMenuModel | null {
@@ -141,7 +154,9 @@ export const gameCommandService = {
       items.push({ label: 'Inspect', action: `/inspect ${entity.name}` })
 
       if (isPortableEntity(entity)) {
+        if (!isSwitchEntity(entity)) {
         items.push({ label: 'Take', action: `/take ${entity.name}` })
+        }
       }
 
       if (!isStationaryEntity(entity)) {

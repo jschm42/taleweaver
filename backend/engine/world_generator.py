@@ -351,7 +351,7 @@ class WorldObjectSchema(BaseModel):
     start_scene_id: str = Field(..., description="The ID of the scene where the object starts.")
     spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'on the dusty shelf', 'under the rug'")
     
-    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER")
+    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH")
     wearable_slots: list[str] = Field(..., description="If WEARABLE, which slots? e.g. ['Head'], ['MainHand']. Use [] if none.")
     is_hidden: bool = Field(..., description="If True, the player must SEARCH or trigger an event to see this.")
     reveal_rule: str = Field(
@@ -383,6 +383,10 @@ class WorldObjectSchema(BaseModel):
     inventory: list[str] = Field(..., description="List of object IDs inside this container object. Use [] if empty.")
     text_log_content: str = Field("", description="Only for READABLE objects: visible text content, max 500 characters. Must be non-empty for READABLE objects. Paragraphs are allowed (use blank lines). Use empty string for non-readable items.")
     text_log_format: str = Field("", description="Only for READABLE objects: one of DOCUMENT, SCROLL, BOOK, SIGN. Use empty string for non-readable items.")
+    switch_states: list[str] = Field(default_factory=list, description="Only for SWITCH objects: ordered states, e.g. ['OFF','ON'].")
+    switch_initial_state: str = Field("", description="Only for SWITCH objects: initial state value.")
+    switch_transitions: list[dict[str, Any]] = Field(default_factory=list, description="Only for SWITCH objects: deterministic transitions with optional gates and fail_message.")
+    switch_outcomes: list[dict[str, Any]] = Field(default_factory=list, description="Only for SWITCH objects: state-based effects (unlock_exit, unlock_container, story_flag).")
     source_asset_id: Optional[str] = Field(None, description="Optional source object ID to reuse an old item image.")
     
     model_config = {"extra": "forbid"}
@@ -723,6 +727,26 @@ class WorldGenerator:
                 f"- Generate between {max(1, min_items)} and {max(1, max_items)} total objects/items in `objects`."
             )
 
+        original_prompt_lower = str(original_prompt or "").lower()
+        wants_switches = any(
+            token in original_prompt_lower
+            for token in ["switch", "switches", "lever", "control panel", "schalter", "hebel", "mechanism", "mechanik"]
+        )
+        if wants_switches:
+            switch_requirement = (
+                "\n\nSWITCH MECHANISMS:\n"
+                "- Generate at least one object with item_type SWITCH if the story idea mentions a switch/lever/mechanism.\n"
+                "- Every SWITCH must include switch_states (>=2), switch_initial_state, and switch_transitions.\n"
+                "- Transition objects must use: from, to, gates{item,code,rule}, fail_message.\n"
+                "- Optionally include switch_outcomes with deterministic effects: unlock_exit, unlock_container, story_flag."
+            )
+        else:
+            switch_requirement = (
+                "\n\nSWITCH MECHANISMS:\n"
+                "- You may generate item_type SWITCH for puzzle/mechanism interactions when narratively appropriate.\n"
+                "- If used, include switch_states, switch_initial_state, and switch_transitions in deterministic form."
+            )
+
         cover_guidance = ""
         if cover_source_manifest:
             source_title = cover_source_adventure_name or cover_source_manifest.get("title") or "Unknown Source Adventure"
@@ -780,6 +804,7 @@ class WorldGenerator:
         )
         user_prompt += container_requirement
         user_prompt += item_requirement
+        user_prompt += switch_requirement
 
         
         # 1. Update Status
@@ -1990,6 +2015,39 @@ class WorldGenerator:
                 metadata_json["item_to_unlock"] = item_to_unlock
                 metadata_json["rule_to_unlock"] = rule_to_unlock
                 metadata_json["locked"] = bool(code_to_unlock or item_to_unlock or rule_to_unlock)
+
+            if str(o.get("item_type") or "").upper() == "SWITCH":
+                raw_states = o.get("switch_states") or []
+                states_normalized: list[str] = []
+                for state in raw_states:
+                    token = str(state or "").strip().upper()
+                    if token and token not in states_normalized:
+                        states_normalized.append(token)
+                if len(states_normalized) < 2:
+                    states_normalized = ["OFF", "ON"]
+
+                initial_state = str(o.get("switch_initial_state") or states_normalized[0]).strip().upper()
+                if initial_state not in states_normalized:
+                    initial_state = states_normalized[0]
+
+                transitions = o.get("switch_transitions")
+                if not isinstance(transitions, list):
+                    transitions = []
+                outcomes = o.get("switch_outcomes")
+                if not isinstance(outcomes, list):
+                    outcomes = []
+
+                metadata_json["switch"] = {
+                    "states": states_normalized,
+                    "initial_state": initial_state,
+                    "transitions": transitions,
+                    "outcomes": outcomes,
+                }
+                metadata_json.setdefault("discovery_visibility", {
+                    "mentioned_in_scene": True,
+                    "listed_in_discoveries": False,
+                    "lootable": False,
+                })
 
             if avatar and is_in_avatar_inv:
                 if is_starting_inv:

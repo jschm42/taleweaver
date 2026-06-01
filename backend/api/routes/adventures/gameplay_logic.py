@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import asyncio
 import json
 import logging
@@ -1274,6 +1274,247 @@ class GameTurnManager:
 
         return f"Dropped NPC items: {', '.join(dropped_items_summary)}"
 
+    @staticmethod
+    def _is_switch_entity(entity: WorldEntity | dict[str, Any] | None) -> bool:
+        if not entity:
+            return False
+        if isinstance(entity, dict):
+            item_type = str(entity.get("item_type") or "").upper()
+            metadata_json = entity.get("metadata_json")
+        else:
+            item_type = str(getattr(entity, "item_type", "") or "").upper()
+            metadata_json = getattr(entity, "metadata_json", None)
+
+        if item_type == "SWITCH":
+            return True
+        return isinstance(metadata_json, dict) and isinstance(metadata_json.get("switch"), dict)
+
+    @staticmethod
+    def _switch_config(entity: WorldEntity) -> dict[str, Any]:
+        metadata_json = dict(getattr(entity, "metadata_json", None) or {})
+        config = metadata_json.get("switch")
+        return config if isinstance(config, dict) else {}
+
+    @staticmethod
+    def _parse_switch_args(raw_args: str) -> tuple[str, str, str | None] | None:
+        raw = (raw_args or "").strip()
+        if not raw:
+            return None
+
+        quoted = re.match(r'^\s*"(?P<target>.+?)"\s+(?P<state>\S+)(?:\s+(?P<code>\S+))?\s*$', raw)
+        if quoted:
+            target = quoted.group("target").strip()
+            state = quoted.group("state").strip().upper()
+            code = quoted.group("code")
+            return target, state, (code.strip() if code else None)
+
+        parts = raw.split()
+        if len(parts) < 2:
+            return None
+
+        target = parts[0].strip()
+        state = parts[1].strip().upper()
+        code = parts[2].strip() if len(parts) >= 3 else None
+        return target, state, code
+
+    async def _resolve_scene_switch(self, target_hint: str) -> WorldEntity | None:
+        hint = (target_hint or "").strip().lower()
+        if not hint:
+            return None
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.entity_type == "OBJECT",
+            )
+        )
+        candidates = ent_res.scalars().all()
+        states = self.state.entity_states or {}
+
+        best: tuple[int, WorldEntity] | None = None
+        for ent in candidates:
+            if not self._is_switch_entity(ent):
+                continue
+
+            override = states.get(ent.id, {}) if isinstance(states, dict) else {}
+            current_scene_id = override.get("current_scene_id", ent.current_scene_id)
+            is_hidden = bool(override.get("is_hidden", ent.is_hidden))
+            is_in_inventory = bool(override.get("is_in_inventory", ent.is_in_inventory))
+            if current_scene_id != self.state.current_scene_id or is_hidden or is_in_inventory:
+                continue
+
+            id_token = str(ent.id or "").strip().lower()
+            name_token = str(ent.name or "").strip().lower()
+            token = ""
+            if id_token and id_token == hint:
+                token = id_token
+            elif name_token and name_token == hint:
+                token = name_token
+            elif id_token and id_token in hint:
+                token = id_token
+            elif name_token and name_token in hint:
+                token = name_token
+
+            if not token:
+                continue
+
+            candidate = (len(token), ent)
+            if best is None or candidate[0] > best[0]:
+                best = candidate
+
+        return best[1] if best else None
+
+    def _switch_story_flags(self) -> dict[str, bool]:
+        states = self.state.entity_states or {}
+        raw = states.get("__switch_story_flags__")
+        if not isinstance(raw, dict):
+            return {}
+        return {str(k): bool(v) for k, v in raw.items()}
+
+    def _set_switch_story_flag(self, key: str) -> None:
+        key_clean = str(key or "").strip()
+        if not key_clean:
+            return
+        states = dict(self.state.entity_states or {})
+        flags = states.get("__switch_story_flags__")
+        if not isinstance(flags, dict):
+            flags = {}
+        flags[key_clean] = True
+        states["__switch_story_flags__"] = flags
+        self.state.entity_states = states
+        flag_modified(self.state, "entity_states")
+
+    def _avatar_inventory_ids(self) -> set[str]:
+        ids: set[str] = set()
+        for item in (self.avatar.inventory or []):
+            if not isinstance(item, dict):
+                continue
+            raw_id = str(item.get("id") or "").strip().upper()
+            if raw_id:
+                ids.add(raw_id)
+        return ids
+
+    async def _apply_switch_outcomes(self, outcomes: list[Any], on_state: str) -> list[str]:
+        messages: list[str] = []
+        for outcome in outcomes:
+            if not isinstance(outcome, dict):
+                continue
+            if str(outcome.get("on_state") or "").strip().upper() != on_state.upper():
+                continue
+            effects = outcome.get("effects")
+            if not isinstance(effects, list):
+                continue
+            for effect in effects:
+                if not isinstance(effect, dict):
+                    continue
+                effect_type = str(effect.get("type") or "").strip().lower()
+                if effect_type == "story_flag":
+                    key = str(effect.get("key") or "").strip()
+                    if key:
+                        self._set_switch_story_flag(key)
+                        messages.append(f"Story flag set: {key}.")
+                elif effect_type == "unlock_exit":
+                    target_id = str(effect.get("target_id") or "").strip()
+                    if not target_id:
+                        continue
+                    exit_res = await self.db.execute(
+                        select(WorldExit).where(
+                            WorldExit.session_id == self.state.session_id,
+                            WorldExit.id == target_id,
+                        )
+                    )
+                    ex = exit_res.scalars().first()
+                    if ex and ex.is_locked:
+                        ex.is_locked = False
+                        messages.append(f"Exit unlocked: {ex.label or ex.id}.")
+                elif effect_type == "unlock_container":
+                    target_id = str(effect.get("target_id") or "").strip()
+                    if not target_id:
+                        continue
+                    states = dict(self.state.entity_states or {})
+                    entry = dict(states.get(target_id) or {})
+                    entry["locked"] = False
+                    states[target_id] = entry
+                    self.state.entity_states = states
+                    flag_modified(self.state, "entity_states")
+                    messages.append(f"Container unlocked: {target_id}.")
+        return messages
+
+    async def _execute_switch_command(self, switch_args: str) -> str:
+        parsed = self._parse_switch_args(switch_args)
+        if not parsed:
+            return "Usage: /switch <target> <state> [code] (quote target if it contains spaces)."
+
+        target_hint, target_state, provided_code = parsed
+        switch_entity = await self._resolve_scene_switch(target_hint)
+        if not switch_entity:
+            return f"No switch named '{target_hint}' was found in the current scene."
+
+        config = self._switch_config(switch_entity)
+        states = config.get("states")
+        if not isinstance(states, list) or len(states) < 2:
+            return f"{switch_entity.name} has no valid switch configuration."
+
+        allowed_states = [str(state).strip().upper() for state in states if str(state).strip()]
+        if target_state not in allowed_states:
+            return f"Invalid state '{target_state}'. Allowed states: {', '.join(allowed_states)}."
+
+        session_states = dict(self.state.entity_states or {})
+        entry = dict(session_states.get(switch_entity.id) or {})
+        configured_current = str(config.get("initial_state") or allowed_states[0]).strip().upper()
+        current_state = str(entry.get("switch_state") or configured_current).strip().upper()
+        if current_state == target_state:
+            return f"{switch_entity.name} is already set to {target_state}."
+
+        transitions = config.get("transitions")
+        if not isinstance(transitions, list) or not transitions:
+            return f"{switch_entity.name} has no transition map configured."
+
+        transition = None
+        for candidate in transitions:
+            if not isinstance(candidate, dict):
+                continue
+            from_state = str(candidate.get("from") or "").strip().upper()
+            to_state = str(candidate.get("to") or "").strip().upper()
+            if from_state == current_state and to_state == target_state:
+                transition = candidate
+                break
+
+        if transition is None:
+            return f"{switch_entity.name} cannot switch from {current_state} to {target_state}."
+
+        gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
+        required_item = str(gates.get("item") or "").strip().upper()
+        required_code = str(gates.get("code") or "").strip()
+        required_rule = str(gates.get("rule") or "").strip()
+        fail_message = str(transition.get("fail_message") or "").strip()
+
+        if required_item and required_item not in self._avatar_inventory_ids():
+            return fail_message or f"{switch_entity.name} requires item {required_item}."
+
+        if required_code and str(provided_code or "").strip() != required_code:
+            return fail_message or f"{switch_entity.name} requires a valid code."
+
+        if required_rule and not self._switch_story_flags().get(required_rule, False):
+            return fail_message or f"{switch_entity.name} requires rule '{required_rule}'."
+
+        entry["switch_state"] = target_state
+        session_states[switch_entity.id] = entry
+        self.state.entity_states = session_states
+        flag_modified(self.state, "entity_states")
+
+        narration = config.get("narration") if isinstance(config.get("narration"), dict) else {}
+        state_change_notes = narration.get("on_state_change") if isinstance(narration.get("on_state_change"), dict) else {}
+        state_note = str(state_change_notes.get(target_state) or "").strip()
+
+        outcome_notes = await self._apply_switch_outcomes(config.get("outcomes") if isinstance(config.get("outcomes"), list) else [], target_state)
+        message = f"{switch_entity.name} set to {target_state}."
+        if state_note:
+            message = f"{message} {state_note}"
+        if outcome_notes:
+            message = f"{message} {' '.join(outcome_notes)}"
+        return message
+
     async def _handle_slash(self, user_msg: str, response: str) -> AsyncGenerator[str, None]:
         # Handle /map specifically (doesn't use CommandParser)
         if user_msg.lower() == "/map":
@@ -1317,7 +1558,7 @@ class GameTurnManager:
                 if candidate.name and candidate.name.lower() == hint_lower:
                     ent = candidate
                     break
-            if ent and ent.is_portable:
+            if ent and ent.is_portable and str(ent.item_type or "").upper() != "SWITCH":
                 # Move to inventory
                 new_inv = list(self.avatar.inventory)
                 item_dict = jsonable_encoder({c.name: getattr(ent, c.name) for c in ent.__table__.columns})
@@ -1391,6 +1632,10 @@ class GameTurnManager:
                     else:
                         container_inventory = await self._get_container_inventory(scene_container, inventory_container)
                         response = f"{container_name} contains {len(container_inventory)} item(s)."
+
+        if response.startswith("[TRIGGER_SWITCH]"):
+            switch_args = response.replace("[TRIGGER_SWITCH]", "").strip()
+            response = await self._execute_switch_command(switch_args)
 
         if response.startswith("[TRIGGER_CONTAINER_TAKE_ALL]"):
             container_hint = response.replace("[TRIGGER_CONTAINER_TAKE_ALL]", "").strip()
@@ -3779,7 +4024,7 @@ class GameTurnManager:
                     # Output as system message for transparency
                     success_label = "SUCCESS" if res.success else "FAILURE"
                     roll_msg = (
-                        f"🎲 **{req.stat.upper()} CHECK**: {res.reason}\n"
+                        f"**{req.stat.upper()} CHECK**: {res.reason}\n"
                         f"Roll: {res.roll} + {res.modifier} = **{res.total}** (vs DC {res.dc}) -> **{success_label}**"
                     )
                     await self._save_chat_message("system", roll_msg)
@@ -3834,7 +4079,7 @@ class GameTurnManager:
                     # Output as system message
                     hit_label = "HIT" if res.is_hit else "MISS"
                     roll_msg = (
-                        f"⚔️ **ATTACK**: {res.reason}\n"
+                        f"**ATTACK**: {res.reason}\n"
                         f"To-Hit: {res.hit_roll} + {res.hit_modifier} = **{res.hit_total}** (vs AC {res.target_ac}, {ac_reason}) -> **{hit_label}**"
                     )
                     if res.is_hit:
@@ -4648,7 +4893,7 @@ class GameTurnManager:
 
         if event.new_status_effects:
             for effect in event.new_status_effects:
-                msg = f"✨ You are now: {effect}"
+                msg = f"You are now: {effect}"
                 await self._save_chat_message("system", msg)
                 system_messages.append(msg)
 
@@ -4714,7 +4959,7 @@ class GameTurnManager:
                     
                     # Add system message for scene change
                     scene_name = new_scene_db.label if new_scene_db else (event.scene_label or "a new location")
-                    msg = f"📍 You have entered: {scene_name}"
+                    msg = f"You have entered: {scene_name}"
                     await self._save_chat_message("system", msg)
                     system_messages.append(msg)
                     self._queue_checkpoint(CHECKPOINT_REASON_SCENE_CHANGE, scene_label=scene_name)
@@ -4942,7 +5187,7 @@ class GameTurnManager:
                     }
                 )
                 award_title = aw.get("title") or key
-                msg = f"🏆 Award Achievement: {award_title}"
+                msg = f"Award Achievement: {award_title}"
                 await self._save_chat_message("system", msg)
                 system_messages.append(msg)
                 modified = True

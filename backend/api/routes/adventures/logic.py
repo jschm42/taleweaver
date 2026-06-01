@@ -429,6 +429,15 @@ class AdventureLogic:
             eid = ent.get("id")
             if eid in session_overrides:
                 ent.update(session_overrides[eid])
+            metadata_json = ent.get("metadata_json") if isinstance(ent.get("metadata_json"), dict) else {}
+            discovery_visibility = metadata_json.get("discovery_visibility") if isinstance(metadata_json.get("discovery_visibility"), dict) else {}
+            listed_in_discoveries = discovery_visibility.get("listed_in_discoveries")
+            if isinstance(listed_in_discoveries, bool):
+                ent["listed_in_discoveries"] = listed_in_discoveries
+            elif str(ent.get("item_type") or "").upper() == "SWITCH":
+                ent["listed_in_discoveries"] = False
+            else:
+                ent["listed_in_discoveries"] = True
             ent["image_url"] = AdventureLogic.resolve_existing_data_asset_url(ent.get("image_url"))
             merged_entities.append(ent)
 

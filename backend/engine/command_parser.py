@@ -106,6 +106,8 @@ class CommandParser:
             return f"[TRIGGER_PUSH] {args}"
         elif command == "/pull":
             return f"[TRIGGER_PULL] {args}"
+        elif command == "/switch":
+            return f"[TRIGGER_SWITCH] {args}"
         elif command == "/search":
             return f"[TRIGGER_SEARCH] {args}"
         elif command == "/lookaround" or command == "/look":
@@ -138,6 +140,7 @@ class CommandParser:
             "- `/attack <target>`: Start a fight with a specific NPC (by name or ID).",
             "- `/push <target>`: Push an object, lever, mechanism, or obstacle.",
             "- `/pull <target>`: Pull an object, lever, mechanism, or obstacle.",
+            "- `/switch <target> <state> [code]`: Set a switch/mechanism to a target state.",
             "- `/rest`: Take a short rest if the situation allows it.",
             "- `/equip <item>`: Equip an item from your inventory.",
             "- `/drop <item>`: Drop an item into the current room.",

@@ -338,10 +338,18 @@ export function useGameSocket(): UseGameSocket {
   async function sendMessage(content: string): Promise<void> {
     const normalizedContent = normalizeUiActionInput(content)
     const isAgentOff = normalizedContent.trim().toLowerCase() === '/agent off'
-    
+    const hadActiveChat = !!activeChatController
+
     if (activeChatController) {
       activeChatController.abort()
       activeChatController = null
+    }
+
+    // A new player action should replace an in-flight turn immediately.
+    // If we just aborted the prior request, clear transient busy state first.
+    if (hadActiveChat && (status.value === 'connecting' || status.value === 'loading')) {
+      status.value = 'connected'
+      statusText.value = ''
     }
 
     if (isAgentOff) {

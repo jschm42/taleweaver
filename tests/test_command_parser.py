@@ -42,6 +42,11 @@ def test_pull_command_returns_trigger() -> None:
     assert response == "[TRIGGER_PULL] Chain"
 
 
+def test_switch_command_returns_trigger() -> None:
+    response = CommandParser.parse_command(_avatar(), "/switch POWER_CORE HIGH 7391")
+    assert response == "[TRIGGER_SWITCH] POWER_CORE HIGH 7391"
+
+
 def test_talk_and_chat_commands_are_not_known() -> None:
     talk_response = CommandParser.parse_command(_avatar(), "/talk Guard")
     chat_response = CommandParser.parse_command(_avatar(), "/chat Guard")

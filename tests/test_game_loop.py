@@ -229,6 +229,124 @@ async def test_off_scene_name_mention_without_inspect_intent_is_not_blocked(setu
         assert mock_llm_instance.aexecute_complex_task.await_count == 1
         assert mock_llm_instance.stream_simple_task.await_count == 1
 
+
+async def test_switch_command_updates_state_and_unlocks_exit(setup_test_db):
+    """/switch should deterministically update switch state and execute unlock_exit outcomes."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, adv, _avatar, state = await _seed_game_context(db)
+
+        db.add(WorldExit(
+            id="EXIT_FORGE_HALL",
+            session_id="session-1",
+            template_id=adv.id,
+            from_scene_id="START",
+            to_scene_id="HALL",
+            label="Forge Hall Door",
+            is_locked=True,
+        ))
+        db.add(WorldEntity(
+            id="SW_FORGE_POWER",
+            session_id="session-1",
+            entity_type="OBJECT",
+            item_type="SWITCH",
+            name="Hochofen-Regler",
+            description="Regulates forge output.",
+            current_scene_id="START",
+            is_hidden=False,
+            is_in_inventory=False,
+            is_portable=False,
+            metadata_json={
+                "discovery_visibility": {
+                    "mentioned_in_scene": True,
+                    "listed_in_discoveries": False,
+                    "lootable": False,
+                },
+                "switch": {
+                    "states": ["LOW", "HIGH"],
+                    "initial_state": "LOW",
+                    "transitions": [
+                        {
+                            "from": "LOW",
+                            "to": "HIGH",
+                            "gates": {"item": None, "code": "7391", "rule": None},
+                            "fail_message": "Wrong access code.",
+                        }
+                    ],
+                    "outcomes": [
+                        {
+                            "on_state": "HIGH",
+                            "effects": [{"type": "unlock_exit", "target_id": "EXIT_FORGE_HALL"}],
+                        }
+                    ],
+                },
+            },
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("/switch SW_FORGE_POWER HIGH 7391"):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+        exit_res = await db.execute(select(WorldExit).where(WorldExit.id == "EXIT_FORGE_HALL"))
+        exit_db = exit_res.scalars().first()
+
+        output = "".join(chunks)
+        assert "set to HIGH" in output
+        assert "Exit unlocked" in output
+        assert (state.entity_states or {}).get("SW_FORGE_POWER", {}).get("switch_state") == "HIGH"
+        assert exit_db is not None
+        assert exit_db.is_locked is False
+
+
+async def test_switch_command_rejects_wrong_code(setup_test_db):
+    """/switch must not change state when a required code is missing or wrong."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state = await _seed_game_context(db)
+
+        db.add(WorldEntity(
+            id="SW_SECURITY_OVERRIDE",
+            session_id="session-1",
+            entity_type="OBJECT",
+            item_type="SWITCH",
+            name="Security Override",
+            description="Emergency override switch.",
+            current_scene_id="START",
+            is_hidden=False,
+            is_in_inventory=False,
+            is_portable=False,
+            metadata_json={
+                "switch": {
+                    "states": ["OFF", "ON"],
+                    "initial_state": "OFF",
+                    "transitions": [
+                        {
+                            "from": "OFF",
+                            "to": "ON",
+                            "gates": {"item": None, "code": "1234", "rule": None},
+                            "fail_message": "Der Override akzeptiert diesen Code nicht.",
+                        }
+                    ],
+                }
+            },
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("/switch SW_SECURITY_OVERRIDE ON 9999"):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+        output = "".join(chunks)
+        assert "akzeptiert diesen Code nicht" in output
+        assert (state.entity_states or {}).get("SW_SECURITY_OVERRIDE", {}).get("switch_state") is None
+
 async def test_game_loop_session_overrides_template(setup_test_db, monkeypatch):
     """Verifies that the GameMaster receives plot/rules from SessionState, not AdventureTemplate."""
     from backend.engine.memory_manager import MemoryManager

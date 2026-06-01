@@ -17,6 +17,17 @@ async function runInFlightGuard(inFlight: Ref<boolean>, task: () => Promise<void
   }
 }
 
+async function runInFlightGuardWithResult(inFlight: Ref<boolean>, task: () => Promise<void>): Promise<boolean> {
+  if (inFlight.value) return false
+  inFlight.value = true
+  try {
+    await task()
+    return true
+  } finally {
+    inFlight.value = false
+  }
+}
+
 export const gameActionService = {
   async sendIfUnlocked(isBlocked: boolean, sendMessage: SendMessage, command: string): Promise<void> {
     if (isBlocked) return
@@ -27,8 +38,8 @@ export const gameActionService = {
     return !isBlocked && ruleMode !== 'chat'
   },
 
-  async runCombatCommand(inFlight: Ref<boolean>, sendMessage: SendMessage, command: string): Promise<void> {
-    await runInFlightGuard(inFlight, async () => {
+  async runCombatCommand(inFlight: Ref<boolean>, sendMessage: SendMessage, command: string): Promise<boolean> {
+    return await runInFlightGuardWithResult(inFlight, async () => {
       await sendMessage(command)
     })
   },

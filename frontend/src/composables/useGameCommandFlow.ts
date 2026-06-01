@@ -98,6 +98,7 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     }
 
     if (isActionInputBlocked.value) {
+      addNotification('Action is currently locked while the previous turn resolves.', 'info')
       return
     }
 
@@ -108,6 +109,7 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     }
 
     if (isCombatActive.value && !gameCommandService.isAllowedCombatCommand(content)) {
+      addNotification('Action unavailable during combat. Use Attack, Run, or Consume.', 'info')
       return
     }
 

@@ -682,7 +682,7 @@ const restSlotClass = computed(() => {
               <div 
                 class="flex flex-col justify-between p-3 rounded-xl border transition-all"
                 :class="attackSlotClass"
-                @click="!isAttackDisabled && emit('attack')"
+                @click="emit('attack')"
                 @mouseenter="mainHandItem && emitHover({ ...mainHandItem, entity_type: 'ITEM' }, $event)"
                 @mousemove="mainHandItem && emitHover({ ...mainHandItem, entity_type: 'ITEM' }, $event)"
                 @mouseleave="emitLeave"
@@ -763,7 +763,7 @@ const restSlotClass = computed(() => {
                 <div 
                   class="flex flex-col justify-between p-3 rounded-xl border transition-all"
                   :class="restSlotClass"
-                  @click="isPlayerTurn && !isInteractionLocked && emit('rest')"
+                  @click="emit('rest')"
                 >
                   <div class="flex items-center justify-between">
                     <span class="text-xs uppercase font-black tracking-widest text-slate-400">Action</span>
@@ -786,7 +786,7 @@ const restSlotClass = computed(() => {
                 <div 
                   class="flex flex-col justify-between p-3 rounded-xl border border-slate-700 bg-slate-900/40 hover:bg-rose-950/10 hover:border-rose-900/50 text-slate-200 cursor-pointer transition-all"
                   :class="{ 'opacity-50 cursor-not-allowed': !isPlayerTurn || isInteractionLocked }"
-                  @click="isPlayerTurn && !isInteractionLocked && emit('run')"
+                  @click="emit('run')"
                 >
                   <span class="text-xs uppercase font-black tracking-widest text-slate-400">Flee</span>
                   

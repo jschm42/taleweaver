@@ -223,8 +223,8 @@ onBeforeUnmount(() => {
 })
 
 const activeActionId = ref<string | null>(null)
-const isPassRunning = computed(() => status.value === 'connecting' || status.value === 'loading')
-const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value || audioService.isPlaying.value || audioService.isGenerating.value)
+const isPassRunning = computed(() => status.value === 'loading')
+const isActionInputBlocked = computed(() => inputLocked.value || isPassRunning.value)
 const showVoiceUnlockHint = computed(() => audioService.autoSpeechEnabled.value && !audioService.isUnlocked.value)
 
 const handleEntityClick = async (entity: any) => {
@@ -566,7 +566,23 @@ const npcs = computed(() => {
   }
   return worldNpcs
 })
-const items = computed(() => entities.value.filter(e => e.entity_type === 'OBJECT'))
+
+const isListedInDiscoveries = (entity: any): boolean => {
+  if (!entity || entity.entity_type !== 'OBJECT') return false
+
+  const metadata = (entity.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
+  const discoveryVisibility = (metadata.discovery_visibility && typeof metadata.discovery_visibility === 'object')
+    ? metadata.discovery_visibility
+    : {}
+
+  if (typeof discoveryVisibility.listed_in_discoveries === 'boolean') {
+    return discoveryVisibility.listed_in_discoveries
+  }
+
+  return String(entity.item_type || '').toUpperCase() !== 'SWITCH' && entity.listed_in_discoveries !== false
+}
+
+const items = computed(() => entities.value.filter((e: any) => isListedInDiscoveries(e)))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
 const lootPopupItems = computed(() => (combat.value?.loot_items || []) as any[])
@@ -760,11 +776,17 @@ const handleSheetChanged = async () => {
 }
 
 const handleCombatAttack = async () => {
-  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/attack')
+  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/attack')
+  if (!dispatched) {
+    addNotification('Combat action is already being resolved. Please wait a moment.', 'info')
+  }
 }
 
 const handleCombatRun = async () => {
-  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/run')
+  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/run')
+  if (!dispatched) {
+    addNotification('Combat action is already being resolved. Please wait a moment.', 'info')
+  }
 }
 
 const handleCombatConsume = async (name: string) => {
@@ -772,7 +794,10 @@ const handleCombatConsume = async (name: string) => {
 }
 
 const handleCombatRest = async () => {
-  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/rest')
+  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/rest')
+  if (!dispatched) {
+    addNotification('Combat action is already being resolved. Please wait a moment.', 'info')
+  }
 }
 
 const handleCombatDebugWin = async () => {
