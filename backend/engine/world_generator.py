@@ -208,6 +208,81 @@ def _normalize_unlock_requirements(
     return code_to_unlock, item_to_unlock, rule_to_unlock
 
 
+def _extract_item_id(entry: Any) -> Optional[str]:
+    if isinstance(entry, str):
+        normalized = entry.strip()
+        return normalized or None
+    if isinstance(entry, dict):
+        for key in ("id", "item_id", "object_id"):
+            value = entry.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def _ensure_containers_have_minimum_inventory(objects: list[dict[str, Any]]) -> None:
+    """Ensure every generated CONTAINER references at least one item ID in inventory.
+
+    This function only reuses existing valid item IDs and never fabricates new items.
+    """
+    if not isinstance(objects, list) or not objects:
+        return
+
+    container_objs: list[dict[str, Any]] = []
+    object_ids_in_order: list[str] = []
+    seen_ids: set[str] = set()
+
+    for obj in objects:
+        if not isinstance(obj, dict):
+            continue
+        obj_id = str(obj.get("id") or "").strip()
+        if obj_id and obj_id not in seen_ids:
+            seen_ids.add(obj_id)
+            object_ids_in_order.append(obj_id)
+        if str(obj.get("item_type") or "").upper() == "CONTAINER":
+            container_objs.append(obj)
+
+    if not container_objs:
+        return
+
+    object_ids_set = set(object_ids_in_order)
+    # Prefer assigning tangible, non-container objects to avoid nested lock complexity.
+    candidate_item_ids = [
+        str(obj.get("id") or "").strip()
+        for obj in objects
+        if isinstance(obj, dict)
+        and str(obj.get("id") or "").strip()
+        and str(obj.get("item_type") or "").upper() != "CONTAINER"
+    ]
+
+    assigned_ids: set[str] = set()
+    for container in container_objs:
+        container_id = str(container.get("id") or "").strip()
+        raw_inventory = container.get("inventory")
+        normalized_inventory: list[str] = []
+        if isinstance(raw_inventory, list):
+            for entry in raw_inventory:
+                item_id = _extract_item_id(entry)
+                if not item_id or item_id not in object_ids_set or item_id == container_id:
+                    continue
+                if item_id in normalized_inventory:
+                    continue
+                normalized_inventory.append(item_id)
+
+        container["inventory"] = normalized_inventory
+        assigned_ids.update(normalized_inventory)
+
+    unassigned_candidates = [item_id for item_id in candidate_item_ids if item_id not in assigned_ids]
+    for container in container_objs:
+        if container.get("inventory"):
+            continue
+
+        if unassigned_candidates:
+            chosen_item_id = unassigned_candidates.pop(0)
+            container["inventory"] = [chosen_item_id]
+            assigned_ids.add(chosen_item_id)
+
+
 # --- Schemas for Structured LLM Output ---
 
 class WorldSceneSchema(BaseModel):
@@ -565,6 +640,7 @@ class WorldGenerator:
                     "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
                     "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method."
                 )
+
             elif min_containers is None and max_containers is not None:
                 container_requirement = (
                     "\n\nCONTAINER ITEMS:\n"
@@ -583,6 +659,10 @@ class WorldGenerator:
                     "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
                     "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method."
                 )
+
+            container_requirement += (
+                "\n- Every generated CONTAINER must include at least one item ID in `inventory`; do not leave container inventories empty."
+            )
 
         # Text log requirement
         if not text_log_generation_enabled:
@@ -867,6 +947,8 @@ class WorldGenerator:
             obj["code_to_unlock"] = code_to_unlock
             obj["item_to_unlock"] = item_to_unlock
             obj["rule_to_unlock"] = rule_to_unlock
+
+        _ensure_containers_have_minimum_inventory(objects)
 
         readable_indices = [
             idx for idx, obj in enumerate(objects)

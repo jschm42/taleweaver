@@ -3508,4 +3508,46 @@ def test_mutual_exclusivity_normalization():
     assert rule == "narrative rule"
 
 
+def test_world_generator_ensures_container_has_item_from_existing_objects():
+    from backend.engine.world_generator import _ensure_containers_have_minimum_inventory
+
+    objects = [
+        {
+            "id": "CASH_REGISTER",
+            "name": "Cash Register",
+            "item_type": "CONTAINER",
+            "inventory": [],
+        },
+        {
+            "id": "BETTYS_NOTE",
+            "name": "Betty's Note",
+            "item_type": "READABLE",
+        },
+    ]
+
+    _ensure_containers_have_minimum_inventory(objects)
+
+    container = next(obj for obj in objects if obj.get("id") == "CASH_REGISTER")
+    assert container.get("inventory") == ["BETTYS_NOTE"]
+
+
+def test_world_generator_does_not_create_fallback_item_when_no_candidates():
+    from backend.engine.world_generator import _ensure_containers_have_minimum_inventory
+
+    objects = [
+        {
+            "id": "LOCKBOX",
+            "name": "Lockbox",
+            "item_type": "CONTAINER",
+            "inventory": [],
+        },
+    ]
+
+    _ensure_containers_have_minimum_inventory(objects)
+
+    assert len(objects) == 1
+    container = next(obj for obj in objects if obj.get("id") == "LOCKBOX")
+    assert container.get("inventory") == []
+
+
 
