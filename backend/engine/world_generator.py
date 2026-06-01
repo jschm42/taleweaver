@@ -1497,8 +1497,9 @@ class WorldGenerator:
             ))
             
         # Persist Exits
-        # Track (from, to) pairs to deduplicate reverse exits that the LLM may still emit.
-        seen_exit_pairs: set[tuple[str, str]] = set()
+        # Keep bidirectional exits as a single DB row and deduplicate reverse duplicates.
+        seen_directed_exit_pairs: set[tuple[str, str]] = set()
+        seen_bidirectional_pairs: set[tuple[str, str]] = set()
         for e in manifest_dict.get("exits", []):
             from_id = e["from_scene_id"]
             to_id = e["to_scene_id"]
@@ -1510,37 +1511,29 @@ class WorldGenerator:
                 e.get("rule_to_unlock"),
             )
 
-            # Forward direction
-            if (from_id, to_id) not in seen_exit_pairs:
-                seen_exit_pairs.add((from_id, to_id))
-                db.add(WorldExit(
-                    template_id=template_id,
-                    from_scene_id=from_id,
-                    to_scene_id=to_id,
-                    label=e["label"],
-                    exit_type="bidirectional" if is_bidirectional else "one_way",
-                    is_locked=e["is_locked"],
-                    lock_description=e.get("lock_description"),
-                    code_to_unlock=code_to_unlock,
-                    item_to_unlock=item_to_unlock,
-                    rule_to_unlock=rule_to_unlock,
-                ))
+            if is_bidirectional:
+                pair_key = tuple(sorted((from_id, to_id)))
+                if pair_key in seen_bidirectional_pairs:
+                    continue
+                seen_bidirectional_pairs.add(pair_key)
+            else:
+                directed_key = (from_id, to_id)
+                if directed_key in seen_directed_exit_pairs:
+                    continue
+                seen_directed_exit_pairs.add(directed_key)
 
-            # Reverse direction — only for bidirectional exits and only if not already defined
-            if is_bidirectional and (to_id, from_id) not in seen_exit_pairs:
-                seen_exit_pairs.add((to_id, from_id))
-                db.add(WorldExit(
-                    template_id=template_id,
-                    from_scene_id=to_id,
-                    to_scene_id=from_id,
-                    label=e["label"],
-                    exit_type="bidirectional",
-                    is_locked=e["is_locked"],
-                    lock_description=e.get("lock_description"),
-                    code_to_unlock=code_to_unlock,
-                    item_to_unlock=item_to_unlock,
-                    rule_to_unlock=rule_to_unlock,
-                ))
+            db.add(WorldExit(
+                template_id=template_id,
+                from_scene_id=from_id,
+                to_scene_id=to_id,
+                label=e["label"],
+                exit_type="bidirectional" if is_bidirectional else "one_way",
+                is_locked=e["is_locked"],
+                lock_description=e.get("lock_description"),
+                code_to_unlock=code_to_unlock,
+                item_to_unlock=item_to_unlock,
+                rule_to_unlock=rule_to_unlock,
+            ))
         
         await db.commit() # Save scenes and exits
         adventure = await db.get(AdventureTemplate, template_id)

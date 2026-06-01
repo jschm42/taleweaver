@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 from backend.engine.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.models.world_entity import WorldEntity, WorldScene
+from backend.models.world_entity import WorldEntity, WorldScene, WorldExit
 from sqlalchemy.future import select
 
 pytestmark = pytest.mark.asyncio
@@ -249,3 +249,108 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
         assert len(generate_object_calls) == 1
         assert "POTION_1" in generate_object_calls
         assert "POTION_2" not in generate_object_calls
+
+
+async def test_bidirectional_exits_are_persisted_as_single_row(setup_test_db):
+    """Bidirectional exits must be stored once and not duplicated in reverse direction."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user = User(
+            username="test_exit_user",
+            hashed_password="pw",
+            role="user",
+            t2i_settings={},
+            image_styles_catalog={},
+        )
+        db.add(user)
+        await db.commit()
+
+        template = AdventureTemplate(
+            title="Exit Consistency",
+            owner_id=user.id,
+            original_prompt="Test bidirectional exit persistence.",
+            teaser="Test",
+            selected_image_styles=["cinematic"],
+        )
+        db.add(template)
+        await db.commit()
+
+        manifest_dict = {
+            "protagonist": {
+                "name": "Hero",
+                "role": "Adventurer",
+                "description": "A brave explorer.",
+                "goal": "Find a path.",
+                "character": "Calm",
+                "strength": 10,
+                "dexterity": 10,
+                "intelligence": 10,
+                "wisdom": 10,
+                "charisma": 10,
+                "armor_class": 10,
+                "hp": 100,
+                "mana": 50,
+                "stamina": 100,
+                "starting_inventory": [],
+                "starting_equipment": {
+                    "Head": "", "Chest": "", "Hands": "", "Legs": "", "Feet": "",
+                    "Neck": "", "Ring_1": "", "Ring_2": "", "MainHand": "", "OffHand": ""
+                },
+            },
+            "scenes": [
+                {"id": "PARKING_LOT", "name": "Parking Lot", "description": "An empty lot."},
+                {"id": "DINER_ENTRANCE", "name": "Diner Entrance", "description": "A greasy door."},
+            ],
+            "exits": [
+                {
+                    "from_scene_id": "PARKING_LOT",
+                    "to_scene_id": "DINER_ENTRANCE",
+                    "label": "a glass door etched with grime",
+                    "is_locked": False,
+                    "is_bidirectional": True,
+                    "lock_description": "",
+                    "code_to_unlock": "",
+                    "item_to_unlock": "",
+                    "rule_to_unlock": "",
+                },
+                {
+                    "from_scene_id": "DINER_ENTRANCE",
+                    "to_scene_id": "PARKING_LOT",
+                    "label": "a glass door etched with grime",
+                    "is_locked": False,
+                    "is_bidirectional": True,
+                    "lock_description": "",
+                    "code_to_unlock": "",
+                    "item_to_unlock": "",
+                    "rule_to_unlock": "",
+                },
+            ],
+            "npcs": [],
+            "objects": [],
+            "quests": [],
+            "awards": [],
+        }
+
+        await WorldGenerator.apply_manifest(
+            db,
+            template.id,
+            manifest_dict,
+            user=None,
+            gen_scenes=False,
+            gen_npc=False,
+            gen_items=False,
+            gen_protagonist_image=False,
+        )
+
+        exits_res = await db.execute(
+            select(WorldExit).where(
+                WorldExit.template_id == template.id,
+                WorldExit.session_id.is_(None),
+            )
+        )
+        exits = exits_res.scalars().all()
+
+        assert len(exits) == 1
+        assert exits[0].exit_type == "bidirectional"
+        assert {exits[0].from_scene_id, exits[0].to_scene_id} == {"PARKING_LOT", "DINER_ENTRANCE"}
