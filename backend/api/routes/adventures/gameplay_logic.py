@@ -220,6 +220,22 @@ class GameTurnManager:
         if scene_label:
             self._checkpoint_scene_label = scene_label
 
+    @staticmethod
+    def _normalize_technical_action_input(user_msg: str) -> str:
+        text = str(user_msg or "").strip()
+        if not text:
+            return text
+
+        open_match = re.match(r"^\[?OPEN_CONTAINER\]?\s+(.+)$", text, re.IGNORECASE)
+        if open_match and open_match.group(1).strip():
+            return f"/open {open_match.group(1).strip()}"
+
+        read_match = re.match(r"^\[?OPEN_TEXT_LOG\]?\s+(.+)$", text, re.IGNORECASE)
+        if read_match and read_match.group(1).strip():
+            return f"/read {read_match.group(1).strip()}"
+
+        return text
+
     async def _persist_pending_checkpoints(self) -> list[dict[str, Any]]:
         if not self._pending_checkpoint_reasons or not self.state:
             return []
@@ -770,6 +786,11 @@ class GameTurnManager:
         actual_user_input = user_msg
         if not user_msg:
             user_msg = "[LOOK AROUND]"
+        else:
+            normalized_user_msg = self._normalize_technical_action_input(user_msg)
+            if normalized_user_msg != user_msg:
+                user_msg = normalized_user_msg
+                actual_user_input = normalized_user_msg
 
         if user_msg.lower() in {"/shuffle", "/suggest", "/suggestions"}:
             last_response = await self._load_last_assistant_message()
@@ -1568,8 +1589,31 @@ class GameTurnManager:
         if not is_locked:
             return []
 
+        is_being_unlocked = any(
+            update.entity_id == container_id and update.locked is False
+            for update in (event.updated_entities or [])
+        )
+
         unlock_allowed = True
         reason = ""
+
+        if required_rule and not is_being_unlocked:
+            unlock_allowed = False
+            hinted_actor = ""
+            distract_match = re.search(r"\bdistract\w*\s+([A-Za-z0-9_\- ]{2,60})", required_rule, re.IGNORECASE)
+            if distract_match:
+                hinted_actor = distract_match.group(1).strip(" .,:;!?")
+
+            if hinted_actor:
+                reason = (
+                    f"{container_name} stays shut. {hinted_actor} seems to keep a close eye on it. "
+                    "A clever distraction might create an opening."
+                )
+            else:
+                reason = (
+                    f"{container_name} stays shut. The moment does not feel right yet. "
+                    "A different approach might open a window."
+                )
 
         if required_code:
             code_match = re.search(r"(?:code|pin|access)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)

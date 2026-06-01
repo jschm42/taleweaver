@@ -114,6 +114,23 @@ export function useGameSocket(): UseGameSocket {
     }
   })
 
+  function normalizeUiActionInput(rawContent: string): string {
+    const content = String(rawContent || '').trim()
+    if (!content) return content
+
+    const openMatch = content.match(/^\[?OPEN_CONTAINER\]?\s+(.+)$/i)
+    if (openMatch && openMatch[1]) {
+      return `/open ${openMatch[1].trim()}`
+    }
+
+    const readMatch = content.match(/^\[?OPEN_TEXT_LOG\]?\s+(.+)$/i)
+    if (readMatch && readMatch[1]) {
+      return `/read ${readMatch[1].trim()}`
+    }
+
+    return content
+  }
+
   // Sync with User Profile default if no local preference exists
   watch(() => authState.user?.default_language, (newDef) => {
     if (localStorage.getItem('tw_bable_fish_lang') === null && newDef) {
@@ -319,7 +336,8 @@ export function useGameSocket(): UseGameSocket {
    * Posts a player message and processes the GM response.
    */
   async function sendMessage(content: string): Promise<void> {
-    const isAgentOff = content.trim().toLowerCase() === '/agent off'
+    const normalizedContent = normalizeUiActionInput(content)
+    const isAgentOff = normalizedContent.trim().toLowerCase() === '/agent off'
     
     if (activeChatController) {
       activeChatController.abort()
@@ -351,9 +369,9 @@ export function useGameSocket(): UseGameSocket {
     }
 
     const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume', '/shuffle', '/suggest', '/suggestions']
-    const isSilent = silentCommands.some(cmd => content.toLowerCase().startsWith(cmd))
+    const isSilent = silentCommands.some(cmd => normalizedContent.toLowerCase().startsWith(cmd))
 
-    if (content && !isSilent) _pushMessage('user', content)
+    if (normalizedContent && !isSilent) _pushMessage('user', normalizedContent)
     const preTurnMessageCount = messages.value.length
 
     if (!isAgentOff) {
@@ -372,7 +390,7 @@ export function useGameSocket(): UseGameSocket {
         headers: authHeaders(true),
         signal: controller.signal,
         body: JSON.stringify({ 
-          content,
+          content: normalizedContent,
           auto_visualize: autoVisualize.value,
           language: language.value || undefined
         })

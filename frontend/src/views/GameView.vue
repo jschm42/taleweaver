@@ -275,7 +275,7 @@ const isContainerLocked = (container: any): boolean => {
     return container.locked
   }
   const metadata = (container?.metadata_json && typeof container.metadata_json === 'object') ? container.metadata_json : {}
-  return Boolean(metadata.code_to_unlock || metadata.item_to_unlock)
+  return Boolean(metadata.code_to_unlock || metadata.item_to_unlock || metadata.rule_to_unlock)
 }
 
 const getContainerCodeRequirement = (container: any): string => {

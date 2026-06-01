@@ -3250,6 +3250,44 @@ async def test_container_rule_unlock_passes(setup_test_db):
         assert not reasons
 
 
+async def test_container_rule_unlock_requires_explicit_unlock_update(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state = await _seed_game_context(db)
+
+        db.add(WorldEntity(
+            id="CASH_REGISTER",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Diner Cash Register",
+            description="A vintage mechanical cash register that rings loudly.",
+            current_scene_id=state.current_scene_id,
+            item_type="CONTAINER",
+            metadata_json={
+                "code_to_unlock": "",
+                "item_to_unlock": "",
+                "rule_to_unlock": "Protagonist distracts Betty",
+                "locked": True,
+            },
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        event = GameEvent()
+        reasons = await manager._enforce_container_unlock_guardrails(event, "OPEN_CONTAINER CASH_REGISTER")
+
+        assert reasons
+        assert "stays shut" in reasons[0]
+        assert "distraction" in reasons[0].lower()
+        assert any(
+            up.entity_id == "CASH_REGISTER" and up.locked is True
+            for up in (event.updated_entities or [])
+        )
+
+
 def test_mutual_exclusivity_normalization():
     from backend.engine.world_generator import _normalize_unlock_requirements
 
