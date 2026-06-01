@@ -36,6 +36,7 @@ class WorldExit(Base, TimestampMixin):
     to_scene_id = Column(String(50), nullable=False)
     
     label = Column(String(100), nullable=False) # e.g. "a heavy oak door"
+    exit_type = Column(String(20), default="one_way", nullable=False)
     is_locked = Column(Boolean, default=False, nullable=False)
     lock_description = Column(String(255), nullable=True) # e.g. "The door is bolted from the other side."
     code_to_unlock = Column(String(50), nullable=True)

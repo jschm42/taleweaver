@@ -227,6 +227,7 @@ class SessionImporter:
                         from_scene_id=ex.get("from_scene_id"),
                         to_scene_id=ex.get("to_scene_id"),
                         label=ex.get("label"),
+                        exit_type=ex.get("exit_type", "one_way"),
                         is_locked=ex.get("is_locked", False),
                         lock_description=ex.get("lock_description"),
                         code_to_unlock=ex.get("code_to_unlock"),

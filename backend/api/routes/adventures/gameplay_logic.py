@@ -15,7 +15,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -1616,10 +1616,35 @@ class GameTurnManager:
         exit_res = await self.db.execute(
             select(WorldExit).where(
                 WorldExit.session_id == self.game_id,
-                WorldExit.from_scene_id == self.state.current_scene_id,
+                or_(
+                    WorldExit.from_scene_id == self.state.current_scene_id,
+                    and_(
+                        WorldExit.to_scene_id == self.state.current_scene_id,
+                        WorldExit.exit_type == "bidirectional"
+                    )
+                )
             )
         )
-        scene_exits = list(exit_res.scalars().all())
+        db_scene_exits = list(exit_res.scalars().all())
+        scene_exits = []
+        for e in db_scene_exits:
+            if e.from_scene_id == self.state.current_scene_id:
+                scene_exits.append(e)
+            else:
+                scene_exits.append(WorldExit(
+                    id=e.id,
+                    template_id=e.template_id,
+                    session_id=e.session_id,
+                    from_scene_id=e.to_scene_id,
+                    to_scene_id=e.from_scene_id,
+                    label=e.label,
+                    exit_type=e.exit_type,
+                    is_locked=e.is_locked,
+                    lock_description=e.lock_description,
+                    code_to_unlock=e.code_to_unlock,
+                    item_to_unlock=e.item_to_unlock,
+                    rule_to_unlock=e.rule_to_unlock
+                ))
 
         reasons = []
         for ex in scene_exits:
@@ -4588,8 +4613,17 @@ class GameTurnManager:
             exit_res = await self.db.execute(
                 select(WorldExit).where(
                     WorldExit.session_id == self.state.session_id,
-                    WorldExit.from_scene_id == self.state.current_scene_id,
-                    WorldExit.to_scene_id == event.new_scene_id,
+                    or_(
+                        and_(
+                            WorldExit.from_scene_id == self.state.current_scene_id,
+                            WorldExit.to_scene_id == event.new_scene_id
+                        ),
+                        and_(
+                            WorldExit.from_scene_id == event.new_scene_id,
+                            WorldExit.to_scene_id == self.state.current_scene_id,
+                            WorldExit.exit_type == "bidirectional"
+                        )
+                    )
                 )
             )
             valid_exit = exit_res.scalars().first()
@@ -4614,7 +4648,13 @@ class GameTurnManager:
                 try:
                     world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
                     # 1. Register exit between scenes
-                    MapEngine.register_exit(world_map, old_scene_id, event.new_scene_id, exit_label=event.exit_label or "")
+                    MapEngine.register_exit(
+                        world_map, 
+                        old_scene_id, 
+                        event.new_scene_id, 
+                        exit_label=event.exit_label or "",
+                        exit_type=valid_exit.exit_type if valid_exit else "one_way"
+                    )
                     # 2. Register visit to the new scene
                     # Use session snapshot for scene data
                     scene_res = await self.db.execute(
@@ -4923,21 +4963,33 @@ class GameTurnManager:
             try:
                 world_map = await AdventureLogic.get_or_create_map(self.db, self.state.template_id)
                 for up_exit in event.updated_exits:
+                    # Update DB row and get exit_type
+                    exit_res = await self.db.execute(
+                        select(WorldExit).where(
+                            WorldExit.session_id == self.state.session_id,
+                            or_(
+                                and_(
+                                    WorldExit.from_scene_id == up_exit.from_scene_id,
+                                    WorldExit.to_scene_id == up_exit.to_scene_id
+                                ),
+                                and_(
+                                    WorldExit.from_scene_id == up_exit.to_scene_id,
+                                    WorldExit.to_scene_id == up_exit.from_scene_id,
+                                    WorldExit.exit_type == "bidirectional"
+                                )
+                            )
+                        )
+                    )
+                    exit_db = exit_res.scalars().first()
+                    exit_type = exit_db.exit_type if exit_db else "one_way"
+
                     MapEngine.register_exit(
                         world_map, 
                         up_exit.from_scene_id, 
                         up_exit.to_scene_id, 
-                        is_locked=up_exit.is_locked
+                        is_locked=up_exit.is_locked,
+                        exit_type=exit_type
                     )
-                    # Update DB row
-                    exit_res = await self.db.execute(
-                        select(WorldExit).where(
-                            WorldExit.session_id == self.state.session_id,
-                            WorldExit.from_scene_id == up_exit.from_scene_id,
-                            WorldExit.to_scene_id == up_exit.to_scene_id,
-                        )
-                    )
-                    exit_db = exit_res.scalars().first()
                     if exit_db:
                         exit_db.is_locked = up_exit.is_locked
             except Exception as e:

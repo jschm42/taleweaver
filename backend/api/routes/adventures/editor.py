@@ -62,6 +62,7 @@ class EntityUpdateRequest(BaseModel):
     inventory: Optional[list] = None
     text_log_content: Optional[str] = None
     text_log_format: Optional[str] = None
+    exit_type: Optional[str] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -326,6 +327,7 @@ async def update_editor_entity(
             if payload.name is not None: world_exit.label = payload.name
             if payload.locked is not None: world_exit.is_locked = bool(payload.locked)
             if payload.description is not None: world_exit.lock_description = payload.description
+            if payload.exit_type is not None: world_exit.exit_type = payload.exit_type
             
             # Enforce mutual exclusivity and priority on exit lock attributes
             if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.rule_to_unlock is not None:

@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, or_, and_
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
@@ -67,11 +67,36 @@ class TurnLlmContextBuilder:
 
         exit_res = await self.manager.db.execute(
             select(WorldExit).where(
-                WorldExit.from_scene_id == self.manager.state.current_scene_id,
                 WorldExit.session_id == self.manager.game_id,
+                or_(
+                    WorldExit.from_scene_id == self.manager.state.current_scene_id,
+                    and_(
+                        WorldExit.to_scene_id == self.manager.state.current_scene_id,
+                        WorldExit.exit_type == "bidirectional"
+                    )
+                )
             )
         )
-        exits = list(exit_res.scalars().all())
+        db_exits = list(exit_res.scalars().all())
+        exits = []
+        for e in db_exits:
+            if e.from_scene_id == self.manager.state.current_scene_id:
+                exits.append(e)
+            else:
+                exits.append(WorldExit(
+                    id=e.id,
+                    template_id=e.template_id,
+                    session_id=e.session_id,
+                    from_scene_id=e.to_scene_id,
+                    to_scene_id=e.from_scene_id,
+                    label=e.label,
+                    exit_type=e.exit_type,
+                    is_locked=e.is_locked,
+                    lock_description=e.lock_description,
+                    code_to_unlock=e.code_to_unlock,
+                    item_to_unlock=e.item_to_unlock,
+                    rule_to_unlock=e.rule_to_unlock
+                ))
 
         overrides = self.manager.state.entity_states or {}
         for ent in all_entities:
