@@ -251,6 +251,161 @@ async def test_duplicate_media_reuse_npcs_and_objects(setup_test_db, monkeypatch
         assert "POTION_2" not in generate_object_calls
 
 
+async def test_stale_local_image_urls_fall_back_to_placeholders(setup_test_db, monkeypatch):
+    """Stale /data image URLs from source manifests must be replaced with valid placeholders."""
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user = User(
+            username="test_stale_image_user",
+            hashed_password="pw",
+            role="user",
+            t2i_settings={"provider": "ollama"},
+            image_styles_catalog={},
+        )
+        db.add(user)
+        await db.commit()
+
+        template = AdventureTemplate(
+            title="Stale Images Cover",
+            owner_id=user.id,
+            original_prompt="Create a cover adventure.",
+            teaser="Cover regression test.",
+        )
+        db.add(template)
+        await db.commit()
+
+        stale_scene_url = "/data/adventures/sessions/dead/scene.png"
+        stale_npc_url = "/data/adventures/sessions/dead/npc.png"
+        stale_object_url = "/data/adventures/sessions/dead/object.png"
+
+        manifest_dict = {
+            "teaser": "Stale image test",
+            "plot": "Ensure broken URLs are not persisted.",
+            "rules": "n/a",
+            "language": "English",
+            "protagonist": {
+                "name": "Hero",
+                "role": "Adventurer",
+                "description": "A brave fighter.",
+                "hp": 100,
+                "mana": 50,
+                "stamina": 100,
+                "strength": 10,
+                "dexterity": 10,
+                "intelligence": 10,
+                "wisdom": 10,
+                "charisma": 10,
+                "armor_class": 10,
+                "starting_inventory": [],
+                "starting_equipment": {},
+            },
+            "scenes": [
+                {
+                    "id": "SCENE_1",
+                    "name": "Source Room",
+                    "description": "A room from a stale source.",
+                    "image_url": stale_scene_url,
+                }
+            ],
+            "exits": [],
+            "npcs": [
+                {
+                    "id": "NPC_1",
+                    "name": "Old Guard",
+                    "description": "Guard with stale portrait.",
+                    "start_scene_id": "SCENE_1",
+                    "spatial_position": "near the door",
+                    "npc_type": "HUMANOID",
+                    "movement_type": "STATIONARY",
+                    "hp": 40,
+                    "mana": 0,
+                    "stamina": 30,
+                    "is_attackable": True,
+                    "is_killable": True,
+                    "is_hidden": False,
+                    "image_url": stale_npc_url,
+                    "inventory": [],
+                }
+            ],
+            "objects": [
+                {
+                    "id": "OBJ_1",
+                    "name": "Old Relic",
+                    "description": "Relic with stale image.",
+                    "start_scene_id": "SCENE_1",
+                    "spatial_position": "on pedestal",
+                    "item_type": "PICKABLE",
+                    "is_portable": True,
+                    "is_hidden": False,
+                    "image_url": stale_object_url,
+                    "wearable_slots": [],
+                    "inventory": [],
+                    "combination_ingredients": [],
+                    "reveals_item_id": "",
+                }
+            ],
+            "quests": [],
+            "awards": [],
+        }
+
+        async def fake_generate_placeholder(template_id, entity_id, base_dir, category="SCENE"):
+            return f"/data/adventures/generated/{entity_id}_{category}.png"
+
+        monkeypatch.setattr(
+            "backend.engine.media_engine.MediaEngine.generate_placeholder",
+            fake_generate_placeholder,
+        )
+
+        await WorldGenerator.apply_manifest(
+            db,
+            template.id,
+            manifest_dict,
+            user=None,
+            gen_npc=False,
+            gen_items=False,
+            gen_scenes=False,
+        )
+
+        scene_res = await db.execute(
+            select(WorldScene).where(
+                WorldScene.template_id == template.id,
+                WorldScene.id == "SCENE_1",
+            )
+        )
+        scene = scene_res.scalars().first()
+
+        npc_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == template.id,
+                WorldEntity.id == "NPC_1",
+                WorldEntity.entity_type == "NPC",
+            )
+        )
+        npc = npc_res.scalars().first()
+
+        obj_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == template.id,
+                WorldEntity.id == "OBJ_1",
+                WorldEntity.entity_type == "OBJECT",
+            )
+        )
+        obj = obj_res.scalars().first()
+
+        assert scene is not None
+        assert npc is not None
+        assert obj is not None
+
+        assert scene.image_url != stale_scene_url
+        assert npc.image_url != stale_npc_url
+        assert obj.image_url != stale_object_url
+
+        assert scene.image_url.startswith("/data/adventures/generated/")
+        assert npc.image_url.startswith("/data/adventures/generated/")
+        assert obj.image_url.startswith("/data/adventures/generated/")
+
+
 async def test_bidirectional_exits_are_persisted_as_single_row(setup_test_db):
     """Bidirectional exits must be stored once and not duplicated in reverse direction."""
     from tests.conftest import TestSessionLocal

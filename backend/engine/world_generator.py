@@ -1080,6 +1080,26 @@ class WorldGenerator:
             except ValueError:
                 return None
 
+        def _is_usable_image_url(url: Optional[str]) -> bool:
+            value = str(url or "").strip()
+            if not value:
+                return False
+
+            # Keep non-local URLs as-is; only /data URLs can be validated against local files.
+            if not value.startswith("/data/"):
+                return True
+
+            local_path = _public_data_url_to_local_path(value)
+            if not local_path:
+                return False
+
+            try:
+                safe_local_path = ensure_within_data_dir(local_path)
+            except ValueError:
+                return False
+
+            return os.path.isfile(safe_local_path)
+
         def _copy_source_asset_to_current_adventure(
             source_url: Optional[str],
             *,
@@ -1341,7 +1361,8 @@ class WorldGenerator:
             
             # Generate Adventure Cover if missing
             any_image_generation_enabled = bool(gen_scenes or gen_npc or gen_items or gen_protagonist_image)
-            if adventure and user and not adventure.image_url and any_image_generation_enabled:
+            existing_cover_url = adventure.image_url if _is_usable_image_url(adventure.image_url) else None
+            if adventure and user and not existing_cover_url and any_image_generation_enabled:
                 await _publish_generation_status_with_callback(
                     db,
                     adventure,
@@ -1484,6 +1505,8 @@ class WorldGenerator:
                 or _resolve_source_asset_image("protagonist", prot.get("source_asset_id"))
                 or prot.get("profile_image")
             )
+            if not _is_usable_image_url(image_url):
+                image_url = None
             if not image_url or image_url.startswith("assets/"): # If it's a relative path from manifest, it should have been in existing_images
                 if user and gen_protagonist_image:
                     await _publish_generation_status_with_callback(
@@ -1553,6 +1576,8 @@ class WorldGenerator:
                 or _resolve_source_asset_image("scene", s.get("source_asset_id"))
                 or s.get("image_url")
             )
+            if not _is_usable_image_url(image_url):
+                image_url = None
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_scenes:
                     await _publish_generation_status_with_callback(
@@ -1676,6 +1701,8 @@ class WorldGenerator:
                 or _resolve_source_asset_image("npc", n.get("source_asset_id"))
                 or n.get("image_url")
             )
+            if not _is_usable_image_url(image_url):
+                image_url = None
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_npc:
                     await _publish_generation_status_with_callback(
@@ -1905,6 +1932,8 @@ class WorldGenerator:
                 or _resolve_source_asset_image("object", o.get("source_asset_id"))
                 or o.get("image_url")
             )
+            if not _is_usable_image_url(image_url):
+                image_url = None
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_items:
                     await _publish_generation_status_with_callback(
