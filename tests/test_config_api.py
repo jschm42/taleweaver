@@ -450,6 +450,58 @@ async def test_settings_are_global_for_all_users(client: AsyncClient):
     assert b_settings.json()["llm_settings"]["small_model"] == "llama3.2"
 
 
+async def test_test_llm_connection_handles_authentication_errors_gracefully(client: AsyncClient, monkeypatch):
+    """/test-llm must return a user-safe error response for provider auth failures."""
+
+    class _FakeLLM:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def aexecute_simple_task(self, **kwargs):
+            raise Exception("litellm.AuthenticationError: Invalid Authentication")
+
+    monkeypatch.setattr(config_api, "GameMasterLLM", _FakeLLM)
+
+    resp = await client.post(
+        "/api/settings/test-llm",
+        json={
+            "provider": "kimi",
+            "model": "moonshot-v1-8k",
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "Authentication failed" in data["message"]
+
+
+async def test_test_llm_connection_handles_generic_errors_without_500(client: AsyncClient, monkeypatch):
+    """Generic runtime errors from LLM test endpoint should not bubble up as HTTP 500."""
+
+    class _FakeLLM:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def aexecute_simple_task(self, **kwargs):
+            raise RuntimeError("upstream timeout")
+
+    monkeypatch.setattr(config_api, "GameMasterLLM", _FakeLLM)
+
+    resp = await client.post(
+        "/api/settings/test-llm",
+        json={
+            "provider": "openai",
+            "model": "gpt-5.3",
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "error"
+    assert "Connection test failed" in data["message"]
+
+
 
 
 

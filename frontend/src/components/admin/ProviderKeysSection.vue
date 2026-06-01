@@ -36,6 +36,7 @@ const handleSave = () => {
           <select v-model="keyForm.provider" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none">
             <option value="openai">OpenAI</option>
             <option value="google">Google Gemini</option>
+            <option value="kimi">Kimi (Moonshot)</option>
             <option value="elevenlabs">ElevenLabs</option>
             <option value="openrouter">OpenRouter</option>
             <option value="deepseek">DeepSeek</option>

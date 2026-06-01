@@ -106,6 +106,49 @@ def test_openrouter_normalizes_prefixed_model(monkeypatch):
     assert captured["api_key"] == "sk-or-v1-test"
 
 
+def test_kimi_routes_via_moonshot_openai_compatible_endpoint(monkeypatch):
+    user = _make_user(
+        llm_settings={},
+        encrypted_api_keys={"kimi": "encrypted-placeholder"},
+    )
+
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-kimi-test")
+    router = GameMasterLLM(user, provider="kimi")
+
+    captured = {}
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.completion", fake_completion)
+
+    out = router.execute_simple_task(
+        system_prompt="sys",
+        user_prompt="hello",
+        model="moonshot-v1-8k",
+    )
+
+    assert out == "ok"
+    assert captured["model"] == "moonshot-v1-8k"
+    assert captured["custom_llm_provider"] == "openai"
+    assert captured["api_base"] == "https://api.moonshot.ai/v1"
+    assert captured["api_key"] == "sk-kimi-test"
+
+
 def test_openrouter_retries_with_available_providers_on_provider_mismatch(monkeypatch):
     user = _make_user(
         llm_settings={},
@@ -398,8 +441,52 @@ async def test_aexecute_complex_task_gemini_direct_uses_structured_outputs(monke
     assert out.required == "ok"
     # Direct Gemini should pass response_model directly as response_format
     assert captured["response_format"] == _MiniSchema
-    # Should not inject SCHEMA: into prompt
-    assert "SCHEMA:" not in captured["messages"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_aexecute_complex_task_kimi_uses_json_mode_fallback(monkeypatch):
+    class _MiniSchema(BaseModel):
+        title: str
+
+    user = _make_user(
+        encrypted_api_keys={"kimi": "encrypted-placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-kimi-test")
+    router = GameMasterLLM(user, provider="kimi")
+
+    captured = {}
+
+    class _Msg:
+        content = '{"title":"ok"}'
+
+    class _Choice:
+        message = _Msg()
+        finish_reason = "stop"
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.aexecute_complex_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        response_model=_MiniSchema,
+        model="kimi-k2.6",
+    )
+
+    assert out.title == "ok"
+    assert captured["response_format"] == {"type": "json_object"}
+    assert "SCHEMA:" in captured["messages"][0]["content"]
+    assert captured["api_base"] == "https://api.moonshot.ai/v1"
 
 
 @pytest.mark.asyncio

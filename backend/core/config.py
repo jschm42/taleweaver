@@ -111,6 +111,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
     DEEPSEEK_API_KEY: Optional[str] = None
+    KIMI_API_KEY: Optional[str] = None
+    KIMI_API_BASE: str = "https://api.moonshot.ai/v1"
     MISTRAL_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     BLACK_FOREST_LABS_API_KEY: Optional[str] = None
@@ -125,6 +127,7 @@ class Settings(BaseSettings):
         if p == "anthropic": return self.ANTHROPIC_API_KEY
         if p in ["google", "gemini"]: return self.GOOGLE_API_KEY or self.GEMINI_API_KEY
         if p == "deepseek": return self.DEEPSEEK_API_KEY
+        if p == "kimi": return self.KIMI_API_KEY
         if p == "openrouter": return self.OPENROUTER_API_KEY
         if p == "mistral": return self.MISTRAL_API_KEY
         if p == "groq": return self.GROQ_API_KEY

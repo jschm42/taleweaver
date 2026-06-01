@@ -1014,7 +1014,27 @@ async def test_llm_connection(
         end_time = time.perf_counter()
         latency = round(end_time - start_time, 2)
         return {"status": "success", "message": response, "response_time": latency}
-    except (ValueError, RuntimeError, TypeError) as exc:
+    except Exception as exc:
+        err_text = str(exc or "").lower()
+        auth_tokens = (
+            "invalid authentication",
+            "authenticationerror",
+            "invalid_api_key",
+            "incorrect api key",
+            "unauthorized",
+            "401",
+        )
+        if any(token in err_text for token in auth_tokens):
+            logger.warning(
+                "LLM connection test authentication failed for provider '%s': %s",
+                payload.provider,
+                exc,
+            )
+            return {
+                "status": "error",
+                "message": f"Authentication failed for provider '{payload.provider}'. Please verify the API key.",
+            }
+
         return _route_error_response(
             "LLM connection test",
             "Connection test failed. Check provider settings and server logs.",

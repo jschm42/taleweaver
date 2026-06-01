@@ -78,6 +78,37 @@ const selectedToneObject = computed(() => {
   return tones.value.find(t => t.id === form.value.selected_tone_id) || null
 })
 
+const resolveStyleIdFromAdventure = (adventure: any): string => {
+  const rawStyles = Array.isArray(adventure?.selected_image_styles) ? adventure.selected_image_styles : []
+  const firstStyle = rawStyles[0]
+  if (!firstStyle) return ''
+  if (typeof firstStyle === 'string') return firstStyle
+  if (typeof firstStyle === 'object') {
+    return String(firstStyle.id || firstStyle.name || '').trim()
+  }
+  return ''
+}
+
+const resolveToneIdFromAdventure = (adventure: any): string => {
+  const rawTone = adventure?.selected_tone
+  if (!rawTone) return ''
+  if (typeof rawTone === 'string') {
+    const trimmed = rawTone.trim()
+    if (!trimmed) return ''
+    if (!trimmed.startsWith('{')) return trimmed
+    try {
+      const parsed = JSON.parse(trimmed)
+      return String(parsed?.id || parsed?.name || '').trim()
+    } catch {
+      return trimmed
+    }
+  }
+  if (typeof rawTone === 'object') {
+    return String(rawTone.id || rawTone.name || '').trim()
+  }
+  return ''
+}
+
 async function loadCatalogs() {
   isLoadingCatalogs.value = true
   try {
@@ -191,6 +222,16 @@ async function loadCoverSource() {
     }
     if (!form.value.storyIdea.trim()) {
       form.value.storyIdea = source.original_prompt || source.plot || source.teaser || ''
+    }
+
+    const sourceStyleId = resolveStyleIdFromAdventure(source)
+    if (sourceStyleId) {
+      form.value.selected_style_id = sourceStyleId
+    }
+
+    const sourceToneId = resolveToneIdFromAdventure(source)
+    if (sourceToneId) {
+      form.value.selected_tone_id = sourceToneId
     }
   } catch (error: any) {
     sourceAdventure.value = null

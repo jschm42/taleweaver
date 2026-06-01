@@ -283,6 +283,7 @@ class GameMasterLLM:
                 settings.INTELLIGENCE_TIMEOUT,
                 default=settings.INTELLIGENCE_TIMEOUT,
             )
+        self.kimi_api_base = (getattr(settings, "KIMI_API_BASE", "https://api.moonshot.ai/v1") or "https://api.moonshot.ai/v1").rstrip("/")
         
         # Pull granular settings with fallbacks to global/legacy names.
         # Thinking must stay disabled unless explicitly configured truthy.
@@ -363,6 +364,12 @@ class GameMasterLLM:
             if normalized.startswith("anthropic/"):
                 return normalized
             return f"anthropic/{normalized}"
+
+        if self.provider == "kimi":
+            # Kimi (Moonshot) uses an OpenAI-compatible endpoint and expects raw model ids.
+            if normalized.lower().startswith("kimi/"):
+                return normalized.split("/", 1)[1].strip()
+            return normalized
 
         if "/" in normalized:
             return normalized.split("/", 1)[1].strip()
@@ -465,6 +472,9 @@ class GameMasterLLM:
             elif self.provider == "deepseek":
                 kwargs["custom_llm_provider"] = "deepseek"
                 kwargs["api_base"] = "https://api.deepseek.com"
+            elif self.provider == "kimi":
+                kwargs["custom_llm_provider"] = "openai"
+                kwargs["api_base"] = self.kimi_api_base
         
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
@@ -547,6 +557,9 @@ class GameMasterLLM:
             elif self.provider == "deepseek":
                 kwargs["custom_llm_provider"] = "deepseek"
                 kwargs["api_base"] = "https://api.deepseek.com"
+            elif self.provider == "kimi":
+                kwargs["custom_llm_provider"] = "openai"
+                kwargs["api_base"] = self.kimi_api_base
         
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -629,6 +642,9 @@ class GameMasterLLM:
             elif self.provider == "deepseek":
                 kwargs["custom_llm_provider"] = "deepseek"
                 kwargs["api_base"] = "https://api.deepseek.com"
+            elif self.provider == "kimi":
+                kwargs["custom_llm_provider"] = "openai"
+                kwargs["api_base"] = self.kimi_api_base
         
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -674,13 +690,14 @@ class GameMasterLLM:
         is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
         is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
         is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
+        is_kimi = "kimi" in normalized_model.lower() or "moonshot" in normalized_model.lower() or self.provider == "kimi"
         is_openrouter = self.provider == "openrouter" or (self.api_key and self.api_key.startswith("sk-or-v1"))
 
         # Many non-OpenAI providers (including DeepSeek on some platforms) do not support 
         # complex Pydantic models in response_format (structured outputs).
         # We fall back to standard JSON mode with prompt-injected schemas for these.
         # Direct Gemini (not via OpenRouter) supports response_schema perfectly and does not need fallback.
-        use_json_mode_fallback = is_anthropic or is_deepseek or is_openrouter
+        use_json_mode_fallback = is_anthropic or is_deepseek or is_kimi or is_openrouter
 
         if use_json_mode_fallback:
             # Inject schema into prompt since we are bypassing strict tool enforcement
@@ -720,6 +737,9 @@ class GameMasterLLM:
             elif self.provider == "deepseek":
                 kwargs["custom_llm_provider"] = "deepseek"
                 kwargs["api_base"] = "https://api.deepseek.com"
+            elif self.provider == "kimi":
+                kwargs["custom_llm_provider"] = "openai"
+                kwargs["api_base"] = self.kimi_api_base
 
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
@@ -829,10 +849,11 @@ class GameMasterLLM:
         is_gemini = "gemini" in normalized_model.lower() or self.provider == "google"
         is_anthropic = "claude" in normalized_model.lower() or self.provider == "anthropic"
         is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
+        is_kimi = "kimi" in normalized_model.lower() or "moonshot" in normalized_model.lower() or self.provider == "kimi"
         is_openrouter = self.provider == "openrouter" or (self.api_key and self.api_key.startswith("sk-or-v1"))
 
         # Direct Gemini (not via OpenRouter) supports response_schema perfectly and does not need fallback.
-        use_json_mode_fallback = is_anthropic or is_deepseek or is_openrouter
+        use_json_mode_fallback = is_anthropic or is_deepseek or is_kimi or is_openrouter
 
         if use_json_mode_fallback:
             # Inject schema into prompt since we are bypassing strict enforcement
@@ -874,6 +895,9 @@ class GameMasterLLM:
             elif self.provider == "deepseek":
                 kwargs["custom_llm_provider"] = "deepseek"
                 kwargs["api_base"] = "https://api.deepseek.com"
+            elif self.provider == "kimi":
+                kwargs["custom_llm_provider"] = "openai"
+                kwargs["api_base"] = self.kimi_api_base
 
         # Auto-detect OpenRouter keys or provider
         if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):

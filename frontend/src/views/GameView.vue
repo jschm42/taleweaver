@@ -22,7 +22,6 @@ import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
-import ContainerCodeModal from '@/components/game/ContainerCodeModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
@@ -69,7 +68,6 @@ const checkpoints = ref<SessionCheckpoint[]>([])
 const pendingRestoreCheckpoint = ref<SessionCheckpoint | null>(null)
 const showContainerModal = ref(false)
 const containerBusy = ref(false)
-const showContainerCodeModal = ref(false)
 const containerCodeBusy = ref(false)
 const showTextLogModal = ref(false)
 const activeTextLog = ref<{
@@ -85,6 +83,7 @@ const activeContainer = ref<{
   items: any[]
 } | null>(null)
 const activeCodeContainer = ref<{ id: string; name: string; source: 'scene' | 'inventory' } | null>(null)
+const awaitingContainerCodeInput = ref(false)
 const dialogPanel = ref<any>(null)
 
 const saveSessionNote = async (note: string) => {
@@ -379,7 +378,11 @@ const openContainerFromEntity = (entity: any): boolean => {
         name: String(entity.name || entity.id || 'Container'),
         source: 'scene',
       }
-      showContainerCodeModal.value = true
+      awaitingContainerCodeInput.value = true
+      const promptMessage = `🔐 ${activeCodeContainer.value.name} is locked. Enter the code in chat (or use /cancel to abort).`
+      addNotification(promptMessage, 'info')
+      emitSystemMessage(promptMessage)
+      dialogPanel.value?.setInputText('/code ')
       return false
     }
     addNotification(`${entity?.name || 'Container'} is locked.`, 'info')
@@ -405,7 +408,11 @@ const openContainerFromInventoryItem = (item: any): boolean => {
         name: String(item.name || item.id || 'Container'),
         source: 'inventory',
       }
-      showContainerCodeModal.value = true
+      awaitingContainerCodeInput.value = true
+      const promptMessage = `🔐 ${activeCodeContainer.value.name} is locked. Enter the code in chat (or use /cancel to abort).`
+      addNotification(promptMessage, 'info')
+      emitSystemMessage(promptMessage)
+      dialogPanel.value?.setInputText('/code ')
       return false
     }
     addNotification(`${item?.name || 'Container'} is locked.`, 'info')
@@ -488,8 +495,8 @@ const closeContainerModal = () => {
 
 const containerCodeErrorMessage = ref('')
 
-const closeContainerCodeModal = () => {
-  showContainerCodeModal.value = false
+const clearContainerCodeState = () => {
+  awaitingContainerCodeInput.value = false
   containerCodeErrorMessage.value = ''
   activeCodeContainer.value = null
 }
@@ -506,7 +513,7 @@ const submitContainerCode = async (code: string) => {
     markContainerUnlockedLocally(containerId)
     addNotification(`${activeCodeContainer.value.name} unlocked.`, 'success')
     const source = activeCodeContainer.value.source
-    closeContainerCodeModal()
+    clearContainerCodeState()
 
     if (source === 'scene') {
       const container = (items.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
@@ -520,6 +527,41 @@ const submitContainerCode = async (code: string) => {
   } finally {
     containerCodeBusy.value = false
   }
+}
+
+const handlePlayerInput = async (content: string) => {
+  const trimmed = String(content || '').trim()
+
+  if (awaitingContainerCodeInput.value && activeCodeContainer.value) {
+    if (!trimmed) return
+
+    if (trimmed.toLowerCase() === '/cancel') {
+      const containerName = activeCodeContainer.value.name
+      clearContainerCodeState()
+      const msg = `Code input cancelled for ${containerName}.`
+      addNotification(msg, 'info')
+      emitSystemMessage(msg)
+      return
+    }
+
+    let codeCandidate = ''
+    if (trimmed.toLowerCase().startsWith('/code ')) {
+      codeCandidate = trimmed.slice(6).trim()
+    } else if (!trimmed.startsWith('/')) {
+      codeCandidate = trimmed
+    }
+
+    if (!codeCandidate) {
+      // Keep gameplay controls responsive while the unlock prompt is pending.
+      await handlePlayerInputBase(content)
+      return
+    }
+
+    await submitContainerCode(codeCandidate)
+    return
+  }
+
+  await handlePlayerInputBase(content)
 }
 
 const runContainerAction = async (commandBuilder: (containerIdOrName: string) => string) => {
@@ -648,7 +690,7 @@ const {
   openDebugInspector,
   revealWalkthrough,
   buyHint,
-  handlePlayerInput,
+  handlePlayerInput: handlePlayerInputBase,
 } = useGameCommandFlow({
   routeId: computed(() => props.id),
   sheet,
@@ -1151,15 +1193,6 @@ watch(
       @drop-to-scene="handleContainerDropToScene"
       @item-hover="(item, event) => handleHover(item, event)"
       @item-leave="hoveredEntity = null"
-    />
-
-    <ContainerCodeModal
-      :open="showContainerCodeModal"
-      :title="activeCodeContainer?.name || 'Container'"
-      :busy="containerCodeBusy"
-      :error-message="containerCodeErrorMessage"
-      @close="closeContainerCodeModal"
-      @submit="submitContainerCode"
     />
 
     <TextLogModal
