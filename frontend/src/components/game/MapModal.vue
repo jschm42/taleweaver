@@ -121,7 +121,7 @@ function updateLayout() {
   }
 
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'LR', nodesep: 80, edgesep: 40, ranksep: 140 })
+  g.setGraph({ rankdir: 'LR', nodesep: 64, edgesep: 40, ranksep: 110 })
   g.setDefaultEdgeLabel(() => ({}))
 
   const visitedIdsList = Object.keys(props.mapData.nodes).sort()
