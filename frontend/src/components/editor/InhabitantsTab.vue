@@ -33,85 +33,6 @@ function buildVisualImageUrl(imagePath?: string | null) {
 
 <template>
   <div class="space-y-8 animate-page-in">
-    <!-- Protagonist -->
-    <section v-if="debugData.protagonist" class="space-y-4">
-      <div class="flex items-center justify-between">
-        <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">The Protagonist</h3>
-        <button
-          @click="emit('open-text-edit', 'protagonist', debugData.protagonist.id, debugData.protagonist.name, debugData.protagonist.description, '', debugData.protagonist.hp, debugData.protagonist.stamina, debugData.protagonist.mana, debugData.protagonist.goal, debugData.protagonist.character)"
-          class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-blue-500/20 border border-white/5 hover:border-blue-500/30 text-xs font-bold text-blue-400 hover:text-blue-300 uppercase tracking-widest transition-all"
-        >
-          <i class="ra ra-quill-pen"></i> Edit Character
-        </button>
-      </div>
-
-      <div class="bg-slate-900/60 border border-white/5 rounded-3xl p-6 flex gap-6 backdrop-blur-md shadow-xl">
-        <div class="shrink-0 relative group">
-          <div @mouseenter="emit('handle-hover', { name: debugData.protagonist.name, description: debugData.protagonist.description, image_url: debugData.protagonist.profile_image, type: 'PROTAGONIST', stats: { hp: debugData.protagonist.hp, stamina: debugData.protagonist.stamina, mana: debugData.protagonist.mana } }, $event)" @mouseleave="emit('clear-hover')" class="w-24 h-24 rounded-2xl overflow-hidden bg-slate-800 border border-white/10 shadow-lg relative">
-            <img v-if="debugData.protagonist.profile_image" :src="buildVisualImageUrl(debugData.protagonist.profile_image)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-            <div v-else class="absolute inset-0 flex items-center justify-center text-slate-600">
-              <i class="ra ra-person text-4xl"></i>
-            </div>
-            <div v-if="isQuickGenerating['protagonist_' + debugData.protagonist.id]" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-10">
-              <i class="ra ra-cycle animate-spin text-2xl text-emerald-500"></i>
-            </div>
-          </div>
-          <div class="absolute top-1.5 right-1.5 z-40">
-            <button @click="emit('toggle-menu', debugData.protagonist.id, $event)" class="w-6 h-6 rounded-full bg-black/70 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg">
-              <div class="flex flex-col gap-[3px]">
-                <div class="w-[3px] h-[3px] bg-white rounded-full"></div>
-                <div class="w-[3px] h-[3px] bg-white rounded-full"></div>
-                <div class="w-[3px] h-[3px] bg-white rounded-full"></div>
-              </div>
-            </button>
-            <div v-if="activeMenuId === debugData.protagonist.id" class="absolute right-0 mt-1.5 w-52 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
-              <button @click="emit('quick-regen', 'protagonist', debugData.protagonist.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate Portrait</button>
-              <button @click="emit('open-regen-dialog', 'protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
-              <button @click="emit('open-upload-picker', 'protagonist', debugData.protagonist.id, debugData.protagonist.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Portrait</button>
-              <button v-if="debugData.protagonist.profile_image" @click="emit('download-asset', debugData.protagonist.profile_image, `${debugData.protagonist.name || 'protagonist'}_portrait`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Portrait</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex-1 min-w-0 space-y-4">
-          <div>
-            <h4 class="text-xl font-black text-white tracking-tight">{{ debugData.protagonist.name }}</h4>
-            <p class="text-xs font-bold text-emerald-400/70 uppercase tracking-widest mt-0.5">{{ debugData.protagonist.role || 'Protagonist' }}</p>
-          </div>
-
-          <div v-if="ruleEnforcementMode !== 'chat'" class="flex gap-3 flex-wrap">
-            <div class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400">
-              <i class="ra ra-heart text-[11px]"></i> {{ debugData.protagonist.hp ?? '—' }} HP
-            </div>
-            <div class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-400">
-              <i class="ra ra-muscle-up text-[11px]"></i> {{ debugData.protagonist.stamina ?? '—' }} STM
-            </div>
-            <div v-if="ruleEnforcementMode === 'rpg'" class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-bold text-blue-400">
-              <i class="ra ra-crystal-ball text-[11px]"></i> {{ debugData.protagonist.mana ?? '—' }} MAN
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 gap-3">
-            <div v-if="debugData.protagonist.description" class="space-y-1">
-              <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Bio</span>
-              <p class="text-xs text-slate-400 leading-relaxed line-clamp-2">{{ debugData.protagonist.description }}</p>
-            </div>
-            <div v-if="debugData.protagonist.goal || debugData.protagonist.character" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div v-if="debugData.protagonist.goal" class="space-y-1">
-                <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Motivation</span>
-                <p class="text-xs text-slate-400 leading-relaxed line-clamp-2">{{ debugData.protagonist.goal }}</p>
-              </div>
-              <div v-if="debugData.protagonist.character" class="space-y-1">
-                <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Traits</span>
-                <p class="text-xs text-slate-400 leading-relaxed line-clamp-2">{{ debugData.protagonist.character }}</p>
-              </div>
-            </div>
-            <p v-if="!debugData.protagonist.description && !debugData.protagonist.goal && !debugData.protagonist.character" class="text-xs italic text-slate-600">No character details yet. Click "Edit Character" to add them.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- NPCs -->
     <section v-if="editorNpcs.length" class="space-y-6">
       <div class="flex items-center justify-between">
@@ -126,7 +47,16 @@ function buildVisualImageUrl(imagePath?: string | null) {
         </div>
       </div>
       <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-        <div v-for="npc in editorNpcs" :key="'npc_' + npc.id" @mouseenter="emit('handle-hover', { id: npc.id, name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats, inventory: npc.inventory }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl shadow-lg transition-all overflow-visible">
+        <div
+          v-for="npc in editorNpcs"
+          :key="'npc_' + npc.id"
+          @mouseenter="emit('handle-hover', { id: npc.id, name: npc.name, description: npc.description, image_url: npc.image_url, type: 'NPC', stats: npc.stats, inventory: npc.inventory }, $event)"
+          @mouseleave="emit('clear-hover')"
+          :class="[
+            'relative group aspect-[3/4] bg-slate-900 border border-white/5 rounded-2xl shadow-lg transition-all overflow-visible',
+            activeMenuId === npc.id ? 'z-[180]' : 'z-0',
+          ]"
+        >
           <div class="absolute inset-0 rounded-2xl overflow-hidden">
             <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
@@ -166,7 +96,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
                 <div class="w-1 h-1 bg-white rounded-full group-hover/dots:bg-white"></div>
               </div>
             </button>
-            <div v-if="activeMenuId === npc.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+            <div v-if="activeMenuId === npc.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[200] animate-fade-in ring-1 ring-white/5">
               <button @click="emit('quick-regen', 'npc', npc.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
               <button @click="emit('open-regen-dialog', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
               <button @click="emit('open-upload-picker', 'npc', npc.id, npc.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>

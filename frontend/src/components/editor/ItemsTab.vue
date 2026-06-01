@@ -63,7 +63,16 @@ function buildVisualImageUrl(imagePath?: string | null) {
         </div>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-        <div v-for="obj in editorTextLogs" :key="'txt_' + obj.id" @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: (obj.metadata_json?.text_log_content || obj.description), image_url: obj.image_url, type: 'TEXT_LOG', stats: {} }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-square bg-slate-900 border border-cyan-500/20 rounded-xl shadow-lg transition-all overflow-visible">
+        <div
+          v-for="obj in editorTextLogs"
+          :key="'txt_' + obj.id"
+          @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: (obj.metadata_json?.text_log_content || obj.description), image_url: obj.image_url, type: 'TEXT_LOG', stats: {} }, $event)"
+          @mouseleave="emit('clear-hover')"
+          :class="[
+            'relative group aspect-square bg-slate-900 border border-cyan-500/20 rounded-xl shadow-lg transition-all overflow-visible',
+            activeMenuId === obj.id ? 'z-[180]' : 'z-0',
+          ]"
+        >
           <div class="absolute inset-0 rounded-xl overflow-hidden">
             <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
@@ -85,7 +94,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
                 <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
               </div>
             </button>
-            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[200] animate-fade-in ring-1 ring-white/5">
               <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
               <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
               <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
@@ -111,7 +120,16 @@ function buildVisualImageUrl(imagePath?: string | null) {
         </div>
       </div>
       <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-        <div v-for="obj in editorContainers" :key="'con_' + obj.id" @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-square bg-slate-900 border border-amber-500/20 rounded-xl shadow-lg transition-all overflow-visible">
+        <div
+          v-for="obj in editorContainers"
+          :key="'con_' + obj.id"
+          @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)"
+          @mouseleave="emit('clear-hover')"
+          :class="[
+            'relative group aspect-square bg-slate-900 border border-amber-500/20 rounded-xl shadow-lg transition-all overflow-visible',
+            activeMenuId === obj.id ? 'z-[180]' : 'z-0',
+          ]"
+        >
           <div class="absolute inset-0 rounded-xl overflow-hidden">
             <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
@@ -132,7 +150,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
                 <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
               </div>
             </button>
-            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[200] animate-fade-in ring-1 ring-white/5">
               <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
               <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
               <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
@@ -158,7 +176,16 @@ function buildVisualImageUrl(imagePath?: string | null) {
         </div>
       </div>
       <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-        <div v-for="obj in editorSwitches" :key="'sw_' + obj.id" @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-square bg-slate-900 border border-lime-500/20 rounded-xl shadow-lg transition-all overflow-visible">
+        <div
+          v-for="obj in editorSwitches"
+          :key="'sw_' + obj.id"
+          @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)"
+          @mouseleave="emit('clear-hover')"
+          :class="[
+            'relative group aspect-square bg-slate-900 border border-lime-500/20 rounded-xl shadow-lg transition-all overflow-visible',
+            activeMenuId === obj.id ? 'z-[180]' : 'z-0',
+          ]"
+        >
           <div class="absolute inset-0 rounded-xl overflow-hidden">
             <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
@@ -181,7 +208,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
                 <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
               </div>
             </button>
-            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[200] animate-fade-in ring-1 ring-white/5">
               <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
               <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
               <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
@@ -207,7 +234,16 @@ function buildVisualImageUrl(imagePath?: string | null) {
         </div>
       </div>
       <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-        <div v-for="obj in editorObjects" :key="'obj_' + obj.id" @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-square bg-slate-900 border border-white/5 rounded-xl shadow-lg transition-all overflow-visible">
+        <div
+          v-for="obj in editorObjects"
+          :key="'obj_' + obj.id"
+          @mouseenter="emit('handle-hover', { id: obj.id, name: obj.name, description: obj.description, image_url: obj.image_url, type: 'ITEM', stats: obj.stats }, $event)"
+          @mouseleave="emit('clear-hover')"
+          :class="[
+            'relative group aspect-square bg-slate-900 border border-white/5 rounded-xl shadow-lg transition-all overflow-visible',
+            activeMenuId === obj.id ? 'z-[180]' : 'z-0',
+          ]"
+        >
           <div class="absolute inset-0 rounded-xl overflow-hidden">
             <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
@@ -231,7 +267,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
                 <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
               </div>
             </button>
-            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+            <div v-if="activeMenuId === obj.id" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[200] animate-fade-in ring-1 ring-white/5">
               <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
               <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
               <button @click="emit('open-upload-picker', 'object', obj.id, obj.name)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>

@@ -110,7 +110,10 @@ function isStartScene(scene: any): boolean {
         @click="emit('open-scene', scene.id)"
         @mouseenter="emit('handle-hover', { id: scene.id, name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)"
         @mouseleave="emit('clear-hover')"
-        class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl shadow-xl transition-all overflow-visible cursor-pointer"
+        :class="[
+          'relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl shadow-xl transition-all overflow-visible cursor-pointer',
+          activeMenuId === scene.id ? 'z-[180]' : 'z-0',
+        ]"
       >
         <div v-if="isStartScene(scene)" class="absolute top-3 left-3 z-40 inline-flex items-center gap-1 rounded-full bg-amber-400/90 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow-lg">
           <span>★</span>
@@ -139,7 +142,7 @@ function isStartScene(scene: any): boolean {
               <div class="w-1 h-1 bg-white rounded-full"></div>
             </div>
           </button>
-          <div v-if="activeMenuId === scene.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+          <div v-if="activeMenuId === scene.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[200] animate-fade-in ring-1 ring-white/5">
             <button
               @click.stop="emit('set-start-scene', scene.id)"
               :disabled="isStartScene(scene) || isSettingStartScene"

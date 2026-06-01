@@ -12,6 +12,7 @@ import { notificationService } from '@/services/notificationService'
 // Components
 import EditorHeader from '@/components/editor/EditorHeader.vue'
 import WorldTab from '@/components/editor/WorldTab.vue'
+import ProtagonistTab from '@/components/editor/ProtagonistTab.vue'
 import ItemsTab from '@/components/editor/ItemsTab.vue'
 import VisualsTab from '@/components/editor/VisualsTab.vue'
 import ToneTab from '@/components/editor/ToneTab.vue'
@@ -122,7 +123,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'world' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('world')
+const activeTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('world')
 
 const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
 const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
@@ -133,6 +134,14 @@ const isSuggestingPrompt = ref(false)
 const useAdvancedModel = ref(false)
 const showRegenerateAllConfirmDialog = ref(false)
 const pendingBatchRegeneration = ref<{ kind: string; missingOnly: boolean } | null>(null)
+type PendingDeleteTarget = {
+  kind: 'scene' | 'exit' | 'entity'
+  id: string
+  title: string
+  description: string
+}
+const showDeleteConfirmDialog = ref(false)
+const pendingDeleteTarget = ref<PendingDeleteTarget | null>(null)
 const isUploading = ref(false)
 const isSettingStartScene = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
@@ -173,6 +182,7 @@ const availableVoices = ref<Array<{ name: string; gender?: string; description?:
 
 const editorTabs = [
   { key: 'world', label: 'World' },
+  { key: 'protagonist', label: 'Protagonist' },
   { key: 'map', label: 'Map' },
   { key: 'scenes', label: 'Szenen' },
   { key: 'inhabitants', label: 'Inhabitants' },
@@ -1631,54 +1641,77 @@ async function createExitFromRouteScene() {
   }
 }
 
-async function deleteRouteScene() {
+function requestDeleteRouteScene() {
   const sceneId = String(activeMapSceneId.value || '').trim()
   if (!sceneId) return
-  const confirmed = window.confirm(`Delete scene ${sceneId}? This also removes linked exits and entities in that scene.`)
-  if (!confirmed) return
-  isDeletingRouteAsset.value = true
-  try {
-    await entityService.deleteScene(props.adventureId, sceneId)
-    await fetchDebugInfo()
-    addNotification('Scene deleted.', 'success')
-    router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: route.query })
-  } catch (error: any) {
-    addNotification(error?.message || 'Failed to delete scene.', 'error')
-  } finally {
-    isDeletingRouteAsset.value = false
+  pendingDeleteTarget.value = {
+    kind: 'scene',
+    id: sceneId,
+    title: `Delete Scene ${sceneId}?`,
+    description: 'This also removes linked exits and entities in that scene.',
   }
+  showDeleteConfirmDialog.value = true
 }
 
-async function deleteRouteExit(exitIdInput?: string) {
+function requestDeleteRouteExit(exitIdInput?: string) {
   const exitId = String(exitIdInput || activeMapExitId.value || '').trim()
   if (!exitId) return
-  const confirmed = window.confirm(`Delete exit ${exitId}?`)
-  if (!confirmed) return
-  isDeletingRouteAsset.value = true
-  try {
-    await entityService.deleteExit(props.adventureId, exitId)
-    await fetchDebugInfo()
-    addNotification('Exit deleted.', 'success')
-    router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: route.query })
-  } catch (error: any) {
-    addNotification(error?.message || 'Failed to delete exit.', 'error')
-  } finally {
-    isDeletingRouteAsset.value = false
+  pendingDeleteTarget.value = {
+    kind: 'exit',
+    id: exitId,
+    title: `Delete Exit ${exitId}?`,
+    description: 'This action cannot be undone.',
   }
+  showDeleteConfirmDialog.value = true
 }
 
-async function deleteRouteEntity(entityId: string) {
+function requestDeleteRouteEntity(entityId: string) {
   const normalized = String(entityId || '').trim()
   if (!normalized) return
-  const confirmed = window.confirm(`Delete entity ${normalized}?`)
-  if (!confirmed) return
+  pendingDeleteTarget.value = {
+    kind: 'entity',
+    id: normalized,
+    title: `Delete Entity ${normalized}?`,
+    description: 'This action cannot be undone.',
+  }
+  showDeleteConfirmDialog.value = true
+}
+
+function closeDeleteConfirmDialog() {
+  showDeleteConfirmDialog.value = false
+  pendingDeleteTarget.value = null
+}
+
+async function confirmDeleteRouteAsset() {
+  const target = pendingDeleteTarget.value
+  if (!target) return
+
   isDeletingRouteAsset.value = true
   try {
-    await entityService.deleteEntity(props.adventureId, normalized)
-    await fetchDebugInfo()
-    addNotification('Entity deleted.', 'success')
+    if (target.kind === 'scene') {
+      await entityService.deleteScene(props.adventureId, target.id)
+      await fetchDebugInfo()
+      addNotification('Scene deleted.', 'success')
+      router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: route.query })
+    } else if (target.kind === 'exit') {
+      await entityService.deleteExit(props.adventureId, target.id)
+      await fetchDebugInfo()
+      addNotification('Exit deleted.', 'success')
+      router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: route.query })
+    } else {
+      await entityService.deleteEntity(props.adventureId, target.id)
+      await fetchDebugInfo()
+      addNotification('Entity deleted.', 'success')
+    }
+    closeDeleteConfirmDialog()
   } catch (error: any) {
-    addNotification(error?.message || 'Failed to delete entity.', 'error')
+    if (target.kind === 'scene') {
+      addNotification(error?.message || 'Failed to delete scene.', 'error')
+    } else if (target.kind === 'exit') {
+      addNotification(error?.message || 'Failed to delete exit.', 'error')
+    } else {
+      addNotification(error?.message || 'Failed to delete entity.', 'error')
+    }
   } finally {
     isDeletingRouteAsset.value = false
   }
@@ -1824,6 +1857,21 @@ watch(
               @save-changes="saveChanges"
             />
 
+            <ProtagonistTab
+              v-if="activeTab === 'protagonist'"
+              :debug-data="debugData"
+              :is-quick-generating="isQuickGenerating"
+              :active-menu-id="activeMenuId"
+              :visuals-cache-version="visualsCacheVersion"
+              :rule-enforcement-mode="form.rule_enforcement_mode"
+              @quick-regen="quickRegenerateVisual"
+              @open-regen-dialog="openRegenerateDialog"
+              @open-upload-picker="openUploadPicker"
+              @download-asset="downloadVisualAsset"
+              @open-text-edit="openTextEdit"
+              @toggle-menu="toggleMenu"
+            />
+
             <ItemsTab 
               v-if="activeTab === 'items'"
               :editor-objects="editorObjects"
@@ -1932,7 +1980,7 @@ watch(
                   <button
                     class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
                     :disabled="isDeletingRouteAsset"
-                    @click="deleteRouteScene"
+                    @click="requestDeleteRouteScene"
                   >
                     Delete Scene
                   </button>
@@ -1974,7 +2022,14 @@ watch(
                     </div>
                   </div>
                   <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                    <article v-for="npc in filteredRouteSceneNpcs" :key="npc.id" class="relative group aspect-square bg-slate-900 border border-white/10 rounded-xl shadow-lg overflow-visible hover:z-30">
+                    <article
+                      v-for="npc in filteredRouteSceneNpcs"
+                      :key="npc.id"
+                      :class="[
+                        'relative group aspect-square bg-slate-900 border border-white/10 rounded-xl shadow-lg overflow-visible',
+                        activeMenuId === `scene-npc-${npc.id}` ? 'z-[180]' : 'z-0 hover:z-30',
+                      ]"
+                    >
                       <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
                         <i class="ra ra-player text-3xl"></i>
@@ -2006,7 +2061,7 @@ watch(
                           <button @click="openUploadPicker('npc', npc.id, npc.name || npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
                           <button v-if="npc.image_url" @click="downloadVisualAsset(npc.image_url, `${npc.name || 'npc'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                           <button @click="editRouteEntity('npc', npc); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="deleteRouteEntity(npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="requestDeleteRouteEntity(npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2028,7 +2083,14 @@ watch(
                     </div>
                   </div>
                   <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                    <article v-for="obj in filteredRouteSceneItems" :key="obj.id" class="relative group aspect-square bg-slate-900 border border-white/10 rounded-xl shadow-lg overflow-visible hover:z-30">
+                    <article
+                      v-for="obj in filteredRouteSceneItems"
+                      :key="obj.id"
+                      :class="[
+                        'relative group aspect-square bg-slate-900 border border-white/10 rounded-xl shadow-lg overflow-visible',
+                        activeMenuId === `scene-item-${obj.id}` ? 'z-[180]' : 'z-0 hover:z-30',
+                      ]"
+                    >
                       <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
                         <i class="ra ra-key text-3xl"></i>
@@ -2059,7 +2121,7 @@ watch(
                           <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
                           <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'object'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                           <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="deleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="requestDeleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2081,7 +2143,14 @@ watch(
                     </div>
                   </div>
                   <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                    <article v-for="obj in filteredRouteSceneSwitches" :key="obj.id" class="relative group aspect-square bg-slate-900 border border-lime-500/20 rounded-xl shadow-lg overflow-visible hover:z-30">
+                    <article
+                      v-for="obj in filteredRouteSceneSwitches"
+                      :key="obj.id"
+                      :class="[
+                        'relative group aspect-square bg-slate-900 border border-lime-500/20 rounded-xl shadow-lg overflow-visible',
+                        activeMenuId === `scene-switch-${obj.id}` ? 'z-[180]' : 'z-0 hover:z-30',
+                      ]"
+                    >
                       <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
                         <i class="ra ra-lightning-bolt text-3xl"></i>
@@ -2112,7 +2181,7 @@ watch(
                           <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
                           <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'switch'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                           <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="deleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="requestDeleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2134,7 +2203,14 @@ watch(
                     </div>
                   </div>
                   <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                    <article v-for="obj in filteredRouteSceneContainers" :key="obj.id" class="relative group aspect-square bg-slate-900 border border-amber-500/20 rounded-xl shadow-lg overflow-visible hover:z-30">
+                    <article
+                      v-for="obj in filteredRouteSceneContainers"
+                      :key="obj.id"
+                      :class="[
+                        'relative group aspect-square bg-slate-900 border border-amber-500/20 rounded-xl shadow-lg overflow-visible',
+                        activeMenuId === `scene-container-${obj.id}` ? 'z-[180]' : 'z-0 hover:z-30',
+                      ]"
+                    >
                       <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
                         <i class="ra ra-chest text-3xl"></i>
@@ -2165,7 +2241,7 @@ watch(
                           <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
                           <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'container'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                           <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="deleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="requestDeleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2187,7 +2263,14 @@ watch(
                     </div>
                   </div>
                   <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                    <article v-for="obj in filteredRouteSceneTextLogs" :key="obj.id" class="relative group aspect-square bg-slate-900 border border-cyan-500/20 rounded-xl shadow-lg overflow-visible hover:z-30">
+                    <article
+                      v-for="obj in filteredRouteSceneTextLogs"
+                      :key="obj.id"
+                      :class="[
+                        'relative group aspect-square bg-slate-900 border border-cyan-500/20 rounded-xl shadow-lg overflow-visible',
+                        activeMenuId === `scene-log-${obj.id}` ? 'z-[180]' : 'z-0 hover:z-30',
+                      ]"
+                    >
                       <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
                         <i class="ra ra-scroll-unfurled text-3xl"></i>
@@ -2218,7 +2301,7 @@ watch(
                           <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
                           <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'text-log'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
                           <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="deleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="requestDeleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2234,7 +2317,14 @@ watch(
                     </div>
                   </div>
                   <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-                    <article v-for="worldExit in filteredRouteSceneExits" :key="worldExit.id" class="relative group aspect-square bg-slate-900 border border-emerald-500/20 rounded-xl shadow-lg overflow-visible hover:z-30">
+                    <article
+                      v-for="worldExit in filteredRouteSceneExits"
+                      :key="worldExit.id"
+                      :class="[
+                        'relative group aspect-square bg-slate-900 border border-emerald-500/20 rounded-xl shadow-lg overflow-visible',
+                        activeMenuId === `scene-exit-${worldExit.id}` ? 'z-[180]' : 'z-0 hover:z-30',
+                      ]"
+                    >
                       <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.22),transparent_55%)]"></div>
                       <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-85"></div>
                       <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-emerald-400/50 bg-emerald-500/20 text-emerald-100">EXIT</div>
@@ -2256,7 +2346,7 @@ watch(
                         <div v-if="activeMenuId === `scene-exit-${worldExit.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
                           <button @click="openExitEditorRoute(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Open Route</button>
                           <button @click="openEditExitModal(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Edit</button>
-                          <button @click="deleteRouteExit(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="requestDeleteRouteExit(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2281,7 +2371,7 @@ watch(
                 <button
                   class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
                   :disabled="isDeletingRouteAsset"
-                  @click="deleteRouteExit"
+                  @click="requestDeleteRouteExit"
                 >
                   Delete Exit
                 </button>
@@ -2490,6 +2580,44 @@ watch(
       :debug-data="debugData"
       @close="showDebug = false"
     />
+
+    <div
+      v-if="showDeleteConfirmDialog"
+      class="fixed inset-0 z-[320] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+      @click="closeDeleteConfirmDialog"
+    >
+      <div class="w-full max-w-lg rounded-2xl border border-red-500/30 bg-slate-900 shadow-2xl overflow-hidden" @click.stop>
+        <div class="px-6 py-5 border-b border-white/10 flex items-start gap-3">
+          <div class="w-10 h-10 rounded-full border border-red-400/40 bg-red-500/15 flex items-center justify-center shrink-0">
+            <i class="ra ra-skull text-red-300"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-black text-white">{{ pendingDeleteTarget?.title }}</h3>
+            <p class="text-xs text-slate-400 mt-1">{{ pendingDeleteTarget?.description }}</p>
+          </div>
+        </div>
+
+        <div class="px-6 py-5 space-y-2">
+          <p class="text-sm text-slate-200">Target: <span class="font-bold text-red-300">{{ pendingDeleteTarget?.id }}</span></p>
+        </div>
+
+        <div class="px-6 py-4 border-t border-white/10 flex items-center justify-end gap-3">
+          <button
+            class="px-4 py-2 rounded-lg border border-white/15 text-slate-300 text-sm font-bold hover:bg-white/5 transition-colors"
+            @click="closeDeleteConfirmDialog"
+          >
+            Cancel
+          </button>
+          <button
+            class="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-black uppercase tracking-wider hover:bg-red-400 transition-colors disabled:opacity-50"
+            :disabled="isDeletingRouteAsset"
+            @click="confirmDeleteRouteAsset"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
 
     <div
       v-if="showRegenerateAllConfirmDialog"
