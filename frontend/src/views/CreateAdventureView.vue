@@ -109,6 +109,17 @@ const resolveToneIdFromAdventure = (adventure: any): string => {
   return ''
 }
 
+const resolveRuleModeFromAdventure = (adventure: any): RuleMode | null => {
+  const rawMode = String(adventure?.rule_enforcement_mode || '').trim().toLowerCase()
+  if (!rawMode) return null
+  if (rawMode === 'rpg' || rawMode === 'story' || rawMode === 'chat') {
+    return rawMode as RuleMode
+  }
+  // Legacy mode value used in older data snapshots.
+  if (rawMode === 'strict') return 'rpg'
+  return null
+}
+
 async function loadCatalogs() {
   isLoadingCatalogs.value = true
   try {
@@ -232,6 +243,11 @@ async function loadCoverSource() {
     const sourceToneId = resolveToneIdFromAdventure(source)
     if (sourceToneId) {
       form.value.selected_tone_id = sourceToneId
+    }
+
+    const sourceRuleMode = resolveRuleModeFromAdventure(source)
+    if (sourceRuleMode) {
+      form.value.rule_enforcement_mode = sourceRuleMode
     }
   } catch (error: any) {
     sourceAdventure.value = null
