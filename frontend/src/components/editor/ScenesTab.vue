@@ -13,6 +13,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  (e: 'open-scene', sceneId: string): void
   (e: 'regen-all', kind: string, missingOnly?: boolean): void
   (e: 'quick-regen', kind: string, id: string): void
   (e: 'open-regen-dialog', kind: string, id: string, label: string): void
@@ -103,7 +104,14 @@ function isStartScene(scene: any): boolean {
       </div>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-      <div v-for="(scene, idx) in scenes" :key="'scene_' + (scene.id || idx)" @mouseenter="emit('handle-hover', { id: scene.id, name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)" @mouseleave="emit('clear-hover')" class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl shadow-xl transition-all overflow-visible">
+      <div
+        v-for="(scene, idx) in scenes"
+        :key="'scene_' + (scene.id || idx)"
+        @click="emit('open-scene', scene.id)"
+        @mouseenter="emit('handle-hover', { id: scene.id, name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)"
+        @mouseleave="emit('clear-hover')"
+        class="relative group aspect-[3/2] bg-slate-900 border border-white/5 rounded-2xl shadow-xl transition-all overflow-visible cursor-pointer"
+      >
         <div v-if="isStartScene(scene)" class="absolute top-3 left-3 z-40 inline-flex items-center gap-1 rounded-full bg-amber-400/90 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 shadow-lg">
           <span>★</span>
           <span>Start</span>
@@ -124,7 +132,7 @@ function isStartScene(scene: any): boolean {
           </div>
         </div>
         <div class="absolute top-3 right-3 z-40">
-          <button @click="emit('toggle-menu', scene.id, $event)" class="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
+          <button @click.stop="emit('toggle-menu', scene.id, $event)" class="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg group/dots">
             <div class="flex flex-col gap-0.5">
               <div class="w-1 h-1 bg-white rounded-full"></div>
               <div class="w-1 h-1 bg-white rounded-full"></div>
@@ -133,7 +141,7 @@ function isStartScene(scene: any): boolean {
           </button>
           <div v-if="activeMenuId === scene.id" class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
             <button
-              @click="emit('set-start-scene', scene.id)"
+              @click.stop="emit('set-start-scene', scene.id)"
               :disabled="isStartScene(scene) || isSettingStartScene"
               class="w-full px-4 py-2 text-left text-xs font-bold transition-all"
               :class="isStartScene(scene) || isSettingStartScene
@@ -142,11 +150,12 @@ function isStartScene(scene: any): boolean {
             >
               {{ isStartScene(scene) ? 'Start Scene' : 'Set As Start Scene' }}
             </button>
-            <button @click="emit('quick-regen', 'scene', scene.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
-            <button @click="emit('open-regen-dialog', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
-            <button @click="emit('open-upload-picker', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Illustration</button>
-            <button v-if="scene.image_url" @click="emit('download-asset', scene.image_url, `${scene.label || scene.name || 'scene'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-            <button @click="emit('open-text-edit', 'scene', scene.id, scene.label || scene.name, scene.description)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Description</button>
+            <button @click.stop="emit('open-scene', scene.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Open Scene Editor</button>
+            <button @click.stop="emit('quick-regen', 'scene', scene.id)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regenerate</button>
+            <button @click.stop="emit('open-regen-dialog', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
+            <button @click.stop="emit('open-upload-picker', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Illustration</button>
+            <button v-if="scene.image_url" @click.stop="emit('download-asset', scene.image_url, `${scene.label || scene.name || 'scene'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+            <button @click.stop="emit('open-text-edit', 'scene', scene.id, scene.label || scene.name, scene.description)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Description</button>
           </div>
         </div>
       </div>

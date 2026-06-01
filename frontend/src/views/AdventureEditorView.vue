@@ -61,6 +61,19 @@ const isGenerating = computed(() => {
 const isSavingText = ref(false)
 const showEditModal = ref(false)
 const editEntityContext = ref<{ type: string; id: string } | null>(null)
+const isCreateEntityMode = ref(false)
+const createEntitySceneId = ref<string | null>(null)
+const createEntityType = ref<'npc' | 'object' | null>(null)
+const showExitModal = ref(false)
+const isCreateExitMode = ref(false)
+const activeEditExitId = ref<string | null>(null)
+const exitModalForm = ref({
+  from_scene_id: '',
+  to_scene_id: '',
+  label: '',
+  exit_type: 'one_way' as 'one_way' | 'bidirectional',
+  lock_description: '',
+})
 const editForm = ref({
   name: '',
   teaser: '',
@@ -80,6 +93,27 @@ const editForm = ref({
   text_log_content: '',
   text_log_format: 'DOCUMENT',
 })
+
+function closeEditEntityModal() {
+  showEditModal.value = false
+  editEntityContext.value = null
+  isCreateEntityMode.value = false
+  createEntitySceneId.value = null
+  createEntityType.value = null
+}
+
+function closeExitEditModal() {
+  showExitModal.value = false
+  isCreateExitMode.value = false
+  activeEditExitId.value = null
+  exitModalForm.value = {
+    from_scene_id: '',
+    to_scene_id: '',
+    label: '',
+    exit_type: 'one_way',
+    lock_description: '',
+  }
+}
 
 const adventure = ref<any>(null)
 const debugData = ref<any>(null)
@@ -139,13 +173,13 @@ const availableVoices = ref<Array<{ name: string; gender?: string; description?:
 
 const editorTabs = [
   { key: 'world', label: 'World' },
-  { key: 'items', label: 'Items' },
-  { key: 'visuals', label: 'Visuals' },
-  { key: 'inhabitants', label: 'Inhabitants' },
-  { key: 'scenes', label: 'Scenes' },
   { key: 'map', label: 'Map' },
-  { key: 'quest', label: 'Quest' },
+  { key: 'scenes', label: 'Szenen' },
+  { key: 'inhabitants', label: 'Inhabitants' },
+  { key: 'items', label: 'Items' },
+  { key: 'quest', label: 'Quests' },
   { key: 'awards', label: 'Awards' },
+  { key: 'visuals', label: 'Visual Style' },
   { key: 'tone', label: 'Tone' },
   { key: 'advanced', label: 'Advanced' },
 ] as const
@@ -473,6 +507,96 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
 
 async function saveEntityText(data: any) {
   if (!editEntityContext.value) return
+
+  if (isCreateEntityMode.value) {
+    const sceneId = String(createEntitySceneId.value || activeMapSceneId.value || '').trim()
+    if (!sceneId) {
+      addNotification('No active scene selected for creation.', 'error')
+      return
+    }
+
+    const entityName = String(data.name || '').trim()
+    const entityDescription = String(data.description || '').trim()
+    if (!entityName || !entityDescription) {
+      addNotification('Name and description are required.', 'error')
+      return
+    }
+
+    const creationType = createEntityType.value
+    if (!creationType) {
+      addNotification('Missing creation type.', 'error')
+      return
+    }
+
+    const prefix = creationType === 'npc'
+      ? 'NPC_'
+      : itemTypePrefix(String(data.item_type || 'PICKABLE'))
+
+    let generatedId = buildPrefixedEditorId(entityName, prefix)
+    if (!generatedId) {
+      generatedId = `${sanitizeEditorIdToken(prefix)}${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+    }
+    const takenIds = new Set(referenceOptions.value.map((entry) => String(entry.id || '').toUpperCase()))
+    let candidateId = generatedId
+    let guard = 0
+    while (takenIds.has(candidateId.toUpperCase()) && guard < 8) {
+      const suffix = Math.random().toString(36).slice(2, 6).toUpperCase()
+      candidateId = `${generatedId}_${suffix}`.slice(0, 128)
+      guard += 1
+    }
+
+    isSavingText.value = true
+    promptError.value = ''
+    try {
+      if (creationType === 'npc') {
+        await entityService.createEntity(props.adventureId, {
+          entity_id: candidateId,
+          entity_type: 'NPC',
+          scene_id: sceneId,
+          name: entityName,
+          description: entityDescription,
+          hp: Number(data.hp || 20),
+          stamina: Number(data.stamina || 20),
+          mana: Number(data.mana || 20),
+          goal: String(data.goal || '').trim() || undefined,
+          character: String(data.character || '').trim() || undefined,
+          is_killable: Boolean(data.is_killable),
+        })
+      } else {
+        const itemType = String(data.item_type || 'PICKABLE').toUpperCase()
+        if (itemType === 'READABLE' && !String(data.text_log_content || '').trim()) {
+          addNotification('Readable items require text-log content.', 'error')
+          return
+        }
+
+        await entityService.createEntity(props.adventureId, {
+          entity_id: candidateId,
+          entity_type: 'OBJECT',
+          scene_id: sceneId,
+          name: entityName,
+          description: entityDescription,
+          item_type: itemType,
+          is_portable: !['STATIC', 'SWITCH'].includes(itemType),
+          metadata_json: itemType === 'READABLE'
+            ? {
+                text_log_content: String(data.text_log_content || '').trim(),
+                text_log_format: String(data.text_log_format || 'DOCUMENT').toUpperCase(),
+              }
+            : undefined,
+        })
+      }
+
+      closeEditEntityModal()
+      await fetchDebugInfo()
+      addNotification('Entity created.', 'success')
+    } catch (error: any) {
+      promptError.value = error?.message || 'Failed to create entity.'
+      addNotification(promptError.value, 'error')
+    } finally {
+      isSavingText.value = false
+    }
+    return
+  }
   
   // Basic validation for stats
   if (data.hp < 0 || data.hp > 999 || data.stamina < 0 || data.stamina > 999 || data.mana < 0 || data.mana > 999) {
@@ -527,8 +651,7 @@ async function saveEntityText(data: any) {
         ? data.text_log_format
         : undefined,
     })
-    showEditModal.value = false
-    editEntityContext.value = null
+    closeEditEntityModal()
     await Promise.all([fetchAdventure(), fetchDebugInfo()])
     addNotification('Changes applied successfully.', 'success')
   } catch (error: any) {
@@ -563,6 +686,15 @@ async function saveChanges() {
 
 function buildVisualImageUrl(imagePath?: string | null) {
   return visualService.buildImageUrl(imagePath, visualsCacheVersion.value)
+}
+
+function hasMissingImage(entity: any): boolean {
+  const raw = String(entity?.image_url || '').trim()
+  if (!raw) return true
+  const lowered = raw.toLowerCase()
+  if (lowered.startsWith('assets/') || lowered.startsWith('/assets/')) return true
+  if (lowered.includes('placeholder_') || lowered.includes('/placeholder-')) return true
+  return false
 }
 
 function downloadVisualAsset(imagePath: string | null | undefined, filenameLabel: string) {
@@ -911,6 +1043,25 @@ const routeSceneObjects = computed<any[]>(() => {
   return editorAllObjects.value.filter((obj: any) => String(obj.current_scene_id || '') === sceneId)
 })
 
+const routeSceneSwitches = computed<any[]>(() => {
+  return routeSceneObjects.value.filter((obj: any) => String(obj.item_type || '').toUpperCase() === 'SWITCH')
+})
+
+const routeSceneContainers = computed<any[]>(() => {
+  return routeSceneObjects.value.filter((obj: any) => String(obj.item_type || '').toUpperCase() === 'CONTAINER')
+})
+
+const routeSceneTextLogs = computed<any[]>(() => {
+  return routeSceneObjects.value.filter((obj: any) => String(obj.item_type || '').toUpperCase() === 'READABLE')
+})
+
+const routeSceneItems = computed<any[]>(() => {
+  return routeSceneObjects.value.filter((obj: any) => {
+    const itemType = String(obj.item_type || '').toUpperCase()
+    return itemType !== 'SWITCH' && itemType !== 'CONTAINER' && itemType !== 'READABLE'
+  })
+})
+
 const routeSceneExits = computed<any[]>(() => {
   const sceneId = String(activeMapSceneId.value || '').trim()
   const exits = Array.isArray(debugData.value?.exits) ? debugData.value.exits : []
@@ -969,6 +1120,8 @@ const showCreateExitForm = ref(false)
 const isCreatingRouteAsset = ref(false)
 const isDeletingRouteAsset = ref(false)
 
+const routeSceneSearch = ref('')
+const hideEmptyFilteredGroups = ref(false)
 const createNpcForm = ref({
   id: '',
   name: '',
@@ -980,6 +1133,7 @@ const createItemForm = ref({
   name: '',
   description: '',
   item_type: 'PICKABLE',
+  text_log_content: '',
 })
 
 const createExitForm = ref({
@@ -993,6 +1147,32 @@ const exitEditForm = ref({
   lock_description: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
 })
+
+const normalizedRouteSceneSearch = computed(() => String(routeSceneSearch.value || '').trim().toLowerCase())
+
+function matchesRouteSceneSearch(entry: any): boolean {
+  const query = normalizedRouteSceneSearch.value
+  if (!query) return true
+  const haystack = [
+    entry?.id,
+    entry?.name,
+    entry?.label,
+    entry?.description,
+    entry?.item_type,
+    entry?.from_scene_id,
+    entry?.to_scene_id,
+  ]
+    .map((value: any) => String(value || '').toLowerCase())
+    .join(' ')
+  return haystack.includes(query)
+}
+
+const filteredRouteSceneNpcs = computed(() => routeSceneNpcs.value.filter((entry) => matchesRouteSceneSearch(entry)))
+const filteredRouteSceneItems = computed(() => routeSceneItems.value.filter((entry) => matchesRouteSceneSearch(entry)))
+const filteredRouteSceneSwitches = computed(() => routeSceneSwitches.value.filter((entry) => matchesRouteSceneSearch(entry)))
+const filteredRouteSceneContainers = computed(() => routeSceneContainers.value.filter((entry) => matchesRouteSceneSearch(entry)))
+const filteredRouteSceneTextLogs = computed(() => routeSceneTextLogs.value.filter((entry) => matchesRouteSceneSearch(entry)))
+const filteredRouteSceneExits = computed(() => routeSceneExits.value.filter((entry) => matchesRouteSceneSearch(entry)))
 
 watch(
   () => routeExitDetails.value,
@@ -1017,6 +1197,9 @@ watch(
 function openSceneEditorRoute(sceneId: string) {
   const normalized = String(sceneId || '').trim()
   if (!normalized) return
+  clearHover()
+  activeMenuId.value = null
+  activeTab.value = 'scenes'
   router.push({
     name: 'adventure-editor-scene',
     params: {
@@ -1025,6 +1208,125 @@ function openSceneEditorRoute(sceneId: string) {
     },
     query: route.query,
   })
+}
+
+function closeSceneEditorDialog() {
+  activeTab.value = 'scenes'
+  router.push({
+    name: 'adventure-editor',
+    params: {
+      adventureId: props.adventureId,
+    },
+    query: route.query,
+  })
+}
+
+function editRouteScene() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  openTextEdit(
+    'scene',
+    String(scene.id),
+    String(scene.label || scene.id || ''),
+    String(scene.description || ''),
+  )
+}
+
+function editRouteEntity(type: 'npc' | 'object', entity: any) {
+  if (!entity) return
+  openTextEdit(
+    type,
+    String(entity.id || ''),
+    String(entity.name || entity.id || ''),
+    String(entity.description || ''),
+    '',
+    entity.hp,
+    entity.stamina,
+    entity.mana,
+    entity.goal,
+    entity.character,
+    entity.is_killable,
+  )
+}
+
+function openCreateNpcModal() {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) return
+  isCreateEntityMode.value = true
+  createEntitySceneId.value = sceneId
+  createEntityType.value = 'npc'
+  editEntityContext.value = { type: 'npc', id: 'NEW_NPC' }
+  editForm.value = {
+    name: 'New NPC',
+    teaser: '',
+    description: 'A mysterious inhabitant of this scene.',
+    hp: 20,
+    stamina: 20,
+    mana: 20,
+    goal: '',
+    character: '',
+    is_killable: true,
+    item_type: 'PICKABLE',
+    is_portable: true,
+    locked: false,
+    code_to_unlock: '',
+    item_to_unlock: '',
+    inventory_json: '[]',
+    text_log_content: '',
+    text_log_format: 'DOCUMENT',
+  }
+  showEditModal.value = true
+}
+
+function objectTemplateDefaults(itemType: string): { name: string; description: string; textLogContent: string } {
+  const normalized = String(itemType || 'PICKABLE').toUpperCase()
+  if (normalized === 'SWITCH') {
+    return { name: 'Lever Switch', description: 'A sturdy lever that toggles a hidden mechanism.', textLogContent: '' }
+  }
+  if (normalized === 'CONTAINER') {
+    return { name: 'Storage Crate', description: 'A container that may hold useful items.', textLogContent: '' }
+  }
+  if (normalized === 'READABLE') {
+    return { name: 'Weathered Note', description: 'A readable note containing clues for this scene.', textLogContent: 'A faded message hints at a hidden mechanism nearby.' }
+  }
+  if (normalized === 'KEY') {
+    return { name: 'Brass Key', description: 'A key that might unlock a nearby door or chest.', textLogContent: '' }
+  }
+  if (normalized === 'WEAPON') {
+    return { name: 'Rusty Blade', description: 'An old weapon that can still be used in combat.', textLogContent: '' }
+  }
+  return { name: 'Scene Item', description: 'A useful object found in this scene.', textLogContent: '' }
+}
+
+function openCreateObjectModal(itemType: string = 'PICKABLE') {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) return
+  const normalizedType = String(itemType || 'PICKABLE').toUpperCase()
+  const defaults = objectTemplateDefaults(normalizedType)
+  isCreateEntityMode.value = true
+  createEntitySceneId.value = sceneId
+  createEntityType.value = 'object'
+  editEntityContext.value = { type: 'object', id: `NEW_${normalizedType}` }
+  editForm.value = {
+    name: defaults.name,
+    teaser: '',
+    description: defaults.description,
+    hp: 0,
+    stamina: 0,
+    mana: 0,
+    goal: '',
+    character: '',
+    is_killable: true,
+    item_type: normalizedType,
+    is_portable: !['STATIC', 'SWITCH'].includes(normalizedType),
+    locked: false,
+    code_to_unlock: '',
+    item_to_unlock: '',
+    inventory_json: '[]',
+    text_log_content: defaults.textLogContent,
+    text_log_format: 'DOCUMENT',
+  }
+  showEditModal.value = true
 }
 
 function openExitEditorRoute(exitId: string) {
@@ -1040,11 +1342,111 @@ function openExitEditorRoute(exitId: string) {
   })
 }
 
+function openCreateExitModal() {
+  const fromSceneId = String(activeMapSceneId.value || '').trim()
+  if (!fromSceneId) {
+    addNotification('Select a scene before creating an exit.', 'error')
+    return
+  }
+  isCreateExitMode.value = true
+  activeEditExitId.value = null
+  exitModalForm.value = {
+    from_scene_id: fromSceneId,
+    to_scene_id: '',
+    label: '',
+    exit_type: 'one_way',
+    lock_description: '',
+  }
+  showExitModal.value = true
+}
+
+function openEditExitModal(exitId: string) {
+  const normalized = String(exitId || '').trim()
+  if (!normalized) return
+  const exit = routeSceneExits.value.find((entry: any) => String(entry.id || '') === normalized)
+  if (!exit) {
+    addNotification('Exit not found in current scene.', 'error')
+    return
+  }
+  isCreateExitMode.value = false
+  activeEditExitId.value = normalized
+  exitModalForm.value = {
+    from_scene_id: String(exit.from_scene_id || ''),
+    to_scene_id: String(exit.to_scene_id || ''),
+    label: String(exit.label || ''),
+    exit_type: (String(exit.exit_type || 'one_way') as 'one_way' | 'bidirectional'),
+    lock_description: String(exit.lock_description || ''),
+  }
+  showExitModal.value = true
+}
+
+async function saveExitModal() {
+  const fromSceneId = String(exitModalForm.value.from_scene_id || activeMapSceneId.value || '').trim()
+  const toSceneId = String(exitModalForm.value.to_scene_id || '').trim()
+  const label = String(exitModalForm.value.label || '').trim()
+  const lockDescription = String(exitModalForm.value.lock_description || '').trim()
+
+  if (!fromSceneId || !label) {
+    addNotification('Exit requires a source scene and label.', 'error')
+    return
+  }
+
+  if (isCreateExitMode.value && !toSceneId) {
+    addNotification('Exit requires a destination scene.', 'error')
+    return
+  }
+
+  if (isCreateExitMode.value && toSceneId === fromSceneId) {
+    addNotification('Exit destination must be a different scene.', 'error')
+    return
+  }
+
+  isSavingText.value = true
+  promptError.value = ''
+  try {
+    if (isCreateExitMode.value) {
+      await entityService.createExit(props.adventureId, {
+        from_scene_id: fromSceneId,
+        to_scene_id: toSceneId,
+        label,
+        exit_type: exitModalForm.value.exit_type,
+        lock_description: lockDescription || undefined,
+      })
+      addNotification('Exit created.', 'success')
+    } else {
+      const exitId = String(activeEditExitId.value || '').trim()
+      if (!exitId) {
+        addNotification('Missing exit id for edit.', 'error')
+        return
+      }
+      await entityService.saveEntityText(props.adventureId, {
+        target_type: 'exit',
+        target_id: exitId,
+        name: label,
+        description: lockDescription,
+        exit_type: exitModalForm.value.exit_type,
+      })
+      addNotification('Exit updated.', 'success')
+    }
+    closeExitEditModal()
+    await fetchDebugInfo()
+  } catch (error: any) {
+    promptError.value = error?.message || 'Failed to save exit.'
+    addNotification(promptError.value, 'error')
+  } finally {
+    isSavingText.value = false
+  }
+}
+
 function resetRouteCreateForms() {
   createNpcForm.value = { id: '', name: '', description: '' }
-  createItemForm.value = { id: '', name: '', description: '', item_type: 'PICKABLE' }
+  createItemForm.value = { id: '', name: '', description: '', item_type: 'PICKABLE', text_log_content: '' }
   createExitForm.value = { to_scene_id: '', label: '', exit_type: 'one_way' }
 }
+
+const normalizedCreateItemType = computed(() => String(createItemForm.value.item_type || '').toUpperCase())
+const createItemPortablePreview = computed(() => !['STATIC', 'SWITCH'].includes(normalizedCreateItemType.value))
+const isCreateReadableItem = computed(() => normalizedCreateItemType.value === 'READABLE')
 
 function sanitizeEditorIdToken(rawValue: string): string {
   return String(rawValue || '')
@@ -1068,8 +1470,62 @@ function autoFillNpcId() {
   createNpcForm.value.id = buildPrefixedEditorId(createNpcForm.value.id || createNpcForm.value.name, 'NPC_')
 }
 
+function itemTypePrefix(itemType: string): string {
+  const normalized = String(itemType || '').toUpperCase()
+  if (normalized === 'SWITCH') return 'SWITCH_'
+  if (normalized === 'CONTAINER') return 'CONTAINER_'
+  if (normalized === 'READABLE') return 'LOG_'
+  if (normalized === 'KEY') return 'KEY_'
+  if (normalized === 'WEAPON') return 'WEAPON_'
+  return 'ITEM_'
+}
+
 function autoFillItemId() {
-  createItemForm.value.id = buildPrefixedEditorId(createItemForm.value.id || createItemForm.value.name, 'ITEM_')
+  createItemForm.value.id = buildPrefixedEditorId(
+    createItemForm.value.id || createItemForm.value.name,
+    itemTypePrefix(createItemForm.value.item_type),
+  )
+}
+
+function openCreateItemFormForType(itemType: string) {
+  showCreateItemForm.value = true
+  createItemForm.value.item_type = String(itemType || 'PICKABLE').toUpperCase()
+  if (String(createItemForm.value.item_type || '').toUpperCase() !== 'READABLE') {
+    createItemForm.value.text_log_content = ''
+  }
+}
+
+function applyCreateItemTemplate(itemType: string) {
+  const normalized = String(itemType || 'PICKABLE').toUpperCase()
+  openCreateItemFormForType(normalized)
+
+  if (normalized === 'SWITCH') {
+    createItemForm.value.name = 'Lever Switch'
+    createItemForm.value.description = 'A sturdy lever that toggles a hidden mechanism.'
+  } else if (normalized === 'CONTAINER') {
+    createItemForm.value.name = 'Storage Crate'
+    createItemForm.value.description = 'A container that may hold useful items.'
+  } else if (normalized === 'READABLE') {
+    createItemForm.value.name = 'Weathered Note'
+    createItemForm.value.description = 'A readable note containing clues for this scene.'
+    createItemForm.value.text_log_content = 'A faded message hints at a hidden mechanism nearby.'
+  } else if (normalized === 'KEY') {
+    createItemForm.value.name = 'Brass Key'
+    createItemForm.value.description = 'A key that might unlock a nearby door or chest.'
+  } else if (normalized === 'WEAPON') {
+    createItemForm.value.name = 'Rusty Blade'
+    createItemForm.value.description = 'An old weapon that can still be used in combat.'
+  } else {
+    createItemForm.value.name = 'Scene Item'
+    createItemForm.value.description = 'A useful object found in this scene.'
+  }
+
+  createItemForm.value.id = ''
+  autoFillItemId()
+}
+
+function shouldShowSceneGroup(filteredCount: number): boolean {
+  return !hideEmptyFilteredGroups.value || filteredCount > 0
 }
 
 async function createNpcInRouteScene() {
@@ -1106,11 +1562,21 @@ async function createNpcInRouteScene() {
 async function createItemInRouteScene() {
   const sceneId = String(activeMapSceneId.value || '').trim()
   if (!sceneId) return
-  const normalizedItemId = buildPrefixedEditorId(createItemForm.value.id || createItemForm.value.name, 'ITEM_')
+  const itemType = String(createItemForm.value.item_type || '').toUpperCase()
+  const normalizedItemId = buildPrefixedEditorId(
+    createItemForm.value.id || createItemForm.value.name,
+    itemTypePrefix(itemType),
+  )
   if (!normalizedItemId || !createItemForm.value.name.trim() || !createItemForm.value.description.trim()) {
     addNotification('Item requires ID, name and description.', 'error')
     return
   }
+
+  if (itemType === 'READABLE' && !String(createItemForm.value.text_log_content || '').trim()) {
+    addNotification('Readable items require text-log content.', 'error')
+    return
+  }
+
   isCreatingRouteAsset.value = true
   try {
     await entityService.createEntity(props.adventureId, {
@@ -1120,7 +1586,13 @@ async function createItemInRouteScene() {
       name: createItemForm.value.name.trim(),
       description: createItemForm.value.description.trim(),
       item_type: createItemForm.value.item_type,
-      is_portable: createItemForm.value.item_type !== 'STATIC',
+      is_portable: !['STATIC', 'SWITCH'].includes(itemType),
+      metadata_json: itemType === 'READABLE'
+        ? {
+            text_log_content: String(createItemForm.value.text_log_content || '').trim(),
+            text_log_format: 'DOCUMENT',
+          }
+        : undefined,
     })
     showCreateItemForm.value = false
     resetRouteCreateForms()
@@ -1177,8 +1649,8 @@ async function deleteRouteScene() {
   }
 }
 
-async function deleteRouteExit() {
-  const exitId = String(activeMapExitId.value || '').trim()
+async function deleteRouteExit(exitIdInput?: string) {
+  const exitId = String(exitIdInput || activeMapExitId.value || '').trim()
   if (!exitId) return
   const confirmed = window.confirm(`Delete exit ${exitId}?`)
   if (!confirmed) return
@@ -1240,11 +1712,22 @@ async function saveRouteExit() {
 watch(
   () => route.name,
   (name) => {
-    if (name === 'adventure-editor-scene' || name === 'adventure-editor-exit') {
+    if (name === 'adventure-editor-scene') {
+      clearHover()
+      activeMenuId.value = null
+      activeTab.value = 'scenes'
+    } else if (name === 'adventure-editor-exit') {
       activeTab.value = 'map'
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => activeMapSceneId.value,
+  () => {
+    routeSceneSearch.value = ''
+  },
 )
 </script>
 
@@ -1312,7 +1795,7 @@ watch(
             </div>
           </aside>
 
-          <div class="space-y-10 min-w-0">
+          <div class="space-y-10 min-w-0 relative">
             <WorldTab
               v-if="activeTab === 'world'"
               :form="form"
@@ -1386,7 +1869,7 @@ watch(
             />
 
             <ScenesTab
-              v-if="activeTab === 'scenes'"
+              v-if="activeTab === 'scenes' && !canShowSceneRoutePanel"
               :editor-scenes="editorScenes"
               :debug-data="debugData"
               :is-batch-generating="isBatchGenerating"
@@ -1401,6 +1884,7 @@ watch(
               @download-asset="downloadVisualAsset"
               @open-text-edit="openTextEdit"
               @set-start-scene="setStartScene"
+              @open-scene="openSceneEditorRoute"
               @toggle-menu="toggleMenu"
               @handle-hover="handleHover"
               @clear-hover="clearHover"
@@ -1413,128 +1897,370 @@ watch(
               :visuals-cache-version="visualsCacheVersion"
               :active-scene-id="activeMapSceneId"
               :active-exit-id="activeMapExitId"
-              @open-scene="openSceneEditorRoute"
               @open-exit="openExitEditorRoute"
             />
 
             <section
-              v-if="activeTab === 'map' && canShowSceneRoutePanel"
-              class="bg-slate-900/40 border border-white/10 rounded-2xl p-5 space-y-4"
+              v-if="activeTab === 'scenes' && canShowSceneRoutePanel"
+              class="space-y-4 animate-page-in"
             >
+              <div class="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                <button
+                  class="px-3 py-2 text-xs font-bold rounded-lg border border-white/20 text-slate-200 hover:bg-white/10"
+                  @click="closeSceneEditorDialog"
+                >
+                  Back to Scenes
+                </button>
+                <button class="px-3 py-2 text-xs font-bold rounded-lg border border-white/20 text-slate-300 hover:bg-white/10" @click="closeSceneEditorDialog">
+                  Close
+                </button>
+              </div>
+
               <div class="flex items-start justify-between gap-4">
                 <div>
                   <p class="text-xs uppercase tracking-widest text-emerald-300">Scene Route</p>
                   <h3 class="text-lg font-bold text-white">{{ routeSceneDetails?.label || routeSceneDetails?.id || activeMapSceneId }}</h3>
                   <p class="text-sm text-slate-300 mt-1">{{ routeSceneDetails?.description || 'No description.' }}</p>
                 </div>
-                <button
-                  class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
-                  :disabled="isDeletingRouteAsset"
-                  @click="deleteRouteScene"
-                >
-                  Delete Scene
-                </button>
+                <div class="flex items-center gap-2">
+                  <button
+                    class="px-3 py-2 text-xs font-bold rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                    @click="editRouteScene"
+                  >
+                    Edit Scene
+                  </button>
+                  <button
+                    class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                    :disabled="isDeletingRouteAsset"
+                    @click="deleteRouteScene"
+                  >
+                    Delete Scene
+                  </button>
+                </div>
               </div>
 
-              <div class="grid md:grid-cols-3 gap-4">
-                <div class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+              <div class="grid md:grid-cols-2 gap-3">
+                <label class="text-xs text-slate-300 space-y-1">
+                  <span>Filter Scene Content</span>
+                  <input
+                    v-model="routeSceneSearch"
+                    class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm"
+                    placeholder="Search by id, name, label, description..."
+                  />
+                </label>
+                <div class="flex items-end justify-end gap-2">
+                  <label class="px-3 py-2 text-xs font-bold rounded border border-white/15 text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2 cursor-pointer">
+                    <input v-model="hideEmptyFilteredGroups" type="checkbox" class="accent-emerald-500" />
+                    Hide Empty Groups
+                  </label>
+                  <button class="px-3 py-2 text-xs font-bold rounded border border-white/15 text-slate-300 hover:text-white hover:bg-white/5" @click="routeSceneSearch = ''">
+                    Clear Filter
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div v-if="shouldShowSceneGroup(filteredRouteSceneNpcs.length)" class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
                   <div class="flex items-center justify-between mb-2">
-                    <p class="text-xs font-bold uppercase tracking-wide text-slate-300">NPCs ({{ routeSceneNpcs.length }})</p>
-                    <button class="text-xs text-emerald-300" @click="showCreateNpcForm = !showCreateNpcForm">+ Add</button>
-                  </div>
-                  <ul class="space-y-1 text-sm text-slate-300 max-h-52 overflow-auto">
-                    <li v-for="npc in routeSceneNpcs" :key="npc.id" class="flex items-center justify-between gap-2">
-                      <span class="truncate">{{ npc.name || npc.id }}</span>
-                      <div class="flex items-center gap-2">
-                        <span class="text-xs text-slate-500">{{ npc.id }}</span>
-                        <button class="text-xs text-red-300 hover:text-red-200" @click="deleteRouteEntity(npc.id)">Delete</button>
-                      </div>
-                    </li>
-                    <li v-if="routeSceneNpcs.length === 0" class="text-xs text-slate-500">No NPCs in this scene.</li>
-                  </ul>
-                  <div v-if="showCreateNpcForm" class="mt-3 space-y-2">
-                    <div class="flex gap-2">
-                      <input v-model="createNpcForm.id" class="flex-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="NPC_ID" />
-                      <button class="px-2 py-1 text-xs rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10" @click="autoFillNpcId">Auto ID</button>
+                    <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">NPCs ({{ filteredRouteSceneNpcs.length }}/{{ routeSceneNpcs.length }})</p>
+                    <div class="flex items-center gap-4">
+                      <button @click="requestRegenerateAll('npc', true)" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Generate Missing
+                      </button>
+                      <button @click="requestRegenerateAll('npc', false)" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
+                      </button>
+                      <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="openCreateNpcModal">+ Add</button>
                     </div>
-                    <input v-model="createNpcForm.name" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="Name" />
-                    <ReferenceTextarea
-                      v-model="createNpcForm.description"
-                      :rows="2"
-                      :options="referenceOptions"
-                      class-name="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm"
-                      placeholder="Description"
-                    />
-                    <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded px-2 py-1 disabled:opacity-50" :disabled="isCreatingRouteAsset" @click="createNpcInRouteScene">Create NPC</button>
+                  </div>
+                  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    <article v-for="npc in filteredRouteSceneNpcs" :key="npc.id" class="relative group aspect-square bg-slate-900 border border-white/10 rounded-xl shadow-lg overflow-visible hover:z-30">
+                      <img v-if="npc.image_url" :src="buildVisualImageUrl(npc.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
+                        <i class="ra ra-player text-3xl"></i>
+                      </div>
+                      <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
+                        <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
+                      </div>
+                      <div v-if="hasMissingImage(npc)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
+                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
+                      <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-sky-400/50 bg-sky-500/20 text-sky-100">NPC</div>
+                      <div class="absolute bottom-0 left-0 right-0 p-2">
+                        <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ npc.name || npc.id }}</div>
+                        <div class="text-[9px] text-sky-200/80 uppercase tracking-widest truncate mt-1">{{ npc.id }}</div>
+                      </div>
+                      <div class="absolute top-2 right-2 z-40">
+                        <button
+                          @click="toggleMenu(`scene-npc-${npc.id}`, $event)"
+                          class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg"
+                        >
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        <div v-if="activeMenuId === `scene-npc-${npc.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+                          <button @click="quickRegenerateVisual('npc', npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('npc', npc.id, npc.name || npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('npc', npc.id, npc.name || npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="npc.image_url" @click="downloadVisualAsset(npc.image_url, `${npc.name || 'npc'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('npc', npc); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="deleteRouteEntity(npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                        </div>
+                      </div>
+                    </article>
+                    <div v-if="filteredRouteSceneNpcs.length === 0" class="text-xs text-slate-500">No NPCs match the current filter.</div>
                   </div>
                 </div>
 
-                <div class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+                <div v-if="shouldShowSceneGroup(filteredRouteSceneItems.length)" class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
                   <div class="flex items-center justify-between mb-2">
-                    <p class="text-xs font-bold uppercase tracking-wide text-slate-300">Items/Switches ({{ routeSceneObjects.length }})</p>
-                    <button class="text-xs text-emerald-300" @click="showCreateItemForm = !showCreateItemForm">+ Add</button>
-                  </div>
-                  <ul class="space-y-1 text-sm text-slate-300 max-h-52 overflow-auto">
-                    <li v-for="obj in routeSceneObjects" :key="obj.id" class="flex items-center justify-between gap-2">
-                      <span class="truncate">{{ obj.name || obj.id }}</span>
-                      <div class="flex items-center gap-2">
-                        <span class="text-xs text-slate-500">{{ obj.item_type || 'OBJECT' }}</span>
-                        <button class="text-xs text-red-300 hover:text-red-200" @click="deleteRouteEntity(obj.id)">Delete</button>
-                      </div>
-                    </li>
-                    <li v-if="routeSceneObjects.length === 0" class="text-xs text-slate-500">No items in this scene.</li>
-                  </ul>
-                  <div v-if="showCreateItemForm" class="mt-3 space-y-2">
-                    <div class="flex gap-2">
-                      <input v-model="createItemForm.id" class="flex-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="ITEM_ID" />
-                      <button class="px-2 py-1 text-xs rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10" @click="autoFillItemId">Auto ID</button>
+                    <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Items ({{ filteredRouteSceneItems.length }}/{{ routeSceneItems.length }})</p>
+                    <div class="flex items-center gap-4">
+                      <button @click="requestRegenerateAll('object', true)" :disabled="isBatchGenerating['object']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['object'] }"></i> Generate Missing
+                      </button>
+                      <button @click="requestRegenerateAll('object', false)" :disabled="isBatchGenerating['object']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['object'] }"></i> Regenerate All
+                      </button>
+                      <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="openCreateObjectModal('PICKABLE')">+ Add</button>
                     </div>
-                    <input v-model="createItemForm.name" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="Name" />
-                    <select v-model="createItemForm.item_type" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm">
-                      <option value="PICKABLE">PICKABLE</option>
-                      <option value="KEY">KEY</option>
-                      <option value="WEAPON">WEAPON</option>
-                      <option value="CONTAINER">CONTAINER</option>
-                      <option value="READABLE">READABLE</option>
-                      <option value="SWITCH">SWITCH</option>
-                      <option value="STATIC">STATIC</option>
-                    </select>
-                    <ReferenceTextarea
-                      v-model="createItemForm.description"
-                      :rows="2"
-                      :options="referenceOptions"
-                      class-name="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm"
-                      placeholder="Description"
-                    />
-                    <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded px-2 py-1 disabled:opacity-50" :disabled="isCreatingRouteAsset" @click="createItemInRouteScene">Create Item</button>
+                  </div>
+                  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    <article v-for="obj in filteredRouteSceneItems" :key="obj.id" class="relative group aspect-square bg-slate-900 border border-white/10 rounded-xl shadow-lg overflow-visible hover:z-30">
+                      <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
+                        <i class="ra ra-key text-3xl"></i>
+                      </div>
+                      <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
+                        <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
+                      </div>
+                      <div v-if="hasMissingImage(obj)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
+                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
+                      <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
+                      <div class="absolute bottom-0 left-0 right-0 p-2">
+                        <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
+                      </div>
+                      <div class="absolute top-2 right-2 z-40">
+                        <button
+                          @click="toggleMenu(`scene-item-${obj.id}`, $event)"
+                          class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg"
+                        >
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        <div v-if="activeMenuId === `scene-item-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+                          <button @click="quickRegenerateVisual('object', obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'object'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="deleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                        </div>
+                      </div>
+                    </article>
+                    <div v-if="filteredRouteSceneItems.length === 0" class="text-xs text-slate-500">No items match the current filter.</div>
                   </div>
                 </div>
 
-                <div class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+                <div v-if="shouldShowSceneGroup(filteredRouteSceneSwitches.length)" class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
                   <div class="flex items-center justify-between mb-2">
-                    <p class="text-xs font-bold uppercase tracking-wide text-slate-300">Exits ({{ routeSceneExits.length }})</p>
-                    <button class="text-xs text-emerald-300" @click="showCreateExitForm = !showCreateExitForm">+ Add</button>
+                    <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Switches ({{ filteredRouteSceneSwitches.length }}/{{ routeSceneSwitches.length }})</p>
+                    <div class="flex items-center gap-4">
+                      <button @click="requestRegenerateAll('switch', true)" :disabled="isBatchGenerating['switch']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['switch'] }"></i> Generate Missing
+                      </button>
+                      <button @click="requestRegenerateAll('switch', false)" :disabled="isBatchGenerating['switch']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['switch'] }"></i> Regenerate All
+                      </button>
+                      <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="openCreateObjectModal('SWITCH')">+ Add</button>
+                    </div>
                   </div>
-                  <ul class="space-y-1 text-sm text-slate-300 max-h-52 overflow-auto">
-                    <li v-for="worldExit in routeSceneExits" :key="worldExit.id" class="flex items-center justify-between gap-2">
-                      <button class="truncate text-left hover:text-emerald-300" @click="openExitEditorRoute(worldExit.id)">{{ worldExit.label || worldExit.id }}</button>
-                      <span class="text-xs text-slate-500">{{ worldExit.exit_type || 'one_way' }}</span>
-                    </li>
-                    <li v-if="routeSceneExits.length === 0" class="text-xs text-slate-500">No exits for this scene.</li>
-                  </ul>
-                  <div v-if="showCreateExitForm" class="mt-3 space-y-2">
-                    <EntityReferenceCombobox
-                      v-model="createExitForm.to_scene_id"
-                      :options="sceneReferenceOptions.filter((scene) => scene.id !== activeMapSceneId)"
-                      placeholder="Select destination scene"
-                      :enable-search="true"
-                    />
-                    <input v-model="createExitForm.label" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="Exit label" />
-                    <select v-model="createExitForm.exit_type" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm">
-                      <option value="one_way">one_way</option>
-                      <option value="bidirectional">bidirectional</option>
-                    </select>
-                    <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded px-2 py-1 disabled:opacity-50" :disabled="isCreatingRouteAsset" @click="createExitFromRouteScene">Create Exit</button>
+                  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    <article v-for="obj in filteredRouteSceneSwitches" :key="obj.id" class="relative group aspect-square bg-slate-900 border border-lime-500/20 rounded-xl shadow-lg overflow-visible hover:z-30">
+                      <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
+                        <i class="ra ra-lightning-bolt text-3xl"></i>
+                      </div>
+                      <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
+                        <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
+                      </div>
+                      <div v-if="hasMissingImage(obj)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
+                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
+                      <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/20 text-lime-100">SWITCH</div>
+                      <div class="absolute bottom-0 left-0 right-0 p-2">
+                        <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
+                      </div>
+                      <div class="absolute top-2 right-2 z-40">
+                        <button
+                          @click="toggleMenu(`scene-switch-${obj.id}`, $event)"
+                          class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg"
+                        >
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        <div v-if="activeMenuId === `scene-switch-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+                          <button @click="quickRegenerateVisual('object', obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'switch'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="deleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                        </div>
+                      </div>
+                    </article>
+                    <div v-if="filteredRouteSceneSwitches.length === 0" class="text-xs text-slate-500">No switches match the current filter.</div>
+                  </div>
+                </div>
+
+                <div v-if="shouldShowSceneGroup(filteredRouteSceneContainers.length)" class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Containers ({{ filteredRouteSceneContainers.length }}/{{ routeSceneContainers.length }})</p>
+                    <div class="flex items-center gap-4">
+                      <button @click="requestRegenerateAll('container', true)" :disabled="isBatchGenerating['container']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['container'] }"></i> Generate Missing
+                      </button>
+                      <button @click="requestRegenerateAll('container', false)" :disabled="isBatchGenerating['container']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['container'] }"></i> Regenerate All
+                      </button>
+                      <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="openCreateObjectModal('CONTAINER')">+ Add</button>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    <article v-for="obj in filteredRouteSceneContainers" :key="obj.id" class="relative group aspect-square bg-slate-900 border border-amber-500/20 rounded-xl shadow-lg overflow-visible hover:z-30">
+                      <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
+                        <i class="ra ra-chest text-3xl"></i>
+                      </div>
+                      <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
+                        <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
+                      </div>
+                      <div v-if="hasMissingImage(obj)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
+                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
+                      <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">CONTAINER</div>
+                      <div class="absolute bottom-0 left-0 right-0 p-2">
+                        <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
+                      </div>
+                      <div class="absolute top-2 right-2 z-40">
+                        <button
+                          @click="toggleMenu(`scene-container-${obj.id}`, $event)"
+                          class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg"
+                        >
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        <div v-if="activeMenuId === `scene-container-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+                          <button @click="quickRegenerateVisual('object', obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'container'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="deleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                        </div>
+                      </div>
+                    </article>
+                    <div v-if="filteredRouteSceneContainers.length === 0" class="text-xs text-slate-500">No containers match the current filter.</div>
+                  </div>
+                </div>
+
+                <div v-if="shouldShowSceneGroup(filteredRouteSceneTextLogs.length)" class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Text Logs ({{ filteredRouteSceneTextLogs.length }}/{{ routeSceneTextLogs.length }})</p>
+                    <div class="flex items-center gap-4">
+                      <button @click="requestRegenerateAll('text-log', true)" :disabled="isBatchGenerating['text-log']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['text-log'] }"></i> Generate Missing
+                      </button>
+                      <button @click="requestRegenerateAll('text-log', false)" :disabled="isBatchGenerating['text-log']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+                        <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['text-log'] }"></i> Regenerate All
+                      </button>
+                      <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="openCreateObjectModal('READABLE')">+ Add</button>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    <article v-for="obj in filteredRouteSceneTextLogs" :key="obj.id" class="relative group aspect-square bg-slate-900 border border-cyan-500/20 rounded-xl shadow-lg overflow-visible hover:z-30">
+                      <img v-if="obj.image_url" :src="buildVisualImageUrl(obj.image_url)" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div v-else class="absolute inset-0 bg-slate-900 flex items-center justify-center text-slate-600">
+                        <i class="ra ra-scroll-unfurled text-3xl"></i>
+                      </div>
+                      <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
+                        <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
+                      </div>
+                      <div v-if="hasMissingImage(obj)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
+                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
+                      <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
+                      <div class="absolute bottom-0 left-0 right-0 p-2">
+                        <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
+                      </div>
+                      <div class="absolute top-2 right-2 z-40">
+                        <button
+                          @click="toggleMenu(`scene-log-${obj.id}`, $event)"
+                          class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg"
+                        >
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        <div v-if="activeMenuId === `scene-log-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+                          <button @click="quickRegenerateVisual('object', obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'text-log'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="deleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                        </div>
+                      </div>
+                    </article>
+                    <div v-if="filteredRouteSceneTextLogs.length === 0" class="text-xs text-slate-500">No text logs match the current filter.</div>
+                  </div>
+                </div>
+
+                <div v-if="shouldShowSceneGroup(filteredRouteSceneExits.length)" class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Exits ({{ filteredRouteSceneExits.length }}/{{ routeSceneExits.length }})</p>
+                    <div class="flex items-center gap-4">
+                      <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="openCreateExitModal">+ Add</button>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                    <article v-for="worldExit in filteredRouteSceneExits" :key="worldExit.id" class="relative group aspect-square bg-slate-900 border border-emerald-500/20 rounded-xl shadow-lg overflow-visible hover:z-30">
+                      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.22),transparent_55%)]"></div>
+                      <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-85"></div>
+                      <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-emerald-400/50 bg-emerald-500/20 text-emerald-100">EXIT</div>
+                      <div class="absolute bottom-0 left-0 right-0 p-2">
+                        <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ worldExit.label || worldExit.id }}</div>
+                        <div class="text-[9px] text-emerald-200/80 uppercase tracking-widest truncate mt-1">{{ worldExit.exit_type || 'one_way' }}</div>
+                      </div>
+                      <div class="absolute top-2 right-2 z-40">
+                        <button
+                          @click="toggleMenu(`scene-exit-${worldExit.id}`, $event)"
+                          class="w-6 h-6 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 transition-all shadow-lg"
+                        >
+                          <div class="flex flex-col gap-0.5">
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
+                          </div>
+                        </button>
+                        <div v-if="activeMenuId === `scene-exit-${worldExit.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
+                          <button @click="openExitEditorRoute(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Open Route</button>
+                          <button @click="openEditExitModal(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Edit</button>
+                          <button @click="deleteRouteExit(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                        </div>
+                      </div>
+                    </article>
+                    <div v-if="filteredRouteSceneExits.length === 0" class="text-xs text-slate-500">No exits match the current filter.</div>
                   </div>
                 </div>
               </div>
@@ -1644,7 +2370,7 @@ watch(
     </main>
 
     <EntityTooltip 
-      :hovered-entity="hoveredEntity"
+      :hovered-entity="canShowSceneRoutePanel ? null : hoveredEntity"
       :active-menu-id="activeMenuId"
       :mouse-pos="mousePos"
       :tooltip-align-top="tooltipAlignTop"
@@ -1678,9 +2404,85 @@ watch(
       :rule-enforcement-mode="form.rule_enforcement_mode"
       :is-saving="isSavingText"
       :adventure-id="adventureId"
-      @close="showEditModal = false"
+      @close="closeEditEntityModal"
       @save="saveEntityText"
     />
+
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showExitModal" class="fixed inset-0 z-[190] flex items-center justify-center p-6 backdrop-blur-xl bg-slate-950/60">
+          <div class="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div class="p-6 space-y-5 overflow-y-auto flex-1">
+              <div class="flex justify-between items-center">
+                <div class="space-y-1">
+                  <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">{{ isCreateExitMode ? 'Create Exit' : 'Edit Exit' }}</h3>
+                  <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">
+                    {{ isCreateExitMode ? `From: ${exitModalForm.from_scene_id || activeMapSceneId || 'n/a'}` : `ID: ${activeEditExitId || 'n/a'}` }}
+                  </p>
+                </div>
+                <button @click="closeExitEditModal" class="text-slate-500 hover:text-white transition-colors">
+                  <i class="ra ra-cancel text-xl"></i>
+                </button>
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-3">
+                <label class="text-xs text-slate-300 space-y-1">
+                  <span>From Scene</span>
+                  <input :value="exitModalForm.from_scene_id || activeMapSceneId" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-200" disabled />
+                </label>
+                <label class="text-xs text-slate-300 space-y-1">
+                  <span>To Scene</span>
+                  <EntityReferenceCombobox
+                    v-if="isCreateExitMode"
+                    v-model="exitModalForm.to_scene_id"
+                    :options="sceneReferenceOptions.filter((scene) => scene.id !== (exitModalForm.from_scene_id || activeMapSceneId))"
+                    placeholder="Select destination scene"
+                    :enable-search="true"
+                  />
+                  <input
+                    v-else
+                    :value="exitModalForm.to_scene_id"
+                    class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-200"
+                    disabled
+                  />
+                </label>
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-3">
+                <label class="text-xs text-slate-300 space-y-1">
+                  <span>Label</span>
+                  <input v-model="exitModalForm.label" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all" />
+                </label>
+                <label class="text-xs text-slate-300 space-y-1">
+                  <span>Type</span>
+                  <select v-model="exitModalForm.exit_type" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:border-emerald-500 outline-none transition-all">
+                    <option value="one_way">one_way</option>
+                    <option value="bidirectional">bidirectional</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="text-xs text-slate-300 space-y-1 block">
+                <span>Lock Description</span>
+                <ReferenceTextarea
+                  v-model="exitModalForm.lock_description"
+                  :rows="3"
+                  :options="referenceOptions"
+                  class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all"
+                />
+              </label>
+            </div>
+
+            <div class="p-4 border-t border-white/10 flex justify-end gap-2">
+              <button class="px-4 py-2 rounded-xl border border-white/15 text-slate-300 hover:bg-white/5" @click="closeExitEditModal">Cancel</button>
+              <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50" :disabled="isSavingText" @click="saveExitModal">
+                {{ isCreateExitMode ? 'Create Exit' : 'Save Exit' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <DataDebugModal 
       :show="showDebug"

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import PlotTab from '@/components/editor/PlotTab.vue'
-import WorldMapSection from '@/components/editor/WorldMapSection.vue'
 import { Save, X } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -151,8 +150,6 @@ function handlePacingInput(event: Event) {
         </div>
       </div>
     </section>
-
-    <WorldMapSection :debug-data="debugData" />
 
     <PlotTab
       :form="form"
