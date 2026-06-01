@@ -7,6 +7,7 @@ const props = defineProps<{
   form: any
   adventure: any
   debugData: any
+  referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null }>
   editingField: string | null
   tempValue: string
   isSaving: boolean
@@ -156,6 +157,7 @@ function handlePacingInput(event: Event) {
     <PlotTab
       :form="form"
       :adventure="adventure"
+      :reference-options="referenceOptions || []"
       :editing-field="editingField"
       :temp-value="tempValue"
       :is-saving="isSaving"

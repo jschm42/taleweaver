@@ -1,11 +1,12 @@
 import logging
 import os
+import re
 from copy import deepcopy
 from typing import Any, Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.schemas import (
@@ -68,6 +69,65 @@ class EntityUpdateRequest(BaseModel):
 class StartSceneUpdateRequest(BaseModel):
     scene_id: str
 
+
+class SceneCreateRequest(BaseModel):
+    scene_id: str
+    label: str
+    description: str
+    image_url: Optional[str] = None
+
+
+class ExitCreateRequest(BaseModel):
+    from_scene_id: str
+    to_scene_id: str
+    label: str
+    exit_type: Literal["one_way", "bidirectional"] = "one_way"
+    is_locked: bool = False
+    lock_description: Optional[str] = None
+    code_to_unlock: Optional[str] = None
+    item_to_unlock: Optional[str] = None
+    rule_to_unlock: Optional[str] = None
+
+
+class EntityCreateRequest(BaseModel):
+    entity_id: str
+    entity_type: Literal["NPC", "OBJECT"]
+    scene_id: str
+    name: str
+    description: str
+    image_url: Optional[str] = None
+    item_type: Optional[str] = None
+    is_portable: Optional[bool] = None
+    goal: Optional[str] = None
+    character: Optional[str] = None
+    hp: Optional[int] = None
+    stamina: Optional[int] = None
+    mana: Optional[int] = None
+    is_killable: Optional[bool] = None
+    metadata_json: Optional[dict[str, Any]] = None
+
+
+class QuestCreateRequest(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    goal: str = ""
+    impact: str = ""
+    exp_reward: int = 0
+    is_main: bool = False
+
+
+class AwardCreateRequest(BaseModel):
+    key: str
+    title: str
+    description: str = ""
+    tier: Literal["bronze", "silver", "gold"] = "bronze"
+    requirement: str = ""
+    is_earned: bool = False
+
+
+EDITOR_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
 def _serialize_model(obj):
     if not obj: return None
     data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
@@ -104,6 +164,57 @@ def _is_npc_entity(ent):
 
 def _is_object_entity(ent):
     return ent.entity_type == "OBJECT"
+
+
+def _sanitize_editor_id(raw_value: Optional[str], field_name: str) -> str:
+    value = str(raw_value or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    if not EDITOR_ID_PATTERN.match(value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must match ^[A-Za-z0-9_-]{{1,128}}$",
+        )
+    return value
+
+
+async def _get_owned_adventure_or_404(db: AsyncSession, template_id: str, user_id: str) -> AdventureTemplate:
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != user_id:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+    return adv
+
+
+async def _ensure_template_scene_exists(db: AsyncSession, template_id: str, scene_id: str) -> None:
+    res = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+            WorldScene.id == scene_id,
+        )
+    )
+    if not res.scalars().first():
+        raise HTTPException(status_code=400, detail=f"scene_id '{scene_id}' does not exist in this adventure")
+
+
+def _normalize_lock_fields(
+    *,
+    code_to_unlock: Optional[str],
+    item_to_unlock: Optional[str],
+    rule_to_unlock: Optional[str],
+) -> tuple[str, str, str]:
+    code = str(code_to_unlock or "").strip()
+    item = str(item_to_unlock or "").strip().upper()
+    rule = str(rule_to_unlock or "").strip()
+
+    if code:
+        return code[:32], "", ""
+    if item:
+        from backend.utils.text_utils import slugify
+        return "", slugify(item).upper().replace("-", "_")[:64], ""
+    if rule:
+        return "", "", rule[:500]
+    return "", "", ""
 
 
 def _public_data_to_local_path(path: str) -> Optional[str]:
@@ -280,6 +391,362 @@ async def get_adventure_editor_assets(template_id: str, db: AsyncSession = Depen
 async def get_adventure_debug(template_id: str, db: AsyncSession = Depends(get_db)):
     """Legacy debug endpoint."""
     return await _build_adventure_editor_assets(template_id, db)
+
+
+@router.post("/{template_id}/editor/scene")
+async def create_editor_scene(
+    template_id: str,
+    payload: SceneCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    scene_id = _sanitize_editor_id(payload.scene_id, "scene_id")
+    label = str(payload.label or "").strip()
+    description = str(payload.description or "").strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="label is required")
+    if not description:
+        raise HTTPException(status_code=400, detail="description is required")
+
+    existing_scene = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+            WorldScene.id == scene_id,
+        )
+    )
+    if existing_scene.scalars().first():
+        raise HTTPException(status_code=409, detail="scene_id already exists")
+
+    scene = WorldScene(
+        id=scene_id,
+        template_id=template_id,
+        session_id=None,
+        label=label,
+        description=description,
+        image_url=str(payload.image_url or "").strip() or None,
+    )
+    db.add(scene)
+    await db.commit()
+    return {"status": "success", "scene": _serialize_model(scene)}
+
+
+@router.delete("/{template_id}/editor/scene/{scene_id}")
+async def delete_editor_scene(
+    template_id: str,
+    scene_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    scene_id = _sanitize_editor_id(scene_id, "scene_id")
+
+    scene_res = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+            WorldScene.id == scene_id,
+        )
+    )
+    scene = scene_res.scalars().first()
+    if not scene:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    await db.execute(
+        delete(WorldExit).where(
+            WorldExit.template_id == template_id,
+            WorldExit.session_id.is_(None),
+            ((WorldExit.from_scene_id == scene_id) | (WorldExit.to_scene_id == scene_id)),
+        )
+    )
+    await db.execute(
+        delete(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+            WorldEntity.current_scene_id == scene_id,
+        )
+    )
+    await db.delete(scene)
+
+    manifest = deepcopy(adv.original_manifest or {})
+    if (manifest.get("start_scene_id") or "") == scene_id:
+        replacement_scene_res = await db.execute(
+            select(WorldScene.id).where(
+                WorldScene.template_id == template_id,
+                WorldScene.session_id.is_(None),
+                WorldScene.id != scene_id,
+            )
+        )
+        replacement_scene_id = replacement_scene_res.scalars().first()
+        if replacement_scene_id:
+            manifest["start_scene_id"] = replacement_scene_id
+        else:
+            manifest.pop("start_scene_id", None)
+        adv.original_manifest = manifest
+
+    await db.commit()
+    return {"status": "success", "deleted_scene_id": scene_id}
+
+
+@router.post("/{template_id}/editor/exit")
+async def create_editor_exit(
+    template_id: str,
+    payload: ExitCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    from_scene_id = _sanitize_editor_id(payload.from_scene_id, "from_scene_id")
+    to_scene_id = _sanitize_editor_id(payload.to_scene_id, "to_scene_id")
+    if from_scene_id == to_scene_id:
+        raise HTTPException(status_code=400, detail="from_scene_id and to_scene_id must differ")
+
+    await _ensure_template_scene_exists(db, template_id, from_scene_id)
+    await _ensure_template_scene_exists(db, template_id, to_scene_id)
+
+    label = str(payload.label or "").strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="label is required")
+
+    code, item, rule = _normalize_lock_fields(
+        code_to_unlock=payload.code_to_unlock,
+        item_to_unlock=payload.item_to_unlock,
+        rule_to_unlock=payload.rule_to_unlock,
+    )
+
+    world_exit = WorldExit(
+        template_id=template_id,
+        session_id=None,
+        from_scene_id=from_scene_id,
+        to_scene_id=to_scene_id,
+        label=label,
+        exit_type=payload.exit_type,
+        is_locked=bool(payload.is_locked or code or item or rule),
+        lock_description=str(payload.lock_description or "").strip() or None,
+        code_to_unlock=code or None,
+        item_to_unlock=item or None,
+        rule_to_unlock=rule or None,
+    )
+    db.add(world_exit)
+    await db.commit()
+    return {"status": "success", "exit": _serialize_model(world_exit)}
+
+
+@router.delete("/{template_id}/editor/exit/{exit_id}")
+async def delete_editor_exit(
+    template_id: str,
+    exit_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    exit_res = await db.execute(
+        select(WorldExit).where(
+            WorldExit.template_id == template_id,
+            WorldExit.session_id.is_(None),
+            WorldExit.id == exit_id,
+        )
+    )
+    world_exit = exit_res.scalars().first()
+    if not world_exit:
+        raise HTTPException(status_code=404, detail="Exit not found")
+
+    await db.delete(world_exit)
+    await db.commit()
+    return {"status": "success", "deleted_exit_id": exit_id}
+
+
+@router.post("/{template_id}/editor/entity")
+async def create_editor_entity(
+    template_id: str,
+    payload: EntityCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    entity_id = _sanitize_editor_id(payload.entity_id, "entity_id")
+    scene_id = _sanitize_editor_id(payload.scene_id, "scene_id")
+    await _ensure_template_scene_exists(db, template_id, scene_id)
+
+    name = str(payload.name or "").strip()
+    description = str(payload.description or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    if not description:
+        raise HTTPException(status_code=400, detail="description is required")
+
+    existing_ent = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+            WorldEntity.id == entity_id,
+        )
+    )
+    if existing_ent.scalars().first():
+        raise HTTPException(status_code=409, detail="entity_id already exists")
+
+    item_type = str(payload.item_type or "").strip().upper() if payload.entity_type == "OBJECT" else None
+    entity = WorldEntity(
+        id=entity_id,
+        template_id=template_id,
+        session_id=None,
+        entity_type=payload.entity_type,
+        name=name,
+        description=description,
+        current_scene_id=scene_id,
+        image_url=str(payload.image_url or "").strip() or None,
+        item_type=item_type,
+        is_portable=bool(payload.is_portable) if payload.is_portable is not None else True,
+        goal=str(payload.goal or "").strip() or None,
+        character=str(payload.character or "").strip() or None,
+        hp=payload.hp,
+        max_hp=payload.hp,
+        mana=payload.mana,
+        max_mana=payload.mana,
+        stamina=payload.stamina,
+        max_stamina=payload.stamina,
+        is_killable=bool(payload.is_killable) if payload.is_killable is not None else True,
+        metadata_json=dict(payload.metadata_json or {}),
+        inventory=[],
+    )
+    db.add(entity)
+    await db.commit()
+    return {"status": "success", "entity": _serialize_model(entity)}
+
+
+@router.delete("/{template_id}/editor/entity/{entity_id}")
+async def delete_editor_entity(
+    template_id: str,
+    entity_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    entity_id = _sanitize_editor_id(entity_id, "entity_id")
+
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+            WorldEntity.id == entity_id,
+        )
+    )
+    entity = ent_res.scalars().first()
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    await db.delete(entity)
+    await db.commit()
+    return {"status": "success", "deleted_entity_id": entity_id}
+
+
+@router.post("/{template_id}/editor/quest")
+async def create_editor_quest(
+    template_id: str,
+    payload: QuestCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    quest_id = _sanitize_editor_id(payload.id, "id")
+    quests = list(adv.quests or [])
+    if any(str(q.get("id") or "") == quest_id for q in quests):
+        raise HTTPException(status_code=409, detail="quest id already exists")
+
+    quest = {
+        "id": quest_id,
+        "title": str(payload.title or "").strip(),
+        "description": str(payload.description or "").strip(),
+        "goal": str(payload.goal or "").strip(),
+        "impact": str(payload.impact or "").strip(),
+        "exp_reward": int(payload.exp_reward or 0),
+        "is_main": bool(payload.is_main),
+        "status": "open",
+    }
+    if not quest["title"]:
+        raise HTTPException(status_code=400, detail="title is required")
+
+    quests.append(quest)
+    adv.quests = quests
+    await db.commit()
+    return {"status": "success", "quest": quest}
+
+
+@router.delete("/{template_id}/editor/quest/{quest_id}")
+async def delete_editor_quest(
+    template_id: str,
+    quest_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    quest_id = _sanitize_editor_id(quest_id, "quest_id")
+
+    quests = list(adv.quests or [])
+    filtered = [q for q in quests if str(q.get("id") or "") != quest_id]
+    if len(filtered) == len(quests):
+        raise HTTPException(status_code=404, detail="Quest not found")
+
+    adv.quests = filtered
+    await db.commit()
+    return {"status": "success", "deleted_quest_id": quest_id}
+
+
+@router.post("/{template_id}/editor/award")
+async def create_editor_award(
+    template_id: str,
+    payload: AwardCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    award_key = _sanitize_editor_id(payload.key, "key")
+    awards = list(adv.awards or [])
+    if any(str(a.get("key") or "") == award_key for a in awards):
+        raise HTTPException(status_code=409, detail="award key already exists")
+
+    award = {
+        "key": award_key,
+        "title": str(payload.title or "").strip(),
+        "description": str(payload.description or "").strip(),
+        "tier": payload.tier,
+        "requirement": str(payload.requirement or "").strip(),
+        "is_earned": bool(payload.is_earned),
+    }
+    if not award["title"]:
+        raise HTTPException(status_code=400, detail="title is required")
+
+    awards.append(award)
+    adv.awards = awards
+    await db.commit()
+    return {"status": "success", "award": award}
+
+
+@router.delete("/{template_id}/editor/award/{award_key}")
+async def delete_editor_award(
+    template_id: str,
+    award_key: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    award_key = _sanitize_editor_id(award_key, "award_key")
+
+    awards = list(adv.awards or [])
+    filtered = [a for a in awards if str(a.get("key") or "") != award_key]
+    if len(filtered) == len(awards):
+        raise HTTPException(status_code=404, detail="Award not found")
+
+    adv.awards = filtered
+    await db.commit()
+    return {"status": "success", "deleted_award_key": award_key}
 
 @router.patch("/{template_id}/editor/entity")
 async def update_editor_entity(

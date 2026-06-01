@@ -12,6 +12,13 @@ const props = defineProps<{
   debugData: any
   editorScenes: any[]
   visualsCacheVersion?: number
+  activeSceneId?: string | null
+  activeExitId?: string | null
+}>()
+
+const emit = defineEmits<{
+  (e: 'open-scene', sceneId: string): void
+  (e: 'open-exit', exitId: string): void
 }>()
 
 const mapContainer = ref<HTMLDivElement | null>(null)
@@ -66,6 +73,7 @@ function safeId(raw: string): string {
 const layoutData = ref<{
   nodes: Array<{
     id: string
+    rawId: string
     label: string
     x: number
     y: number
@@ -76,6 +84,7 @@ const layoutData = ref<{
     description: string
   }>
   edges: Array<{
+    id: string
     from: string
     to: string
     points: Array<{ x: number, y: number }>
@@ -129,6 +138,7 @@ function updateLayout() {
 
     return {
       id,
+      rawId: originalScene.id || id,
       label: originalScene.label || originalScene.name || id,
       x: node.x,
       y: node.y,
@@ -148,6 +158,7 @@ function updateLayout() {
     ) || {}
     const exitType = edge.exitType || rawExit.exit_type || 'one_way'
     return {
+      id: String(rawExit.id || `${e.v}-${e.w}`),
       from: e.v,
       to: e.w,
       points: edge.points || [],
@@ -171,6 +182,7 @@ const exitCircles = computed(() => {
   if (!layoutData.value) return []
   const circles: Array<{
     id: string
+    exitId: string
     x: number
     y: number
     from: string
@@ -192,6 +204,7 @@ const exitCircles = computed(() => {
     const toNode = layoutData.value!.nodes.find(n => n.id === edge.to)
     circles.push({
       id: `exit-end-${edgeIdx}`,
+      exitId: edge.id,
       x: endCirclePoint.x + margin,
       y: endCirclePoint.y + margin,
       from: fromNode?.label || edge.from,
@@ -208,6 +221,7 @@ const exitCircles = computed(() => {
       const startCirclePoint = movePointToward(startPoint, afterStartPoint, EXIT_CIRCLE_EDGE_OFFSET)
       circles.push({
         id: `exit-start-${edgeIdx}`,
+        exitId: edge.id,
         x: startCirclePoint.x + margin,
         y: startCirclePoint.y + margin,
         from: toNode?.label || edge.to,
@@ -310,6 +324,30 @@ function handleExitMouseMove(event: MouseEvent) {
   hoveredExitPos.value = { x: event.clientX, y: event.clientY }
 }
 
+function handleNodeClick(node: { rawId: string }) {
+  const sceneId = String(node.rawId || '').trim()
+  if (!sceneId) return
+  emit('open-scene', sceneId)
+}
+
+function handleExitClick(exitId: string) {
+  const normalized = String(exitId || '').trim()
+  if (!normalized) return
+  emit('open-exit', normalized)
+}
+
+function isActiveSceneNode(nodeId: string): boolean {
+  const active = String(props.activeSceneId || '').trim()
+  if (!active) return false
+  return safeId(active) === nodeId
+}
+
+function isActiveExit(exitId: string): boolean {
+  const active = String(props.activeExitId || '').trim()
+  if (!active) return false
+  return active === exitId
+}
+
 watch(() => [props.editorScenes, props.debugData], () => {
   updateLayout()
 }, { deep: true })
@@ -400,7 +438,7 @@ onMounted(() => {
         >
           <!-- SVG overlay for connections/edges -->
           <svg 
-            class="absolute inset-0 pointer-events-none z-0"
+            class="absolute inset-0 z-0"
             :width="(layoutData?.width || 800) + margin * 2"
             :height="(layoutData?.height || 600) + margin * 2"
           >
@@ -436,13 +474,15 @@ onMounted(() => {
                 :key="idx"
                 :d="getEdgePath(edge.points)"
                 stroke="#ffd97d"
-                :stroke-width="edge.isLocked ? 2 : 2.5"
+                :stroke-width="isActiveExit(edge.id) ? 4 : (edge.isLocked ? 2 : 2.5)"
                 :stroke-dasharray="edge.isLocked ? '6,6' : 'none'"
                 fill="none"
-                class="transition-opacity duration-300"
-                :class="{ 'opacity-60': edge.isLocked }"
+                class="transition-opacity duration-300 cursor-pointer"
+                :class="{ 'opacity-60': edge.isLocked, 'opacity-100': isActiveExit(edge.id), 'opacity-80': !isActiveExit(edge.id) }"
                 marker-end="url(#arrow-end)"
                 :marker-start="edge.isBidirectional ? 'url(#arrow-start)' : 'none'"
+                style="pointer-events: stroke;"
+                @click.stop="handleExitClick(edge.id)"
               />
             </g>
           </svg>
@@ -462,12 +502,13 @@ onMounted(() => {
               @mouseenter="handleNodeMouseEnter(node, $event)"
               @mouseleave="handleNodeMouseLeave"
               @mousemove="handleNodeMouseMove($event)"
+              @click.stop="handleNodeClick(node)"
             >
               <!-- Modern node card with scene thumbnail -->
               <div 
                 class="w-full h-full rounded-2xl border bg-slate-900 overflow-hidden flex flex-col transition-all duration-300 shadow-lg group-hover:scale-105 group-hover:shadow-2xl"
                 :class="[
-                  node.isStart 
+                  node.isStart || isActiveSceneNode(node.id)
                     ? 'border-emerald-500 shadow-emerald-950/50 shadow-md ring-2 ring-emerald-500/30' 
                     : 'border-slate-700 hover:border-amber-500/50'
                 ]"
@@ -535,10 +576,13 @@ onMounted(() => {
               <button 
                 class="w-full h-full rounded-full border flex items-center justify-center transition-all duration-300 shadow-md transform hover:scale-125"
                 :class="[
-                  exit.isLocked
+                  isActiveExit(exit.exitId)
+                    ? 'bg-emerald-700 border-emerald-400 text-white'
+                    : exit.isLocked
                     ? 'bg-amber-950 border-amber-500 text-amber-400 hover:bg-amber-900'
                     : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-emerald-500 hover:text-emerald-400'
                 ]"
+                @click.stop="handleExitClick(exit.exitId)"
               >
                 <svg v-if="exit.isLocked" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />

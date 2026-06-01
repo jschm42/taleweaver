@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
+import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 
 const props = defineProps<{
   show: boolean
@@ -23,6 +25,7 @@ const props = defineProps<{
     text_log_content: string
     text_log_format: string
   }
+  referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null; type?: string }>
   ruleEnforcementMode: string
   isSaving: boolean
   adventureId?: string
@@ -34,6 +37,11 @@ const emit = defineEmits<{
 }>()
 
 const localForm = ref({ ...props.initialForm })
+
+const itemReferenceOptions = computed(() => {
+  const source = props.referenceOptions || []
+  return source.filter((option) => String(option.type || '').toUpperCase() === 'OBJECT')
+})
 
 watch(() => props.initialForm, (newVal) => {
   localForm.value = { ...newVal }
@@ -149,7 +157,13 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                     {{ localForm.teaser.length }} / 300
                   </span>
                 </div>
-                <textarea v-model="localForm.teaser" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="A short, catchy teaser for your adventure..."></textarea>
+                  <ReferenceTextarea
+                    v-model="localForm.teaser"
+                    :rows="3"
+                    :options="props.referenceOptions || []"
+                    class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
+                    placeholder="A short, catchy teaser for your adventure..."
+                  />
               </div>
 
               <!-- Protagonist Motivation & Traits -->
@@ -161,7 +175,14 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.goal || '').length }} / 200
                     </span>
                   </div>
-                  <textarea v-model="localForm.goal" maxlength="200" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What drives the protagonist? (e.g. 'Seeks revenge for family's death')"></textarea>
+                  <ReferenceTextarea
+                    v-model="localForm.goal"
+                    :maxlength="200"
+                    :rows="2"
+                    :options="props.referenceOptions || []"
+                    class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
+                    placeholder="What drives the protagonist? (e.g. 'Seeks revenge for family's death')"
+                  />
                   <button 
                     v-if="localForm.description"
                     @click="handleGenerateTraits('goal')" 
@@ -179,7 +200,14 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.character || '').length }} / 200
                     </span>
                   </div>
-                  <textarea v-model="localForm.character" maxlength="200" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does the protagonist behave? (e.g. 'Sarcastic but loyal, prone to rash decisions')"></textarea>
+                  <ReferenceTextarea
+                    v-model="localForm.character"
+                    :maxlength="200"
+                    :rows="2"
+                    :options="props.referenceOptions || []"
+                    class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
+                    placeholder="How does the protagonist behave? (e.g. 'Sarcastic but loyal, prone to rash decisions')"
+                  />
                   <button 
                     v-if="localForm.description"
                     @click="handleGenerateTraits('character')" 
@@ -200,7 +228,14 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.goal || '').length }} / 200
                     </span>
                   </div>
-                  <textarea v-model="localForm.goal" maxlength="200" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="What does this NPC want? (e.g. 'Wants to steal the player's gold')"></textarea>
+                  <ReferenceTextarea
+                    v-model="localForm.goal"
+                    :maxlength="200"
+                    :rows="2"
+                    :options="props.referenceOptions || []"
+                    class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
+                    placeholder="What does this NPC want? (e.g. 'Wants to steal the player's gold')"
+                  />
                   <button 
                     v-if="localForm.description"
                     @click="handleGenerateTraits('goal')" 
@@ -218,7 +253,14 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.character || '').length }} / 200
                     </span>
                   </div>
-                  <textarea v-model="localForm.character" maxlength="200" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner" placeholder="How does this NPC behave? (e.g. 'Grumpy and stubborn')"></textarea>
+                  <ReferenceTextarea
+                    v-model="localForm.character"
+                    :maxlength="200"
+                    :rows="2"
+                    :options="props.referenceOptions || []"
+                    class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
+                    placeholder="How does this NPC behave? (e.g. 'Grumpy and stubborn')"
+                  />
                   <button 
                     v-if="localForm.description"
                     @click="handleGenerateTraits('character')" 
@@ -297,11 +339,11 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                   </div>
                   <div class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Item ID To Unlock</label>
-                    <input
+                    <EntityReferenceCombobox
                       v-model="localForm.item_to_unlock"
-                      maxlength="64"
-                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all"
-                      placeholder="ITEM_KEY_BRASS"
+                      :options="itemReferenceOptions"
+                      placeholder="Select item reference"
+                      :enable-search="true"
                     />
                   </div>
                 </div>
@@ -328,7 +370,14 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                       {{ (localForm.text_log_content || '').length }} / 500
                     </span>
                   </div>
-                  <textarea v-model="localForm.text_log_content" maxlength="500" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all" placeholder="Readable note text shown to the player."></textarea>
+                  <ReferenceTextarea
+                    v-model="localForm.text_log_content"
+                    :maxlength="500"
+                    :rows="3"
+                    :options="props.referenceOptions || []"
+                    class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all"
+                    placeholder="Readable note text shown to the player."
+                  />
                 </div>
               </div>
 
@@ -339,7 +388,13 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                     {{ (localForm.description || '').length }} / {{ context.type === 'object' ? 200 : 400 }}
                   </span>
                 </div>
-                <textarea v-model="localForm.description" :maxlength="['npc', 'protagonist'].includes(context.type) ? 400 : (context.type === 'object' && String(localForm.item_type || '').toUpperCase() === 'READABLE' ? 200 : undefined)" :rows="context.type === 'object' ? 3 : 4" :class="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner', context.type === 'object' ? 'text-sm' : 'text-base']"></textarea>
+                <ReferenceTextarea
+                  v-model="localForm.description"
+                  :maxlength="['npc', 'protagonist'].includes(context.type) ? 400 : (context.type === 'object' && String(localForm.item_type || '').toUpperCase() === 'READABLE' ? 200 : undefined)"
+                  :rows="context.type === 'object' ? 3 : 4"
+                  :options="props.referenceOptions || []"
+                  :class-name="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner', context.type === 'object' ? 'text-sm' : 'text-base'].join(' ')"
+                />
               </div>
             </div>
 

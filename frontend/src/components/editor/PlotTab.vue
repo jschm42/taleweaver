@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 
 defineProps<{
   form: any
@@ -7,6 +8,7 @@ defineProps<{
   tempValue: string
   isSaving: boolean
   fixNewlines: (text: string) => string
+  referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null }>
 }>()
 
 const emit = defineEmits<{
@@ -59,7 +61,14 @@ const emit = defineEmits<{
         <div class="space-y-4">
           <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Plot (Secret)</label>
           <div v-if="editingField === 'plot'" class="space-y-4 animate-fade-in">
-            <textarea :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLTextAreaElement).value)" rows="10" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[200px]" placeholder="The main plotline, hidden goals, and core narrative..."></textarea>
+            <ReferenceTextarea
+              :model-value="tempValue"
+              :rows="10"
+              :options="referenceOptions || []"
+              class-name="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[200px]"
+              placeholder="The main plotline, hidden goals, and core narrative..."
+              @update:model-value="emit('update:tempValue', $event)"
+            />
             <div class="flex gap-4">
               <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
@@ -81,7 +90,14 @@ const emit = defineEmits<{
         <div class="space-y-4">
           <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Rules / Mechanics</label>
           <div v-if="editingField === 'rules'" class="space-y-4 animate-fade-in">
-            <textarea :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLTextAreaElement).value)" rows="6" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]" placeholder="Special rules for this world..."></textarea>
+            <ReferenceTextarea
+              :model-value="tempValue"
+              :rows="6"
+              :options="referenceOptions || []"
+              class-name="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]"
+              placeholder="Special rules for this world..."
+              @update:model-value="emit('update:tempValue', $event)"
+            />
             <div class="flex gap-4">
               <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
@@ -103,7 +119,14 @@ const emit = defineEmits<{
         <div class="space-y-4">
           <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Session Intro Text (Shown Once)</label>
           <div v-if="editingField === 'intro_text'" class="space-y-4 animate-fade-in">
-            <textarea :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLTextAreaElement).value)" rows="6" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]" placeholder="Optional opening system text for a newly started session..."></textarea>
+            <ReferenceTextarea
+              :model-value="tempValue"
+              :rows="6"
+              :options="referenceOptions || []"
+              class-name="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]"
+              placeholder="Optional opening system text for a newly started session..."
+              @update:model-value="emit('update:tempValue', $event)"
+            />
             <div class="flex gap-4">
               <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
@@ -125,7 +148,14 @@ const emit = defineEmits<{
         <div class="space-y-4">
           <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">GM Walkthrough (Solution Path)</label>
           <div v-if="editingField === 'walkthrough'" class="space-y-4 animate-fade-in">
-            <textarea :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLTextAreaElement).value)" rows="10" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[200px]" placeholder="Step-by-step secret solution for the GM..."></textarea>
+            <ReferenceTextarea
+              :model-value="tempValue"
+              :rows="10"
+              :options="referenceOptions || []"
+              class-name="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[200px]"
+              placeholder="Step-by-step secret solution for the GM..."
+              @update:model-value="emit('update:tempValue', $event)"
+            />
             <div class="flex gap-4">
               <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
@@ -147,7 +177,14 @@ const emit = defineEmits<{
         <div class="space-y-4">
           <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Director's Text-to-Speech Notes (Gemini TTS only)</label>
           <div v-if="editingField === 'tts_director_notes'" class="space-y-4 animate-fade-in">
-            <textarea :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLTextAreaElement).value)" rows="8" class="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]" placeholder="Specific instructions for voice style, dynamics, and tone..."></textarea>
+            <ReferenceTextarea
+              :model-value="tempValue"
+              :rows="8"
+              :options="referenceOptions || []"
+              class-name="w-full bg-black/60 border border-emerald-500/50 rounded-3xl px-8 py-6 text-lg text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all leading-relaxed shadow-2xl resize-y min-h-[150px]"
+              placeholder="Specific instructions for voice style, dynamics, and tone..."
+              @update:model-value="emit('update:tempValue', $event)"
+            />
             <p class="text-[10px] text-slate-500 uppercase tracking-widest italic px-2">Note: These instructions only apply when using Gemini-based TTS models.</p>
             <div class="flex gap-4">
               <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
@@ -171,7 +208,14 @@ const emit = defineEmits<{
           <div class="space-y-4">
             <label class="block text-xs font-black text-emerald-500/80 uppercase tracking-[0.3em]">Win Conditions</label>
             <div v-if="editingField === 'completed_condition'" class="space-y-4 animate-fade-in">
-              <textarea :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLTextAreaElement).value)" rows="4" class="w-full bg-black/60 border border-emerald-500/50 rounded-2xl px-6 py-5 text-base text-slate-200 outline-none transition-all resize-y" placeholder="What must the player achieve?"></textarea>
+              <ReferenceTextarea
+                :model-value="tempValue"
+                :rows="4"
+                :options="referenceOptions || []"
+                class-name="w-full bg-black/60 border border-emerald-500/50 rounded-2xl px-6 py-5 text-base text-slate-200 outline-none transition-all resize-y"
+                placeholder="What must the player achieve?"
+                @update:model-value="emit('update:tempValue', $event)"
+              />
               <div class="flex gap-4">
                 <button @click="emit('save-field')" :disabled="isSaving" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
                 <button @click="emit('cancel-edit')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
@@ -186,7 +230,14 @@ const emit = defineEmits<{
           <div class="space-y-4">
             <label class="block text-xs font-black text-red-500/80 uppercase tracking-[0.3em]">Loss Conditions</label>
             <div v-if="editingField === 'gameover_condition'" class="space-y-4 animate-fade-in">
-              <textarea :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLTextAreaElement).value)" rows="4" class="w-full bg-black/60 border border-red-500/50 rounded-2xl px-6 py-5 text-base text-slate-200 outline-none transition-all resize-y" placeholder="How can the adventure fail?"></textarea>
+              <ReferenceTextarea
+                :model-value="tempValue"
+                :rows="4"
+                :options="referenceOptions || []"
+                class-name="w-full bg-black/60 border border-red-500/50 rounded-2xl px-6 py-5 text-base text-slate-200 outline-none transition-all resize-y"
+                placeholder="How can the adventure fail?"
+                @update:model-value="emit('update:tempValue', $event)"
+              />
               <div class="flex gap-4">
                 <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
                 <button @click="emit('cancel-edit')" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>

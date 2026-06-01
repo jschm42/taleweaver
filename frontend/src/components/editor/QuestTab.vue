@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { entityService } from '@/services/entityService'
+import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 
 
 const props = defineProps<{
   adventure: any
+  referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null }>
 }>()
 
 const emit = defineEmits<{
@@ -372,12 +374,13 @@ function confirmDeleteQuest() {
                     <span>{{ isGeneratingDescription ? 'Generating...' : 'Auto-Generate' }}</span>
                   </button>
                 </div>
-                <textarea 
-                  v-model="modalQuest.description" 
-                  rows="4" 
-                  placeholder="Explain what the protagonist needs to do..." 
-                  class="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
-                ></textarea>
+                <ReferenceTextarea
+                  v-model="modalQuest.description"
+                  :rows="4"
+                  :options="props.referenceOptions || []"
+                  placeholder="Explain what the protagonist needs to do..."
+                  class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
+                />
               </div>
             </div>
 

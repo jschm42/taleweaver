@@ -3349,6 +3349,170 @@ async def test_editor_start_scene_endpoint_updates_manifest_and_assets(client: A
         assert (adventure.original_manifest or {}).get("start_scene_id") == "ASSESSMENT_ROOM"
 
 
+async def test_editor_scene_entity_exit_crud_endpoints(client: AsyncClient):
+    """Editor CRUD endpoints should create and delete scenes, entities and exits consistently."""
+    ids = await _create_adventure(client, "Editor CRUD Adventure")
+    adv_id = ids["adventure_id"]
+
+    async with TestSessionLocal() as db:
+        await db.execute(
+            delete(WorldExit).where(
+                WorldExit.template_id == adv_id,
+                WorldExit.session_id.is_(None),
+            )
+        )
+        await db.execute(
+            delete(WorldEntity).where(
+                WorldEntity.template_id == adv_id,
+                WorldEntity.session_id.is_(None),
+            )
+        )
+        await db.execute(
+            delete(WorldScene).where(
+                WorldScene.template_id == adv_id,
+                WorldScene.session_id.is_(None),
+            )
+        )
+        db.add_all([
+            WorldScene(
+                id="SCENE_A",
+                template_id=adv_id,
+                session_id=None,
+                label="Scene A",
+                description="A",
+                image_url=None,
+            ),
+            WorldScene(
+                id="SCENE_B",
+                template_id=adv_id,
+                session_id=None,
+                label="Scene B",
+                description="B",
+                image_url=None,
+            ),
+        ])
+        await db.commit()
+
+    create_scene_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/scene",
+        json={
+            "scene_id": "SCENE_C",
+            "label": "Scene C",
+            "description": "C",
+        },
+    )
+    assert create_scene_resp.status_code == 200, create_scene_resp.text
+
+    create_entity_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "entity_id": "NPC_C",
+            "entity_type": "NPC",
+            "scene_id": "SCENE_C",
+            "name": "NPC C",
+            "description": "Guardian",
+            "goal": "Protect the room",
+            "character": "Quiet",
+            "hp": 30,
+            "mana": 10,
+            "stamina": 20,
+        },
+    )
+    assert create_entity_resp.status_code == 200, create_entity_resp.text
+
+    create_exit_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/exit",
+        json={
+            "from_scene_id": "SCENE_A",
+            "to_scene_id": "SCENE_C",
+            "label": "Stone Arch",
+            "exit_type": "one_way",
+        },
+    )
+    assert create_exit_resp.status_code == 200, create_exit_resp.text
+    exit_id = create_exit_resp.json().get("exit", {}).get("id")
+    assert exit_id
+
+    assets_before_delete_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    assert assets_before_delete_resp.status_code == 200, assets_before_delete_resp.text
+    assets_before_delete = assets_before_delete_resp.json()
+    assert any(scene.get("id") == "SCENE_C" for scene in assets_before_delete.get("scenes", []))
+    assert any(entity.get("id") == "NPC_C" for entity in assets_before_delete.get("npcs", []))
+    assert any(world_exit.get("id") == exit_id for world_exit in assets_before_delete.get("exits", []))
+
+    delete_scene_resp = await client.delete(f"/api/adventures/{adv_id}/editor/scene/SCENE_C")
+    assert delete_scene_resp.status_code == 200, delete_scene_resp.text
+
+    assets_after_delete_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    assert assets_after_delete_resp.status_code == 200, assets_after_delete_resp.text
+    assets_after_delete = assets_after_delete_resp.json()
+    assert all(scene.get("id") != "SCENE_C" for scene in assets_after_delete.get("scenes", []))
+    assert all(entity.get("id") != "NPC_C" for entity in assets_after_delete.get("npcs", []))
+    assert all(world_exit.get("id") != exit_id for world_exit in assets_after_delete.get("exits", []))
+
+
+async def test_editor_quest_and_award_crud_endpoints(client: AsyncClient):
+    """Editor CRUD endpoints should create and delete quest and award records on the template."""
+    ids = await _create_adventure(client, "Quest Award CRUD Adventure")
+    adv_id = ids["adventure_id"]
+
+    create_quest_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/quest",
+        json={
+            "id": "QUEST_ALPHA",
+            "title": "Find the Lantern",
+            "description": "Recover the lantern from the vault.",
+            "goal": "Retrieve the lantern",
+            "impact": "Unlocks hidden chamber",
+            "exp_reward": 120,
+            "is_main": True,
+        },
+    )
+    assert create_quest_resp.status_code == 200, create_quest_resp.text
+
+    create_award_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/award",
+        json={
+            "key": "AWARD_LANTERN",
+            "title": "Lantern Bearer",
+            "description": "Recovered the ancient lantern.",
+            "tier": "silver",
+            "requirement": "Complete QUEST_ALPHA",
+        },
+    )
+    assert create_award_resp.status_code == 200, create_award_resp.text
+
+    duplicate_quest_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/quest",
+        json={
+            "id": "QUEST_ALPHA",
+            "title": "Duplicate",
+        },
+    )
+    assert duplicate_quest_resp.status_code == 409, duplicate_quest_resp.text
+
+    duplicate_award_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/award",
+        json={
+            "key": "AWARD_LANTERN",
+            "title": "Duplicate",
+        },
+    )
+    assert duplicate_award_resp.status_code == 409, duplicate_award_resp.text
+
+    delete_quest_resp = await client.delete(f"/api/adventures/{adv_id}/editor/quest/QUEST_ALPHA")
+    assert delete_quest_resp.status_code == 200, delete_quest_resp.text
+
+    delete_award_resp = await client.delete(f"/api/adventures/{adv_id}/editor/award/AWARD_LANTERN")
+    assert delete_award_resp.status_code == 200, delete_award_resp.text
+
+    adventure_resp = await client.get(f"/api/adventures/{adv_id}")
+    assert adventure_resp.status_code == 200, adventure_resp.text
+    payload = adventure_resp.json()
+    assert all(str(q.get("id") or "") != "QUEST_ALPHA" for q in (payload.get("quests") or []))
+    assert all(str(a.get("key") or "") != "AWARD_LANTERN" for a in (payload.get("awards") or []))
+
+
 
 
 

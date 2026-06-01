@@ -26,6 +26,8 @@ import NotificationToast from '@/components/editor/NotificationToast.vue'
 import EditEntityModal from '@/components/editor/EditEntityModal.vue'
 import ManualVisionModal from '@/components/editor/ManualVisionModal.vue'
 import DataDebugModal from '@/components/editor/DataDebugModal.vue'
+import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
+import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 
 // Utilities
 import { 
@@ -850,6 +852,19 @@ async function handleUpdateQuests(newQuests: any[]) {
   }
 }
 
+async function handleUpdateAwards(newAwards: any[]) {
+  isSaving.value = true
+  try {
+    await adventureService.updateAdventure(props.adventureId, { awards: newAwards })
+    await fetchAdventure()
+    addNotification('Awards updated.', 'success')
+  } catch (error: any) {
+    addNotification(error instanceof Error ? error.message : 'Failed to update awards', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
 const goBack = () => {
   const from = route.query.from as string
   if (from) {
@@ -858,6 +873,379 @@ const goBack = () => {
     router.push({ name: 'portal' })
   }
 }
+
+const activeMapSceneId = computed<string | null>(() => {
+  if (route.name !== 'adventure-editor-scene') return null
+  const raw = route.params.sceneId
+  return typeof raw === 'string' ? raw : null
+})
+
+const activeMapExitId = computed<string | null>(() => {
+  if (route.name !== 'adventure-editor-exit') return null
+  const raw = route.params.exitId
+  return typeof raw === 'string' ? raw : null
+})
+
+const editorAllObjects = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
+  return mergeUniqueById(source, inferred)
+})
+
+const routeSceneDetails = computed<any | null>(() => {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) return null
+  return editorScenes.value.find((scene: any) => String(scene.id) === sceneId) || null
+})
+
+const routeSceneNpcs = computed<any[]>(() => {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) return []
+  return editorNpcs.value.filter((npc: any) => String(npc.current_scene_id || '') === sceneId)
+})
+
+const routeSceneObjects = computed<any[]>(() => {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) return []
+  return editorAllObjects.value.filter((obj: any) => String(obj.current_scene_id || '') === sceneId)
+})
+
+const routeSceneExits = computed<any[]>(() => {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  const exits = Array.isArray(debugData.value?.exits) ? debugData.value.exits : []
+  if (!sceneId) return []
+  return exits.filter((worldExit: any) => {
+    return String(worldExit.from_scene_id || '') === sceneId || String(worldExit.to_scene_id || '') === sceneId
+  })
+})
+
+const routeExitDetails = computed<any | null>(() => {
+  const exitId = String(activeMapExitId.value || '').trim()
+  const exits = Array.isArray(debugData.value?.exits) ? debugData.value.exits : []
+  if (!exitId) return null
+  return exits.find((worldExit: any) => String(worldExit.id) === exitId) || null
+})
+
+const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: string | null; type: string }>>(() => {
+  const entries: Array<{ id: string; name: string; imageUrl?: string | null; type: string }> = []
+  for (const scene of editorScenes.value) {
+    entries.push({
+      id: String(scene.id || ''),
+      name: String(scene.label || scene.name || scene.id || ''),
+      imageUrl: scene.image_url ? buildVisualImageUrl(scene.image_url) : null,
+      type: 'SCENE',
+    })
+  }
+  for (const npc of editorNpcs.value) {
+    entries.push({
+      id: String(npc.id || ''),
+      name: String(npc.name || npc.id || ''),
+      imageUrl: npc.image_url ? buildVisualImageUrl(npc.image_url) : null,
+      type: 'NPC',
+    })
+  }
+  for (const obj of editorAllObjects.value) {
+    entries.push({
+      id: String(obj.id || ''),
+      name: String(obj.name || obj.id || ''),
+      imageUrl: obj.image_url ? buildVisualImageUrl(obj.image_url) : null,
+      type: 'OBJECT',
+    })
+  }
+  return entries.filter((entry) => entry.id)
+})
+
+const sceneReferenceOptions = computed(() => {
+  return referenceOptions.value.filter((entry) => entry.type === 'SCENE')
+})
+
+const canShowSceneRoutePanel = computed(() => route.name === 'adventure-editor-scene')
+const canShowExitRoutePanel = computed(() => route.name === 'adventure-editor-exit')
+
+const showCreateNpcForm = ref(false)
+const showCreateItemForm = ref(false)
+const showCreateExitForm = ref(false)
+const isCreatingRouteAsset = ref(false)
+const isDeletingRouteAsset = ref(false)
+
+const createNpcForm = ref({
+  id: '',
+  name: '',
+  description: '',
+})
+
+const createItemForm = ref({
+  id: '',
+  name: '',
+  description: '',
+  item_type: 'PICKABLE',
+})
+
+const createExitForm = ref({
+  to_scene_id: '',
+  label: '',
+  exit_type: 'one_way' as 'one_way' | 'bidirectional',
+})
+
+const exitEditForm = ref({
+  label: '',
+  lock_description: '',
+  exit_type: 'one_way' as 'one_way' | 'bidirectional',
+})
+
+watch(
+  () => routeExitDetails.value,
+  (exitData) => {
+    if (!exitData) {
+      exitEditForm.value = {
+        label: '',
+        lock_description: '',
+        exit_type: 'one_way',
+      }
+      return
+    }
+    exitEditForm.value = {
+      label: String(exitData.label || ''),
+      lock_description: String(exitData.lock_description || ''),
+      exit_type: String(exitData.exit_type || 'one_way').toLowerCase() === 'bidirectional' ? 'bidirectional' : 'one_way',
+    }
+  },
+  { immediate: true },
+)
+
+function openSceneEditorRoute(sceneId: string) {
+  const normalized = String(sceneId || '').trim()
+  if (!normalized) return
+  router.push({
+    name: 'adventure-editor-scene',
+    params: {
+      adventureId: props.adventureId,
+      sceneId: normalized,
+    },
+    query: route.query,
+  })
+}
+
+function openExitEditorRoute(exitId: string) {
+  const normalized = String(exitId || '').trim()
+  if (!normalized) return
+  router.push({
+    name: 'adventure-editor-exit',
+    params: {
+      adventureId: props.adventureId,
+      exitId: normalized,
+    },
+    query: route.query,
+  })
+}
+
+function resetRouteCreateForms() {
+  createNpcForm.value = { id: '', name: '', description: '' }
+  createItemForm.value = { id: '', name: '', description: '', item_type: 'PICKABLE' }
+  createExitForm.value = { to_scene_id: '', label: '', exit_type: 'one_way' }
+}
+
+function sanitizeEditorIdToken(rawValue: string): string {
+  return String(rawValue || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[_-]+|[_-]+$/g, '')
+    .slice(0, 128)
+}
+
+function buildPrefixedEditorId(rawValue: string, prefix: string): string {
+  const safePrefix = sanitizeEditorIdToken(prefix)
+  const safeValue = sanitizeEditorIdToken(rawValue)
+  if (!safeValue) return ''
+  if (safeValue.startsWith(safePrefix)) return safeValue
+  return `${safePrefix}${safeValue}`.slice(0, 128)
+}
+
+function autoFillNpcId() {
+  createNpcForm.value.id = buildPrefixedEditorId(createNpcForm.value.id || createNpcForm.value.name, 'NPC_')
+}
+
+function autoFillItemId() {
+  createItemForm.value.id = buildPrefixedEditorId(createItemForm.value.id || createItemForm.value.name, 'ITEM_')
+}
+
+async function createNpcInRouteScene() {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) return
+  const normalizedNpcId = buildPrefixedEditorId(createNpcForm.value.id || createNpcForm.value.name, 'NPC_')
+  if (!normalizedNpcId || !createNpcForm.value.name.trim() || !createNpcForm.value.description.trim()) {
+    addNotification('NPC requires ID, name and description.', 'error')
+    return
+  }
+  isCreatingRouteAsset.value = true
+  try {
+    await entityService.createEntity(props.adventureId, {
+      entity_id: normalizedNpcId,
+      entity_type: 'NPC',
+      scene_id: sceneId,
+      name: createNpcForm.value.name.trim(),
+      description: createNpcForm.value.description.trim(),
+      hp: 20,
+      stamina: 20,
+      mana: 20,
+    })
+    showCreateNpcForm.value = false
+    resetRouteCreateForms()
+    await fetchDebugInfo()
+    addNotification('NPC added to scene.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to add NPC.', 'error')
+  } finally {
+    isCreatingRouteAsset.value = false
+  }
+}
+
+async function createItemInRouteScene() {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) return
+  const normalizedItemId = buildPrefixedEditorId(createItemForm.value.id || createItemForm.value.name, 'ITEM_')
+  if (!normalizedItemId || !createItemForm.value.name.trim() || !createItemForm.value.description.trim()) {
+    addNotification('Item requires ID, name and description.', 'error')
+    return
+  }
+  isCreatingRouteAsset.value = true
+  try {
+    await entityService.createEntity(props.adventureId, {
+      entity_id: normalizedItemId,
+      entity_type: 'OBJECT',
+      scene_id: sceneId,
+      name: createItemForm.value.name.trim(),
+      description: createItemForm.value.description.trim(),
+      item_type: createItemForm.value.item_type,
+      is_portable: createItemForm.value.item_type !== 'STATIC',
+    })
+    showCreateItemForm.value = false
+    resetRouteCreateForms()
+    await fetchDebugInfo()
+    addNotification('Item added to scene.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to add item.', 'error')
+  } finally {
+    isCreatingRouteAsset.value = false
+  }
+}
+
+async function createExitFromRouteScene() {
+  const fromSceneId = String(activeMapSceneId.value || '').trim()
+  if (!fromSceneId) return
+  if (!createExitForm.value.to_scene_id.trim() || !createExitForm.value.label.trim()) {
+    addNotification('Exit requires target scene and label.', 'error')
+    return
+  }
+  isCreatingRouteAsset.value = true
+  try {
+    await entityService.createExit(props.adventureId, {
+      from_scene_id: fromSceneId,
+      to_scene_id: createExitForm.value.to_scene_id.trim(),
+      label: createExitForm.value.label.trim(),
+      exit_type: createExitForm.value.exit_type,
+    })
+    showCreateExitForm.value = false
+    resetRouteCreateForms()
+    await fetchDebugInfo()
+    addNotification('Exit created.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to create exit.', 'error')
+  } finally {
+    isCreatingRouteAsset.value = false
+  }
+}
+
+async function deleteRouteScene() {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) return
+  const confirmed = window.confirm(`Delete scene ${sceneId}? This also removes linked exits and entities in that scene.`)
+  if (!confirmed) return
+  isDeletingRouteAsset.value = true
+  try {
+    await entityService.deleteScene(props.adventureId, sceneId)
+    await fetchDebugInfo()
+    addNotification('Scene deleted.', 'success')
+    router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: route.query })
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to delete scene.', 'error')
+  } finally {
+    isDeletingRouteAsset.value = false
+  }
+}
+
+async function deleteRouteExit() {
+  const exitId = String(activeMapExitId.value || '').trim()
+  if (!exitId) return
+  const confirmed = window.confirm(`Delete exit ${exitId}?`)
+  if (!confirmed) return
+  isDeletingRouteAsset.value = true
+  try {
+    await entityService.deleteExit(props.adventureId, exitId)
+    await fetchDebugInfo()
+    addNotification('Exit deleted.', 'success')
+    router.push({ name: 'adventure-editor', params: { adventureId: props.adventureId }, query: route.query })
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to delete exit.', 'error')
+  } finally {
+    isDeletingRouteAsset.value = false
+  }
+}
+
+async function deleteRouteEntity(entityId: string) {
+  const normalized = String(entityId || '').trim()
+  if (!normalized) return
+  const confirmed = window.confirm(`Delete entity ${normalized}?`)
+  if (!confirmed) return
+  isDeletingRouteAsset.value = true
+  try {
+    await entityService.deleteEntity(props.adventureId, normalized)
+    await fetchDebugInfo()
+    addNotification('Entity deleted.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to delete entity.', 'error')
+  } finally {
+    isDeletingRouteAsset.value = false
+  }
+}
+
+async function saveRouteExit() {
+  const exit = routeExitDetails.value
+  if (!exit) return
+  if (!exitEditForm.value.label.trim()) {
+    addNotification('Exit label is required.', 'error')
+    return
+  }
+  isSaving.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'exit',
+      target_id: String(exit.id),
+      name: exitEditForm.value.label.trim(),
+      description: exitEditForm.value.lock_description.trim(),
+      exit_type: exitEditForm.value.exit_type,
+    })
+    await fetchDebugInfo()
+    addNotification('Exit updated.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to update exit.', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
+watch(
+  () => route.name,
+  (name) => {
+    if (name === 'adventure-editor-scene' || name === 'adventure-editor-exit') {
+      activeTab.value = 'map'
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -930,6 +1318,7 @@ const goBack = () => {
               :form="form"
               :adventure="adventure"
               :debug-data="debugData"
+              :reference-options="referenceOptions"
               :editing-field="editingField"
               :temp-value="tempValue"
               :is-saving="isSaving"
@@ -1022,11 +1411,191 @@ const goBack = () => {
               :debug-data="debugData"
               :editor-scenes="editorScenes"
               :visuals-cache-version="visualsCacheVersion"
+              :active-scene-id="activeMapSceneId"
+              :active-exit-id="activeMapExitId"
+              @open-scene="openSceneEditorRoute"
+              @open-exit="openExitEditorRoute"
             />
+
+            <section
+              v-if="activeTab === 'map' && canShowSceneRoutePanel"
+              class="bg-slate-900/40 border border-white/10 rounded-2xl p-5 space-y-4"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-xs uppercase tracking-widest text-emerald-300">Scene Route</p>
+                  <h3 class="text-lg font-bold text-white">{{ routeSceneDetails?.label || routeSceneDetails?.id || activeMapSceneId }}</h3>
+                  <p class="text-sm text-slate-300 mt-1">{{ routeSceneDetails?.description || 'No description.' }}</p>
+                </div>
+                <button
+                  class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                  :disabled="isDeletingRouteAsset"
+                  @click="deleteRouteScene"
+                >
+                  Delete Scene
+                </button>
+              </div>
+
+              <div class="grid md:grid-cols-3 gap-4">
+                <div class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-300">NPCs ({{ routeSceneNpcs.length }})</p>
+                    <button class="text-xs text-emerald-300" @click="showCreateNpcForm = !showCreateNpcForm">+ Add</button>
+                  </div>
+                  <ul class="space-y-1 text-sm text-slate-300 max-h-52 overflow-auto">
+                    <li v-for="npc in routeSceneNpcs" :key="npc.id" class="flex items-center justify-between gap-2">
+                      <span class="truncate">{{ npc.name || npc.id }}</span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500">{{ npc.id }}</span>
+                        <button class="text-xs text-red-300 hover:text-red-200" @click="deleteRouteEntity(npc.id)">Delete</button>
+                      </div>
+                    </li>
+                    <li v-if="routeSceneNpcs.length === 0" class="text-xs text-slate-500">No NPCs in this scene.</li>
+                  </ul>
+                  <div v-if="showCreateNpcForm" class="mt-3 space-y-2">
+                    <div class="flex gap-2">
+                      <input v-model="createNpcForm.id" class="flex-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="NPC_ID" />
+                      <button class="px-2 py-1 text-xs rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10" @click="autoFillNpcId">Auto ID</button>
+                    </div>
+                    <input v-model="createNpcForm.name" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="Name" />
+                    <ReferenceTextarea
+                      v-model="createNpcForm.description"
+                      :rows="2"
+                      :options="referenceOptions"
+                      class-name="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm"
+                      placeholder="Description"
+                    />
+                    <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded px-2 py-1 disabled:opacity-50" :disabled="isCreatingRouteAsset" @click="createNpcInRouteScene">Create NPC</button>
+                  </div>
+                </div>
+
+                <div class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-300">Items/Switches ({{ routeSceneObjects.length }})</p>
+                    <button class="text-xs text-emerald-300" @click="showCreateItemForm = !showCreateItemForm">+ Add</button>
+                  </div>
+                  <ul class="space-y-1 text-sm text-slate-300 max-h-52 overflow-auto">
+                    <li v-for="obj in routeSceneObjects" :key="obj.id" class="flex items-center justify-between gap-2">
+                      <span class="truncate">{{ obj.name || obj.id }}</span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500">{{ obj.item_type || 'OBJECT' }}</span>
+                        <button class="text-xs text-red-300 hover:text-red-200" @click="deleteRouteEntity(obj.id)">Delete</button>
+                      </div>
+                    </li>
+                    <li v-if="routeSceneObjects.length === 0" class="text-xs text-slate-500">No items in this scene.</li>
+                  </ul>
+                  <div v-if="showCreateItemForm" class="mt-3 space-y-2">
+                    <div class="flex gap-2">
+                      <input v-model="createItemForm.id" class="flex-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="ITEM_ID" />
+                      <button class="px-2 py-1 text-xs rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10" @click="autoFillItemId">Auto ID</button>
+                    </div>
+                    <input v-model="createItemForm.name" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="Name" />
+                    <select v-model="createItemForm.item_type" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm">
+                      <option value="PICKABLE">PICKABLE</option>
+                      <option value="KEY">KEY</option>
+                      <option value="WEAPON">WEAPON</option>
+                      <option value="CONTAINER">CONTAINER</option>
+                      <option value="READABLE">READABLE</option>
+                      <option value="SWITCH">SWITCH</option>
+                      <option value="STATIC">STATIC</option>
+                    </select>
+                    <ReferenceTextarea
+                      v-model="createItemForm.description"
+                      :rows="2"
+                      :options="referenceOptions"
+                      class-name="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm"
+                      placeholder="Description"
+                    />
+                    <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded px-2 py-1 disabled:opacity-50" :disabled="isCreatingRouteAsset" @click="createItemInRouteScene">Create Item</button>
+                  </div>
+                </div>
+
+                <div class="bg-slate-950/70 border border-white/5 rounded-xl p-3">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-300">Exits ({{ routeSceneExits.length }})</p>
+                    <button class="text-xs text-emerald-300" @click="showCreateExitForm = !showCreateExitForm">+ Add</button>
+                  </div>
+                  <ul class="space-y-1 text-sm text-slate-300 max-h-52 overflow-auto">
+                    <li v-for="worldExit in routeSceneExits" :key="worldExit.id" class="flex items-center justify-between gap-2">
+                      <button class="truncate text-left hover:text-emerald-300" @click="openExitEditorRoute(worldExit.id)">{{ worldExit.label || worldExit.id }}</button>
+                      <span class="text-xs text-slate-500">{{ worldExit.exit_type || 'one_way' }}</span>
+                    </li>
+                    <li v-if="routeSceneExits.length === 0" class="text-xs text-slate-500">No exits for this scene.</li>
+                  </ul>
+                  <div v-if="showCreateExitForm" class="mt-3 space-y-2">
+                    <EntityReferenceCombobox
+                      v-model="createExitForm.to_scene_id"
+                      :options="sceneReferenceOptions.filter((scene) => scene.id !== activeMapSceneId)"
+                      placeholder="Select destination scene"
+                      :enable-search="true"
+                    />
+                    <input v-model="createExitForm.label" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm" placeholder="Exit label" />
+                    <select v-model="createExitForm.exit_type" class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm">
+                      <option value="one_way">one_way</option>
+                      <option value="bidirectional">bidirectional</option>
+                    </select>
+                    <button class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded px-2 py-1 disabled:opacity-50" :disabled="isCreatingRouteAsset" @click="createExitFromRouteScene">Create Exit</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section
+              v-if="activeTab === 'map' && canShowExitRoutePanel"
+              class="bg-slate-900/40 border border-white/10 rounded-2xl p-5 space-y-4"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-xs uppercase tracking-widest text-emerald-300">Exit Route</p>
+                  <h3 class="text-lg font-bold text-white">{{ routeExitDetails?.label || routeExitDetails?.id || activeMapExitId }}</h3>
+                  <p class="text-sm text-slate-300 mt-1">
+                    {{ routeExitDetails?.from_scene_id }} -> {{ routeExitDetails?.to_scene_id }}
+                  </p>
+                </div>
+                <button
+                  class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                  :disabled="isDeletingRouteAsset"
+                  @click="deleteRouteExit"
+                >
+                  Delete Exit
+                </button>
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-3">
+                <label class="text-xs text-slate-300 space-y-1">
+                  <span>Label</span>
+                  <input v-model="exitEditForm.label" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm" />
+                </label>
+                <label class="text-xs text-slate-300 space-y-1">
+                  <span>Type</span>
+                  <select v-model="exitEditForm.exit_type" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm">
+                    <option value="one_way">one_way</option>
+                    <option value="bidirectional">bidirectional</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="text-xs text-slate-300 space-y-1 block">
+                <span>Lock Description</span>
+                <ReferenceTextarea
+                  v-model="exitEditForm.lock_description"
+                  :rows="3"
+                  :options="referenceOptions"
+                  class-name="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm"
+                />
+              </label>
+
+              <div class="flex justify-end">
+                <button class="px-3 py-2 text-xs font-bold rounded bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50" :disabled="isSaving" @click="saveRouteExit">
+                  Save Exit
+                </button>
+              </div>
+            </section>
 
             <QuestTab
               v-if="activeTab === 'quest'"
               :adventure="adventure"
+              :reference-options="referenceOptions"
               @update-quests="handleUpdateQuests"
               @notify="addNotification"
             />
@@ -1034,6 +1603,9 @@ const goBack = () => {
             <AwardsTab
               v-if="activeTab === 'awards'"
               :adventure="adventure"
+              :reference-options="referenceOptions"
+              @update-awards="handleUpdateAwards"
+              @notify="addNotification"
             />
 
             <VisualsTab
@@ -1102,6 +1674,7 @@ const goBack = () => {
       :show="showEditModal"
       :context="editEntityContext"
       :initial-form="editForm"
+      :reference-options="referenceOptions"
       :rule-enforcement-mode="form.rule_enforcement_mode"
       :is-saving="isSavingText"
       :adventure-id="adventureId"
