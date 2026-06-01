@@ -3288,6 +3288,204 @@ async def test_container_rule_unlock_requires_explicit_unlock_update(setup_test_
         )
 
 
+async def test_build_context_includes_global_soft_unlock_rules(setup_test_db):
+    from tests.conftest import TestSessionLocal
+    from backend.api.routes.adventures.turn_llm_pipeline import TurnLlmContextBuilder
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state = await _seed_game_context(db)
+
+        db.add_all([
+            WorldScene(
+                id="DINER_FLOOR",
+                session_id=state.session_id,
+                template_id=state.template_id,
+                label="Diner Floor",
+                description="Greasy tables and neon lights.",
+            ),
+            WorldScene(
+                id="BACK_ALLEY",
+                session_id=state.session_id,
+                template_id=state.template_id,
+                label="Back Alley",
+                description="Rain drips from rusty pipes.",
+            ),
+        ])
+        db.add(WorldEntity(
+            id="CASH_REGISTER",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Diner Cash Register",
+            description="A vintage mechanical cash register.",
+            current_scene_id="DINER_FLOOR",
+            item_type="CONTAINER",
+            metadata_json={
+                "code_to_unlock": "",
+                "item_to_unlock": "",
+                "rule_to_unlock": "Protagonist distracts Betty",
+                "locked": True,
+            },
+        ))
+        db.add(WorldExit(
+            session_id=state.session_id,
+            from_scene_id="DINER_FLOOR",
+            to_scene_id="BACK_ALLEY",
+            label="Service Door",
+            is_locked=True,
+            code_to_unlock=None,
+            item_to_unlock=None,
+            rule_to_unlock="Protagonist convinces Betty to buzz the door",
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        builder = TurnLlmContextBuilder(manager)
+        ctx = await builder.build_context(user_msg="I talk to Betty", language=None)
+
+        prompt = ctx.mechanics_system_prompt
+        assert "GLOBAL SOFT UNLOCK RULES (ADVENTURE-WIDE)" in prompt
+        assert "CASH_REGISTER" in prompt
+        assert "Protagonist distracts Betty" in prompt
+        assert "DINER_FLOOR" in prompt
+        assert "BACK_ALLEY" in prompt
+
+
+async def test_apply_game_event_emits_unlock_messages_for_container_and_exit(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state = await _seed_game_context(db)
+
+        db.add(WorldEntity(
+            id="CASH_REGISTER",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Diner Cash Register",
+            description="A vintage mechanical cash register.",
+            current_scene_id=state.current_scene_id,
+            item_type="CONTAINER",
+            metadata_json={
+                "code_to_unlock": "",
+                "item_to_unlock": "",
+                "rule_to_unlock": "Protagonist distracts Betty",
+                "locked": True,
+            },
+        ))
+        db.add(WorldExit(
+            session_id=state.session_id,
+            from_scene_id=state.current_scene_id,
+            to_scene_id="BACKROOM",
+            label="Kitchen Swing Door",
+            is_locked=True,
+            code_to_unlock=None,
+            item_to_unlock=None,
+            rule_to_unlock="Protagonist distracts Betty",
+        ))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        event = GameEvent(
+            updated_entities=[WorldEntityUpdate(entity_id="CASH_REGISTER", locked=False)],
+            updated_exits=[ExitUpdate(from_scene_id=state.current_scene_id, to_scene_id="BACKROOM", is_locked=False)],
+        )
+
+        system_messages = await manager._apply_game_event(event)
+        assert any("Container unlocked: Diner Cash Register." in msg for msg in system_messages)
+        assert any("Exit unlocked: Kitchen Swing Door." in msg for msg in system_messages)
+
+
+async def test_off_scene_rule_unlock_flow_unlocks_container_globally(setup_test_db, monkeypatch):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, _avatar, state = await _seed_game_context(db)
+
+        # Current scene is START (scene 3 in this scenario), container sits in another scene.
+        db.add(WorldScene(
+            id="DINER_ENTRANCE",
+            session_id=state.session_id,
+            template_id=state.template_id,
+            label="Diner Entrance",
+            description="Rain-slick glass doors and a long counter.",
+        ))
+        db.add(WorldEntity(
+            id="BETTY",
+            session_id=state.session_id,
+            entity_type="NPC",
+            name="Betty",
+            description="A tired waitress with sharp eyes.",
+            current_scene_id=state.current_scene_id,
+        ))
+        db.add(WorldEntity(
+            id="CASH_REGISTER",
+            session_id=state.session_id,
+            entity_type="OBJECT",
+            name="Diner Cash Register",
+            description="A vintage mechanical cash register.",
+            current_scene_id="DINER_ENTRANCE",
+            item_type="CONTAINER",
+            metadata_json={
+                "code_to_unlock": "",
+                "item_to_unlock": "",
+                "rule_to_unlock": "Protagonist distracts Betty",
+                "locked": True,
+            },
+        ))
+        await db.commit()
+
+        mock_llm_instance = MagicMock()
+        mock_event = GameEvent(
+            narrative_description="Betty turns toward the spilled coffee.",
+            hp_change=0,
+            stamina_change=0,
+            mana_change=0,
+            new_status_effects=[],
+            new_inventory_items=[],
+            updated_entities=[WorldEntityUpdate(entity_id="CASH_REGISTER", locked=False)],
+        )
+        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=mock_event)
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="Betty curses and grabs a towel."))])
+
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, state.session_id, user)
+        chunks = []
+        async for chunk in manager.process_turn("I distract Betty by knocking over a coffee mug"):
+            chunks.append(chunk)
+
+        # The mechanics prompt must include the global soft unlock rule list with IDs.
+        mechanics_prompt = mock_llm_instance.aexecute_complex_task.await_args_list[0].args[0]
+        assert "GLOBAL SOFT UNLOCK RULES (ADVENTURE-WIDE)" in mechanics_prompt
+        assert "CASH_REGISTER" in mechanics_prompt
+        assert "Protagonist distracts Betty" in mechanics_prompt
+
+        # The turn should emit a system unlock message.
+        full_output = "".join(chunks)
+        assert "Container unlocked: Diner Cash Register." in full_output
+
+        await db.refresh(state)
+        assert (state.entity_states or {}).get("CASH_REGISTER", {}).get("locked") is False
+
+        # Verify global unlock effect from another scene.
+        manager_after = GameTurnManager(db, state.session_id, user)
+        await manager_after.initialize()
+        container_res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == state.session_id,
+                WorldEntity.id == "CASH_REGISTER",
+            )
+        )
+        container = container_res.scalars().first()
+        assert manager_after._is_container_locked(container, None) is False
+
+
 def test_mutual_exclusivity_normalization():
     from backend.engine.world_generator import _normalize_unlock_requirements
 

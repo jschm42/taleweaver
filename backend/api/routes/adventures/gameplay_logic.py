@@ -3641,6 +3641,7 @@ class GameTurnManager:
         complex_model_provider = ctx.complex_model_provider
         small_model = ctx.small_model
         complex_model = ctx.complex_model
+        global_unlock_rules_prompt_block = ctx.global_unlock_rules_prompt_block
 
         game_event = None
         pre_inventory_ids = set()
@@ -4006,6 +4007,8 @@ class GameTurnManager:
                 scenes=reduced_scenes,
                 exits=reduced_exits,
             )
+            if global_unlock_rules_prompt_block:
+                progression_prompt += global_unlock_rules_prompt_block
 
             if language:
                 progression_prompt += f"\n\nLANGUAGE CONTEXT: Current player language is {language}."
@@ -4824,7 +4827,11 @@ class GameTurnManager:
                         ent_obj = ent_res.scalars().first()
                         if ent_obj:
                             metadata_json = dict(ent_obj.metadata_json or {})
-                            was_locked = bool(metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock"))
+                            was_locked = bool(
+                                metadata_json.get("code_to_unlock")
+                                or metadata_json.get("item_to_unlock")
+                                or metadata_json.get("rule_to_unlock")
+                            )
                     
                     if was_locked and update.locked is False:
                         if ent_obj is None:
@@ -4848,6 +4855,10 @@ class GameTurnManager:
                                 await self._save_chat_message("system", xp_msg)
                                 system_messages.append(msg)
                                 system_messages.append(xp_msg)
+                            else:
+                                msg = f"Container unlocked: {ent_obj.name}."
+                                await self._save_chat_message("system", msg)
+                                system_messages.append(msg)
                     states[eid]["locked"] = update.locked
                 if update.inventory is not None: 
                     states[eid]["inventory"] = [i.model_dump(exclude_none=True) for i in update.inventory]
@@ -5035,7 +5046,13 @@ class GameTurnManager:
                         exit_type=exit_type
                     )
                     if exit_db:
+                        was_locked = bool(exit_db.is_locked)
                         exit_db.is_locked = up_exit.is_locked
+                        if was_locked and up_exit.is_locked is False:
+                            exit_name = str(exit_db.label or "").strip() or f"{up_exit.from_scene_id} -> {up_exit.to_scene_id}"
+                            msg = f"Exit unlocked: {exit_name}."
+                            await self._save_chat_message("system", msg)
+                            system_messages.append(msg)
             except Exception as e:
                 logger.error(f"Manual map exit update failed: {e}")
 

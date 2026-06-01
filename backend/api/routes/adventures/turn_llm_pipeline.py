@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -9,7 +10,6 @@ from sqlalchemy import select, or_, and_
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
-from backend.core import prompts
 from backend.core.llm_logger import log_structured_event
 from backend.engine.memory_manager import MemoryManager
 from backend.models.chat import ChatMessage
@@ -25,6 +25,7 @@ class TurnLlmContext:
     all_entities: list[WorldEntity]
     exits: list[WorldExit]
     all_scenes: list[WorldScene]
+    global_unlock_rules_prompt_block: str
     mechanics_system_prompt: str
     narration_system_prompt: str
     mechanics_awards: list[dict]
@@ -39,6 +40,91 @@ class TurnLlmContextBuilder:
 
     def __init__(self, manager: Any):
         self.manager = manager
+
+    @staticmethod
+    def _is_entity_locked_by_requirements(entity: WorldEntity, overrides: dict[str, Any]) -> bool:
+        state_locked = (overrides.get(entity.id) or {}).get("locked") if isinstance(overrides, dict) else None
+        if isinstance(state_locked, bool):
+            return state_locked
+
+        metadata = dict(getattr(entity, "metadata_json", None) or {})
+        return bool(
+            str(metadata.get("code_to_unlock") or "").strip()
+            or str(metadata.get("item_to_unlock") or "").strip()
+            or str(metadata.get("rule_to_unlock") or "").strip()
+        )
+
+    def _build_global_unlock_rules_prompt_block(
+        self,
+        all_entities: list[WorldEntity],
+        all_exits: list[WorldExit],
+        all_scenes: list[WorldScene],
+        overrides: dict[str, Any],
+    ) -> str:
+        scene_label_map = {str(scene.id): str(scene.label or scene.id) for scene in all_scenes}
+
+        container_rules: list[dict[str, str]] = []
+        for ent in all_entities:
+            if str(getattr(ent, "entity_type", "") or "").upper() != "OBJECT":
+                continue
+            if str(getattr(ent, "item_type", "") or "").upper() != "CONTAINER":
+                continue
+            if not self._is_entity_locked_by_requirements(ent, overrides):
+                continue
+
+            metadata = dict(getattr(ent, "metadata_json", None) or {})
+            rule_to_unlock = str(metadata.get("rule_to_unlock") or "").strip()
+            if not rule_to_unlock:
+                continue
+
+            scene_id = str(getattr(ent, "current_scene_id", "") or "")
+            container_rules.append(
+                {
+                    "entity_id": str(ent.id or "").strip(),
+                    "name": str(ent.name or ent.id or "container").strip(),
+                    "scene_id": scene_id,
+                    "scene_label": scene_label_map.get(scene_id, scene_id),
+                    "rule_to_unlock": rule_to_unlock,
+                }
+            )
+
+        exit_rules: list[dict[str, str]] = []
+        for ex in all_exits:
+            if not bool(getattr(ex, "is_locked", False)):
+                continue
+            rule_to_unlock = str(getattr(ex, "rule_to_unlock", "") or "").strip()
+            if not rule_to_unlock:
+                continue
+
+            from_scene_id = str(getattr(ex, "from_scene_id", "") or "")
+            to_scene_id = str(getattr(ex, "to_scene_id", "") or "")
+            exit_rules.append(
+                {
+                    "from_scene_id": from_scene_id,
+                    "from_scene_label": scene_label_map.get(from_scene_id, from_scene_id),
+                    "to_scene_id": to_scene_id,
+                    "to_scene_label": scene_label_map.get(to_scene_id, to_scene_id),
+                    "label": str(getattr(ex, "label", "") or "").strip(),
+                    "rule_to_unlock": rule_to_unlock,
+                }
+            )
+
+        if not container_rules and not exit_rules:
+            return ""
+
+        payload = {
+            "containers": container_rules,
+            "exits": exit_rules,
+        }
+
+        return (
+            "\n\nGLOBAL SOFT UNLOCK RULES (ADVENTURE-WIDE):\n"
+            "- These locks may be unlocked from ANY scene when the player's action clearly fulfills the rule this turn.\n"
+            "- For container unlocks, emit `updated_entities` with the exact `entity_id` and `locked=false`.\n"
+            "- For exit unlocks, emit `updated_exits` with exact `from_scene_id`, `to_scene_id`, and `is_locked=false`.\n"
+            "- Do not unlock speculatively; only unlock when the action actually satisfies the rule.\n"
+            f"RULE_LOCKS_JSON: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
+        )
 
     async def build_context(self, user_msg: str, language: str | None) -> TurnLlmContext:
         db_start = time.perf_counter()
@@ -171,6 +257,18 @@ class TurnLlmContextBuilder:
             select(WorldScene).where(WorldScene.session_id == self.manager.game_id)
         )
         all_scenes = list(all_scenes_res.scalars().all())
+
+        all_exits_res = await self.manager.db.execute(
+            select(WorldExit).where(WorldExit.session_id == self.manager.game_id)
+        )
+        all_exits = list(all_exits_res.scalars().all())
+
+        global_unlock_rules_prompt_block = self._build_global_unlock_rules_prompt_block(
+            all_entities=all_entities,
+            all_exits=all_exits,
+            all_scenes=all_scenes,
+            overrides=overrides,
+        )
         scene_map = {s.id: s.label for s in all_scenes}
 
         db_duration = time.perf_counter() - db_start
@@ -227,6 +325,8 @@ class TurnLlmContextBuilder:
         notes_prompt_block = self.manager._build_gm_notes_prompt_block()
         mechanics_system_prompt += notes_prompt_block
         narration_system_prompt += notes_prompt_block
+        if global_unlock_rules_prompt_block:
+            mechanics_system_prompt += global_unlock_rules_prompt_block
         mechanics_awards = self.manager._build_mechanics_awards()
 
         mechanics_prompt_chars = len(mechanics_system_prompt or "")
@@ -309,6 +409,7 @@ class TurnLlmContextBuilder:
             all_entities=all_entities,
             exits=exits,
             all_scenes=all_scenes,
+            global_unlock_rules_prompt_block=global_unlock_rules_prompt_block,
             mechanics_system_prompt=mechanics_system_prompt,
             narration_system_prompt=narration_system_prompt,
             mechanics_awards=mechanics_awards,
