@@ -86,6 +86,14 @@ export const gameCommandService = {
       || msg === '/attack'
       || msg.startsWith('attack ')
       || msg.startsWith('/attack ')
+      || msg === 'rest'
+      || msg === '/rest'
+      || msg === 'wait'
+      || msg === '/wait'
+      || msg === 'recover'
+      || msg === '/recover'
+      || msg === 'skip'
+      || msg === '/skip'
       || msg === 'run'
       || msg === '/run'
       || msg.startsWith('/consume ')

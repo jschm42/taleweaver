@@ -136,6 +136,7 @@ const {
   disconnect,
   haltActiveOperations,
   sendMessage,
+  emitSystemMessage,
   runAgentTurn,
   createTerminalEpilogue
 } = useGameSocket()
@@ -660,6 +661,7 @@ const {
   showSheet,
   showQuests,
   addNotification,
+  emitSystemMessage,
 })
 
 const { speakLatestAssistantMessage } = useGameAutoSpeak({
@@ -778,25 +780,36 @@ const handleSheetChanged = async () => {
 const handleCombatAttack = async () => {
   const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/attack')
   if (!dispatched) {
-    addNotification('Combat action is already being resolved. Please wait a moment.', 'info')
+    const blockedMsg = 'Your move is still being resolved. Hold your stance for a moment.'
+    addNotification(blockedMsg, 'info')
+    emitSystemMessage(blockedMsg)
   }
 }
 
 const handleCombatRun = async () => {
   const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/run')
   if (!dispatched) {
-    addNotification('Combat action is already being resolved. Please wait a moment.', 'info')
+    const blockedMsg = 'Your move is still being resolved. Hold your stance for a moment.'
+    addNotification(blockedMsg, 'info')
+    emitSystemMessage(blockedMsg)
   }
 }
 
 const handleCombatConsume = async (name: string) => {
-  await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, `/consume ${name}`)
+  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, `/consume ${name}`)
+  if (!dispatched) {
+    const blockedMsg = 'Your move is still being resolved. Hold your stance for a moment.'
+    addNotification(blockedMsg, 'info')
+    emitSystemMessage(blockedMsg)
+  }
 }
 
 const handleCombatRest = async () => {
   const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, '/rest')
   if (!dispatched) {
-    addNotification('Combat action is already being resolved. Please wait a moment.', 'info')
+    const blockedMsg = 'Your move is still being resolved. Hold your stance for a moment.'
+    addNotification(blockedMsg, 'info')
+    emitSystemMessage(blockedMsg)
   }
 }
 

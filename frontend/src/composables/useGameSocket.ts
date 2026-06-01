@@ -44,6 +44,7 @@ export interface UseGameSocket {
   disconnect: () => void
   haltActiveOperations: () => void
   sendMessage: (content: string) => Promise<void>
+  emitSystemMessage: (content: string) => void
   runAgentTurn: () => Promise<void>
   createTerminalEpilogue: () => Promise<void>
   revealIllustration: (name: string, url: string) => void
@@ -144,6 +145,12 @@ export function useGameSocket(): UseGameSocket {
 
   function _pushMessage(role: ChatMessage['role'], content: string, itemIds?: string[], is_debug?: boolean): void {
     messages.value.push({ role, content, timestamp: new Date(), itemIds, is_debug } as any)
+  }
+
+  function emitSystemMessage(content: string): void {
+    const text = String(content || '').trim()
+    if (!text) return
+    _pushMessage('system', text)
   }
 
   function authHeaders(includeJson = false): Record<string, string> {
@@ -795,6 +802,7 @@ export function useGameSocket(): UseGameSocket {
     disconnect,
     haltActiveOperations,
     sendMessage,
+    emitSystemMessage,
     runAgentTurn,
     createTerminalEpilogue,
     deleteMessage,

@@ -16,6 +16,7 @@ type UseGameCommandFlowOptions = {
   showSheet: Ref<boolean>
   showQuests: Ref<boolean>
   addNotification: (message: string, type?: 'info' | 'success' | 'error') => void
+  emitSystemMessage: (message: string) => void
 }
 
 export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
@@ -31,6 +32,7 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     showSheet,
     showQuests,
     addNotification,
+    emitSystemMessage,
   } = options
 
   const showWalkthrough = ref(false)
@@ -98,7 +100,9 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     }
 
     if (isActionInputBlocked.value) {
-      addNotification('Action is currently locked while the previous turn resolves.', 'info')
+      const blockedMsg = 'The Game Master is still resolving your previous move.'
+      addNotification(blockedMsg, 'info')
+      emitSystemMessage(blockedMsg)
       return
     }
 
@@ -109,7 +113,9 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     }
 
     if (isCombatActive.value && !gameCommandService.isAllowedCombatCommand(content)) {
-      addNotification('Action unavailable during combat. Use Attack, Run, or Consume.', 'info')
+      const blockedMsg = 'Battle limits your options: Attack, Run, Rest, or /consume <item>.'
+      addNotification(blockedMsg, 'info')
+      emitSystemMessage(blockedMsg)
       return
     }
 
