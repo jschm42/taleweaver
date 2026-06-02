@@ -24,9 +24,9 @@ interface ItemTypeOption {
 
 const itemTypes: ItemTypeOption[] = [
   {
-    type: 'PICKABLE',
-    label: 'Pickable',
-    description: 'A standard item the player can pick up and carry.',
+    type: 'DEFAULT',
+    label: 'Default',
+    description: 'A standard item. Whether it can be picked up is controlled by the Portable flag.',
     icon: 'ra-key',
     color: 'text-slate-200',
     borderColor: 'border-white/10',
@@ -54,22 +54,6 @@ const itemTypes: ItemTypeOption[] = [
     icon: 'ra-sword',
     color: 'text-red-300',
     borderColor: 'border-red-500/20',
-  },
-  {
-    type: 'KEY',
-    label: 'Key',
-    description: 'A physical key or pass to unlock doors and containers.',
-    icon: 'ra-key-basic',
-    color: 'text-yellow-300',
-    borderColor: 'border-yellow-500/20',
-  },
-  {
-    type: 'STATIC',
-    label: 'Static',
-    description: 'A heavy or fixed object that cannot be moved.',
-    icon: 'ra-monument',
-    color: 'text-stone-300',
-    borderColor: 'border-stone-500/20',
   },
   {
     type: 'COMBINABLE',

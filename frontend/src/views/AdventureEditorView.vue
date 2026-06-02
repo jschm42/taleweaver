@@ -95,12 +95,12 @@ const editForm = ref({
   goal: '',
   character: '',
   is_killable: true,
-  item_type: 'PICKABLE',
-  is_portable: true,
+    item_type: 'DEFAULT',
+    is_portable: true,
   locked: false,
   code_to_unlock: '',
   item_to_unlock: '',
-  inventory_json: '[]',
+  inventory_input: [] as string[],
   text_log_content: '',
   text_log_format: 'DOCUMENT',
   entity_id: '',
@@ -156,11 +156,11 @@ function handleItemTypeSelected(itemType: string) {
     character: '',
     is_killable: true,
     item_type: itemType,
-    is_portable: !['STATIC', 'SWITCH'].includes(String(itemType).toUpperCase()),
+    is_portable: String(itemType).toUpperCase() !== 'SWITCH',
     locked: false,
     code_to_unlock: '',
     item_to_unlock: '',
-    inventory_json: '[]',
+    inventory_input: [],
     text_log_content: '',
     text_log_format: 'DOCUMENT',
     entity_id: defaultId,
@@ -647,12 +647,14 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     goal: goal || '',
     character: character || '',
     is_killable: isKillable ?? true,
-    item_type: selectedObject?.item_type || 'PICKABLE',
+    item_type: selectedObject?.item_type || 'DEFAULT',
     is_portable: selectedObject?.is_portable !== false,
     locked: selectedObject?.locked === true,
     code_to_unlock: selectedObject?.code_to_unlock || '',
     item_to_unlock: selectedObject?.item_to_unlock || '',
-    inventory_json: JSON.stringify(selectedObject?.inventory || [], null, 2),
+    inventory_input: Array.isArray(selectedObject?.inventory)
+      ? [...selectedObject.inventory.map((item: any) => typeof item === 'string' ? item : (item?.id || ''))]
+      : [],
     text_log_content: fixNewlines(metadata?.text_log_content || ''),
     text_log_format: String(metadata?.text_log_format || selectedObject?.text_log_format || 'DOCUMENT').trim().toUpperCase(),
     entity_id: String(selectedObject?.id || id || ''),
@@ -736,7 +738,7 @@ async function saveEntityText(data: any) {
           is_killable: Boolean(data.is_killable),
         })
       } else {
-        const itemType = String(data.item_type || 'PICKABLE').toUpperCase()
+        const itemType = String(data.item_type || 'DEFAULT').toUpperCase()
         if (itemType === 'READABLE' && !String(data.text_log_content || '').trim()) {
           addNotification('Readable items require text-log content.', 'error')
           return
@@ -749,7 +751,7 @@ async function saveEntityText(data: any) {
           name: entityName,
           description: entityDescription,
           item_type: itemType,
-          is_portable: !['STATIC', 'SWITCH'].includes(itemType),
+          is_portable: itemType !== 'SWITCH',
           inventory: data.inventory || [],
           wearable_slots: data.wearable_slots || undefined,
           combination_ingredients: data.combination_ingredients || undefined,

@@ -65,18 +65,16 @@ export function getImageExtension(imagePath?: string | null) {
 // Item type helpers for editor
 export function itemTypePrefix(itemType: string): string {
   const map: Record<string, string> = {
-    PICKABLE: 'ITEM_',
+    DEFAULT: 'ITEM_',
     CONSUMABLE: 'ITEM_',
     WEARABLE: 'ITEM_',
     WEAPON: 'ITEM_',
-    KEY: 'ITEM_',
-    STATIC: 'ITEM_',
     COMBINABLE: 'ITEM_',
     READABLE: 'ITEM_',
     CONTAINER: 'CON_',
     SWITCH: 'SW_',
   }
-  return map[String(itemType || 'PICKABLE').toUpperCase()] || 'ITEM_'
+  return map[String(itemType || 'DEFAULT').toUpperCase()] || 'ITEM_'
 }
 
 export function sanitizeEditorIdToken(token: string): string {

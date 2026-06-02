@@ -21,7 +21,7 @@ const props = defineProps<{
     locked: boolean
     code_to_unlock: string
     item_to_unlock: string
-    inventory_json: string
+    inventory_input: string[]
     text_log_content: string
     text_log_format: string
     entity_id: string
@@ -72,7 +72,10 @@ const isFormInvalid = computed(() => {
   const idInvalid = props.isCreateEntityMode
     ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > 30)
     : false
-  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid
+  const combinationInvalid = currentItemType.value === 'COMBINABLE' &&
+    (!Array.isArray(localForm.value.combination_ingredients_input) ||
+     localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 2)
+  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid
 })
 
 watch(() => props.initialForm, (newVal) => {
@@ -82,9 +85,11 @@ watch(() => props.initialForm, (newVal) => {
 watch(() => localForm.value.item_type, (newType) => {
   if (!props.isCreateEntityMode) return
   const type = String(newType || '').toUpperCase()
-  if (type === 'STATIC' || type === 'SWITCH') {
+  if (type === 'SWITCH') {
     localForm.value.is_portable = false
-  } else if (['PICKABLE', 'CONSUMABLE', 'WEARABLE', 'WEAPON', 'KEY', 'COMBINABLE'].includes(type)) {
+  } else if (type === 'WEARABLE') {
+    localForm.value.is_portable = true
+  } else {
     localForm.value.is_portable = true
   }
 })
@@ -102,15 +107,9 @@ function handleSave() {
   let parsedIngredients: string[] = []
 
   if (props.context?.type === 'object') {
-    const rawInv = (localForm.value.inventory_json || '').trim()
-    if (rawInv) {
-      try {
-        const parsed = JSON.parse(rawInv)
-        parsedInventory = Array.isArray(parsed) ? parsed : []
-      } catch {
-        parsedInventory = []
-      }
-    }
+    parsedInventory = Array.isArray(localForm.value.inventory_input)
+      ? localForm.value.inventory_input.filter((s: string) => Boolean(s))
+      : []
 
     parsedWearableSlots = Array.isArray(localForm.value.wearable_slots_input)
       ? localForm.value.wearable_slots_input
@@ -202,6 +201,68 @@ async function handleGenerateBiography() {
     isGenerating.value['biography'] = false
   }
 }
+
+async function handleGenerateDescription() {
+  if (!props.adventureId || !localForm.value.name) return
+  isGenerating.value['description'] = true
+  try {
+    const result = await entityService.generateSceneDescription(
+      props.adventureId,
+      localForm.value.name
+    )
+    localForm.value.description = result.description
+  } catch (error) {
+    console.error('Failed to generate description:', error)
+  } finally {
+    isGenerating.value['description'] = false
+  }
+}
+
+async function handleGenerateTextLogContent() {
+  if (!props.adventureId || !localForm.value.name) return
+  isGenerating.value['text_log'] = true
+  try {
+    const result = await entityService.generateSceneDescription(
+      props.adventureId,
+      `Text log for ${localForm.value.name}`
+    )
+    localForm.value.text_log_content = result.description.slice(0, 500)
+  } catch (error) {
+    console.error('Failed to generate text log content:', error)
+  } finally {
+    isGenerating.value['text_log'] = false
+  }
+}
+
+const textLogPreviewClass = computed(() => {
+  const fmt = String(localForm.value.text_log_format || 'DOCUMENT').toUpperCase()
+  switch (fmt) {
+    case 'BOOK':
+      return 'font-serif tracking-[0.01em] leading-7 text-[1.06rem] text-amber-100/90'
+    case 'SCROLL':
+      return "font-['Caveat'] tracking-[0.02em] leading-7 text-[1.22rem] text-yellow-100/90"
+    case 'SIGN':
+      return 'font-mono uppercase tracking-[0.12em] leading-6 text-[1rem] text-cyan-100/90'
+    case 'DOCUMENT':
+    default:
+      return 'font-sans tracking-[0.015em] leading-6 text-[1.02rem] text-slate-200/90'
+  }
+})
+
+const textLogPreviewCardClass = computed(() => {
+  const fmt = String(localForm.value.text_log_format || 'DOCUMENT').toUpperCase()
+  switch (fmt) {
+    case 'BOOK':
+      return 'border-orange-300/25 bg-gradient-to-b from-amber-200/10 via-amber-100/5 to-slate-950/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+    case 'SCROLL':
+      return 'border-yellow-200/30 bg-gradient-to-b from-yellow-100/10 via-amber-100/5 to-slate-950/20 shadow-[inset_0_1px_0_rgba(255,244,200,0.14)]'
+    case 'SIGN':
+      return 'border-cyan-300/30 bg-gradient-to-b from-cyan-200/10 via-sky-200/5 to-slate-950/20 shadow-[inset_0_1px_0_rgba(180,255,255,0.12)]'
+    case 'DOCUMENT':
+    default:
+      return 'border-amber-500/20 bg-gradient-to-b from-amber-500/8 via-amber-500/4 to-slate-950/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+  }
+})
 </script>
 
 <template>
@@ -433,12 +494,10 @@ async function handleGenerateBiography() {
                       v-model="localForm.item_type"
                       class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-emerald-500/50 outline-none transition-all"
                     >
-                      <option value="PICKABLE">PICKABLE</option>
+                      <option value="DEFAULT">DEFAULT</option>
                       <option value="CONSUMABLE">CONSUMABLE</option>
                       <option value="WEARABLE">WEARABLE</option>
                       <option value="WEAPON">WEAPON</option>
-                      <option value="KEY">KEY</option>
-                      <option value="STATIC">STATIC</option>
                       <option value="COMBINABLE">COMBINABLE</option>
                       <option value="READABLE">READABLE</option>
                       <option value="CONTAINER">CONTAINER</option>
@@ -451,7 +510,7 @@ async function handleGenerateBiography() {
                       class="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-2 text-slate-300 font-bold uppercase tracking-widest cursor-not-allowed"
                     />
                   </div>
-                  <div v-if="!['PICKABLE', 'STATIC'].includes(currentItemType)" class="space-y-2">
+                  <div v-if="currentItemType !== 'WEARABLE'" class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Portable</label>
                     <button
                       type="button"
@@ -464,7 +523,7 @@ async function handleGenerateBiography() {
                   <div v-else class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Portable</label>
                     <div class="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-2 text-slate-400 font-bold uppercase tracking-widest">
-                      {{ currentItemType === 'PICKABLE' ? 'TRUE (Fixed)' : 'FALSE (Fixed)' }}
+                      TRUE (Fixed)
                     </div>
                   </div>
                 </div>
@@ -615,7 +674,7 @@ async function handleGenerateBiography() {
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Code To Unlock</label>
                     <input
                       v-model="localForm.code_to_unlock"
-                      maxlength="32"
+                      maxlength="20"
                       class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-amber-500/50 outline-none transition-all"
                       placeholder="ALPHA or 4711"
                     />
@@ -631,10 +690,37 @@ async function handleGenerateBiography() {
                   </div>
                 </div>
 
-                <div v-if="currentItemType === 'CONTAINER'" class="space-y-2">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Contained Items (JSON Array)</label>
-                  <textarea v-model="localForm.inventory_json" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-amber-500/50 outline-none transition-all" placeholder='["ITEM_KEY", {"id":"ITEM_MAP","name":"Old Map","item_type":"PICKABLE"}]'></textarea>
-                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Supports item IDs and inline item objects.</p>
+                <div v-if="currentItemType === 'CONTAINER'" class="space-y-3">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Contained Items</label>
+                  <div class="space-y-2">
+                    <div
+                      v-for="(item, idx) in localForm.inventory_input"
+                      :key="idx"
+                      class="flex items-center gap-2"
+                    >
+                      <EntityReferenceCombobox
+                        v-model="localForm.inventory_input[idx]"
+                        :options="itemReferenceOptions"
+                        placeholder="Select contained item"
+                        :enable-search="true"
+                      />
+                      <button
+                        type="button"
+                        @click="localForm.inventory_input = localForm.inventory_input.filter((_: string, i: number) => i !== idx)"
+                        class="shrink-0 px-2 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-[10px] font-bold uppercase tracking-widest transition-all"
+                      >
+                        <i class="ra ra-cancel"></i>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      @click="localForm.inventory_input = [...(localForm.inventory_input || []), '']"
+                      class="w-full py-2 bg-amber-500/5 border border-amber-500/10 hover:bg-amber-500/10 hover:border-amber-500/30 rounded-xl text-[10px] font-black text-amber-400 uppercase tracking-widest transition-all"
+                    >
+                      + Add Item
+                    </button>
+                  </div>
+                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Select items contained inside this container.</p>
                 </div>
 
                 <!-- READABLE -->
@@ -659,9 +745,22 @@ async function handleGenerateBiography() {
                     :maxlength="500"
                     :rows="3"
                     :options="props.referenceOptions || []"
-                    class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all"
+                    :class-name="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all', textLogPreviewClass].join(' ')"
                     placeholder="Readable note text shown to the player."
                   />
+                  <!-- Preview -->
+                  <div v-if="localForm.text_log_content" :class="['mt-2 p-3 rounded-xl border text-left whitespace-pre-line', textLogPreviewCardClass]">
+                    <p :class="textLogPreviewClass">{{ localForm.text_log_content }}</p>
+                  </div>
+                  <button
+                    v-if="localForm.name"
+                    @click="handleGenerateTextLogContent"
+                    :disabled="isGenerating['text_log']"
+                    class="w-full py-2 bg-cyan-500/5 border border-cyan-500/10 hover:bg-cyan-500/10 hover:border-cyan-500/30 rounded-xl text-[10px] font-black text-cyan-500 uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2"
+                  >
+                    <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['text_log'] }"></i>
+                    <span>Quick-Gen Text Log</span>
+                  </button>
                 </div>
               </div>
 
@@ -688,6 +787,16 @@ async function handleGenerateBiography() {
                 >
                   <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['biography'] }"></i>
                   <span>Quick-Gen Biography</span>
+                </button>
+                <button 
+                  v-if="context.type === 'object' && localForm.name"
+                  type="button"
+                  @click="handleGenerateDescription" 
+                  :disabled="isGenerating['description']"
+                  class="w-full py-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 rounded-xl text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2"
+                >
+                  <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['description'] }"></i>
+                  <span>Quick-Gen Description</span>
                 </button>
               </div>
             </div>
