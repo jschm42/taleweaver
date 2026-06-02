@@ -70,13 +70,12 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Text-Log Discovery System:** Readable objects can contain structured text logs (document, scroll, book, sign) that can be opened directly from scene and inventory interactions.
 
 ### 🎧 The Playable Audiobook (Cinematic Audio)
-* **Next-Gen Voice Acting:** Powered by **Google Gemini 3.1 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth.
+* **Next-Gen Voice Acting:** Powered by **Google Gemini 3.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth.
 * **Director's Cut:** The engine automatically parses vocal tags and director notes to build dramatic tension[cite: 1]. It is not just reading text; it is performing a high-budget audio drama.
 
 ### 🗺️ Visuals & Sensory Immersion
 * **Dynamic Cartography:** Automatic rendering of hand-drawn style directed graph maps of your discovered scenes using rough.js and dagre[cite: 1].
 * **Babel Fish Multilingualism:** Generate adventures and translate narration instantly in multiple languages.
-* **Cinematic Audio:** Immersive TTS support powered by Google Gemini 1.5 Flash and ElevenLabs for high-budget audio drama pacing.
 
 ### 🧠 Bring Your Own Model (BYOK) & Privacy First
 * **Cloud-Tier Intelligence:** Designed to harness the reasoning power of top-tier models (GPT-5, Claude 4.5, Gemini 3 Pro) via our LiteLLM adapter for flawless, complex world generation. You provide your own API key, meaning you have full control over your data and costs.
@@ -96,7 +95,18 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Offline Image Generation:** Local providers are supported, including **Ollama** and **Stable Diffusion via Automatic1111/Forge API**.
 
 ### Recent Feature Highlights
-* **Chronicles Checkpoints + Timeline Restore** (`617f682`): Added milestone-based auto-checkpoints, a dedicated in-game Chronicles timeline, and rollback restore flow for recent session states.
+* **Interactive World Map with Pathfinding** (`3e66a99`): Fully interactive world map visualization with pathfinding, panning, and zooming capabilities for navigating adventure scenes.
+* **Adventure Editor API** (`ec53b2e`, `50e1657`): Complete CRUD endpoints for scenes, entities, and exits in the adventure editor, with reference components for entity selection and bidirectional exit persistence.
+* **Centralized API Client + Proxy Config** (`47f4fa5`): Refactored frontend to use a centralized API client with backend configuration routes and updated nginx proxy configuration for security.
+* **Exit Unlock Rules + Bidirectional Exits** (`2825346`, `109f5c2`, `59ecf98`): Global soft unlock rules for exits and containers, bidirectional exit persistence as a single database row, and explicit rule distraction for container unlocks.
+* **SWITCH Item Type** (`be98796`): Added support for the SWITCH item type and related gameplay mechanics.
+* **Kimi (Moonshot) Provider** (`37e3c85`): New LLM provider support for Kimi/Moonshot with authentication handling and UI integration.
+* **Rule Mode Enforcement** (`be752eb`): Added `resolveRuleModeFromAdventure` to dynamically determine rule enforcement mode per adventure.
+* **Enhanced Combat Initiation** (`4f2fd83`): Improved combat logic to handle enemy-initiated attacks and NPC damage settings.
+* **Image URL Validation + Stale Fallback** (`503c06e`): Validation for usable image URLs with automatic fallback for stale local image URLs in adventure generation.
+* **System Message Flow** (`e3fe80f`): Added `emitSystemMessage` function integrated into game command flow and socket handling for richer feedback.
+* **LLM Blank JSON Retry Logic** (`14c9beb`): Implemented automatic retry logic for blank JSON responses in LLM interactions to improve generation reliability.
+* **Chronicles Checkpoints + Timeline Restore** (`617f682`, `4d02263`, `79fc42f`): Added milestone-based auto-checkpoints, a dedicated in-game Chronicles timeline, and rollback restore flow for recent session states.
 * **Container Unlock Rules + Generated Containers** (`9e26e8c`, `39688df`, `0bb4c0f`): Added generated container entities with lock-state rules plus code/item-based unlock requirements.
 * **Text-Log Generation + Readable Inventory Integration** (`329c835`, `dabbee3`): Added generated text logs and richer readable-item handling with content/format support in inventory and scene flows.
 * **Session Notes + Combat Loot Handling** (`60214f6`): Added editable session notes in the game/portal flow and structured post-combat loot handling in the gameplay UI.
@@ -416,7 +426,7 @@ You can download `.adv` or `.adz` files from there and import them into your loc
 ## 7. Credits & Assets
 
 * **AI & LLM:** Image generation is powered by **FLUX.1 [schnell]** and **FLUX.2 [klein]** by [Black Forest Labs](https://blackforestlabs.ai/). Multi-provider LLM abstraction is handled via [LiteLLM](https://github.com/BerriAI/litellm).
-* **Voice & TTS:** Cinematic narration provided by **Google Gemini 1.5 Flash (TTS)** and **ElevenLabs**.
+* **Voice & TTS:** Cinematic narration provided by **Google Gemini 2.5 Flash (TTS)** and **ElevenLabs**.
 * **Mapping:** Dynamic hand-drawn world maps are rendered using [rough.js](https://roughjs.com/) and [dagre](https://github.com/dagrejs/dagre).
 * **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets, and [DiceBear](https://www.dicebear.com/) for the procedural user avatars.
 * **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/) and system icons by [Lucide](https://lucide.dev/).
