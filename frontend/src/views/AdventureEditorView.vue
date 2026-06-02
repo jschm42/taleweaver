@@ -26,6 +26,7 @@ import AdvancedTab from '@/components/editor/AdvancedTab.vue'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
 import NotificationToast from '@/components/editor/NotificationToast.vue'
 import EditEntityModal from '@/components/editor/EditEntityModal.vue'
+import ItemTypeSelectorModal from '@/components/editor/ItemTypeSelectorModal.vue'
 import ManualVisionModal from '@/components/editor/ManualVisionModal.vue'
 import DataDebugModal from '@/components/editor/DataDebugModal.vue'
 import CreateSceneForm from '@/components/editor/CreateSceneForm.vue'
@@ -42,6 +43,9 @@ import {
   formatBytes,
   makeSafeFilename,
   getImageExtension,
+  itemTypePrefix,
+  buildPrefixedEditorId,
+  sanitizeEditorIdToken,
 } from '@/utils/editor_utils'
 
 const props = defineProps<{
@@ -69,6 +73,8 @@ const editEntityContext = ref<{ type: string; id: string } | null>(null)
 const isCreateEntityMode = ref(false)
 const createEntitySceneId = ref<string | null>(null)
 const createEntityType = ref<'npc' | 'object' | null>(null)
+const showItemTypeSelector = ref(false)
+const itemTypeSelectorSceneLabel = ref('')
 const showExitModal = ref(false)
 const isCreateExitMode = ref(false)
 const activeEditExitId = ref<string | null>(null)
@@ -97,6 +103,14 @@ const editForm = ref({
   inventory_json: '[]',
   text_log_content: '',
   text_log_format: 'DOCUMENT',
+  entity_id: '',
+  wearable_slots_input: [],
+  combination_ingredients: '',
+  switch_states_json: '[]',
+  switch_initial_state: '',
+  switch_transitions_json: '[]',
+  effects_json: '{}',
+  stat_modifier_strength: 0,
 })
 
 function closeEditEntityModal() {
@@ -105,6 +119,58 @@ function closeEditEntityModal() {
   isCreateEntityMode.value = false
   createEntitySceneId.value = null
   createEntityType.value = null
+}
+
+function openCreateItem() {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) {
+    addNotification('No active scene selected for item creation.', 'error')
+    return
+  }
+  createEntitySceneId.value = sceneId
+  createEntityType.value = 'object'
+  showItemTypeSelector.value = true
+}
+
+function handleItemTypeSelected(itemType: string) {
+  showItemTypeSelector.value = false
+  const sceneId = String(createEntitySceneId.value || activeMapSceneId.value || '').trim()
+  if (!sceneId) return
+  isCreateEntityMode.value = true
+  createEntityType.value = 'object'
+  editEntityContext.value = { type: 'object', id: `NEW_${String(itemType).toUpperCase()}` }
+  const prefix = itemTypePrefix(String(itemType).toUpperCase())
+  const randomSuffix = Math.random().toString(36).slice(2, 8).toUpperCase()
+  const defaultId = `${sanitizeEditorIdToken(prefix)}${randomSuffix}`
+
+  editForm.value = {
+    name: 'New Item',
+    description: 'A mysterious object found in this scene.',
+    teaser: '',
+    hp: 0,
+    stamina: 0,
+    mana: 0,
+    goal: '',
+    character: '',
+    is_killable: true,
+    item_type: itemType,
+    is_portable: !['STATIC', 'SWITCH'].includes(String(itemType).toUpperCase()),
+    locked: false,
+    code_to_unlock: '',
+    item_to_unlock: '',
+    inventory_json: '[]',
+    text_log_content: '',
+    text_log_format: 'DOCUMENT',
+    entity_id: defaultId,
+    wearable_slots_input: [],
+    combination_ingredients: '',
+    switch_states_json: '[]',
+    switch_initial_state: '',
+    switch_transitions_json: '[]',
+    effects_json: '{}',
+    stat_modifier_strength: 0,
+  }
+  showEditModal.value = true
 }
 
 function closeExitEditModal() {
@@ -540,16 +606,16 @@ async function setStartScene(sceneId: string) {
   }
 }
 
-async function handleCreateScene(data: { sceneId: string; label: string; description: string }) {
+async function handleCreateScene(data: { sceneId: string; name: string; description: string }) {
   isSavingText.value = true
   try {
     await entityService.createScene(props.adventureId, {
       scene_id: data.sceneId,
-      label: data.label,
+      label: data.name,
       description: data.description,
     })
     await fetchDebugInfo()
-    addNotification(`Scene "${data.label}" created.`, 'success')
+    addNotification(`Scene "${data.name}" created.`, 'success')
   } catch (error: any) {
     addNotification(error?.message || 'Failed to create scene.', 'error')
   } finally {
@@ -566,6 +632,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
   const resolvedDescription = type === 'object'
     ? fixNewlines(selectedObject?.description || currentDesc || '')
     : fixNewlines(currentDesc || '')
+  const metadata = selectedObject?.metadata_json || {}
   editForm.value = { 
     name: currentName || '', 
     description: resolvedDescription,
@@ -582,8 +649,16 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     code_to_unlock: selectedObject?.code_to_unlock || '',
     item_to_unlock: selectedObject?.item_to_unlock || '',
     inventory_json: JSON.stringify(selectedObject?.inventory || [], null, 2),
-    text_log_content: fixNewlines(selectedObject?.metadata_json?.text_log_content || ''),
-    text_log_format: String(selectedObject?.metadata_json?.text_log_format || selectedObject?.text_log_format || 'DOCUMENT').trim().toUpperCase(),
+    text_log_content: fixNewlines(metadata?.text_log_content || ''),
+    text_log_format: String(metadata?.text_log_format || selectedObject?.text_log_format || 'DOCUMENT').trim().toUpperCase(),
+    entity_id: String(selectedObject?.id || id || ''),
+    wearable_slots_input: selectedObject?.wearable_slots || [],
+    combination_ingredients: (selectedObject?.combination_ingredients || []).join(', '),
+    switch_states_json: JSON.stringify(selectedObject?.switch_states || metadata?.switch_states || [], null, 2),
+    switch_initial_state: String(selectedObject?.switch_initial_state || metadata?.switch_initial_state || ''),
+    switch_transitions_json: JSON.stringify(selectedObject?.switch_transitions || metadata?.switch_transitions || [], null, 2),
+    effects_json: JSON.stringify(selectedObject?.effects || metadata?.effects || {}, null, 2),
+    stat_modifier_strength: selectedObject?.stat_modifier_strength || metadata?.stat_modifier_strength || 0,
   }
   showEditModal.value = true
 }
@@ -604,8 +679,8 @@ async function saveEntityText(data: any) {
       addNotification('Name and description are required.', 'error')
       return
     }
-    if (entityName.length > 100) {
-      addNotification('Name must be 100 characters or less.', 'error')
+    if (entityName.length > 50) {
+      addNotification('Name must be 50 characters or less.', 'error')
       return
     }
     if (entityDescription.length > 1000) {
@@ -619,21 +694,20 @@ async function saveEntityText(data: any) {
       return
     }
 
-    const prefix = creationType === 'npc'
-      ? 'NPC_'
-      : itemTypePrefix(String(data.item_type || 'PICKABLE'))
-
-    let generatedId = buildPrefixedEditorId(entityName, prefix)
-    if (!generatedId) {
-      generatedId = `${sanitizeEditorIdToken(prefix)}${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+    let candidateId = String(data.entity_id || '').trim().toUpperCase()
+    if (!candidateId) {
+      addNotification('Entity ID is required.', 'error')
+      return
     }
+    if (candidateId.length > 30) {
+      addNotification('Entity ID must be 30 characters or less.', 'error')
+      return
+    }
+
     const takenIds = new Set(referenceOptions.value.map((entry) => String(entry.id || '').toUpperCase()))
-    let candidateId = generatedId
-    let guard = 0
-    while (takenIds.has(candidateId.toUpperCase()) && guard < 8) {
-      const suffix = Math.random().toString(36).slice(2, 6).toUpperCase()
-      candidateId = `${generatedId}_${suffix}`.slice(0, 128)
-      guard += 1
+    if (takenIds.has(candidateId)) {
+      addNotification(`An entity with ID "${candidateId}" already exists.`, 'error')
+      return
     }
 
     isSavingText.value = true
@@ -660,7 +734,7 @@ async function saveEntityText(data: any) {
           return
         }
 
-        await entityService.createEntity(props.adventureId, {
+        const createPayload: any = {
           entity_id: candidateId,
           entity_type: 'OBJECT',
           scene_id: sceneId,
@@ -668,13 +742,32 @@ async function saveEntityText(data: any) {
           description: entityDescription,
           item_type: itemType,
           is_portable: !['STATIC', 'SWITCH'].includes(itemType),
-          metadata_json: itemType === 'READABLE'
-            ? {
-                text_log_content: String(data.text_log_content || '').trim(),
-                text_log_format: String(data.text_log_format || 'DOCUMENT').toUpperCase(),
-              }
-            : undefined,
-        })
+          inventory: data.inventory || [],
+          wearable_slots: data.wearable_slots || undefined,
+          combination_ingredients: data.combination_ingredients || undefined,
+          stat_modifier_strength: data.stat_modifier_strength || undefined,
+        }
+        if (itemType === 'READABLE') {
+          createPayload.metadata_json = {
+            text_log_content: String(data.text_log_content || '').trim(),
+            text_log_format: String(data.text_log_format || 'DOCUMENT').toUpperCase(),
+          }
+        }
+        if (itemType === 'SWITCH') {
+          createPayload.metadata_json = {
+            ...(createPayload.metadata_json || {}),
+            switch_states: data.switch_states || [],
+            switch_initial_state: data.switch_initial_state || '',
+            switch_transitions: data.switch_transitions || [],
+          }
+        }
+        if (itemType === 'CONSUMABLE') {
+          createPayload.metadata_json = {
+            ...(createPayload.metadata_json || {}),
+            effects: data.effects || {},
+          }
+        }
+        await entityService.createEntity(props.adventureId, createPayload)
       }
 
       closeEditEntityModal()
@@ -695,8 +788,8 @@ async function saveEntityText(data: any) {
     addNotification('Name and description are required.', 'error')
     return
   }
-  if (entityName.length > 100) {
-    addNotification('Name must be 100 characters or less.', 'error')
+  if (entityName.length > 50) {
+    addNotification('Name must be 50 characters or less.', 'error')
     return
   }
   if (entityDescription.length > 1000) {
@@ -747,6 +840,13 @@ async function saveEntityText(data: any) {
       text_log_format: editEntityContext.value.type === 'object' && String(data.item_type || '').toUpperCase() === 'READABLE'
         ? data.text_log_format
         : undefined,
+      wearable_slots: editEntityContext.value.type === 'object' ? data.wearable_slots : undefined,
+      combination_ingredients: editEntityContext.value.type === 'object' ? data.combination_ingredients : undefined,
+      switch_states: editEntityContext.value.type === 'object' ? data.switch_states : undefined,
+      switch_initial_state: editEntityContext.value.type === 'object' ? data.switch_initial_state : undefined,
+      switch_transitions: editEntityContext.value.type === 'object' ? data.switch_transitions : undefined,
+      effects: editEntityContext.value.type === 'object' ? data.effects : undefined,
+      stat_modifier_strength: editEntityContext.value.type === 'object' ? data.stat_modifier_strength : undefined,
     })
     closeEditEntityModal()
     await Promise.all([fetchAdventure(), fetchDebugInfo()])
@@ -1071,7 +1171,7 @@ watch(
 async function handleUpdateQuests(newQuests: any[]) {
   isSaving.value = true
   try {
-    await adventureService.updateAdventure(props.adventureId, { quests: newQuests })
+    await adventureService.updateAdventure(props.adventureId, { quests: newQuests } as any)
     await fetchAdventure()
     addNotification('Quests updated.', 'success')
   } catch (error: any) {
@@ -1084,7 +1184,7 @@ async function handleUpdateQuests(newQuests: any[]) {
 async function handleUpdateAwards(newAwards: any[]) {
   isSaving.value = true
   try {
-    await adventureService.updateAdventure(props.adventureId, { awards: newAwards })
+    await adventureService.updateAdventure(props.adventureId, { awards: newAwards } as any)
     await fetchAdventure()
     addNotification('Awards updated.', 'success')
   } catch (error: any) {
@@ -1225,6 +1325,8 @@ const isCreatingRouteAsset = ref(false)
 const isDeletingRouteAsset = ref(false)
 
 const isCreatingScene = ref(false)
+const createSceneForm = ref({ sceneId: '', name: '', description: '' })
+const createSceneFormError = ref('')
 
 function openCreateSceneForm() {
   isCreatingScene.value = true
@@ -1325,6 +1427,48 @@ function openExitEditorRoute(exitId: string) {
     },
     query: route.query,
   })
+}
+
+function openCreateExitModal() {
+  isCreateExitMode.value = true
+  activeEditExitId.value = null
+  exitModalForm.value = {
+    from_scene_id: String(activeMapSceneId.value || ''),
+    to_scene_id: '',
+    label: '',
+    exit_type: 'one_way',
+    lock_description: '',
+  }
+  showExitModal.value = true
+}
+
+function requestDeleteRouteExit(exitId: string) {
+  const normalized = String(exitId || '').trim()
+  if (!normalized) return
+  pendingDeleteTarget.value = {
+    kind: 'exit',
+    id: normalized,
+    title: `Delete Exit ${normalized}?`,
+    description: 'This removes the exit route between scenes.',
+  }
+  showDeleteConfirmDialog.value = true
+}
+
+function requestDeleteRouteEntity(entityId: string) {
+  const normalized = String(entityId || '').trim()
+  if (!normalized) return
+  pendingDeleteTarget.value = {
+    kind: 'entity',
+    id: normalized,
+    title: `Delete Entity ${normalized}?`,
+    description: 'This permanently removes the entity from the world.',
+  }
+  showDeleteConfirmDialog.value = true
+}
+
+function closeDeleteConfirmDialog() {
+  showDeleteConfirmDialog.value = false
+  pendingDeleteTarget.value = null
 }
 
 function openEditExitModal(exitId: string) {
@@ -1474,7 +1618,7 @@ watch(
 watch(
   () => activeMapSceneId.value,
   () => {
-    routeSceneSearch.value = ''
+    // routeSceneSearch is local to SceneRoutePanel
   },
 )
 </script>
@@ -1680,6 +1824,7 @@ watch(
               :rule-enforcement-mode="form.rule_enforcement_mode"
               @back="closeSceneEditorDialog"
               @open-text-edit="openTextEdit"
+              @open-create-item="openCreateItem"
               @open-regen-dialog="openRegenerateDialog"
               @open-upload-picker="openUploadPicker"
               @download-asset="downloadVisualAsset"
@@ -1795,8 +1940,16 @@ watch(
       :rule-enforcement-mode="form.rule_enforcement_mode"
       :is-saving="isSavingText"
       :adventure-id="adventureId"
+      :is-create-entity-mode="isCreateEntityMode"
       @close="closeEditEntityModal"
       @save="saveEntityText"
+    />
+
+    <ItemTypeSelectorModal
+      :show="showItemTypeSelector"
+      :scene-label="routeSceneDetails?.label || routeSceneDetails?.name || createEntitySceneId || ''"
+      @close="showItemTypeSelector = false"
+      @select="handleItemTypeSelected"
     />
 
     <EditExitModal

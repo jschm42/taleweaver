@@ -61,3 +61,36 @@ export function getImageExtension(imagePath?: string | null) {
   }
   return ext
 }
+
+// Item type helpers for editor
+export function itemTypePrefix(itemType: string): string {
+  const map: Record<string, string> = {
+    PICKABLE: 'ITEM_',
+    CONSUMABLE: 'ITEM_',
+    WEARABLE: 'ITEM_',
+    WEAPON: 'ITEM_',
+    TOOL: 'ITEM_',
+    KEY: 'ITEM_',
+    STATIC: 'ITEM_',
+    COMBINABLE: 'ITEM_',
+    READABLE: 'ITEM_',
+    CONTAINER: 'CON_',
+    SWITCH: 'SW_',
+  }
+  return map[String(itemType || 'PICKABLE').toUpperCase()] || 'ITEM_'
+}
+
+export function sanitizeEditorIdToken(token: string): string {
+  return token.replace(/[^A-Za-z0-9_]/g, '').toUpperCase()
+}
+
+export function buildPrefixedEditorId(name: string, prefix: string): string {
+  if (!name || !prefix) return ''
+  const base = name
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .toUpperCase()
+  if (!base) return ''
+  return `${sanitizeEditorIdToken(prefix)}${base}`
+}

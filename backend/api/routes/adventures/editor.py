@@ -68,6 +68,13 @@ class EntityUpdateRequest(BaseModel):
     text_log_content: Optional[str] = None
     text_log_format: Optional[str] = None
     exit_type: Optional[str] = None
+    wearable_slots: Optional[list[str]] = None
+    combination_ingredients: Optional[list[str]] = None
+    switch_states: Optional[list[str]] = None
+    switch_initial_state: Optional[str] = None
+    switch_transitions: Optional[list[dict[str, Any]]] = None
+    effects: Optional[dict[str, Any]] = None
+    stat_modifier_strength: Optional[int] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -109,6 +116,10 @@ class EntityCreateRequest(BaseModel):
     mana: Optional[int] = None
     is_killable: Optional[bool] = None
     metadata_json: Optional[dict[str, Any]] = None
+    wearable_slots: Optional[list[str]] = None
+    combination_ingredients: Optional[list[str]] = None
+    stat_modifier_strength: Optional[int] = None
+    inventory: Optional[list] = None
 
 
 class QuestCreateRequest(BaseModel):
@@ -616,7 +627,10 @@ async def create_editor_entity(
         max_stamina=payload.stamina,
         is_killable=bool(payload.is_killable) if payload.is_killable is not None else True,
         metadata_json=dict(payload.metadata_json or {}),
-        inventory=[],
+        inventory=list(payload.inventory or []),
+        wearable_slots=payload.wearable_slots,
+        combination_ingredients=payload.combination_ingredients,
+        stat_modifier_strength=payload.stat_modifier_strength,
     )
     db.add(entity)
     await db.commit()
@@ -915,6 +929,29 @@ async def update_editor_entity(
                         raise HTTPException(status_code=400, detail="text_log_format must be one of DOCUMENT, SCROLL, BOOK, SIGN.")
                     metadata_json = dict(ent.metadata_json or {})
                     metadata_json["text_log_format"] = normalized_format
+                    ent.metadata_json = metadata_json
+                if payload.wearable_slots is not None:
+                    ent.wearable_slots = payload.wearable_slots
+                if payload.combination_ingredients is not None:
+                    ent.combination_ingredients = payload.combination_ingredients
+                if payload.stat_modifier_strength is not None:
+                    ent.stat_modifier_strength = payload.stat_modifier_strength
+                
+                metadata_json = dict(ent.metadata_json or {})
+                has_meta_change = False
+                if payload.switch_states is not None:
+                    metadata_json["switch_states"] = payload.switch_states
+                    has_meta_change = True
+                if payload.switch_initial_state is not None:
+                    metadata_json["switch_initial_state"] = payload.switch_initial_state
+                    has_meta_change = True
+                if payload.switch_transitions is not None:
+                    metadata_json["switch_transitions"] = payload.switch_transitions
+                    has_meta_change = True
+                if payload.effects is not None:
+                    metadata_json["effects"] = payload.effects
+                    has_meta_change = True
+                if has_meta_change:
                     ent.metadata_json = metadata_json
             
     await db.commit()

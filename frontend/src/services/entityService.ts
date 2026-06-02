@@ -23,6 +23,13 @@ export interface EntityEditData {
   inventory?: any[]
   text_log_content?: string
   text_log_format?: string
+  wearable_slots?: string[]
+  combination_ingredients?: string[]
+  switch_states?: string[]
+  switch_initial_state?: string
+  switch_transitions?: any[]
+  effects?: Record<string, any>
+  stat_modifier_strength?: number
 }
 
 export interface SceneCreateData {
@@ -60,6 +67,10 @@ export interface EntityCreateData {
   mana?: number
   is_killable?: boolean
   metadata_json?: Record<string, any>
+  wearable_slots?: string[]
+  combination_ingredients?: string[]
+  stat_modifier_strength?: number
+  inventory?: any[]
 }
 
 export interface QuestCreateData {
@@ -303,4 +314,3 @@ export const entityService = {
     }
   },
 }
-
