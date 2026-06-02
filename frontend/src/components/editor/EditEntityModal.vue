@@ -93,6 +93,27 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
     isGenerating.value[field] = false
   }
 }
+
+async function handleGenerateBiography() {
+  if (!props.adventureId || !localForm.value.name || !localForm.value.goal || !localForm.value.character) return
+  const targetType = props.context?.type
+  if (targetType !== 'npc' && targetType !== 'protagonist') return
+  isGenerating.value['biography'] = true
+  try {
+    const result = await entityService.generateBiography(
+      props.adventureId,
+      localForm.value.name,
+      localForm.value.goal,
+      localForm.value.character,
+      targetType
+    )
+    localForm.value.description = result.description
+  } catch (error) {
+    console.error('Failed to generate biography:', error)
+  } finally {
+    isGenerating.value['biography'] = false
+  }
+}
 </script>
 
 <template>
@@ -404,6 +425,16 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
                   :options="props.referenceOptions || []"
                   :class-name="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner', context.type === 'object' ? 'text-sm' : 'text-base'].join(' ')"
                 />
+                <button 
+                  v-if="['npc', 'protagonist'].includes(context.type) && localForm.name && localForm.goal && localForm.character"
+                  type="button"
+                  @click="handleGenerateBiography" 
+                  :disabled="isGenerating['biography']"
+                  class="w-full py-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 hover:border-emerald-500/30 rounded-xl text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2"
+                >
+                  <i class="ra ra-crystals" :class="{ 'animate-spin': isGenerating['biography'] }"></i>
+                  <span>Quick-Gen Biography</span>
+                </button>
               </div>
             </div>
 

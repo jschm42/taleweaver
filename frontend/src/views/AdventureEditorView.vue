@@ -11,7 +11,7 @@ import { notificationService } from '@/services/notificationService'
 
 // Components
 import EditorHeader from '@/components/editor/EditorHeader.vue'
-import { Save, X } from 'lucide-vue-next'
+import { Save, X, Trash2, ArrowLeft } from 'lucide-vue-next'
 import WorldTab from '@/components/editor/WorldTab.vue'
 import ProtagonistTab from '@/components/editor/ProtagonistTab.vue'
 import ItemsTab from '@/components/editor/ItemsTab.vue'
@@ -53,6 +53,7 @@ const ASSET_BASE = ''
 // Visuals state
 const isQuickGenerating = ref<Record<string, boolean>>({})
 const isBatchGenerating = ref<Record<string, boolean>>({})
+const isGeneratingField = ref<Record<string, boolean>>({})
 const activeAbortControllers = ref<Map<string, AbortController>>(new Map())
 const isGenerating = computed(() => {
   return isRegenerating.value || 
@@ -325,6 +326,31 @@ function startEditing(field: string, value: string) {
 function cancelEditing() {
   editingField.value = null
   tempValue.value = ''
+}
+
+async function handleGenerateField(field: string) {
+  if (!props.adventureId) return
+  isGeneratingField.value[field] = true
+  try {
+    const result = await adventureService.generateTemplateField(props.adventureId, {
+      field: field,
+      title: form.value.title,
+      original_prompt: form.value.original_prompt,
+      plot: form.value.plot,
+      rules: form.value.rules,
+      intro_text: form.value.intro_text,
+      walkthrough: form.value.walkthrough,
+      completed_condition: form.value.completed_condition,
+      gameover_condition: form.value.gameover_condition,
+      tts_director_notes: form.value.tts_director_notes
+    })
+    tempValue.value = fixNewlines(result.generated_text)
+    addNotification(`AI generated content for ${field}.`, 'success')
+  } catch (error: any) {
+    addNotification(error?.message || `Failed to generate ${field}.`, 'error')
+  } finally {
+    isGeneratingField.value[field] = false
+  }
 }
 
 async function saveField() {
@@ -2065,6 +2091,7 @@ watch(
               :is-saving="isSaving"
               :is-batch-generating="isBatchGenerating"
               :is-quick-generating="isQuickGenerating"
+              :is-generating-field="isGeneratingField"
               :active-menu-id="activeMenuId"
               :fix-newlines="fixNewlines"
               @quick-regen="quickRegenerateVisual"
@@ -2076,6 +2103,7 @@ watch(
               @start-edit="startEditing"
               @save-field="saveField"
               @cancel-edit="cancelEditing"
+              @generate-field="handleGenerateField"
               @update:temp-value="tempValue = $event"
               @update:pacing="form.time_per_turn = $event"
               @update:mode="form.rule_enforcement_mode = $event as any"
@@ -2265,23 +2293,41 @@ watch(
             >
               <div class="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
                 <button
-                  class="px-3 py-2 text-xs font-bold rounded-lg border border-white/20 text-slate-200 hover:bg-white/10"
+                  class="flex items-center gap-2 px-3 py-1.5 text-xs font-black uppercase tracking-[0.15em] rounded-lg border border-white/10 bg-slate-900/40 text-slate-300 hover:text-white hover:bg-white/5 transition-all"
                   @click="closeSceneEditorDialog"
                 >
+                  <ArrowLeft class="w-4 h-4" />
                   Back to Scenes
-                </button>
-                <button class="px-3 py-2 text-xs font-bold rounded-lg border border-white/20 text-slate-300 hover:bg-white/10" @click="closeSceneEditorDialog">
-                  Close
                 </button>
               </div>
 
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0 flex-1 space-y-4">
-                  <!-- Scene Name -->
-                  <div class="space-y-2">
+              <!-- Scene Details Card -->
+              <div class="bg-slate-900/40 border border-white/5 rounded-2xl p-6 backdrop-blur-md space-y-6 shadow-xl">
+                <!-- Card Header -->
+                <div class="flex items-center justify-between gap-4 border-b border-white/5 pb-4">
+                  <div class="flex items-center gap-3">
+                    <span class="px-2.5 py-1 rounded-md bg-slate-950/80 border border-white/10 text-xs font-mono text-emerald-400 tracking-wider">
+                      {{ routeSceneDetails?.id || activeMapSceneId }}
+                    </span>
+                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-[0.25em]">Scene Editor</h4>
+                  </div>
+                  <button
+                    class="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 border border-white/5 hover:border-red-500/20 bg-slate-950/40"
+                    :disabled="isDeletingRouteAsset"
+                    @click="requestDeleteRouteScene"
+                    title="Delete Scene"
+                  >
+                    <Trash2 class="w-4.5 h-4.5" />
+                  </button>
+                </div>
+
+                <!-- Card Body -->
+                <div class="grid md:grid-cols-3 gap-6">
+                  <!-- Scene Name Column -->
+                  <div class="md:col-span-1 space-y-2">
                     <div class="flex justify-between items-center">
-                      <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Scene Name <span class="text-red-400">*</span></label>
-                      <span v-if="isEditingSceneName" :class="['text-[10px] font-bold tracking-widest', (sceneNameEdit || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
+                      <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Scene Name <span class="text-red-400">*</span></label>
+                      <span v-if="isEditingSceneName" :class="['text-[9px] font-bold tracking-widest', (sceneNameEdit || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
                         {{ (sceneNameEdit || '').length }} / 100
                       </span>
                     </div>
@@ -2290,13 +2336,13 @@ watch(
                         ref="sceneNameInputRef"
                         v-model="sceneNameEdit"
                         maxlength="100"
-                        class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all"
+                        class="flex-grow bg-slate-950/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all"
                         @keydown.enter="saveSceneNameEdit"
                         @keydown.esc="cancelSceneNameEdit"
                       />
                       <button
                         :disabled="isSavingText || !(sceneNameEdit || '').trim()"
-                        class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg"
+                        class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg shrink-0"
                         title="Save"
                         @click="saveSceneNameEdit"
                       >
@@ -2304,7 +2350,7 @@ watch(
                         <Save v-else class="w-4 h-4" />
                       </button>
                       <button
-                        class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all"
+                        class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all shrink-0"
                         title="Discard"
                         @click="cancelSceneNameEdit"
                       >
@@ -2313,19 +2359,19 @@ watch(
                     </div>
                     <div
                       v-else
-                      class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center"
+                      class="group cursor-pointer bg-slate-950/30 hover:bg-slate-950/50 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-center h-[46px]"
                       @click="startEditingSceneName"
                     >
-                      <span class="text-sm font-bold text-white">{{ routeSceneDetails?.label || routeSceneDetails?.id || activeMapSceneId }}</span>
-                      <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                      <span class="text-sm font-bold text-white truncate mr-2">{{ routeSceneDetails?.label || routeSceneDetails?.name || routeSceneDetails?.id || activeMapSceneId }}</span>
+                      <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"></i>
                     </div>
                   </div>
 
-                  <!-- Scene Description -->
-                  <div class="space-y-2">
+                  <!-- Scene Description Column -->
+                  <div class="md:col-span-2 space-y-2">
                     <div class="flex justify-between items-center">
-                      <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Description <span class="text-red-400">*</span></label>
-                      <span v-if="isEditingSceneDesc" :class="['text-[10px] font-bold tracking-widest', (sceneDescEdit || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
+                      <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Description <span class="text-red-400">*</span></label>
+                      <span v-if="isEditingSceneDesc" :class="['text-[9px] font-bold tracking-widest', (sceneDescEdit || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
                         {{ (sceneDescEdit || '').length }} / 1000
                       </span>
                     </div>
@@ -2335,44 +2381,37 @@ watch(
                         v-model="sceneDescEdit"
                         maxlength="1000"
                         rows="3"
-                        class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-none"
+                        class="flex-grow bg-slate-950/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-none"
                         @keydown.esc="cancelSceneDescEdit"
                       ></textarea>
-                      <button
-                        :disabled="isSavingText || !(sceneDescEdit || '').trim()"
-                        class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg self-start"
-                        title="Save"
-                        @click="saveSceneDescEdit"
-                      >
-                        <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
-                        <Save v-else class="w-4 h-4" />
-                      </button>
-                      <button
-                        class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all self-start"
-                        title="Discard"
-                        @click="cancelSceneDescEdit"
-                      >
-                        <X class="w-4 h-4" />
-                      </button>
+                      <div class="flex flex-col gap-1.5 shrink-0">
+                        <button
+                          :disabled="isSavingText || !(sceneDescEdit || '').trim()"
+                          class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg"
+                          title="Save"
+                          @click="saveSceneDescEdit"
+                        >
+                          <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
+                          <Save v-else class="w-4 h-4" />
+                        </button>
+                        <button
+                          class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all"
+                          title="Discard"
+                          @click="cancelSceneDescEdit"
+                        >
+                          <X class="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <div
                       v-else
-                      class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center"
+                      class="group cursor-pointer bg-slate-950/30 hover:bg-slate-950/50 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-start min-h-[46px]"
                       @click="startEditingSceneDesc"
                     >
-                      <span class="text-sm text-slate-300">{{ routeSceneDetails?.description || 'No description.' }}</span>
-                      <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                      <span class="text-sm text-slate-300 break-words flex-grow mr-2">{{ routeSceneDetails?.description || 'No description.' }}</span>
+                      <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"></i>
                     </div>
                   </div>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <button
-                    class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
-                    :disabled="isDeletingRouteAsset"
-                    @click="requestDeleteRouteScene"
-                  >
-                    Delete Scene
-                  </button>
                 </div>
               </div>
 
@@ -2445,12 +2484,12 @@ watch(
                           </div>
                         </button>
                         <div v-if="activeMenuId === `scene-npc-${npc.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                          <button @click="quickRegenerateVisual('npc', npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                          <button @click="openRegenerateDialog('npc', npc.id, npc.name || npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                          <button @click="openUploadPicker('npc', npc.id, npc.name || npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                          <button v-if="npc.image_url" @click="downloadVisualAsset(npc.image_url, `${npc.name || 'npc'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                          <button @click="editRouteEntity('npc', npc); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="requestDeleteRouteEntity(npc.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="quickRegenerateVisual('npc', npc.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('npc', npc.id, npc.name || npc.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('npc', npc.id, npc.name || npc.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="npc.image_url" @click="downloadVisualAsset(npc.image_url, `${npc.name || 'npc'}_image`), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('npc', npc), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="requestDeleteRouteEntity(npc.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2505,12 +2544,12 @@ watch(
                           </div>
                         </button>
                         <div v-if="activeMenuId === `scene-item-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                          <button @click="quickRegenerateVisual('object', obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'object'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                          <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="requestDeleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="quickRegenerateVisual('object', obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'object'}_image`), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('object', obj), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="requestDeleteRouteEntity(obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2565,12 +2604,12 @@ watch(
                           </div>
                         </button>
                         <div v-if="activeMenuId === `scene-switch-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                          <button @click="quickRegenerateVisual('object', obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'switch'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                          <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="requestDeleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="quickRegenerateVisual('object', obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'switch'}_image`), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('object', obj), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="requestDeleteRouteEntity(obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2625,12 +2664,12 @@ watch(
                           </div>
                         </button>
                         <div v-if="activeMenuId === `scene-container-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                          <button @click="quickRegenerateVisual('object', obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'container'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                          <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="requestDeleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="quickRegenerateVisual('object', obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'container'}_image`), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('object', obj), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="requestDeleteRouteEntity(obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2685,12 +2724,12 @@ watch(
                           </div>
                         </button>
                         <div v-if="activeMenuId === `scene-log-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                          <button @click="quickRegenerateVisual('object', obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'text-log'}_image`); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                          <button @click="editRouteEntity('object', obj); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                          <button @click="requestDeleteRouteEntity(obj.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="quickRegenerateVisual('object', obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                          <button @click="openRegenerateDialog('object', obj.id, obj.name || obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                          <button @click="openUploadPicker('object', obj.id, obj.name || obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                          <button v-if="obj.image_url" @click="downloadVisualAsset(obj.image_url, `${obj.name || 'text-log'}_image`), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                          <button @click="editRouteEntity('object', obj), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                          <button @click="requestDeleteRouteEntity(obj.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>
@@ -2733,9 +2772,9 @@ watch(
                           </div>
                         </button>
                         <div v-if="activeMenuId === `scene-exit-${worldExit.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                          <button @click="openExitEditorRoute(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Open Route</button>
-                          <button @click="openEditExitModal(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Edit</button>
-                          <button @click="requestDeleteRouteExit(worldExit.id); activeMenuId = null" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+                          <button @click="openExitEditorRoute(worldExit.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Open Route</button>
+                          <button @click="openEditExitModal(worldExit.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Edit</button>
+                          <button @click="requestDeleteRouteExit(worldExit.id), (activeMenuId = null)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
                         </div>
                       </div>
                     </article>

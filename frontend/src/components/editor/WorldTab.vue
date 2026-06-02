@@ -12,6 +12,7 @@ const props = defineProps<{
   isSaving: boolean
   isBatchGenerating: Record<string, boolean>
   isQuickGenerating: Record<string, boolean>
+  isGeneratingField: Record<string, boolean>
   activeMenuId: string | null
   fixNewlines: (text: string) => string
 }>()
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   (e: 'start-edit', field: string, value: string): void
   (e: 'save-field'): void
   (e: 'cancel-edit'): void
+  (e: 'generate-field', field: string): void
   (e: 'update:tempValue', val: string): void
   (e: 'update:mode', val: 'rpg' | 'story' | 'chat'): void
   (e: 'save-changes'): void
@@ -158,12 +160,14 @@ function handlePacingInput(event: Event) {
       :editing-field="editingField"
       :temp-value="tempValue"
       :is-saving="isSaving"
+      :is-generating-field="isGeneratingField"
       :fix-newlines="fixNewlines"
       @update:temp-value="emit('update:tempValue', $event)"
       @update:mode="emit('update:mode', $event)"
       @start-edit="(field, value) => emit('start-edit', field, value)"
       @save-field="emit('save-field')"
       @cancel-edit="emit('cancel-edit')"
+      @generate-field="emit('generate-field', $event)"
       @save-changes="emit('save-changes')"
     />
   </div>

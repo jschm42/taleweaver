@@ -7,6 +7,7 @@ defineProps<{
   editingField: string | null
   tempValue: string
   isSaving: boolean
+  isGeneratingField?: Record<string, boolean>
   fixNewlines: (text: string) => string
   referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null }>
 }>()
@@ -16,6 +17,7 @@ const emit = defineEmits<{
   (e: 'start-edit', field: string, value: string): void
   (e: 'save-field'): void
   (e: 'cancel-edit'): void
+  (e: 'generate-field', field: string): void
   (e: 'update:tempValue', val: string): void
   (e: 'update:mode', val: 'rpg' | 'story' | 'chat'): void
 }>()
@@ -70,11 +72,15 @@ const emit = defineEmits<{
               @update:model-value="emit('update:tempValue', $event)"
             />
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['plot']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save Plot</span>
               </button>
-              <button @click="emit('cancel-edit')" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+              <button type="button" @click="emit('generate-field', 'plot')" :disabled="isSaving || isGeneratingField?.['plot']" class="px-6 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2">
+                <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['plot'] }"></i>
+                <span>AI Generate</span>
+              </button>
+              <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['plot']" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
             </div>
           </div>
           <div v-else @click="emit('start-edit', 'plot', form.plot)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
@@ -99,11 +105,15 @@ const emit = defineEmits<{
               @update:model-value="emit('update:tempValue', $event)"
             />
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['rules']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save Rules</span>
               </button>
-              <button @click="emit('cancel-edit')" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+              <button type="button" @click="emit('generate-field', 'rules')" :disabled="isSaving || isGeneratingField?.['rules']" class="px-6 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2">
+                <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['rules'] }"></i>
+                <span>AI Generate</span>
+              </button>
+              <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['rules']" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
             </div>
           </div>
           <div v-else @click="emit('start-edit', 'rules', form.rules)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
@@ -128,11 +138,15 @@ const emit = defineEmits<{
               @update:model-value="emit('update:tempValue', $event)"
             />
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['intro_text']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save Intro</span>
               </button>
-              <button @click="emit('cancel-edit')" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+              <button type="button" @click="emit('generate-field', 'intro_text')" :disabled="isSaving || isGeneratingField?.['intro_text']" class="px-6 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2">
+                <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['intro_text'] }"></i>
+                <span>AI Generate</span>
+              </button>
+              <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['intro_text']" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
             </div>
           </div>
           <div v-else @click="emit('start-edit', 'intro_text', form.intro_text)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
@@ -157,11 +171,15 @@ const emit = defineEmits<{
               @update:model-value="emit('update:tempValue', $event)"
             />
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['walkthrough']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save Walkthrough</span>
               </button>
-              <button @click="emit('cancel-edit')" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+              <button type="button" @click="emit('generate-field', 'walkthrough')" :disabled="isSaving || isGeneratingField?.['walkthrough']" class="px-6 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2">
+                <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['walkthrough'] }"></i>
+                <span>AI Generate</span>
+              </button>
+              <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['walkthrough']" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
             </div>
           </div>
           <div v-else @click="emit('start-edit', 'walkthrough', form.walkthrough)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
@@ -187,11 +205,15 @@ const emit = defineEmits<{
             />
             <p class="text-[10px] text-slate-500 uppercase tracking-widest italic px-2">Note: These instructions only apply when using Gemini-based TTS models.</p>
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['tts_director_notes']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save TTS Notes</span>
               </button>
-              <button @click="emit('cancel-edit')" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+              <button type="button" @click="emit('generate-field', 'tts_director_notes')" :disabled="isSaving || isGeneratingField?.['tts_director_notes']" class="px-6 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2">
+                <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['tts_director_notes'] }"></i>
+                <span>AI Generate</span>
+              </button>
+              <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['tts_director_notes']" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
             </div>
           </div>
           <div v-else @click="emit('start-edit', 'tts_director_notes', form.tts_director_notes)" class="group relative cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-[2rem] p-8 transition-all duration-300 shadow-inner">
@@ -217,8 +239,12 @@ const emit = defineEmits<{
                 @update:model-value="emit('update:tempValue', $event)"
               />
               <div class="flex gap-4">
-                <button @click="emit('save-field')" :disabled="isSaving" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
-                <button @click="emit('cancel-edit')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                <button type="button" @click="emit('generate-field', 'completed_condition')" :disabled="isSaving || isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-2">
+                  <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['completed_condition'] }"></i>
+                  <span>AI Generate</span>
+                </button>
+                <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
               </div>
             </div>
             <div v-else @click="emit('start-edit', 'completed_condition', form.completed_condition)" class="group relative cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/30 rounded-2xl p-6 transition-all duration-300">
@@ -239,8 +265,12 @@ const emit = defineEmits<{
                 @update:model-value="emit('update:tempValue', $event)"
               />
               <div class="flex gap-4">
-                <button @click="emit('save-field')" :disabled="isSaving" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
-                <button @click="emit('cancel-edit')" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
+                <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['gameover_condition']" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                <button type="button" @click="emit('generate-field', 'gameover_condition')" :disabled="isSaving || isGeneratingField?.['gameover_condition']" class="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-2">
+                  <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['gameover_condition'] }"></i>
+                  <span>AI Generate</span>
+                </button>
+                <button @click="emit('cancel-edit')" :disabled="isGeneratingField?.['gameover_condition']" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Cancel</button>
               </div>
             </div>
             <div v-else @click="emit('start-edit', 'gameover_condition', form.gameover_condition)" class="group relative cursor-pointer bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 rounded-2xl p-6 transition-all duration-300">

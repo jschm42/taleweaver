@@ -115,6 +115,25 @@ export const entityService = {
     return await res.json()
   },
 
+  async generateBiography(adventureId: string, name: string, goal: string, character: string, targetType: 'npc' | 'protagonist', adventureTheme?: string): Promise<{ description: string }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-biography`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        name,
+        goal,
+        character,
+        target_type: targetType,
+        adventure_theme: adventureTheme
+      }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to generate biography')
+    }
+    return await res.json()
+  },
+
   async generateQuestDescription(adventureId: string, title: string, isMain: boolean, otherQuests: any[]): Promise<{ description: string }> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-quest-description`, {
       method: 'POST',

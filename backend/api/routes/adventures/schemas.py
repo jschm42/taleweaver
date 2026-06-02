@@ -67,6 +67,52 @@ class CreateAdventureTemplatePayload(BaseModel):
             raise ValueError("title must be at most 50 characters")
         return cleaned
 
+    @field_validator("version")
+    @classmethod
+    def validate_version_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 15:
+            raise ValueError("version must be at most 15 characters")
+        return value
+
+    @field_validator("teaser")
+    @classmethod
+    def validate_teaser_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 300:
+            raise ValueError("teaser must be at most 300 characters")
+        return value
+
+    @field_validator("original_prompt")
+    @classmethod
+    def validate_original_prompt_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 20000:
+            raise ValueError("original_prompt must be at most 20000 characters")
+        return value
+
+    @field_validator("intro_text")
+    @classmethod
+    def validate_intro_text_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 20000:
+            raise ValueError("intro_text must be at most 20000 characters")
+        return value
+
+    @field_validator("tts_director_notes")
+    @classmethod
+    def validate_tts_director_notes_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 5000:
+            raise ValueError("tts_director_notes must be at most 5000 characters")
+        return value
+
+
     @field_validator("selected_tone", mode="before")
     @classmethod
     def parse_legacy_tone(cls, v):
@@ -472,6 +518,61 @@ class AdventureTemplateUpdate(BaseModel):
             raise ValueError("title must be at most 50 characters")
         return cleaned
 
+    @field_validator("version")
+    @classmethod
+    def validate_version_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 15:
+            raise ValueError("version must be at most 15 characters")
+        return value
+
+    @field_validator("teaser")
+    @classmethod
+    def validate_teaser_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 300:
+            raise ValueError("teaser must be at most 300 characters")
+        return value
+
+    @field_validator("original_prompt")
+    @classmethod
+    def validate_original_prompt_length(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 20000:
+            raise ValueError("original_prompt must be at most 20000 characters")
+        return value
+
+    @field_validator("plot", "rules", "tts_director_notes")
+    @classmethod
+    def validate_5k_fields(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 5000:
+            raise ValueError("length must be at most 5000 characters")
+        return value
+
+    @field_validator("intro_text", "walkthrough")
+    @classmethod
+    def validate_20k_fields(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 20000:
+            raise ValueError("length must be at most 20000 characters")
+        return value
+
+    @field_validator("completed_condition", "gameover_condition")
+    @classmethod
+    def validate_2k_fields(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 2000:
+            raise ValueError("length must be at most 2000 characters")
+        return value
+
+
     @field_validator("selected_tone", mode="before")
     @classmethod
     def parse_legacy_tone(cls, v):
@@ -517,4 +618,34 @@ class QuestGenerationRequest(BaseModel):
 class QuestGenerationResponse(BaseModel):
     title: str
     description: str
+
+
+class TemplateFieldGenerationRequest(BaseModel):
+    field: Literal["plot", "rules", "intro_text", "walkthrough", "completed_condition", "gameover_condition", "tts_director_notes"]
+    title: Optional[str] = None
+    original_prompt: Optional[str] = None
+    plot: Optional[str] = None
+    rules: Optional[str] = None
+    intro_text: Optional[str] = None
+    walkthrough: Optional[str] = None
+    completed_condition: Optional[str] = None
+    gameover_condition: Optional[str] = None
+    tts_director_notes: Optional[str] = None
+
+
+class TemplateFieldGenerationResponse(BaseModel):
+    generated_text: str
+
+
+class BiographyGenerationRequest(BaseModel):
+    target_type: Literal["npc", "protagonist"]
+    name: str
+    goal: str
+    character: str
+    adventure_theme: Optional[str] = None
+
+
+class BiographyGenerationResponse(BaseModel):
+    description: str
+
 

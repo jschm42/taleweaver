@@ -155,6 +155,30 @@ export const adventureService = {
     if (!res.ok) throw new Error('Failed to clear creation error')
   },
 
+  async generateTemplateField(adventureId: string, data: {
+    field: string
+    title?: string
+    original_prompt?: string
+    plot?: string
+    rules?: string
+    intro_text?: string
+    walkthrough?: string
+    completed_condition?: string
+    gameover_condition?: string
+    tts_director_notes?: string
+  }): Promise<{ generated_text: string }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/generate-field`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const respData = await res.json()
+      throw new Error(respData.detail || 'Failed to generate field.')
+    }
+    return res.json()
+  },
+
   normalizeDebugPayload(raw: any): DebugPayload {
     if (!raw || typeof raw !== 'object') return raw
     const payload = { ...raw }

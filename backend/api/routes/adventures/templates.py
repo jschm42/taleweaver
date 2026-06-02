@@ -21,6 +21,8 @@ from backend.api.routes.adventures.schemas import (
     CreateAdventureTemplatePayload,
     StoryIdeaSuggestionRequest,
     StoryIdeaSuggestionResponse,
+    TemplateFieldGenerationRequest,
+    TemplateFieldGenerationResponse,
 )
 from backend.core.auth import get_current_user
 from backend.core.config import settings
@@ -396,6 +398,147 @@ async def suggest_story_idea(
         title=final_title,
         story_idea=suggestion.story_idea.strip(),
     )
+
+
+@router.post("/{template_id}/generate-field", response_model=TemplateFieldGenerationResponse)
+async def generate_template_field(
+    template_id: str,
+    payload: TemplateFieldGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates a template field using the configured small/simple model, given the other fields as context."""
+    # 1. Fetch template and check ownership
+    result = await db.execute(
+        select(AdventureTemplate).where(
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
+        )
+    )
+    adv = result.scalars().first()
+    if not adv:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
+
+    # 2. Get user's LLM settings for small model
+    llm_settings = current_user.llm_settings or {}
+    provider = (
+        llm_settings.get("small_model_provider")
+        or llm_settings.get("complex_model_provider")
+        or llm_settings.get("preferred_provider")
+        or "openai"
+    )
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+
+    # 3. Determine the target field and limits
+    field_limits = {
+        "plot": 5000,
+        "rules": 5000,
+        "intro_text": 20000,
+        "walkthrough": 20000,
+        "completed_condition": 2000,
+        "gameover_condition": 2000,
+        "tts_director_notes": 5000,
+    }
+    field_labels = {
+        "plot": "Adventure Plot (Secret)",
+        "rules": "Adventure Rules / Mechanics",
+        "intro_text": "Session Intro Text",
+        "walkthrough": "GM Walkthrough (Solution Path)",
+        "completed_condition": "Win Conditions",
+        "gameover_condition": "Loss Conditions",
+        "tts_director_notes": "Director's TTS Notes",
+    }
+
+    target_field = payload.field
+    if target_field not in field_limits:
+        raise HTTPException(status_code=400, detail="Invalid field name for generation.")
+
+    max_len = field_limits[target_field]
+    label = field_labels[target_field]
+
+    # 4. Construct the prompt context using provided or saved values
+    # We prefer the payload values if provided, falling back to database values.
+    context_data = {
+        "title": payload.title or adv.title,
+        "original_prompt": payload.original_prompt or adv.original_prompt or "",
+        "plot": payload.plot or adv.plot or "",
+        "rules": payload.rules or adv.rules or "",
+        "intro_text": payload.intro_text or adv.intro_text or "",
+        "walkthrough": payload.walkthrough or adv.walkthrough or "",
+        "completed_condition": payload.completed_condition or adv.completed_condition or "",
+        "gameover_condition": payload.gameover_condition or adv.gameover_condition or "",
+        "tts_director_notes": payload.tts_director_notes or adv.tts_director_notes or "",
+    }
+
+    # Remove the target field from context so it's not self-referential
+    context_data[target_field] = ""
+
+    # Compile details of other fields
+    other_fields_block = ""
+    for f, val in context_data.items():
+        if f == target_field or f in ("title", "original_prompt"):
+            continue
+        val_str = val.strip() if val else ""
+        if val_str:
+            other_fields_block += f"- {field_labels[f]}: {val_str}\n\n"
+
+    # Narrative tone & language if available
+    tone_str = "Neutral"
+    if adv.selected_tone and isinstance(adv.selected_tone, dict):
+        tone_str = adv.selected_tone.get("name") or adv.selected_tone.get("id") or "Neutral"
+    
+    language_str = adv.language or "English"
+
+    system_prompt = (
+        "You are an expert game designer, creative writer, and world-builder for interactive text adventure RPGs.\n"
+        "Your task is to generate cohesive, high-quality content for a specific field of an adventure template.\n"
+        f"The language of the adventure is {language_str}.\n"
+        f"The tone of the adventure is {tone_str}.\n"
+        "Respond with ONLY the generated text. Do NOT wrap it in quotes, do NOT add markdown header labels like "
+        f"'{label}:', and do NOT include any introductory or explanatory text (e.g., 'Here is the plot:'). "
+        "Just output the content directly."
+    )
+
+    user_prompt = (
+        f"Generate the content for the field: {label}\n\n"
+        f"Adventure Title: {context_data['title']}\n"
+        f"Core Premise / Story Prompt: {context_data['original_prompt']}\n\n"
+        "Here is the context of other defined fields in this adventure:\n"
+        f"{other_fields_block or '- No other fields are defined yet.'}\n"
+        f"CRITICAL CONSTRAINT: The generated text must be at most {max_len} characters. "
+        "Make it engaging, immersive, and highly detailed, but stay strictly within this limit. "
+        f"Generate the {label} now:"
+    )
+
+    try:
+        generated_text = await gm.aexecute_simple_task(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=model,
+        )
+    except Exception as exc:
+        logger.error("Failed to generate template field %s: %s", target_field, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to generate {label}.") from exc
+
+    # Clean up generated text
+    cleaned = generated_text.strip()
+    prefix_to_strip = f"{label}:"
+    if cleaned.lower().startswith(prefix_to_strip.lower()):
+        cleaned = cleaned[len(prefix_to_strip):].strip()
+    
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+
+    # Enforce database length constraints
+    cleaned = cleaned[:max_len]
+
+    return TemplateFieldGenerationResponse(generated_text=cleaned)
 
 @router.get("/templates", response_model=list[AdventureTemplateSummaryResponse])
 async def list_templates(

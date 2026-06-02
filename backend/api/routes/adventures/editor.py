@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.schemas import (
     AdventureTemplateDebugResponse,
+    BiographyGenerationRequest,
+    BiographyGenerationResponse,
     TraitGenerationRequest,
     TraitGenerationResponse,
     QuestDescriptionGenerationRequest,
@@ -1100,6 +1102,58 @@ async def generate_new_quest(
     except Exception as e:
         logger.error(f"Failed to generate new quest: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{template_id}/editor/generate-biography", response_model=BiographyGenerationResponse)
+async def generate_entity_biography(
+    template_id: str,
+    payload: BiographyGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates NPC/Protagonist description/biography based on name, goal, and character traits."""
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+
+    llm_settings = current_user.llm_settings or {}
+    provider = llm_settings.get("small_model_provider") or "openai"
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+    
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+    
+    system_prompt = (
+        "You are a creative character designer and writer for interactive text adventure RPGs.\n"
+        "Your task is to write a concise and compelling Description / Biography for a character.\n"
+        "Base your biography on the character's Name, Goal/Motivation, Personality/Traits, and the overall adventure theme.\n"
+        "Respond with ONLY the generated biography text. Do NOT include intro, outro, explanations, or quotes. Output the biography directly."
+    )
+
+    theme = payload.adventure_theme or adv.original_prompt or 'Fantasy Adventure'
+    user_prompt = (
+        f"Character Name: {payload.name}\n"
+        f"Goal/Motivation: {payload.goal}\n"
+        f"Personality/Traits: {payload.character}\n"
+        f"Adventure Theme: {theme}\n\n"
+        "CRITICAL CONSTRAINT: The biography must be at most 1000 characters. "
+        "Write the character's description/biography now:"
+    )
+
+    try:
+        generated_text = await gm.aexecute_simple_task(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=model
+        )
+        cleaned = generated_text.strip()
+        if cleaned.startswith('"') and cleaned.endswith('"'):
+            cleaned = cleaned[1:-1].strip()
+        cleaned = cleaned[:1000]
+        return BiographyGenerationResponse(description=cleaned)
+    except Exception as e:
+        logger.error(f"Failed to generate biography: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 
