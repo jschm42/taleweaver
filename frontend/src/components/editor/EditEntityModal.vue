@@ -48,6 +48,10 @@ watch(() => props.initialForm, (newVal) => {
 }, { deep: true })
 
 function handleSave() {
+  if (!(localForm.value.name || '').trim() || !(localForm.value.description || '').trim()) {
+    return
+  }
+
   let parsedInventory: any[] = []
   if (props.context?.type === 'object') {
     const raw = (localForm.value.inventory_json || '').trim()
@@ -109,8 +113,13 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
 
             <div class="space-y-6">
               <div class="space-y-3">
-                <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Entity Name</label>
-                <input v-model="localForm.name" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xl font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" />
+                <div class="flex justify-between items-center">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Entity Name <span class="text-red-400">*</span></label>
+                  <span :class="['text-xs font-bold tracking-widest', (localForm.name || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ (localForm.name || '').length }} / 100
+                  </span>
+                </div>
+                <input v-model="localForm.name" maxlength="100" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xl font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" />
               
               <!-- Stats Inputs -->
               <div v-if="['protagonist', 'npc'].includes(context.type) && ruleEnforcementMode !== 'chat'" class="grid grid-cols-3 gap-4">
@@ -383,14 +392,14 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
 
               <div class="space-y-3">
                 <div class="flex justify-between items-center">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ context.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }}</label>
-                  <span v-if="['npc', 'protagonist'].includes(context.type) || (context.type === 'object' && String(localForm.item_type || '').toUpperCase() === 'READABLE')" :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > (context.type === 'object' ? 200 : 400) ? 'text-red-500' : 'text-emerald-500/50']">
-                    {{ (localForm.description || '').length }} / {{ context.type === 'object' ? 200 : 400 }}
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ context.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }} <span class="text-red-400">*</span></label>
+                  <span :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ (localForm.description || '').length }} / 1000
                   </span>
                 </div>
                 <ReferenceTextarea
                   v-model="localForm.description"
-                  :maxlength="['npc', 'protagonist'].includes(context.type) ? 400 : (context.type === 'object' && String(localForm.item_type || '').toUpperCase() === 'READABLE' ? 200 : undefined)"
+                  :maxlength="1000"
                   :rows="context.type === 'object' ? 3 : 4"
                   :options="props.referenceOptions || []"
                   :class-name="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner', context.type === 'object' ? 'text-sm' : 'text-base'].join(' ')"
@@ -400,7 +409,7 @@ async function handleGenerateTraits(field: 'goal' | 'character') {
 
             <div class="flex justify-end gap-4 pt-3 border-t border-white/5 mt-2">
               <button @click="emit('close')" class="px-6 py-2.5 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
-              <button @click="handleSave" :disabled="isSaving" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
+              <button @click="handleSave" :disabled="isSaving || !(localForm.name || '').trim() || !(localForm.description || '').trim()" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>{{ isSaving ? 'Saving...' : 'Apply Changes' }}</span>
               </button>

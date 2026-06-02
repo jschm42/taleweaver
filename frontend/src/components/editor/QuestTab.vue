@@ -143,7 +143,7 @@ function closeModal() {
 }
 
 function saveQuest() {
-  if (!modalQuest.value.title) return
+  if (!modalQuest.value.title.trim() || !modalQuest.value.description.trim()) return
   let updatedList = [...quests.value]
   if (isNewQuest.value) {
     updatedList.push(modalQuest.value)
@@ -310,7 +310,10 @@ function confirmDeleteQuest() {
             <div class="space-y-5">
               <div class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Quest Title</label>
+                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Quest Title <span class="text-red-400">*</span></label>
+                  <span :class="['text-xs font-bold tracking-widest', (modalQuest.title || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ (modalQuest.title || '').length }} / 100
+                  </span>
                   <button 
                     v-if="isNewQuest"
                     type="button"
@@ -324,6 +327,7 @@ function confirmDeleteQuest() {
                 </div>
                 <input 
                   v-model="modalQuest.title" 
+                  maxlength="100"
                   placeholder="e.g. Find the Lost Key" 
                   class="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-3.5 text-base font-bold text-white focus:border-emerald-500 outline-none transition-all shadow-inner" 
                 />
@@ -362,7 +366,10 @@ function confirmDeleteQuest() {
 
               <div class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</label>
+                  <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Description <span class="text-red-400">*</span></label>
+                  <span :class="['text-xs font-bold tracking-widest', (modalQuest.description || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ (modalQuest.description || '').length }} / 1000
+                  </span>
                   <button 
                     v-if="modalQuest.title"
                     type="button"
@@ -376,6 +383,7 @@ function confirmDeleteQuest() {
                 </div>
                 <ReferenceTextarea
                   v-model="modalQuest.description"
+                  :maxlength="1000"
                   :rows="4"
                   :options="props.referenceOptions || []"
                   placeholder="Explain what the protagonist needs to do..."
@@ -389,7 +397,7 @@ function confirmDeleteQuest() {
               <button @click="closeModal" class="px-6 py-3 text-slate-400 hover:text-white font-black uppercase text-[10px] tracking-widest transition-colors">Cancel</button>
               <button 
                 @click="saveQuest" 
-                :disabled="!modalQuest.title" 
+                :disabled="!(modalQuest.title || '').trim() || !(modalQuest.description || '').trim()" 
                 class="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black uppercase text-[10px] tracking-widest rounded-xl shadow-lg transition-all disabled:opacity-50"
               >
                 Apply

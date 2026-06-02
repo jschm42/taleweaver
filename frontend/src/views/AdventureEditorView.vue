@@ -329,6 +329,17 @@ function cancelEditing() {
 
 async function saveField() {
   if (!editingField.value) return
+  const trimmed = tempValue.value.trim()
+  if (editingField.value === 'title') {
+    if (!trimmed) {
+      addNotification('Chronicle title is required.', 'error')
+      return
+    }
+    if (trimmed.length > 50) {
+      addNotification('Chronicle title must be 50 characters or less.', 'error')
+      return
+    }
+  }
   // @ts-ignore
   form.value[editingField.value] = tempValue.value
   await saveChanges()
@@ -549,6 +560,14 @@ async function saveEntityText(data: any) {
       addNotification('Name and description are required.', 'error')
       return
     }
+    if (entityName.length > 100) {
+      addNotification('Name must be 100 characters or less.', 'error')
+      return
+    }
+    if (entityDescription.length > 1000) {
+      addNotification('Description must be 1000 characters or less.', 'error')
+      return
+    }
 
     const creationType = createEntityType.value
     if (!creationType) {
@@ -626,6 +645,21 @@ async function saveEntityText(data: any) {
     return
   }
   
+  const entityName = String(data.name || '').trim()
+  const entityDescription = String(data.description || '').trim()
+  if (!entityName || !entityDescription) {
+    addNotification('Name and description are required.', 'error')
+    return
+  }
+  if (entityName.length > 100) {
+    addNotification('Name must be 100 characters or less.', 'error')
+    return
+  }
+  if (entityDescription.length > 1000) {
+    addNotification('Description must be 1000 characters or less.', 'error')
+    return
+  }
+
   // Basic validation for stats
   if (data.hp < 0 || data.hp > 999 || data.stamina < 0 || data.stamina > 999 || data.mana < 0 || data.mana > 999) {
     addNotification('Stats must be between 0 and 999.', 'error')
@@ -642,15 +676,6 @@ async function saveEntityText(data: any) {
 
   if (editEntityContext.value.type === 'object' && (data.text_log_content || '').length > 500) {
     addNotification('Text logs must be 500 characters or less.', 'error')
-    return
-  }
-
-  if (
-    editEntityContext.value.type === 'object' &&
-    String(data.item_type || '').toUpperCase() === 'READABLE' &&
-    (data.description || '').length > 200
-  ) {
-    addNotification('Readable item descriptions must be 200 characters or less.', 'error')
     return
   }
 
@@ -1266,8 +1291,16 @@ async function saveCreateScene() {
     createSceneFormError.value = 'Scene name is required.'
     return
   }
+  if (name.length > 100) {
+    createSceneFormError.value = 'Scene name must be 100 characters or less.'
+    return
+  }
   if (!description) {
     createSceneFormError.value = 'Scene description is required.'
+    return
+  }
+  if (description.length > 1000) {
+    createSceneFormError.value = 'Scene description must be 1000 characters or less.'
     return
   }
 
@@ -1360,7 +1393,15 @@ async function saveSceneNameEdit() {
   const scene = routeSceneDetails.value
   if (!scene) return
   const newName = sceneNameEdit.value.trim()
-  if (!newName || newName === String(scene.label || scene.name || '')) {
+  if (!newName) {
+    addNotification('Scene name is required.', 'error')
+    return
+  }
+  if (newName.length > 100) {
+    addNotification('Scene name must be 100 characters or less.', 'error')
+    return
+  }
+  if (newName === String(scene.label || scene.name || '')) {
     isEditingSceneName.value = false
     return
   }
@@ -1386,6 +1427,14 @@ async function saveSceneDescEdit() {
   const scene = routeSceneDetails.value
   if (!scene) return
   const newDesc = sceneDescEdit.value.trim()
+  if (!newDesc) {
+    addNotification('Scene description is required.', 'error')
+    return
+  }
+  if (newDesc.length > 1000) {
+    addNotification('Scene description must be 1000 characters or less.', 'error')
+    return
+  }
   if (newDesc === String(scene.description || '')) {
     isEditingSceneDesc.value = false
     return
@@ -2146,13 +2195,19 @@ watch(
 
                 <!-- Scene Name (Pflichtfeld) -->
                 <div>
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1.5">
-                    Scene Name <span class="text-red-400">*</span>
-                  </label>
+                  <div class="flex justify-between items-center mb-1.5">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
+                      Scene Name <span class="text-red-400">*</span>
+                    </label>
+                    <span :class="['text-[10px] font-bold tracking-widest', (createSceneForm.name || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (createSceneForm.name || '').length }} / 100
+                    </span>
+                  </div>
                   <input
                     ref="sceneNameInputRef"
                     v-model="createSceneForm.name"
                     type="text"
+                    maxlength="100"
                     placeholder="e.g. Dark Forest"
                     class="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
                     @keydown.enter="saveCreateScene"
@@ -2161,12 +2216,18 @@ watch(
 
                 <!-- Scene Description (Pflichtfeld) -->
                 <div>
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1.5">
-                    Description <span class="text-red-400">*</span>
-                  </label>
+                  <div class="flex justify-between items-center mb-1.5">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
+                      Description <span class="text-red-400">*</span>
+                    </label>
+                    <span :class="['text-[10px] font-bold tracking-widest', (createSceneForm.description || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (createSceneForm.description || '').length }} / 1000
+                    </span>
+                  </div>
                   <textarea
                     v-model="createSceneForm.description"
                     rows="4"
+                    maxlength="1000"
                     placeholder="A brief description of this scene..."
                     class="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none"
                   ></textarea>
@@ -2218,17 +2279,23 @@ watch(
                 <div class="min-w-0 flex-1 space-y-4">
                   <!-- Scene Name -->
                   <div class="space-y-2">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Scene Name</label>
+                    <div class="flex justify-between items-center">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Scene Name <span class="text-red-400">*</span></label>
+                      <span v-if="isEditingSceneName" :class="['text-[10px] font-bold tracking-widest', (sceneNameEdit || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
+                        {{ (sceneNameEdit || '').length }} / 100
+                      </span>
+                    </div>
                     <div v-if="isEditingSceneName" class="flex gap-2 animate-fade-in">
                       <input
                         ref="sceneNameInputRef"
                         v-model="sceneNameEdit"
+                        maxlength="100"
                         class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all"
                         @keydown.enter="saveSceneNameEdit"
                         @keydown.esc="cancelSceneNameEdit"
                       />
                       <button
-                        :disabled="isSavingText"
+                        :disabled="isSavingText || !(sceneNameEdit || '').trim()"
                         class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg"
                         title="Save"
                         @click="saveSceneNameEdit"
@@ -2256,17 +2323,23 @@ watch(
 
                   <!-- Scene Description -->
                   <div class="space-y-2">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Description</label>
+                    <div class="flex justify-between items-center">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Description <span class="text-red-400">*</span></label>
+                      <span v-if="isEditingSceneDesc" :class="['text-[10px] font-bold tracking-widest', (sceneDescEdit || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
+                        {{ (sceneDescEdit || '').length }} / 1000
+                      </span>
+                    </div>
                     <div v-if="isEditingSceneDesc" class="flex gap-2 animate-fade-in">
                       <textarea
                         ref="sceneDescInputRef"
                         v-model="sceneDescEdit"
+                        maxlength="1000"
                         rows="3"
                         class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-none"
                         @keydown.esc="cancelSceneDescEdit"
                       ></textarea>
                       <button
-                        :disabled="isSavingText"
+                        :disabled="isSavingText || !(sceneDescEdit || '').trim()"
                         class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg self-start"
                         title="Save"
                         @click="saveSceneDescEdit"

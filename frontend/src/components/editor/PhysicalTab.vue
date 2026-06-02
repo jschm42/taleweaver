@@ -90,7 +90,7 @@ function handlePacingInput(event: Event) {
       <div class="space-y-2">
         <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
         <div v-if="editingField === 'title'" class="flex gap-2 animate-fade-in">
-          <input :value="tempValue" @input="$emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all" />
+          <input :value="tempValue" @input="$emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" maxlength="50" class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all" />
           <button @click="emit('save-field')" :disabled="isSaving" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg">
             <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
             <Save v-else class="w-4 h-4" />

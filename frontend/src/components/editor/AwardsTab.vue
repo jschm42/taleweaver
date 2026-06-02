@@ -74,8 +74,8 @@ function closeModal() {
 }
 
 function saveAward() {
-  if (!modalAward.value.title) {
-    emit('notify', 'Award title is required.', 'error')
+  if (!(modalAward.value.title || '').trim() || !(modalAward.value.description || '').trim()) {
+    emit('notify', 'Award title and description are required.', 'error')
     return
   }
   const updated = [...awards.value]
@@ -170,8 +170,13 @@ function confirmDeleteAward() {
               <input v-model="modalAward.key" :disabled="!isNewAward" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-sm text-white disabled:opacity-60" />
             </div>
             <div class="space-y-2">
-              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Title</label>
-              <input v-model="modalAward.title" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-sm text-white" />
+              <div class="flex items-center justify-between">
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Title <span class="text-red-400">*</span></label>
+                <span :class="['text-[10px] font-bold tracking-widest', (modalAward.title || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
+                  {{ (modalAward.title || '').length }} / 100
+                </span>
+              </div>
+              <input v-model="modalAward.title" maxlength="100" class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-sm text-white" />
             </div>
             <div class="space-y-2">
               <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tier</label>
@@ -182,9 +187,15 @@ function confirmDeleteAward() {
               </select>
             </div>
             <div class="space-y-2">
-              <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</label>
+              <div class="flex items-center justify-between">
+                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Description <span class="text-red-400">*</span></label>
+                <span :class="['text-[10px] font-bold tracking-widest', (modalAward.description || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
+                  {{ (modalAward.description || '').length }} / 1000
+                </span>
+              </div>
               <ReferenceTextarea
                 v-model="modalAward.description"
+                :maxlength="1000"
                 :rows="3"
                 :options="props.referenceOptions || []"
                 class-name="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-sm text-white"
@@ -200,9 +211,9 @@ function confirmDeleteAward() {
               />
             </div>
 
-            <div class="flex justify-end gap-3 pt-2">
+             <div class="flex justify-end gap-3 pt-2">
               <button class="px-4 py-2 text-xs font-bold border border-white/15 rounded-lg text-slate-300" @click="closeModal">Cancel</button>
-              <button class="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white" @click="saveAward">Save Award</button>
+              <button class="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white disabled:opacity-50" :disabled="!(modalAward.title || '').trim() || !(modalAward.description || '').trim()" @click="saveAward">Save Award</button>
             </div>
           </div>
         </div>
