@@ -105,11 +105,13 @@ const editForm = ref({
   text_log_format: 'DOCUMENT',
   entity_id: '',
   wearable_slots_input: [],
-  combination_ingredients: '',
+  combination_ingredients_input: [] as string[],
   switch_states_json: '[]',
   switch_initial_state: '',
   switch_transitions_json: '[]',
-  effects_json: '{}',
+  effects_hp: 0,
+  effects_stamina: 0,
+  effects_mana: 0,
   stat_modifier_strength: 0,
 })
 
@@ -163,11 +165,13 @@ function handleItemTypeSelected(itemType: string) {
     text_log_format: 'DOCUMENT',
     entity_id: defaultId,
     wearable_slots_input: [],
-    combination_ingredients: '',
+    combination_ingredients_input: [],
     switch_states_json: '[]',
     switch_initial_state: '',
     switch_transitions_json: '[]',
-    effects_json: '{}',
+    effects_hp: 0,
+    effects_stamina: 0,
+    effects_mana: 0,
     stat_modifier_strength: 0,
   }
   showEditModal.value = true
@@ -653,11 +657,15 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     text_log_format: String(metadata?.text_log_format || selectedObject?.text_log_format || 'DOCUMENT').trim().toUpperCase(),
     entity_id: String(selectedObject?.id || id || ''),
     wearable_slots_input: selectedObject?.wearable_slots || [],
-    combination_ingredients: (selectedObject?.combination_ingredients || []).join(', '),
+    combination_ingredients_input: Array.isArray(selectedObject?.combination_ingredients)
+      ? [...selectedObject.combination_ingredients]
+      : (metadata?.combination_ingredients ? [...metadata.combination_ingredients] : []),
     switch_states_json: JSON.stringify(selectedObject?.switch_states || metadata?.switch_states || [], null, 2),
     switch_initial_state: String(selectedObject?.switch_initial_state || metadata?.switch_initial_state || ''),
     switch_transitions_json: JSON.stringify(selectedObject?.switch_transitions || metadata?.switch_transitions || [], null, 2),
-    effects_json: JSON.stringify(selectedObject?.effects || metadata?.effects || {}, null, 2),
+    effects_hp: selectedObject?.effects?.hp || metadata?.effects?.hp || 0,
+    effects_stamina: selectedObject?.effects?.stamina || metadata?.effects?.stamina || 0,
+    effects_mana: selectedObject?.effects?.mana || metadata?.effects?.mana || 0,
     stat_modifier_strength: selectedObject?.stat_modifier_strength || metadata?.stat_modifier_strength || 0,
   }
   showEditModal.value = true

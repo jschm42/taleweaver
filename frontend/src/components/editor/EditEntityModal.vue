@@ -26,11 +26,13 @@ const props = defineProps<{
     text_log_format: string
     entity_id: string
     wearable_slots_input: string[]
-    combination_ingredients: string
+    combination_ingredients_input: string[]
     switch_states_json: string
     switch_initial_state: string
     switch_transitions_json: string
-    effects_json: string
+    effects_hp: number
+    effects_stamina: number
+    effects_mana: number
     stat_modifier_strength: number
   }
   referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null; type?: string }>
@@ -80,11 +82,9 @@ watch(() => props.initialForm, (newVal) => {
 watch(() => localForm.value.item_type, (newType) => {
   if (!props.isCreateEntityMode) return
   const type = String(newType || '').toUpperCase()
-  if (type === 'STATIC') {
+  if (type === 'STATIC' || type === 'SWITCH') {
     localForm.value.is_portable = false
-  } else if (type === 'SWITCH') {
-    localForm.value.is_portable = false
-  } else if (['PICKABLE', 'CONSUMABLE', 'WEARABLE', 'WEAPON', 'TOOL', 'KEY', 'COMBINABLE'].includes(type)) {
+  } else if (['PICKABLE', 'CONSUMABLE', 'WEARABLE', 'WEAPON', 'KEY', 'COMBINABLE'].includes(type)) {
     localForm.value.is_portable = true
   }
 })
@@ -136,20 +136,15 @@ function handleSave() {
       }
     }
 
-    const rawEffects = (localForm.value.effects_json || '').trim()
-    if (rawEffects) {
-      try {
-        const parsed = JSON.parse(rawEffects)
-        parsedEffects = typeof parsed === 'object' && parsed !== null ? parsed : {}
-      } catch {
-        parsedEffects = {}
-      }
+    parsedEffects = {
+      hp: Number(localForm.value.effects_hp || 0),
+      stamina: Number(localForm.value.effects_stamina || 0),
+      mana: Number(localForm.value.effects_mana || 0),
     }
 
-    const rawIngredients = (localForm.value.combination_ingredients || '').trim()
-    if (rawIngredients) {
-      parsedIngredients = rawIngredients.split(',').map(s => s.trim()).filter(Boolean)
-    }
+    parsedIngredients = Array.isArray(localForm.value.combination_ingredients_input)
+      ? localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s))
+      : []
   }
 
   emit('save', {
@@ -442,7 +437,6 @@ async function handleGenerateBiography() {
                       <option value="CONSUMABLE">CONSUMABLE</option>
                       <option value="WEARABLE">WEARABLE</option>
                       <option value="WEAPON">WEAPON</option>
-                      <option value="TOOL">TOOL</option>
                       <option value="KEY">KEY</option>
                       <option value="STATIC">STATIC</option>
                       <option value="COMBINABLE">COMBINABLE</option>
@@ -457,7 +451,7 @@ async function handleGenerateBiography() {
                       class="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-2 text-slate-300 font-bold uppercase tracking-widest cursor-not-allowed"
                     />
                   </div>
-                  <div class="space-y-2">
+                  <div v-if="!['PICKABLE', 'STATIC'].includes(currentItemType)" class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Portable</label>
                     <button
                       type="button"
@@ -467,10 +461,16 @@ async function handleGenerateBiography() {
                       <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_portable ? 'translate-x-6' : 'translate-x-0']"></div>
                     </button>
                   </div>
+                  <div v-else class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Portable</label>
+                    <div class="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-2 text-slate-400 font-bold uppercase tracking-widest">
+                      {{ currentItemType === 'PICKABLE' ? 'TRUE (Fixed)' : 'FALSE (Fixed)' }}
+                    </div>
+                  </div>
                 </div>
 
-                <!-- WEAPON / WEARABLE / TOOL: Wearable Slots -->
-                <div v-if="['WEAPON', 'WEARABLE', 'TOOL'].includes(currentItemType)" class="space-y-2">
+                <!-- WEAPON / WEARABLE: Wearable Slots -->
+                <div v-if="['WEAPON', 'WEARABLE'].includes(currentItemType)" class="space-y-2">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Wearable Slots</label>
                   <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     <label
@@ -499,34 +499,76 @@ async function handleGenerateBiography() {
                   </div>
                 </div>
 
-                <!-- CONSUMABLE: Effects & Stat Modifier -->
+                <!-- CONSUMABLE: Effects -->
                 <div v-if="currentItemType === 'CONSUMABLE'" class="space-y-4">
-                  <div class="space-y-2">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Effects (JSON)</label>
-                    <textarea v-model="localForm.effects_json" rows="3" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-rose-500/50 outline-none transition-all" placeholder='{"hp": 20, "stamina": 10, "mana": 5}'></textarea>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">JSON object with stat changes applied when consumed.</p>
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Stat Effects When Consumed</label>
+                  <div class="grid grid-cols-3 gap-4">
+                    <div class="space-y-2">
+                      <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Health (HP)</label>
+                      <input
+                        v-model.number="localForm.effects_hp"
+                        type="number"
+                        min="-999"
+                        max="999"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-red-500/50 outline-none transition-all"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Stamina</label>
+                      <input
+                        v-model.number="localForm.effects_stamina"
+                        type="number"
+                        min="-999"
+                        max="999"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-emerald-500/50 outline-none transition-all"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mana</label>
+                      <input
+                        v-model.number="localForm.effects_mana"
+                        type="number"
+                        min="-999"
+                        max="999"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-blue-500/50 outline-none transition-all"
+                      />
+                    </div>
                   </div>
-                  <div class="space-y-2">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Stat Modifier Strength</label>
-                    <input
-                      v-model.number="localForm.stat_modifier_strength"
-                      type="number"
-                      min="-999"
-                      max="999"
-                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold focus:border-rose-500/50 outline-none transition-all"
-                    />
-                  </div>
+                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Positive values restore stats, negative values drain them.</p>
                 </div>
 
                 <!-- COMBINABLE: Ingredients -->
-                <div v-if="currentItemType === 'COMBINABLE'" class="space-y-2">
+                <div v-if="currentItemType === 'COMBINABLE'" class="space-y-3">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Combination Ingredients</label>
-                  <input
-                    v-model="localForm.combination_ingredients"
-                    class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-violet-500/50 outline-none transition-all"
-                    placeholder="ITEM_IRON, ITEM_WOOD, ITEM_FLINT"
-                  />
-                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Comma-separated item IDs required to combine with this item.</p>
+                  <div class="space-y-2">
+                    <div
+                      v-for="(ing, idx) in localForm.combination_ingredients_input"
+                      :key="idx"
+                      class="flex items-center gap-2"
+                    >
+                      <EntityReferenceCombobox
+                        v-model="localForm.combination_ingredients_input[idx]"
+                        :options="itemReferenceOptions"
+                        placeholder="Select ingredient item"
+                        :enable-search="true"
+                      />
+                      <button
+                        type="button"
+                        @click="localForm.combination_ingredients_input = localForm.combination_ingredients_input.filter((_: string, i: number) => i !== idx)"
+                        class="shrink-0 px-2 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 text-[10px] font-bold uppercase tracking-widest transition-all"
+                      >
+                        <i class="ra ra-cancel"></i>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      @click="localForm.combination_ingredients_input = [...(localForm.combination_ingredients_input || []), '']"
+                      class="w-full py-2 bg-violet-500/5 border border-violet-500/10 hover:bg-violet-500/10 hover:border-violet-500/30 rounded-xl text-[10px] font-black text-violet-400 uppercase tracking-widest transition-all"
+                    >
+                      + Add Ingredient
+                    </button>
+                  </div>
+                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Select item references required to combine with this item.</p>
                 </div>
 
                 <!-- SWITCH: States & Transitions -->

@@ -56,14 +56,6 @@ const itemTypes: ItemTypeOption[] = [
     borderColor: 'border-red-500/20',
   },
   {
-    type: 'TOOL',
-    label: 'Tool',
-    description: 'A lantern, lockpick, or utility tool for puzzles.',
-    icon: 'ra-hammer',
-    color: 'text-amber-300',
-    borderColor: 'border-amber-500/20',
-  },
-  {
     type: 'KEY',
     label: 'Key',
     description: 'A physical key or pass to unlock doors and containers.',
