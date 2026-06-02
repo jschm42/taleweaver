@@ -43,6 +43,16 @@ const itemReferenceOptions = computed(() => {
   return source.filter((option) => String(option.type || '').toUpperCase() === 'OBJECT')
 })
 
+const isFormInvalid = computed(() => {
+  return !(localForm.value.name || '').trim() ||
+         !(localForm.value.description || '').trim() ||
+         (localForm.value.name || '').length > 100 ||
+         (localForm.value.description || '').length > 1000 ||
+         (localForm.value.goal || '').length > 200 ||
+         (localForm.value.character || '').length > 200 ||
+         (localForm.value.teaser || '').length > 300
+})
+
 watch(() => props.initialForm, (newVal) => {
   localForm.value = { ...newVal }
 }, { deep: true })
@@ -440,7 +450,7 @@ async function handleGenerateBiography() {
 
             <div class="flex justify-end gap-4 pt-3 border-t border-white/5 mt-2">
               <button @click="emit('close')" class="px-6 py-2.5 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
-              <button @click="handleSave" :disabled="isSaving || !(localForm.name || '').trim() || !(localForm.description || '').trim()" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
+              <button @click="handleSave" :disabled="isSaving || isFormInvalid" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>{{ isSaving ? 'Saving...' : 'Apply Changes' }}</span>
               </button>

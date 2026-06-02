@@ -61,7 +61,12 @@ const emit = defineEmits<{
       <div class="flex flex-col gap-10">
         <!-- Adventure Plot Section -->
         <div class="space-y-4">
-          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Plot (Secret)</label>
+          <div class="flex justify-between items-center">
+            <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Plot (Secret)</label>
+            <span v-if="editingField === 'plot'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 5000 ? 'text-red-500' : 'text-emerald-500/50']">
+              {{ tempValue.length }} / 5000
+            </span>
+          </div>
           <div v-if="editingField === 'plot'" class="space-y-4 animate-fade-in">
             <ReferenceTextarea
               :model-value="tempValue"
@@ -72,7 +77,7 @@ const emit = defineEmits<{
               @update:model-value="emit('update:tempValue', $event)"
             />
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['plot']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['plot'] || tempValue.length > 5000" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save Plot</span>
               </button>
@@ -94,7 +99,12 @@ const emit = defineEmits<{
 
         <!-- Rules Section -->
         <div class="space-y-4">
-          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Rules / Mechanics</label>
+          <div class="flex justify-between items-center">
+            <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Adventure Rules / Mechanics</label>
+            <span v-if="editingField === 'rules'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 5000 ? 'text-red-500' : 'text-emerald-500/50']">
+              {{ tempValue.length }} / 5000
+            </span>
+          </div>
           <div v-if="editingField === 'rules'" class="space-y-4 animate-fade-in">
             <ReferenceTextarea
               :model-value="tempValue"
@@ -105,7 +115,7 @@ const emit = defineEmits<{
               @update:model-value="emit('update:tempValue', $event)"
             />
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['rules']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['rules'] || tempValue.length > 5000" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save Rules</span>
               </button>
@@ -127,7 +137,12 @@ const emit = defineEmits<{
 
         <!-- Session Intro Section -->
         <div class="space-y-4">
-          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Session Intro Text (Shown Once)</label>
+          <div class="flex justify-between items-center">
+            <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Session Intro Text (Shown Once)</label>
+            <span v-if="editingField === 'intro_text'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 20000 ? 'text-red-500' : 'text-emerald-500/50']">
+              {{ tempValue.length }} / 20000
+            </span>
+          </div>
           <div v-if="editingField === 'intro_text'" class="space-y-4 animate-fade-in">
             <ReferenceTextarea
               :model-value="tempValue"
@@ -138,7 +153,7 @@ const emit = defineEmits<{
               @update:model-value="emit('update:tempValue', $event)"
             />
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['intro_text']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['intro_text'] || tempValue.length > 20000" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save Intro</span>
               </button>
@@ -160,7 +175,12 @@ const emit = defineEmits<{
 
         <!-- Walkthrough Section -->
         <div class="space-y-4">
-          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">GM Walkthrough (Solution Path)</label>
+          <div class="flex justify-between items-center">
+            <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">GM Walkthrough (Solution Path)</label>
+            <span v-if="editingField === 'walkthrough'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 20000 ? 'text-red-500' : 'text-emerald-500/50']">
+              {{ tempValue.length }} / 20000
+            </span>
+          </div>
           <div v-if="editingField === 'walkthrough'" class="space-y-4 animate-fade-in">
             <ReferenceTextarea
               :model-value="tempValue"
@@ -171,7 +191,7 @@ const emit = defineEmits<{
               @update:model-value="emit('update:tempValue', $event)"
             />
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['walkthrough']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['walkthrough'] || tempValue.length > 20000" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save Walkthrough</span>
               </button>
@@ -193,7 +213,12 @@ const emit = defineEmits<{
 
         <!-- Director's TTS Notes Section -->
         <div class="space-y-4">
-          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Director's Text-to-Speech Notes (Gemini TTS only)</label>
+          <div class="flex justify-between items-center">
+            <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Director's Text-to-Speech Notes (Gemini TTS only)</label>
+            <span v-if="editingField === 'tts_director_notes'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 5000 ? 'text-red-500' : 'text-emerald-500/50']">
+              {{ tempValue.length }} / 5000
+            </span>
+          </div>
           <div v-if="editingField === 'tts_director_notes'" class="space-y-4 animate-fade-in">
             <ReferenceTextarea
               :model-value="tempValue"
@@ -205,7 +230,7 @@ const emit = defineEmits<{
             />
             <p class="text-[10px] text-slate-500 uppercase tracking-widest italic px-2">Note: These instructions only apply when using Gemini-based TTS models.</p>
             <div class="flex gap-4">
-              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['tts_director_notes']" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
+              <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['tts_director_notes'] || tempValue.length > 5000" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center gap-2">
                 <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
                 <span>Save TTS Notes</span>
               </button>
@@ -228,7 +253,12 @@ const emit = defineEmits<{
         <!-- Conditions -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
           <div class="space-y-4">
-            <label class="block text-xs font-black text-emerald-500/80 uppercase tracking-[0.3em]">Win Conditions</label>
+            <div class="flex justify-between items-center">
+              <label class="block text-xs font-black text-emerald-500/80 uppercase tracking-[0.3em]">Win Conditions</label>
+              <span v-if="editingField === 'completed_condition'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 2000 ? 'text-red-500' : 'text-emerald-500/50']">
+                {{ tempValue.length }} / 2000
+              </span>
+            </div>
             <div v-if="editingField === 'completed_condition'" class="space-y-4 animate-fade-in">
               <ReferenceTextarea
                 :model-value="tempValue"
@@ -239,7 +269,7 @@ const emit = defineEmits<{
                 @update:model-value="emit('update:tempValue', $event)"
               />
               <div class="flex gap-4">
-                <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['completed_condition'] || tempValue.length > 2000" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
                 <button type="button" @click="emit('generate-field', 'completed_condition')" :disabled="isSaving || isGeneratingField?.['completed_condition']" class="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-2">
                   <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['completed_condition'] }"></i>
                   <span>AI Generate</span>
@@ -254,7 +284,12 @@ const emit = defineEmits<{
           </div>
 
           <div class="space-y-4">
-            <label class="block text-xs font-black text-red-500/80 uppercase tracking-[0.3em]">Loss Conditions</label>
+            <div class="flex justify-between items-center">
+              <label class="block text-xs font-black text-red-500/80 uppercase tracking-[0.3em]">Loss Conditions</label>
+              <span v-if="editingField === 'gameover_condition'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 2000 ? 'text-red-500' : 'text-emerald-500/50']">
+                {{ tempValue.length }} / 2000
+              </span>
+            </div>
             <div v-if="editingField === 'gameover_condition'" class="space-y-4 animate-fade-in">
               <ReferenceTextarea
                 :model-value="tempValue"
@@ -265,7 +300,7 @@ const emit = defineEmits<{
                 @update:model-value="emit('update:tempValue', $event)"
               />
               <div class="flex gap-4">
-                <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['gameover_condition']" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
+                <button @click="emit('save-field')" :disabled="isSaving || isGeneratingField?.['gameover_condition'] || tempValue.length > 2000" class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest rounded-lg transition-all">Save</button>
                 <button type="button" @click="emit('generate-field', 'gameover_condition')" :disabled="isSaving || isGeneratingField?.['gameover_condition']" class="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-lg transition-all flex items-center gap-2">
                   <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingField?.['gameover_condition'] }"></i>
                   <span>AI Generate</span>

@@ -134,6 +134,22 @@ export const entityService = {
     return await res.json()
   },
 
+  async generateSceneDescription(adventureId: string, name: string, adventureTheme?: string): Promise<{ description: string }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-scene-description`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        name,
+        adventure_theme: adventureTheme
+      }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to generate scene description')
+    }
+    return await res.json()
+  },
+
   async generateQuestDescription(adventureId: string, title: string, isMain: boolean, otherQuests: any[]): Promise<{ description: string }> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-quest-description`, {
       method: 'POST',

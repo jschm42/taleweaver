@@ -54,10 +54,15 @@ function handlePacingInput(event: Event) {
   <div class="space-y-8 animate-page-in">
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
       <div class="space-y-2">
-        <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
+        <div class="flex justify-between items-center">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Chronicle Title</label>
+          <span v-if="editingField === 'title'" :class="['text-[10px] font-bold tracking-widest', (!tempValue.trim() || tempValue.length > 50) ? 'text-red-500' : 'text-emerald-500/50']">
+            {{ tempValue.length }} / 50
+          </span>
+        </div>
         <div v-if="editingField === 'title'" class="flex gap-2 animate-fade-in">
-          <input :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" maxlength="50" class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all" />
-          <button @click="emit('save-field')" :disabled="isSaving" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg">
+          <input :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="(!tempValue.trim() || tempValue.length > 50) ? null : emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" maxlength="50" class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all" />
+          <button @click="emit('save-field')" :disabled="isSaving || !tempValue.trim() || tempValue.length > 50" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-50">
             <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
             <Save v-else class="w-4 h-4" />
           </button>
@@ -72,10 +77,15 @@ function handlePacingInput(event: Event) {
       </div>
 
       <div class="space-y-2">
-        <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Version</label>
+        <div class="flex justify-between items-center">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Version</label>
+          <span v-if="editingField === 'version'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 15 ? 'text-red-500' : 'text-emerald-500/50']">
+            {{ tempValue.length }} / 15
+          </span>
+        </div>
         <div v-if="editingField === 'version'" class="flex gap-2 animate-fade-in">
-          <input :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" maxlength="15" placeholder="e.g. 1.0.0" class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all" />
-          <button @click="emit('save-field')" :disabled="isSaving" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg">
+          <input :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="tempValue.length > 15 ? null : emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" maxlength="15" placeholder="e.g. 1.0.0" class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all" />
+          <button @click="emit('save-field')" :disabled="isSaving || tempValue.length > 15" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-50">
             <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
             <Save v-else class="w-4 h-4" />
           </button>

@@ -356,13 +356,29 @@ async function handleGenerateField(field: string) {
 async function saveField() {
   if (!editingField.value) return
   const trimmed = tempValue.value.trim()
+
+  const FIELD_LIMITS: Record<string, number> = {
+    title: 50,
+    version: 15,
+    teaser: 300,
+    plot: 5000,
+    rules: 5000,
+    intro_text: 20000,
+    walkthrough: 20000,
+    completed_condition: 2000,
+    gameover_condition: 2000,
+    tts_director_notes: 5000
+  }
+
+  const limit = FIELD_LIMITS[editingField.value]
+  if (limit !== undefined && tempValue.value.length > limit) {
+    addNotification(`Field content exceeds limit of ${limit} characters.`, 'error')
+    return
+  }
+
   if (editingField.value === 'title') {
     if (!trimmed) {
       addNotification('Chronicle title is required.', 'error')
-      return
-    }
-    if (trimmed.length > 50) {
-      addNotification('Chronicle title must be 50 characters or less.', 'error')
       return
     }
   }
@@ -1211,6 +1227,7 @@ const createSceneForm = ref({
 const createSceneFormError = ref('')
 const isEditingSceneName = ref(false)
 const isEditingSceneDesc = ref(false)
+const isGeneratingSceneDesc = ref(false)
 const sceneNameEdit = ref('')
 const sceneDescEdit = ref('')
 const sceneNameInputRef = ref<HTMLInputElement | null>(null)
@@ -1491,6 +1508,21 @@ function cancelSceneNameEdit() {
 function cancelSceneDescEdit() {
   isEditingSceneDesc.value = false
   sceneDescEdit.value = ''
+}
+
+async function handleGenerateSceneDesc() {
+  const sceneName = routeSceneDetails.value?.label || routeSceneDetails.value?.name
+  if (!props.adventureId || !sceneName) return
+  isGeneratingSceneDesc.value = true
+  try {
+    const result = await entityService.generateSceneDescription(props.adventureId, sceneName)
+    sceneDescEdit.value = result.description
+    addNotification('AI generated scene description.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to generate scene description.', 'error')
+  } finally {
+    isGeneratingSceneDesc.value = false
+  }
 }
 
 function editRouteEntity(type: 'npc' | 'object', entity: any) {
@@ -2322,9 +2354,9 @@ watch(
                 </div>
 
                 <!-- Card Body -->
-                <div class="grid md:grid-cols-3 gap-6">
+                <div class="space-y-6">
                   <!-- Scene Name Column -->
-                  <div class="md:col-span-1 space-y-2">
+                  <div class="space-y-2">
                     <div class="flex justify-between items-center">
                       <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Scene Name <span class="text-red-400">*</span></label>
                       <span v-if="isEditingSceneName" :class="['text-[9px] font-bold tracking-widest', (sceneNameEdit || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
@@ -2368,7 +2400,7 @@ watch(
                   </div>
 
                   <!-- Scene Description Column -->
-                  <div class="md:col-span-2 space-y-2">
+                  <div class="space-y-2">
                     <div class="flex justify-between items-center">
                       <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Description <span class="text-red-400">*</span></label>
                       <span v-if="isEditingSceneDesc" :class="['text-[9px] font-bold tracking-widest', (sceneDescEdit || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
@@ -2393,6 +2425,15 @@ watch(
                         >
                           <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
                           <Save v-else class="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          :disabled="isSavingText || isGeneratingSceneDesc || !(routeSceneDetails?.label || routeSceneDetails?.name)"
+                          class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 rounded-xl transition-all"
+                          title="AI Generate Description"
+                          @click="handleGenerateSceneDesc"
+                        >
+                          <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingSceneDesc }"></i>
                         </button>
                         <button
                           class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all"

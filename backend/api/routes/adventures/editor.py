@@ -19,6 +19,8 @@ from backend.api.routes.adventures.schemas import (
     QuestDescriptionGenerationResponse,
     QuestGenerationRequest,
     QuestGenerationResponse,
+    SceneDescriptionGenerationRequest,
+    SceneDescriptionGenerationResponse,
 )
 from backend.core.auth import get_current_user
 from backend.core.config import settings
@@ -1152,6 +1154,55 @@ async def generate_entity_biography(
         return BiographyGenerationResponse(description=cleaned)
     except Exception as e:
         logger.error(f"Failed to generate biography: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{template_id}/editor/generate-scene-description", response_model=SceneDescriptionGenerationResponse)
+async def generate_scene_description(
+    template_id: str,
+    payload: SceneDescriptionGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates a scene description based on scene name and adventure theme context."""
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+
+    llm_settings = current_user.llm_settings or {}
+    provider = llm_settings.get("small_model_provider") or "openai"
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+    
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+    
+    system_prompt = (
+        "You are a master creative writer and game designer for interactive text adventure RPGs.\n"
+        "Your task is to write an engaging, immersive, and vivid Description for a single world Scene.\n"
+        "Describe the atmosphere, look, feel, and sensory details of the scene. Do NOT mention gameplay rules or stats.\n"
+        "Respond with ONLY the generated scene description text. Do NOT wrap it in quotes or add headers. Output the text directly."
+    )
+
+    theme = payload.adventure_theme or adv.original_prompt or 'Fantasy Adventure'
+    user_prompt = (
+        f"Scene Name: {payload.name}\n"
+        f"Adventure Theme / Global Context: {theme}\n\n"
+        "CRITICAL CONSTRAINT: The scene description must be at most 1000 characters. "
+        "Write the scene description now:"
+    )
+
+    try:
+        generated_text = await gm.aexecute_simple_task(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=model
+        )
+        cleaned = generated_text.strip()
+        if cleaned.startswith('"') and cleaned.endswith('"'):
+            cleaned = cleaned[1:-1].strip()
+        cleaned = cleaned[:1000]
+        return SceneDescriptionGenerationResponse(description=cleaned)
+    except Exception as e:
+        logger.error(f"Failed to generate scene description: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

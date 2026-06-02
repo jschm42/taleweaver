@@ -649,3 +649,13 @@ class BiographyGenerationResponse(BaseModel):
     description: str
 
 
+class SceneDescriptionGenerationRequest(BaseModel):
+    name: str
+    adventure_theme: Optional[str] = None
+
+
+class SceneDescriptionGenerationResponse(BaseModel):
+    description: str
+
+
+
