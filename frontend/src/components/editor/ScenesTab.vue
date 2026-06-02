@@ -10,6 +10,7 @@ const props = defineProps<{
   activeMenuId: string | null
   visualsCacheVersion: number
   isSettingStartScene?: boolean
+  adventureId?: string
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +25,7 @@ const emit = defineEmits<{
   (e: 'handle-hover', entity: any, event: MouseEvent): void
   (e: 'clear-hover'): void
   (e: 'set-start-scene', sceneId: string): void
+  (e: 'create-new-scene'): void
 }>()
 
 const scenes = computed<any[]>(() => {
@@ -91,19 +93,36 @@ function isStartScene(scene: any): boolean {
 </script>
 
 <template>
-  <section v-if="scenes.length" class="space-y-6 animate-page-in">
+  <section class="space-y-6 animate-page-in">
     <div class="flex items-center justify-between">
       <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">World Locations ({{ scenes.length }})</h3>
       <div class="flex items-center gap-4">
-        <button @click="emit('regen-all', 'scene', true)" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
-          <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Generate Missing
+        <button @click="emit('create-new-scene')" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-2 uppercase tracking-widest transition-colors">
+          <i class="ra ra-plus"></i> New Scene
         </button>
-        <button @click="emit('regen-all', 'scene', false)" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
-          <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Regenerate All
-        </button>
+        <template v-if="scenes.length">
+          <button @click="emit('regen-all', 'scene', true)" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Generate Missing
+          </button>
+          <button @click="emit('regen-all', 'scene', false)" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Regenerate All
+          </button>
+        </template>
       </div>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+
+    <!-- Empty State -->
+    <div v-if="!scenes.length" class="flex flex-col items-center justify-center py-20 border-2 border-dashed border-white/10 rounded-2xl bg-slate-900/30">
+      <i class="ra ra-map text-4xl text-slate-600 mb-4"></i>
+      <p class="text-sm font-bold text-slate-500 uppercase tracking-[0.15em] mb-2">No scenes yet</p>
+      <p class="text-xs text-slate-600 mb-6">Create your first world location to get started.</p>
+      <button @click="emit('create-new-scene')" class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg">
+        <i class="ra ra-plus"></i> New Scene
+      </button>
+    </div>
+
+    <!-- Scene Grid -->
+    <div v-if="scenes.length" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
       <div
         v-for="(scene, idx) in scenes"
         :key="'scene_' + (scene.id || idx)"
@@ -162,6 +181,15 @@ function isStartScene(scene: any): boolean {
           </div>
         </div>
       </div>
+
+      <!-- Add Scene Card -->
+      <button
+        @click="emit('create-new-scene')"
+        class="aspect-[3/2] bg-slate-900/50 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all hover:border-emerald-500/50 hover:bg-slate-900/80 group"
+      >
+        <i class="ra ra-plus text-2xl text-slate-600 group-hover:text-emerald-400 transition-colors"></i>
+        <span class="text-xs font-bold text-slate-600 group-hover:text-emerald-400 uppercase tracking-widest transition-colors">New Scene</span>
+      </button>
     </div>
   </section>
 </template>

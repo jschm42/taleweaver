@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adventureService } from '@/services/adventureService'
 import { visualService } from '@/services/visualService'
@@ -11,6 +11,7 @@ import { notificationService } from '@/services/notificationService'
 
 // Components
 import EditorHeader from '@/components/editor/EditorHeader.vue'
+import { Save, X } from 'lucide-vue-next'
 import WorldTab from '@/components/editor/WorldTab.vue'
 import ProtagonistTab from '@/components/editor/ProtagonistTab.vue'
 import ItemsTab from '@/components/editor/ItemsTab.vue'
@@ -481,6 +482,23 @@ async function setStartScene(sceneId: string) {
   } finally {
     isSettingStartScene.value = false
     activeMenuId.value = null
+  }
+}
+
+async function handleCreateScene(data: { sceneId: string; label: string; description: string }) {
+  isSavingText.value = true
+  try {
+    await entityService.createScene(props.adventureId, {
+      scene_id: data.sceneId,
+      label: data.label,
+      description: data.description,
+    })
+    await fetchDebugInfo()
+    addNotification(`Scene "${data.label}" created.`, 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to create scene.', 'error')
+  } finally {
+    isSavingText.value = false
   }
 }
 
@@ -1132,6 +1150,21 @@ const isDeletingRouteAsset = ref(false)
 
 const routeSceneSearch = ref('')
 const hideEmptyFilteredGroups = ref(false)
+
+const isCreatingScene = ref(false)
+const createSceneForm = ref({
+  sceneId: '',
+  name: '',
+  description: '',
+})
+const createSceneFormError = ref('')
+const isEditingSceneName = ref(false)
+const isEditingSceneDesc = ref(false)
+const sceneNameEdit = ref('')
+const sceneDescEdit = ref('')
+const sceneNameInputRef = ref<HTMLInputElement | null>(null)
+const sceneDescInputRef = ref<HTMLTextAreaElement | null>(null)
+
 const createNpcForm = ref({
   id: '',
   name: '',
@@ -1204,6 +1237,66 @@ watch(
   { immediate: true },
 )
 
+function openCreateSceneForm() {
+  createSceneForm.value = { sceneId: '', name: '', description: '' }
+  createSceneFormError.value = ''
+  isCreatingScene.value = true
+  activeTab.value = 'scenes'
+  nextTick(() => {
+    sceneNameInputRef.value?.focus()
+  })
+}
+
+function cancelCreateScene() {
+  isCreatingScene.value = false
+  createSceneForm.value = { sceneId: '', name: '', description: '' }
+  createSceneFormError.value = ''
+}
+
+async function saveCreateScene() {
+  const sceneId = createSceneForm.value.sceneId.trim()
+  const name = createSceneForm.value.name.trim()
+  const description = createSceneForm.value.description.trim()
+
+  if (!sceneId) {
+    createSceneFormError.value = 'Scene ID is required.'
+    return
+  }
+  if (!name) {
+    createSceneFormError.value = 'Scene name is required.'
+    return
+  }
+  if (!description) {
+    createSceneFormError.value = 'Scene description is required.'
+    return
+  }
+
+  const existingIds = new Set(editorScenes.value.map((s: any) => String(s.id || '').toUpperCase()))
+  if (existingIds.has(sceneId.toUpperCase())) {
+    createSceneFormError.value = `A scene with ID "${sceneId}" already exists.`
+    return
+  }
+
+  isSavingText.value = true
+  createSceneFormError.value = ''
+  try {
+    await entityService.createScene(props.adventureId, {
+      scene_id: sceneId,
+      label: name,
+      description,
+    })
+    await fetchDebugInfo()
+    addNotification(`Scene "${name}" created.`, 'success')
+    isCreatingScene.value = false
+    createSceneForm.value = { sceneId: '', name: '', description: '' }
+  } catch (error: any) {
+    createSceneFormError.value = error?.message || 'Failed to create scene.'
+    addNotification(createSceneFormError.value, 'error')
+  } finally {
+    isSavingText.value = false
+  }
+}
+
 function openSceneEditorRoute(sceneId: string) {
   const normalized = String(sceneId || '').trim()
   if (!normalized) return
@@ -1240,6 +1333,89 @@ function editRouteScene() {
     String(scene.label || scene.id || ''),
     String(scene.description || ''),
   )
+}
+
+function startEditingSceneName() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  sceneNameEdit.value = String(scene.label || scene.name || scene.id || '')
+  isEditingSceneName.value = true
+  nextTick(() => {
+    sceneNameInputRef.value?.focus()
+    sceneNameInputRef.value?.select()
+  })
+}
+
+function startEditingSceneDesc() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  sceneDescEdit.value = String(scene.description || '')
+  isEditingSceneDesc.value = true
+  nextTick(() => {
+    sceneDescInputRef.value?.focus()
+  })
+}
+
+async function saveSceneNameEdit() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  const newName = sceneNameEdit.value.trim()
+  if (!newName || newName === String(scene.label || scene.name || '')) {
+    isEditingSceneName.value = false
+    return
+  }
+  isSavingText.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'scene',
+      target_id: String(scene.id),
+      name: newName,
+      description: scene.description,
+    })
+    await Promise.all([fetchAdventure(), fetchDebugInfo()])
+    addNotification('Scene name updated.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to update scene name.', 'error')
+  } finally {
+    isSavingText.value = false
+    isEditingSceneName.value = false
+  }
+}
+
+async function saveSceneDescEdit() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  const newDesc = sceneDescEdit.value.trim()
+  if (newDesc === String(scene.description || '')) {
+    isEditingSceneDesc.value = false
+    return
+  }
+  isSavingText.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'scene',
+      target_id: String(scene.id),
+      name: scene.label || scene.name,
+      description: newDesc,
+    })
+    await Promise.all([fetchAdventure(), fetchDebugInfo()])
+    addNotification('Scene description updated.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to update scene description.', 'error')
+  } finally {
+    isSavingText.value = false
+    isEditingSceneDesc.value = false
+  }
+}
+
+function cancelSceneNameEdit() {
+  isEditingSceneName.value = false
+  sceneNameEdit.value = ''
+}
+
+function cancelSceneDescEdit() {
+  isEditingSceneDesc.value = false
+  sceneDescEdit.value = ''
 }
 
 function editRouteEntity(type: 'npc' | 'object', entity: any) {
@@ -1917,9 +2093,10 @@ watch(
             />
 
             <ScenesTab
-              v-if="activeTab === 'scenes' && !canShowSceneRoutePanel"
+              v-if="activeTab === 'scenes' && !canShowSceneRoutePanel && !isCreatingScene"
               :editor-scenes="editorScenes"
               :debug-data="debugData"
+              :adventure-id="adventureId"
               :is-batch-generating="isBatchGenerating"
               :is-quick-generating="isQuickGenerating"
               :active-menu-id="activeMenuId"
@@ -1936,7 +2113,80 @@ watch(
               @toggle-menu="toggleMenu"
               @handle-hover="handleHover"
               @clear-hover="clearHover"
+              @create-new-scene="openCreateSceneForm"
             />
+
+            <!-- Create Scene Form -->
+            <section
+              v-if="activeTab === 'scenes' && isCreatingScene"
+              class="space-y-6 animate-page-in"
+            >
+              <div class="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                <h3 class="text-xs font-black text-emerald-400 uppercase tracking-[0.3em]">New Scene</h3>
+                <button class="px-3 py-2 text-xs font-bold rounded-lg border border-white/20 text-slate-300 hover:bg-white/10" @click="cancelCreateScene">
+                  Cancel
+                </button>
+              </div>
+
+              <div class="space-y-4">
+                <!-- Scene ID (Pflichtfeld) -->
+                <div>
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1.5">
+                    Scene ID <span class="text-red-400">*</span>
+                  </label>
+                  <input
+                    v-model="createSceneForm.sceneId"
+                    type="text"
+                    placeholder="e.g. DARK_FOREST"
+                    class="w-full bg-black/60 border rounded-xl px-4 py-2.5 text-sm text-white font-mono tracking-wider placeholder:text-slate-600 focus:outline-none focus:ring-2 transition-all"
+                    :class="createSceneFormError ? 'border-red-500 focus:ring-red-500/50' : 'border-white/10 focus:ring-emerald-500/50 focus:border-emerald-500'"
+                    @keydown.enter="saveCreateScene"
+                  />
+                </div>
+
+                <!-- Scene Name (Pflichtfeld) -->
+                <div>
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1.5">
+                    Scene Name <span class="text-red-400">*</span>
+                  </label>
+                  <input
+                    ref="sceneNameInputRef"
+                    v-model="createSceneForm.name"
+                    type="text"
+                    placeholder="e.g. Dark Forest"
+                    class="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
+                    @keydown.enter="saveCreateScene"
+                  />
+                </div>
+
+                <!-- Scene Description (Pflichtfeld) -->
+                <div>
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1.5">
+                    Description <span class="text-red-400">*</span>
+                  </label>
+                  <textarea
+                    v-model="createSceneForm.description"
+                    rows="4"
+                    placeholder="A brief description of this scene..."
+                    class="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none"
+                  ></textarea>
+                </div>
+
+                <!-- Error -->
+                <p v-if="createSceneFormError" class="text-xs font-bold text-red-400">{{ createSceneFormError }}</p>
+
+                <!-- Actions -->
+                <div class="flex items-center justify-end gap-3 pt-2">
+                  <button @click="cancelCreateScene" class="px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white uppercase tracking-widest transition-all">
+                    Cancel
+                  </button>
+                  <button @click="saveCreateScene" :disabled="isSavingText" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg disabled:opacity-50">
+                    <i v-if="isSavingText" class="ra ra-cycle animate-spin mr-2"></i>
+                    Create Scene
+                  </button>
+                </div>
+              </div>
+            </section>
 
             <MapTab
               v-if="activeTab === 'map'"
@@ -1965,18 +2215,84 @@ watch(
               </div>
 
               <div class="flex items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs uppercase tracking-widest text-emerald-300">Scene Route</p>
-                  <h3 class="text-lg font-bold text-white">{{ routeSceneDetails?.label || routeSceneDetails?.id || activeMapSceneId }}</h3>
-                  <p class="text-sm text-slate-300 mt-1">{{ routeSceneDetails?.description || 'No description.' }}</p>
+                <div class="min-w-0 flex-1 space-y-4">
+                  <!-- Scene Name -->
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Scene Name</label>
+                    <div v-if="isEditingSceneName" class="flex gap-2 animate-fade-in">
+                      <input
+                        ref="sceneNameInputRef"
+                        v-model="sceneNameEdit"
+                        class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all"
+                        @keydown.enter="saveSceneNameEdit"
+                        @keydown.esc="cancelSceneNameEdit"
+                      />
+                      <button
+                        :disabled="isSavingText"
+                        class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg"
+                        title="Save"
+                        @click="saveSceneNameEdit"
+                      >
+                        <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
+                        <Save v-else class="w-4 h-4" />
+                      </button>
+                      <button
+                        class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all"
+                        title="Discard"
+                        @click="cancelSceneNameEdit"
+                      >
+                        <X class="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div
+                      v-else
+                      class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center"
+                      @click="startEditingSceneName"
+                    >
+                      <span class="text-sm font-bold text-white">{{ routeSceneDetails?.label || routeSceneDetails?.id || activeMapSceneId }}</span>
+                      <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                    </div>
+                  </div>
+
+                  <!-- Scene Description -->
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Description</label>
+                    <div v-if="isEditingSceneDesc" class="flex gap-2 animate-fade-in">
+                      <textarea
+                        ref="sceneDescInputRef"
+                        v-model="sceneDescEdit"
+                        rows="3"
+                        class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-none"
+                        @keydown.esc="cancelSceneDescEdit"
+                      ></textarea>
+                      <button
+                        :disabled="isSavingText"
+                        class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg self-start"
+                        title="Save"
+                        @click="saveSceneDescEdit"
+                      >
+                        <i v-if="isSavingText" class="ra ra-cycle animate-spin"></i>
+                        <Save v-else class="w-4 h-4" />
+                      </button>
+                      <button
+                        class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all self-start"
+                        title="Discard"
+                        @click="cancelSceneDescEdit"
+                      >
+                        <X class="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div
+                      v-else
+                      class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center"
+                      @click="startEditingSceneDesc"
+                    >
+                      <span class="text-sm text-slate-300">{{ routeSceneDetails?.description || 'No description.' }}</span>
+                      <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                    </div>
+                  </div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <button
-                    class="px-3 py-2 text-xs font-bold rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-                    @click="editRouteScene"
-                  >
-                    Edit Scene
-                  </button>
+                <div class="flex items-center gap-2 shrink-0">
                   <button
                     class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
                     :disabled="isDeletingRouteAsset"
