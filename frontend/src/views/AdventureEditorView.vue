@@ -1815,6 +1815,7 @@ watch(
               v-if="activeTab === 'scenes' && isCreatingScene"
               :is-saving="isSavingText"
               :editor-scenes="editorScenes"
+              :reference-options="referenceOptions"
               @close="cancelCreateScene"
               @create="handleCreateScene"
             />

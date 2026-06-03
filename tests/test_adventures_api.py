@@ -3513,6 +3513,96 @@ async def test_editor_quest_and_award_crud_endpoints(client: AsyncClient):
     assert all(str(a.get("key") or "") != "AWARD_LANTERN" for a in (payload.get("awards") or []))
 
 
+async def test_editor_strict_object_id_validation_and_uniqueness(client: AsyncClient):
+    """Verify that Scene and Entity IDs must be uppercase alphanumeric and underscores, and adventure-wide unique."""
+    ids = await _create_adventure(client, "ID Validation Adventure")
+    adv_id = ids["adventure_id"]
+
+    # 1. Create a scene with invalid ID (lowercase) - should fail with 400
+    create_scene_fail_1 = await client.post(
+        f"/api/adventures/{adv_id}/editor/scene",
+        json={
+            "scene_id": "lowercase_scene",
+            "label": "Invalid Scene",
+            "description": "Failed scene.",
+        },
+    )
+    assert create_scene_fail_1.status_code == 400
+
+    # 2. Create a scene with invalid ID (contains dashes) - should fail with 400
+    create_scene_fail_2 = await client.post(
+        f"/api/adventures/{adv_id}/editor/scene",
+        json={
+            "scene_id": "SCENE-WITH-DASH",
+            "label": "Invalid Scene 2",
+            "description": "Failed scene 2.",
+        },
+    )
+    assert create_scene_fail_2.status_code == 400
+
+    # 3. Create a valid scene - should succeed with 200
+    create_scene_ok = await client.post(
+        f"/api/adventures/{adv_id}/editor/scene",
+        json={
+            "scene_id": "UNIQUE_SCENE_ID",
+            "label": "Valid Scene",
+            "description": "Succeeded scene.",
+        },
+    )
+    assert create_scene_ok.status_code == 200
+
+    # 4. Create an entity with invalid ID (contains lowercase) - should fail with 400
+    create_entity_fail_1 = await client.post(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "entity_id": "npc_lowercase",
+            "entity_type": "NPC",
+            "scene_id": "UNIQUE_SCENE_ID",
+            "name": "Invalid NPC",
+            "description": "Failed NPC.",
+        },
+    )
+    assert create_entity_fail_1.status_code == 400
+
+    # 5. Create an entity with duplicate ID (same as existing scene) - should fail with 409
+    create_entity_fail_dup = await client.post(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "entity_id": "UNIQUE_SCENE_ID",
+            "entity_type": "NPC",
+            "scene_id": "UNIQUE_SCENE_ID",
+            "name": "Duplicate NPC ID",
+            "description": "Failed duplicate NPC.",
+        },
+    )
+    assert create_entity_fail_dup.status_code == 409
+
+    # 6. Create a valid entity - should succeed
+    create_entity_ok = await client.post(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "entity_id": "VALID_NPC_ID",
+            "entity_type": "NPC",
+            "scene_id": "UNIQUE_SCENE_ID",
+            "name": "Valid NPC",
+            "description": "Succeeded NPC.",
+        },
+    )
+    assert create_entity_ok.status_code == 200
+
+    # 7. Create a scene with duplicate ID (same as existing NPC entity) - should fail with 409
+    create_scene_fail_dup = await client.post(
+        f"/api/adventures/{adv_id}/editor/scene",
+        json={
+            "scene_id": "VALID_NPC_ID",
+            "label": "Duplicate Scene ID",
+            "description": "Failed duplicate scene.",
+        },
+    )
+    assert create_scene_fail_dup.status_code == 409
+
+
+
 
 
 

@@ -61,6 +61,23 @@ const itemReferenceOptions = computed(() => {
 
 const currentItemType = computed(() => String(localForm.value.item_type || '').toUpperCase())
 
+const entityIdError = computed(() => {
+  if (!props.isCreateEntityMode) return ''
+  const val = (localForm.value.entity_id || '').trim()
+  if (!val) return ''
+
+  const idRegex = /^[A-Z0-9_]+$/
+  if (!idRegex.test(val)) {
+    return 'ID must contain only uppercase letters, digits, and underscores.'
+  }
+
+  const takenIds = new Set((props.referenceOptions || []).map((entry) => String(entry.id || '').toUpperCase()))
+  if (takenIds.has(val.toUpperCase())) {
+    return `ID "${val}" already exists in this adventure.`
+  }
+  return ''
+})
+
 const isFormInvalid = computed(() => {
   const nameInvalid = !(localForm.value.name || '').trim() ||
          (localForm.value.name || '').length > 50
@@ -70,7 +87,7 @@ const isFormInvalid = computed(() => {
          (localForm.value.character || '').length > 200
   const teaserInvalid = (localForm.value.teaser || '').length > 300
   const idInvalid = props.isCreateEntityMode
-    ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > 30)
+    ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > 30 || !!entityIdError.value)
     : false
   const combinationInvalid = currentItemType.value === 'COMBINABLE' &&
     (!Array.isArray(localForm.value.combination_ingredients_input) ||
@@ -81,6 +98,12 @@ const isFormInvalid = computed(() => {
 watch(() => props.initialForm, (newVal) => {
   localForm.value = { ...newVal }
 }, { deep: true })
+
+watch(() => localForm.value.entity_id, (newVal) => {
+  if (newVal) {
+    localForm.value.entity_id = newVal.toUpperCase()
+  }
+})
 
 watch(() => localForm.value.item_type, (newType) => {
   if (!props.isCreateEntityMode) return
@@ -272,17 +295,19 @@ const textLogPreviewClass = computed(() => {
               <div v-if="isCreateEntityMode" class="space-y-3">
                 <div class="flex justify-between items-center">
                   <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Entity ID <span class="text-red-400">*</span></label>
-                  <span :class="['text-xs font-bold tracking-widest', (localForm.entity_id || '').length > 30 ? 'text-red-500' : 'text-emerald-500/50']">
+                  <span :class="['text-xs font-bold tracking-widest', (localForm.entity_id || '').length > 30 || entityIdError ? 'text-red-500' : 'text-emerald-500/50']">
                     {{ (localForm.entity_id || '').length }} / 30
                   </span>
                 </div>
                 <input
                   v-model="localForm.entity_id"
                   maxlength="30"
-                  class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-lg font-mono font-bold text-amber-300 focus:border-amber-500 outline-none transition-all shadow-inner uppercase"
+                  class="w-full bg-black/40 border rounded-2xl px-4 py-3 text-lg font-mono font-bold text-amber-300 focus:border-amber-500 outline-none transition-all shadow-inner uppercase"
+                  :class="entityIdError ? 'border-red-500 focus:ring-red-500/50' : 'border-white/5'"
                   placeholder="ITEM_001"
                 />
-                <p class="text-[10px] text-slate-500 uppercase tracking-wider">Unique identifier. Only uppercase letters, numbers, and underscores.</p>
+                <p v-if="entityIdError" class="text-xs font-bold text-red-400">{{ entityIdError }}</p>
+                <p v-else class="text-[10px] text-slate-500 uppercase tracking-wider">Unique identifier. Only uppercase letters, numbers, and underscores.</p>
               </div>
 
               <div class="space-y-3">

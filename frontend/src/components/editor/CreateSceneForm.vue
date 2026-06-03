@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 
 const props = defineProps<{
   isSaving: boolean
   editorScenes: any[]
+  referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null; type?: string }>
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +17,33 @@ const name = ref('')
 const description = ref('')
 const formError = ref('')
 const sceneNameInputRef = ref<HTMLInputElement | null>(null)
+
+watch(sceneId, (newVal) => {
+  sceneId.value = newVal.toUpperCase()
+})
+
+const idError = computed(() => {
+  const val = sceneId.value.trim()
+  if (!val) return ''
+  
+  const idRegex = /^[A-Z0-9_]+$/
+  if (!idRegex.test(val)) {
+    return 'ID must contain only uppercase letters, digits, and underscores.'
+  }
+
+  if (val.length > 30) {
+    return 'ID must be 30 characters or less.'
+  }
+
+  const takenIds = new Set((props.referenceOptions || []).map((entry) => String(entry.id || '').toUpperCase()))
+  console.log('DEBUG referenceOptions:', props.referenceOptions)
+  console.log('DEBUG takenIds:', Array.from(takenIds))
+  console.log('DEBUG val:', val)
+  if (takenIds.has(val.toUpperCase())) {
+    return `ID "${val}" already exists in this adventure.`
+  }
+  return ''
+})
 
 onMounted(() => {
   sceneNameInputRef.value?.focus()
@@ -34,6 +62,11 @@ function submit() {
     formError.value = 'Scene ID is required.'
     return
   }
+  const currentIdError = idError.value
+  if (currentIdError) {
+    formError.value = currentIdError
+    return
+  }
   if (!sName) {
     formError.value = 'Scene name is required.'
     return
@@ -48,12 +81,6 @@ function submit() {
   }
   if (sDesc.length > 1000) {
     formError.value = 'Scene description must be 1000 characters or less.'
-    return
-  }
-
-  const existingIds = new Set(props.editorScenes.map((s: any) => String(s.id || '').toUpperCase()))
-  if (existingIds.has(sId.toUpperCase())) {
-    formError.value = `A scene with ID "${sId}" already exists.`
     return
   }
 
@@ -74,17 +101,24 @@ function submit() {
     <div class="space-y-4">
       <!-- Scene ID (Pflichtfeld) -->
       <div>
-        <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-1.5">
-          Scene ID <span class="text-red-400">*</span>
-        </label>
+        <div class="flex justify-between items-center mb-1.5">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">
+            Scene ID <span class="text-red-400">*</span>
+          </label>
+          <span :class="['text-[10px] font-bold tracking-widest', (sceneId || '').length > 30 ? 'text-red-500' : 'text-emerald-500/50']">
+            {{ (sceneId || '').length }} / 30
+          </span>
+        </div>
         <input
           v-model="sceneId"
           type="text"
+          maxlength="30"
           placeholder="e.g. DARK_FOREST"
-          class="w-full bg-black/60 border rounded-xl px-4 py-2.5 text-sm text-white font-mono tracking-wider placeholder:text-slate-600 focus:outline-none focus:ring-2 transition-all"
-          :class="formError ? 'border-red-500 focus:ring-red-500/50' : 'border-white/10 focus:ring-emerald-500/50 focus:border-emerald-500'"
+          class="w-full bg-black/60 border rounded-xl px-4 py-2.5 text-sm text-white font-mono tracking-wider placeholder:text-slate-600 focus:outline-none focus:ring-2 transition-all uppercase"
+          :class="idError ? 'border-red-500 focus:ring-red-500/50' : 'border-white/10 focus:ring-emerald-500/50 focus:border-emerald-500'"
           @keydown.enter="submit"
         />
+        <p v-if="idError" class="text-xs font-bold text-red-400 mt-1.5">{{ idError }}</p>
       </div>
 
       <!-- Scene Name (Pflichtfeld) -->

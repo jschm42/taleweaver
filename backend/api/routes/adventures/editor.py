@@ -181,6 +181,20 @@ def _is_object_entity(ent):
     return ent.entity_type == "OBJECT"
 
 
+OBJECT_ID_PATTERN = re.compile(r"^[A-Z0-9_]{1,30}$")
+
+def _sanitize_object_id(raw_value: Optional[str], field_name: str) -> str:
+    value = str(raw_value or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    if not OBJECT_ID_PATTERN.match(value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must contain only uppercase letters, digits, and underscores, and be at most 30 characters",
+        )
+    return value
+
+
 def _sanitize_editor_id(raw_value: Optional[str], field_name: str) -> str:
     value = str(raw_value or "").strip()
     if not value:
@@ -417,7 +431,7 @@ async def create_editor_scene(
 ) -> dict:
     await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
-    scene_id = _sanitize_editor_id(payload.scene_id, "scene_id")
+    scene_id = _sanitize_object_id(payload.scene_id, "scene_id")
     label = str(payload.label or "").strip()
     description = str(payload.description or "").strip()
     if not label:
@@ -434,6 +448,16 @@ async def create_editor_scene(
     )
     if existing_scene.scalars().first():
         raise HTTPException(status_code=409, detail="scene_id already exists")
+
+    existing_entity = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+            WorldEntity.id == scene_id,
+        )
+    )
+    if existing_entity.scalars().first():
+        raise HTTPException(status_code=409, detail="ID already exists as an entity")
 
     scene = WorldScene(
         id=scene_id,
@@ -456,7 +480,7 @@ async def delete_editor_scene(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
-    scene_id = _sanitize_editor_id(scene_id, "scene_id")
+    scene_id = _sanitize_object_id(scene_id, "scene_id")
 
     scene_res = await db.execute(
         select(WorldScene).where(
@@ -514,8 +538,8 @@ async def create_editor_exit(
 ) -> dict:
     await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
-    from_scene_id = _sanitize_editor_id(payload.from_scene_id, "from_scene_id")
-    to_scene_id = _sanitize_editor_id(payload.to_scene_id, "to_scene_id")
+    from_scene_id = _sanitize_object_id(payload.from_scene_id, "from_scene_id")
+    to_scene_id = _sanitize_object_id(payload.to_scene_id, "to_scene_id")
     if from_scene_id == to_scene_id:
         raise HTTPException(status_code=400, detail="from_scene_id and to_scene_id must differ")
 
@@ -584,8 +608,8 @@ async def create_editor_entity(
 ) -> dict:
     await _get_owned_adventure_or_404(db, template_id, current_user.id)
 
-    entity_id = _sanitize_editor_id(payload.entity_id, "entity_id")
-    scene_id = _sanitize_editor_id(payload.scene_id, "scene_id")
+    entity_id = _sanitize_object_id(payload.entity_id, "entity_id")
+    scene_id = _sanitize_object_id(payload.scene_id, "scene_id")
     await _ensure_template_scene_exists(db, template_id, scene_id)
 
     name = str(payload.name or "").strip()
@@ -604,6 +628,16 @@ async def create_editor_entity(
     )
     if existing_ent.scalars().first():
         raise HTTPException(status_code=409, detail="entity_id already exists")
+
+    existing_scene = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+            WorldScene.id == entity_id,
+        )
+    )
+    if existing_scene.scalars().first():
+        raise HTTPException(status_code=409, detail="ID already exists as a scene")
 
     item_type = str(payload.item_type or "").strip().upper() if payload.entity_type == "OBJECT" else None
     entity = WorldEntity(
@@ -645,7 +679,7 @@ async def delete_editor_entity(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     await _get_owned_adventure_or_404(db, template_id, current_user.id)
-    entity_id = _sanitize_editor_id(entity_id, "entity_id")
+    entity_id = _sanitize_object_id(entity_id, "entity_id")
 
     ent_res = await db.execute(
         select(WorldEntity).where(
