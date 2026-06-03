@@ -9,6 +9,7 @@ import GameActionBar from '@/components/game/GameActionBar.vue'
 import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
+import { formatObjectIds } from '@/utils/editor_utils'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -612,7 +613,8 @@ function renderMessageHtml(text: string, isSystemMessage: boolean): string {
   const escaped = escapeHtml(normalized)
   const withVoiceTags = formatVoiceTags(escaped)
   const withBolds = formatBolds(withVoiceTags)
-  const enriched = isSystemMessage ? colorizeStatNames(withBolds) : withBolds
+  const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="object-id-tag">($1)</span>')
+  const enriched = isSystemMessage ? colorizeStatNames(withObjectIds) : withObjectIds
 
   return DOMPurify.sanitize(enriched, {
     ALLOWED_TAGS: ['span', 'strong', 'img', 'div', 'br'],
@@ -924,9 +926,7 @@ onUnmounted(() => {
             <!-- Item Details -->
             <div class="p-3 flex flex-col gap-1 flex-1">
               <h4 class="text-white font-bold text-sm truncate">{{ entities.find(e => e.id === itemId)?.name }}</h4>
-              <p class="text-slate-400 text-xs leading-tight line-clamp-3 mb-2 italic">
-                {{ entities.find(e => e.id === itemId)?.description }}
-              </p>
+              <p class="text-slate-400 text-xs leading-tight line-clamp-3 mb-2 italic" v-html="formatObjectIds(entities.find(e => e.id === itemId)?.description)"></p>
               
               <button 
                 v-if="entities.find(e => e.id === itemId)?.is_portable !== false"

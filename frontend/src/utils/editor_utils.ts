@@ -91,3 +91,18 @@ export function buildPrefixedEditorId(name: string, prefix: string): string {
   if (!base) return ''
   return `${sanitizeEditorIdToken(prefix)}${base}`
 }
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+export function formatObjectIds(text: string | null | undefined): string {
+  if (!text) return ''
+  const withNewlines = fixNewlines(text)
+  const escaped = escapeHtml(withNewlines)
+  return escaped.replace(/##([A-Za-z0-9_-]+)/g, '<span class="object-id-tag">($1)</span>')
+}

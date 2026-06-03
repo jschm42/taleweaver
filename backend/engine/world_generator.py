@@ -480,6 +480,109 @@ class WorldManifesto(BaseModel):
 
 class WorldGenerator:
     @staticmethod
+    def preprocess_manifest_object_ids(manifest_dict: dict) -> None:
+        """
+        Finds all object IDs in the manifest and replaces references to them in
+        all narrative text fields with the format ##OBJECTID.
+        """
+        if not isinstance(manifest_dict, dict):
+            return
+
+        objects = manifest_dict.get("objects", [])
+        if not isinstance(objects, list):
+            return
+
+        # Extract all object IDs
+        object_ids = []
+        for obj in objects:
+            if isinstance(obj, dict):
+                obj_id = obj.get("id")
+                if isinstance(obj_id, str) and obj_id.strip():
+                    object_ids.append(obj_id.strip())
+
+        if not object_ids:
+            return
+
+        # Sort object IDs by length descending to replace longer ones first
+        object_ids.sort(key=len, reverse=True)
+
+        import re
+
+        def replace_ids_in_text(text: Any) -> Any:
+            if not isinstance(text, str) or not text:
+                return text
+            for obj_id in object_ids:
+                # Case-insensitive match for whole word, not preceded by ##
+                pattern = rf"(?<!##)\b{re.escape(obj_id)}\b"
+                # Replace with ##OBJECTID using the exact case-sensitive object ID
+                text = re.sub(pattern, f"##{obj_id}", text, flags=re.IGNORECASE)
+            return text
+
+        # Update top-level narrative fields
+        for field in ("teaser", "plot", "rules", "intro_text", "walkthrough", "completed_condition", "gameover_condition", "tts_director_notes"):
+            if field in manifest_dict:
+                manifest_dict[field] = replace_ids_in_text(manifest_dict[field])
+
+        # Update protagonist fields
+        protagonist = manifest_dict.get("protagonist")
+        if isinstance(protagonist, dict):
+            for field in ("description", "goal", "character"):
+                if field in protagonist:
+                    protagonist[field] = replace_ids_in_text(protagonist[field])
+
+        # Update scenes
+        scenes = manifest_dict.get("scenes", [])
+        if isinstance(scenes, list):
+            for scene in scenes:
+                if isinstance(scene, dict):
+                    for field in ("description",):
+                        if field in scene:
+                            scene[field] = replace_ids_in_text(scene[field])
+
+        # Update exits
+        exits = manifest_dict.get("exits", [])
+        if isinstance(exits, list):
+            for exit_val in exits:
+                if isinstance(exit_val, dict):
+                    for field in ("label", "lock_description", "rule_to_unlock"):
+                        if field in exit_val:
+                            exit_val[field] = replace_ids_in_text(exit_val[field])
+
+        # Update npcs
+        npcs = manifest_dict.get("npcs", [])
+        if isinstance(npcs, list):
+            for npc in npcs:
+                if isinstance(npc, dict):
+                    for field in ("description", "goal", "character", "spatial_position", "reveal_rule"):
+                        if field in npc:
+                            npc[field] = replace_ids_in_text(npc[field])
+
+        # Update objects
+        for obj in objects:
+            if isinstance(obj, dict):
+                for field in ("description", "spatial_position", "reveal_rule", "text_log_content", "rule_to_unlock"):
+                    if field in obj:
+                        obj[field] = replace_ids_in_text(obj[field])
+
+        # Update quests
+        quests = manifest_dict.get("quests", [])
+        if isinstance(quests, list):
+            for quest in quests:
+                if isinstance(quest, dict):
+                    for field in ("title", "description", "goal", "impact"):
+                        if field in quest:
+                            quest[field] = replace_ids_in_text(quest[field])
+
+        # Update awards
+        awards = manifest_dict.get("awards", [])
+        if isinstance(awards, list):
+            for award in awards:
+                if isinstance(award, dict):
+                    for field in ("title", "description", "requirement"):
+                        if field in award:
+                            award[field] = replace_ids_in_text(award[field])
+
+    @staticmethod
     async def generate_world(
         db: AsyncSession, 
         user: User, 
@@ -852,6 +955,9 @@ class WorldGenerator:
                 "max_quests": max_quests,
             },
         )
+        
+        manifest_dict = manifesto.model_dump()
+        WorldGenerator.preprocess_manifest_object_ids(manifest_dict)
 
         log_structured_event(
             "adventure.generation.manifest_received",
@@ -879,14 +985,14 @@ class WorldGenerator:
             )
             if adventure:
                 # Keep imported/source manifest intact for reproducible resets.
-                adventure.teaser = manifesto.teaser  # type: ignore
+                adventure.teaser = manifest_dict.get("teaser") or ""  # type: ignore
                 adventure.original_prompt = original_prompt  # type: ignore
                 if language:
                     adventure.language = language  # type: ignore
                 if not adventure.origin_id:
-                    adventure.origin_id = manifesto.origin_id or template_id  # type: ignore
+                    adventure.origin_id = manifest_dict.get("origin_id") or template_id  # type: ignore
                 if not adventure.original_manifest:
-                    adventure.original_manifest = manifesto.model_dump()  # type: ignore
+                    adventure.original_manifest = manifest_dict  # type: ignore
             await db.commit()
             
         cover_source_assets = None
@@ -933,8 +1039,6 @@ class WorldGenerator:
                         if ent.entity_type == "OBJECT"
                     ],
                 }
-
-        manifest_dict = manifesto.model_dump()
 
         # Post-processing clamp limits for Auto Mode vs Manual constraints
         clamped_max_containers = max(0, min(30, int(max_containers))) if max_containers is not None else 9999
@@ -1056,6 +1160,7 @@ class WorldGenerator:
         If user is provided, attempts to generate entity images based on flags.
         If existing_images is provided, uses them to restore entity visual states.
         """
+        WorldGenerator.preprocess_manifest_object_ids(manifest_dict)
         from backend.engine.media_engine import MediaEngine
         adventure = await db.get(AdventureTemplate, template_id)
 

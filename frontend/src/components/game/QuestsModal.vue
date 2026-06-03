@@ -38,7 +38,7 @@
                   </div>
                   <span class="quest-reward">{{ quest.exp_reward }} EXP</span>
                 </div>
-                <p class="quest-desc">{{ quest.description || quest.goal }}</p>
+                <p class="quest-desc" v-html="formatObjectIds(quest.description || quest.goal)"></p>
                 <div class="quest-footer">
                   <div class="status-badge" :class="quest.status">
                     <span class="status-dot"></span>
@@ -69,7 +69,7 @@
                   </div>
                   <span class="quest-reward">{{ quest.exp_reward }} EXP</span>
                 </div>
-                <p class="quest-desc">{{ quest.description || quest.goal }}</p>
+                <p class="quest-desc" v-html="formatObjectIds(quest.description || quest.goal)"></p>
                 <div class="quest-footer">
                   <div class="status-badge" :class="quest.status">
                     <span class="status-dot"></span>
@@ -104,7 +104,7 @@
                   <span class="award-title">{{ award.title }}</span>
                   <span class="award-tier">{{ award.tier }}</span>
                 </div>
-                <p class="award-desc">{{ award.description }}</p>
+                <p class="award-desc" v-html="formatObjectIds(award.description)"></p>
                 <div v-if="award.is_earned" class="earned-label">EARNED</div>
               </div>
             </div>
@@ -116,6 +116,8 @@
 </template>
 
 <script>
+import { formatObjectIds } from '@/utils/editor_utils'
+
 export default {
   name: "QuestsModal",
   props: {
@@ -145,6 +147,9 @@ export default {
     }
   },
   methods: {
+    formatObjectIds(text) {
+      return formatObjectIds(text);
+    },
     close() {
       this.$emit("close");
     },

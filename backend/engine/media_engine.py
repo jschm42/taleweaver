@@ -140,17 +140,23 @@ def _resolve_output_dir(target_dir: str) -> str:
     if os.path.isabs(candidate):
         return _ensure_within_data_dir(candidate)
 
-    safe_parts: list[str] = []
-    for part in re.split(r"[\\/]+", candidate):
-        if not part:
-            continue
-        safe_part = _sanitize_path_component(part)
-        if not safe_part:
+    # Check if candidate is relative to repository root but already starts with DATA_DIR
+    candidate_abs = os.path.abspath(candidate)
+    try:
+        return _ensure_within_data_dir(candidate_abs)
+    except ValueError:
+        # If not, candidate is relative to DATA_DIR, so append it under DATA_DIR.
+        safe_parts: list[str] = []
+        for part in re.split(r"[\\/]+", candidate):
+            if not part:
+                continue
+            safe_part = _sanitize_path_component(part)
+            if not safe_part:
+                raise ValueError("Invalid target directory.")
+            safe_parts.append(safe_part)
+        if not safe_parts:
             raise ValueError("Invalid target directory.")
-        safe_parts.append(safe_part)
-    if not safe_parts:
-        raise ValueError("Invalid target directory.")
-    return _safe_data_path(*safe_parts)
+        return _safe_data_path(*safe_parts)
 
 
 def _write_binary_file(filepath: str, payload: bytes) -> None:

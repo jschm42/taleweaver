@@ -5,6 +5,7 @@ import { audioService } from '@/services/audioService'
 import { api } from '@/composables/useApi'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
+import { formatObjectIds } from '@/utils/editor_utils'
 
 const props = defineProps<{
   open: boolean
@@ -186,7 +187,7 @@ watch(
               >
                 Translated to {{ translatedLanguage || targetLanguage }}
               </p>
-              <p :class="['text-base md:text-lg text-amber-50/90 leading-relaxed whitespace-pre-wrap', contentTypographyClass]">{{ activeContent || 'No text content found.' }}</p>
+              <p :class="['text-base md:text-lg text-amber-50/90 leading-relaxed whitespace-pre-wrap', contentTypographyClass]" v-html="formatObjectIds(activeContent || 'No text content found.')"></p>
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import StatBar from '@/components/game/StatBar.vue'
 import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
 import { fixNewlines, hasNonZero } from '@/services/hoverEntityService'
+import { formatObjectIds } from '@/utils/editor_utils'
 
 const props = defineProps<{
   hoveredEntity: any
@@ -120,7 +121,7 @@ const hasObjectDetails = computed(() => {
                 </div>
                 <!-- Right: Description -->
                 <div class="p-3 flex-1 min-w-0">
-                  <p class="text-[13px] text-slate-400 leading-relaxed italic whitespace-pre-wrap break-words tooltip-readable-text">{{ fixNewlines(props.hoveredEntity.description) }}</p>
+                  <p class="text-[13px] text-slate-400 leading-relaxed italic whitespace-pre-wrap break-words tooltip-readable-text" v-html="formatObjectIds(props.hoveredEntity.description)"></p>
                 </div>
               </div>
             </div>
@@ -139,7 +140,7 @@ const hasObjectDetails = computed(() => {
                   {{ props.hoveredEntity.entity_type || 'OBJECT' }}
                 </span>
               </div>
-              <p class="text-xs text-slate-400 leading-relaxed italic mb-2 whitespace-pre-wrap break-words tooltip-readable-text">{{ fixNewlines(props.hoveredEntity.description) }}</p>
+              <p class="text-xs text-slate-400 leading-relaxed italic mb-2 whitespace-pre-wrap break-words tooltip-readable-text" v-html="formatObjectIds(props.hoveredEntity.description)"></p>
 
               <div v-if="(props.hoveredEntity.entity_type === 'OBJECT' || props.hoveredEntity.entity_type === 'ITEM') && props.ruleMode !== 'chat' && hasObjectDetails" class="mt-1">
                 <div class="grid grid-cols-2 gap-2 text-xxs uppercase font-bold tracking-wider">
