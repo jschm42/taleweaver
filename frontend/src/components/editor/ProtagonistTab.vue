@@ -6,6 +6,7 @@ const props = defineProps<{
   visualsCacheVersion: number
   ruleEnforcementMode: string
 }>()
+import { formatObjectIds } from '@/utils/editor_utils'
 
 const emit = defineEmits<{
   (e: 'quick-regen', kind: string, id: string): void
@@ -89,16 +90,16 @@ function buildVisualImageUrl(imagePath?: string | null) {
           <div class="grid grid-cols-1 gap-3">
             <div v-if="debugData.protagonist.description" class="space-y-1">
               <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Bio</span>
-              <p class="text-xs text-slate-400 leading-relaxed">{{ debugData.protagonist.description }}</p>
+              <p class="text-xs text-slate-400 leading-relaxed" v-html="formatObjectIds(debugData.protagonist.description)"></p>
             </div>
             <div v-if="debugData.protagonist.goal || debugData.protagonist.character" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div v-if="debugData.protagonist.goal" class="space-y-1">
                 <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Motivation</span>
-                <p class="text-xs text-slate-400 leading-relaxed">{{ debugData.protagonist.goal }}</p>
+                <p class="text-xs text-slate-400 leading-relaxed" v-html="formatObjectIds(debugData.protagonist.goal)"></p>
               </div>
               <div v-if="debugData.protagonist.character" class="space-y-1">
                 <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Traits</span>
-                <p class="text-xs text-slate-400 leading-relaxed">{{ debugData.protagonist.character }}</p>
+                <p class="text-xs text-slate-400 leading-relaxed" v-html="formatObjectIds(debugData.protagonist.character)"></p>
               </div>
             </div>
             <p v-if="!debugData.protagonist.description && !debugData.protagonist.goal && !debugData.protagonist.character" class="text-xs italic text-slate-600">No character details yet. Click "Edit Character" to add them.</p>

@@ -613,7 +613,7 @@ function renderMessageHtml(text: string, isSystemMessage: boolean): string {
   const escaped = escapeHtml(normalized)
   const withVoiceTags = formatVoiceTags(escaped)
   const withBolds = formatBolds(withVoiceTags)
-  const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="object-id-tag">($1)</span>')
+  const withObjectIds = withBolds.replace(/##([A-Za-z0-9_-]+)/g, '<span class="object-id-tag">$1</span>')
   const enriched = isSystemMessage ? colorizeStatNames(withObjectIds) : withObjectIds
 
   return DOMPurify.sanitize(enriched, {

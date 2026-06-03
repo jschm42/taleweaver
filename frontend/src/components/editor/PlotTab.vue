@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import { formatObjectIds } from '@/utils/editor_utils'
 
 defineProps<{
   form: any
@@ -92,7 +93,7 @@ const emit = defineEmits<{
             <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
               <i class="ra ra-quill-pen"></i> Edit Plot
             </div>
-            <p v-if="form.plot" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.plot) }}</p>
+            <p v-if="form.plot" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.plot)"></p>
             <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No plot defined. Click to weave the story.</p>
           </div>
         </div>
@@ -130,7 +131,7 @@ const emit = defineEmits<{
             <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
               <i class="ra ra-quill-pen"></i> Edit Rules
             </div>
-            <p v-if="form.rules" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.rules) }}</p>
+            <p v-if="form.rules" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.rules)"></p>
             <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No specific rules. Click to define world logic.</p>
           </div>
         </div>
@@ -168,7 +169,7 @@ const emit = defineEmits<{
             <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
               <i class="ra ra-quill-pen"></i> Edit Intro
             </div>
-            <p v-if="form.intro_text" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.intro_text) }}</p>
+            <p v-if="form.intro_text" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.intro_text)"></p>
             <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No intro text set. Click to add a one-time session opener.</p>
           </div>
         </div>
@@ -206,7 +207,7 @@ const emit = defineEmits<{
             <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
               <i class="ra ra-quill-pen"></i> Edit Walkthrough
             </div>
-            <p v-if="form.walkthrough" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.walkthrough) }}</p>
+            <p v-if="form.walkthrough" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.walkthrough)"></p>
             <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No walkthrough set. Click to define the path.</p>
           </div>
         </div>
@@ -245,7 +246,7 @@ const emit = defineEmits<{
             <div class="absolute top-6 right-8 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 text-emerald-500 text-xs font-black uppercase">
               <i class="ra ra-quill-pen"></i> Edit TTS Notes
             </div>
-            <p v-if="form.tts_director_notes" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.tts_director_notes) }}</p>
+            <p v-if="form.tts_director_notes" class="text-lg text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.tts_director_notes)"></p>
             <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center py-6">No TTS notes set. Click to customize voice delivery.</p>
           </div>
         </div>
@@ -278,7 +279,7 @@ const emit = defineEmits<{
               </div>
             </div>
             <div v-else @click="emit('start-edit', 'completed_condition', form.completed_condition)" class="group relative cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/30 rounded-2xl p-6 transition-all duration-300">
-              <p v-if="form.completed_condition" class="text-base text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.completed_condition) }}</p>
+              <p v-if="form.completed_condition" class="text-base text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.completed_condition)"></p>
               <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center">Define Victory Conditions</p>
             </div>
           </div>
@@ -309,7 +310,7 @@ const emit = defineEmits<{
               </div>
             </div>
             <div v-else @click="emit('start-edit', 'gameover_condition', form.gameover_condition)" class="group relative cursor-pointer bg-red-500/5 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 rounded-2xl p-6 transition-all duration-300">
-              <p v-if="form.gameover_condition" class="text-base text-slate-300 leading-relaxed whitespace-pre-wrap">{{ fixNewlines(form.gameover_condition) }}</p>
+              <p v-if="form.gameover_condition" class="text-base text-slate-300 leading-relaxed whitespace-pre-wrap" v-html="formatObjectIds(form.gameover_condition)"></p>
               <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest text-center">Define Failure Conditions</p>
             </div>
           </div>

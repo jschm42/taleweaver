@@ -8,6 +8,7 @@ import {
   isNpcEntity, 
   isObjectEntity, 
   mergeUniqueById, 
+  formatObjectIds,
 } from '@/utils/editor_utils'
 import { Save, X, Trash2, ArrowLeft } from 'lucide-vue-next'
 
@@ -433,7 +434,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             class="group cursor-pointer bg-slate-950/30 hover:bg-slate-950/50 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-start min-h-[46px]"
             @click="startEditingSceneDesc"
           >
-            <span class="text-sm text-slate-300 break-words flex-grow mr-2">{{ routeSceneDetails?.description || 'No description.' }}</span>
+            <span class="text-sm text-slate-300 break-words flex-grow mr-2" v-html="formatObjectIds(routeSceneDetails?.description || 'No description.')"></span>
             <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"></i>
           </div>
         </div>

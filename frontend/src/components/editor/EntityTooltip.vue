@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { getItemIcon, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
+import { formatObjectIds } from '@/utils/editor_utils'
 
 const props = defineProps<{
   hoveredEntity: any | null
@@ -92,7 +93,7 @@ function onTooltipImageError() {
               </template>
             </div>
 
-            <p class="text-xs text-slate-400 leading-relaxed italic whitespace-pre-wrap">{{ fixNewlines(hoveredEntity.description) }}</p>
+            <p class="text-xs text-slate-400 leading-relaxed italic whitespace-pre-wrap" v-html="formatObjectIds(hoveredEntity.description)"></p>
 
             <!-- NPC Inventory in Tooltip -->
             <div v-if="hoveredEntity.type === 'NPC' && hoveredEntity.inventory && hoveredEntity.inventory.length > 0" class="space-y-2 pt-2 border-t border-white/5">

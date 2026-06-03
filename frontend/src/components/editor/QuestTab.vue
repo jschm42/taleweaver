@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { entityService } from '@/services/entityService'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import { formatObjectIds } from '@/utils/editor_utils'
 
 
 const props = defineProps<{
@@ -225,7 +226,7 @@ function confirmDeleteQuest() {
                 {{ quest.exp_reward }} XP
               </span>
             </div>
-            <p class="text-xs text-slate-400 leading-relaxed">{{ quest.description }}</p>
+            <p class="text-xs text-slate-400 leading-relaxed" v-html="formatObjectIds(quest.description)"></p>
           </div>
 
           <!-- Actions Panel on Hover -->
@@ -265,7 +266,7 @@ function confirmDeleteQuest() {
                 {{ quest.exp_reward }} XP
               </span>
             </div>
-            <p class="text-xs text-slate-400 leading-relaxed">{{ quest.description }}</p>
+            <p class="text-xs text-slate-400 leading-relaxed" v-html="formatObjectIds(quest.description)"></p>
           </div>
 
           <!-- Actions Panel on Hover -->

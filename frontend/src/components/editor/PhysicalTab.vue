@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Save, X, AlertTriangle } from 'lucide-vue-next'
 import { getItemIcon } from '@/utils/game_icons'
-import type { VisualKind } from '@/utils/editor_utils'
+import { formatObjectIds, type VisualKind } from '@/utils/editor_utils'
 
 const props = defineProps<{
   form: any
@@ -261,16 +261,16 @@ function handlePacingInput(event: Event) {
                <div class="grid grid-cols-1 gap-3">
                  <div v-if="debugData.protagonist.description" class="space-y-1">
                    <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Bio</span>
-                   <p class="text-xs text-slate-400 leading-relaxed line-clamp-2">{{ debugData.protagonist.description }}</p>
+                   <p class="text-xs text-slate-400 leading-relaxed line-clamp-2" v-html="formatObjectIds(debugData.protagonist.description)"></p>
                  </div>
                  <div v-if="debugData.protagonist.goal || debugData.protagonist.character" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                    <div v-if="debugData.protagonist.goal" class="space-y-1">
                      <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Motivation</span>
-                     <p class="text-xs text-slate-400 leading-relaxed line-clamp-2">{{ debugData.protagonist.goal }}</p>
+                     <p class="text-xs text-slate-400 leading-relaxed line-clamp-2" v-html="formatObjectIds(debugData.protagonist.goal)"></p>
                    </div>
                    <div v-if="debugData.protagonist.character" class="space-y-1">
                      <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Traits</span>
-                     <p class="text-xs text-slate-400 leading-relaxed line-clamp-2">{{ debugData.protagonist.character }}</p>
+                     <p class="text-xs text-slate-400 leading-relaxed line-clamp-2" v-html="formatObjectIds(debugData.protagonist.character)"></p>
                    </div>
                  </div>
                  <p v-if="!debugData.protagonist.description && !debugData.protagonist.goal && !debugData.protagonist.character" class="text-xs italic text-slate-600">No character details yet. Click "Edit Character" to add them.</p>
@@ -448,7 +448,7 @@ function handlePacingInput(event: Event) {
                  </div>
                  <span class="px-2 py-0.5 rounded bg-black/40 text-xs font-black text-emerald-500 uppercase border border-emerald-500/20">{{ quest.exp_reward }} XP</span>
                </div>
-               <p class="text-xs text-slate-400 leading-relaxed line-clamp-2 mb-3">{{ quest.description }}</p>
+               <p class="text-xs text-slate-400 leading-relaxed line-clamp-2 mb-3" v-html="formatObjectIds(quest.description)"></p>
                <div class="flex items-center gap-2">
                   <div class="flex-grow h-1 bg-black/40 rounded-full overflow-hidden">
                      <div class="h-full bg-emerald-500/40" :style="{ width: quest.status === 'completed' ? '100%' : '0%' }"></div>
@@ -482,8 +482,8 @@ function handlePacingInput(event: Event) {
                      'bg-orange-700/20 border-orange-700/30 text-orange-700'
                    ]">{{ award.tier }}</span>
                  </div>
-                 <p class="text-xs text-slate-400 leading-relaxed">{{ award.description }}</p>
-                 <p class="text-xs text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
+                 <p class="text-xs text-slate-400 leading-relaxed" v-html="formatObjectIds(award.description)"></p>
+                 <p class="text-xs text-slate-500 italic mt-1" v-html="'Requirement: ' + formatObjectIds(award.requirement)"></p>
                </div>
              </div>
            </div>

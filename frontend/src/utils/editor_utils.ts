@@ -104,5 +104,5 @@ export function formatObjectIds(text: string | null | undefined): string {
   if (!text) return ''
   const withNewlines = fixNewlines(text)
   const escaped = escapeHtml(withNewlines)
-  return escaped.replace(/##([A-Za-z0-9_-]+)/g, '<span class="object-id-tag">($1)</span>')
+  return escaped.replace(/##([A-Za-z0-9_-]+)/g, '<span class="object-id-tag">$1</span>')
 }

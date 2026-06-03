@@ -249,20 +249,6 @@ const textLogPreviewClass = computed(() => {
   }
 })
 
-const textLogPreviewCardClass = computed(() => {
-  const fmt = String(localForm.value.text_log_format || 'DOCUMENT').toUpperCase()
-  switch (fmt) {
-    case 'BOOK':
-      return 'border-orange-300/25 bg-gradient-to-b from-amber-200/10 via-amber-100/5 to-slate-950/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-    case 'SCROLL':
-      return 'border-yellow-200/30 bg-gradient-to-b from-yellow-100/10 via-amber-100/5 to-slate-950/20 shadow-[inset_0_1px_0_rgba(255,244,200,0.14)]'
-    case 'SIGN':
-      return 'border-cyan-300/30 bg-gradient-to-b from-cyan-200/10 via-sky-200/5 to-slate-950/20 shadow-[inset_0_1px_0_rgba(180,255,255,0.12)]'
-    case 'DOCUMENT':
-    default:
-      return 'border-amber-500/20 bg-gradient-to-b from-amber-500/8 via-amber-500/4 to-slate-950/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-  }
-})
 </script>
 
 <template>
@@ -748,10 +734,6 @@ const textLogPreviewCardClass = computed(() => {
                     :class-name="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all', textLogPreviewClass].join(' ')"
                     placeholder="Readable note text shown to the player."
                   />
-                  <!-- Preview -->
-                  <div v-if="localForm.text_log_content" :class="['mt-2 p-3 rounded-xl border text-left whitespace-pre-line', textLogPreviewCardClass]">
-                    <p :class="textLogPreviewClass">{{ localForm.text_log_content }}</p>
-                  </div>
                   <button
                     v-if="localForm.name"
                     @click="handleGenerateTextLogContent"

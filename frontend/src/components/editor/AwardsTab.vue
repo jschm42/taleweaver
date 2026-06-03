@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import { formatObjectIds } from '@/utils/editor_utils'
 import bronzeTrophy from '@/assets/svg/bronze-award-trophy.svg'
 import silverTrophy from '@/assets/svg/silver-award-trophy.svg'
 import goldTrophy from '@/assets/svg/gold-award-trophy.svg'
@@ -144,8 +145,8 @@ function confirmDeleteAward() {
               'bg-orange-700/20 border-orange-700/30 text-orange-700'
             ]">{{ award.tier }}</span>
           </div>
-          <p class="text-xs text-slate-400 leading-relaxed">{{ award.description }}</p>
-          <p class="text-xs text-slate-500 italic mt-1">Requirement: {{ award.requirement }}</p>
+          <p class="text-xs text-slate-400 leading-relaxed" v-html="formatObjectIds(award.description)"></p>
+          <p class="text-xs text-slate-500 italic mt-1" v-html="'Requirement: ' + formatObjectIds(award.requirement)"></p>
           <div class="flex justify-end gap-3 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <button class="text-[10px] font-black text-slate-400 hover:text-emerald-300 uppercase" @click="openEditModal(award)">Edit</button>
             <button class="text-[10px] font-black text-slate-500 hover:text-red-300 uppercase" @click="requestDeleteAward(award.key)">Delete</button>
