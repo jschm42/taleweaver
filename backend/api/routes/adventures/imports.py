@@ -316,3 +316,13 @@ async def import_adventure_adv(
         logger.exception("ADV Import failed")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
+
+@router.get("/generation-sayings", response_model=list[str])
+async def get_generation_sayings(
+    current_user: User = Depends(get_current_user),
+):
+    """Returns the list of humorous generation sayings."""
+    from backend.core.generation_sayings import GenerationSayings
+    return GenerationSayings.SAYINGS
+
+

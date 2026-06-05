@@ -24,6 +24,8 @@ import ImportConflictModal from '@/components/portal/ImportConflictModal.vue'
 import SetupWarningModal from '@/components/portal/SetupWarningModal.vue'
 import ExportProgressModal from '@/components/portal/ExportProgressModal.vue'
 import CloneProgressModal from '@/components/portal/CloneProgressModal.vue'
+import GenerationProgressModal from '@/components/portal/GenerationProgressModal.vue'
+
 
 const { route, router, activeSection, pushSection } = usePortalSectionRouting()
 const showAboutModal = ref(false)
@@ -32,6 +34,15 @@ const hasCheckedSetup = ref(false)
 const showDeleteAllAdventuresConfirm = ref(false)
 const showDeleteAllSessionsConfirm = ref(false)
 const isResuming = ref(false)
+const activeProgressAdventure = ref<{ id: string; title: string } | null>(null)
+
+function openProgressModal(pending: any) {
+  activeProgressAdventure.value = {
+    id: pending.adventureId,
+    title: pending.title
+  }
+}
+
 
 const {
   templates,
@@ -301,6 +312,7 @@ onUnmounted(() => {
               @export-adv="exportAdventureAdv"
               @delete="confirmDeleteTemplate"
               @dismiss-warning="dismissWarning"
+              @click-pending="openProgressModal"
             />
           </div>
 
@@ -425,6 +437,13 @@ onUnmounted(() => {
         :stage="cloneProgressState.stage"
         :error-msg="cloneProgressState.errorMsg"
         @close="cloneProgressState.isOpen = false"
+      />
+
+      <GenerationProgressModal
+        v-if="activeProgressAdventure"
+        :adventure-id="activeProgressAdventure.id"
+        :adventure-title="activeProgressAdventure.title"
+        @close="activeProgressAdventure = null"
       />
 
       <div

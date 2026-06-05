@@ -296,4 +296,156 @@ async def test_world_generator_image_fallback_with_assets_path(monkeypatch):
     # I'll just check that my code changes are correct via the LLM tests above which cover the core stability.
     
     # Let's try a simpler mock for WorldGenerator logic if possible.
-    # Actually, the LLM tests are the most critical for the user's recent errors.
+
+@pytest.mark.asyncio
+async def test_minimax_fallback_injects_schema(monkeypatch):
+    """Test that MiniMax uses the prompt-injected JSON mode fallback with response_format=None."""
+    user = _make_user(encrypted_api_keys={"minimax": "key"})
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, provider: "sk-minimax")
+    router = GameMasterLLM(user, provider="minimax")
+
+    captured = {}
+    async def fake_acompletion(**kwargs):
+        captured.update(kwargs)
+        class _Msg: content = '{"name": "Mini", "age": 27}'
+        class _Choice: message = _Msg(); finish_reason = "stop"
+        class _Resp:
+            choices = [_Choice()]
+            @staticmethod
+            def model_dump(): return {}
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.aexecute_complex_task(
+        system_prompt="Base sys",
+        user_prompt="prompt",
+        response_model=MockSchema,
+        model="MiniMax-M3"
+    )
+
+    assert out.name == "Mini"
+    assert out.age == 27
+    assert "SCHEMA:" in captured["messages"][0]["content"]
+    assert "response_format" not in captured
+
+def test_repair_json():
+    # 1. Test trailing commas
+    assert GameMasterLLM._repair_json('{"a": 1,}') == '{"a": 1}'
+    assert GameMasterLLM._repair_json('{"a": [1, 2,],}') == '{"a": [1, 2]}'
+    
+    # 2. Test single quotes around keys
+    assert GameMasterLLM._repair_json("{'key': 'value'}") == '{"key": "value"}'
+    assert GameMasterLLM._repair_json("{'key_name': 123}") == '{"key_name": 123}'
+    
+    # 3. Test single quotes around values containing escaped characters / apostrophes
+    assert GameMasterLLM._repair_json("{'key': 'don\\'t'}") == '{"key": "don\'t"}'
+    assert GameMasterLLM._repair_json("{'comment': 'yes, it\\'s fine'}") == '{"comment": "yes, it\'s fine"}'
+
+def test_normalize_voice_tags():
+    # 1. Unbracketed tag followed by newline
+    raw = "curious\n\nDu machst auf dem Absatz kehrt."
+    assert GameMasterLLM.normalize_voice_tags(raw) == "[curious] Du machst auf dem Absatz kehrt."
+
+    # 2. Bracketed tag followed by newline
+    raw = "[curious]\n\nDu machst auf dem Absatz kehrt."
+    assert GameMasterLLM.normalize_voice_tags(raw) == "[curious] Du machst auf dem Absatz kehrt."
+
+    # 3. Bracketed tag with colon and spaces
+    raw = "[curious]:   Du machst auf dem Absatz kehrt."
+    assert GameMasterLLM.normalize_voice_tags(raw) == "[curious] Du machst auf dem Absatz kehrt."
+
+    # 4. Unbracketed tag with spaces and newlines
+    raw = "curious : \n\n Du machst auf dem Absatz kehrt."
+    assert GameMasterLLM.normalize_voice_tags(raw) == "[curious] Du machst auf dem Absatz kehrt."
+
+    # 5. Case insensitivity (output tag should be lowercase)
+    raw = "cUrIoUs\n\nDu machst..."
+    assert GameMasterLLM.normalize_voice_tags(raw) == "[curious] Du machst..."
+
+    # 6. Regular prose starting with tag but no line boundary (should NOT be matched/corrupted)
+    raw = "Curious about the secret door, he looked around."
+    assert GameMasterLLM.normalize_voice_tags(raw) == raw
+
+    # 7. Unrecognized tag (should NOT be matched)
+    raw = "mysterious\n\nDu machst..."
+    assert GameMasterLLM.normalize_voice_tags(raw) == raw
+
+@pytest.mark.asyncio
+async def test_clean_stream_voice_tags():
+    class MockDelta:
+        def __init__(self, content):
+            self.content = content
+        def model_copy(self, update=None):
+            return MockDelta(update.get("content", self.content) if update else self.content)
+
+    class MockChoice:
+        def __init__(self, content):
+            self.delta = MockDelta(content)
+
+    class MockChunk:
+        def __init__(self, content):
+            self.choices = [MockChoice(content)]
+
+    # Stream yielding: "curious", "\n", "\n", "Du machst ", "auf dem Absatz kehrt."
+    async def mock_stream():
+        yield MockChunk("curious")
+        yield MockChunk("\n")
+        yield MockChunk("\n")
+        yield MockChunk("Du machst ")
+        yield MockChunk("auf dem Absatz kehrt.")
+
+    # We wrap the mock_stream in _clean_stream_voice_tags
+    cleaned_stream = GameMasterLLM._clean_stream_voice_tags(mock_stream())
+
+    results = []
+    async for chunk in cleaned_stream:
+        results.append(chunk.choices[0].delta.content)
+
+    # Since total buffer was less than 100 characters, it should normalize when stream ends
+    # and yield the full normalized prefix in the last chunk.
+    assert len(results) == 1
+    assert results[0] == "[curious] Du machst auf dem Absatz kehrt."
+
+
+def test_extract_thinking():
+    # 1. Test basic <think> block extraction
+    content = "<think>Let me see.</think>Hello world"
+    assert GameMasterLLM.extract_thinking(content) == "Let me see."
+
+    # 2. Test dangling <think> tag (incomplete response)
+    content_dangling = "<think>Let me think more..."
+    assert GameMasterLLM.extract_thinking(content_dangling) == "Let me think more..."
+
+    # 3. Test multiple <think> blocks
+    content_multiple = "<think>First thought.</think> Intermediate text <think>Second thought.</think> Final text"
+    assert GameMasterLLM.extract_thinking(content_multiple) == "First thought.\nSecond thought."
+
+    # 4. Test explicit reasoning_content in message object
+    class MockMessage:
+        def __init__(self, reasoning_content=None, provider_specific_fields=None):
+            if reasoning_content is not None:
+                self.reasoning_content = reasoning_content
+            if provider_specific_fields is not None:
+                self.provider_specific_fields = provider_specific_fields
+
+    msg_obj = MockMessage(reasoning_content="Thinking from attribute")
+    assert GameMasterLLM.extract_thinking("Hello", msg_obj) == "Thinking from attribute"
+
+    # 5. Test explicit reasoning_content in message dict
+    msg_dict = {"reasoning_content": "Thinking from dict"}
+    assert GameMasterLLM.extract_thinking("Hello", msg_dict) == "Thinking from dict"
+
+    # 6. Test nested reasoning_content in provider_specific_fields
+    msg_nested = MockMessage(provider_specific_fields={"reasoning_content": "Thinking from nested fields"})
+    assert GameMasterLLM.extract_thinking("Hello", msg_nested) == "Thinking from nested fields"
+
+    # 7. Test nested reasoning_content in dict
+    msg_dict_nested = {"provider_specific_fields": {"reasoning_content": "Thinking from dict nested"}}
+    assert GameMasterLLM.extract_thinking("Hello", msg_dict_nested) == "Thinking from dict nested"
+
+    # 8. Test no thinking fields or tags
+    assert GameMasterLLM.extract_thinking("Hello world") == ""
+
+
+

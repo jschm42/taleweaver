@@ -116,12 +116,7 @@ def _validate_t2i_prerequisites(
 
 
 async def _publish_generation_status(db: AsyncSession, adventure: Optional[AdventureTemplate], status: str) -> None:
-    """Publish live status text and commit so that concurrent polling requests can see the update.
-
-    Using commit() (not flush()) is intentional: the status endpoint runs in a separate
-    SQLAlchemy session and cannot see un-committed rows.  Committing here is safe because
-    generation status is idempotent and can always be overwritten by the next step.
-    """
+    """Publish live status text and commit so that concurrent polling requests can see the update."""
     if not adventure:
         return
         
@@ -131,9 +126,55 @@ async def _publish_generation_status(db: AsyncSession, adventure: Optional[Adven
         raise GenerationCancelled("Generation was cancelled by the user.")
         
     adventure.creation_status = status  # type: ignore
+    
+    # Append status log
+    import datetime
+    logs = list(adventure.generation_logs or [])
+    logs.append({
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "type": "status",
+        "content": status
+    })
+    adventure.generation_logs = logs
+    
     await db.commit()
     # Re-attach so the caller can still use the object after the commit.
     await db.refresh(adventure)
+
+async def _log_image_generation(db: AsyncSession, adventure: Optional[AdventureTemplate], prompt: str, image_url: str):
+    """Log AI-generated image prompt and URL."""
+    if not adventure or not image_url or image_url.startswith("assets/"):
+        return
+    import datetime
+    logs = list(adventure.generation_logs or [])
+    logs.append({
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "type": "image_generation",
+        "content": prompt,
+        "image_url": image_url
+    })
+    adventure.generation_logs = logs
+    await db.commit()
+    await db.refresh(adventure)
+
+
+async def _log_reused_asset(db: AsyncSession, adventure: Optional[AdventureTemplate], entity_name: str, image_url: str):
+    """Log reused/copied visual asset."""
+    if not adventure or not image_url or image_url.startswith("assets/"):
+        return
+    import datetime
+    logs = list(adventure.generation_logs or [])
+    logs.append({
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "type": "image_generation",
+        "content": f"Reused source asset: {entity_name}",
+        "image_url": image_url
+    })
+    adventure.generation_logs = logs
+    await db.commit()
+    await db.refresh(adventure)
+
+
 
 
 async def _publish_generation_status_with_callback(
@@ -913,6 +954,8 @@ class WorldGenerator:
         # 1. Update Status
         adventure = await db.get(AdventureTemplate, template_id)
         if adventure:
+            adventure.generation_logs = []
+            await db.commit()
             await _publish_generation_status_with_callback(
                 db,
                 adventure,
@@ -1481,6 +1524,7 @@ class WorldGenerator:
                         reused_cover_url = _resolve_source_asset_image("cover", requested_cover_source_id)
                     if reused_cover_url:
                         cover_url = reused_cover_url
+                        await _log_reused_asset(db, adventure, "Adventure Cover", cover_url)
                     else:
                         image_attempts += 1
                         cover_url = await MediaEngine.generate_adventure_cover(
@@ -1605,13 +1649,16 @@ class WorldGenerator:
                 }
 
             # Unified Portrait Logic
+            reused_protagonist_url = _resolve_source_asset_image("protagonist", prot.get("source_asset_id"))
             image_url = (
                 (existing_images or {}).get("PROTAGONIST")
-                or _resolve_source_asset_image("protagonist", prot.get("source_asset_id"))
+                or reused_protagonist_url
                 or prot.get("profile_image")
             )
             if not _is_usable_image_url(image_url):
                 image_url = None
+            if image_url and image_url == reused_protagonist_url:
+                await _log_reused_asset(db, adventure, f"Protagonist ({avatar.name})", image_url)
             if not image_url or image_url.startswith("assets/"): # If it's a relative path from manifest, it should have been in existing_images
                 if user and gen_protagonist_image:
                     await _publish_generation_status_with_callback(
@@ -1653,6 +1700,7 @@ class WorldGenerator:
                         image_url = None
                     if image_url:
                         image_successes += 1
+                        await _log_image_generation(db, adventure, prompt, image_url)
                 
                 if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder
@@ -1676,13 +1724,16 @@ class WorldGenerator:
                 continue
             seen_scene_ids.add(s["id"])
             
+            reused_scene_url = _resolve_source_asset_image("scene", s.get("source_asset_id"))
             image_url = (
                 (existing_images or {}).get(s["id"])
-                or _resolve_source_asset_image("scene", s.get("source_asset_id"))
+                or reused_scene_url
                 or s.get("image_url")
             )
             if not _is_usable_image_url(image_url):
                 image_url = None
+            if image_url and image_url == reused_scene_url:
+                await _log_reused_asset(db, adventure, f"Scene: {s.get('name')}", image_url)
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_scenes:
                     await _publish_generation_status_with_callback(
@@ -1717,6 +1768,7 @@ class WorldGenerator:
                         image_url = None
                     if image_url:
                         image_successes += 1
+                        await _log_image_generation(db, adventure, prompt, image_url)
                 
                 if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder
@@ -1800,14 +1852,17 @@ class WorldGenerator:
                     duplicate_image_url = npc_image_cache.get(prev["id"])
                     break
             
+            reused_npc_url = _resolve_source_asset_image("npc", n.get("source_asset_id"))
             image_url = (
                 duplicate_image_url
                 or (existing_images or {}).get(n["id"])
-                or _resolve_source_asset_image("npc", n.get("source_asset_id"))
+                or reused_npc_url
                 or n.get("image_url")
             )
             if not _is_usable_image_url(image_url):
                 image_url = None
+            if image_url and image_url == reused_npc_url:
+                await _log_reused_asset(db, adventure, f"NPC: {n.get('name')}", image_url)
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_npc:
                     await _publish_generation_status_with_callback(
@@ -1844,6 +1899,7 @@ class WorldGenerator:
                         image_url = None
                     if image_url:
                         image_successes += 1
+                        await _log_image_generation(db, adventure, prompt, image_url)
                 
                 if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder for NPCs
@@ -2031,14 +2087,17 @@ class WorldGenerator:
                     duplicate_image_url = object_image_cache.get(prev["id"])
                     break
 
+            reused_object_url = _resolve_source_asset_image("object", o.get("source_asset_id"))
             image_url = (
                 duplicate_image_url
                 or (existing_images or {}).get(o["id"])
-                or _resolve_source_asset_image("object", o.get("source_asset_id"))
+                or reused_object_url
                 or o.get("image_url")
             )
             if not _is_usable_image_url(image_url):
                 image_url = None
+            if image_url and image_url == reused_object_url:
+                await _log_reused_asset(db, adventure, f"Item: {o.get('name')}", image_url)
             if not image_url or image_url.startswith("assets/"):
                 if user and gen_items:
                     await _publish_generation_status_with_callback(
@@ -2072,6 +2131,7 @@ class WorldGenerator:
                         image_url = None
                     if image_url:
                         image_successes += 1
+                        await _log_image_generation(db, adventure, prompt, image_url)
                 
                 if not image_url or image_url.startswith("assets/"):
                     # Fallback to high-quality placeholder for Items

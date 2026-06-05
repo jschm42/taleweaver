@@ -26,6 +26,7 @@ defineEmits<{
   (e: 'export-adv', templateId: string, title: string): void
   (e: 'delete', templateId: string, title: string): void
   (e: 'dismiss-warning', templateId: string): void
+  (e: 'click-pending', pending: any): void
 }>()
 </script>
 
@@ -51,6 +52,7 @@ defineEmits<{
       :loading-word-index="loadingWordIndex"
       @remove-failed="(id, kind) => $emit('remove-failed-pending', id, kind)"
       @cancel="(id) => $emit('cancel-pending', id)"
+      @click="$emit('click-pending', pending)"
     />
 
     <AdventureTemplateCard

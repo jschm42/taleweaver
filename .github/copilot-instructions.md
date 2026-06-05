@@ -116,3 +116,31 @@ To understand the internal processes of TaleWeaver, refer to the following Merma
     * not blocking unrelated mention-only text,
     * preserving hypothetical (non-explicit) scene-transition behavior,
     * preserving generator confirmation/retry behavior.
+
+---
+
+## 8. Agent-Friendly Command Execution (Avoiding Terminal Hangs)
+
+To prevent terminal commands executed by AI agents (like the Gemini agent in Antigravity IDE) from hanging or consuming excessive resources, adhere to these guidelines:
+
+* **Avoid Terminal Pagers (Standard Trap):**
+  * When running interactive commands that paginate output (like `git diff` or `git log`), Git automatically invokes `less`, which blocks the terminal and waits for human input (like spacebar or `q`). Because the agent is not a human, it will hang indefinitely on `"Working"`.
+  * **Solution:** Always run Git commands with the `--no-pager` flag, or limit output explicitly.
+    * Use: `git --no-pager diff <file>` instead of `git diff <file>`.
+    * Use: `git --no-pager log -n 5` instead of `git log`.
+  * *Tip:* You can also permanently disable the pager for the local repository by running `git config core.pager ''`.
+* **Prevent Token Flooding:**
+  * Avoid spitting out huge amounts of raw text into the console (e.g., dumping a massive JSON file or a huge diff). The agent has to read, process, and compress this context, which consumes massive amounts of computation time and tokens, slowing down response times.
+  * **Solution:** Limit commands to only the necessary output.
+    * Use: `head -n 50 <file>` instead of `cat <file>` for large files.
+* **Use IDE Features Instead of Terminal Output:**
+  * Instead of asking the agent to read raw terminal diffs, leverage Antigravity's native visual "Review Changes" area in the agent panel to review changes visually.
+
+### Quick Command Guide:
+
+| Command (The Trap) | Agent-Friendly Alternative | Reason |
+| :--- | :--- | :--- |
+| `git diff <file>` | `git --no-pager diff <file>` | Prevents the terminal from blocking/waiting for key presses. |
+| `git log` | `git --no-pager log -n 5` | Bypasses the pager and prevents endless output. |
+| `cat huge_file.json` | `head -n 50 huge_file.json` | Protects the agent from immediate token overload. |
+

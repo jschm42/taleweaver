@@ -10,9 +10,27 @@ from pydantic import BaseModel, ValidationError
 from backend.core.llm_logger import log_llm_interaction, log_structured_event
 from backend.core.security import encryption_util
 from backend.models.user import User
+from backend.core.voice_tags import VOICE_TAG_SET
 
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
+
+# Compile regex pattern to match voice tags.
+# Sort by length descending to match longest first
+_sorted_tags = sorted(VOICE_TAG_SET, key=len, reverse=True)
+_tag_pattern = "|".join(re.escape(t) for t in _sorted_tags)
+
+BRACKETED_RE = re.compile(
+    rf"^\s*\[(?P<tag>{_tag_pattern})\]\s*:?\s*(?P<rest>.*)",
+    re.IGNORECASE | re.DOTALL
+)
+
+UNBRACKETED_RE = re.compile(
+    rf"^\s*(?P<tag>{_tag_pattern})\s*:?\s*\n\s*(?P<rest>.*)",
+    re.IGNORECASE | re.DOTALL
+)
+
+
 
 class GameMasterLLM:
     DEFAULT_SMALL_MAX_TOKENS = 4096
@@ -134,6 +152,249 @@ class GameMasterLLM:
             return content[first_json_char : last_json_char + 1]
             
         return content
+
+    @staticmethod
+    def _repair_json(content: str) -> str:
+        """
+        Attempts to repair common minor JSON syntax errors like trailing commas
+        and single quotes around keys/values.
+        """
+        if not content:
+            return ""
+        
+        # 1. Strip trailing commas before closing braces or brackets
+        content = re.sub(r',\s*([\}\]])', r'\1', content)
+        
+        # 2. Try parsing to see if it is already valid
+        try:
+            json.loads(content)
+            return content
+        except json.JSONDecodeError:
+            pass
+            
+        # 3. Handle single quotes for keys (e.g. 'key': -> "key":)
+        content = re.sub(r"'\s*([a-zA-Z0-9_-]+)\s*'\s*:", r'"\1":', content)
+        
+        # 4. Handle single quotes for string values (e.g. : 'value' -> : "value")
+        def _replace_val(match):
+            val = match.group(1)
+            # Escape double quotes since they will be wrapped in double quotes now
+            val = val.replace('"', r'\"')
+            # Unescape single quotes
+            val = val.replace(r"\'", "'")
+            return f': "{val}"'
+            
+        content = re.sub(r":\s*'([^'\\]*(?:\\.[^'\\]*)*)'", _replace_val, content)
+        
+        return content
+
+    @staticmethod
+    def clean_thinking_tags(text: str) -> str:
+        """Strip <think>...</think> tags and the reasoning text inside them."""
+        if not text:
+            return ""
+        # Remove completed think blocks
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        # Also strip any dangling open think tag to the end of the text (in case of truncation/interruption)
+        cleaned = re.sub(r"<think>.*", "", cleaned, flags=re.DOTALL)
+        return cleaned.strip()
+
+    @staticmethod
+    def extract_thinking(content: str, message: Any = None) -> str:
+        """Extract thinking/reasoning text from the message content or reasoning fields."""
+        # Check explicit reasoning field first
+        reasoning = GameMasterLLM._extract_reasoning_content(message) if message else ""
+        if reasoning and reasoning.strip():
+            return reasoning.strip()
+
+        # Fallback to extracting <think>...</think> blocks from content
+        if content and "<think>" in content:
+            matches = re.findall(r"<think>(.*?)</think>", content, flags=re.DOTALL)
+            if matches:
+                return "\n".join(matches).strip()
+            # Handle incomplete/dangling think tags
+            m = re.search(r"<think>(.*)", content, flags=re.DOTALL)
+            if m:
+                return m.group(1).strip()
+        return ""
+
+    @staticmethod
+    async def _append_generation_log_async(adventure_id: Optional[str], log_type: str, content: str, image_url: Optional[str] = None):
+        """Append a status, thinking, or image generation log to the adventure template's generation_logs list."""
+        if not adventure_id:
+            return
+        try:
+            from backend.core.database import AsyncSessionLocal
+            from backend.models.adventure_template import AdventureTemplate
+            from sqlalchemy import select
+            import datetime
+
+            async with AsyncSessionLocal() as db:
+                res = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == adventure_id))
+                adv = res.scalars().first()
+                if adv:
+                    logs = list(adv.generation_logs or [])
+                    logs.append({
+                        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "type": log_type,
+                        "content": content,
+                        "image_url": image_url
+                    })
+                    adv.generation_logs = logs
+                    await db.commit()
+        except Exception as e:
+            logger.warning("Failed to append generation log: %s", e)
+
+    @staticmethod
+    def normalize_voice_tags(text: str) -> str:
+        """
+        Normalizes voice/emotion tags at the beginning of the text to bracketed format [tag]
+        and removes any unnecessary newlines between the tag and the narration text.
+        """
+        if not text:
+            return text
+
+        # Try matching bracketed first
+        m = BRACKETED_RE.match(text)
+        if m:
+            tag = m.group("tag")
+            rest = m.group("rest")
+            return f"[{tag.lower()}] {rest.lstrip()}".strip()
+
+        # Try matching unbracketed followed by line boundary
+        m = UNBRACKETED_RE.match(text)
+        if m:
+            tag = m.group("tag")
+            rest = m.group("rest")
+            return f"[{tag.lower()}] {rest.lstrip()}".strip()
+
+        return text
+
+    @staticmethod
+    async def _clean_stream_voice_tags(stream):
+        """Async generator that buffers the start of the stream and normalizes voice tags."""
+        buffer = ""
+        prefix_processed = False
+        last_chunk = None
+
+        async for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta.content
+            except (AttributeError, IndexError, TypeError):
+                delta = None
+
+            if not isinstance(delta, str) or not delta:
+                yield chunk
+                continue
+
+            if prefix_processed:
+                yield chunk
+                continue
+
+            buffer += delta
+            last_chunk = chunk
+
+            if len(buffer) >= 100:
+                normalized = GameMasterLLM.normalize_voice_tags(buffer)
+                try:
+                    chunk.choices[0].delta.content = normalized
+                except Exception:
+                    try:
+                        delta_obj = chunk.choices[0].delta
+                        if hasattr(delta_obj, "model_copy"):
+                            new_delta = delta_obj.model_copy(update={"content": normalized})
+                        else:
+                            new_delta = delta_obj.copy(update={"content": normalized})
+                        chunk.choices[0].delta = new_delta
+                    except Exception as e:
+                        logger.warning("Failed to modify streaming chunk content: %s", e)
+                yield chunk
+                prefix_processed = True
+
+        if not prefix_processed and last_chunk is not None:
+            normalized = GameMasterLLM.normalize_voice_tags(buffer)
+            try:
+                last_chunk.choices[0].delta.content = normalized
+            except Exception:
+                try:
+                    delta_obj = last_chunk.choices[0].delta
+                    if hasattr(delta_obj, "model_copy"):
+                        new_delta = delta_obj.model_copy(update={"content": normalized})
+                    else:
+                        new_delta = delta_obj.copy(update={"content": normalized})
+                    last_chunk.choices[0].delta = new_delta
+                except Exception as e:
+                    logger.warning("Failed to modify streaming chunk content: %s", e)
+            yield last_chunk
+
+    @staticmethod
+    async def _clean_stream_thinking(stream):
+        """Async generator that strips <think>...</think> blocks from stream chunks on-the-fly."""
+        in_think = False
+        buffer = ""
+        
+        async for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta.content
+            except (AttributeError, IndexError, TypeError):
+                delta = None
+                
+            if not isinstance(delta, str) or not delta:
+                yield chunk
+                continue
+                
+            buffer += delta
+            cleaned_delta = ""
+            
+            while buffer:
+                if not in_think:
+                    think_idx = buffer.find("<think>")
+                    if think_idx != -1:
+                        cleaned_delta += buffer[:think_idx]
+                        in_think = True
+                        buffer = buffer[think_idx + 7:]
+                    else:
+                        partial_match = False
+                        for i in range(1, 7):
+                            tag_part = "<think"[:i]
+                            if buffer.endswith(tag_part):
+                                keep_len = len(buffer) - i
+                                cleaned_delta += buffer[:keep_len]
+                                buffer = buffer[keep_len:]
+                                partial_match = True
+                                break
+                        if not partial_match:
+                            cleaned_delta += buffer
+                            buffer = ""
+                else:
+                    end_idx = buffer.find("</think>")
+                    if end_idx != -1:
+                        in_think = False
+                        buffer = buffer[end_idx + 8:]
+                    else:
+                        partial_match = False
+                        for i in range(1, 8):
+                            tag_part = "</think"[:i]
+                            if buffer.endswith(tag_part):
+                                buffer = buffer[-i:]
+                                partial_match = True
+                                break
+                        if not partial_match:
+                            buffer = ""
+            
+            try:
+                chunk.choices[0].delta.content = cleaned_delta
+            except Exception:
+                try:
+                    delta_obj = chunk.choices[0].delta
+                    if hasattr(delta_obj, "model_copy"):
+                        new_delta = delta_obj.model_copy(update={"content": cleaned_delta})
+                    else:
+                        new_delta = delta_obj.copy(update={"content": cleaned_delta})
+                    chunk.choices[0].delta = new_delta
+                except Exception as e:
+                    logger.warning("Failed to modify streaming chunk content: %s", e)
+            yield chunk
 
     @staticmethod
     def _extract_reasoning_content(message: Any) -> str:
@@ -519,6 +780,8 @@ class GameMasterLLM:
         response = self._completion_with_openrouter_fallback(kwargs)
 
         result = response.choices[0].message.content or ""
+        result = self.clean_thinking_tags(result)
+        result = self.normalize_voice_tags(result)
         
         log_llm_interaction(
             model=model,
@@ -612,6 +875,8 @@ class GameMasterLLM:
         response = await self._acompletion_with_openrouter_fallback(kwargs)
         
         result = response.choices[0].message.content or ""
+        result = self.clean_thinking_tags(result)
+        result = self.normalize_voice_tags(result)
         
         log_llm_interaction(
             model=model,
@@ -703,7 +968,9 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        return await self._acompletion_with_openrouter_fallback(kwargs)
+        stream = await self._acompletion_with_openrouter_fallback(kwargs)
+        stream = self._clean_stream_thinking(stream)
+        return self._clean_stream_voice_tags(stream)
 
     async def aexecute_complex_task(
         self,
@@ -752,6 +1019,7 @@ class GameMasterLLM:
                 f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
                 f"DO NOT wrap the response in a list (no square brackets at the top level).\n"
                 f"DO NOT include any markdown formatting or text outside the JSON.\n"
+                f"CRITICAL: Do NOT translate the JSON key names. The JSON keys MUST be exactly identical to the schema keys in English.\n"
                 f"SCHEMA:\n{schema_json}"
             )
             messages[0]["content"] = system_prompt
@@ -761,9 +1029,12 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "response_format": {"type": "json_object"} if use_json_mode_fallback else response_model,
+            "response_format": ({"type": "json_object"} if use_json_mode_fallback and not is_minimax else (None if is_minimax else response_model)),
             "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking and allow_thinking else 0),
         }
+        if kwargs.get("response_format") is None:
+            kwargs.pop("response_format", None)
+
         if allow_thinking:
             self._apply_thinking_settings(kwargs)
 
@@ -818,6 +1089,12 @@ class GameMasterLLM:
             response = await self._retry_blank_json_content_async(kwargs, response)
             content = response.choices[0].message.content
         
+        # Log thinking/reasoning if present
+        if adventure_id:
+            thinking_text = self.extract_thinking(content or "", response.choices[0].message)
+            if thinking_text:
+                await self._append_generation_log_async(adventure_id, "thinking", thinking_text)
+        
         log_llm_interaction(
             model=model,
             provider=self.provider,
@@ -845,12 +1122,14 @@ class GameMasterLLM:
             raise ValueError("No content returned from LLM for complex task.")
             
         try:
+            content = self.clean_thinking_tags(content)
             content = self._clean_json_string(content)
             if not content:
                 logger.error("LLM returned content that was empty after JSON cleanup. Raw response: %s", response.model_dump())
                 if finish_reason == "length":
                     raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
                 raise ValueError("No content returned from LLM for complex task.")
+            content = self._repair_json(content)
             data = json.loads(content)
             if isinstance(data, list) and len(data) > 0:
                 logger.warning(f"LLM returned a list for {response_model.__name__}. Taking first element.")
@@ -920,6 +1199,7 @@ class GameMasterLLM:
                 f"\n\nCRITICAL: You MUST respond with a single JSON object matching this schema exactly.\n"
                 f"DO NOT wrap the response in a list (no square brackets at the top level).\n"
                 f"DO NOT include any markdown formatting or text outside the JSON.\n"
+                f"CRITICAL: Do NOT translate the JSON key names. The JSON keys MUST be exactly identical to the schema keys in English.\n"
                 f"SCHEMA:\n{schema_json}"
             )
             messages[0]["content"] = system_prompt
@@ -929,9 +1209,12 @@ class GameMasterLLM:
         kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "response_format": {"type": "json_object"} if use_json_mode_fallback else response_model,
+            "response_format": ({"type": "json_object"} if use_json_mode_fallback and not is_minimax else (None if is_minimax else response_model)),
             "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking and allow_thinking else 0),
         }
+        if kwargs.get("response_format") is None:
+            kwargs.pop("response_format", None)
+
         if allow_thinking:
             self._apply_thinking_settings(kwargs)
 
@@ -1016,12 +1299,14 @@ class GameMasterLLM:
             raise ValueError("No content returned from LLM for complex task.")
             
         try:
+            content = self.clean_thinking_tags(content)
             content = self._clean_json_string(content)
             if not content:
                 logger.error("LLM returned content that was empty after JSON cleanup. Raw response: %s", response.model_dump())
                 if finish_reason == "length":
                     raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
                 raise ValueError("No content returned from LLM for complex task.")
+            content = self._repair_json(content)
             data = json.loads(content)
             return response_model(**data)
         except json.JSONDecodeError as exc:

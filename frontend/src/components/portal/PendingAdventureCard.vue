@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
 import { X } from 'lucide-vue-next'
+import { GENERATION_SAYINGS } from '@/composables/useApi'
 
 const props = defineProps<{
   pending: {
@@ -15,11 +17,33 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'removeFailed', adventureId: string, kind: 'creation' | 'import'): void
   (e: 'cancel', adventureId: string): void
+  (e: 'click'): void
 }>()
+
+const currentSaying = ref(GENERATION_SAYINGS[Math.floor(Math.random() * GENERATION_SAYINGS.length)])
+let sayingTimer: number | null = null
+
+function updateSaying() {
+  const randomIndex = Math.floor(Math.random() * GENERATION_SAYINGS.length)
+  currentSaying.value = GENERATION_SAYINGS[randomIndex]
+}
+
+onMounted(() => {
+  sayingTimer = window.setInterval(updateSaying, 5000)
+})
+
+onUnmounted(() => {
+  if (sayingTimer) {
+    clearInterval(sayingTimer)
+  }
+})
 </script>
 
 <template>
-  <div class="adventure-card flex flex-col rounded-xl border border-white/10 bg-aether-surface/30 relative overflow-hidden group">
+  <div 
+    class="adventure-card flex flex-col rounded-xl border border-white/10 bg-aether-surface/30 relative overflow-hidden group cursor-pointer hover:border-aether-primary/40 hover:shadow-[0_0_20px_rgba(56,189,248,0.05)] transition-all duration-200"
+    @click="emit('click')"
+  >
     <div class="absolute inset-0 animate-shimmer opacity-30 pointer-events-none"></div>
     
     <!-- Placeholder Cover Area -->
@@ -48,7 +72,7 @@ const emit = defineEmits<{
       <button
         v-if="!props.pending.hasError && props.pending.kind === 'creation'"
         class="absolute top-3 right-3 p-1.5 rounded-lg bg-black/40 border border-white/10 text-slate-400 hover:text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
-        @click="emit('cancel', props.pending.adventureId)"
+        @click.stop="emit('cancel', props.pending.adventureId)"
         title="Abbrechen"
       >
         <X class="w-4 h-4" />
@@ -57,15 +81,23 @@ const emit = defineEmits<{
 
     <div class="p-6 flex-1 flex flex-col gap-2">
       <h3 class="text-2xl font-black text-white leading-tight tracking-tight line-clamp-1">{{ props.pending.title }}</h3>
-      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed">
-        {{ props.pending.status }}
+      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed min-h-[2rem]">
+        {{ props.pending.hasError ? props.pending.status : currentSaying }}
       </p>
+      
+      <span
+        v-if="!props.pending.hasError"
+        class="text-[10px] font-bold text-sky-400/80 uppercase tracking-widest flex items-center gap-1.5 mt-1 animate-pulse"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+        Click for details
+      </span>
 
       <div class="mt-auto pt-4">
         <button
           v-if="props.pending.hasError"
           class="w-full px-3 py-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
-          @click="emit('removeFailed', props.pending.adventureId, props.pending.kind)"
+          @click.stop="emit('removeFailed', props.pending.adventureId, props.pending.kind)"
         >
           Remove Adventure
         </button>

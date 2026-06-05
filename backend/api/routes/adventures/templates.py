@@ -1566,3 +1566,24 @@ async def export_adventure_session(
 
     return {"avatar": avatar_payload}
 
+@router.get("/{template_id}/generation-logs")
+async def get_adventure_generation_logs(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieves the live detailed generation logs (history) for an adventure template."""
+    result = await db.execute(
+        select(AdventureTemplate).where(
+            (AdventureTemplate.id == template_id) & (AdventureTemplate.owner_id == current_user.id)
+        )
+    )
+    adv = result.scalars().first()
+    if not adv:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
+    
+    return {
+        "logs": adv.generation_logs or []
+    }
+
+

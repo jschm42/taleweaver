@@ -51,6 +51,7 @@ class AdventureTemplate(Base, TimestampMixin):
     is_ready: Mapped[bool] = mapped_column(Boolean, default=False)
     creation_status: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     creation_error: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    generation_logs: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)
 
     # Metadata
     original_manifest: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
