@@ -4,6 +4,7 @@ import { entityService } from '@/services/entityService'
 import { notificationService } from '@/services/notificationService'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
+import { ArrowLeft } from 'lucide-vue-next'
 
 const props = defineProps<{
   adventureId: string
@@ -12,11 +13,13 @@ const props = defineProps<{
   referenceOptions: any[]
   isSaving: boolean
   isDeletingRouteAsset: boolean
+  returnTabLabel?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'request-delete-exit', exitId: string): void
+  (e: 'back'): void
 }>()
 
 const routeExitDetails = computed<any | null>(() => {
@@ -111,14 +114,14 @@ async function saveRouteExit() {
 
 <template>
   <section class="bg-slate-900/40 border border-white/10 rounded-2xl p-5 space-y-4">
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <p class="text-xs uppercase tracking-widest text-emerald-300">Exit Route</p>
-        <h3 class="text-lg font-bold text-white">{{ routeExitDetails?.label || routeExitDetails?.id || exitId }}</h3>
-        <p class="text-sm text-slate-300 mt-1">
-          {{ routeExitDetails?.from_scene_id }} -> {{ routeExitDetails?.to_scene_id }}
-        </p>
-      </div>
+    <div class="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+      <button
+        class="flex items-center gap-2 px-3 py-1.5 text-xs font-black uppercase tracking-[0.15em] rounded-lg border border-white/10 bg-slate-900/40 text-slate-300 hover:text-white hover:bg-white/5 transition-all"
+        @click="emit('back')"
+      >
+        <ArrowLeft class="w-4 h-4" />
+        Back to {{ props.returnTabLabel || 'Map' }}
+      </button>
       <button
         class="px-3 py-2 text-xs font-bold rounded-lg border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
         :disabled="isDeletingRouteAsset"
@@ -126,6 +129,14 @@ async function saveRouteExit() {
       >
         Delete Exit
       </button>
+    </div>
+
+    <div>
+      <p class="text-xs uppercase tracking-widest text-emerald-300">Exit Route</p>
+      <h3 class="text-lg font-bold text-white">{{ routeExitDetails?.label || routeExitDetails?.id || exitId }}</h3>
+      <p class="text-sm text-slate-300 mt-1">
+        {{ routeExitDetails?.from_scene_id }} -> {{ routeExitDetails?.to_scene_id }}
+      </p>
     </div>
 
     <div class="grid md:grid-cols-2 gap-3 text-slate-200">

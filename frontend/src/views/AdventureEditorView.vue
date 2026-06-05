@@ -207,6 +207,8 @@ const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
 const activeTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('world')
+const sceneEditorReturnTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('scenes')
+const exitEditorReturnTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('map')
 
 const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
 const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
@@ -276,6 +278,11 @@ const editorTabs = [
   { key: 'tone', label: 'Tone' },
   { key: 'advanced', label: 'Advanced' },
 ] as const
+
+function getTabLabel(key: string): string {
+  const tab = editorTabs.find((t) => t.key === key)
+  return tab ? tab.label : 'Scenes'
+}
 
 // Use notification service
 const notifications = notificationService.all
@@ -1419,6 +1426,7 @@ function openSceneEditorRoute(sceneId: string) {
   if (!normalized) return
   clearHover()
   activeMenuId.value = null
+  sceneEditorReturnTab.value = activeTab.value
   activeTab.value = 'scenes'
   router.push({
     name: 'adventure-editor-scene',
@@ -1431,7 +1439,7 @@ function openSceneEditorRoute(sceneId: string) {
 }
 
 function closeSceneEditorDialog() {
-  activeTab.value = 'scenes'
+  activeTab.value = sceneEditorReturnTab.value
   router.push({
     name: 'adventure-editor',
     params: {
@@ -1444,11 +1452,23 @@ function closeSceneEditorDialog() {
 function openExitEditorRoute(exitId: string) {
   const normalized = String(exitId || '').trim()
   if (!normalized) return
+  exitEditorReturnTab.value = activeTab.value
   router.push({
     name: 'adventure-editor-exit',
     params: {
       adventureId: props.adventureId,
       exitId: normalized,
+    },
+    query: route.query,
+  })
+}
+
+function closeExitEditorRoute() {
+  activeTab.value = exitEditorReturnTab.value
+  router.push({
+    name: 'adventure-editor',
+    params: {
+      adventureId: props.adventureId,
     },
     query: route.query,
   })
@@ -1860,6 +1880,7 @@ watch(
               :active-menu-id="activeMenuId"
               :visuals-cache-version="visualsCacheVersion"
               :rule-enforcement-mode="form.rule_enforcement_mode"
+              :return-tab-label="getTabLabel(sceneEditorReturnTab)"
               @back="closeSceneEditorDialog"
               @open-text-edit="openTextEdit"
               @open-create-item="openCreateItem"
@@ -1888,8 +1909,10 @@ watch(
               :reference-options="referenceOptions"
               :is-saving="isSaving"
               :is-deleting-route-asset="isDeletingRouteAsset"
+              :return-tab-label="getTabLabel(exitEditorReturnTab)"
               @refresh="fetchDebugInfo"
               @request-delete-exit="requestDeleteRouteExit"
+              @back="closeExitEditorRoute"
             />
 
             <MapTab

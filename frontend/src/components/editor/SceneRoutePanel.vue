@@ -24,6 +24,7 @@ const props = defineProps<{
   activeMenuId: string | null
   visualsCacheVersion: number
   ruleEnforcementMode: string
+  returnTabLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -314,7 +315,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         @click="emit('back')"
       >
         <ArrowLeft class="w-4 h-4" />
-        Back to Scenes
+        Back to {{ props.returnTabLabel || 'Scenes' }}
       </button>
     </div>
 
