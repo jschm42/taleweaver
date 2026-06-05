@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue'
 import { entityService } from '@/services/entityService'
 import { notificationService } from '@/services/notificationService'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 
 const props = defineProps<{
   adventureId: string
@@ -29,6 +30,9 @@ const exitEditForm = ref({
   label: '',
   lock_description: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
+  code_to_unlock: '',
+  item_to_unlock: '',
+  rule_to_unlock: '',
 })
 
 watch(
@@ -39,6 +43,9 @@ watch(
         label: '',
         lock_description: '',
         exit_type: 'one_way',
+        code_to_unlock: '',
+        item_to_unlock: '',
+        rule_to_unlock: '',
       }
       return
     }
@@ -46,20 +53,40 @@ watch(
       label: String(exitData.label || ''),
       lock_description: String(exitData.lock_description || ''),
       exit_type: String(exitData.exit_type || 'one_way').toLowerCase() === 'bidirectional' ? 'bidirectional' : 'one_way',
+      code_to_unlock: String(exitData.code_to_unlock || ''),
+      item_to_unlock: String(exitData.item_to_unlock || ''),
+      rule_to_unlock: String(exitData.rule_to_unlock || ''),
     }
   },
   { immediate: true }
 )
+
+const itemReferenceOptions = computed(() => {
+  const source = props.referenceOptions || []
+  return source
+    .filter((option) => String(option.type || '').toUpperCase() === 'OBJECT')
+    .map((option) => ({
+      ...option,
+      name: option.name || option.id || '',
+    }))
+})
+
+const isFormInvalid = computed(() => {
+  const labelText = (exitEditForm.value.label || '').trim()
+  if (!labelText || labelText.length > 100) return true
+  if ((exitEditForm.value.lock_description || '').length > 255) return true
+  if ((exitEditForm.value.code_to_unlock || '').length > 32) return true
+  if ((exitEditForm.value.rule_to_unlock || '').length > 500) return true
+  return false
+})
 
 const localIsSaving = ref(false)
 
 async function saveRouteExit() {
   const exit = routeExitDetails.value
   if (!exit) return
-  if (!exitEditForm.value.label.trim()) {
-    notificationService.add('Exit label is required.', 'error')
-    return
-  }
+  if (isFormInvalid.value) return
+  
   localIsSaving.value = true
   try {
     await entityService.saveEntityText(props.adventureId, {
@@ -68,6 +95,9 @@ async function saveRouteExit() {
       name: exitEditForm.value.label.trim(),
       description: exitEditForm.value.lock_description.trim(),
       exit_type: exitEditForm.value.exit_type,
+      code_to_unlock: exitEditForm.value.code_to_unlock || undefined,
+      item_to_unlock: exitEditForm.value.item_to_unlock || undefined,
+      rule_to_unlock: exitEditForm.value.rule_to_unlock || undefined,
     })
     emit('refresh')
     notificationService.add('Exit updated.', 'success')
@@ -100,12 +130,17 @@ async function saveRouteExit() {
 
     <div class="grid md:grid-cols-2 gap-3 text-slate-200">
       <label class="text-xs text-slate-300 space-y-1">
-        <span>Label</span>
-        <input v-model="exitEditForm.label" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white" />
+        <div class="flex justify-between items-center">
+          <span>Label <span class="text-red-400">*</span></span>
+          <span :class="['text-[10px] font-mono', (exitEditForm.label || '').length > 100 || !(exitEditForm.label || '').trim() ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
+            {{ (exitEditForm.label || '').length }} / 100
+          </span>
+        </div>
+        <input v-model="exitEditForm.label" maxlength="100" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none" />
       </label>
       <label class="text-xs text-slate-300 space-y-1">
         <span>Type</span>
-        <select v-model="exitEditForm.exit_type" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white">
+        <select v-model="exitEditForm.exit_type" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none">
           <option value="one_way">one_way</option>
           <option value="bidirectional">bidirectional</option>
         </select>
@@ -113,17 +148,54 @@ async function saveRouteExit() {
     </div>
 
     <label class="text-xs text-slate-300 space-y-1 block">
-      <span>Lock Description</span>
+      <div class="flex justify-between items-center">
+        <span>Lock Description</span>
+        <span :class="['text-[10px] font-mono', (exitEditForm.lock_description || '').length > 255 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
+          {{ (exitEditForm.lock_description || '').length }} / 255
+        </span>
+      </div>
       <ReferenceTextarea
         v-model="exitEditForm.lock_description"
         :rows="3"
         :options="referenceOptions"
-        class-name="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white"
+        :maxlength="255"
+        class-name="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none"
       />
     </label>
 
+    <div class="grid md:grid-cols-2 gap-3 text-slate-200">
+      <label class="text-xs text-slate-300 space-y-1">
+        <div class="flex justify-between items-center">
+          <span>Code To Unlock</span>
+          <span :class="['text-[10px] font-mono', (exitEditForm.code_to_unlock || '').length > 32 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
+            {{ (exitEditForm.code_to_unlock || '').length }} / 32
+          </span>
+        </div>
+        <input v-model="exitEditForm.code_to_unlock" maxlength="32" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none" placeholder="e.g. 1234 or WORD" />
+      </label>
+      <label class="text-xs text-slate-300 space-y-1">
+        <span>Item ID To Unlock</span>
+        <EntityReferenceCombobox
+          v-model="exitEditForm.item_to_unlock"
+          :options="itemReferenceOptions"
+          placeholder="Select key item reference"
+          :enable-search="true"
+        />
+      </label>
+    </div>
+
+    <label class="text-xs text-slate-300 space-y-1 block">
+      <div class="flex justify-between items-center">
+        <span>Rule To Unlock (Narrative Requirement)</span>
+        <span :class="['text-[10px] font-mono', (exitEditForm.rule_to_unlock || '').length > 500 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
+          {{ (exitEditForm.rule_to_unlock || '').length }} / 500
+        </span>
+      </div>
+      <input v-model="exitEditForm.rule_to_unlock" maxlength="500" class="w-full bg-slate-950 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-emerald-500 outline-none" placeholder="e.g. Protagonist defeats NPC_2" />
+    </label>
+
     <div class="flex justify-end">
-      <button class="px-3 py-2 text-xs font-bold rounded bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50" :disabled="localIsSaving || isSaving" @click="saveRouteExit">
+      <button class="px-3 py-2 text-xs font-bold rounded bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50" :disabled="localIsSaving || isSaving || isFormInvalid" @click="saveRouteExit">
         Save Exit
       </button>
     </div>
