@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 
 export interface ReferenceOption {
   id: string
@@ -22,6 +22,7 @@ const emit = defineEmits<{
 
 const isOpen = ref(false)
 const searchText = ref('')
+const root = ref<HTMLElement | null>(null)
 
 const selectedOption = computed(() => {
   return props.options.find((option) => String(option.id) === String(props.modelValue || '')) || null
@@ -55,6 +56,28 @@ function clearSelection() {
   searchText.value = ''
 }
 
+function handleDocumentClick(e: MouseEvent) {
+  if (root.value && !root.value.contains(e.target as Node)) {
+    isOpen.value = false
+  }
+}
+
+function handleDocumentKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    isOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+  document.addEventListener('keydown', handleDocumentKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleDocumentClick)
+  document.removeEventListener('keydown', handleDocumentKeydown)
+})
+
 watch(
   () => props.modelValue,
   () => {
@@ -65,7 +88,7 @@ watch(
 </script>
 
 <template>
-  <div class="relative">
+  <div class="relative" ref="root">
     <button
       type="button"
       class="w-full bg-slate-900 border border-white/10 rounded px-3 py-2 text-left text-sm text-white flex items-center justify-between gap-3"
@@ -82,7 +105,7 @@ watch(
       <span class="text-slate-400 text-xs">▼</span>
     </button>
 
-    <div v-if="isOpen" class="absolute z-[130] mt-1 w-full bg-slate-950 border border-white/10 rounded-lg shadow-2xl overflow-hidden">
+    <div v-if="isOpen" class="absolute z-[210] mt-1 w-full bg-slate-950 border border-white/10 rounded-lg shadow-2xl overflow-hidden">
       <div class="p-2 border-b border-white/10" v-if="enableSearch !== false">
         <input
           v-model="searchText"

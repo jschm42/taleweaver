@@ -84,6 +84,9 @@ const exitModalForm = ref({
   label: '',
   exit_type: 'one_way' as 'one_way' | 'bidirectional',
   lock_description: '',
+  code_to_unlock: '',
+  item_to_unlock: '',
+  rule_to_unlock: '',
 })
 const editForm = ref({
   name: '',
@@ -1448,6 +1451,9 @@ function openCreateExitModal() {
     label: '',
     exit_type: 'one_way',
     lock_description: '',
+    code_to_unlock: '',
+    item_to_unlock: '',
+    rule_to_unlock: '',
   }
   showExitModal.value = true
 }
@@ -1498,6 +1504,9 @@ function openEditExitModal(exitId: string) {
     label: String(exit.label || ''),
     exit_type: (String(exit.exit_type || 'one_way') as 'one_way' | 'bidirectional'),
     lock_description: String(exit.lock_description || ''),
+    code_to_unlock: String(exit.code_to_unlock || ''),
+    item_to_unlock: String(exit.item_to_unlock || ''),
+    rule_to_unlock: String(exit.rule_to_unlock || ''),
   }
   showExitModal.value = true
 }
@@ -1533,6 +1542,9 @@ async function saveExitModal(formData: any) {
         label,
         exit_type: formData.exit_type,
         lock_description: lockDescription || undefined,
+        code_to_unlock: formData.code_to_unlock || undefined,
+        item_to_unlock: formData.item_to_unlock || undefined,
+        rule_to_unlock: formData.rule_to_unlock || undefined,
       })
       addNotification('Exit created.', 'success')
     } else {
@@ -1547,6 +1559,9 @@ async function saveExitModal(formData: any) {
         name: label,
         description: lockDescription,
         exit_type: formData.exit_type,
+        code_to_unlock: formData.code_to_unlock,
+        item_to_unlock: formData.item_to_unlock,
+        rule_to_unlock: formData.rule_to_unlock,
       })
       addNotification('Exit updated.', 'success')
     }
