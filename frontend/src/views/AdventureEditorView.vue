@@ -1865,6 +1865,17 @@ watch(
               @request-delete-exit="requestDeleteRouteExit"
             />
 
+            <MapTab
+              v-if="activeTab === 'map' && !canShowExitRoutePanel"
+              :debug-data="debugData"
+              :editor-scenes="editorScenes"
+              :visuals-cache-version="visualsCacheVersion"
+              :active-scene-id="activeMapSceneId"
+              :active-exit-id="activeMapExitId"
+              @open-scene="openSceneEditorRoute"
+              @open-exit="openExitEditorRoute"
+            />
+
             <QuestTab
               v-if="activeTab === 'quest'"
               :adventure="adventure"
