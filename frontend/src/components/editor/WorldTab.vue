@@ -112,6 +112,39 @@ function handlePacingInput(event: Event) {
       </div>
     </div>
 
+    <div class="bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl space-y-2">
+      <div class="flex justify-between items-center">
+        <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Teaser (Max 300 Characters)</label>
+        <span v-if="editingField === 'teaser'" :class="['text-[10px] font-bold tracking-widest', tempValue.length > 300 ? 'text-red-500' : 'text-emerald-500/50']">
+          {{ tempValue.length }} / 300
+        </span>
+      </div>
+      <div v-if="editingField === 'teaser'" class="flex gap-2 animate-fade-in">
+        <textarea
+          :value="tempValue"
+          @input="emit('update:tempValue', ($event.target as HTMLTextAreaElement).value)"
+          @keyup.esc="emit('cancel-edit')"
+          maxlength="300"
+          rows="3"
+          placeholder="A short, catchy teaser for your adventure..."
+          class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-y min-h-[80px]"
+        />
+        <div class="flex flex-col gap-2">
+          <button @click="emit('save-field')" :disabled="isSaving || tempValue.length > 300" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-50">
+            <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+            <Save v-else class="w-4 h-4" />
+          </button>
+          <button @click="emit('cancel-edit')" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div v-else @click="emit('start-edit', 'teaser', form.teaser || '')" class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner min-h-[80px]">
+        <p v-if="form.teaser" class="text-sm font-bold text-emerald-500/80 whitespace-pre-wrap leading-relaxed">{{ form.teaser }}</p>
+        <p v-else class="text-xs italic text-slate-600 uppercase tracking-widest">No teaser set. Click to add a short tagline for your adventure.</p>
+      </div>
+    </div>
+
     <section v-if="debugData?.adventure" class="space-y-4 bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
       <div class="flex items-center justify-between">
         <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">World Essence</h3>
@@ -133,13 +166,8 @@ function handlePacingInput(event: Event) {
           <div class="flex justify-between items-end gap-12">
             <div class="space-y-2 max-w-3xl">
               <h4 class="text-xl font-black text-white tracking-tight">{{ debugData.adventure.title }}</h4>
-              <div class="flex items-center gap-3">
-                <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
-                <p v-else class="text-xs font-bold text-slate-500/40 uppercase tracking-widest italic">No teaser set...</p>
-                <button @click="emit('open-text-edit', 'cover', debugData.adventure.id, debugData.adventure.title, getCoverNarrativeContext(), debugData.adventure.teaser)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-emerald-400 transition-all" title="Edit Teaser & Metadata">
-                  <i class="ra ra-quill-ink text-xs"></i>
-                </button>
-              </div>
+              <p v-if="debugData.adventure.teaser" class="text-xs font-bold text-emerald-500/80 uppercase tracking-widest">{{ debugData.adventure.teaser }}</p>
+              <p v-else class="text-xs font-bold text-slate-500/40 uppercase tracking-widest italic">No teaser set...</p>
               <p class="text-sm text-slate-400 leading-relaxed line-clamp-1">{{ getCoverNarrativeContext() }}</p>
             </div>
             <div class="relative shrink-0">
@@ -155,7 +183,6 @@ function handlePacingInput(event: Event) {
                 <button @click="emit('open-regen-dialog', 'cover', debugData.adventure.id, debugData.adventure.title)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-cyan-600 hover:text-white transition-all uppercase tracking-widest">Regenerate (Prompt)</button>
                 <button @click="emit('open-upload-picker', 'cover', debugData.adventure.id, debugData.adventure.title)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-amber-600 hover:text-white transition-all uppercase tracking-widest">Upload Custom Cover</button>
                 <button v-if="debugData.adventure.image_url" @click="emit('download-asset', debugData.adventure.image_url, `${debugData.adventure.title || 'adventure'}_cover`)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-violet-600 hover:text-white transition-all uppercase tracking-widest">Download Cover</button>
-                <button @click="emit('open-text-edit', 'cover', debugData.adventure.id, debugData.adventure.title, getCoverNarrativeContext(), debugData.adventure.teaser)" class="w-full px-4 py-2.5 text-left text-xs font-black text-slate-300 hover:bg-blue-600 hover:text-white transition-all uppercase tracking-widest">Edit Essence Details</button>
               </div>
             </div>
           </div>

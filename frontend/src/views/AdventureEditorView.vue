@@ -843,7 +843,6 @@ async function saveEntityText(data: any) {
       target_type: editEntityContext.value.type,
       target_id: editEntityContext.value.id,
       name: data.name,
-      teaser: editEntityContext.value.type === 'cover' ? data.teaser : undefined,
       description: data.description,
       hp: data.hp || undefined,
       stamina: data.stamina || undefined,

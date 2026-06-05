@@ -477,22 +477,6 @@ const textLogPreviewClass = computed(() => {
               </div>
               </div>
               
-              <div v-if="context.type === 'cover'" class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Teaser (Max 300 Characters)</label>
-                  <span :class="['text-xs font-bold tracking-widest', localForm.teaser.length > 300 ? 'text-red-500' : 'text-emerald-500/50']">
-                    {{ localForm.teaser.length }} / 300
-                  </span>
-                </div>
-                  <ReferenceTextarea
-                    v-model="localForm.teaser"
-                    :rows="3"
-                    :options="props.referenceOptions || []"
-                    class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-sm text-slate-300 resize-none focus:border-emerald-500 outline-none transition-all leading-relaxed shadow-inner"
-                    placeholder="A short, catchy teaser for your adventure..."
-                  />
-              </div>
-
               <!-- Protagonist Motivation & Traits -->
               <div v-if="context.type === 'protagonist'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="space-y-3">
@@ -1076,7 +1060,7 @@ const textLogPreviewClass = computed(() => {
 
               <div class="space-y-3">
                 <div class="flex justify-between items-center">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">{{ context.type === 'cover' ? 'Global Context / Premise' : 'Description / Biography' }} <span class="text-red-400">*</span></label>
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Description / Biography <span class="text-red-400">*</span></label>
                   <span :class="['text-xs font-bold tracking-widest', (localForm.description || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
                     {{ (localForm.description || '').length }} / 1000
                   </span>
