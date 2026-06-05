@@ -46,6 +46,7 @@ class SettingsService {
 
     preferred_provider: 'openai',
     ollama_url: 'http://localhost:11434',
+    minimax_url: 'https://api.minimax.chat/v1',
   })
 
   t2iForm = ref({
@@ -111,6 +112,9 @@ class SettingsService {
   isHydratingSettings = ref(false)
   isLoadingOllamaModels = ref(false)
   isLoadingStableDiffusionModels = ref(false)
+  isLoadingLlmModels = ref<Record<string, boolean>>({})
+
+  isLoadingMinimaxModels = ref(false)
 
   // ============ FETCHING & INITIALIZATION ============
 
@@ -225,6 +229,39 @@ class SettingsService {
       return ['default']
     } finally {
       this.isLoadingStableDiffusionModels.value = false
+    }
+  }
+
+  async fetchLlmModels(provider: string, apiBase?: string) {
+    this.isLoadingLlmModels.value = { ...this.isLoadingLlmModels.value, [provider]: true }
+    try {
+      const data = await api.getLlmModels(provider, apiBase)
+      const models = Array.isArray(data.models) ? data.models : []
+      if (models.length > 0) {
+        this.availableConstants.value = {
+          ...this.availableConstants.value,
+          predefined_llm_models: {
+            ...this.availableConstants.value.predefined_llm_models,
+            [provider]: models,
+          },
+        }
+        return models
+      }
+      return this.availableConstants.value.predefined_llm_models?.[provider] || []
+    } catch (error) {
+      console.error(`[SettingsService] Failed to fetch ${provider} models:`, error)
+      return this.availableConstants.value.predefined_llm_models?.[provider] || []
+    } finally {
+      this.isLoadingLlmModels.value = { ...this.isLoadingLlmModels.value, [provider]: false }
+    }
+  }
+
+  async fetchMinimaxModels(minimaxUrl?: string) {
+    this.isLoadingMinimaxModels.value = true
+    try {
+      return await this.fetchLlmModels('minimax', minimaxUrl)
+    } finally {
+      this.isLoadingMinimaxModels.value = false
     }
   }
 

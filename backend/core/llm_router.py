@@ -284,7 +284,7 @@ class GameMasterLLM:
                 default=settings.INTELLIGENCE_TIMEOUT,
             )
         self.kimi_api_base = (getattr(settings, "KIMI_API_BASE", "https://api.moonshot.ai/v1") or "https://api.moonshot.ai/v1").rstrip("/")
-        self.minimax_api_base = (getattr(settings, "MINIMAX_API_BASE", "https://api.minimax.chat/v1") or "https://api.minimax.chat/v1").rstrip("/")
+        self.minimax_api_base = (getattr(settings, "MINIMAX_API_BASE", "https://api.minimax.io/v1") or "https://api.minimax.io/v1").rstrip("/")
         
         # Pull granular settings with fallbacks to global/legacy names.
         # Thinking must stay disabled unless explicitly configured truthy.
@@ -384,10 +384,20 @@ class GameMasterLLM:
         return normalized
     
     def _apply_thinking_settings(self, kwargs: dict) -> None:
-        """Inject thinking parameters if enabled in user settings."""
+        """Inject thinking parameters based on user settings and provider."""
+        # MiniMax defaults to thinking-on server-side, so we must explicitly opt-out
+        # when the user has not enabled thinking in their settings.
+        if self.provider == "minimax":
+            kwargs["thinking"] = (
+                {"type": "adaptive"}
+                if self.enable_thinking
+                else {"type": "disabled"}
+            )
+            return
+
         if not self.enable_thinking:
             return
-            
+
         # LiteLLM maps 'thinking' to provider-specific params (budget_tokens for Anthropic, etc.)
         kwargs["thinking"] = {
             "type": "enabled",
@@ -486,10 +496,15 @@ class GameMasterLLM:
                 kwargs["custom_llm_provider"] = "openai"
                 kwargs["api_base"] = self.minimax_api_base
         
-        # Auto-detect OpenRouter keys or provider
-        if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
+        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
+        openai_compatible_providers = ("kimi", "minimax", "deepseek")
+        if (
+            self.provider != "ollama"
+            and self.provider not in openai_compatible_providers
+            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
+        ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
-        
+
         log_structured_event(
             "gm.turn.request",
             model=normalized_model,
@@ -502,7 +517,7 @@ class GameMasterLLM:
         )
 
         response = self._completion_with_openrouter_fallback(kwargs)
-        
+
         result = response.choices[0].message.content or ""
         
         log_llm_interaction(
@@ -574,7 +589,13 @@ class GameMasterLLM:
                 kwargs["custom_llm_provider"] = "openai"
                 kwargs["api_base"] = self.minimax_api_base
         
-        if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
+        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
+        openai_compatible_providers = ("kimi", "minimax", "deepseek")
+        if (
+            self.provider != "ollama"
+            and self.provider not in openai_compatible_providers
+            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
+        ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
         
         log_structured_event(
@@ -662,7 +683,13 @@ class GameMasterLLM:
                 kwargs["custom_llm_provider"] = "openai"
                 kwargs["api_base"] = self.minimax_api_base
         
-        if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
+        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
+        openai_compatible_providers = ("kimi", "minimax", "deepseek")
+        if (
+            self.provider != "ollama"
+            and self.provider not in openai_compatible_providers
+            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
+        ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
         
         log_structured_event(
@@ -708,7 +735,9 @@ class GameMasterLLM:
         is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
         is_kimi = "kimi" in normalized_model.lower() or "moonshot" in normalized_model.lower() or self.provider == "kimi"
         is_minimax = "minimax" in normalized_model.lower() or self.provider == "minimax"
-        is_openrouter = self.provider == "openrouter" or (self.api_key and self.api_key.startswith("sk-or-v1"))
+        # Only treat as OpenRouter when the provider is explicitly openrouter; key-prefix
+        # detection would falsely match MiniMax/kimi/deepseek keys that also start with "sk-or-v1".
+        is_openrouter = self.provider == "openrouter"
 
         # Many non-OpenAI providers (including DeepSeek on some platforms) do not support 
         # complex Pydantic models in response_format (structured outputs).
@@ -761,7 +790,13 @@ class GameMasterLLM:
                 kwargs["custom_llm_provider"] = "openai"
                 kwargs["api_base"] = self.minimax_api_base
 
-        if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
+        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
+        openai_compatible_providers = ("kimi", "minimax", "deepseek")
+        if (
+            self.provider != "ollama"
+            and self.provider not in openai_compatible_providers
+            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
+        ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
 
         log_structured_event(
@@ -871,7 +906,9 @@ class GameMasterLLM:
         is_deepseek = "deepseek" in normalized_model.lower() or self.provider == "deepseek"
         is_kimi = "kimi" in normalized_model.lower() or "moonshot" in normalized_model.lower() or self.provider == "kimi"
         is_minimax = "minimax" in normalized_model.lower() or self.provider == "minimax"
-        is_openrouter = self.provider == "openrouter" or (self.api_key and self.api_key.startswith("sk-or-v1"))
+        # Only treat as OpenRouter when the provider is explicitly openrouter; key-prefix
+        # detection would falsely match MiniMax/kimi/deepseek keys that also start with "sk-or-v1".
+        is_openrouter = self.provider == "openrouter"
 
         # Direct Gemini (not via OpenRouter) supports response_schema perfectly and does not need fallback.
         use_json_mode_fallback = is_anthropic or is_deepseek or is_kimi or is_minimax or is_openrouter
@@ -924,7 +961,13 @@ class GameMasterLLM:
                 kwargs["api_base"] = self.minimax_api_base
 
         # Auto-detect OpenRouter keys or provider
-        if self.provider != "ollama" and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter"):
+        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
+        openai_compatible_providers = ("kimi", "minimax", "deepseek")
+        if (
+            self.provider != "ollama"
+            and self.provider not in openai_compatible_providers
+            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
+        ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
 
         log_structured_event(

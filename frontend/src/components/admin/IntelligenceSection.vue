@@ -7,6 +7,8 @@ const props = defineProps<{
   configuredKeys: any
   isSubmitting: boolean
   isLoadingOllamaModels: boolean
+  isLoadingMinimaxModels: boolean
+  isLoadingLlmModels: Record<string, boolean>
   testResults: any
 }>()
 
@@ -31,6 +33,8 @@ const emit = defineEmits<{
   (e: 'save', payload: any): void
   (e: 'test', payload: { key: string, model: string, provider: string }): void
   (e: 'refreshOllamaModels', ollamaUrl?: string): void
+  (e: 'refreshMinimaxModels', minimaxUrl?: string): void
+  (e: 'refreshLlmModels', provider: string, apiBase?: string): void
   (e: 'switchSection', section: string): void
 }>()
 
@@ -97,8 +101,20 @@ const hasOllamaProviderSelected = computed(() => (
   || localForm.value.play_agent_model_provider === 'ollama'
 ))
 
+const hasMinimaxProviderSelected = computed(() => (
+  localForm.value.small_model_provider === 'minimax'
+  || localForm.value.complex_model_provider === 'minimax'
+  || localForm.value.generator_model_provider === 'minimax'
+  || localForm.value.play_agent_model_provider === 'minimax'
+))
+
 const ollamaModelCount = computed(() => {
   const models = props.availableConstants?.predefined_llm_models?.ollama
+  return Array.isArray(models) ? models.length : 0
+})
+
+const minimaxModelCount = computed(() => {
+  const models = props.availableConstants?.predefined_llm_models?.minimax
   return Array.isArray(models) ? models.length : 0
 })
 
@@ -110,6 +126,30 @@ watch(hasOllamaProviderSelected, (enabled) => {
 
 const refreshOllamaModels = () => {
   emit('refreshOllamaModels', localForm.value.ollama_url)
+}
+
+const refreshMinimaxModels = () => {
+  emit('refreshMinimaxModels', localForm.value.minimax_url)
+}
+
+const LLM_MODEL_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'google', 'openrouter', 'deepseek', 'kimi', 'minimax']
+
+const isLlmDiscoveryProvider = (provider: string | undefined | null) => {
+  return !!provider && LLM_MODEL_DISCOVERY_PROVIDERS.includes(provider)
+}
+
+const isLlmProviderLoading = (provider: string | undefined | null) => {
+  if (!provider) return false
+  if (provider === 'minimax') return props.isLoadingMinimaxModels
+  return !!props.isLoadingLlmModels?.[provider]
+}
+
+const refreshLlmProviderModels = (provider: string) => {
+  if (provider === 'minimax') {
+    emit('refreshMinimaxModels', localForm.value.minimax_url)
+  } else {
+    emit('refreshLlmModels', provider, localForm.value.minimax_url)
+  }
 }
 
 watch(localForm, () => {
@@ -164,21 +204,33 @@ const handleSave = () => {
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2">
+          <div class="space-y-2 min-w-0">
             <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <select 
-              :value="isModelCustom(localForm.small_model, localForm.small_model_provider) ? 'custom' : localForm.small_model"
-              @change="(e) => { 
-                const val = (e.target as HTMLSelectElement).value; 
-                if(val !== 'custom') localForm.small_model = val;
-                else if(!isModelCustom(localForm.small_model, localForm.small_model_provider)) localForm.small_model = '';
-              }"
-              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
-            >
-              <option value="" disabled>-- Please Select --</option>
-              <option v-for="m in availableConstants.predefined_llm_models[localForm.small_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.small_model_provider, m) }}</option>
-              <option value="custom">-- Custom Model String --</option>
-            </select>
+            <div class="flex gap-2 min-w-0">
+              <select
+                :value="isModelCustom(localForm.small_model, localForm.small_model_provider) ? 'custom' : localForm.small_model"
+                @change="(e) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  if(val !== 'custom') localForm.small_model = val;
+                  else if(!isModelCustom(localForm.small_model, localForm.small_model_provider)) localForm.small_model = '';
+                }"
+                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+              >
+                <option value="" disabled>-- Please Select --</option>
+                <option v-for="m in availableConstants.predefined_llm_models[localForm.small_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.small_model_provider, m) }}</option>
+                <option value="custom">-- Custom Model String --</option>
+              </select>
+              <button
+                v-if="isLlmDiscoveryProvider(localForm.small_model_provider)"
+                type="button"
+                @click="refreshLlmProviderModels(localForm.small_model_provider)"
+                :disabled="isLlmProviderLoading(localForm.small_model_provider)"
+                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
+                :title="`Fetch ${localForm.small_model_provider} models from API`"
+              >
+                <i class="ra ra-recycle"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -237,21 +289,33 @@ const handleSave = () => {
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2">
+          <div class="space-y-2 min-w-0">
             <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <select 
-              :value="isModelCustom(localForm.complex_model, localForm.complex_model_provider) ? 'custom' : localForm.complex_model"
-              @change="(e) => { 
-                const val = (e.target as HTMLSelectElement).value; 
-                if(val !== 'custom') localForm.complex_model = val;
-                else if(!isModelCustom(localForm.complex_model, localForm.complex_model_provider)) localForm.complex_model = '';
-              }"
-              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
-            >
-              <option value="" disabled>-- Please Select --</option>
-              <option v-for="m in availableConstants.predefined_llm_models[localForm.complex_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.complex_model_provider, m) }}</option>
-              <option value="custom">-- Custom Model String --</option>
-            </select>
+            <div class="flex gap-2 min-w-0">
+              <select
+                :value="isModelCustom(localForm.complex_model, localForm.complex_model_provider) ? 'custom' : localForm.complex_model"
+                @change="(e) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  if(val !== 'custom') localForm.complex_model = val;
+                  else if(!isModelCustom(localForm.complex_model, localForm.complex_model_provider)) localForm.complex_model = '';
+                }"
+                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+              >
+                <option value="" disabled>-- Please Select --</option>
+                <option v-for="m in availableConstants.predefined_llm_models[localForm.complex_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.complex_model_provider, m) }}</option>
+                <option value="custom">-- Custom Model String --</option>
+              </select>
+              <button
+                v-if="isLlmDiscoveryProvider(localForm.complex_model_provider)"
+                type="button"
+                @click="refreshLlmProviderModels(localForm.complex_model_provider)"
+                :disabled="isLlmProviderLoading(localForm.complex_model_provider)"
+                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
+                :title="`Fetch ${localForm.complex_model_provider} models from API`"
+              >
+                <i class="ra ra-recycle"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -310,21 +374,33 @@ const handleSave = () => {
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2">
+          <div class="space-y-2 min-w-0">
             <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <select 
-              :value="isModelCustom(localForm.generator_model, localForm.generator_model_provider) ? 'custom' : localForm.generator_model"
-              @change="(e) => { 
-                const val = (e.target as HTMLSelectElement).value; 
-                if(val !== 'custom') localForm.generator_model = val;
-                else if(!isModelCustom(localForm.generator_model, localForm.generator_model_provider)) localForm.generator_model = '';
-              }"
-              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
-            >
-              <option value="" disabled>-- Please Select --</option>
-              <option v-for="m in availableConstants.predefined_llm_models[localForm.generator_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.generator_model_provider, m) }}</option>
-              <option value="custom">-- Custom Model String --</option>
-            </select>
+            <div class="flex gap-2 min-w-0">
+              <select
+                :value="isModelCustom(localForm.generator_model, localForm.generator_model_provider) ? 'custom' : localForm.generator_model"
+                @change="(e) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  if(val !== 'custom') localForm.generator_model = val;
+                  else if(!isModelCustom(localForm.generator_model, localForm.generator_model_provider)) localForm.generator_model = '';
+                }"
+                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+              >
+                <option value="" disabled>-- Please Select --</option>
+                <option v-for="m in availableConstants.predefined_llm_models[localForm.generator_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.generator_model_provider, m) }}</option>
+                <option value="custom">-- Custom Model String --</option>
+              </select>
+              <button
+                v-if="isLlmDiscoveryProvider(localForm.generator_model_provider)"
+                type="button"
+                @click="refreshLlmProviderModels(localForm.generator_model_provider)"
+                :disabled="isLlmProviderLoading(localForm.generator_model_provider)"
+                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
+                :title="`Fetch ${localForm.generator_model_provider} models from API`"
+              >
+                <i class="ra ra-recycle"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -383,21 +459,33 @@ const handleSave = () => {
               <option v-for="p in availableConstants.llm_providers" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
-          <div class="space-y-2">
+          <div class="space-y-2 min-w-0">
             <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model Selection</label>
-            <select
-              :value="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) ? 'custom' : localForm.play_agent_model"
-              @change="(e) => {
-                const val = (e.target as HTMLSelectElement).value;
-                if (val !== 'custom') localForm.play_agent_model = val;
-                else if (!isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider)) localForm.play_agent_model = '';
-              }"
-              class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
-            >
-              <option value="" disabled>-- Please Select --</option>
-              <option v-for="m in availableConstants.predefined_llm_models[localForm.play_agent_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.play_agent_model_provider, m) }}</option>
-              <option value="custom">-- Custom Model String --</option>
-            </select>
+            <div class="flex gap-2 min-w-0">
+              <select
+                :value="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) ? 'custom' : localForm.play_agent_model"
+                @change="(e) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  if (val !== 'custom') localForm.play_agent_model = val;
+                  else if (!isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider)) localForm.play_agent_model = '';
+                }"
+                class="flex-1 min-w-0 max-w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono truncate"
+              >
+                <option value="" disabled>-- Please Select --</option>
+                <option v-for="m in availableConstants.predefined_llm_models[localForm.play_agent_model_provider]" :key="m" :value="m">{{ getModelOptionLabel(localForm.play_agent_model_provider, m) }}</option>
+                <option value="custom">-- Custom Model String --</option>
+              </select>
+              <button
+                v-if="isLlmDiscoveryProvider(localForm.play_agent_model_provider)"
+                type="button"
+                @click="refreshLlmProviderModels(localForm.play_agent_model_provider)"
+                :disabled="isLlmProviderLoading(localForm.play_agent_model_provider)"
+                class="shrink-0 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-xl border border-purple-600/30 transition-all disabled:opacity-50"
+                :title="`Fetch ${localForm.play_agent_model_provider} models from API`"
+              >
+                <i class="ra ra-recycle"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -454,6 +542,24 @@ const handleSave = () => {
             <p class="text-xxs text-slate-500">Local endpoint used for local model execution. The model lists above show installed Ollama models.</p>
             <div v-if="!isLoadingOllamaModels && ollamaModelCount === 0" class="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
               No local Ollama models were found for this URL. Download one first (for example: ollama pull llama3.2), then click Refresh Models.
+            </div>
+          </div>
+
+          <div v-if="localForm.small_model_provider === 'minimax' || localForm.complex_model_provider === 'minimax' || localForm.generator_model_provider === 'minimax' || localForm.play_agent_model_provider === 'minimax'" class="space-y-2 p-4 bg-purple-500/5 rounded-xl border border-purple-500/20">
+            <div class="flex items-center justify-between gap-3">
+              <label class="block text-sm font-semibold text-slate-300">MiniMax API Base URL</label>
+              <button
+                type="button"
+                @click="refreshMinimaxModels"
+                class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all"
+              >
+                {{ isLoadingMinimaxModels ? 'Loading models...' : 'Refresh Models' }}
+              </button>
+            </div>
+            <input v-model="localForm.minimax_url" type="text" placeholder="https://api.minimax.chat/v1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+            <p class="text-xxs text-slate-500">API endpoint for MiniMax. Click Refresh Models to fetch available models from your configured API key.</p>
+            <div v-if="!isLoadingMinimaxModels && minimaxModelCount === 0" class="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
+              No MiniMax models were found. Make sure your API key is configured in Provider Keys and the URL is correct.
             </div>
           </div>
         </div>

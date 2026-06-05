@@ -40,6 +40,7 @@ const handleSave = () => {
             <option value="elevenlabs">ElevenLabs</option>
             <option value="openrouter">OpenRouter</option>
             <option value="deepseek">DeepSeek</option>
+            <option value="minimax">MiniMax</option>
             <option value="black_forest_labs">Black Forest Labs</option>
             <option value="anthropic">Anthropic</option>
             <option value="ollama">Ollama (Local)</option>

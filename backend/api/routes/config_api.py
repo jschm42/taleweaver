@@ -291,6 +291,95 @@ async def _fetch_stable_diffusion_models(stable_diffusion_url: Optional[str]) ->
         return ["default"]
 
 
+async def _fetch_minimax_models(api_key: Optional[str], api_base: Optional[str] = None) -> list[str]:
+    """Return available model names from MiniMax API."""
+    if not api_key:
+        _log_model_fetch_failure_once_per_interval("minimax", "https://api.minimax.chat/v1")
+        return []
+
+    base_url = (api_base or "https://api.minimax.chat/v1").rstrip("/")
+    endpoint = f"{base_url}/models"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(endpoint, headers={"Authorization": f"Bearer {api_key}"})
+        response.raise_for_status()
+        payload = response.json()
+
+        models: list[str] = []
+        if isinstance(payload, dict):
+            for item in payload.get("data") or []:
+                if not isinstance(item, dict):
+                    continue
+                model_id = str(item.get("id") or "").strip()
+                if model_id:
+                    models.append(model_id)
+        elif isinstance(payload, list):
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                model_id = str(item.get("id") or item.get("name") or "").strip()
+                if model_id:
+                    models.append(model_id)
+
+        return sorted(set(models))
+    except (httpx.HTTPError, ValueError, TypeError):
+        _log_model_fetch_failure_once_per_interval("minimax", endpoint)
+        return []
+
+
+_OPENAI_COMPATIBLE_PROVIDERS = {
+    "openai": {"default_base": "https://api.openai.com/v1", "env_key": "OPENAI_API_KEY"},
+    "anthropic": {"default_base": "https://api.anthropic.com/v1", "env_key": "ANTHROPIC_API_KEY"},
+    "google": {"default_base": "https://generativelanguage.googleapis.com/v1beta", "env_key": "GOOGLE_API_KEY"},
+    "openrouter": {"default_base": "https://openrouter.ai/api/v1", "env_key": "OPENROUTER_API_KEY"},
+    "deepseek": {"default_base": "https://api.deepseek.com/v1", "env_key": "DEEPSEEK_API_KEY"},
+    "kimi": {"default_base": "https://api.moonshot.ai/v1", "env_key": "KIMI_API_KEY"},
+}
+
+
+async def _fetch_openai_compatible_models(
+    provider: str,
+    api_key: Optional[str],
+    api_base: Optional[str] = None,
+) -> list[str]:
+    """Return model names from any OpenAI-compatible /v1/models endpoint."""
+    if provider not in _OPENAI_COMPATIBLE_PROVIDERS:
+        return []
+    if not api_key:
+        _log_model_fetch_failure_once_per_interval(provider, _OPENAI_COMPATIBLE_PROVIDERS[provider]["default_base"])
+        return []
+
+    default_base = _OPENAI_COMPATIBLE_PROVIDERS[provider]["default_base"]
+    base_url = (api_base or default_base).rstrip("/")
+    endpoint = f"{base_url}/models"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(endpoint, headers={"Authorization": f"Bearer {api_key}"})
+        response.raise_for_status()
+        payload = response.json()
+
+        models: list[str] = []
+        if isinstance(payload, dict):
+            for item in payload.get("data") or []:
+                if not isinstance(item, dict):
+                    continue
+                model_id = str(item.get("id") or item.get("name") or "").strip()
+                if model_id:
+                    models.append(model_id)
+        elif isinstance(payload, list):
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                model_id = str(item.get("id") or item.get("name") or "").strip()
+                if model_id:
+                    models.append(model_id)
+
+        return sorted(set(models))
+    except (httpx.HTTPError, ValueError, TypeError):
+        _log_model_fetch_failure_once_per_interval(provider, endpoint)
+        return []
+
+
 def _log_model_fetch_failure_once_per_interval(provider: str, endpoint: str) -> None:
     """Rate-limit model-fetch failure logs to avoid flooding app logs while polling settings."""
     now = time.monotonic()
@@ -375,6 +464,7 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         "play_agent_monkey_mode": False,
         "preferred_provider": "openai",  # Legacy/Default
         "ollama_url": "http://localhost:11434",
+        "minimax_url": "https://api.minimax.chat/v1",
     }
     if not llm_settings:
         return fallback
@@ -690,6 +780,7 @@ class SettingsPayload(BaseModel):
     
     preferred_provider: str # Legacy
     ollama_url: Optional[str] = None
+    minimax_url: Optional[str] = None
 
 class T2ISettingsPayload(BaseModel):
     simple_model: str
@@ -859,6 +950,58 @@ async def get_ollama_models(ollama_url: Optional[str] = None):
 async def get_stable_diffusion_models(stable_diffusion_url: Optional[str] = None):
     """Return available Stable Diffusion checkpoints for the configured endpoint."""
     return {"models": await _fetch_stable_diffusion_models(stable_diffusion_url)}
+
+@router.get("/minimax-models")
+async def get_minimax_models(
+    api_key: Optional[str] = None,
+    api_base: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return available MiniMax model names for the configured endpoint."""
+    if not api_key:
+        user = await _resolve_global_settings_owner(db, current_user)
+        if user and user.encrypted_api_keys and "minimax" in user.encrypted_api_keys:
+            from backend.core.security import encryption_util
+            api_key = encryption_util.decrypt_key(user.encrypted_api_keys["minimax"])
+        elif settings.MINIMAX_API_KEY:
+            api_key = settings.MINIMAX_API_KEY
+
+    return {"models": await _fetch_minimax_models(api_key, api_base or settings.MINIMAX_API_BASE)}
+
+
+async def _resolve_provider_api_key_for_models(
+    db: AsyncSession, current_user: User, provider: str
+) -> Optional[str]:
+    """Return the best available API key for a provider (user DB first, then env)."""
+    user = await _resolve_global_settings_owner(db, current_user)
+    if user and user.encrypted_api_keys and provider in user.encrypted_api_keys:
+        from backend.core.security import encryption_util
+        try:
+            return encryption_util.decrypt_key(user.encrypted_api_keys[provider])
+        except (ValueError, TypeError, KeyError):
+            logger.error("Failed to decrypt API key for provider '%s'", provider)
+    return settings.get_env_api_key(provider)
+
+
+@router.get("/llm-models")
+async def get_llm_models(
+    provider: str,
+    api_base: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return available model names for any OpenAI-compatible LLM provider."""
+    provider_lower = provider.lower()
+    if provider_lower == "minimax":
+        api_key = await _resolve_provider_api_key_for_models(db, current_user, "minimax")
+        models = await _fetch_minimax_models(api_key, api_base or settings.MINIMAX_API_BASE)
+    elif provider_lower in _OPENAI_COMPATIBLE_PROVIDERS:
+        api_key = await _resolve_provider_api_key_for_models(db, current_user, provider_lower)
+        models = await _fetch_openai_compatible_models(provider_lower, api_key, api_base)
+    else:
+        raise HTTPException(status_code=400, detail=f"Model discovery not supported for provider '{provider}'.")
+    return {"models": models}
 
 @router.post("/keys")
 async def update_api_key(

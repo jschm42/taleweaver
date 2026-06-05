@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     BLACK_FOREST_LABS_API_KEY: Optional[str] = None
     MINIMAX_API_KEY: Optional[str] = None
-    MINIMAX_API_BASE: str = "https://api.minimax.chat/v1"
+    MINIMAX_API_BASE: str = "https://api.minimax.io/v1"
 
     # Debug / Development
     TALEWEAVER_DEBUG_ENABLED: bool = False

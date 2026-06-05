@@ -416,6 +416,19 @@ export const api = {
     return request(url, { method: 'GET', timeoutMs: 30000 })
   },
 
+  getMinimaxModels(minimaxUrl?: string): Promise<{ models: string[] }> {
+    const url = minimaxUrl
+      ? `/settings/minimax-models?api_base=${encodeURIComponent(minimaxUrl)}`
+      : '/settings/minimax-models'
+    return request(url, { method: 'GET', timeoutMs: 30000 })
+  },
+
+  getLlmModels(provider: string, apiBase?: string): Promise<{ models: string[] }> {
+    const params = new URLSearchParams({ provider })
+    if (apiBase) params.set('api_base', apiBase)
+    return request(`/settings/llm-models?${params.toString()}`, { method: 'GET', timeoutMs: 30000 })
+  },
+
   /** Testing */
   testLlm(payload: any): Promise<any> {
     return request('/settings/test-llm', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 60000 })
