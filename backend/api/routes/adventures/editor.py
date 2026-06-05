@@ -900,6 +900,7 @@ async def update_editor_entity(
                 if payload.goal is not None: ent.goal = payload.goal
                 if payload.character is not None: ent.character = payload.character
                 if payload.is_killable is not None: ent.is_killable = payload.is_killable
+                if payload.inventory is not None: ent.inventory = list(payload.inventory)
             if ent.entity_type == "OBJECT":
                 is_readable_object = str(ent.item_type or "").upper() == "READABLE"
                 if payload.description is not None and is_readable_object and len(payload.description) > 200:
