@@ -136,6 +136,86 @@ class GameMasterLLM:
         return content
 
     @staticmethod
+    def clean_thinking_tags(text: str) -> str:
+        """Strip <think>...</think> tags and the reasoning text inside them."""
+        if not text:
+            return ""
+        # Remove completed think blocks
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        # Also strip any dangling open think tag to the end of the text (in case of truncation/interruption)
+        cleaned = re.sub(r"<think>.*", "", cleaned, flags=re.DOTALL)
+        return cleaned.strip()
+
+    @staticmethod
+    async def _clean_stream_thinking(stream):
+        """Async generator that strips <think>...</think> blocks from stream chunks on-the-fly."""
+        in_think = False
+        buffer = ""
+        
+        async for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta.content
+            except (AttributeError, IndexError, TypeError):
+                delta = None
+                
+            if not isinstance(delta, str) or not delta:
+                yield chunk
+                continue
+                
+            buffer += delta
+            cleaned_delta = ""
+            
+            while buffer:
+                if not in_think:
+                    think_idx = buffer.find("<think>")
+                    if think_idx != -1:
+                        cleaned_delta += buffer[:think_idx]
+                        in_think = True
+                        buffer = buffer[think_idx + 7:]
+                    else:
+                        partial_match = False
+                        for i in range(1, 7):
+                            tag_part = "<think"[:i]
+                            if buffer.endswith(tag_part):
+                                keep_len = len(buffer) - i
+                                cleaned_delta += buffer[:keep_len]
+                                buffer = buffer[keep_len:]
+                                partial_match = True
+                                break
+                        if not partial_match:
+                            cleaned_delta += buffer
+                            buffer = ""
+                else:
+                    end_idx = buffer.find("</think>")
+                    if end_idx != -1:
+                        in_think = False
+                        buffer = buffer[end_idx + 8:]
+                    else:
+                        partial_match = False
+                        for i in range(1, 8):
+                            tag_part = "</think"[:i]
+                            if buffer.endswith(tag_part):
+                                buffer = buffer[-i:]
+                                partial_match = True
+                                break
+                        if not partial_match:
+                            buffer = ""
+            
+            try:
+                chunk.choices[0].delta.content = cleaned_delta
+            except Exception:
+                try:
+                    delta_obj = chunk.choices[0].delta
+                    if hasattr(delta_obj, "model_copy"):
+                        new_delta = delta_obj.model_copy(update={"content": cleaned_delta})
+                    else:
+                        new_delta = delta_obj.copy(update={"content": cleaned_delta})
+                    chunk.choices[0].delta = new_delta
+                except Exception as e:
+                    logger.warning("Failed to modify streaming chunk content: %s", e)
+            yield chunk
+
+    @staticmethod
     def _extract_reasoning_content(message: Any) -> str:
         """Extract provider-specific reasoning text from a LiteLLM message object or dict."""
         if message is None:
@@ -378,261 +458,6 @@ class GameMasterLLM:
                 return normalized.split("/", 1)[1].strip()
             return normalized
 
-        if "/" in normalized:
-            return normalized.split("/", 1)[1].strip()
-
-        return normalized
-    
-    def _apply_thinking_settings(self, kwargs: dict) -> None:
-        """Inject thinking parameters based on user settings and provider."""
-        # MiniMax defaults to thinking-on server-side, so we must explicitly opt-out
-        # when the user has not enabled thinking in their settings.
-        if self.provider == "minimax":
-            kwargs["thinking"] = (
-                {"type": "adaptive"}
-                if self.enable_thinking
-                else {"type": "disabled"}
-            )
-            return
-
-        if not self.enable_thinking:
-            return
-
-        # LiteLLM maps 'thinking' to provider-specific params (budget_tokens for Anthropic, etc.)
-        kwargs["thinking"] = {
-            "type": "enabled",
-            "budget_tokens": self.max_thinking_tokens
-        }
-
-    def _get_decrypted_key(self, provider: str) -> str:
-        from backend.core.config import settings
-        
-        # 1. Check environment variables first (precedence)
-        env_key = settings.get_env_api_key(provider)
-        if env_key:
-            return env_key
-
-        # 2. Fallback to database
-        if not self.user.encrypted_api_keys or provider not in self.user.encrypted_api_keys:
-            raise ValueError(f"No API key configured for provider: {provider}")
-        
-        encrypted_key = self.user.encrypted_api_keys[provider]
-        return encryption_util.decrypt_key(encrypted_key)
-
-    def _validate_ollama_model(self, model: str) -> None:
-        """Ensure local Ollama mode never silently routes to cloud models."""
-        if self.provider != "ollama":
-            return
-        if not model or not model.strip():
-            raise ValueError("No model configured for provider 'ollama'.")
-
-        remote_prefixes = (
-            "openai/",
-            "openrouter/",
-            "anthropic/",
-            "deepseek/",
-            "google/",
-            "gemini/",
-            "bedrock/",
-            "azure/",
-            "cohere/",
-        )
-        if model.startswith(remote_prefixes):
-            raise ValueError(
-                f"Provider is 'ollama' but model '{model}' looks like a remote/cloud model. "
-                "Configure a local Ollama model (for example: llama3.2, qwen2.5, mistral)."
-            )
-
-    def execute_simple_task(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        model: str,
-        *,
-        adventure_id: Optional[str] = None,
-        game_id: Optional[str] = None,
-        operation: Optional[str] = None,
-        phase: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
-    ) -> str:
-        """
-        Free narrative task (Hallucination Mode).
-        Provides a plain text output from the model.
-        """
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        normalized_model = self._normalize_model(model)
-
-        kwargs = {
-            "model": normalized_model,
-            "messages": messages,
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
-        }
-        self._apply_thinking_settings(kwargs)
-
-        if self.provider == "ollama":
-            self._validate_ollama_model(model)
-            kwargs["api_base"] = self.api_base
-            kwargs["custom_llm_provider"] = "ollama"
-        else:
-            kwargs["api_key"] = self.api_key
-            if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openrouter"
-            elif self.provider == "openai":
-                kwargs["custom_llm_provider"] = "openai"
-            elif self.provider == "anthropic":
-                kwargs["custom_llm_provider"] = "anthropic"
-                kwargs["api_base"] = "https://api.anthropic.com"
-            elif self.provider == "deepseek":
-                kwargs["custom_llm_provider"] = "deepseek"
-                kwargs["api_base"] = "https://api.deepseek.com"
-            elif self.provider == "kimi":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.kimi_api_base
-            elif self.provider == "minimax":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.minimax_api_base
-        
-        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
-        openai_compatible_providers = ("kimi", "minimax", "deepseek")
-        if (
-            self.provider != "ollama"
-            and self.provider not in openai_compatible_providers
-            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
-        ):
-            kwargs["api_base"] = "https://openrouter.ai/api/v1"
-
-        log_structured_event(
-            "gm.turn.request",
-            model=normalized_model,
-            provider=self.provider,
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation=operation,
-            phase=phase,
-            metadata=metadata,
-        )
-
-        response = self._completion_with_openrouter_fallback(kwargs)
-
-        result = response.choices[0].message.content or ""
-        
-        log_llm_interaction(
-            model=model,
-            provider=self.provider,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_content=result,
-            raw_response=response.model_dump(),
-            event_type="gm.turn.response",
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation=operation,
-            phase=phase,
-            metadata=metadata,
-        )
-        
-        return result
-
-    async def aexecute_simple_task(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        model: str,
-        *,
-        adventure_id: Optional[str] = None,
-        game_id: Optional[str] = None,
-        operation: Optional[str] = None,
-        phase: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
-    ) -> str:
-        """
-        Async version of execute_simple_task.
-        """
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        normalized_model = self._normalize_model(model)
-
-        kwargs = {
-            "model": normalized_model,
-            "messages": messages,
-            "max_tokens": self.max_tokens + (self.max_thinking_tokens if self.enable_thinking else 0),
-        }
-        self._apply_thinking_settings(kwargs)
-
-        if self.provider == "ollama":
-            self._validate_ollama_model(model)
-            kwargs["api_base"] = self.api_base
-            kwargs["custom_llm_provider"] = "ollama"
-        else:
-            kwargs["api_key"] = self.api_key
-            if self.provider == "openrouter":
-                kwargs["custom_llm_provider"] = "openrouter"
-            elif self.provider == "openai":
-                kwargs["custom_llm_provider"] = "openai"
-            elif self.provider == "anthropic":
-                kwargs["custom_llm_provider"] = "anthropic"
-                kwargs["api_base"] = "https://api.anthropic.com"
-            elif self.provider == "deepseek":
-                kwargs["custom_llm_provider"] = "deepseek"
-                kwargs["api_base"] = "https://api.deepseek.com"
-            elif self.provider == "kimi":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.kimi_api_base
-            elif self.provider == "minimax":
-                kwargs["custom_llm_provider"] = "openai"
-                kwargs["api_base"] = self.minimax_api_base
-        
-        # Auto-detect OpenRouter keys (only when no other OpenAI-compatible provider is explicitly set)
-        openai_compatible_providers = ("kimi", "minimax", "deepseek")
-        if (
-            self.provider != "ollama"
-            and self.provider not in openai_compatible_providers
-            and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
-        ):
-            kwargs["api_base"] = "https://openrouter.ai/api/v1"
-        
-        log_structured_event(
-            "gm.turn.request",
-            model=normalized_model,
-            provider=self.provider,
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation=operation,
-            phase=phase,
-            metadata=metadata,
-        )
-
-        response = await self._acompletion_with_openrouter_fallback(kwargs)
-        
-        result = response.choices[0].message.content or ""
-        
-        log_llm_interaction(
-            model=model,
-            provider=self.provider,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_content=result,
-            raw_response=response.model_dump(),
-            event_type="gm.turn.response",
-            adventure_id=adventure_id,
-            game_id=game_id,
-            operation=operation,
-            phase=phase,
-            metadata=metadata,
-        )
-        
-        return result
-
-    async def stream_simple_task(
-        self,
-        system_prompt: str,
         user_prompt: str,
         model: str,
         *,
@@ -703,7 +528,8 @@ class GameMasterLLM:
             metadata=metadata,
         )
 
-        return await self._acompletion_with_openrouter_fallback(kwargs)
+        stream = await self._acompletion_with_openrouter_fallback(kwargs)
+        return self._clean_stream_thinking(stream)
 
     async def aexecute_complex_task(
         self,
