@@ -882,6 +882,9 @@ async function saveChanges() {
   isSaving.value = true
   errorMsg.value = ''
   try {
+    const teaserOrPlotChanged = (form.value.teaser || '') !== (adventure.value?.teaser || '')
+      || (form.value.plot || '') !== (adventure.value?.plot || '')
+
     const fullStyleObj = imageStylesCatalog.value.find(s => s.id === form.value.selected_style_id) || { id: form.value.selected_style_id, name: form.value.selected_style_id }
     const fullToneObj = toneCatalog.value.find(t => t.id === form.value.selected_tone_id) || { id: form.value.selected_tone_id, name: form.value.selected_tone_id }
     const payload = {
@@ -891,6 +894,9 @@ async function saveChanges() {
     }
     await adventureService.updateAdventure(props.adventureId, payload as any)
     await fetchAdventure()
+    if (teaserOrPlotChanged) {
+      await fetchDebugInfo()
+    }
     addNotification('Adventure configuration updated.', 'success')
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error while saving.'
