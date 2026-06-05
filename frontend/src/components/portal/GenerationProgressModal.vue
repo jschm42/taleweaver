@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { api, GENERATION_SAYINGS } from '@/composables/useApi'
-import { ChevronDown, ChevronUp, Image as ImageIcon, Brain } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Image as ImageIcon, Brain, BarChart3 } from 'lucide-vue-next'
 
 const props = defineProps<{
   adventureId: string
@@ -79,6 +79,74 @@ const lastStatusIndex = computed(() => {
     }
   }
   return lastIdx
+})
+
+const assetStats = computed(() => {
+  const stats = {
+    cover: { generated: 0, reused: 0 },
+    protagonist: { generated: 0, reused: 0 },
+    scene: { generated: 0, reused: 0 },
+    npc: { generated: 0, reused: 0 },
+    item: { generated: 0, reused: 0 }
+  }
+  
+  logs.value.forEach((log, index) => {
+    if (log.type !== 'image_generation') return
+    
+    const isReused = log.content.includes('Reused source asset')
+    
+    if (isReused) {
+      const contentLower = log.content.toLowerCase()
+      if (contentLower.includes('adventure cover')) {
+        stats.cover.reused++
+      } else if (contentLower.includes('protagonist')) {
+        stats.protagonist.reused++
+      } else if (contentLower.includes('scene:')) {
+        stats.scene.reused++
+      } else if (contentLower.includes('npc:')) {
+        stats.npc.reused++
+      } else if (contentLower.includes('item:')) {
+        stats.item.reused++
+      }
+    } else {
+      let assetType = 'other'
+      for (let i = index - 1; i >= 0; i--) {
+        if (logs.value[i].type === 'status') {
+          const statusText = logs.value[i].content.toLowerCase()
+          if (statusText.includes('adventure cover') || statusText.includes('painting cover')) {
+            assetType = 'cover'
+          } else if (statusText.includes('portrait for npc') || statusText.includes('npc:')) {
+            assetType = 'npc'
+          } else if (statusText.includes('portrait for item') || statusText.includes('item:')) {
+            assetType = 'item'
+          } else if (statusText.includes('portrait for') || statusText.includes('protagonist')) {
+            assetType = 'protagonist'
+          } else if (statusText.includes('scene:') || statusText.includes('drawing scene')) {
+            assetType = 'scene'
+          }
+          break
+        }
+      }
+      
+      if (assetType === 'cover') stats.cover.generated++
+      else if (assetType === 'protagonist') stats.protagonist.generated++
+      else if (assetType === 'scene') stats.scene.generated++
+      else if (assetType === 'npc') stats.npc.generated++
+      else if (assetType === 'item') stats.item.generated++
+    }
+  })
+  
+  return stats
+})
+
+const totalStats = computed(() => {
+  let generated = 0
+  let reused = 0
+  Object.values(assetStats.value).forEach(stat => {
+    generated += stat.generated
+    reused += stat.reused
+  })
+  return { generated, reused }
 })
 
 const currentSaying = ref(GENERATION_SAYINGS[Math.floor(Math.random() * GENERATION_SAYINGS.length)])
@@ -162,10 +230,10 @@ onUnmounted(() => {
             </div>
 
             <!-- 2. Thinking Log -->
-            <div v-else-if="log.type === 'thinking'" class="flex justify-start max-w-[85%] self-start my-1">
-              <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col gap-2 w-full">
+            <div v-else-if="log.type === 'thinking'" class="flex justify-center w-full max-w-[85%] self-center my-1 animate-fade-in">
+              <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col gap-2 w-full items-center">
                 <button 
-                  class="flex items-center gap-2 text-xs font-black text-amber-400 uppercase tracking-widest select-none cursor-pointer"
+                  class="flex items-center justify-center gap-2 text-xs font-black text-amber-400 uppercase tracking-widest select-none cursor-pointer w-full"
                   @click="toggleExpand(log.timestamp)"
                 >
                   <Brain class="w-4 h-4 shrink-0" />
@@ -174,7 +242,7 @@ onUnmounted(() => {
                 </button>
                 <div 
                   v-if="isExpandedMap[log.timestamp]"
-                  class="text-xs text-amber-300/80 leading-relaxed font-mono whitespace-pre-wrap mt-2 p-3 bg-black/40 rounded-lg border border-amber-500/10"
+                  class="text-xs text-amber-300/80 leading-relaxed font-mono whitespace-pre-wrap mt-2 p-3 bg-black/40 rounded-lg border border-amber-500/10 w-full text-left"
                 >
                   {{ log.content }}
                 </div>
@@ -182,13 +250,13 @@ onUnmounted(() => {
             </div>
 
             <!-- 3. Image Generation / Reused Log -->
-            <div v-else-if="log.type === 'image_generation'" class="flex justify-end max-w-[85%] self-end my-1">
-              <div class="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4 flex flex-col gap-3 items-end">
-                <div class="flex items-center gap-2 text-xs font-black text-sky-400 uppercase tracking-widest self-start">
+            <div v-else-if="log.type === 'image_generation'" class="flex justify-center w-full max-w-[85%] self-center my-1 animate-fade-in">
+              <div class="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4 flex flex-col gap-3 items-center w-full">
+                <div class="flex items-center justify-center gap-2 text-xs font-black text-sky-400 uppercase tracking-widest">
                   <ImageIcon class="w-4 h-4 shrink-0" />
                   <span>{{ log.content.includes('Reused source asset') ? 'Visual Asset Reused' : 'Envisioned Asset Generated' }}</span>
                 </div>
-                <p class="text-xs text-slate-300 italic bg-black/30 p-2.5 rounded-lg border border-white/5 leading-relaxed self-stretch">
+                <p class="text-xs text-slate-300 italic bg-black/30 p-2.5 rounded-lg border border-white/5 leading-relaxed self-stretch text-center">
                   "{{ log.content }}"
                 </p>
                 <div v-if="log.image_url" class="relative group w-60 h-60 overflow-hidden rounded-lg border border-white/10 bg-[#030712] flex items-center justify-center">
@@ -198,6 +266,106 @@ onUnmounted(() => {
                     class="max-w-full max-h-full object-contain p-1 transition-transform duration-500 group-hover:scale-105"
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Statistics Summary (shown when generation is complete) -->
+          <div v-if="isReady || hasError" class="mt-6 p-5 rounded-2xl border border-sky-500/20 bg-sky-500/5 backdrop-blur-md flex flex-col gap-4 self-center w-full max-w-[85%] shadow-[0_0_20px_rgba(56,189,248,0.05)] animate-fade-in">
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+              <div class="flex items-center gap-2">
+                <BarChart3 class="w-4 h-4 text-sky-400 shrink-0" />
+                <h4 class="text-xs font-black text-white uppercase tracking-widest">Generation Summary</h4>
+              </div>
+              <span class="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                {{ isReady ? 'Success' : 'Failed / Cancelled' }}
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <!-- Cover Stat -->
+              <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Cover</span>
+                <div class="flex flex-col gap-1 w-full text-[9px] font-black">
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">
+                    <span>Created</span>
+                    <span>{{ assetStats.cover.generated }}</span>
+                  </div>
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
+                    <span>Reused</span>
+                    <span>{{ assetStats.cover.reused }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Protagonist Stat -->
+              <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Hero</span>
+                <div class="flex flex-col gap-1 w-full text-[9px] font-black">
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">
+                    <span>Created</span>
+                    <span>{{ assetStats.protagonist.generated }}</span>
+                  </div>
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
+                    <span>Reused</span>
+                    <span>{{ assetStats.protagonist.reused }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Scenes Stat -->
+              <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Scenes</span>
+                <div class="flex flex-col gap-1 w-full text-[9px] font-black">
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">
+                    <span>Created</span>
+                    <span>{{ assetStats.scene.generated }}</span>
+                  </div>
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
+                    <span>Reused</span>
+                    <span>{{ assetStats.scene.reused }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- NPCs Stat -->
+              <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">NPCs</span>
+                <div class="flex flex-col gap-1 w-full text-[9px] font-black">
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">
+                    <span>Created</span>
+                    <span>{{ assetStats.npc.generated }}</span>
+                  </div>
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
+                    <span>Reused</span>
+                    <span>{{ assetStats.npc.reused }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Items Stat -->
+              <div class="flex flex-col items-center p-3 rounded-xl bg-black/40 border border-white/5 text-center">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Items</span>
+                <div class="flex flex-col gap-1 w-full text-[9px] font-black">
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">
+                    <span>Created</span>
+                    <span>{{ assetStats.item.generated }}</span>
+                  </div>
+                  <div class="flex justify-between px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
+                    <span>Reused</span>
+                    <span>{{ assetStats.item.reused }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest border-t border-white/10 pt-3">
+              <div class="flex items-center gap-4">
+                <span>Total Created: <span class="text-sky-400 font-black">{{ totalStats.generated }}</span></span>
+                <span>Total Reused: <span class="text-purple-400 font-black">{{ totalStats.reused }}</span></span>
+              </div>
+              <div class="text-slate-500">
+                Total Assets: <span class="text-white font-black">{{ totalStats.generated + totalStats.reused }}</span>
               </div>
             </div>
           </div>

@@ -1538,6 +1538,8 @@ class WorldGenerator:
                     if cover_url:
                         image_successes += 1
                         adventure.image_url = cover_url  # type: ignore
+                        if not reused_cover_url:
+                            await _log_image_generation(db, adventure, adventure.teaser or adventure.original_prompt, cover_url)
                         await db.commit() # Save cover immediately
                         adventure = await db.get(AdventureTemplate, template_id)
                 except Exception as e:
