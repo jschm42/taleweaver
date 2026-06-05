@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
+import { Plus, Trash2, Key, FileText, Lock } from 'lucide-vue-next'
 
 const props = defineProps<{
   show: boolean
@@ -34,6 +35,7 @@ const props = defineProps<{
     effects_stamina: number
     effects_mana: number
     stat_modifier_strength: number
+    is_item_type_fixed?: boolean
   }
   referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null; type?: string }>
   ruleEnforcementMode: string
@@ -48,6 +50,102 @@ const emit = defineEmits<{
 }>()
 
 const localForm = ref({ ...props.initialForm })
+const switchStates = ref<string[]>([])
+const switchTransitions = ref<any[]>([])
+
+function syncFromForm() {
+  let states: string[] = []
+  try {
+    const parsed = JSON.parse(localForm.value.switch_states_json || '[]')
+    states = Array.isArray(parsed) ? parsed.map((s: any) => String(s).toUpperCase()) : []
+  } catch {
+    states = []
+  }
+  if (states.length === 0) {
+    states = ['OFF', 'ON']
+  }
+  switchStates.value = states
+
+  let transitions: any[] = []
+  try {
+    const parsed = JSON.parse(localForm.value.switch_transitions_json || '[]')
+    transitions = Array.isArray(parsed) ? parsed : []
+  } catch {
+    transitions = []
+  }
+  
+  switchTransitions.value = transitions.map((t: any) => ({
+    from: String(t.from || '').toUpperCase(),
+    to: String(t.to || '').toUpperCase(),
+    gates: {
+      item: t.gates?.item || '',
+      code: t.gates?.code || '',
+      rule: t.gates?.rule || '',
+    },
+    fail_message: t.fail_message || '',
+  }))
+}
+
+// Initial sync
+syncFromForm()
+
+function addState() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  let newName = 'STATE_A'
+  for (let i = 0; i < chars.length; i++) {
+    const candidate = `STATE_${chars[i]}`
+    if (!switchStates.value.includes(candidate)) {
+      newName = candidate
+      break
+    }
+  }
+  switchStates.value.push(newName)
+}
+
+function removeState(index: number) {
+  const removed = switchStates.value[index]
+  switchStates.value.splice(index, 1)
+  
+  if (localForm.value.switch_initial_state === removed) {
+    localForm.value.switch_initial_state = switchStates.value[0] || ''
+  }
+  
+  switchTransitions.value = switchTransitions.value.filter(
+    t => t.from !== removed && t.to !== removed
+  )
+}
+
+function updateStateValue(index: number, val: string) {
+  const oldVal = switchStates.value[index]
+  const cleanVal = val.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+  switchStates.value[index] = cleanVal
+  
+  if (localForm.value.switch_initial_state === oldVal) {
+    localForm.value.switch_initial_state = cleanVal
+  }
+  
+  switchTransitions.value.forEach(t => {
+    if (t.from === oldVal) t.from = cleanVal
+    if (t.to === oldVal) t.to = cleanVal
+  })
+}
+
+function addTransition() {
+  switchTransitions.value.push({
+    from: switchStates.value[0] || '',
+    to: switchStates.value[1] || switchStates.value[0] || '',
+    gates: {
+      item: '',
+      code: '',
+      rule: '',
+    },
+    fail_message: '',
+  })
+}
+
+function removeTransition(index: number) {
+  switchTransitions.value.splice(index, 1)
+}
 
 const itemReferenceOptions = computed(() => {
   const source = props.referenceOptions || []
@@ -92,11 +190,19 @@ const isFormInvalid = computed(() => {
   const combinationInvalid = currentItemType.value === 'COMBINABLE' &&
     (!Array.isArray(localForm.value.combination_ingredients_input) ||
      localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 2)
-  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid
+  const uniqueStates = new Set(switchStates.value.map(s => s.trim().toUpperCase()))
+  const switchInvalid = currentItemType.value === 'SWITCH' && (
+    switchStates.value.length < 2 ||
+    uniqueStates.size !== switchStates.value.length ||
+    switchStates.value.some(s => !s.trim()) ||
+    switchTransitions.value.some(t => !t.from || !t.to || !uniqueStates.has(t.from) || !uniqueStates.has(t.to))
+  )
+  return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid
 })
 
 watch(() => props.initialForm, (newVal) => {
   localForm.value = { ...newVal }
+  syncFromForm()
 }, { deep: true })
 
 watch(() => localForm.value.entity_id, (newVal) => {
@@ -110,6 +216,9 @@ watch(() => localForm.value.item_type, (newType) => {
   const type = String(newType || '').toUpperCase()
   if (type === 'SWITCH') {
     localForm.value.is_portable = false
+    if (switchStates.value.length === 0) {
+      switchStates.value = ['OFF', 'ON']
+    }
   } else if (type === 'WEARABLE') {
     localForm.value.is_portable = true
   } else {
@@ -138,24 +247,33 @@ function handleSave() {
       ? localForm.value.wearable_slots_input
       : []
 
-    const rawStates = (localForm.value.switch_states_json || '').trim()
-    if (rawStates) {
-      try {
-        const parsed = JSON.parse(rawStates)
-        parsedSwitchStates = Array.isArray(parsed) ? parsed : []
-      } catch {
-        parsedSwitchStates = []
-      }
-    }
+    if (currentItemType.value === 'SWITCH') {
+      parsedSwitchStates = switchStates.value
+        .map(s => s.trim().toUpperCase())
+        .filter(Boolean)
 
-    const rawTransitions = (localForm.value.switch_transitions_json || '').trim()
-    if (rawTransitions) {
-      try {
-        const parsed = JSON.parse(rawTransitions)
-        parsedSwitchTransitions = Array.isArray(parsed) ? parsed : []
-      } catch {
-        parsedSwitchTransitions = []
+      parsedSwitchTransitions = switchTransitions.value.map(t => {
+        const gates: Record<string, string> = {}
+        if (t.gates?.item) gates.item = t.gates.item.trim().toUpperCase()
+        if (t.gates?.code) gates.code = t.gates.code.trim()
+        if (t.gates?.rule) gates.rule = t.gates.rule.trim()
+
+        const transition: Record<string, any> = {
+          from: t.from.trim().toUpperCase(),
+          to: t.to.trim().toUpperCase(),
+          gates,
+        }
+        if (t.fail_message?.trim()) {
+          transition.fail_message = t.fail_message.trim()
+        }
+        return transition
+      })
+
+      let initial = String(localForm.value.switch_initial_state || '').trim().toUpperCase()
+      if (!parsedSwitchStates.includes(initial)) {
+        initial = parsedSwitchStates[0] || 'OFF'
       }
+      localForm.value.switch_initial_state = initial
     }
 
     parsedEffects = {
@@ -501,7 +619,7 @@ const textLogPreviewClass = computed(() => {
                   <div class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Item Type</label>
                     <select
-                      v-if="isCreateEntityMode"
+                      v-if="isCreateEntityMode && !localForm.is_item_type_fixed"
                       v-model="localForm.item_type"
                       class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-emerald-500/50 outline-none transition-all"
                     >
@@ -641,25 +759,166 @@ const textLogPreviewClass = computed(() => {
                   <p class="text-[10px] text-slate-500 uppercase tracking-wider">Select item references required to combine with this item.</p>
                 </div>
 
-                <!-- SWITCH: States & Transitions -->
-                <div v-if="currentItemType === 'SWITCH'" class="space-y-4">
-                  <div class="space-y-2">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Switch States (JSON Array)</label>
-                    <textarea v-model="localForm.switch_states_json" rows="2" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-lime-500/50 outline-none transition-all" placeholder='["off", "on", "broken"]'></textarea>
+                <!-- SWITCH: Visual Configurator -->
+                <div v-if="currentItemType === 'SWITCH'" class="space-y-6">
+                  <!-- 1. States Management -->
+                  <div class="space-y-3 bg-black/20 border border-white/5 p-4 rounded-2xl">
+                    <div class="flex justify-between items-center">
+                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Switch States</label>
+                      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">At least 2 required</span>
+                    </div>
+                    
+                    <div class="space-y-2">
+                      <div
+                        v-for="(state, idx) in switchStates"
+                        :key="idx"
+                        class="flex items-center gap-2"
+                      >
+                        <input
+                          v-model="switchStates[idx]"
+                          @input="(e) => updateStateValue(idx, (e.target as HTMLInputElement).value)"
+                          placeholder="e.g. OFF"
+                          class="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-sm text-white font-mono font-bold focus:border-lime-500 outline-none transition-all"
+                        />
+                        <button
+                          type="button"
+                          @click="removeState(idx)"
+                          :disabled="switchStates.length <= 2"
+                          class="shrink-0 px-2.5 py-2 rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+                          title="Remove State"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </button>
+                      </div>
+                      
+                      <button
+                        type="button"
+                        @click="addState"
+                        class="w-full py-2 bg-lime-500/5 border border-lime-500/10 hover:bg-lime-500/10 hover:border-lime-500/30 rounded-xl text-[10px] font-black text-lime-400 uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Plus class="w-3.5 h-3.5" /> Add State
+                      </button>
+                    </div>
                   </div>
-                  <div class="space-y-2">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Initial State</label>
-                    <input
+
+                  <!-- 2. Initial State Selection -->
+                  <div class="space-y-2 bg-black/20 border border-white/5 p-4 rounded-2xl">
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Initial State</label>
+                    <select
                       v-model="localForm.switch_initial_state"
-                      maxlength="50"
-                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white focus:border-lime-500/50 outline-none transition-all"
-                      placeholder="off"
-                    />
+                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-lime-500/50 outline-none transition-all"
+                    >
+                      <option v-for="state in switchStates" :key="state" :value="state">{{ state }}</option>
+                    </select>
                   </div>
-                  <div class="space-y-2">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Switch Transitions (JSON Array)</label>
-                    <textarea v-model="localForm.switch_transitions_json" rows="4" class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs text-slate-300 font-mono resize-y focus:border-lime-500/50 outline-none transition-all" placeholder='[{"from":"off","to":"on","gates":{}},{"from":"on","to":"off","gates":{}}]'></textarea>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">Array of transition objects with from, to, gates, and optional fail_message.</p>
+
+                  <!-- 3. Transitions Management -->
+                  <div class="space-y-3 bg-black/20 border border-white/5 p-4 rounded-2xl">
+                    <div class="flex justify-between items-center">
+                      <label class="block text-xs font-black text-slate-400 uppercase tracking-widest">Transitions & Rules</label>
+                      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{{ switchTransitions.length }} defined</span>
+                    </div>
+
+                    <div class="space-y-4">
+                      <div
+                        v-for="(t, idx) in switchTransitions"
+                        :key="idx"
+                        class="p-4 bg-black/40 border border-white/5 rounded-2xl space-y-3 relative group"
+                      >
+                        <button
+                          type="button"
+                          @click="removeTransition(idx)"
+                          class="absolute top-3 right-3 p-1.5 rounded-lg border border-red-500/10 text-red-400 hover:bg-red-500/10 hover:border-red-500/20 transition-all"
+                          title="Remove Transition"
+                        >
+                          <Trash2 class="w-4.5 h-4.5" />
+                        </button>
+
+                        <!-- From/To Row -->
+                        <div class="grid grid-cols-2 gap-4 mr-8">
+                          <div class="space-y-1">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">From State</span>
+                            <select
+                              v-model="t.from"
+                              class="w-full bg-slate-900 border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold uppercase outline-none"
+                            >
+                              <option v-for="state in switchStates" :key="state" :value="state">{{ state }}</option>
+                            </select>
+                          </div>
+                          <div class="space-y-1">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">To State</span>
+                            <select
+                              v-model="t.to"
+                              class="w-full bg-slate-900 border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold uppercase outline-none"
+                            >
+                              <option v-for="state in switchStates" :key="state" :value="state">{{ state }}</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <!-- Requirements (Gates) Grid -->
+                        <div class="bg-black/20 p-3 rounded-xl space-y-2.5">
+                          <div class="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            <Lock class="w-3 h-3 text-lime-500" /> Requirements (Gates)
+                          </div>
+                          
+                          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <!-- Required Item -->
+                            <div class="space-y-1">
+                              <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1"><Key class="w-3 h-3 text-amber-500" /> Required Key Item</span>
+                              <EntityReferenceCombobox
+                                v-model="t.gates.item"
+                                :options="itemReferenceOptions"
+                                placeholder="None"
+                                :enable-search="true"
+                              />
+                            </div>
+                            
+                            <!-- Required Code -->
+                            <div class="space-y-1">
+                              <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1"><Lock class="w-3 h-3 text-cyan-500" /> Required Code / PIN</span>
+                              <input
+                                v-model="t.gates.code"
+                                placeholder="None"
+                                class="w-full bg-slate-900 border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:border-cyan-500/50 outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <!-- Required Story Flag -->
+                          <div class="space-y-1">
+                            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1"><FileText class="w-3 h-3 text-violet-500" /> Required Story Flag (Rule Key)</span>
+                            <input
+                              v-model="t.gates.rule"
+                              placeholder="None"
+                              class="w-full bg-slate-900 border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-violet-500/50 outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <!-- Fail Message -->
+                        <div class="space-y-1">
+                          <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Failure Message</span>
+                          <input
+                            v-model="t.fail_message"
+                            placeholder="e.g. The lever refuses to budge. It seems locked."
+                            class="w-full bg-slate-900 border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-lime-500/50 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div v-if="switchTransitions.length === 0" class="text-xs text-slate-500 italic py-2 text-center">
+                        No transitions configured. Any state can be activated freely.
+                      </div>
+
+                      <button
+                        type="button"
+                        @click="addTransition"
+                        class="w-full py-2 bg-lime-500/5 border border-lime-500/10 hover:bg-lime-500/10 hover:border-lime-500/30 rounded-xl text-[10px] font-black text-lime-400 uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Plus class="w-3.5 h-3.5" /> Add Transition Rule
+                      </button>
+                    </div>
                   </div>
                 </div>
 

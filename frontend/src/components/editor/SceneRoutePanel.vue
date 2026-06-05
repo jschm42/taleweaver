@@ -29,7 +29,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'back'): void
   (e: 'open-text-edit', type: string, id: string, name: string, description: string, teaser?: string, hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean): void
-  (e: 'open-create-item'): void
+  (e: 'open-create-item', itemType?: string): void
   (e: 'open-regen-dialog', kind: string, id: string, label: string): void
   (e: 'open-upload-picker', kind: string, id: string, label: string): void
   (e: 'download-asset', path: string, label: string): void
@@ -593,7 +593,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <button @click="emit('regen-all', 'switch', false)" :disabled="isBatchGenerating['switch']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['switch'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item')">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'SWITCH')">+ Add</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -653,7 +653,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <button @click="emit('regen-all', 'container', false)" :disabled="isBatchGenerating['container']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['container'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item')">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'CONTAINER')">+ Add</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -713,7 +713,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <button @click="emit('regen-all', 'text-log', false)" :disabled="isBatchGenerating['text-log']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['text-log'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item')">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'READABLE')">+ Add</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">

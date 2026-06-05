@@ -98,8 +98,8 @@ const editForm = ref({
   goal: '',
   character: '',
   is_killable: true,
-    item_type: 'DEFAULT',
-    is_portable: true,
+  item_type: 'DEFAULT',
+  is_portable: true,
   locked: false,
   code_to_unlock: '',
   item_to_unlock: '',
@@ -116,6 +116,7 @@ const editForm = ref({
   effects_stamina: 0,
   effects_mana: 0,
   stat_modifier_strength: 0,
+  is_item_type_fixed: false,
 })
 
 function closeEditEntityModal() {
@@ -126,7 +127,7 @@ function closeEditEntityModal() {
   createEntityType.value = null
 }
 
-function openCreateItem() {
+function openCreateItem(itemType?: string) {
   const sceneId = String(activeMapSceneId.value || '').trim()
   if (!sceneId) {
     addNotification('No active scene selected for item creation.', 'error')
@@ -134,10 +135,14 @@ function openCreateItem() {
   }
   createEntitySceneId.value = sceneId
   createEntityType.value = 'object'
-  showItemTypeSelector.value = true
+  if (itemType) {
+    handleItemTypeSelected(itemType, true)
+  } else {
+    showItemTypeSelector.value = true
+  }
 }
 
-function handleItemTypeSelected(itemType: string) {
+function handleItemTypeSelected(itemType: string, isFixed = false) {
   showItemTypeSelector.value = false
   const sceneId = String(createEntitySceneId.value || activeMapSceneId.value || '').trim()
   if (!sceneId) return
@@ -176,6 +181,7 @@ function handleItemTypeSelected(itemType: string) {
     effects_stamina: 0,
     effects_mana: 0,
     stat_modifier_strength: 0,
+    is_item_type_fixed: isFixed,
   }
   showEditModal.value = true
 }
@@ -672,6 +678,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     effects_stamina: selectedObject?.effects?.stamina || metadata?.effects?.stamina || 0,
     effects_mana: selectedObject?.effects?.mana || metadata?.effects?.mana || 0,
     stat_modifier_strength: selectedObject?.stat_modifier_strength || metadata?.stat_modifier_strength || 0,
+    is_item_type_fixed: false,
   }
   showEditModal.value = true
 }
