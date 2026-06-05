@@ -116,7 +116,9 @@ class Settings(BaseSettings):
     MISTRAL_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     BLACK_FOREST_LABS_API_KEY: Optional[str] = None
-    
+    MINIMAX_API_KEY: Optional[str] = None
+    MINIMAX_API_BASE: str = "https://api.minimax.chat/v1"
+
     # Debug / Development
     TALEWEAVER_DEBUG_ENABLED: bool = False
     
@@ -132,6 +134,7 @@ class Settings(BaseSettings):
         if p == "mistral": return self.MISTRAL_API_KEY
         if p == "groq": return self.GROQ_API_KEY
         if p == "black_forest_labs": return self.BLACK_FOREST_LABS_API_KEY
+        if p == "minimax": return self.MINIMAX_API_KEY
         return None
     
     model_config = {"env_file": ".env", "extra": "ignore"}
