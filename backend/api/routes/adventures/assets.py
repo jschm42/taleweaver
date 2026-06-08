@@ -472,6 +472,10 @@ async def upload_visual(
         )
         safe_parent_dir = ensure_within_data_dir(os.path.dirname(full_path))
         full_path = ensure_within_base_dir(full_path, safe_parent_dir)
+        # Re-verify containment at the sink so the taint analysis trusts the path.
+        data_root = os.path.realpath(settings.DATA_DIR)
+        if os.path.commonpath([os.path.realpath(full_path), data_root]) != data_root:
+            raise HTTPException(status_code=400, detail="Invalid upload path.")
         with open(full_path, "wb") as f:
             f.write(content)
 

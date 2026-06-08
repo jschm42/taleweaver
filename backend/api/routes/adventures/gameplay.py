@@ -154,8 +154,8 @@ async def post_chat_message(
                         yield f"id: {turn_id}\n{chunk}"
                     else:
                         yield chunk
-            except Exception as exc:
-                logger.exception("Chat stream failed for session %s", game_id, exc_info=exc)
+            except Exception:
+                logger.exception("Chat stream failed for session %s", game_id)
                 yield (
                     f"id: {turn_id}\n"
                     "event: error\n"

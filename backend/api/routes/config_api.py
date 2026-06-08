@@ -1434,6 +1434,10 @@ async def upload_catalog_image(
         safe_filepath = _ensure_within_data_dir(filepath)
         safe_parent_dir = _ensure_within_data_dir(os.path.dirname(safe_filepath))
         safe_filepath = ensure_within_base_dir(safe_filepath, safe_parent_dir)
+        # Re-verify containment at the sink so the taint analysis trusts the path.
+        data_root = os.path.realpath(settings.DATA_DIR)
+        if os.path.commonpath([os.path.realpath(safe_filepath), data_root]) != data_root:
+            raise ValueError("Invalid filepath: escapes DATA_DIR.")
         with open(safe_filepath, "wb") as f:
             f.write(await file.read())
 

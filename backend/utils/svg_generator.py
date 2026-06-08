@@ -5,6 +5,7 @@ import random
 import re
 
 from backend.utils.path_security import ensure_within_base_dir, ensure_within_data_dir
+from backend.core.config import settings
 
 
 class SVGPlaceholderGenerator:
@@ -213,6 +214,10 @@ class SVGPlaceholderGenerator:
             raise ValueError("Invalid filepath: missing parent directory.")
         safe_parent_dir = ensure_within_data_dir(parent_dir)
         safe_resolved_path = ensure_within_base_dir(resolved_path, safe_parent_dir)
+        # Re-verify containment at the sink so the taint analysis trusts the path.
+        data_root = os.path.realpath(settings.DATA_DIR)
+        if os.path.commonpath([os.path.realpath(safe_resolved_path), data_root]) != data_root:
+            raise ValueError("Invalid filepath: escapes DATA_DIR.")
         os.makedirs(safe_parent_dir, exist_ok=True)
         with open(safe_resolved_path, 'w', encoding='utf-8') as f:
             f.write(self.generate(title, category))

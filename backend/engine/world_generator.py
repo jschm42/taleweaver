@@ -1313,6 +1313,11 @@ class WorldGenerator:
             except ValueError:
                 return None
 
+            # Re-verify containment at the sink so the taint analysis trusts the path.
+            target_root = os.path.realpath(safe_target_dir)
+            if os.path.commonpath([os.path.realpath(target_local), target_root]) != target_root:
+                return None
+
             if not os.path.isfile(target_local):
                 try:
                     shutil.copy2(safe_source_local, target_local)

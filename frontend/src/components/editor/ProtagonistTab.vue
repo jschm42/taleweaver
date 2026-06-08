@@ -156,14 +156,14 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 <h4 class="text-xl font-black text-white tracking-tight">{{ value }}</h4>
               </template>
             </InlineEditableField>
-            <p class="text-xs font-bold text-emerald-400/70 uppercase tracking-widest mt-0.5 px-3">{{ debugData.protagonist.role || 'Protagonist' }}</p>
+            <p class="text-sm font-bold text-emerald-400/70 uppercase tracking-widest mt-0.5 px-3">{{ debugData.protagonist.role || 'Protagonist' }}</p>
           </div>
 
           <!-- RPG & Status Stats Grid -->
           <div v-if="ruleEnforcementMode !== 'chat'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
             <!-- HP -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Hit Points</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Hit Points</span>
               <InlineEditableField
                 :value="debugData.protagonist.hp ?? 20"
                 type="number"
@@ -174,7 +174,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="hp"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'hp', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -184,7 +184,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-heart text-[14px]"></i>
                       <span class="text-xs font-black">HP</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -192,7 +192,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- STM -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Stamina</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Stamina</span>
               <InlineEditableField
                 :value="debugData.protagonist.stamina ?? 20"
                 type="number"
@@ -203,7 +203,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="stamina"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'stamina', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -213,7 +213,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-muscle-up text-[14px]"></i>
                       <span class="text-xs font-black">STM</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -221,7 +221,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- MAN -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Mana</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Mana</span>
               <InlineEditableField
                 :value="debugData.protagonist.mana ?? 20"
                 type="number"
@@ -232,7 +232,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="mana"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'mana', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -242,7 +242,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-crystal-ball text-[14px]"></i>
                       <span class="text-xs font-black">MAN</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -250,7 +250,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- STR -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Strength</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Strength</span>
               <InlineEditableField
                 :value="debugData.protagonist.strength ?? 10"
                 type="number"
@@ -261,7 +261,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="strength"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'strength', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -271,7 +271,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-sword-brandish text-[14px]"></i>
                       <span class="text-xs font-black">STR</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -279,7 +279,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- DEX -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Dexterity</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Dexterity</span>
               <InlineEditableField
                 :value="debugData.protagonist.dexterity ?? 10"
                 type="number"
@@ -290,7 +290,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="dexterity"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'dexterity', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -300,7 +300,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-arrow-flight text-[14px]"></i>
                       <span class="text-xs font-black">DEX</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -308,7 +308,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- INT -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Intelligence</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Intelligence</span>
               <InlineEditableField
                 :value="debugData.protagonist.intelligence ?? 10"
                 type="number"
@@ -319,7 +319,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="intelligence"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'intelligence', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -329,7 +329,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-brain text-[14px]"></i>
                       <span class="text-xs font-black">INT</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -337,7 +337,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- WIS -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Wisdom</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Wisdom</span>
               <InlineEditableField
                 :value="debugData.protagonist.wisdom ?? 10"
                 type="number"
@@ -348,7 +348,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="wisdom"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-fuchsia-500/10 hover:bg-fuchsia-500/20 border border-fuchsia-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'wisdom', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -358,7 +358,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-eye-shield text-[14px]"></i>
                       <span class="text-xs font-black">WIS</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -366,7 +366,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- CHA -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Charisma</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Charisma</span>
               <InlineEditableField
                 :value="debugData.protagonist.charisma ?? 10"
                 type="number"
@@ -377,7 +377,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="charisma"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'charisma', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -387,7 +387,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-crowned-heart text-[14px]"></i>
                       <span class="text-xs font-black">CHA</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -395,7 +395,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- AC -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Armor Class</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Armor Class</span>
               <InlineEditableField
                 :value="debugData.protagonist.armor_class ?? 10"
                 type="number"
@@ -406,7 +406,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="armor_class"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-slate-500/10 hover:bg-slate-500/20 border border-slate-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'armor_class', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -416,7 +416,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-shield text-[14px]"></i>
                       <span class="text-xs font-black">AC</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -424,7 +424,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
             <!-- EXP -->
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Experience</span>
+              <span class="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Experience</span>
               <InlineEditableField
                 :value="debugData.protagonist.exp ?? 0"
                 type="number"
@@ -434,7 +434,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 edit-id="exp"
                 :active-edit-id="activeEditId"
                 display-class="group cursor-pointer bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
-                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-sm font-bold text-white outline-none animate-fade-in"
+                input-class="flex-grow min-w-0 bg-black/60 border border-emerald-500/50 rounded px-2 py-0.5 text-base font-bold text-white outline-none animate-fade-in"
                 @save="emit('save-field', 'exp', $event)"
                 @start-edit="activeEditId = $event"
               >
@@ -444,7 +444,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                       <i class="ra ra-player-king text-[14px]"></i>
                       <span class="text-xs font-black">EXP</span>
                     </div>
-                    <span class="text-sm font-black text-white">{{ value ?? '-' }}</span>
+                    <span class="text-base font-black text-white">{{ value ?? '-' }}</span>
                   </div>
                 </template>
               </InlineEditableField>
@@ -453,7 +453,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
 
           <div class="grid grid-cols-1 gap-3">
             <div class="space-y-1">
-              <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest px-1">Bio</span>
+              <span class="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Bio</span>
               <InlineEditableField
                 :value="debugData.protagonist.description ?? ''"
                 type="textarea"
@@ -470,14 +470,14 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                 @start-edit="activeEditId = $event"
               >
                 <template #default="{ value }">
-                  <p class="text-xs text-slate-300 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
+                  <p class="text-sm text-slate-200 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
                 </template>
               </InlineEditableField>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div class="space-y-1">
-                <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest px-1">Motivation</span>
+                <span class="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Motivation</span>
                 <InlineEditableField
                   :value="debugData.protagonist.goal ?? ''"
                   type="textarea"
@@ -493,13 +493,13 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                   @start-edit="activeEditId = $event"
                 >
                   <template #default="{ value }">
-                    <p class="text-xs text-slate-300 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
+                    <p class="text-sm text-slate-200 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
                   </template>
                 </InlineEditableField>
               </div>
 
               <div class="space-y-1">
-                <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest px-1">Traits</span>
+                <span class="text-xs font-black text-slate-500 uppercase tracking-widest px-1">Traits</span>
                 <InlineEditableField
                   :value="debugData.protagonist.character ?? ''"
                   type="textarea"
@@ -515,7 +515,7 @@ function saveEquipmentSlot(slotKey: string, itemId: string) {
                   @start-edit="activeEditId = $event"
                 >
                   <template #default="{ value }">
-                    <p class="text-xs text-slate-300 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
+                    <p class="text-sm text-slate-200 leading-relaxed" v-html="formatObjectIds(String(value))"></p>
                   </template>
                 </InlineEditableField>
               </div>

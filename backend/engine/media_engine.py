@@ -178,6 +178,10 @@ def _write_binary_file(filepath: str, payload: bytes) -> None:
     if not safe_filename:
         raise ValueError("Invalid filepath: invalid filename.")
     safe_filepath = ensure_within_base_dir(os.path.join(safe_parent_dir, safe_filename), safe_parent_dir)
+    # Re-verify containment at the sink so the taint analysis trusts the path.
+    data_root = os.path.realpath(settings.DATA_DIR)
+    if os.path.commonpath([os.path.realpath(safe_filepath), data_root]) != data_root:
+        raise ValueError("Invalid filepath: escapes DATA_DIR.")
     os.makedirs(safe_parent_dir, exist_ok=True)
     with open(safe_filepath, "wb") as file_handle:
         file_handle.write(payload)
@@ -294,7 +298,10 @@ class MediaEngine:
             thumb_path = _ensure_within_data_dir(
                 os.path.join(os.path.dirname(safe_filepath), safe_thumb_name)
             )
-            
+            # Re-verify containment at the sink so the taint analysis trusts the path.
+            data_root = os.path.realpath(settings.DATA_DIR)
+            if os.path.commonpath([os.path.realpath(thumb_path), data_root]) != data_root:
+                raise ValueError("Invalid thumbnail path: escapes DATA_DIR.")
             # Avoid re-generating if it already exists
             if os.path.exists(thumb_path):
                 return thumb_path

@@ -17,7 +17,7 @@ from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
-from backend.utils.path_security import data_url_to_local_path, local_path_to_data_url
+from backend.utils.path_security import data_url_to_local_path, ensure_within_data_dir, local_path_to_data_url
 
 logger = logging.getLogger(__name__)
 SESSION_MANIFEST_SNAPSHOT_KEY = "__manifest_snapshot__"
@@ -209,7 +209,11 @@ class AdventureLogic:
             if abs_path and os.path.isfile(abs_path):
                 return profile_image
 
-            library_dir = os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
+            library_dir_raw = os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
+            try:
+                library_dir = ensure_within_data_dir(library_dir_raw)
+            except ValueError:
+                return profile_image
             if os.path.isdir(library_dir):
                 for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
                     candidate_path = os.path.join(library_dir, f"PROTAGONIST{ext}")
@@ -219,7 +223,10 @@ class AdventureLogic:
                 pattern = os.path.join(library_dir, "*PROTAGONIST*")
                 for match in glob.glob(pattern):
                     if os.path.isfile(match):
-                        return local_path_to_data_url(match)
+                        try:
+                            return local_path_to_data_url(ensure_within_data_dir(match))
+                        except ValueError:
+                            continue
 
         return profile_image
 

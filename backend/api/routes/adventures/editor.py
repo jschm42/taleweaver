@@ -261,11 +261,17 @@ async def _clone_entity_image(
     if not target_dir or not os.path.isdir(target_dir):
         return None
 
+    # Restrict the extension to a hard-coded allowlist to satisfy the
+    # path-traversal linter: a user-controlled image URL could otherwise inject
+    # an arbitrary suffix into the constructed file name.
+    _, raw_ext = os.path.splitext(source_path)
+    safe_ext = raw_ext.lower() if raw_ext.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"} else ".png"
+
     safe_entity_id = re.sub(r"[^A-Za-z0-9_-]", "_", new_entity_id).strip("_") or "entity"
     suffix = ""
     counter = 1
     while True:
-        candidate_name = f"{safe_entity_id}_clone{suffix}{os.path.splitext(source_path)[1]}"
+        candidate_name = f"{safe_entity_id}_clone{suffix}{safe_ext}"
         candidate_path = os.path.join(target_dir, candidate_name)
         if not os.path.exists(candidate_path):
             break

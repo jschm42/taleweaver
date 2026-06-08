@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, nextTick, ref, watch, onMounted, onUnmounted } from 'vue'
 
 export interface ReferenceOption {
   id: string
@@ -23,6 +23,7 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const searchText = ref('')
 const root = ref<HTMLElement | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
 
 const selectedOption = computed(() => {
   return props.options.find((option) => String(option.id) === String(props.modelValue || '')) || null
@@ -38,10 +39,32 @@ const filteredOptions = computed(() => {
   })
 })
 
-function toggleOpen() {
+function updateDropdownPosition() {
+  if (!root.value) return
+  const rect = root.value.getBoundingClientRect()
+  const dropdownMaxHeight = 280
+  const spaceBelow = window.innerHeight - rect.bottom
+  const openUpward = spaceBelow < dropdownMaxHeight && rect.top > spaceBelow
+  const top = openUpward ? `${Math.max(8, rect.top - dropdownMaxHeight - 4)}px` : `${rect.bottom + 4}px`
+  const left = `${rect.left}px`
+  const width = `${rect.width}px`
+  const maxHeight = `${Math.min(dropdownMaxHeight, openUpward ? rect.top - 12 : spaceBelow - 12)}px`
+  dropdownStyle.value = {
+    position: 'fixed',
+    top,
+    left,
+    width,
+    maxHeight,
+    zIndex: '400',
+  }
+}
+
+async function toggleOpen() {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
     searchText.value = ''
+    await nextTick()
+    updateDropdownPosition()
   }
 }
 
@@ -57,9 +80,12 @@ function clearSelection() {
 }
 
 function handleDocumentClick(e: MouseEvent) {
-  if (root.value && !root.value.contains(e.target as Node)) {
-    isOpen.value = false
-  }
+  const target = e.target as Node | null
+  if (!target) return
+  if (root.value && root.value.contains(target)) return
+  const dropdown = document.getElementById(`entity-ref-dropdown-${rootId}`)
+  if (dropdown && dropdown.contains(target)) return
+  isOpen.value = false
 }
 
 function handleDocumentKeydown(e: KeyboardEvent) {
@@ -68,14 +94,24 @@ function handleDocumentKeydown(e: KeyboardEvent) {
   }
 }
 
+function handleWindowChange() {
+  if (isOpen.value) updateDropdownPosition()
+}
+
+const rootId = `entity-ref-${Math.random().toString(36).slice(2, 10)}`
+
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
   document.addEventListener('keydown', handleDocumentKeydown)
+  window.addEventListener('resize', handleWindowChange)
+  window.addEventListener('scroll', handleWindowChange, true)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick)
   document.removeEventListener('keydown', handleDocumentKeydown)
+  window.removeEventListener('resize', handleWindowChange)
+  window.removeEventListener('scroll', handleWindowChange, true)
 })
 
 watch(
@@ -88,7 +124,7 @@ watch(
 </script>
 
 <template>
-  <div class="relative" ref="root">
+  <div class="relative" ref="root" :data-ref-id="rootId">
     <button
       type="button"
       class="w-full bg-slate-900 border border-white/10 rounded px-3 py-2 text-left text-sm text-white flex items-center justify-between gap-3"
@@ -105,50 +141,58 @@ watch(
       <span class="text-slate-400 text-xs">▼</span>
     </button>
 
-    <div v-if="isOpen" class="absolute z-[210] mt-1 w-full bg-slate-950 border border-white/10 rounded-lg shadow-2xl overflow-hidden">
-      <div class="p-2 border-b border-white/10" v-if="enableSearch !== false">
-        <input
-          v-model="searchText"
-          type="text"
-          class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm text-white"
-          :placeholder="searchPlaceholder || 'Search by ID or name'"
-        />
-      </div>
+    <Teleport to="body">
+      <div
+        v-if="isOpen"
+        :id="`entity-ref-dropdown-${rootId}`"
+        :style="dropdownStyle"
+        class="bg-slate-950 border border-white/10 rounded-lg shadow-2xl overflow-hidden"
+      >
+        <div class="p-2 border-b border-white/10" v-if="enableSearch !== false">
+          <input
+            v-model="searchText"
+            type="text"
+            class="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm text-white"
+            :placeholder="searchPlaceholder || 'Search by ID or name'"
+          />
+        </div>
 
-      <div class="max-h-64 overflow-auto">
-        <button
-          type="button"
-          class="w-full text-left px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/10 border-b border-white/5"
-          @click="clearSelection"
-        >
-          Clear selection
-        </button>
+        <div class="overflow-auto" :style="{ maxHeight: '240px' }">
+          <button
+            type="button"
+            class="w-full text-left px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/10 border-b border-white/5"
+            @click="clearSelection"
+          >
+            Clear selection
+          </button>
 
-        <button
-          v-for="option in filteredOptions"
-          :key="option.id"
-          type="button"
-          class="w-full px-3 py-2 text-left hover:bg-emerald-500/10 border-b border-white/5 last:border-b-0"
-          @click="selectOption(option.id)"
-        >
-          <div class="flex items-center gap-2">
-            <img
-              v-if="option.imageUrl"
-              :src="option.imageUrl"
-              class="w-8 h-8 rounded object-cover border border-white/10"
-              alt=""
-            />
-            <div class="min-w-0">
-              <div class="text-sm text-white truncate">{{ option.name || option.id }}</div>
-              <div class="text-[11px] text-slate-400 truncate">{{ option.id }}</div>
+          <button
+            v-for="option in filteredOptions"
+            :key="option.id"
+            type="button"
+            class="w-full px-3 py-2 text-left hover:bg-emerald-500/10 border-b border-white/5 last:border-b-0"
+            @click="selectOption(option.id)"
+          >
+            <div class="flex items-center gap-2">
+              <img
+                v-if="option.imageUrl"
+                :src="option.imageUrl"
+                class="w-8 h-8 rounded object-cover border border-white/10"
+                alt=""
+              />
+              <div class="min-w-0">
+                <div class="text-sm text-white truncate">{{ option.name || option.id }}</div>
+                <div class="text-[11px] text-slate-400 truncate">{{ option.id }}</div>
+              </div>
             </div>
-          </div>
-        </button>
+          </button>
 
-        <div v-if="filteredOptions.length === 0" class="px-3 py-3 text-xs text-slate-500">
-          No matching entries.
+          <div v-if="filteredOptions.length === 0" class="px-3 py-3 text-xs text-slate-500">
+            No matching entries.
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
+
