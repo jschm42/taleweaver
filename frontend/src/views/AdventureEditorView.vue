@@ -73,6 +73,7 @@ const editEntityContext = ref<{ type: string; id: string } | null>(null)
 const isCreateEntityMode = ref(false)
 const createEntitySceneId = ref<string | null>(null)
 const createEntityType = ref<'npc' | 'object' | null>(null)
+const pendingProtagonistAssignment = ref<{ type: 'equipment' | 'inventory'; key?: string; index?: number } | null>(null)
 const showItemTypeSelector = ref(false)
 const itemTypeSelectorSceneLabel = ref('')
 const showExitModal = ref(false)
@@ -117,6 +118,7 @@ const editForm = ref({
   effects_mana: 0,
   stat_modifier_strength: 0,
   is_item_type_fixed: false,
+  is_wearable_slots_fixed: false,
 })
 
 function closeEditEntityModal() {
@@ -125,6 +127,7 @@ function closeEditEntityModal() {
   isCreateEntityMode.value = false
   createEntitySceneId.value = null
   createEntityType.value = null
+  pendingProtagonistAssignment.value = null
 }
 
 function openCreateItem(itemType?: string) {
@@ -142,7 +145,31 @@ function openCreateItem(itemType?: string) {
   }
 }
 
-function handleItemTypeSelected(itemType: string, isFixed = false) {
+function createNewItemForProtagonist(target: { type: 'equipment' | 'inventory'; key?: string; index?: number }) {
+  const startSceneId = debugData.value?.adventure?.start_scene_id || (debugData.value?.scenes?.[0]?.id)
+  if (!startSceneId) {
+    addNotification('No scenes exist in the chronicle to associate the item with.', 'error')
+    return
+  }
+  pendingProtagonistAssignment.value = target
+  createEntitySceneId.value = startSceneId
+  createEntityType.value = 'object'
+  
+  if (target.type === 'equipment' && target.key) {
+    const itemType = target.key === 'MainHand' ? 'WEAPON' : 'WEARABLE'
+    let mappedSlot = target.key
+    if (target.key === 'Arms') {
+      mappedSlot = 'Wrist'
+    } else if (target.key === 'Ring_1' || target.key === 'Ring_2') {
+      mappedSlot = 'Finger'
+    }
+    handleItemTypeSelected(itemType, true, [mappedSlot], true)
+  } else {
+    showItemTypeSelector.value = true
+  }
+}
+
+function handleItemTypeSelected(itemType: string, isFixed = false, preselectedSlots: string[] = [], isSlotsFixed = false) {
   showItemTypeSelector.value = false
   const sceneId = String(createEntitySceneId.value || activeMapSceneId.value || '').trim()
   if (!sceneId) return
@@ -172,7 +199,7 @@ function handleItemTypeSelected(itemType: string, isFixed = false) {
     text_log_content: '',
     text_log_format: 'DOCUMENT',
     entity_id: defaultId,
-    wearable_slots_input: [],
+    wearable_slots_input: preselectedSlots,
     combination_ingredients_input: [],
     switch_states_json: '[]',
     switch_initial_state: '',
@@ -182,6 +209,7 @@ function handleItemTypeSelected(itemType: string, isFixed = false) {
     effects_mana: 0,
     stat_modifier_strength: 0,
     is_item_type_fixed: isFixed,
+    is_wearable_slots_fixed: isSlotsFixed,
   }
   showEditModal.value = true
 }
@@ -269,7 +297,7 @@ const editorTabs = [
   { key: 'world', label: 'World' },
   { key: 'protagonist', label: 'Protagonist' },
   { key: 'map', label: 'Map' },
-  { key: 'scenes', label: 'Szenen' },
+  { key: 'scenes', label: 'Scenes' },
   { key: 'inhabitants', label: 'Inhabitants' },
   { key: 'items', label: 'Items' },
   { key: 'quest', label: 'Quests' },
@@ -686,6 +714,7 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     effects_mana: selectedObject?.effects?.mana || metadata?.effects?.mana || 0,
     stat_modifier_strength: selectedObject?.stat_modifier_strength || metadata?.stat_modifier_strength || 0,
     is_item_type_fixed: false,
+    is_wearable_slots_fixed: false,
   }
   showEditModal.value = true
 }
@@ -795,6 +824,31 @@ async function saveEntityText(data: any) {
           }
         }
         await entityService.createEntity(props.adventureId, createPayload)
+      }
+
+      if (pendingProtagonistAssignment.value) {
+        const target = pendingProtagonistAssignment.value
+        const p = debugData.value?.protagonist
+        if (p) {
+          if (target.type === 'equipment' && target.key) {
+            const currentEquipment = p.equipment || {}
+            const updatedEquipment = Object.entries(currentEquipment).reduce((acc: any, [k, v]: [string, any]) => {
+              acc[k] = v ? (typeof v === 'string' ? v : (v?.id || null)) : null
+              return acc
+            }, {})
+            updatedEquipment[target.key] = candidateId
+            await saveProtagonistField('equipment', updatedEquipment)
+          } else if (target.type === 'inventory') {
+            const currentInventory = p.inventory || []
+            const idsList = currentInventory.map((i: any) => typeof i === 'string' ? i : (i?.id || ''))
+            if (target.index !== undefined && target.index >= 0 && target.index < idsList.length) {
+              idsList[target.index] = candidateId
+            } else {
+              idsList.push(candidateId)
+            }
+            await saveProtagonistField('inventory', idsList)
+          }
+        }
       }
 
       closeEditEntityModal()
@@ -910,6 +964,44 @@ async function saveChanges() {
     addNotification(errorMsg.value, 'error')
   } finally {
     isSaving.value = false
+  }
+}
+
+async function saveProtagonistField(field: string, newValue: any) {
+  const p = debugData.value?.protagonist
+  if (!p) return
+  isSavingText.value = true
+  try {
+    const updatePayload = {
+      target_type: 'protagonist',
+      target_id: p.id,
+      name: field === 'name' ? String(newValue).trim() : p.name,
+      description: field === 'description' ? String(newValue).trim() : p.description,
+      hp: field === 'hp' ? Number(newValue) : p.hp,
+      stamina: field === 'stamina' ? Number(newValue) : p.stamina,
+      mana: field === 'mana' ? Number(newValue) : p.mana,
+      goal: field === 'goal' ? String(newValue).trim() : p.goal,
+      character: field === 'character' ? String(newValue).trim() : p.character,
+      strength: field === 'strength' ? Number(newValue) : p.strength,
+      intelligence: field === 'intelligence' ? Number(newValue) : p.intelligence,
+      wisdom: field === 'wisdom' ? Number(newValue) : p.wisdom,
+      dexterity: field === 'dexterity' ? Number(newValue) : p.dexterity,
+      charisma: field === 'charisma' ? Number(newValue) : p.charisma,
+      armor_class: field === 'armor_class' ? Number(newValue) : p.armor_class,
+      exp: field === 'exp' ? Number(newValue) : p.exp,
+      inventory: field === 'inventory' ? newValue : (p.inventory ? p.inventory.map((i: any) => typeof i === 'string' ? i : (i?.id || '')) : []),
+      equipment: field === 'equipment' ? newValue : (p.equipment ? Object.entries(p.equipment).reduce((acc: any, [k, v]: [string, any]) => {
+        acc[k] = v ? (typeof v === 'string' ? v : (v?.id || null)) : null
+        return acc
+      }, {}) : {}),
+    }
+    await entityService.saveEntityText(props.adventureId, updatePayload as any)
+    await Promise.all([fetchAdventure(), fetchDebugInfo()])
+    addNotification('Protagonist updated successfully.', 'success')
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to update protagonist.', 'error')
+  } finally {
+    isSavingText.value = false
   }
 }
 
@@ -1782,12 +1874,15 @@ watch(
               :active-menu-id="activeMenuId"
               :visuals-cache-version="visualsCacheVersion"
               :rule-enforcement-mode="form.rule_enforcement_mode"
+              :is-saving-text="isSavingText"
+              :reference-options="referenceOptions"
               @quick-regen="quickRegenerateVisual"
               @open-regen-dialog="openRegenerateDialog"
               @open-upload-picker="openUploadPicker"
               @download-asset="downloadVisualAsset"
-              @open-text-edit="openTextEdit"
               @toggle-menu="toggleMenu"
+              @save-field="saveProtagonistField"
+              @create-new-item="createNewItemForProtagonist"
             />
 
             <ItemsTab 

@@ -75,6 +75,14 @@ class EntityUpdateRequest(BaseModel):
     switch_transitions: Optional[list[dict[str, Any]]] = None
     effects: Optional[dict[str, Any]] = None
     stat_modifier_strength: Optional[int] = None
+    strength: Optional[int] = None
+    intelligence: Optional[int] = None
+    wisdom: Optional[int] = None
+    dexterity: Optional[int] = None
+    charisma: Optional[int] = None
+    armor_class: Optional[int] = None
+    exp: Optional[int] = None
+    equipment: Optional[dict[str, Any]] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -833,6 +841,15 @@ async def update_editor_entity(
             if payload.stamina is not None: 
                 avatar.stamina = payload.stamina
                 avatar.max_stamina = payload.stamina
+            if payload.strength is not None: avatar.strength = payload.strength
+            if payload.intelligence is not None: avatar.intelligence = payload.intelligence
+            if payload.wisdom is not None: avatar.wisdom = payload.wisdom
+            if payload.dexterity is not None: avatar.dexterity = payload.dexterity
+            if payload.charisma is not None: avatar.charisma = payload.charisma
+            if payload.armor_class is not None: avatar.armor_class = payload.armor_class
+            if payload.exp is not None: avatar.exp = payload.exp
+            if payload.inventory is not None: avatar.inventory = list(payload.inventory)
+            if payload.equipment is not None: avatar.equipment = dict(payload.equipment)
     elif payload.target_type == "scene":
         sc_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.id == payload.target_id))
         scene = sc_res.scalars().first()

@@ -177,7 +177,6 @@ function isStartScene(scene: any): boolean {
             <button @click.stop="emit('open-regen-dialog', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regenerate (Prompt)</button>
             <button @click.stop="emit('open-upload-picker', 'scene', scene.id, scene.label || scene.name)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Illustration</button>
             <button v-if="scene.image_url" @click.stop="emit('download-asset', scene.image_url, `${scene.label || scene.name || 'scene'}_image`)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-            <button @click.stop="emit('open-text-edit', 'scene', scene.id, scene.label || scene.name, scene.description)" class="w-full px-4 py-2 text-left text-xs font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit Description</button>
           </div>
         </div>
       </div>

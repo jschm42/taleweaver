@@ -36,6 +36,7 @@ const props = defineProps<{
     effects_mana: number
     stat_modifier_strength: number
     is_item_type_fixed?: boolean
+    is_wearable_slots_fixed?: boolean
   }
   referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null; type?: string }>
   ruleEnforcementMode: string
@@ -692,13 +693,19 @@ const textLogPreviewClass = computed(() => {
                     <label
                       v-for="slot in ['Head', 'Neck', 'Chest', 'Hands', 'Legs', 'Feet', 'MainHand', 'OffHand', 'Finger', 'Wrist', 'Back', 'Waist']"
                       :key="slot"
-                      class="flex items-center gap-2 p-2 rounded-lg border border-white/5 bg-black/20 hover:bg-sky-500/10 hover:border-sky-500/20 cursor-pointer transition-all select-none"
+                      :class="[
+                        'flex items-center gap-2 p-2 rounded-lg border border-white/5 bg-black/20 transition-all select-none',
+                        localForm.is_wearable_slots_fixed
+                          ? 'cursor-not-allowed opacity-50'
+                          : 'cursor-pointer hover:bg-sky-500/10 hover:border-sky-500/20'
+                      ]"
                     >
                       <div class="relative flex items-center">
                         <input
                           type="checkbox"
                           :value="slot"
                           :checked="localForm.wearable_slots_input.includes(slot)"
+                          :disabled="localForm.is_wearable_slots_fixed"
                           @change="(e: Event) => {
                             const checked = (e.target as HTMLInputElement).checked
                             if (checked) {
@@ -707,7 +714,7 @@ const textLogPreviewClass = computed(() => {
                               localForm.wearable_slots_input = localForm.wearable_slots_input.filter((s: string) => s !== slot)
                             }
                           }"
-                          class="w-4 h-4 rounded border-white/20 bg-black/40 text-sky-500 focus:ring-sky-500/40 focus:ring-1"
+                          class="w-4 h-4 rounded border-white/20 bg-black/40 text-sky-500 focus:ring-sky-500/40 focus:ring-1 disabled:opacity-50"
                         />
                       </div>
                       <span class="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{{ slot }}</span>

@@ -11,6 +11,7 @@ import {
   formatObjectIds,
 } from '@/utils/editor_utils'
 import { Save, X, Trash2, ArrowLeft } from 'lucide-vue-next'
+import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 
 const props = defineProps<{
   adventureId: string
@@ -49,13 +50,8 @@ const emit = defineEmits<{
 }>()
 
 // Local states for editing name and description
-const isEditingSceneName = ref(false)
-const isEditingSceneDesc = ref(false)
+const sceneDescFieldRef = ref<any>(null)
 const isGeneratingSceneDesc = ref(false)
-const sceneNameEdit = ref('')
-const sceneDescEdit = ref('')
-const sceneNameInputRef = ref<HTMLInputElement | null>(null)
-const sceneDescInputRef = ref<HTMLTextAreaElement | null>(null)
 
 // Filtering
 const routeSceneSearch = ref('')
@@ -157,41 +153,12 @@ const filteredRouteSceneTextLogs = computed(() => routeSceneTextLogs.value.filte
 const filteredRouteSceneExits = computed(() => routeSceneExits.value.filter((entry) => matchesRouteSceneSearch(entry)))
 
 // Actions
-function startEditingSceneName() {
+async function saveSceneName(newName: any) {
   const scene = routeSceneDetails.value
   if (!scene) return
-  sceneNameEdit.value = String(scene.label || scene.name || scene.id || '')
-  isEditingSceneName.value = true
-  nextTick(() => {
-    sceneNameInputRef.value?.focus()
-    sceneNameInputRef.value?.select()
-  })
-}
-
-function startEditingSceneDesc() {
-  const scene = routeSceneDetails.value
-  if (!scene) return
-  sceneDescEdit.value = String(scene.description || '')
-  isEditingSceneDesc.value = true
-  nextTick(() => {
-    sceneDescInputRef.value?.focus()
-  })
-}
-
-async function saveSceneNameEdit() {
-  const scene = routeSceneDetails.value
-  if (!scene) return
-  const newName = sceneNameEdit.value.trim()
-  if (!newName) {
+  const nameStr = String(newName).trim()
+  if (!nameStr) {
     notificationService.add('Scene name is required.', 'error')
-    return
-  }
-  if (newName.length > 100) {
-    notificationService.add('Scene name must be 100 characters or less.', 'error')
-    return
-  }
-  if (newName === String(scene.label || scene.name || '')) {
-    isEditingSceneName.value = false
     return
   }
   localIsSavingText.value = true
@@ -199,7 +166,7 @@ async function saveSceneNameEdit() {
     await entityService.saveEntityText(props.adventureId, {
       target_type: 'scene',
       target_id: String(scene.id),
-      name: newName,
+      name: nameStr,
       description: scene.description,
     })
     emit('refresh')
@@ -208,24 +175,15 @@ async function saveSceneNameEdit() {
     notificationService.add(error?.message || 'Failed to update scene name.', 'error')
   } finally {
     localIsSavingText.value = false
-    isEditingSceneName.value = false
   }
 }
 
-async function saveSceneDescEdit() {
+async function saveSceneDesc(newDesc: any) {
   const scene = routeSceneDetails.value
   if (!scene) return
-  const newDesc = sceneDescEdit.value.trim()
-  if (!newDesc) {
+  const descStr = String(newDesc).trim()
+  if (!descStr) {
     notificationService.add('Scene description is required.', 'error')
-    return
-  }
-  if (newDesc.length > 1000) {
-    notificationService.add('Scene description must be 1000 characters or less.', 'error')
-    return
-  }
-  if (newDesc === String(scene.description || '')) {
-    isEditingSceneDesc.value = false
     return
   }
   localIsSavingText.value = true
@@ -234,7 +192,7 @@ async function saveSceneDescEdit() {
       target_type: 'scene',
       target_id: String(scene.id),
       name: scene.label || scene.name,
-      description: newDesc,
+      description: descStr,
     })
     emit('refresh')
     notificationService.add('Scene description updated.', 'success')
@@ -242,18 +200,7 @@ async function saveSceneDescEdit() {
     notificationService.add(error?.message || 'Failed to update scene description.', 'error')
   } finally {
     localIsSavingText.value = false
-    isEditingSceneDesc.value = false
   }
-}
-
-function cancelSceneNameEdit() {
-  isEditingSceneName.value = false
-  sceneNameEdit.value = ''
-}
-
-function cancelSceneDescEdit() {
-  isEditingSceneDesc.value = false
-  sceneDescEdit.value = ''
 }
 
 async function handleGenerateSceneDesc() {
@@ -262,7 +209,7 @@ async function handleGenerateSceneDesc() {
   isGeneratingSceneDesc.value = true
   try {
     const result = await entityService.generateSceneDescription(props.adventureId, sceneName)
-    sceneDescEdit.value = result.description
+    sceneDescFieldRef.value?.setEditValue(result.description)
     notificationService.add('AI generated scene description.', 'success')
   } catch (error: any) {
     notificationService.add(error?.message || 'Failed to generate scene description.', 'error')
@@ -345,99 +292,43 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         <div class="space-y-2">
           <div class="flex justify-between items-center">
             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Scene Name <span class="text-red-400">*</span></label>
-            <span v-if="isEditingSceneName" :class="['text-[9px] font-bold tracking-widest', (sceneNameEdit || '').length > 100 ? 'text-red-500' : 'text-emerald-500/50']">
-              {{ (sceneNameEdit || '').length }} / 100
-            </span>
           </div>
-          <div v-if="isEditingSceneName" class="flex gap-2 animate-fade-in">
-            <input
-              ref="sceneNameInputRef"
-              v-model="sceneNameEdit"
-              maxlength="100"
-              class="flex-grow bg-slate-950/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all"
-              @keydown.enter="saveSceneNameEdit"
-              @keydown.esc="cancelSceneNameEdit"
-            />
-            <button
-              :disabled="localIsSavingText || isSavingText || !(sceneNameEdit || '').trim()"
-              class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg shrink-0"
-              title="Save"
-              @click="saveSceneNameEdit"
-            >
-              <i v-if="localIsSavingText || isSavingText" class="ra ra-cycle animate-spin"></i>
-              <Save v-else class="w-4 h-4" />
-            </button>
-            <button
-              class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all shrink-0"
-              title="Discard"
-              @click="cancelSceneNameEdit"
-            >
-              <X class="w-4 h-4" />
-            </button>
-          </div>
-          <div
-            v-else
-            class="group cursor-pointer bg-slate-950/30 hover:bg-slate-950/50 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-center h-[46px]"
-            @click="startEditingSceneName"
-          >
-            <span class="text-sm font-bold text-white truncate mr-2">{{ routeSceneDetails?.label || routeSceneDetails?.name || routeSceneDetails?.id || sceneId }}</span>
-            <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"></i>
-          </div>
+          <InlineEditableField
+            :value="routeSceneDetails?.label || routeSceneDetails?.name || routeSceneDetails?.id || sceneId"
+            type="text"
+            :maxlength="100"
+            required
+            :is-saving="localIsSavingText || isSavingText"
+            display-class="group cursor-pointer bg-slate-950/30 hover:bg-slate-950/50 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]"
+            input-class="flex-grow min-w-0 w-full bg-slate-950/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all"
+            @save="saveSceneName"
+          />
         </div>
 
         <!-- Scene Description Column -->
         <div class="space-y-2">
           <div class="flex justify-between items-center">
             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Description <span class="text-red-400">*</span></label>
-            <span v-if="isEditingSceneDesc" :class="['text-[9px] font-bold tracking-widest', (sceneDescEdit || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
-              {{ (sceneDescEdit || '').length }} / 1000
-            </span>
           </div>
-          <div v-if="isEditingSceneDesc" class="flex gap-2 animate-fade-in">
-            <textarea
-              ref="sceneDescInputRef"
-              v-model="sceneDescEdit"
-              maxlength="1000"
-              rows="3"
-              class="flex-grow bg-slate-950/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-none"
-              @keydown.esc="cancelSceneDescEdit"
-            ></textarea>
-            <div class="flex flex-col gap-1.5 shrink-0">
-              <button
-                :disabled="localIsSavingText || isSavingText || !(sceneDescEdit || '').trim()"
-                class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg"
-                title="Save"
-                @click="saveSceneDescEdit"
-              >
-                <i v-if="localIsSavingText || isSavingText" class="ra ra-cycle animate-spin"></i>
-                <Save v-else class="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                :disabled="localIsSavingText || isSavingText || isGeneratingSceneDesc || !(routeSceneDetails?.label || routeSceneDetails?.name)"
-                class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 rounded-xl transition-all"
-                title="AI Generate Description"
-                @click="handleGenerateSceneDesc"
-              >
-                <i class="ra ra-crystals" :class="{ 'animate-spin': isGeneratingSceneDesc }"></i>
-              </button>
-              <button
-                class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all"
-                title="Discard"
-                @click="cancelSceneDescEdit"
-              >
-                <X class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <div
-            v-else
-            class="group cursor-pointer bg-slate-950/30 hover:bg-slate-950/50 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-start min-h-[46px]"
-            @click="startEditingSceneDesc"
+          <InlineEditableField
+            ref="sceneDescFieldRef"
+            :value="routeSceneDetails?.description || ''"
+            type="textarea"
+            :maxlength="1000"
+            required
+            :use-references="true"
+            :reference-options="referenceOptions"
+            :is-saving="localIsSavingText || isSavingText"
+            :show-ai-generate="true"
+            :is-generating-ai="isGeneratingSceneDesc"
+            display-class="group cursor-pointer bg-slate-950/30 hover:bg-slate-950/50 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-3 transition-all duration-300 shadow-inner flex justify-between items-start w-full min-h-[46px]"
+            @save="saveSceneDesc"
+            @ai-generate="handleGenerateSceneDesc"
           >
-            <span class="text-sm text-slate-300 break-words flex-grow mr-2" v-html="formatObjectIds(routeSceneDetails?.description || 'No description.')"></span>
-            <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"></i>
-          </div>
+            <template #default="{ value }">
+              <span class="text-sm text-slate-300 break-words flex-grow mr-2" v-html="formatObjectIds(String(value || 'No description.'))"></span>
+            </template>
+          </InlineEditableField>
         </div>
       </div>
     </div>

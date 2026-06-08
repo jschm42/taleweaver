@@ -34,7 +34,7 @@ const props = withDefaults(defineProps<{
   rows: 3,
   emptyText: 'No content set. Click to edit.',
   displayClass: 'group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center w-full min-h-[46px]',
-  inputClass: 'flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all',
+  inputClass: 'flex-grow min-w-0 w-full bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all',
   activeEditId: null
 })
 
@@ -141,7 +141,7 @@ defineExpose({
           :maxlength="maxlength"
           :placeholder="placeholder"
           class-name="w-full bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-y min-h-[80px]"
-          class="flex-grow min-w-0"
+          class="flex-grow min-w-0 w-full"
         />
         <textarea
           v-else
@@ -150,7 +150,7 @@ defineExpose({
           :maxlength="maxlength"
           :rows="rows"
           :placeholder="placeholder"
-          class="flex-grow bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-y min-h-[80px]"
+          class="flex-grow min-w-0 w-full bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 ring-emerald-500/20 outline-none transition-all resize-y min-h-[80px]"
           @keydown.esc="cancelEdit"
         ></textarea>
       </template>

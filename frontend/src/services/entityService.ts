@@ -30,6 +30,14 @@ export interface EntityEditData {
   switch_transitions?: any[]
   effects?: Record<string, any>
   stat_modifier_strength?: number
+  strength?: number
+  intelligence?: number
+  wisdom?: number
+  dexterity?: number
+  charisma?: number
+  armor_class?: number
+  exp?: number
+  equipment?: Record<string, any>
 }
 
 export interface SceneCreateData {
