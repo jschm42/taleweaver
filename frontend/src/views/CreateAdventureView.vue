@@ -269,7 +269,7 @@ onMounted(() => {
   <div class="h-full min-h-0 overflow-y-auto bg-slate-950 text-slate-200 font-sans p-8 md:p-12">
     <header class="max-w-7xl mx-auto mb-12 flex items-center justify-between">
       <div>
-        <h1 class="text-4xl font-black text-white uppercase tracking-tight">New Adventure</h1>
+        <h1 class="text-4xl font-black text-white uppercase tracking-tight">Generate Adventure</h1>
         <p class="text-slate-500 mt-2 tracking-wide text-sm">Weave the parameters of your next odyssey.</p>
       </div>
       <button @click="router.back()" class="px-6 py-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all">Back</button>

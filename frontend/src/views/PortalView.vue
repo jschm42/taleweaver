@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { configState } from '@/store/config'
 import { authState } from '@/store/auth'
+import { api } from '@/composables/useApi'
 import { usePortalData } from '@/composables/usePortalData'
 import { usePortalSectionRouting } from '@/composables/usePortalSectionRouting'
 import PortalSidebar from '@/components/portal/PortalSidebar.vue'
@@ -162,6 +163,28 @@ function openCreateModal() {
   router.push({ name: 'adventure-create' })
 }
 
+async function createEmptyAdventure() {
+  setLoadingState(true)
+  try {
+    const payload = {
+      title: 'New Adventure',
+      skip_generation: true,
+      rule_enforcement_mode: 'rpg' as const
+    }
+    const result = await api.createAdventure(payload)
+    router.push({ 
+      name: 'adventure-editor', 
+      params: { adventureId: result.adventure_id },
+      query: { from: activeSection.value }
+    })
+  } catch (error: any) {
+    console.error('Failed to create empty adventure:', error)
+    errorMsg.value = error?.message || 'Failed to create empty adventure.'
+  } finally {
+    setLoadingState(false)
+  }
+}
+
 async function onDeleteAllAdventures() {
   if (templates.length === 0 || isDeleting.value) return
   showDeleteAllAdventuresConfirm.value = true
@@ -301,7 +324,8 @@ onUnmounted(() => {
               :loading-word-index="loadingWordIndex"
               :is-starting-session="isStartingSession"
               :starting-session-template-id="startingSessionTemplateId"
-              @create="openCreateModal"
+              @create="createEmptyAdventure"
+              @generate-world="openCreateModal"
               @import-samples="handleImportSamplesClick"
               @remove-failed-pending="removeFailedPendingCard"
               @cancel-pending="cancelAdventure"

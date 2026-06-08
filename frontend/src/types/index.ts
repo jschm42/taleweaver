@@ -222,6 +222,7 @@ export interface CreateAdventurePayload {
   cover_source_adventure_name?: string
   cover_similarity_percent?: number
   allow_reuse_source_assets?: boolean
+  skip_generation?: boolean
 }
 
 export interface CatalogTile {

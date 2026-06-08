@@ -382,6 +382,11 @@ export const api = {
     return request(`/adventures/${adventureId}`, { method: 'DELETE' })
   },
 
+  /** Updates an adventure template's metadata. */
+  updateAdventureTemplate(templateId: string, payload: any): Promise<any> {
+    return request(`/adventures/${templateId}`, { method: 'PATCH', body: JSON.stringify(payload) })
+  },
+
   /** Saves an encrypted API key for a provider. */
   saveApiKey(provider: string, apiKey: string): Promise<{ status: string; message: string }> {
     return request('/settings/keys', {

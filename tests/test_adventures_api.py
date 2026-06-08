@@ -3602,6 +3602,27 @@ async def test_editor_strict_object_id_validation_and_uniqueness(client: AsyncCl
     assert create_scene_fail_dup.status_code == 409
 
 
+async def test_create_adventure_skip_generation(client: AsyncClient):
+    """Verify that creating an adventure with skip_generation=True skips background gen and is immediately ready."""
+    payload = {
+        "title": "Empty Sandbox Quest",
+        "avatar_name": "Lone Ranger",
+        "skip_generation": True,
+    }
+    resp = await client.post("/api/adventures/", json=payload)
+    assert resp.status_code == 201, resp.text
+    ids = resp.json()
+    assert ids["adventure_id"]
+    
+    # Fetch details and ensure it is ready
+    get_resp = await client.get(f"/api/adventures/{ids['adventure_id']}")
+    assert get_resp.status_code == 200, get_resp.text
+    data = get_resp.json()
+    assert data["is_ready"] is True
+    assert data["creation_status"] == "Ready"
+
+
+
 
 
 

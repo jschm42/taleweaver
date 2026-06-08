@@ -180,6 +180,7 @@ async def _materialize_initial_session_from_template(
     if copied_cover:
         game_session.adventure_image_url = copied_cover
 
+    session_avatar = None
     if avatar:
         # Heal template avatar image on the fly if corrupted
         healed_image = AdventureLogic.heal_template_avatar_profile_image(template_id, avatar.profile_image)
@@ -340,7 +341,11 @@ async def _materialize_initial_session_from_template(
         raw_snapshot = entity_states.get("__asset_snapshot__")
         snapshot = dict(raw_snapshot) if isinstance(raw_snapshot, dict) else {}
         snapshot["cover"] = game_session.adventure_image_url
-        snapshot["protagonist"] = avatar.profile_image if avatar else snapshot.get("protagonist")
+        snapshot["protagonist"] = (
+            session_avatar.profile_image
+            if session_avatar
+            else (avatar.profile_image if avatar else snapshot.get("protagonist"))
+        )
         snapshot["entity_images"] = entity_images
         entity_states["__asset_snapshot__"] = snapshot
         session_state.entity_states = entity_states
@@ -700,8 +705,8 @@ async def create_adventure(
         max_awards=payload.max_awards,
         can_damage_npcs=payload.can_damage_npcs,
         npcs_can_damage_protagonist=payload.npcs_can_damage_protagonist,
-        is_ready=False,
-        creation_status="Initializing...",
+        is_ready=True if payload.skip_generation else False,
+        creation_status="Ready" if payload.skip_generation else "Initializing...",
         original_manifest=payload.original_manifest,
         teaser=payload.teaser,
         version=payload.version,
@@ -969,7 +974,8 @@ async def create_adventure(
                     bg_adv.creation_error = str(e)
                     await bg_db.commit()
 
-    background_tasks.add_task(run_gen)
+    if not payload.skip_generation:
+        background_tasks.add_task(run_gen)
     
     return {
         "game_id": session.id,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AdventureTemplateSummary } from '@/types'
 import PortalCreateAdventureCard from './PortalCreateAdventureCard.vue'
+import GenerateWorldCard from './GenerateWorldCard.vue'
 import ImportExamplesCard from './ImportExamplesCard.vue'
 import PendingAdventureCard from './PendingAdventureCard.vue'
 import AdventureTemplateCard from './AdventureTemplateCard.vue'
@@ -16,6 +17,7 @@ defineProps<{
 
 defineEmits<{
   (e: 'create'): void
+  (e: 'generate-world'): void
   (e: 'import-samples'): void
   (e: 'remove-failed-pending', adventureId: string, kind: 'creation' | 'import'): void
   (e: 'cancel-pending', adventureId: string): void
@@ -33,6 +35,8 @@ defineEmits<{
 <template>
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-5 xl:gap-4">
     <PortalCreateAdventureCard @click="$emit('create')" />
+
+    <GenerateWorldCard @generate="$emit('generate-world')" />
     
     <ImportExamplesCard 
       v-if="!isSeeding" 
@@ -40,7 +44,7 @@ defineEmits<{
     />
 
     <!-- Loading indicator for seeding -->
-    <div v-if="isSeeding" class="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl aspect-[3/2] bg-white/5 gap-3">
+    <div v-if="isSeeding" class="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl bg-white/5 gap-3 h-full">
       <div class="w-8 h-8 border-2 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
       <span class="text-xxs text-aether-primary uppercase tracking-widest font-bold">Importing Tales...</span>
     </div>

@@ -5,8 +5,8 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <button
-    class="group flex flex-col border-2 border-dashed border-white/10 rounded-xl hover:border-blue-500/30 transition-all bg-transparent overflow-hidden text-left h-full"
+  <article
+    class="group flex flex-col border-2 border-dashed border-white/10 rounded-xl hover:border-blue-500/30 cursor-pointer transition-all bg-transparent overflow-hidden text-left h-full w-full"
     @click="emit('import')"
   >
     <!-- Placeholder Cover -->
@@ -20,10 +20,23 @@ const emit = defineEmits<{
       </div>
     </div>
     
-    <div class="p-6 flex flex-col gap-2">
-      <h3 class="text-2xl font-black text-white leading-tight tracking-tight">Import Examples</h3>
-      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Seed your library with classic tales.</p>
-    </div>
-  </button>
-</template>
+    <!-- Content Area -->
+    <div class="p-6 pt-5 flex flex-col gap-4 flex-1 w-full">
+      <div class="space-y-2 flex-1">
+        <h3 class="text-xl font-black text-white leading-tight tracking-tight">Import Examples</h3>
+        <div class="h-4"></div>
+        <p class="text-xs font-bold text-slate-500 uppercase tracking-widest leading-relaxed">
+          Seed your library with classic tales.
+        </p>
+      </div>
 
+      <!-- Action Button -->
+      <div
+        class="w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-3 bg-blue-500/10 text-blue-400 border-blue-500/20 group-hover:bg-blue-500/20"
+      >
+        <i class="ra ra-book text-sm"></i>
+        Import
+      </div>
+    </div>
+  </article>
+</template>

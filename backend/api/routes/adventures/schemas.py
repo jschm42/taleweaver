@@ -56,6 +56,7 @@ class CreateAdventureTemplatePayload(BaseModel):
     cover_source_adventure_name: Optional[str] = None
     cover_similarity_percent: int = 50
     allow_reuse_source_assets: bool = True
+    skip_generation: Optional[bool] = False
 
     @field_validator("title")
     @classmethod
