@@ -445,9 +445,9 @@ class DebugEngine:
                     if (te.from_scene_id, te.to_scene_id, te.label) not in session_exits:
                         exits.append(te)
             
-            # 3. Get or create the map for this SPECIFIC session
+            # 3. Get or create the TEMPLATE-LEVEL map — this is what the frontend always reads
             from backend.api.routes.adventures.logic import AdventureLogic
-            world_map = await AdventureLogic.get_or_create_map(db, state.template_id, session_id=state.session_id)
+            world_map = await AdventureLogic.get_or_create_map(db, state.template_id)
             
             # 4. Register everything
             for s in scenes:
