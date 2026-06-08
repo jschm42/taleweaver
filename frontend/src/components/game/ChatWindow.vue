@@ -781,12 +781,21 @@ onUnmounted(() => {
             :class="[
               audioService.autoSpeechEnabled.value
                 ? 'bg-blue-500/15 border-blue-500/40 shadow-[0_0_12px_rgba(96,165,250,0.25)]'
-                : 'bg-slate-950/40 border-slate-800/50 hover:bg-white/5 hover:border-white/10'
+                : 'bg-slate-900/60 border-slate-700/70 hover:bg-slate-800/80 hover:border-slate-500'
             ]"
             title="Toggle Automatic Speech"
             :aria-label="audioService.autoSpeechEnabled.value ? 'Auto Speak enabled' : 'Auto Speak disabled'"
+            :aria-pressed="audioService.autoSpeechEnabled.value"
           >
-            <i :class="['ra text-base group-hover:scale-110 transition-transform', audioService.autoSpeechEnabled.value ? 'ra-microphone text-blue-400' : 'ra-microphone-mute text-slate-500']"></i>
+            <i :class="['ra text-lg group-hover:scale-110 transition-transform', audioService.autoSpeechEnabled.value ? 'ra-microphone text-blue-400' : 'ra-microphone text-slate-400 group-hover:text-slate-200']"></i>
+            <!-- Disabled indicator: diagonal slash across the icon -->
+            <span
+              v-if="!audioService.autoSpeechEnabled.value"
+              class="absolute inset-0 flex items-center justify-center pointer-events-none"
+              aria-hidden="true"
+            >
+              <span class="block w-[120%] h-px bg-slate-500/80 rotate-45 rounded-full shadow-[0_0_4px_rgba(0,0,0,0.5)]"></span>
+            </span>
             <div
               v-if="audioService.autoSpeechEnabled.value"
               class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"
