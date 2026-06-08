@@ -47,11 +47,11 @@ onUnmounted(() => {
     <div class="absolute inset-0 animate-shimmer opacity-30 pointer-events-none"></div>
     
     <!-- Placeholder Cover Area -->
-    <div class="aspect-[3/2] w-full bg-white/5 flex flex-col items-center justify-center border-b border-white/5 relative p-4 sm:p-6 text-center">
-      <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-aether-primary/10 border border-aether-primary/20 flex items-center justify-center mb-2 sm:mb-3">
+    <div class="aspect-[4/3] sm:aspect-[3/2] w-full bg-white/5 flex flex-col items-center justify-center border-b border-white/5 relative p-3 sm:p-6 text-center">
+      <div class="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-aether-primary/10 border border-aether-primary/20 flex items-center justify-center mb-1.5 sm:mb-3">
         <i
           :class="[
-            'ra text-base sm:text-lg',
+            'ra text-sm sm:text-lg',
             props.pending.hasError ? 'ra-burning-embers text-red-400' : 'ra-cog text-aether-primary animate-spin',
           ]"
         ></i>
@@ -79,27 +79,28 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <div class="p-4 sm:p-5 lg:p-6 flex-1 flex flex-col gap-2">
-      <h3 class="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight tracking-tight line-clamp-1">{{ props.pending.title }}</h3>
-      <p class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed min-h-[2rem]">
+    <div class="p-2.5 sm:p-5 lg:p-6 flex-1 flex flex-col gap-1.5 sm:gap-2">
+      <h3 class="text-[11px] sm:text-xl lg:text-2xl font-black text-white leading-tight tracking-tight line-clamp-2 sm:line-clamp-1 break-words">{{ props.pending.title }}</h3>
+      <p class="hidden sm:block text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed min-h-[2rem]">
         {{ props.pending.hasError ? props.pending.status : currentSaying }}
       </p>
       
       <span
         v-if="!props.pending.hasError"
-        class="text-[10px] font-bold text-sky-400/80 uppercase tracking-widest flex items-center gap-1.5 mt-1 animate-pulse"
+        class="hidden sm:flex text-[10px] font-bold text-sky-400/80 uppercase tracking-widest items-center gap-1.5 mt-1 animate-pulse"
       >
         <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
         Click for details
       </span>
 
-      <div class="mt-auto pt-4">
+      <div class="mt-auto pt-2 sm:pt-4">
         <button
           v-if="props.pending.hasError"
-          class="w-full px-3 py-3 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
+          class="w-full px-2 sm:px-3 py-2 sm:py-3 rounded-md sm:rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-red-500/25 transition-colors"
           @click.stop="emit('removeFailed', props.pending.adventureId, props.pending.kind)"
         >
-          Remove Adventure
+          <span class="sm:hidden">Remove</span>
+          <span class="hidden sm:inline">Remove Adventure</span>
         </button>
       </div>
     </div>

@@ -1086,23 +1086,23 @@ onUnmounted(() => {
     />
 
     <!-- Input bar -->
-    <div class="border-t border-slate-800 bg-slate-950 p-4 shrink-0">
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+    <div class="border-t border-slate-800 bg-slate-950 p-3 sm:p-4 shrink-0">
+      <div class="flex items-center gap-2 sm:gap-3">
         <!-- Text Input & Send Row -->
-        <div class="flex items-center gap-2 flex-grow">
+        <div class="flex items-center gap-1.5 sm:gap-2 flex-grow min-w-0">
           <!-- Sidebar Toggle (Mobile/Tablet only) -->
           <button
-            class="xl:hidden w-12 h-12 shrink-0 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-indigo-500/10 hover:border-indigo-500/40 text-slate-400 hover:text-indigo-400 transition-all flex items-center justify-center cursor-pointer shadow-lg group/sidebar-btn"
+            class="xl:hidden w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-indigo-500/10 hover:border-indigo-500/40 text-slate-400 hover:text-indigo-400 transition-all flex items-center justify-center cursor-pointer shadow-lg group/sidebar-btn"
             title="Scene & Inhabitants"
             @click="emit('toggleSidebar')"
           >
-            <Compass class="w-5 h-5 transition-transform duration-500 group-hover/sidebar-btn:rotate-[45deg]" />
+            <Compass class="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-500 group-hover/sidebar-btn:rotate-[45deg]" />
           </button>
 
           <!-- Text Input Wrapper -->
-          <div class="relative flex-grow">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
+          <div class="relative flex-grow min-w-0">
+            <div class="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
               </svg>
             </div>
@@ -1112,12 +1112,12 @@ onUnmounted(() => {
               type="text"
               :disabled="!canSendInput || audioService.isGenerating.value || props.sheet?.agent_active"
               :placeholder="props.sheet?.agent_active ? (agentPaused ? 'Agent Mode Paused. Click Resume or Stop.' : 'Agent Mode Active. Click Stop to regain control.') : 'What do you do next?'"
-              class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
+              class="w-full min-w-0 bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-2.5 sm:py-3.5 pl-9 sm:pl-11 pr-3 sm:pr-4 text-sm sm:text-base text-slate-200 placeholder-slate-600 placeholder:truncate placeholder:text-ellipsis outline-none transition-all disabled:opacity-50"
               @keydown="handleKeydown"
             />
 
             <!-- Command Popup -->
-            <CommandPopup 
+            <CommandPopup
               v-if="showCommandPopup && filteredCommands.length > 0"
               :query="inputText"
               :active-index="commandPopupIndex"
@@ -1131,25 +1131,25 @@ onUnmounted(() => {
           <!-- Send Button (Primary Action) -->
           <button
             :disabled="!canSendInput || !inputText.trim()"
-            class="w-12 h-12 shrink-0 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white disabled:bg-slate-800 disabled:text-slate-600 transition-colors shadow-lg active:scale-95 flex items-center justify-center mr-4"
+            class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white disabled:bg-slate-800 disabled:text-slate-600 transition-colors shadow-lg active:scale-95 flex items-center justify-center"
             title="Send Command"
             @click="() => handleSend()"
           >
-            <SendHorizontal class="h-5 w-5" />
+            <SendHorizontal class="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
         </div>
 
         <!-- Tool Buttons & Adventure Menu -->
-        <div class="flex items-center justify-center sm:justify-end gap-2 shrink-0">
+        <div class="flex items-center justify-end gap-2 shrink-0">
           <div class="relative shrink-0 adventure-menu-container">
             <button
-              class="p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+              class="p-1 sm:p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
               :class="{ 'glow-gear': isAnyGlowActive }"
               title="Adventure Menu"
               @click="showMenuPopup = !showMenuPopup"
             >
-              <div :class="['h-14 w-14 rounded-full bg-slate-800/40 border flex items-center justify-center transition-all shadow-xl backdrop-blur-md', showMenuPopup ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-slate-700/50 group-hover:border-indigo-500/50']">
-                <i :class="['ra ra-cog text-3xl text-slate-400 group-hover:text-indigo-400 group-hover:drop-shadow-[0_0_15px_rgba(99,102,241,0.8)] transition-all', showMenuPopup ? 'text-indigo-400 animate-spin' : '']"></i>
+              <div :class="['h-10 w-10 sm:h-14 sm:w-14 rounded-full bg-slate-800/40 border flex items-center justify-center transition-all shadow-xl backdrop-blur-md', showMenuPopup ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-slate-700/50 group-hover:border-indigo-500/50']">
+                <i :class="['ra ra-cog text-xl sm:text-3xl text-slate-400 group-hover:text-indigo-400 group-hover:drop-shadow-[0_0_15px_rgba(99,102,241,0.8)] transition-all', showMenuPopup ? 'text-indigo-400 animate-spin' : '']"></i>
               </div>
             </button>
 
@@ -1208,7 +1208,7 @@ onUnmounted(() => {
       </div>
       
       <!-- Verbal Speech Hint / Toggle (Interactive) -->
-      <div class="mt-1 pl-11 flex items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity select-none">
+      <div class="hidden sm:flex mt-1 pl-11 items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity select-none">
          <span class="text-[9px] uppercase tracking-widest text-slate-500 font-bold">Shortcut:</span>
          <button
            type="button"

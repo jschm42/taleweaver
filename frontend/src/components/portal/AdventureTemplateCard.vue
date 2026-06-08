@@ -80,7 +80,7 @@ function dismissWarning() {
 <template>
   <article class="rounded-xl border border-white/10 bg-aether-surface/20 flex flex-col relative group">
     <!-- Top Cover Area -->
-    <div class="aspect-[3/2] relative bg-black/30">
+    <div class="aspect-[4/3] sm:aspect-[3/2] relative bg-black/30">
       <div class="absolute inset-0 overflow-hidden rounded-t-xl">
         <img
           v-if="props.template.image_url"
@@ -88,32 +88,32 @@ function dismissWarning() {
           class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
           alt="Adventure cover"
         />
-        <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs font-bold uppercase tracking-widest">
+        <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest">
           No Cover
         </div>
       </div>
 
-      <div class="card-image-fray pointer-events-none absolute inset-x-0 bottom-0 h-24"></div>
+      <div class="card-image-fray pointer-events-none absolute inset-x-0 bottom-0 h-16 sm:h-24"></div>
 
       <!-- Tone Badge -->
-      <div v-if="props.template.selected_tone" class="absolute top-2 left-2 sm:top-3 sm:left-3">
-        <span class="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-aether-primary/20 text-aether-primary text-[10px] sm:text-xs uppercase tracking-widest font-black border border-aether-primary/20">
+      <div v-if="props.template.selected_tone" class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3">
+        <span class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-aether-primary/20 text-aether-primary text-[9px] sm:text-xs uppercase tracking-widest font-black border border-aether-primary/20 max-w-[7rem] truncate inline-block">
           {{ toneLabel }}
         </span>
       </div>
 
       <!-- Moderation Warning Badge -->
-      <div v-if="props.template.creation_error" class="absolute top-2 left-2 sm:top-3 sm:left-3 mt-8 sm:mt-10">
+      <div v-if="props.template.creation_error" class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 mt-6 sm:mt-10">
         <div class="group/warn relative">
-          <div class="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-500/20 text-amber-500 text-[10px] sm:text-xs uppercase tracking-widest font-black border border-amber-500/20 flex items-center gap-1.5 sm:gap-2 backdrop-blur-md shadow-lg shadow-amber-500/10 cursor-help">
-            <i class="ra ra-warning text-xs sm:text-sm"></i>
-            <span class="hidden xs:inline sm:inline">Visual Issues</span>
+          <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-500/20 text-amber-500 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-amber-500/20 flex items-center gap-1 sm:gap-2 backdrop-blur-md shadow-lg shadow-amber-500/10 cursor-help">
+            <i class="ra ra-warning text-[10px] sm:text-sm"></i>
+            <span class="hidden sm:inline">Visual Issues</span>
             <button
               @click.stop="dismissWarning"
-              class="ml-1 p-0.5 hover:bg-amber-500/20 rounded-md transition-colors"
+              class="ml-0.5 sm:ml-1 p-0.5 hover:bg-amber-500/20 rounded-md transition-colors"
               title="Meldung ausblenden"
             >
-              <X class="w-3 h-3" />
+              <X class="w-2.5 h-2.5 sm:w-3 sm:h-3" />
             </button>
           </div>
           <!-- Tooltip-style detail -->
@@ -128,13 +128,13 @@ function dismissWarning() {
       </div>
 
       <!-- Action Dots -->
-      <div class="absolute top-2 right-2 sm:top-3 sm:right-3" ref="menuRef">
+      <div class="absolute top-1.5 right-1.5 sm:top-3 sm:right-3" ref="menuRef">
         <button
           @click.stop="toggleMenu"
-          class="w-8 h-8 sm:w-8 sm:h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all flex items-center justify-center"
+          class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all flex items-center justify-center"
           title="Adventure options"
         >
-          <MoreHorizontal class="w-4 h-4 sm:w-5 sm:h-5" />
+          <MoreHorizontal class="w-3.5 h-3.5 sm:w-5 sm:h-5" />
         </button>
 
         <Transition
@@ -147,7 +147,7 @@ function dismissWarning() {
         >
           <div
             v-if="isMenuOpen"
-            class="absolute right-0 top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
+            class="absolute right-0 top-9 sm:top-10 z-30 w-44 bg-[#0d1117] border border-white/10 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] overflow-hidden backdrop-blur-xl"
           >
             <button
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/5"
@@ -186,20 +186,20 @@ function dismissWarning() {
     </div>
 
     <!-- Content Area -->
-    <div class="p-4 sm:p-5 lg:p-6 lg:pt-5 flex flex-col gap-3 sm:gap-4 flex-1 relative z-10">
-      <div class="space-y-2 flex-1">
-        <h3 class="text-base sm:text-lg lg:text-xl font-black text-white leading-tight line-clamp-1 tracking-tight">{{ props.template.title }}</h3>
-        <div v-if="props.template.version" class="flex items-center gap-1.5 opacity-60">
+    <div class="p-2.5 sm:p-5 lg:p-6 lg:pt-5 flex flex-col gap-2 sm:gap-4 flex-1 relative z-10">
+      <div class="space-y-1 sm:space-y-2 flex-1 min-w-0">
+        <h3 class="text-[11px] sm:text-lg lg:text-xl font-black text-white leading-tight line-clamp-2 sm:line-clamp-1 tracking-tight break-words">{{ props.template.title }}</h3>
+        <div v-if="props.template.version" class="hidden sm:flex items-center gap-1.5 opacity-60">
           <span class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-tighter">v{{ props.template.version }}</span>
         </div>
-        <p v-if="props.template.teaser" class="text-[11px] sm:text-xs font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-3 leading-relaxed whitespace-pre-wrap">
+        <p v-if="props.template.teaser" class="hidden sm:block text-[11px] sm:text-xs font-bold text-emerald-500/80 uppercase tracking-widest line-clamp-3 leading-relaxed whitespace-pre-wrap">
           {{ fixNewlines(props.template.teaser) }}
         </p>
       </div>
 
       <!-- Action Button -->
       <button
-        class="w-full py-3 sm:py-3.5 rounded-xl text-[11px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-2 sm:gap-3 shadow-lg"
+        class="w-full py-2 sm:py-3.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 sm:gap-3 shadow-lg"
         :class="props.isStartingSession
           ? 'bg-slate-800/70 text-slate-400 border-slate-700 cursor-not-allowed shadow-slate-900/30'
           : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20 shadow-emerald-500/5 group/btn'"
@@ -207,9 +207,9 @@ function dismissWarning() {
         @click="emit('startSession', props.template.template_id)"
       >
         <i
-          :class="props.isStartingSession ? 'ra ra-cycle animate-spin text-sm' : 'ra ra-play text-sm transition-transform group-hover/btn:scale-110'"
+          :class="props.isStartingSession ? 'ra ra-cycle animate-spin text-xs sm:text-sm' : 'ra ra-play text-xs sm:text-sm transition-transform group-hover/btn:scale-110'"
         ></i>
-        <span class="truncate">{{ props.isStartingThisTemplate ? 'Starting Session...' : 'Start New Game' }}</span>
+        <span class="truncate">{{ props.isStartingThisTemplate ? 'Starting...' : 'Start' }}</span>
       </button>
     </div>
   </article>

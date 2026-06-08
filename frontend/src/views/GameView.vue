@@ -59,8 +59,24 @@ const sheetDirty = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
 const isMobileSidebarOpen = ref(false)
-const isHeaderCollapsed = ref(localStorage.getItem('tw_header_collapsed') === 'true')
+const isMobileViewport = ref(typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches)
+const isHeaderCollapsed = ref(
+  localStorage.getItem('tw_header_collapsed') === 'true' ||
+  (localStorage.getItem('tw_header_collapsed') === null && isMobileViewport.value)
+)
 const isQuestTrackerHidden = ref(localStorage.getItem('tw_quest_tracker_hidden') === 'true')
+
+let viewportMql: MediaQueryList | null = null
+const handleViewportChange = (e: MediaQueryListEvent) => {
+  isMobileViewport.value = e.matches
+  if (e.matches && localStorage.getItem('tw_header_collapsed') === null) {
+    isHeaderCollapsed.value = true
+  }
+}
+if (typeof window !== 'undefined') {
+  viewportMql = window.matchMedia('(max-width: 1023px)')
+  viewportMql.addEventListener('change', handleViewportChange)
+}
 
 watch(isHeaderCollapsed, (val) => {
   localStorage.setItem('tw_header_collapsed', val ? 'true' : 'false')
@@ -241,6 +257,9 @@ watch(trackedQuestId, (newId) => {
 
 onBeforeUnmount(() => {
   audioService.stop()
+  if (viewportMql) {
+    viewportMql.removeEventListener('change', handleViewportChange)
+  }
 })
 
 const activeActionId = ref<string | null>(null)

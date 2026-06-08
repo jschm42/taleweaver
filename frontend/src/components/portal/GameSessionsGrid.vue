@@ -33,7 +33,7 @@ defineEmits<{
         Adventure Library
       </button>
     </div>
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3 sm:gap-4 lg:gap-5">
+    <div v-else class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3 sm:gap-4 lg:gap-5">
       <GameSessionCard
         v-for="entry in sessions"
         :key="entry.game_id"
