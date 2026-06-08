@@ -9,7 +9,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'changeSection', section: 'templates' | 'sessions'): void
-  (e: 'create'): void
   (e: 'import'): void
   (e: 'restore-defaults'): void
   (e: 'delete-all-adventures'): void
@@ -36,13 +35,6 @@ const emit = defineEmits<{
         >
           <i class="ra ra-burning-embers"></i>
           {{ props.isDeletingTemplates ? 'Deleting...' : 'Delete All Adventures' }}
-        </button>
-        <button
-          class="px-4 py-2 rounded-xl bg-aether-primary/10 border border-aether-primary/20 text-aether-primary text-xs font-bold uppercase tracking-widest hover:bg-aether-primary/20 transition-all flex items-center gap-2"
-          @click="emit('create')"
-        >
-          <i class="ra ra-scroll"></i>
-          Generate adventure...
         </button>
         <button
           class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2"

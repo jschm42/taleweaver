@@ -303,7 +303,6 @@ onUnmounted(() => {
           :is-deleting-sessions="isDeletingSession"
           @change-section="activeSection = $event"
           @delete-all-adventures="onDeleteAllAdventures"
-          @create="openCreateModal"
           @import="triggerImportPicker"
           @restore-defaults="executeRestoreDefaults"
           @delete-all-sessions="onDeleteAllSessions"

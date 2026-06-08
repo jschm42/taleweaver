@@ -14,7 +14,7 @@ const emit = defineEmits<{
        <div class="w-16 h-16 rounded-full bg-purple-500/10 border border-purple-400/20 flex items-center justify-center group-hover:scale-110 transition-transform">
         <img
           src="@/assets/svg/fantasy-rpg-map.svg"
-          alt="Generate World"
+          alt="Generate Adventure"
           class="w-10 h-10 object-contain opacity-70 group-hover:opacity-100 transition-opacity"
         />
       </div>
@@ -23,7 +23,7 @@ const emit = defineEmits<{
     <!-- Content Area -->
     <div class="p-6 pt-5 flex flex-col gap-4 flex-1 w-full">
       <div class="space-y-2 flex-1">
-        <h3 class="text-xl font-black text-white leading-tight tracking-tight">Generate World</h3>
+        <h3 class="text-xl font-black text-white leading-tight tracking-tight">Generate Adventure</h3>
         <div class="h-4"></div>
         <p class="text-xs font-bold text-slate-500 uppercase tracking-widest leading-relaxed">
           Let the AI weave a custom sandbox world.
