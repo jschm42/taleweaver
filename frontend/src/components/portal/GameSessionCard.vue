@@ -80,9 +80,9 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
       <div class="card-image-fray pointer-events-none absolute inset-x-0 bottom-0 h-24"></div>
       
       <!-- Status Badge -->
-      <div class="absolute top-3 left-3">
+      <div class="absolute top-2 left-2 sm:top-3 sm:left-3">
         <span
-          class="px-2.5 py-1 rounded-full text-xs uppercase tracking-widest font-black"
+          class="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs uppercase tracking-widest font-black"
           :class="{
             'bg-amber-500/20 text-amber-300': props.session.is_paused && (!props.session.status || props.session.status === 'active'),
             'bg-emerald-500/20 text-emerald-300': !props.session.is_paused && (!props.session.status || props.session.status === 'active'),
@@ -90,16 +90,16 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
             'bg-emerald-600/40 text-emerald-100': props.session.status === 'completed'
           }"
         >
-          {{ 
-            props.session.status === 'game_over' ? 'Defeated' : 
-            props.session.status === 'completed' ? 'Victory' : 
-            (props.session.is_paused ? 'Paused' : 'Active') 
+          {{
+            props.session.status === 'game_over' ? 'Defeated' :
+            props.session.status === 'completed' ? 'Victory' :
+            (props.session.is_paused ? 'Paused' : 'Active')
           }}
         </span>
       </div>
 
       <!-- Action Dots & Note Icon -->
-      <div class="absolute top-3 right-3 z-20 flex gap-2">
+      <div class="absolute top-2 right-2 sm:top-3 sm:right-3 z-20 flex gap-2">
         <button
           v-if="props.session.status_note"
           @click.stop="isNotePopupOpen = !isNotePopupOpen"
@@ -171,21 +171,21 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
     </div>
 
     <!-- Content Area -->
-    <div class="p-6 pt-5 flex flex-col gap-6 relative z-10">
+    <div class="p-4 sm:p-5 lg:p-6 lg:pt-5 flex flex-col gap-4 sm:gap-5 lg:gap-6 relative z-10">
       <div class="min-w-0">
-        <h3 class="text-xl font-black text-white leading-tight line-clamp-1 tracking-tight flex items-center gap-2">
+        <h3 class="text-base sm:text-lg lg:text-xl font-black text-white leading-tight line-clamp-1 tracking-tight flex items-center gap-2">
           <span class="truncate">{{ props.session.adventure_title }}</span>
           <span v-if="props.session.copied_from_id" class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider shrink-0">
             Clone
           </span>
           <span v-if="props.session.adventure_version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 shrink-0">v{{ props.session.adventure_version }}</span>
         </h3>
-        <div class="flex flex-col gap-1.5 mt-3">
-          <p class="text-sm text-slate-400 flex items-center gap-2 font-bold uppercase tracking-[0.15em]">
+        <div class="flex flex-col gap-1.5 mt-2 sm:mt-3">
+          <p class="text-xs sm:text-sm text-slate-400 flex items-center gap-2 font-bold uppercase tracking-[0.15em]">
             <span class="w-2 h-2 rounded-full bg-emerald-500/60"></span>
             {{ props.session.current_scene_name || 'Exploring...' }}
           </p>
-          <p class="text-xs text-slate-500 flex items-center gap-2 font-black uppercase tracking-widest">
+          <p class="text-[11px] sm:text-xs text-slate-500 flex items-center gap-2 font-black uppercase tracking-widest">
             <Clock class="w-3 h-3 opacity-50" />
             {{ props.session.copied_from_id ? 'Copied:' : 'Started:' }} {{ formatDate(props.session.created_at) }}
           </p>
@@ -193,7 +193,7 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
       </div>
 
       <!-- Progress Stats -->
-      <div class="grid grid-cols-3 gap-4 pt-1">
+      <div class="grid grid-cols-3 gap-3 sm:gap-4 pt-1">
         <!-- Quests -->
         <div class="min-w-0 flex flex-col gap-2.5">
           <div class="flex items-center justify-between gap-2 min-w-0">
@@ -231,7 +231,7 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
 
       <!-- Action Button -->
       <button
-        class="w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-3 mt-1 shadow-lg group/btn"
+        class="w-full py-3 sm:py-3.5 rounded-xl text-[11px] sm:text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-2 sm:gap-3 mt-1 shadow-lg group/btn"
         :class="[
           props.session.status === 'game_over' ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 shadow-red-500/5' :
           props.session.status === 'completed' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20 shadow-amber-500/5' :
@@ -241,15 +241,15 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
       >
         <i :class="[
           'text-sm transition-transform group-hover/btn:scale-110',
-          props.session.status === 'game_over' ? 'ra ra-skull' : 
-          props.session.status === 'completed' ? 'ra ra-trophy' : 
+          props.session.status === 'game_over' ? 'ra ra-skull' :
+          props.session.status === 'completed' ? 'ra ra-trophy' :
           'ra ra-play'
         ]"></i>
-        {{ 
-          props.session.status === 'game_over' ? 'Continue Anyway' : 
-          props.session.status === 'completed' ? 'Continue Anyway' : 
-          'Resume Game' 
-        }}
+        <span class="truncate">{{
+          props.session.status === 'game_over' ? 'Continue Anyway' :
+          props.session.status === 'completed' ? 'Continue Anyway' :
+          'Resume Game'
+        }}</span>
       </button>
     </div>
   </article>

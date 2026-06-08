@@ -47,11 +47,11 @@ onUnmounted(() => {
     <div class="absolute inset-0 animate-shimmer opacity-30 pointer-events-none"></div>
     
     <!-- Placeholder Cover Area -->
-    <div class="aspect-[3/2] w-full bg-white/5 flex flex-col items-center justify-center border-b border-white/5 relative p-6 text-center">
-      <div class="w-12 h-12 rounded-full bg-aether-primary/10 border border-aether-primary/20 flex items-center justify-center mb-3">
+    <div class="aspect-[3/2] w-full bg-white/5 flex flex-col items-center justify-center border-b border-white/5 relative p-4 sm:p-6 text-center">
+      <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-aether-primary/10 border border-aether-primary/20 flex items-center justify-center mb-2 sm:mb-3">
         <i
           :class="[
-            'ra text-lg',
+            'ra text-base sm:text-lg',
             props.pending.hasError ? 'ra-burning-embers text-red-400' : 'ra-cog text-aether-primary animate-spin',
           ]"
         ></i>
@@ -79,9 +79,9 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <div class="p-6 flex-1 flex flex-col gap-2">
-      <h3 class="text-2xl font-black text-white leading-tight tracking-tight line-clamp-1">{{ props.pending.title }}</h3>
-      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed min-h-[2rem]">
+    <div class="p-4 sm:p-5 lg:p-6 flex-1 flex flex-col gap-2">
+      <h3 class="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight tracking-tight line-clamp-1">{{ props.pending.title }}</h3>
+      <p class="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest line-clamp-2 leading-relaxed min-h-[2rem]">
         {{ props.pending.hasError ? props.pending.status : currentSaying }}
       </p>
       

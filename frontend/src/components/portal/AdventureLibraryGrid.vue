@@ -33,7 +33,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-5 xl:gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 xl:gap-4">
     <PortalCreateAdventureCard @click="$emit('create')" />
 
     <GenerateWorldCard @generate="$emit('generate-world')" />

@@ -36,6 +36,7 @@ const showDeleteAllAdventuresConfirm = ref(false)
 const showDeleteAllSessionsConfirm = ref(false)
 const isResuming = ref(false)
 const activeProgressAdventure = ref<{ id: string; title: string } | null>(null)
+const isMobileSidebarOpen = ref(false)
 
 function openProgressModal(pending: any) {
   activeProgressAdventure.value = {
@@ -282,15 +283,32 @@ onUnmounted(() => {
     <PortalSidebar
       :is-admin="isAdmin"
       :active-section="activeSection"
+      :is-mobile-open="isMobileSidebarOpen"
       @section="pushSection($event)"
       @admin="router.push('/admin')"
       @about="showAboutModal = true"
+      @close-mobile="isMobileSidebarOpen = false"
     />
 
     <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col relative overflow-hidden">
+    <main class="flex-1 flex flex-col relative overflow-hidden min-w-0">
+      <!-- Mobile Top Bar -->
+      <div class="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-aether-background/80 backdrop-blur-md shrink-0">
+        <button
+          @click="isMobileSidebarOpen = true"
+          class="w-10 h-10 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-all flex items-center justify-center"
+          title="Open menu"
+          aria-label="Open menu"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-slate-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+          </svg>
+        </button>
+        <span class="text-sm font-black uppercase tracking-[0.25em] text-aether-primary">TaleWeaver</span>
+      </div>
+
       <!-- Scrollable Content -->
-      <div class="flex-1 overflow-y-auto" :class="activeSection !== 'profile' ? 'p-10' : ''">
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10" :class="activeSection === 'profile' ? 'lg:p-10' : ''">
         
         <SetupWarningBanner :active-section="activeSection" />
 
@@ -309,8 +327,8 @@ onUnmounted(() => {
         />
 
         <!-- Loading State -->
-        <div v-if="isLoading && templates.length === 0 && sessions.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-32 gap-6">
-          <div class="w-16 h-16 border-4 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
+        <div v-if="isLoading && templates.length === 0 && sessions.length === 0 && pendingCards.length === 0" class="flex flex-col items-center justify-center py-20 sm:py-32 gap-6">
+          <div class="w-12 h-12 sm:w-16 sm:h-16 border-4 border-aether-primary/10 border-t-aether-primary rounded-full animate-spin"></div>
           <p class="text-aether-primary font-bold uppercase tracking-[0.3em] text-xxs">Accessing Archives...</p>
         </div>
 
