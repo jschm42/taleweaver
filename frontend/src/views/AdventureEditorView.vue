@@ -27,6 +27,7 @@ import EntityTooltip from '@/components/editor/EntityTooltip.vue'
 import NotificationToast from '@/components/editor/NotificationToast.vue'
 import EditEntityModal from '@/components/editor/EditEntityModal.vue'
 import ItemTypeSelectorModal from '@/components/editor/ItemTypeSelectorModal.vue'
+import AddExistingItemModal from '@/components/editor/AddExistingItemModal.vue'
 import ManualVisionModal from '@/components/editor/ManualVisionModal.vue'
 import DataDebugModal from '@/components/editor/DataDebugModal.vue'
 import CreateSceneForm from '@/components/editor/CreateSceneForm.vue'
@@ -76,6 +77,8 @@ const createEntityType = ref<'npc' | 'object' | null>(null)
 const pendingProtagonistAssignment = ref<{ type: 'equipment' | 'inventory'; key?: string; index?: number } | null>(null)
 const showItemTypeSelector = ref(false)
 const itemTypeSelectorSceneLabel = ref('')
+const showAddExistingItemModal = ref(false)
+const addExistingItemKind = ref<'items' | 'switch' | 'container' | 'text-log' | 'npc'>('items')
 const showExitModal = ref(false)
 const isCreateExitMode = ref(false)
 const activeEditExitId = ref<string | null>(null)
@@ -128,6 +131,86 @@ function closeEditEntityModal() {
   createEntitySceneId.value = null
   createEntityType.value = null
   pendingProtagonistAssignment.value = null
+}
+
+function openAddExistingItem(kind: 'items' | 'switch' | 'container' | 'text-log' | 'npc') {
+  addExistingItemKind.value = kind
+  showAddExistingItemModal.value = true
+}
+
+function closeAddExistingItemModal() {
+  showAddExistingItemModal.value = false
+}
+
+const editorAllObjects = computed<any[]>(() => {
+  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
+  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
+  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
+  return mergeUniqueById(source, inferred)
+})
+
+function matchesItemTypeFilter(itemType: string, kind: 'items' | 'switch' | 'container' | 'text-log' | 'npc'): boolean {
+  const t = String(itemType || '').toUpperCase()
+  switch (kind) {
+    case 'switch':
+      return t === 'SWITCH'
+    case 'container':
+      return t === 'CONTAINER'
+    case 'text-log':
+      return t === 'READABLE'
+    case 'items':
+      return t !== 'SWITCH' && t !== 'CONTAINER' && t !== 'READABLE'
+    case 'npc':
+    default:
+      return false
+  }
+}
+
+const addExistingItemOptions = computed<any[]>(() => {
+  const sId = String(activeMapSceneId.value || '').trim()
+  if (addExistingItemKind.value === 'npc') {
+    return editorNpcs.value.filter((npc: any) => {
+      if (!npc?.id) return false
+      if (sId && String(npc.current_scene_id || '') === sId) return false
+      return true
+    })
+  }
+  return editorAllObjects.value.filter((obj: any) => {
+    if (!obj?.id) return false
+    if (sId && String(obj.current_scene_id || '') === sId) return false
+    return matchesItemTypeFilter(obj.item_type, addExistingItemKind.value)
+  })
+})
+
+async function handleAddExistingItemSelected(itemId: string) {
+  const sceneId = String(activeMapSceneId.value || '').trim()
+  if (!sceneId) {
+    addNotification('No active scene selected.', 'error')
+    return
+  }
+  const candidateId = String(itemId || '').trim().toUpperCase()
+  if (!candidateId) {
+    addNotification('No entry selected.', 'error')
+    return
+  }
+  const isNpc = addExistingItemKind.value === 'npc'
+  isSavingText.value = true
+  promptError.value = ''
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: isNpc ? 'npc' : 'object',
+      target_id: candidateId,
+      current_scene_id: sceneId,
+    })
+    showAddExistingItemModal.value = false
+    await fetchDebugInfo()
+    addNotification(isNpc ? 'NPC placed in scene.' : 'Item placed in scene.', 'success')
+  } catch (error: any) {
+    promptError.value = error?.message || (isNpc ? 'Failed to place NPC in scene.' : 'Failed to place item in scene.')
+    addNotification(promptError.value, 'error')
+  } finally {
+    isSavingText.value = false
+  }
 }
 
 function openCreateItem(itemType?: string) {
@@ -1366,13 +1449,6 @@ const activeMapExitId = computed<string | null>(() => {
   return typeof raw === 'string' ? raw : null
 })
 
-const editorAllObjects = computed<any[]>(() => {
-  const source = Array.isArray(debugData.value?.objects) ? debugData.value.objects : []
-  const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
-  const inferred = allEntities.filter((entity: any) => isObjectEntity(entity))
-  return mergeUniqueById(source, inferred)
-})
-
 const routeSceneDetails = computed<any | null>(() => {
   const sceneId = String(activeMapSceneId.value || '').trim()
   if (!sceneId) return null
@@ -1631,6 +1707,24 @@ function requestDeleteRouteEntity(entityId: string) {
     description: 'This permanently removes the entity from the world.',
   }
   showDeleteConfirmDialog.value = true
+}
+
+async function handleCloneRouteEntity(entityType: 'npc' | 'object', entityId: string) {
+  const normalized = String(entityId || '').trim()
+  if (!normalized) return
+  activeMenuId.value = null
+  isSavingText.value = true
+  promptError.value = ''
+  try {
+    const { new_id } = await entityService.cloneEntity(props.adventureId, normalized)
+    await fetchDebugInfo()
+    addNotification(`${entityType === 'npc' ? 'NPC' : 'Item'} cloned as ${new_id}.`, 'success')
+  } catch (error: any) {
+    promptError.value = error?.message || 'Failed to clone entity.'
+    addNotification(promptError.value, 'error')
+  } finally {
+    isSavingText.value = false
+  }
 }
 
 function closeDeleteConfirmDialog() {
@@ -2006,6 +2100,7 @@ watch(
               @back="closeSceneEditorDialog"
               @open-text-edit="openTextEdit"
               @open-create-item="openCreateItem"
+              @open-add-existing="openAddExistingItem"
               @open-regen-dialog="openRegenerateDialog"
               @open-upload-picker="openUploadPicker"
               @download-asset="downloadVisualAsset"
@@ -2018,6 +2113,7 @@ watch(
               @request-delete-scene="requestDeleteRouteScene"
               @request-delete-exit="requestDeleteRouteExit"
               @request-delete-entity="requestDeleteRouteEntity"
+              @clone-entity="handleCloneRouteEntity"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @refresh="refreshData"
@@ -2145,6 +2241,16 @@ watch(
       :scene-label="routeSceneDetails?.label || routeSceneDetails?.name || createEntitySceneId || ''"
       @close="showItemTypeSelector = false"
       @select="handleItemTypeSelected"
+    />
+
+    <AddExistingItemModal
+      :show="showAddExistingItemModal"
+      :kind="addExistingItemKind"
+      :scene-label="routeSceneDetails?.label || routeSceneDetails?.name || activeMapSceneId || ''"
+      :items="addExistingItemOptions"
+      :visuals-cache-version="visualsCacheVersion"
+      @close="closeAddExistingItemModal"
+      @select="handleAddExistingItemSelected"
     />
 
     <EditExitModal

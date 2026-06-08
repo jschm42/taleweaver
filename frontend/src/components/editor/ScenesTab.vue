@@ -101,10 +101,10 @@ function isStartScene(scene: any): boolean {
           <i class="ra ra-plus"></i> New Scene
         </button>
         <template v-if="scenes.length">
-          <button @click="emit('regen-all', 'scene', true)" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+          <button @click="emit('regen-all', 'scene', true)" :disabled="isBatchGenerating['scene']" title="Generate scene images for scenes that are still missing one (does not create new scenes)" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
             <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Generate Missing
           </button>
-          <button @click="emit('regen-all', 'scene', false)" :disabled="isBatchGenerating['scene']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+          <button @click="emit('regen-all', 'scene', false)" :disabled="isBatchGenerating['scene']" title="Re-render scene images for every scene (does not create new scenes)" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
             <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['scene'] }"></i> Regenerate All
           </button>
         </template>

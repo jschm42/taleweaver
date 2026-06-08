@@ -31,6 +31,7 @@ export interface EntityEditData {
   switch_transitions?: any[]
   effects?: Record<string, any>
   stat_modifier_strength?: number
+  current_scene_id?: string
   strength?: number
   intelligence?: number
   wisdom?: number
@@ -115,6 +116,19 @@ export const entityService = {
       const respData = await res.json()
       throw new Error(respData.detail || 'Failed to save entity text')
     }
+  },
+
+  async cloneEntity(adventureId: string, entityId: string): Promise<{ new_id: string; source_id: string }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/entity/${encodeURIComponent(entityId)}/clone`, {
+      method: 'POST',
+      headers: authHeaders(true),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to clone entity')
+    }
+    const payload = await res.json()
+    return { new_id: payload.new_id, source_id: payload.source_id }
   },
 
   async generateTraits(adventureId: string, name: string, description: string, targetType: string, targetField?: 'goal' | 'character'): Promise<{ goal: string, character: string }> {

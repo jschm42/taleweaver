@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import shutil
 from copy import deepcopy
 from typing import Any, Literal, Optional, Union
 
@@ -41,10 +42,12 @@ from backend.api.routes.adventures.logic import AdventureLogic
 from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
-from backend.utils.path_security import data_url_to_local_path, local_path_to_data_url
+from backend.utils.path_security import data_url_to_local_path, ensure_within_data_dir, local_path_to_data_url
 
 router = APIRouter(tags=["Editor"])
 logger = logging.getLogger(__name__)
+
+_SAFE_SCENE_ID_RE = re.compile(r"^[A-Z0-9_]+$")
 
 class EntityUpdateRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist", "exit"]
@@ -76,6 +79,7 @@ class EntityUpdateRequest(BaseModel):
     switch_transitions: Optional[list[dict[str, Any]]] = None
     effects: Optional[dict[str, Any]] = None
     stat_modifier_strength: Optional[int] = None
+    current_scene_id: Optional[str] = None
     strength: Optional[int] = None
     intelligence: Optional[int] = None
     wisdom: Optional[int] = None
@@ -233,6 +237,49 @@ async def _ensure_template_scene_exists(db: AsyncSession, template_id: str, scen
     )
     if not res.scalars().first():
         raise HTTPException(status_code=400, detail=f"scene_id '{scene_id}' does not exist in this adventure")
+
+
+async def _clone_entity_image(
+    *,
+    source_image_url: Optional[str],
+    template_id: str,
+    new_entity_id: str,
+) -> Optional[str]:
+    """Copy the source entity image into a new file under the same adventure's entities dir.
+
+    Returns the new ``/data/...`` URL on success, or ``None`` when the source has no
+    image, the image is not on disk, or the copy fails. The original image is preserved.
+    """
+    if not source_image_url:
+        return None
+
+    source_path = data_url_to_local_path(source_image_url)
+    if not source_path or not os.path.isfile(source_path):
+        return None
+
+    target_dir = os.path.dirname(source_path)
+    if not target_dir or not os.path.isdir(target_dir):
+        return None
+
+    safe_entity_id = re.sub(r"[^A-Za-z0-9_-]", "_", new_entity_id).strip("_") or "entity"
+    suffix = ""
+    counter = 1
+    while True:
+        candidate_name = f"{safe_entity_id}_clone{suffix}{os.path.splitext(source_path)[1]}"
+        candidate_path = os.path.join(target_dir, candidate_name)
+        if not os.path.exists(candidate_path):
+            break
+        counter += 1
+        suffix = f"_{counter}"
+
+    try:
+        target_path = ensure_within_data_dir(candidate_path)
+        shutil.copy2(source_path, target_path)
+    except (OSError, ValueError) as exc:
+        logger.warning("Failed to clone image for entity %s: %s", new_entity_id, exc)
+        return None
+
+    return local_path_to_data_url(target_path)
 
 
 def _normalize_lock_fields(
@@ -706,6 +753,97 @@ async def delete_editor_entity(
     return {"status": "success", "deleted_entity_id": entity_id}
 
 
+@router.post("/{template_id}/editor/entity/{entity_id}/clone")
+async def clone_editor_entity(
+    template_id: str,
+    entity_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    entity_id = _sanitize_object_id(entity_id, "entity_id")
+
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+            WorldEntity.id == entity_id,
+        )
+    )
+    source = ent_res.scalars().first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    base_id = f"{entity_id}_1"
+    new_id = base_id
+    suffix = 1
+    while True:
+        exists = await db.execute(
+            select(WorldEntity.id).where(
+                WorldEntity.template_id == template_id,
+                WorldEntity.session_id.is_(None),
+                WorldEntity.id == new_id,
+            )
+        )
+        if not exists.scalars().first():
+            break
+        suffix += 1
+        new_id = f"{entity_id}_{suffix}"
+
+    cloned_image_url = await _clone_entity_image(
+        source_image_url=source.image_url,
+        template_id=template_id,
+        new_entity_id=new_id,
+    )
+
+    clone = WorldEntity(
+        id=new_id,
+        template_id=template_id,
+        session_id=None,
+        entity_type=source.entity_type,
+        name=source.name,
+        description=source.description,
+        current_scene_id=source.current_scene_id,
+        spatial_position=source.spatial_position,
+        image_url=cloned_image_url,
+        item_type=source.item_type,
+        wearable_slots=list(source.wearable_slots) if source.wearable_slots is not None else None,
+        is_in_inventory=source.is_in_inventory,
+        is_hidden=source.is_hidden,
+        reveal_rule=source.reveal_rule,
+        unlock_rule=source.unlock_rule,
+        is_portable=source.is_portable,
+        combination_ingredients=list(source.combination_ingredients) if source.combination_ingredients is not None else None,
+        reveals_item_id=None,
+        is_final_state=source.is_final_state,
+        state_comment=source.state_comment,
+        npc_type=source.npc_type,
+        movement_type=source.movement_type,
+        goal=source.goal,
+        character=source.character,
+        hp=source.hp,
+        max_hp=source.max_hp,
+        mana=source.mana,
+        max_mana=source.max_mana,
+        stamina=source.stamina,
+        max_stamina=source.max_stamina,
+        voice=source.voice,
+        stat_modifier_strength=source.stat_modifier_strength,
+        stat_modifier_dexterity=source.stat_modifier_dexterity,
+        stat_modifier_intelligence=source.stat_modifier_intelligence,
+        stat_modifier_wisdom=source.stat_modifier_wisdom,
+        stat_modifier_charisma=source.stat_modifier_charisma,
+        stat_modifier_armor_class=source.stat_modifier_armor_class,
+        is_attackable=source.is_attackable,
+        is_killable=source.is_killable,
+        inventory=[item if isinstance(item, str) else dict(item) for item in (source.inventory or [])],
+        metadata_json=dict(source.metadata_json or {}),
+    )
+    db.add(clone)
+    await db.commit()
+    return {"status": "success", "entity": _serialize_model(clone), "source_id": entity_id, "new_id": new_id}
+
+
 @router.post("/{template_id}/editor/quest")
 async def create_editor_quest(
     template_id: str,
@@ -1066,7 +1204,27 @@ async def update_editor_entity(
                 if payload.character is not None: ent.character = payload.character
                 if payload.is_killable is not None: ent.is_killable = payload.is_killable
                 if payload.inventory is not None: ent.inventory = list(payload.inventory)
+                if payload.current_scene_id is not None:
+                    new_scene_id = str(payload.current_scene_id or "").strip().upper()
+                    if not new_scene_id:
+                        raise HTTPException(status_code=400, detail="current_scene_id cannot be empty")
+                    if len(new_scene_id) > 50:
+                        raise HTTPException(status_code=400, detail="current_scene_id must be at most 50 characters.")
+                    if not _SAFE_SCENE_ID_RE.match(new_scene_id):
+                        raise HTTPException(status_code=400, detail="current_scene_id must contain only uppercase letters, digits, and underscores.")
+                    await _ensure_template_scene_exists(db, template_id, new_scene_id)
+                    ent.current_scene_id = new_scene_id
             if ent.entity_type == "OBJECT":
+                if payload.current_scene_id is not None:
+                    new_scene_id = str(payload.current_scene_id or "").strip().upper()
+                    if not new_scene_id:
+                        raise HTTPException(status_code=400, detail="current_scene_id cannot be empty")
+                    if len(new_scene_id) > 50:
+                        raise HTTPException(status_code=400, detail="current_scene_id must be at most 50 characters.")
+                    if not _SAFE_SCENE_ID_RE.match(new_scene_id):
+                        raise HTTPException(status_code=400, detail="current_scene_id must contain only uppercase letters, digits, and underscores.")
+                    await _ensure_template_scene_exists(db, template_id, new_scene_id)
+                    ent.current_scene_id = new_scene_id
                 is_readable_object = str(ent.item_type or "").upper() == "READABLE"
                 if payload.description is not None and is_readable_object and len(payload.description) > 200:
                     raise HTTPException(status_code=400, detail="description must be at most 200 characters for READABLE objects.")

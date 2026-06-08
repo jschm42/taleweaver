@@ -33,6 +33,7 @@ const emit = defineEmits<{
   (e: 'back'): void
   (e: 'open-text-edit', type: string, id: string, name: string, description: string, teaser?: string, hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean): void
   (e: 'open-create-item', itemType?: string): void
+  (e: 'open-add-existing', kind: 'items' | 'switch' | 'container' | 'text-log' | 'npc'): void
   (e: 'open-regen-dialog', kind: string, id: string, label: string): void
   (e: 'open-upload-picker', kind: string, id: string, label: string): void
   (e: 'download-asset', path: string, label: string): void
@@ -45,6 +46,7 @@ const emit = defineEmits<{
   (e: 'request-delete-scene'): void
   (e: 'request-delete-exit', exitId: string): void
   (e: 'request-delete-entity', entityId: string): void
+  (e: 'clone-entity', entityType: 'npc' | 'object', entityId: string): void
   (e: 'quick-regen', kind: string, id: string): void
   (e: 'regen-all', kind: string, missingOnly?: boolean): void
   (e: 'refresh'): void
@@ -217,6 +219,49 @@ const filteredRouteSceneItems = computed(() => routeSceneItems.value.filter((ent
 const filteredRouteSceneSwitches = computed(() => routeSceneSwitches.value.filter((entry) => matchesRouteSceneSearch(entry)))
 const filteredRouteSceneContainers = computed(() => routeSceneContainers.value.filter((entry) => matchesRouteSceneSearch(entry)))
 const filteredRouteSceneTextLogs = computed(() => routeSceneTextLogs.value.filter((entry) => matchesRouteSceneSearch(entry)))
+
+function isSpecialItemType(itemType: string): boolean {
+  const t = String(itemType || '').toUpperCase()
+  return t === 'SWITCH' || t === 'CONTAINER' || t === 'READABLE'
+}
+
+const availableItemsForType = computed<any[]>(() => {
+  const sId = String(props.sceneId || '').trim()
+  return editorAllObjects.value.filter((obj: any) => {
+    if (String(obj.current_scene_id || '') === sId) return false
+    const t = String(obj.item_type || '').toUpperCase()
+    return !isSpecialItemType(t)
+  })
+})
+
+const availableSwitchesForType = computed<any[]>(() => {
+  const sId = String(props.sceneId || '').trim()
+  return editorAllObjects.value.filter((obj: any) => {
+    if (String(obj.current_scene_id || '') === sId) return false
+    return String(obj.item_type || '').toUpperCase() === 'SWITCH'
+  })
+})
+
+const availableContainersForType = computed<any[]>(() => {
+  const sId = String(props.sceneId || '').trim()
+  return editorAllObjects.value.filter((obj: any) => {
+    if (String(obj.current_scene_id || '') === sId) return false
+    return String(obj.item_type || '').toUpperCase() === 'CONTAINER'
+  })
+})
+
+const availableTextLogsForType = computed<any[]>(() => {
+  const sId = String(props.sceneId || '').trim()
+  return editorAllObjects.value.filter((obj: any) => {
+    if (String(obj.current_scene_id || '') === sId) return false
+    return String(obj.item_type || '').toUpperCase() === 'READABLE'
+  })
+})
+
+const availableNpcsForType = computed<any[]>(() => {
+  const sId = String(props.sceneId || '').trim()
+  return editorNpcs.value.filter((npc: any) => String(npc.current_scene_id || '') !== sId)
+})
 const filteredRouteSceneExits = computed(() => routeSceneExits.value.filter((entry) => matchesRouteSceneSearch(entry)))
 
 // Actions
@@ -468,13 +513,19 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">NPCs ({{ filteredRouteSceneNpcs.length }}/{{ routeSceneNpcs.length }})</p>
           <div class="flex items-center gap-4">
-            <button @click="emit('regen-all', 'npc', true)" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'npc', true)" :disabled="isBatchGenerating['npc']" title="Generate portrait images for NPCs that are still missing one (does not create new NPCs)" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Generate Missing
             </button>
-            <button @click="emit('regen-all', 'npc', false)" :disabled="isBatchGenerating['npc']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'npc', false)" :disabled="isBatchGenerating['npc']" title="Re-render portrait images for every NPC in this scene (does not create new NPCs)" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['npc'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-text-edit', 'npc', 'NEW_NPC', 'New NPC', 'A mysterious inhabitant of this scene.', '', 20, 20, 20, '', '', true)">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-text-edit', 'npc', 'NEW_NPC', 'New NPC', 'A mysterious inhabitant of this scene.', '', 20, 20, 20, '', '', true)">+ Create</button>
+            <button
+              class="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              :disabled="availableNpcsForType.length === 0"
+              :title="availableNpcsForType.length === 0 ? 'No other NPCs exist in the adventure' : 'Place an existing NPC from another scene into this scene'"
+              @click="emit('open-add-existing', 'npc')"
+            >+ Add Existing</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -511,13 +562,14 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                   <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
                 </div>
               </button>
-              <div v-if="activeMenuId === `scene-npc-${npc.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                <button @click="emit('quick-regen', 'npc', npc.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                <button @click="emit('open-regen-dialog', 'npc', npc.id, npc.name || npc.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                <button @click="emit('open-upload-picker', 'npc', npc.id, npc.name || npc.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                <button v-if="npc.image_url" @click="emit('download-asset', npc.image_url, `${npc.name || 'npc'}_image`)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                <button @click="editRouteEntity('npc', npc)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                <button @click="emit('request-delete-entity', npc.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+              <div v-if="activeMenuId === `scene-npc-${npc.id}`" class="absolute right-0 mt-1 w-48 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                <button @click="emit('quick-regen', 'npc', npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                <button @click="emit('open-regen-dialog', 'npc', npc.id, npc.name || npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                <button @click="emit('open-upload-picker', 'npc', npc.id, npc.name || npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                <button v-if="npc.image_url" @click="emit('download-asset', npc.image_url, `${npc.name || 'npc'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                <button @click="emit('clone-entity', 'npc', npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
+                <button @click="editRouteEntity('npc', npc)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('request-delete-entity', npc.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
           </article>
@@ -529,13 +581,19 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Items ({{ filteredRouteSceneItems.length }}/{{ routeSceneItems.length }})</p>
           <div class="flex items-center gap-4">
-            <button @click="emit('regen-all', 'object', true)" :disabled="isBatchGenerating['object']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'object', true)" :disabled="isBatchGenerating['object']" title="Generate item images for items in this list that are still missing one (does not create new items)" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['object'] }"></i> Generate Missing
             </button>
-            <button @click="emit('regen-all', 'object', false)" :disabled="isBatchGenerating['object']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'object', false)" :disabled="isBatchGenerating['object']" title="Re-render item images for every item in this list (does not create new items)" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['object'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item')">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item')">+ Create</button>
+            <button
+              class="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              :disabled="availableItemsForType.length === 0"
+              :title="availableItemsForType.length === 0 ? 'No other items of this type exist in the adventure' : 'Place an existing item from another scene or inventory into this scene'"
+              @click="emit('open-add-existing', 'items')"
+            >+ Add Existing</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -571,13 +629,14 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                   <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
                 </div>
               </button>
-              <div v-if="activeMenuId === `scene-item-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name || obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'object'}_image`)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                <button @click="editRouteEntity('object', obj)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+              <div v-if="activeMenuId === `scene-item-${obj.id}`" class="absolute right-0 mt-1 w-48 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'object'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
+                <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
           </article>
@@ -589,13 +648,19 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Switches ({{ filteredRouteSceneSwitches.length }}/{{ routeSceneSwitches.length }})</p>
           <div class="flex items-center gap-4">
-            <button @click="emit('regen-all', 'switch', true)" :disabled="isBatchGenerating['switch']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'switch', true)" :disabled="isBatchGenerating['switch']" title="Generate switch images for switches in this list that are still missing one (does not create new switches)" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['switch'] }"></i> Generate Missing
             </button>
-            <button @click="emit('regen-all', 'switch', false)" :disabled="isBatchGenerating['switch']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'switch', false)" :disabled="isBatchGenerating['switch']" title="Re-render switch images for every switch in this list (does not create new switches)" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['switch'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'SWITCH')">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'SWITCH')">+ Create</button>
+            <button
+              class="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              :disabled="availableSwitchesForType.length === 0"
+              :title="availableSwitchesForType.length === 0 ? 'No other switches exist in the adventure' : 'Place an existing switch from another scene or inventory into this scene'"
+              @click="emit('open-add-existing', 'switch')"
+            >+ Add Existing</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -631,13 +696,14 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                   <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
                 </div>
               </button>
-              <div v-if="activeMenuId === `scene-switch-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name || obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'switch'}_image`)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                <button @click="editRouteEntity('object', obj)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+              <div v-if="activeMenuId === `scene-switch-${obj.id}`" class="absolute right-0 mt-1 w-48 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'switch'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
+                <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
           </article>
@@ -649,13 +715,19 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Containers ({{ filteredRouteSceneContainers.length }}/{{ routeSceneContainers.length }})</p>
           <div class="flex items-center gap-4">
-            <button @click="emit('regen-all', 'container', true)" :disabled="isBatchGenerating['container']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'container', true)" :disabled="isBatchGenerating['container']" title="Generate container images for containers in this list that are still missing one (does not create new containers)" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['container'] }"></i> Generate Missing
             </button>
-            <button @click="emit('regen-all', 'container', false)" :disabled="isBatchGenerating['container']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'container', false)" :disabled="isBatchGenerating['container']" title="Re-render container images for every container in this list (does not create new containers)" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['container'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'CONTAINER')">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'CONTAINER')">+ Create</button>
+            <button
+              class="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              :disabled="availableContainersForType.length === 0"
+              :title="availableContainersForType.length === 0 ? 'No other containers exist in the adventure' : 'Place an existing container from another scene or inventory into this scene'"
+              @click="emit('open-add-existing', 'container')"
+            >+ Add Existing</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -691,13 +763,14 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                   <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
                 </div>
               </button>
-              <div v-if="activeMenuId === `scene-container-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name || obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'container'}_image`)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                <button @click="editRouteEntity('object', obj)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+              <div v-if="activeMenuId === `scene-container-${obj.id}`" class="absolute right-0 mt-1 w-48 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'container'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
+                <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
           </article>
@@ -709,13 +782,19 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Text Logs ({{ filteredRouteSceneTextLogs.length }}/{{ routeSceneTextLogs.length }})</p>
           <div class="flex items-center gap-4">
-            <button @click="emit('regen-all', 'text-log', true)" :disabled="isBatchGenerating['text-log']" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'text-log', true)" :disabled="isBatchGenerating['text-log']" title="Generate text-log images for text logs in this list that are still missing one (does not create new text logs)" class="text-xs font-bold text-cyan-500 hover:text-cyan-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-wand" :class="{ 'animate-spin': isBatchGenerating['text-log'] }"></i> Generate Missing
             </button>
-            <button @click="emit('regen-all', 'text-log', false)" :disabled="isBatchGenerating['text-log']" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
+            <button @click="emit('regen-all', 'text-log', false)" :disabled="isBatchGenerating['text-log']" title="Re-render text-log images for every text log in this list (does not create new text logs)" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-2 uppercase tracking-widest transition-colors">
               <i class="ra ra-cycle" :class="{ 'animate-spin': isBatchGenerating['text-log'] }"></i> Regenerate All
             </button>
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'READABLE')">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-item', 'READABLE')">+ Create</button>
+            <button
+              class="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              :disabled="availableTextLogsForType.length === 0"
+              :title="availableTextLogsForType.length === 0 ? 'No other text logs exist in the adventure' : 'Place an existing text log from another scene or inventory into this scene'"
+              @click="emit('open-add-existing', 'text-log')"
+            >+ Add Existing</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -751,13 +830,14 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                   <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
                 </div>
               </button>
-              <div v-if="activeMenuId === `scene-log-${obj.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
-                <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name || obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
-                <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
-                <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'text-log'}_image`)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
-                <button @click="editRouteEntity('object', obj)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
-                <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+              <div v-if="activeMenuId === `scene-log-${obj.id}`" class="absolute right-0 mt-1 w-48 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                <button @click="emit('quick-regen', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Quick Regen</button>
+                <button @click="emit('open-regen-dialog', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Regen (Prompt)</button>
+                <button @click="emit('open-upload-picker', 'object', obj.id, obj.name || obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-amber-500 hover:text-white transition-all">Upload Image</button>
+                <button v-if="obj.image_url" @click="emit('download-asset', obj.image_url, `${obj.name || 'text-log'}_image`)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-violet-500 hover:text-white transition-all">Download Image</button>
+                <button @click="emit('clone-entity', 'object', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-sky-500 hover:text-white transition-all">Clone</button>
+                <button @click="editRouteEntity('object', obj)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-blue-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('request-delete-entity', obj.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
           </article>
@@ -769,7 +849,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">Exits ({{ filteredRouteSceneExits.length }}/{{ routeSceneExits.length }})</p>
           <div class="flex items-center gap-4">
-            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-exit')">+ Add</button>
+            <button class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors" @click="emit('open-create-exit')">+ Create</button>
           </div>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
@@ -799,10 +879,10 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
                   <div class="w-0.5 h-0.5 bg-white rounded-full"></div>
                 </div>
               </button>
-              <div v-if="activeMenuId === `scene-exit-${worldExit.id}`" class="absolute right-0 mt-1 w-44 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1 z-[100] animate-fade-in ring-1 ring-white/5">
-                <button @click="emit('open-exit', worldExit.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-cyan-500 hover:text-white transition-all">Open Route</button>
-                <button @click="emit('open-edit-exit', worldExit.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-emerald-500 hover:text-white transition-all">Edit</button>
-                <button @click="emit('request-delete-exit', worldExit.id)" class="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-300 hover:bg-red-500 hover:text-white transition-all">Delete</button>
+              <div v-if="activeMenuId === `scene-exit-${worldExit.id}`" class="absolute right-0 mt-1 w-48 bg-slate-900 border border-white/20 rounded-lg shadow-2xl overflow-hidden py-1.5 z-[100] animate-fade-in ring-1 ring-white/5">
+                <button @click="emit('open-exit', worldExit.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-500 hover:text-white transition-all">Open Route</button>
+                <button @click="emit('open-edit-exit', worldExit.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-emerald-500 hover:text-white transition-all">Edit</button>
+                <button @click="emit('request-delete-exit', worldExit.id)" class="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-200 hover:bg-red-500 hover:text-white transition-all">Delete</button>
               </div>
             </div>
           </article>
