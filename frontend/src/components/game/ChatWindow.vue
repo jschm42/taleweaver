@@ -10,6 +10,7 @@ import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocke
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { formatObjectIds } from '@/utils/editor_utils'
+import { Compass } from 'lucide-vue-next'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -60,6 +61,8 @@ const inputEl = ref<HTMLInputElement | null>(null)
 const fontSize = ref<'small' | 'medium' | 'large'>((localStorage.getItem('tw_chat_font_size') as any) || 'medium')
 const logEl = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
+const showMenuPopup = ref(false)
+const isAnyGlowActive = computed(() => Boolean(props.inventoryGlow || props.mapGlow || props.questGlow))
 
 // Command Auto-completion
 const showCommandPopup = ref(false)
@@ -705,12 +708,21 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
+function handleDocumentClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (showMenuPopup.value && !target.closest('.adventure-menu-container')) {
+    showMenuPopup.value = false
+  }
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
+  document.addEventListener('click', handleDocumentClick)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
+  document.removeEventListener('click', handleDocumentClick)
 })
 </script>
 
@@ -1059,6 +1071,15 @@ onUnmounted(() => {
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <!-- Text Input & Send Row -->
         <div class="flex items-center gap-2 flex-grow">
+          <!-- Sidebar Toggle (Mobile/Tablet only) -->
+          <button
+            class="xl:hidden w-12 h-12 shrink-0 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-indigo-500/10 hover:border-indigo-500/40 text-slate-400 hover:text-indigo-400 transition-all flex items-center justify-center cursor-pointer shadow-lg group/sidebar-btn"
+            title="Scene & Inhabitants"
+            @click="emit('toggleSidebar')"
+          >
+            <Compass class="w-5 h-5 transition-transform duration-500 group-hover/sidebar-btn:rotate-[45deg]" />
+          </button>
+
           <!-- Text Input Wrapper -->
           <div class="relative flex-grow">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -1101,55 +1122,71 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- Tool Buttons -->
+        <!-- Tool Buttons & Adventure Menu -->
         <div class="flex items-center justify-center sm:justify-end gap-2 shrink-0">
-          <!-- Scene & Inhabitants Toggle (Mobile/Tablet only) -->
-          <button
-            class="xl:hidden shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-            title="Scene & Inhabitants"
-            @click="emit('toggleSidebar')"
-          >
-            <div class="h-14 w-14 rounded-full bg-slate-800/40 border border-slate-700/50 flex items-center justify-center group-hover:border-indigo-500/50 transition-all shadow-xl backdrop-blur-md">
-              <i class="ra ra-mountain-cave text-2xl text-slate-400 group-hover:text-indigo-400 group-hover:drop-shadow-[0_0_15px_rgba(99,102,241,0.8)] transition-all"></i>
-            </div>
-          </button>
+          <div class="relative shrink-0 adventure-menu-container">
+            <button
+              class="p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+              :class="{ 'glow-gear': isAnyGlowActive }"
+              title="Adventure Menu"
+              @click="showMenuPopup = !showMenuPopup"
+            >
+              <div :class="['h-14 w-14 rounded-full bg-slate-800/40 border flex items-center justify-center transition-all shadow-xl backdrop-blur-md', showMenuPopup ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-slate-700/50 group-hover:border-indigo-500/50']">
+                <i :class="['ra ra-cog text-3xl text-slate-400 group-hover:text-indigo-400 group-hover:drop-shadow-[0_0_15px_rgba(99,102,241,0.8)] transition-all', showMenuPopup ? 'text-indigo-400 animate-spin' : '']"></i>
+              </div>
+            </button>
 
-          <button
-            class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-            :class="{ 'glow-quest': props.questGlow }"
-            title="Quest Log"
-            @click="emit('openQuests')"
-          >
-            <img src="@/assets/svg/fantasy-spellbook.svg" class="h-14 w-14 invert brightness-200 contrast-75 group-hover:drop-shadow-[0_0_20px_rgba(124,58,237,0.8)] transition-all" />
-          </button>
+            <!-- Menu Popup -->
+            <transition name="menu-pop">
+              <div
+                v-if="showMenuPopup"
+                class="absolute bottom-full right-0 mb-3 w-80 bg-slate-950/95 border border-slate-800/80 rounded-2xl p-3.5 shadow-2xl flex flex-col gap-2 z-40 backdrop-blur-lg"
+              >
+                <div class="px-4 py-2 border-b border-slate-900 text-slate-500 text-xs font-black uppercase tracking-wider">
+                  Adventure Panels
+                </div>
+                
+                <!-- Character Sheet -->
+                <button
+                  class="flex items-center gap-5 px-5 py-4 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition-all text-left text-slate-300 hover:text-white cursor-pointer group/item"
+                  @click="emit('openSheet'); showMenuPopup = false"
+                >
+                  <img 
+                    src="@/assets/svg/warrior-upper-body-bust-silhouette.svg" 
+                    class="h-12 w-12 invert brightness-200 contrast-75 transition-all shrink-0"
+                    :class="[props.inventoryGlow ? 'glow-inventory' : 'group-hover/item:drop-shadow-[0_0_15px_rgba(129,140,248,0.7)]']"
+                  />
+                  <span class="text-lg font-bold tracking-wide">Character Sheet</span>
+                </button>
 
-          <button
-            class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-            :class="{ 'glow-inventory': props.inventoryGlow }"
-            title="Character Sheet"
-            @click="emit('openSheet')"
-          >
-            <img src="@/assets/svg/warrior-upper-body-bust-silhouette.svg" class="h-14 w-14 invert brightness-200 contrast-75 group-hover:drop-shadow-[0_0_20px_rgba(129,140,248,0.8)] transition-all" />
-          </button>
+                <!-- World Map -->
+                <button
+                  class="flex items-center gap-5 px-5 py-4 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition-all text-left text-slate-300 hover:text-white cursor-pointer group/item"
+                  @click="emit('openMap'); showMenuPopup = false"
+                >
+                  <img 
+                    src="@/assets/svg/fantasy-rpg-map.svg" 
+                    class="h-12 w-12 brightness-110 transition-all shrink-0" 
+                    :class="[props.mapGlow ? 'glow-map' : 'group-hover/item:brightness-125 group-hover/item:drop-shadow-[0_0_15px_rgba(251,191,36,0.7)]']"
+                  />
+                  <span class="text-lg font-bold tracking-wide">World Map</span>
+                </button>
 
-          <button
-            class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-            :class="{ 'glow-map': props.mapGlow }"
-            title="World Map"
-            @click="emit('openMap')"
-          >
-            <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-14 w-14 brightness-110 group-hover:brightness-125 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.8)] transition-all" />
-          </button>
-
-          <button
-            class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-            title="Evaluate Rules & Quests"
-            @click="emit('send', '/rule-pass')"
-          >
-            <div class="h-14 w-14 rounded-full bg-slate-800/40 border border-slate-700/50 flex items-center justify-center group-hover:border-emerald-500/50 transition-all shadow-xl backdrop-blur-md">
-              <i class="ra ra-cog text-3xl text-slate-400 group-hover:text-emerald-400 group-hover:drop-shadow-[0_0_15px_rgba(16,185,129,0.8)] transition-all"></i>
-            </div>
-          </button>
+                <!-- Quest Log -->
+                <button
+                  class="flex items-center gap-5 px-5 py-4 rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition-all text-left text-slate-300 hover:text-white cursor-pointer group/item"
+                  @click="emit('openQuests'); showMenuPopup = false"
+                >
+                  <img 
+                    src="@/assets/svg/fantasy-spellbook.svg" 
+                    class="h-12 w-12 invert brightness-200 contrast-75 transition-all shrink-0" 
+                    :class="[props.questGlow ? 'glow-quest' : 'group-hover/item:drop-shadow-[0_0_15px_rgba(124,58,237,0.7)]']"
+                  />
+                  <span class="text-lg font-bold tracking-wide">Quest Log</span>
+                </button>
+              </div>
+            </transition>
+          </div>
         </div>
       </div>
       
@@ -1277,4 +1314,19 @@ onUnmounted(() => {
 .glow-inventory { animation: tool-glow-inventory 1s ease-in-out infinite; }
 .glow-map { animation: tool-glow-map 1s ease-in-out infinite; }
 .glow-quest { animation: tool-glow-quest 1s ease-in-out infinite; }
+
+/* Menu Pop Animation */
+.menu-pop-enter-active, .menu-pop-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.menu-pop-enter-from, .menu-pop-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.95);
+}
+
+@keyframes tool-glow-gear {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(99, 102, 241, 0)); }
+  50% { filter: drop-shadow(0 0 15px rgba(99, 102, 241, 0.7)); }
+}
+.glow-gear { animation: tool-glow-gear 1.5s ease-in-out infinite; }
 </style>
