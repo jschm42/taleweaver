@@ -83,6 +83,10 @@ async def get_chat_history(
     map_dict = MapEngine.to_dict(world_map) if world_map else None
     if map_dict is not None:
         map_dict["current_scene_id"] = MapEngine._safe_id(state.current_scene_id)
+        # Heal stale image_url values (e.g. from deleted sessions) in the map nodes
+        for node in map_dict.get("nodes", {}).values():
+            if isinstance(node, dict) and node.get("image_url"):
+                node["image_url"] = AdventureLogic.resolve_existing_data_asset_url(node["image_url"])
     
     # Augment with adjacent unvisited scenes
     if world_map:

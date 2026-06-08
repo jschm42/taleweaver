@@ -4738,6 +4738,10 @@ class GameTurnManager:
 
         map_dict = MapEngine.to_dict(world_map)
         map_dict["current_scene_id"] = MapEngine._safe_id(self.state.current_scene_id)
+        # Heal stale image_url values (e.g. from deleted sessions) in the map nodes
+        for node in map_dict.get("nodes", {}).values():
+            if isinstance(node, dict) and node.get("image_url"):
+                node["image_url"] = AdventureLogic.resolve_existing_data_asset_url(node["image_url"])
         
         # Augment with adjacent unvisited scenes
         # Fetch exits for this session or template

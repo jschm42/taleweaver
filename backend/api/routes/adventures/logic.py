@@ -192,7 +192,9 @@ class AdventureLogic:
                 if os.path.isfile(alt_abs):
                     rel_alt = os.path.relpath(alt_abs, data_root).replace("\\", "/")
                     return f"/data/{rel_alt}"
-        return candidate
+        # File not found at original location and no replacement found — return None
+        # so callers can fall back to alternative image sources rather than serving a 404.
+        return None
 
     @staticmethod
     def heal_template_avatar_profile_image(template_id: Optional[str], profile_image: Optional[str]) -> Optional[str]:
@@ -676,7 +678,7 @@ class AdventureLogic:
                 "id": s.id,
                 "label": s.label,
                 "description": s.description,
-                "image_url": s.image_url
+                "image_url": AdventureLogic.resolve_existing_data_asset_url(s.image_url)
             }
         return metadata
 

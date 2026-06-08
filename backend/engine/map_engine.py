@@ -67,7 +67,8 @@ class MapEngine:
             if description and (not curr_desc or len(description) > len(curr_desc)):
                 nodes[sid]["description"] = description
                 
-            if image_url and not nodes[sid].get("image_url"):
+            # Always update image_url if a new one is provided (e.g. old session was deleted)
+            if image_url:
                 nodes[sid]["image_url"] = image_url
 
         world_map.nodes = nodes

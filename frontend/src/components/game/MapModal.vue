@@ -13,6 +13,7 @@ import { watch, ref, nextTick, onMounted, computed } from 'vue'
 import dagre from 'dagre'
 import mapSvg from '@/assets/svg/fantasy-rpg-map.svg'
 import type { WorldMapData } from '@/types'
+import { getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
   open: boolean
@@ -570,7 +571,7 @@ onMounted(() => {
                         <template v-else>
                           <img 
                             v-if="node.imageUrl" 
-                            :src="node.imageUrl" 
+                            :src="getImageUrl(node.imageUrl)" 
                             class="w-full h-full object-cover transition-transform duration-505 group-hover:scale-110" 
                           />
                           <div 
@@ -686,7 +687,7 @@ onMounted(() => {
                     <template v-else>
                       <!-- Image Area -->
                       <div v-if="hoveredNode.imageUrl" class="h-40 w-full relative">
-                        <img :src="hoveredNode.imageUrl" class="absolute inset-0 w-full h-full object-cover" />
+                        <img :src="getImageUrl(hoveredNode.imageUrl)" class="absolute inset-0 w-full h-full object-cover" />
                         <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
                       </div>
 
