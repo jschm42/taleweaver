@@ -1350,6 +1350,16 @@ const activeMapSceneId = computed<string | null>(() => {
   return typeof raw === 'string' ? raw : null
 })
 
+function handleSceneIdChanged(oldId: string, newId: string) {
+  if (activeMapSceneId.value === oldId) {
+    router.replace({
+      name: 'adventure-editor-scene',
+      params: { adventureId: props.adventureId, sceneId: newId },
+      query: route.query,
+    })
+  }
+}
+
 const activeMapExitId = computed<string | null>(() => {
   if (route.name !== 'adventure-editor-exit') return null
   const raw = route.params.exitId
@@ -2011,6 +2021,7 @@ watch(
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @refresh="refreshData"
+              @scene-id-changed="handleSceneIdChanged"
             />
 
             <ExitRoutePanel

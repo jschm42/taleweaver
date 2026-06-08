@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { entityService } from '@/services/entityService'
 import { visualService } from '@/services/visualService'
 import { notificationService } from '@/services/notificationService'
@@ -47,11 +48,77 @@ const emit = defineEmits<{
   (e: 'quick-regen', kind: string, id: string): void
   (e: 'regen-all', kind: string, missingOnly?: boolean): void
   (e: 'refresh'): void
+  (e: 'scene-id-changed', oldId: string, newId: string): void
 }>()
 
 // Local states for editing name and description
 const sceneDescFieldRef = ref<any>(null)
 const isGeneratingSceneDesc = ref(false)
+
+// Inline Scene ID editing
+const router = useRouter()
+const isEditingSceneId = ref(false)
+const editingSceneIdValue = ref('')
+const isSavingSceneId = ref(false)
+
+const sceneIdError = computed(() => {
+  const val = editingSceneIdValue.value.trim().toUpperCase()
+  if (!val) return 'ID is required.'
+  if (!/^[A-Z0-9_]+$/.test(val)) return 'Only uppercase letters, digits and underscores allowed.'
+  if (val.length > 50) return 'Max 50 characters.'
+  const currentId = String(routeSceneDetails.value?.id || props.sceneId || '').toUpperCase()
+  const taken = (props.referenceOptions || [])
+    .map((e: any) => String(e.id || '').toUpperCase())
+    .filter((id) => id !== currentId)
+  if (taken.includes(val)) return `ID "${val}" already exists.`
+  return ''
+})
+
+function startEditSceneId() {
+  if (isSavingSceneId.value) return
+  editingSceneIdValue.value = String(routeSceneDetails.value?.id || props.sceneId || '')
+  isEditingSceneId.value = true
+}
+
+function cancelEditSceneId() {
+  isEditingSceneId.value = false
+  editingSceneIdValue.value = ''
+}
+
+async function saveSceneId() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  const newId = editingSceneIdValue.value.trim().toUpperCase()
+  if (sceneIdError.value || !newId) return
+  const oldId = String(scene.id)
+  if (newId === oldId) {
+    cancelEditSceneId()
+    return
+  }
+  isSavingSceneId.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'scene',
+      target_id: oldId,
+      new_id: newId,
+      name: scene.label || scene.name,
+      description: scene.description,
+    })
+    isEditingSceneId.value = false
+    editingSceneIdValue.value = ''
+    notificationService.add('Scene ID updated.', 'success')
+    emit('scene-id-changed', oldId, newId)
+    emit('refresh')
+  } catch (error: any) {
+    notificationService.add(error?.message || 'Failed to update Scene ID.', 'error')
+  } finally {
+    isSavingSceneId.value = false
+  }
+}
+
+watch(() => editingSceneIdValue.value, (val) => {
+  editingSceneIdValue.value = val.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+})
 
 // Filtering
 const routeSceneSearch = ref('')
@@ -270,14 +337,57 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
     <div class="bg-slate-900/40 border border-white/5 rounded-2xl p-6 backdrop-blur-md space-y-6 shadow-xl text-slate-200">
       <!-- Card Header -->
       <div class="flex items-center justify-between gap-4 border-b border-white/5 pb-4">
-        <div class="flex items-center gap-3">
-          <span class="px-2.5 py-1 rounded-md bg-slate-950/80 border border-white/10 text-xs font-mono text-emerald-400 tracking-wider">
-            {{ routeSceneDetails?.id || sceneId }}
-          </span>
-          <h4 class="text-xs font-black text-slate-400 uppercase tracking-[0.25em]">Scene Editor</h4>
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <!-- Inline Scene ID Editor -->
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <template v-if="isEditingSceneId">
+              <div class="flex-1 min-w-0 space-y-1">
+                <div class="flex items-center gap-2">
+                  <input
+                    v-model="editingSceneIdValue"
+                    maxlength="50"
+                    class="flex-1 min-w-0 bg-slate-950/80 border rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-amber-300 focus:outline-none uppercase tracking-wider transition-all"
+                    :class="sceneIdError ? 'border-red-500/70 focus:border-red-500' : 'border-emerald-500/50 focus:border-emerald-400'"
+                    placeholder="SCENE_ID"
+                    @keydown.enter="saveSceneId"
+                    @keydown.esc="cancelEditSceneId"
+                    autofocus
+                  />
+                  <button
+                    @click="saveSceneId"
+                    :disabled="!!sceneIdError || isSavingSceneId"
+                    class="shrink-0 p-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-lg transition-all"
+                    title="Save ID"
+                  >
+                    <i v-if="isSavingSceneId" class="ra ra-cycle animate-spin text-xs"></i>
+                    <Save v-else class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    @click="cancelEditSceneId"
+                    :disabled="isSavingSceneId"
+                    class="shrink-0 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-all"
+                    title="Cancel"
+                  >
+                    <X class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p v-if="sceneIdError" class="text-[10px] text-red-400 font-bold pl-1">{{ sceneIdError }}</p>
+              </div>
+            </template>
+            <template v-else>
+              <button
+                class="px-2.5 py-1 rounded-md bg-slate-950/80 border border-white/10 text-xs font-mono text-emerald-400 tracking-wider hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all cursor-pointer shrink-0"
+                title="Click to edit Scene ID"
+                @click="startEditSceneId"
+              >
+                {{ routeSceneDetails?.id || sceneId }}
+              </button>
+              <h4 class="text-xs font-black text-slate-400 uppercase tracking-[0.25em]">Scene Editor</h4>
+            </template>
+          </div>
         </div>
         <button
-          class="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 border border-white/5 hover:border-red-500/20 bg-slate-950/40"
+          class="shrink-0 p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 border border-white/5 hover:border-red-500/20 bg-slate-950/40"
           :disabled="isDeletingRouteAsset"
           @click="emit('request-delete-scene')"
           title="Delete Scene"
