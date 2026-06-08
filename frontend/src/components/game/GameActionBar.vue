@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { audioService } from '@/services/audioService'
-import { configState } from '@/store/config'
 
 const props = defineProps<{
   activeActionId?: string | null
@@ -26,14 +24,13 @@ const emit = defineEmits<{
   <div class="flex items-center w-full p-2 bg-slate-900/80 border-t border-slate-800 backdrop-blur-md no-scrollbar shrink-0">
     <button
       :disabled="props.disabled"
-      aria-label="Generate new ideas"
-      title="Generate new ideas"
-      class="ideas-trigger group flex items-center gap-2 px-3 mr-2 border-r border-slate-800 whitespace-nowrap rounded-lg transition-all duration-300 active:scale-95"
+      aria-label="Generate ideas"
+      title="Generate ideas"
+      class="ideas-trigger group flex items-center justify-center w-9 h-9 mr-2 border-r border-slate-800 rounded-lg transition-all duration-300 active:scale-95"
       :class="props.disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'"
       @click="emit('shuffleSuggestions')"
     >
-      <i class="ra ra-light-bulb text-amber-400 text-xs transition-transform duration-300 group-hover:scale-110"></i>
-      <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-slate-300 transition-colors">Ideas</span>
+      <i class="ra ra-light-bulb text-amber-400 text-base transition-transform duration-300 group-hover:scale-110"></i>
     </button>
 
     <div class="flex items-center gap-2 overflow-x-auto no-scrollbar flex-grow">
@@ -53,40 +50,6 @@ const emit = defineEmits<{
       >
         <span class="max-w-[22rem] truncate">{{ suggestion }}</span>
       </button>
-    </div>
-
-    <!-- Right Aligned Area -->
-    <div class="ml-auto flex items-center gap-2 px-2 sm:px-4 h-full">
-      <!-- TTS Controls -->
-      <div v-if="configState.isTtsEnabled" class="flex items-center gap-2">
-        <button
-          v-show="audioService.isPlaying.value"
-          @click="audioService.stop()"
-          class="group relative flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-300 active:scale-95 border bg-transparent border-transparent hover:bg-white/5 hover:border-white/10 animate-fade-in shrink-0"
-          title="Stop Speech (SPACE)"
-          aria-label="Stop speech"
-        >
-          <i class="ra ra-stop text-red-400 text-base group-hover:scale-110 transition-transform animate-pulse"></i>
-        </button>
-
-        <button
-          @click="audioService.toggleAutoSpeech()"
-          class="group relative flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-300 active:scale-95 border shrink-0"
-          :class="[
-            audioService.autoSpeechEnabled.value
-              ? 'bg-blue-500/15 border-blue-500/40 shadow-[0_0_12px_rgba(96,165,250,0.25)]'
-              : 'bg-transparent border-transparent hover:bg-white/5 hover:border-white/10'
-          ]"
-          title="Toggle Automatic Speech"
-          :aria-label="audioService.autoSpeechEnabled.value ? 'Auto Speak enabled' : 'Auto Speak disabled'"
-        >
-          <i :class="['ra text-base group-hover:scale-110 transition-transform', audioService.autoSpeechEnabled.value ? 'ra-microphone text-blue-400' : 'ra-microphone-mute text-slate-500']"></i>
-          <div
-            v-if="audioService.autoSpeechEnabled.value"
-            class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"
-          ></div>
-        </button>
-      </div>
     </div>
   </div>
 </template>

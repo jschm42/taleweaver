@@ -762,7 +762,38 @@ onUnmounted(() => {
         </svg>
         <span class="text-slate-300 text-sm font-semibold tracking-wide uppercase">Chronicle Log</span>
       </div>
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 sm:gap-4">
+        <!-- TTS Controls -->
+        <div v-if="configState.isTtsEnabled" class="flex items-center gap-1.5 sm:gap-2">
+          <button
+            v-show="audioService.isPlaying.value"
+            @click="audioService.stop()"
+            class="group relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-300 active:scale-95 border bg-transparent border-transparent hover:bg-white/5 hover:border-white/10 animate-fade-in shrink-0"
+            title="Stop Speech (SPACE)"
+            aria-label="Stop speech"
+          >
+            <i class="ra ra-stop text-red-400 text-base group-hover:scale-110 transition-transform animate-pulse"></i>
+          </button>
+
+          <button
+            @click="audioService.toggleAutoSpeech()"
+            class="group relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-300 active:scale-95 border shrink-0"
+            :class="[
+              audioService.autoSpeechEnabled.value
+                ? 'bg-blue-500/15 border-blue-500/40 shadow-[0_0_12px_rgba(96,165,250,0.25)]'
+                : 'bg-slate-950/40 border-slate-800/50 hover:bg-white/5 hover:border-white/10'
+            ]"
+            title="Toggle Automatic Speech"
+            :aria-label="audioService.autoSpeechEnabled.value ? 'Auto Speak enabled' : 'Auto Speak disabled'"
+          >
+            <i :class="['ra text-base group-hover:scale-110 transition-transform', audioService.autoSpeechEnabled.value ? 'ra-microphone text-blue-400' : 'ra-microphone-mute text-slate-500']"></i>
+            <div
+              v-if="audioService.autoSpeechEnabled.value"
+              class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"
+            ></div>
+          </button>
+        </div>
+
         <!-- Font Size Control (cycle) -->
         <button
           @click="cycleFontSize"
@@ -779,10 +810,10 @@ onUnmounted(() => {
             ]"
           >A</span>
         </button>
-        
+
         <BableFishSelector />
 
-        <div 
+        <div
           v-if="status !== 'connected'"
           :class="['px-2.5 py-1 text-xs font-semibold rounded-full border flex items-center gap-2 animate-fade-in', statusColor]"
         >
