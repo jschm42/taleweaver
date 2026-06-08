@@ -77,6 +77,34 @@ const mysteriousSaying = computed(() => {
 function resetView() {
   zoom.value = 1
   offset.value = { x: 0, y: 0 }
+  if (props.mapData?.current_scene_id) {
+    // Center on current node so the player sees where they are right now
+    nextTick(() => focusOnCurrentNode())
+  }
+}
+
+function focusOnCurrentNode() {
+  if (!layoutData.value || !mapContainer.value) return
+  const currentId = props.mapData?.current_scene_id
+  const node = currentId
+    ? layoutData.value.nodes.find(n => n.id === safeId(currentId))
+    : layoutData.value.nodes[0]
+  if (!node) return
+
+  const containerRect = mapContainer.value.getBoundingClientRect()
+  const nodeCenterX = node.x + margin
+  const nodeCenterY = node.y + margin
+
+  // Aim for a comfortable zoom on small screens, but don't go below 1x on desktop
+  const isCompact = containerRect.width < 640
+  const targetZoom = isCompact ? Math.max(0.9, zoom.value) : Math.max(1, zoom.value)
+
+  // Center the node in the viewport
+  offset.value = {
+    x: containerRect.width / 2 - nodeCenterX * targetZoom,
+    y: containerRect.height / 2 - nodeCenterY * targetZoom
+  }
+  zoom.value = targetZoom
 }
 
 function safeId(raw: string): string {
@@ -283,24 +311,105 @@ function getEdgePath(points: Array<{ x: number, y: number }>) {
          points.slice(1).map(p => `L ${p.x + margin} ${p.y + margin}`).join(' ')
 }
 
-// Mouse controls for viewport panning and zooming
-function handleMouseMove(e: MouseEvent) {
-  if (isPanning.value) {
-    offset.value.x += e.clientX - lastMousePos.value.x
-    offset.value.y += e.clientY - lastMousePos.value.y
-    lastMousePos.value = { x: e.clientX, y: e.clientY }
-  }
+// Mouse / touch controls for viewport panning and zooming
+const activePointers = new Map<number, { x: number; y: number }>()
+let pinchStartDistance = 0
+let pinchStartZoom = 1
+let pinchStartOffset = { x: 0, y: 0 }
+let pinchCenter = { x: 0, y: 0 }
+
+function getPointerPos(e: PointerEvent | MouseEvent) {
+  return { x: e.clientX, y: e.clientY }
 }
 
-function handleMouseDown(e: MouseEvent) {
-  if (e.button === 0) {
+function handlePointerDown(e: PointerEvent) {
+  if (!mapContainer.value) return
+  // Capture pointer so we keep receiving move/up events even if finger leaves the element
+  try {
+    (e.target as Element).setPointerCapture?.(e.pointerId)
+  } catch {
+    // ignore — older browsers without setPointerCapture
+  }
+  activePointers.set(e.pointerId, getPointerPos(e))
+
+  if (activePointers.size === 1) {
+    // Single pointer → start panning
     isPanning.value = true
-    lastMousePos.value = { x: e.clientX, y: e.clientY }
+    lastMousePos.value = getPointerPos(e)
+  } else if (activePointers.size === 2) {
+    // Two pointers → start pinch zoom
+    isPanning.value = false
+    const [p1, p2] = Array.from(activePointers.values())
+    pinchStartDistance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+    pinchStartZoom = zoom.value
+    pinchStartOffset = { ...offset.value }
+    pinchCenter = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
   }
 }
 
-function handleMouseUp() {
-  isPanning.value = false
+function handlePointerMove(e: PointerEvent) {
+  if (!activePointers.has(e.pointerId)) return
+  activePointers.set(e.pointerId, getPointerPos(e))
+
+  if (activePointers.size === 1 && isPanning.value) {
+    // Pan
+    const pos = getPointerPos(e)
+    offset.value.x += pos.x - lastMousePos.value.x
+    offset.value.y += pos.y - lastMousePos.value.y
+    lastMousePos.value = pos
+  } else if (activePointers.size === 2) {
+    // Pinch zoom — keep the midpoint between the two fingers stationary in screen space
+    const [p1, p2] = Array.from(activePointers.values())
+    const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+    if (pinchStartDistance <= 0) return
+
+    const rect = mapContainer.value?.getBoundingClientRect()
+    if (!rect) return
+
+    const newCenter = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
+    const factor = distance / pinchStartDistance
+    const newZoom = Math.max(0.2, Math.min(3, pinchStartZoom * factor))
+    zoom.value = newZoom
+
+    // Recompute offset so the pinch center stays anchored on screen.
+    // Map content point under pinch center: (newCenter - rect.topLeft - newOffset) / newZoom
+    // We want: (newCenter - rect.topLeft - newOffset) / newZoom === (oldCenter - rect.topLeft - oldOffset) / oldZoom
+    // Solving for newOffset:
+    const relX = (newCenter.x - rect.left) / newZoom
+    const relY = (newCenter.y - rect.top) / newZoom
+    const oldRelX = (pinchCenter.x - rect.left) / pinchStartZoom
+    const oldRelY = (pinchCenter.y - rect.top) / pinchStartZoom
+    offset.value = {
+      x: pinchStartOffset.x + (oldRelX - relX) * newZoom,
+      y: pinchStartOffset.y + (oldRelY - relY) * newZoom
+    }
+    // Suppress unused-var warning for newCenter (we use rect-relative coordinates above)
+    void newCenter
+  }
+}
+
+function handlePointerUp(e: PointerEvent) {
+  activePointers.delete(e.pointerId)
+  try {
+    (e.target as Element).releasePointerCapture?.(e.pointerId)
+  } catch {
+    // ignore
+  }
+  if (activePointers.size < 2) {
+    pinchStartDistance = 0
+  }
+  if (activePointers.size === 0) {
+    isPanning.value = false
+  } else if (activePointers.size === 1) {
+    // Drop back to pan mode using the remaining pointer
+    const [pos] = Array.from(activePointers.values())
+    lastMousePos.value = pos
+    isPanning.value = true
+  }
+}
+
+function handlePointerCancel(e: PointerEvent) {
+  handlePointerUp(e)
 }
 
 function handleWheel(e: WheelEvent) {
@@ -347,12 +456,17 @@ function handleExitMouseMove(event: MouseEvent) {
 watch(() => [props.open, props.mapData], () => {
   if (props.open) {
     updateLayout()
+    // After the layout has been computed, center the viewport on the current scene
+    nextTick(() => {
+      focusOnCurrentNode()
+    })
   }
 })
 
 onMounted(() => {
   if (props.open) {
     updateLayout()
+    nextTick(() => focusOnCurrentNode())
   }
 })
 </script>
@@ -369,17 +483,17 @@ onMounted(() => {
         />
 
         <!-- Modal panel -->
-        <div class="relative z-10 w-full max-w-5xl h-[80vh] bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
+        <div class="relative z-10 w-full max-w-5xl h-[90vh] sm:h-[80vh] bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-modal-in">
           <!-- Header -->
-          <div class="flex items-center justify-between px-8 py-5 border-b border-slate-800 shrink-0">
-            <div class="flex items-center gap-3">
-              <i class="ra ra-map text-2xl text-emerald-500"></i>
-              <div>
-                <h2 class="text-xl font-bold text-white">World Map</h2>
-                <p class="text-xs text-slate-400 mt-0.5">Tactical Sketch of your journey</p>
+          <div class="flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 border-b border-slate-800 shrink-0">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+              <i class="ra ra-map text-xl sm:text-2xl text-emerald-500 shrink-0"></i>
+              <div class="min-w-0">
+                <h2 class="text-base sm:text-xl font-bold text-white leading-tight">World Map</h2>
+                <p class="hidden sm:block text-xs text-slate-400 mt-0.5">Tactical Sketch of your journey</p>
               </div>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 sm:gap-4 shrink-0">
               <!-- Legend -->
               <div class="hidden sm:flex items-center gap-4 text-xxs text-slate-400">
                 <span class="flex items-center gap-1.5">
@@ -406,11 +520,11 @@ onMounted(() => {
                   Two-way
                 </span>
               </div>
-              
+
               <!-- Map Controls -->
-              <div class="flex items-center bg-slate-800/50 rounded-full px-1.5 py-1 border border-slate-700/50 gap-1">
-                <button 
-                  @click="zoom = Math.max(0.2, zoom - 0.1)" 
+              <div class="flex items-center bg-slate-800/50 rounded-full px-1.5 py-1 border border-slate-700/50 gap-0.5 sm:gap-1">
+                <button
+                  @click="zoom = Math.max(0.2, zoom - 0.1)"
                   class="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
                   title="Zoom Out"
                 >
@@ -418,9 +532,9 @@ onMounted(() => {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
                   </svg>
                 </button>
-                <span class="text-xxs font-mono text-slate-500 min-w-[3rem] text-center">{{ Math.round(zoom * 100) }}%</span>
-                <button 
-                  @click="zoom = Math.min(3, zoom + 0.1)" 
+                <span class="text-xxs font-mono text-slate-500 min-w-[2.5rem] sm:min-w-[3rem] text-center">{{ Math.round(zoom * 100) }}%</span>
+                <button
+                  @click="zoom = Math.min(3, zoom + 0.1)"
                   class="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
                   title="Zoom In"
                 >
@@ -428,9 +542,9 @@ onMounted(() => {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                   </svg>
                 </button>
-                <div class="w-px h-4 bg-slate-700 mx-1"></div>
-                <button 
-                  @click="resetView" 
+                <div class="w-px h-4 bg-slate-700 mx-0.5 sm:mx-1"></div>
+                <button
+                  @click="resetView"
                   class="p-1.5 rounded-full text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
                   title="Reset View"
                 >
@@ -442,7 +556,7 @@ onMounted(() => {
 
               <button
                 @click="emit('close')"
-                class="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                class="p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                 title="Close"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -453,7 +567,7 @@ onMounted(() => {
           </div>
 
           <!-- Map Container -->
-          <div class="flex-grow overflow-auto p-6 relative bg-slate-950 bg-radial-gradient" ref="mapContainer">
+          <div class="flex-grow overflow-auto p-2 sm:p-6 relative bg-slate-950 bg-radial-gradient" ref="mapContainer">
             <!-- Empty state -->
             <div
               v-if="!mapData"
@@ -467,12 +581,13 @@ onMounted(() => {
             <!-- Redesigned view layer -->
             <div
               v-else
-              class="w-full h-full flex items-center justify-center relative z-10 select-none overflow-hidden"
+              class="w-full h-full flex items-center justify-center relative z-10 select-none overflow-hidden touch-none"
               @wheel="handleWheel"
-              @mousedown="handleMouseDown"
-              @mousemove="handleMouseMove"
-              @mouseup="handleMouseUp"
-              @mouseleave="handleMouseUp"
+              @pointerdown="handlePointerDown"
+              @pointermove="handlePointerMove"
+              @pointerup="handlePointerUp"
+              @pointercancel="handlePointerCancel"
+              @pointerleave="handlePointerUp"
             >
               <!-- Viewport container that gets translated/zoomed -->
               <div 
@@ -747,12 +862,13 @@ onMounted(() => {
           </div>
 
           <!-- Footer hint -->
-          <div class="px-8 py-3 border-t border-slate-800 text-xs text-slate-600 flex justify-between items-center shrink-0">
-            <div class="flex gap-4">
-              <span><i class="ra ra-plain-dagger mr-1"></i> Drag to pan</span>
-              <span><i class="ra ra-scroll-unfurled mr-1"></i> Scroll to zoom</span>
+          <div class="px-4 sm:px-8 py-2 sm:py-3 border-t border-slate-800 text-[11px] sm:text-xs text-slate-600 flex justify-between items-center gap-2 shrink-0">
+            <div class="flex gap-3 sm:gap-4 min-w-0">
+              <span class="whitespace-nowrap"><i class="ra ra-plain-dagger mr-1"></i> Drag to pan</span>
+              <span class="hidden sm:inline whitespace-nowrap"><i class="ra ra-scroll-unfurled mr-1"></i> Scroll to zoom</span>
+              <span class="sm:hidden whitespace-nowrap"><i class="ra ra-hand mr-1"></i> Pinch to zoom</span>
             </div>
-            <span>Tip: hover over rooms and exit circles for details • rendered dynamically</span>
+            <span class="hidden sm:inline truncate">Tip: hover over rooms and exit circles for details • rendered dynamically</span>
           </div>
         </div>
       </div>
