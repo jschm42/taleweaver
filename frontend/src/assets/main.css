@@ -50,9 +50,43 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --app-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
+@layer utilities {
+  .h-app {
+    height: var(--app-height);
+  }
+
+  .min-h-app {
+    min-height: var(--app-height);
+  }
+
+  .max-h-app {
+    max-height: var(--app-height);
+  }
+}
+
 @layer base {
+  html, body, #app {
+    height: 100%;
+  }
+
+  html {
+    overflow: hidden;
+  }
+
   body {
     @apply bg-aether-background text-slate-200 font-ui selection:bg-aether-primary/30;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   h1, h2, h3, h4, h5, h6 {

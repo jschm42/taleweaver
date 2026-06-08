@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authState, clearAuth } from '@/store/auth'
 import { configState, refreshConfig } from '@/store/config'
@@ -8,6 +8,13 @@ import GlobalHeader from '@/components/GlobalHeader.vue'
 
 const router = useRouter()
 const route = useRoute()
+
+function updateAppHeight() {
+  if (typeof window === 'undefined') return
+  const vv = window.visualViewport
+  const height = vv?.height ?? window.innerHeight
+  document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`)
+}
 
 async function checkAuth() {
   // Always check bootstrap status first to know if we need setup
@@ -64,21 +71,38 @@ async function checkAuth() {
 }
 
 onMounted(async () => {
+  updateAppHeight()
+  window.addEventListener('resize', updateAppHeight)
+  window.addEventListener('orientationchange', updateAppHeight)
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateAppHeight)
+    window.visualViewport.addEventListener('scroll', updateAppHeight)
+  }
+
   await checkAuth()
   if (authState.token) {
     await refreshConfig()
   }
-  
+
   // Listen for 401 events from useApi
   window.addEventListener('auth-unauthorized', () => {
     clearAuth()
     router.push('/login')
   })
 })
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateAppHeight)
+  window.removeEventListener('orientationchange', updateAppHeight)
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', updateAppHeight)
+    window.visualViewport.removeEventListener('scroll', updateAppHeight)
+  }
+})
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-[#050b14] overflow-hidden">
+  <div class="h-app flex flex-col bg-[#050b14] overflow-hidden">
     <GlobalHeader />
     <main class="flex-1 min-h-0 relative overflow-hidden">
       <RouterView />

@@ -158,6 +158,13 @@ watch(fontSize, (newSize) => {
   localStorage.setItem('tw_chat_font_size', newSize)
 })
 
+const FONT_SIZE_CYCLE: Array<'small' | 'medium' | 'large'> = ['small', 'medium', 'large']
+function cycleFontSize() {
+  const currentIndex = FONT_SIZE_CYCLE.indexOf(fontSize.value)
+  const nextIndex = (currentIndex + 1) % FONT_SIZE_CYCLE.length
+  fontSize.value = FONT_SIZE_CYCLE[nextIndex]
+}
+
 const handleImageError = (path?: string | null) => {
   if (!path) return
   brokenImages.value[path] = true
@@ -756,30 +763,22 @@ onUnmounted(() => {
         <span class="text-slate-300 text-sm font-semibold tracking-wide uppercase">Chronicle Log</span>
       </div>
       <div class="flex items-center gap-4">
-        <!-- Font Size Controls -->
-        <div class="flex items-center bg-slate-950/40 border border-slate-800/50 rounded-xl p-1 mr-2 shadow-inner backdrop-blur-sm">
-          <button 
-            @click="fontSize = 'small'" 
-            :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all transform active:scale-90', fontSize === 'small' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] ring-2 ring-emerald-400/50 scale-105 z-10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80']"
-            title="Small Font"
-          >
-            <span class="text-xs font-black">A</span>
-          </button>
-          <button 
-            @click="fontSize = 'medium'" 
-            :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all transform active:scale-90', fontSize === 'medium' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] ring-2 ring-emerald-400/50 scale-105 z-10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80']"
-            title="Medium Font"
-          >
-            <span class="text-xs font-black">A</span>
-          </button>
-          <button 
-            @click="fontSize = 'large'" 
-            :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all transform active:scale-90', fontSize === 'large' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] ring-2 ring-emerald-400/50 scale-105 z-10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/80']"
-            title="Large Font"
-          >
-            <span class="text-sm font-black">A</span>
-          </button>
-        </div>
+        <!-- Font Size Control (cycle) -->
+        <button
+          @click="cycleFontSize"
+          class="group flex items-center justify-center w-9 h-9 rounded-xl bg-slate-950/40 border border-slate-800/50 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-300 backdrop-blur-sm shadow-inner mr-2 active:scale-90"
+          :title="`Font size: ${fontSize.charAt(0).toUpperCase() + fontSize.slice(1)} (click to cycle)`"
+          :aria-label="`Font size ${fontSize}. Click to cycle.`"
+        >
+          <span
+            :class="[
+              'font-black leading-none transition-all duration-300',
+              fontSize === 'small' && 'text-[10px] text-slate-500 group-hover:text-slate-300',
+              fontSize === 'medium' && 'text-xs text-slate-300 group-hover:text-white',
+              fontSize === 'large' && 'text-base text-emerald-400 group-hover:text-emerald-300'
+            ]"
+          >A</span>
+        </button>
         
         <BableFishSelector />
 

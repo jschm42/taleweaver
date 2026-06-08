@@ -5,7 +5,7 @@
  * Connects to the given game session and displays the chat,
  * intercepting commands and showing the character sheet + world map.
  */
-import { ref, watch, computed, onBeforeUnmount } from 'vue'
+import { ref, watch, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import CharacterSheetModal from '@/components/game/CharacterSheetModal.vue'
 import MapModal from '@/components/game/MapModal.vue'
@@ -31,7 +31,7 @@ import ContextMenu from '@/components/game/ContextMenu.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
 import { api } from '@/composables/useApi'
-import { configState } from '@/store/config'
+import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
@@ -253,6 +253,12 @@ watch(trackedQuestId, (newId) => {
   if (newId) {
     isQuestTrackerHidden.value = false
   }
+})
+
+onMounted(() => {
+  // Re-fetch config so in-game controls (e.g. TTS) reflect the latest server-side settings,
+  // even if the user changed them after the initial app mount.
+  void refreshConfig()
 })
 
 onBeforeUnmount(() => {
