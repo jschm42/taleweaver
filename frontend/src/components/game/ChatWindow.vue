@@ -10,7 +10,7 @@ import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocke
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { formatObjectIds } from '@/utils/editor_utils'
-import { Compass } from 'lucide-vue-next'
+import { Compass, SendHorizontal } from 'lucide-vue-next'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -1135,9 +1135,7 @@ onUnmounted(() => {
             title="Send Command"
             @click="() => handleSend()"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-            </svg>
+            <SendHorizontal class="h-5 w-5" />
           </button>
         </div>
 
