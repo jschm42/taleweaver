@@ -645,6 +645,13 @@ export const api = {
     }
   },
 
+  updateMyCredentials(payload: { current_password: string; username?: string; password?: string }): Promise<{ user: any; access_token?: string; token_type?: string }> {
+    return request('/users/me/credentials', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  },
+
   /** Updates a session note or status. */
   updateSession(gameId: string, payload: { status?: string | null; status_note?: string | null }): Promise<GameSession> {
     return request(`/adventures/sessions/${gameId}`, {

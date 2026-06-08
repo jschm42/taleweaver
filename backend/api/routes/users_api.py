@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.auth_api import UserResponse
-from backend.core.auth import get_current_admin, get_current_user, get_password_hash
+from backend.core.auth import get_current_admin, get_current_user, get_password_hash, verify_password
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
@@ -42,6 +42,16 @@ class UserUpdateRequest(BaseModel):
 
 class BioUpdateRequest(BaseModel):
     bio: str
+
+class UserCredentialsUpdateRequest(BaseModel):
+    current_password: str
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+class UserCredentialsUpdateResponse(BaseModel):
+    user: UserResponse
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
 
 
 class ProfileImageGenerateRequest(BaseModel):
@@ -279,4 +289,110 @@ async def generate_my_profile_image(
     except Exception as e:
         logger.exception("Profile image generation failed for user %s", current_user.id)
         raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}") from e
+
+
+@router.put("/users/me/credentials", response_model=UserCredentialsUpdateResponse)
+async def update_my_credentials(
+    request: UserCredentialsUpdateRequest,
+    current_user: User = USER_DEP,
+    db: AsyncSession = DB_DEP,
+):
+    """
+    Update the user's own username and/or password.
+    Requires the current password to verify identity.
+    """
+    if not verify_password(request.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=400,
+            detail="Incorrect current password."
+        )
+
+    if request.username is None and request.password is None:
+        raise HTTPException(
+            status_code=400,
+            detail="You must provide a new username or a new password."
+        )
+
+    username_changed = False
+
+    if request.username is not None:
+        new_username = request.username.strip()
+        if not new_username:
+            raise HTTPException(
+                status_code=400,
+                detail="Username cannot be empty."
+            )
+        # Check uniqueness if username changed
+        if new_username != current_user.username:
+            check_res = await db.execute(select(User).filter(User.username == new_username))
+            if check_res.scalars().first() is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This username is already taken."
+                )
+            current_user.username = new_username
+            username_changed = True
+
+    if request.password is not None:
+        new_password = request.password
+        if len(new_password) < 4:
+            raise HTTPException(
+                status_code=400,
+                detail="Password must be at least 4 characters long."
+            )
+        current_user.hashed_password = get_password_hash(new_password)
+
+    await db.commit()
+    await db.refresh(current_user)
+
+    access_token = None
+    token_type = None
+    if username_changed:
+        from datetime import timedelta
+        from backend.core.auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": current_user.username},
+            expires_delta=access_token_expires
+        )
+        token_type = "bearer"
+
+    # Fetch stats for response
+    from backend.models.game_session import GameSession
+    from backend.models.avatar import Avatar
+    from sqlalchemy import func
+
+    result = await db.execute(
+        select(GameSession.template_id)
+        .where(GameSession.user_id == current_user.id)
+        .distinct()
+    )
+    adventure_count = len(result.scalars().all())
+
+    xp_res = await db.execute(
+        select(func.sum(Avatar.exp)).where(Avatar.user_id == current_user.id)
+    )
+    total_xp = xp_res.scalar() or 0
+
+    user_response = UserResponse(
+        id=current_user.id,
+        username=current_user.username,
+        role=current_user.role,
+        profile_image_url=current_user.profile_image_url,
+        bio=current_user.bio,
+        default_language=current_user.default_language,
+        earned_awards=current_user.earned_awards or [],
+        is_admin=current_user.role == "admin",
+        adventure_count=adventure_count,
+        total_xp=total_xp,
+        game_log=current_user.game_log or [],
+        has_imported_defaults=current_user.has_imported_defaults
+    )
+
+    return UserCredentialsUpdateResponse(
+        user=user_response,
+        access_token=access_token,
+        token_type=token_type
+    )
+
 

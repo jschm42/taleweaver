@@ -3,9 +3,11 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState, clearAuth } from '@/store/auth'
 import { configState } from '@/store/config'
+import ChangeCredentialsModal from '@/components/portal/ChangeCredentialsModal.vue'
 
 const router = useRouter()
 const isMenuOpen = ref(false)
+const isChangeCredentialsOpen = ref(false)
 
 function normalizeProfileImageUrl(url: string): string {
   let normalized = (url || '').replace(/\\\\/g, '/')
@@ -101,8 +103,16 @@ function handleLogout() {
             <i class="ra ra-person"></i>
             Edit Profile
           </router-link>
+
+          <button 
+            @click="isChangeCredentialsOpen = true; isMenuOpen = false"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-left"
+          >
+            <i class="ra ra-gear"></i>
+            Change Credentials
+          </button>
           
-          <button @click="handleLogout" class="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors">
+          <button @click="handleLogout" class="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors text-left">
             <i class="ra ra-cancel"></i>
             Logout
           </button>
@@ -112,6 +122,12 @@ function handleLogout() {
       <!-- Click Overlay to close dropdown -->
       <div v-if="isMenuOpen" @click="isMenuOpen = false" class="fixed inset-0 z-[-1]"></div>
     </div>
+
+    <!-- Change Credentials Modal -->
+    <ChangeCredentialsModal 
+      :is-open="isChangeCredentialsOpen"
+      @close="isChangeCredentialsOpen = false"
+    />
   </header>
 </template>
 

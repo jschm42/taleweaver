@@ -280,6 +280,9 @@ python scripts/generate_fernet_key.py
 # Apply database migrations
 python -m alembic upgrade head
 
+> [!IMPORTANT]
+> Just like starting the server, run the migration command from the project root directory so Alembic can find the `alembic.ini` configuration file.
+
 # Optional hard reset for local development (SQLite file lives in data/)
 # delete data/taleweaver.db and run migrations again
 

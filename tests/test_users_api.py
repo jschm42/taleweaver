@@ -159,3 +159,101 @@ async def test_auth_me_returns_xp_and_counts(client: AsyncClient) -> None:
     assert len(data["game_log"]) == 1
     assert data["game_log"][0]["xp"] == 350
 
+
+async def test_update_credentials_success(client: AsyncClient) -> None:
+    # 1. Create a user
+    async with TestSessionLocal() as session:
+        user = User(
+            username="test_cred_user",
+            hashed_password=get_password_hash("old_password"),
+            role="user"
+        )
+        session.add(user)
+        await session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'test_cred_user'})}"}
+    payload = {
+        "current_password": "old_password",
+        "username": "new_cred_user",
+        "password": "new_password"
+    }
+    
+    response = await client.put("/api/users/me/credentials", headers=headers, json=payload)
+    assert response.status_code == 200
+    
+    data = response.json()
+    assert data["user"]["username"] == "new_cred_user"
+    assert data["access_token"] is not None
+    assert data["token_type"] == "bearer"
+
+    # Verify we can authenticate with the new token
+    new_headers = {"Authorization": f"Bearer {data['access_token']}"}
+    me_response = await client.get("/api/auth/me", headers=new_headers)
+    assert me_response.status_code == 200
+    assert me_response.json()["username"] == "new_cred_user"
+
+
+async def test_update_credentials_wrong_current_password(client: AsyncClient) -> None:
+    async with TestSessionLocal() as session:
+        user = User(
+            username="wrong_pw_user",
+            hashed_password=get_password_hash("correct_password"),
+            role="user"
+        )
+        session.add(user)
+        await session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'wrong_pw_user'})}"}
+    payload = {
+        "current_password": "wrong_password",
+        "username": "some_other_name"
+    }
+    response = await client.put("/api/users/me/credentials", headers=headers, json=payload)
+    assert response.status_code == 400
+    assert "Incorrect current password" in response.json()["detail"]
+
+
+async def test_update_credentials_username_taken(client: AsyncClient) -> None:
+    async with TestSessionLocal() as session:
+        user1 = User(
+            username="taken_user",
+            hashed_password=get_password_hash("pw"),
+            role="user"
+        )
+        user2 = User(
+            username="updater_user",
+            hashed_password=get_password_hash("pw"),
+            role="user"
+        )
+        session.add_all([user1, user2])
+        await session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'updater_user'})}"}
+    payload = {
+        "current_password": "pw",
+        "username": "taken_user"
+    }
+    response = await client.put("/api/users/me/credentials", headers=headers, json=payload)
+    assert response.status_code == 400
+    assert "already taken" in response.json()["detail"]
+
+
+async def test_update_credentials_no_changes(client: AsyncClient) -> None:
+    async with TestSessionLocal() as session:
+        user = User(
+            username="no_change_user",
+            hashed_password=get_password_hash("pw"),
+            role="user"
+        )
+        session.add(user)
+        await session.commit()
+
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'no_change_user'})}"}
+    payload = {
+        "current_password": "pw"
+    }
+    response = await client.put("/api/users/me/credentials", headers=headers, json=payload)
+    assert response.status_code == 400
+    assert "You must provide a new username or a new password" in response.json()["detail"]
+
+
