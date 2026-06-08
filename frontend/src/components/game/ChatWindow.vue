@@ -841,7 +841,7 @@ onUnmounted(() => {
     <!-- Message log -->
     <div
       ref="logEl"
-      class="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0 relative custom-scrollbar"
+      class="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-4 min-h-0 relative custom-scrollbar"
       aria-live="polite"
       aria-label="Game log"
       @mousemove="handleMouseMove"
@@ -1326,6 +1326,11 @@ onUnmounted(() => {
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -1335,6 +1340,10 @@ onUnmounted(() => {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .item-card {
