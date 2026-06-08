@@ -30,8 +30,8 @@ const handleBack = () => {
 <template>
   <header 
     :class="[
-      'bg-transparent px-4 md:px-8 pt-8 pb-4 grid grid-cols-2 sm:flex sm:flex-row items-start justify-between gap-4 md:gap-6 z-10 shrink-0 relative transition-all duration-300 ease-in-out group/header',
-      collapsed ? 'h-0 min-h-0 pt-0 pb-0 overflow-hidden opacity-0 pointer-events-none' : 'min-h-[110px]'
+      'bg-transparent px-4 md:px-8 grid grid-cols-2 sm:flex sm:flex-row items-start justify-between gap-4 md:gap-6 z-10 shrink-0 relative transition-all duration-300 ease-in-out group/header',
+      collapsed ? 'h-0 min-h-0 pt-0 pb-0 overflow-hidden opacity-0 pointer-events-none' : 'pt-8 pb-4 min-h-[110px]'
     ]"
   >
     <div class="flex flex-col items-start gap-2 z-10 min-w-0 shrink-0 order-1 col-span-1 sm:w-1/4">

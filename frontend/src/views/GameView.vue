@@ -31,6 +31,7 @@ import ContextMenu from '@/components/game/ContextMenu.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
 import { api } from '@/composables/useApi'
+import { configState } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
@@ -992,7 +993,7 @@ watch(
       </svg>
     </button>
 
-    <div class="px-12 pt-6">
+    <div v-if="configState.isLoaded && !configState.hasLlmConfig" class="px-12 pt-6">
       <SetupWarningBanner />
     </div>
 

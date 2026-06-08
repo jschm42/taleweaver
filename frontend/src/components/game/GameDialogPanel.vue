@@ -84,6 +84,7 @@ defineExpose({ appendText, setInputText })
       :game-id="props.gameId"
       :current-scene-description="props.currentSceneDescription"
       :prompt-suggestions="props.promptSuggestions"
+      :exp="props.exp"
       @send="emit('send', $event)"
       @open-sheet="emit('openSheet')"
       @open-map="emit('openMap')"
@@ -101,11 +102,5 @@ defineExpose({ appendText, setInputText })
       @item-click="emit('itemClick', $event)"
       @toggle-sidebar="emit('toggleSidebar')"
     />
-
-    <div v-if="props.mode !== 'chat'" class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">
-      <span class="text-xl font-black text-slate-300/60 uppercase tracking-[0.2em] tabular-nums">
-        {{ props.exp }} XP
-      </span>
-    </div>
   </div>
 </template>

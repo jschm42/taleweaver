@@ -32,6 +32,7 @@ const props = defineProps<{
   gameId?: string
   currentSceneDescription?: string
   promptSuggestions?: string[]
+  exp?: number
 }>()
 
 const { deleteMessage, agentPaused, agentStepByStep, runAgentTurn } = useGameSocket()
@@ -187,7 +188,19 @@ function setInputText(text: string) {
   })
 }
 
-defineExpose({ appendText, setInputText })
+function toggleSayPrefix() {
+  const current = inputText.value.trim()
+  if (current.startsWith('/say ')) {
+    inputText.value = current.slice(5)
+  } else {
+    inputText.value = '/say ' + inputText.value
+  }
+  void nextTick(() => {
+    inputEl.value?.focus()
+  })
+}
+
+defineExpose({ appendText, setInputText, toggleSayPrefix })
 
 const visibleStart = ref(0)
 const visibleEnd = ref(0)
@@ -730,7 +743,13 @@ onUnmounted(() => {
   <div class="flex flex-col w-full h-full bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-xl overflow-hidden shadow-2xl relative z-10">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-slate-950/50 backdrop-blur-md shrink-0">
-      <div class="flex items-center gap-2">
+      <div v-if="props.exp !== undefined && props.mode !== 'chat'" class="flex items-center gap-2 select-none animate-fade-in cursor-help" title="Experience Points">
+        <i class="ra ra-laurels text-xl text-amber-400"></i>
+        <span class="text-amber-400 text-sm font-black uppercase tracking-[0.12em] tabular-nums">
+          {{ props.exp }} XP
+        </span>
+      </div>
+      <div v-else class="flex items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clip-rule="evenodd" />
         </svg>
@@ -1190,11 +1209,18 @@ onUnmounted(() => {
         </div>
       </div>
       
-      <!-- Verbal Speech Hint -->
-      <div class="mt-1 pl-11 flex items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity pointer-events-none select-none">
-         <span class="text-[9px] uppercase tracking-widest text-slate-400 font-black">Shortcut</span>
-         <kbd class="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded text-[9px] text-emerald-400 font-mono shadow-2xl">TAB</kbd>
-         <span class="text-[9px] uppercase tracking-widest text-slate-400 font-black">to insert /say (Verbal Speech)</span>
+      <!-- Verbal Speech Hint / Toggle (Interactive) -->
+      <div class="mt-1 pl-11 flex items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity select-none">
+         <span class="text-[9px] uppercase tracking-widest text-slate-500 font-bold">Shortcut:</span>
+         <button
+           type="button"
+           class="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-[9px] text-emerald-400 font-mono shadow-2xl transition-all cursor-pointer active:scale-95 flex items-center gap-1"
+           title="Toggle speech prefix"
+           @click="toggleSayPrefix"
+         >
+           <kbd class="font-mono">TAB</kbd> / <i class="ra ra-speech-bubble text-[10px]"></i>
+         </button>
+         <span class="text-[9px] uppercase tracking-widest text-slate-500 font-bold">to toggle speech mode (/say)</span>
       </div>
     </div>
   </div>
