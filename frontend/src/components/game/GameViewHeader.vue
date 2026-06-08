@@ -11,12 +11,15 @@ const props = defineProps<{
   clockTick: boolean
   debugMode?: boolean
   isCheckpointSaving?: boolean
+  collapsed?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'back'): void
   (e: 'edit-note'): void
   (e: 'open-chronicles'): void
+  (e: 'collapse'): void
+  (e: 'hide-quest'): void
 }>()
 
 const handleBack = () => {
@@ -25,8 +28,13 @@ const handleBack = () => {
 </script>
 
 <template>
-  <header class="bg-transparent px-4 md:px-8 pt-8 pb-4 flex flex-col lg:flex-row items-start justify-between gap-6 z-10 shrink-0 relative min-h-[110px]">
-    <div class="flex flex-col items-start gap-2 z-10 min-w-0 shrink-0 lg:w-1/4">
+  <header 
+    :class="[
+      'bg-transparent px-4 md:px-8 pt-8 pb-4 grid grid-cols-2 sm:flex sm:flex-row items-start justify-between gap-4 md:gap-6 z-10 shrink-0 relative transition-all duration-300 ease-in-out group/header',
+      collapsed ? 'h-0 min-h-0 pt-0 pb-0 overflow-hidden opacity-0 pointer-events-none' : 'min-h-[110px]'
+    ]"
+  >
+    <div class="flex flex-col items-start gap-2 z-10 min-w-0 shrink-0 order-1 col-span-1 sm:w-1/4">
       <div class="flex items-center gap-2">
         <button
           @click="handleBack"
@@ -67,11 +75,11 @@ const handleBack = () => {
       </div>
     </div>
 
-    <div class="flex-grow w-full lg:w-2/4 min-w-0 flex justify-center">
-      <GameQuestTracker :tracked-quest="props.trackedQuest" />
+    <div class="flex-grow w-full sm:w-2/4 min-w-0 flex justify-center order-3 sm:order-2 col-span-2">
+      <GameQuestTracker :tracked-quest="props.trackedQuest" @hide="emit('hide-quest')" />
     </div>
 
-    <div class="z-20 shrink-0 lg:w-1/4 flex justify-end">
+    <div class="z-20 shrink-0 sm:w-1/4 flex justify-end order-2 sm:order-3 col-span-1 justify-self-end w-full sm:w-auto">
       <div class="flex items-center gap-3">
         <div
           v-if="props.isCheckpointSaving"
@@ -87,6 +95,18 @@ const handleBack = () => {
     <div v-if="props.debugMode" class="absolute top-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-1 bg-rose-600/80 backdrop-blur-md border border-rose-400/50 rounded-full text-[10px] font-black text-white uppercase tracking-[0.2em] animate-pulse shadow-lg">
       Debug Protocol Active
     </div>
+
+    <!-- Collapse Button -->
+    <button 
+      v-if="!props.collapsed"
+      @click="emit('collapse')"
+      class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-20 px-3 py-1 rounded-full border border-slate-800/80 bg-slate-900/95 text-slate-500 hover:text-slate-300 hover:scale-105 transition-all shadow-lg flex items-center justify-center cursor-pointer pointer-events-auto opacity-0 group-hover/header:opacity-100 focus:opacity-100"
+      title="Collapse Header"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+      </svg>
+    </button>
   </header>
 </template>
 

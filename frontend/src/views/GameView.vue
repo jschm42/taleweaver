@@ -57,6 +57,16 @@ const showSheet = ref(false)
 const sheetDirty = ref(false)
 const showMap = ref(false)
 const showQuests = ref(false)
+const isMobileSidebarOpen = ref(false)
+const isHeaderCollapsed = ref(localStorage.getItem('tw_header_collapsed') === 'true')
+const isQuestTrackerHidden = ref(localStorage.getItem('tw_quest_tracker_hidden') === 'true')
+
+watch(isHeaderCollapsed, (val) => {
+  localStorage.setItem('tw_header_collapsed', val ? 'true' : 'false')
+})
+watch(isQuestTrackerHidden, (val) => {
+  localStorage.setItem('tw_quest_tracker_hidden', val ? 'true' : 'false')
+})
 const showDebugLog = ref(false)
 const showNoteModal = ref(false)
 const isSavingNote = ref(false)
@@ -217,6 +227,16 @@ const {
 })
 
 const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQuestId.value))
+const displayedTrackedQuest = computed(() => {
+  if (isQuestTrackerHidden.value) return null
+  return trackedQuest.value
+})
+
+watch(trackedQuestId, (newId) => {
+  if (newId) {
+    isQuestTrackerHidden.value = false
+  }
+})
 
 onBeforeUnmount(() => {
   audioService.stop()
@@ -746,6 +766,7 @@ useGameSessionLifecycle({
     showQuests.value = false
     showWalkthrough.value = false
     showDebug.value = false
+    isMobileSidebarOpen.value = false
   },
 })
 
@@ -945,15 +966,31 @@ watch(
     <GameViewHeader
       :title="sheet?.adventure_title"
       :version="sheet?.adventure_version"
-      :tracked-quest="trackedQuest"
+      :tracked-quest="displayedTrackedQuest"
       :game-time="gameTime"
       :clock-tick="clockTick"
       :debug-mode="!!sheet?.debug_mode"
       :is-checkpoint-saving="isCheckpointSaving"
+      :collapsed="isHeaderCollapsed"
       @back="goBack"
       @open-chronicles="openChroniclesModal"
       @edit-note="showNoteModal = true"
+      @collapse="isHeaderCollapsed = true"
+      @hide-quest="isQuestTrackerHidden = true"
     />
+
+    <!-- Floating Header Toggle (when collapsed) -->
+    <button 
+      v-if="isHeaderCollapsed"
+      @click="isHeaderCollapsed = false"
+      class="absolute top-0 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 rounded-b-xl border border-t-0 border-slate-800 bg-slate-900/90 text-slate-400 hover:text-slate-200 transition-all hover:bg-slate-800 shadow-lg flex items-center justify-center gap-1 cursor-pointer animate-fade-in"
+      title="Show Header"
+    >
+      <span class="text-[9px] uppercase tracking-widest font-black">Show Header</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
 
     <div class="px-12 pt-6">
       <SetupWarningBanner />
@@ -978,8 +1015,24 @@ watch(
         </div>
       </div>
 
+      <!-- Backdrop for mobile sidebar drawer -->
+      <div 
+        v-if="isMobileSidebarOpen && (entities.length > 0 || currentSceneImage)" 
+        class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 xl:hidden animate-fade-in"
+        @click="isMobileSidebarOpen = false"
+      ></div>
+
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
-      <aside v-if="entities.length > 0 || currentSceneImage" class="hidden xl:flex w-72 bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex-col p-6 animate-fade-in shrink-0 overflow-y-auto custom-scrollbar relative z-10 m-6 shadow-2xl">
+      <aside 
+        v-if="entities.length > 0 || currentSceneImage" 
+        :class="[
+          'bg-slate-900/95 xl:bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex flex-col p-6 shrink-0 overflow-y-auto custom-scrollbar shadow-2xl transition-all duration-300 ease-in-out',
+          // Mobile/Tablet drawer placement & translate behavior
+          isMobileSidebarOpen 
+            ? 'fixed inset-y-6 left-6 z-40 w-72 max-w-[calc(100vw-3rem)] translate-x-0' 
+            : 'fixed inset-y-6 left-6 z-40 w-72 -translate-x-[calc(100%+3rem)] xl:translate-x-0 xl:relative xl:inset-y-0 xl:left-0 xl:m-6'
+        ]"
+      >
         <GameScenePanel
           :scene-id="sheet?.scene_id"
           :scene-name="sheet?.current_scene"
@@ -1050,6 +1103,7 @@ watch(
         @open-sheet="showSheet = true"
         @open-map="showMap = true"
         @open-quests="showQuests = true"
+        @toggle-sidebar="isMobileSidebarOpen = !isMobileSidebarOpen"
         @select-action="(id) => activeActionId = id"
         @npc-hover="handleChatNpcHover"
         @npc-leave="hoveredEntity = null"
@@ -1087,8 +1141,10 @@ watch(
       :quests="quests" 
       :awards="awards"
       :tracked-quest-id="trackedQuestId" 
+      :tracker-hidden="isQuestTrackerHidden"
       @close="showQuests = false" 
       @track-quest="handleTrackQuest"
+      @toggle-tracker="(val) => isQuestTrackerHidden = val"
     />
     <WalkthroughModal
       :open="showWalkthrough"

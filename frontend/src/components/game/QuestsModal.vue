@@ -22,6 +22,16 @@
         >
           Awards
         </button>
+
+        <label class="ml-auto flex items-center gap-2 cursor-pointer text-xxs md:text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 select-none transition-colors pr-2">
+          <input 
+            type="checkbox" 
+            :checked="!trackerHidden" 
+            @change="$emit('toggle-tracker', !$event.target.checked)"
+            class="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500/50 focus:ring-offset-slate-950 focus:ring-1 w-3.5 h-3.5 cursor-pointer"
+          />
+          Tracker on Screen
+        </label>
       </div>
 
       <div class="quests-body">
@@ -130,9 +140,10 @@ export default {
       type: Array,
       default: () => []
     },
-    trackedQuestId: String
+    trackedQuestId: String,
+    trackerHidden: Boolean
   },
-  emits: ["close", "track-quest"],
+  emits: ["close", "track-quest", "toggle-tracker"],
   data() {
     return {
       activeTab: 'quests'

@@ -2,6 +2,9 @@
 const props = defineProps<{
   trackedQuest?: any
 }>()
+const emit = defineEmits<{
+  (e: 'hide'): void
+}>()
 </script>
 
 <template>
@@ -26,6 +29,14 @@ const props = defineProps<{
               {{ props.trackedQuest.description || props.trackedQuest.goal }}
             </div>
           </div>
+          <!-- Close Button -->
+          <button 
+            @click="emit('hide')"
+            class="text-slate-500 hover:text-slate-200 transition-colors px-1.5 py-0.5 shrink-0 text-lg md:text-xl font-bold leading-none select-none hover:scale-105 transform active:scale-95 cursor-pointer"
+            title="Hide Tracker"
+          >
+            &times;
+          </button>
         </div>
       </div>
     </transition>

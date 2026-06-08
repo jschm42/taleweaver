@@ -45,6 +45,7 @@ const emit = defineEmits<{
   selectAction: [actionId: string | null]
   npcClick: [name: string]
   itemClick: [item: any]
+  toggleSidebar: []
 }>()
 
 const chatWindow = ref<any>(null)
@@ -98,6 +99,7 @@ defineExpose({ appendText, setInputText })
       @select-action="emit('selectAction', $event)"
       @npc-click="emit('npcClick', $event)"
       @item-click="emit('itemClick', $event)"
+      @toggle-sidebar="emit('toggleSidebar')"
     />
 
     <div v-if="props.mode !== 'chat'" class="absolute bottom-6 right-10 z-20 pointer-events-none animate-fade-in">

@@ -52,6 +52,7 @@ const emit = defineEmits<{
   selectAction: [actionId: string | null]
   npcClick: [name: string]
   itemClick: [item: any]
+  toggleSidebar: []
 }>()
 
 const inputText = ref('')
@@ -1055,86 +1056,101 @@ onUnmounted(() => {
 
     <!-- Input bar -->
     <div class="border-t border-slate-800 bg-slate-950 p-4 shrink-0">
-      <div class="flex items-center gap-2">
-        <!-- Text Input Wrapper -->
-        <div class="relative flex-grow">
-          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-            </svg>
-          </div>
-          <input
-            ref="inputEl"
-            v-model="inputText"
-            type="text"
-            :disabled="!canSendInput || audioService.isGenerating.value || props.sheet?.agent_active"
-            :placeholder="props.sheet?.agent_active ? (agentPaused ? 'Agent Mode Paused. Click Resume or Stop.' : 'Agent Mode Active. Click Stop to regain control.') : 'What do you do next?'"
-            class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
-            @keydown="handleKeydown"
-          />
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <!-- Text Input & Send Row -->
+        <div class="flex items-center gap-2 flex-grow">
+          <!-- Text Input Wrapper -->
+          <div class="relative flex-grow">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <input
+              ref="inputEl"
+              v-model="inputText"
+              type="text"
+              :disabled="!canSendInput || audioService.isGenerating.value || props.sheet?.agent_active"
+              :placeholder="props.sheet?.agent_active ? (agentPaused ? 'Agent Mode Paused. Click Resume or Stop.' : 'Agent Mode Active. Click Stop to regain control.') : 'What do you do next?'"
+              class="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 rounded-xl py-3.5 pl-11 pr-4 text-slate-200 placeholder-slate-600 outline-none transition-all disabled:opacity-50"
+              @keydown="handleKeydown"
+            />
 
-          <!-- Command Popup -->
-          <CommandPopup 
-            v-if="showCommandPopup && filteredCommands.length > 0"
-            :query="inputText"
-            :active-index="commandPopupIndex"
-            :debug-mode="!!sheet?.debug_mode"
-            @select="selectCommand"
-            @close="showCommandPopup = false"
-            @update:active-index="val => commandPopupIndex = val"
-          />
+            <!-- Command Popup -->
+            <CommandPopup 
+              v-if="showCommandPopup && filteredCommands.length > 0"
+              :query="inputText"
+              :active-index="commandPopupIndex"
+              :debug-mode="!!sheet?.debug_mode"
+              @select="selectCommand"
+              @close="showCommandPopup = false"
+              @update:active-index="val => commandPopupIndex = val"
+            />
+          </div>
+
+          <!-- Send Button (Primary Action) -->
+          <button
+            :disabled="!canSendInput || !inputText.trim()"
+            class="w-12 h-12 shrink-0 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white disabled:bg-slate-800 disabled:text-slate-600 transition-colors shadow-lg active:scale-95 flex items-center justify-center mr-4"
+            title="Send Command"
+            @click="() => handleSend()"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+            </svg>
+          </button>
         </div>
 
-        <!-- Send Button (Primary Action) -->
-        <button
-          :disabled="!canSendInput || !inputText.trim()"
-          class="w-12 h-12 shrink-0 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white disabled:bg-slate-800 disabled:text-slate-600 transition-colors shadow-lg active:scale-95 flex items-center justify-center mr-4"
-          title="Send Command"
-          @click="() => handleSend()"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-          </svg>
-        </button>
-
         <!-- Tool Buttons -->
-        <button
-          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-          :class="{ 'glow-quest': props.questGlow }"
-          title="Quest Log"
-          @click="emit('openQuests')"
-        >
-          <img src="@/assets/svg/fantasy-spellbook.svg" class="h-14 w-14 invert brightness-200 contrast-75 group-hover:drop-shadow-[0_0_20px_rgba(124,58,237,0.8)] transition-all" />
-        </button>
+        <div class="flex items-center justify-center sm:justify-end gap-2 shrink-0">
+          <!-- Scene & Inhabitants Toggle (Mobile/Tablet only) -->
+          <button
+            class="xl:hidden shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+            title="Scene & Inhabitants"
+            @click="emit('toggleSidebar')"
+          >
+            <div class="h-14 w-14 rounded-full bg-slate-800/40 border border-slate-700/50 flex items-center justify-center group-hover:border-indigo-500/50 transition-all shadow-xl backdrop-blur-md">
+              <i class="ra ra-mountain-cave text-2xl text-slate-400 group-hover:text-indigo-400 group-hover:drop-shadow-[0_0_15px_rgba(99,102,241,0.8)] transition-all"></i>
+            </div>
+          </button>
 
-        <button
-          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-          :class="{ 'glow-inventory': props.inventoryGlow }"
-          title="Character Sheet"
-          @click="emit('openSheet')"
-        >
-          <img src="@/assets/svg/warrior-upper-body-bust-silhouette.svg" class="h-14 w-14 invert brightness-200 contrast-75 group-hover:drop-shadow-[0_0_20px_rgba(129,140,248,0.8)] transition-all" />
-        </button>
+          <button
+            class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+            :class="{ 'glow-quest': props.questGlow }"
+            title="Quest Log"
+            @click="emit('openQuests')"
+          >
+            <img src="@/assets/svg/fantasy-spellbook.svg" class="h-14 w-14 invert brightness-200 contrast-75 group-hover:drop-shadow-[0_0_20px_rgba(124,58,237,0.8)] transition-all" />
+          </button>
 
-        <button
-          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-          :class="{ 'glow-map': props.mapGlow }"
-          title="World Map"
-          @click="emit('openMap')"
-        >
-          <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-14 w-14 brightness-110 group-hover:brightness-125 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.8)] transition-all" />
-        </button>
+          <button
+            class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+            :class="{ 'glow-inventory': props.inventoryGlow }"
+            title="Character Sheet"
+            @click="emit('openSheet')"
+          >
+            <img src="@/assets/svg/warrior-upper-body-bust-silhouette.svg" class="h-14 w-14 invert brightness-200 contrast-75 group-hover:drop-shadow-[0_0_20px_rgba(129,140,248,0.8)] transition-all" />
+          </button>
 
-        <button
-          class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
-          title="Evaluate Rules & Quests"
-          @click="emit('send', '/rule-pass')"
-        >
-          <div class="h-14 w-14 rounded-full bg-slate-800/40 border border-slate-700/50 flex items-center justify-center group-hover:border-emerald-500/50 transition-all shadow-xl backdrop-blur-md">
-            <i class="ra ra-cog text-3xl text-slate-400 group-hover:text-emerald-400 group-hover:drop-shadow-[0_0_15px_rgba(16,185,129,0.8)] transition-all"></i>
-          </div>
-        </button>
+          <button
+            class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+            :class="{ 'glow-map': props.mapGlow }"
+            title="World Map"
+            @click="emit('openMap')"
+          >
+            <img src="@/assets/svg/fantasy-rpg-map.svg" class="h-14 w-14 brightness-110 group-hover:brightness-125 group-hover:drop-shadow-[0_0_20px_rgba(251,191,36,0.8)] transition-all" />
+          </button>
 
+          <button
+            class="shrink-0 p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
+            title="Evaluate Rules & Quests"
+            @click="emit('send', '/rule-pass')"
+          >
+            <div class="h-14 w-14 rounded-full bg-slate-800/40 border border-slate-700/50 flex items-center justify-center group-hover:border-emerald-500/50 transition-all shadow-xl backdrop-blur-md">
+              <i class="ra ra-cog text-3xl text-slate-400 group-hover:text-emerald-400 group-hover:drop-shadow-[0_0_15px_rgba(16,185,129,0.8)] transition-all"></i>
+            </div>
+          </button>
+        </div>
       </div>
       
       <!-- Verbal Speech Hint -->
