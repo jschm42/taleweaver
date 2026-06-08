@@ -900,9 +900,13 @@ async function saveEntityText(data: any) {
   isSavingText.value = true
   promptError.value = ''
   try {
+    const oldId = editEntityContext.value.id
+    const newId = data.entity_id ? String(data.entity_id).trim().toUpperCase() : ''
+
     await entityService.saveEntityText(props.adventureId, {
       target_type: editEntityContext.value.type,
-      target_id: editEntityContext.value.id,
+      target_id: oldId,
+      new_id: newId || undefined,
       name: data.name,
       description: data.description,
       hp: data.hp || undefined,
@@ -930,6 +934,19 @@ async function saveEntityText(data: any) {
     })
     closeEditEntityModal()
     await Promise.all([fetchAdventure(), fetchDebugInfo()])
+
+    // Redirect if we renamed the scene we are currently viewing
+    if (editEntityContext.value.type === 'scene' && newId && oldId !== newId && activeMapSceneId.value === oldId) {
+      router.replace({
+        name: 'adventure-editor-scene',
+        params: {
+          adventureId: props.adventureId,
+          sceneId: newId,
+        },
+        query: route.query,
+      })
+    }
+
     addNotification('Changes applied successfully.', 'success')
   } catch (error: any) {
     promptError.value = error.message

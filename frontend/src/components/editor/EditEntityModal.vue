@@ -161,16 +161,24 @@ const itemReferenceOptions = computed(() => {
 const currentItemType = computed(() => String(localForm.value.item_type || '').toUpperCase())
 
 const entityIdError = computed(() => {
-  if (!props.isCreateEntityMode) return ''
   const val = (localForm.value.entity_id || '').trim()
-  if (!val) return ''
+  if (!val) return 'ID is required.'
 
   const idRegex = /^[A-Z0-9_]+$/
   if (!idRegex.test(val)) {
     return 'ID must contain only uppercase letters, digits, and underscores.'
   }
 
-  const takenIds = new Set((props.referenceOptions || []).map((entry) => String(entry.id || '').toUpperCase()))
+  // Get original ID (if we are in edit mode, it can remain the same)
+  const originalId = String(props.initialForm.entity_id || props.context?.id || '').trim().toUpperCase()
+
+  // Set of all taken IDs in this adventure, excluding the current one being edited
+  const takenIds = new Set(
+    (props.referenceOptions || [])
+      .map((entry) => String(entry.id || '').toUpperCase())
+      .filter((id) => id !== originalId)
+  )
+
   if (takenIds.has(val.toUpperCase())) {
     return `ID "${val}" already exists in this adventure.`
   }
@@ -185,8 +193,10 @@ const isFormInvalid = computed(() => {
   const personaInvalid = (localForm.value.goal || '').length > 200 ||
          (localForm.value.character || '').length > 200
   const teaserInvalid = (localForm.value.teaser || '').length > 300
-  const idInvalid = props.isCreateEntityMode
-    ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > 30 || !!entityIdError.value)
+  const hasEditableId = props.isCreateEntityMode || (props.context && ['npc', 'object', 'scene'].includes(props.context.type))
+  const maxIdLen = props.context?.type === 'scene' ? 50 : 30
+  const idInvalid = hasEditableId
+    ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > maxIdLen || !!entityIdError.value)
     : false
   const combinationInvalid = currentItemType.value === 'COMBINABLE' &&
     (!Array.isArray(localForm.value.combination_ingredients_input) ||
@@ -410,19 +420,20 @@ const textLogPreviewClass = computed(() => {
                 <i class="ra ra-cancel text-xl"></i>
               </button>
             </div>
-
             <div class="space-y-6">
-              <!-- Editable ID (create mode only) -->
-              <div v-if="isCreateEntityMode" class="space-y-3">
+              <!-- Editable ID (create mode or scene/npc/object edit mode) -->
+              <div v-if="isCreateEntityMode || ['npc', 'object', 'scene'].includes(context.type)" class="space-y-3">
                 <div class="flex justify-between items-center">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Entity ID <span class="text-red-400">*</span></label>
-                  <span :class="['text-xs font-bold tracking-widest', (localForm.entity_id || '').length > 30 || entityIdError ? 'text-red-500' : 'text-emerald-500/50']">
-                    {{ (localForm.entity_id || '').length }} / 30
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">
+                    {{ context.type === 'scene' ? 'Scene ID' : 'Entity ID' }} <span class="text-red-400">*</span>
+                  </label>
+                  <span :class="['text-xs font-bold tracking-widest', (localForm.entity_id || '').length > (context.type === 'scene' ? 50 : 30) || entityIdError ? 'text-red-500' : 'text-emerald-500/50']">
+                    {{ (localForm.entity_id || '').length }} / {{ context.type === 'scene' ? 50 : 30 }}
                   </span>
                 </div>
                 <input
                   v-model="localForm.entity_id"
-                  maxlength="30"
+                  :maxlength="context.type === 'scene' ? 50 : 30"
                   class="w-full bg-black/40 border rounded-2xl px-4 py-3 text-lg font-mono font-bold text-amber-300 focus:border-amber-500 outline-none transition-all shadow-inner uppercase"
                   :class="entityIdError ? 'border-red-500 focus:ring-red-500/50' : 'border-white/5'"
                   placeholder="ITEM_001"
@@ -694,9 +705,12 @@ const textLogPreviewClass = computed(() => {
                       v-for="slot in ['Head', 'Neck', 'Chest', 'Hands', 'Legs', 'Feet', 'MainHand', 'OffHand', 'Finger', 'Wrist', 'Back', 'Waist']"
                       :key="slot"
                       :class="[
-                        'flex items-center gap-2 p-2 rounded-lg border border-white/5 bg-black/20 transition-all select-none',
+                        'flex items-center gap-2 p-2 rounded-lg border transition-all select-none',
+                        localForm.wearable_slots_input.includes(slot)
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                          : 'border-white/5 bg-black/20 text-slate-500',
                         localForm.is_wearable_slots_fixed
-                          ? 'cursor-not-allowed opacity-50'
+                          ? 'cursor-not-allowed' + (localForm.wearable_slots_input.includes(slot) ? '' : ' opacity-40')
                           : 'cursor-pointer hover:bg-sky-500/10 hover:border-sky-500/20'
                       ]"
                     >
@@ -714,10 +728,10 @@ const textLogPreviewClass = computed(() => {
                               localForm.wearable_slots_input = localForm.wearable_slots_input.filter((s: string) => s !== slot)
                             }
                           }"
-                          class="w-4 h-4 rounded border-white/20 bg-black/40 text-sky-500 focus:ring-sky-500/40 focus:ring-1 disabled:opacity-50"
+                          class="w-4 h-4 rounded border-white/20 bg-black/40 text-emerald-500 focus:ring-emerald-500/40 focus:ring-1 disabled:opacity-80"
                         />
                       </div>
-                      <span class="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{{ slot }}</span>
+                      <span class="text-[10px] font-bold uppercase tracking-widest transition-colors" :class="localForm.wearable_slots_input.includes(slot) ? 'text-emerald-300' : 'text-slate-400'">{{ slot }}</span>
                     </label>
                   </div>
                 </div>

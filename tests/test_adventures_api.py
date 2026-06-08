@@ -3622,6 +3622,135 @@ async def test_create_adventure_skip_generation(client: AsyncClient):
     assert data["creation_status"] == "Ready"
 
 
+async def test_editor_asset_id_rename_and_cascade(client: AsyncClient):
+    """Verify renaming scene and entity IDs works and cascades correctly."""
+    ids = await _create_adventure(client, "Rename CRUD Adventure")
+    adv_id = ids["adventure_id"]
+
+    # Rebuild a known baseline
+    async with TestSessionLocal() as db:
+        await db.execute(delete(WorldExit).where(WorldExit.template_id == adv_id))
+        await db.execute(delete(WorldEntity).where(WorldEntity.template_id == adv_id))
+        await db.execute(delete(WorldScene).where(WorldScene.template_id == adv_id))
+        
+        db.add_all([
+            WorldScene(id="SCENE_A", template_id=adv_id, session_id=None, label="Scene A", description="A"),
+            WorldScene(id="SCENE_B", template_id=adv_id, session_id=None, label="Scene B", description="B"),
+            WorldEntity(
+                id="BRONZE_KEY",
+                template_id=adv_id,
+                session_id=None,
+                entity_type="OBJECT",
+                name="Bronze Key",
+                description="Unlocks the door.",
+                current_scene_id="SCENE_A",
+                item_type="DEFAULT",
+            ),
+            WorldEntity(
+                id="CHEST",
+                template_id=adv_id,
+                session_id=None,
+                entity_type="OBJECT",
+                name="Locked Chest",
+                description="Contains loot.",
+                current_scene_id="SCENE_A",
+                item_type="CONTAINER",
+                combination_ingredients=["BRONZE_KEY"],
+                inventory=["BRONZE_KEY"],
+            )
+        ])
+        db.add(
+            WorldExit(
+                template_id=adv_id,
+                session_id=None,
+                from_scene_id="SCENE_A",
+                to_scene_id="SCENE_B",
+                label="Old Oak Door",
+                is_locked=True,
+                item_to_unlock="BRONZE_KEY",
+            )
+        )
+        # Set start scene id
+        adv = await db.get(Adventure, adv_id)
+        manifest = dict(adv.original_manifest or {})
+        manifest["start_scene_id"] = "SCENE_A"
+        adv.original_manifest = manifest
+        await db.commit()
+
+    # 1. Try renaming Scene A to a duplicate (SCENE_B) -> should fail with 409
+    resp = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={"target_type": "scene", "target_id": "SCENE_A", "new_id": "SCENE_B"}
+    )
+    assert resp.status_code == 409
+
+    # 2. Try renaming Scene A with invalid characters -> should fail with 400
+    resp = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={"target_type": "scene", "target_id": "SCENE_A", "new_id": "SCENE-A!"}
+    )
+    assert resp.status_code == 400
+
+    # 3. Rename Scene A to SCENE_START -> should succeed (200)
+    resp = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={"target_type": "scene", "target_id": "SCENE_A", "new_id": "SCENE_START"}
+    )
+    assert resp.status_code == 200
+
+    # 4. Verify Scene ID update and cascades in database
+    async with TestSessionLocal() as db:
+        # Check start_scene_id in original_manifest
+        adv = await db.get(Adventure, adv_id)
+        assert adv.original_manifest.get("start_scene_id") == "SCENE_START"
+
+        # Check WorldScene exists
+        scenes = (await db.execute(select(WorldScene).where(WorldScene.template_id == adv_id))).scalars().all()
+        scene_ids = {s.id for s in scenes}
+        assert "SCENE_START" in scene_ids
+        assert "SCENE_A" not in scene_ids
+
+        # Check exit from_scene_id updated
+        world_exits = (await db.execute(select(WorldExit).where(WorldExit.template_id == adv_id))).scalars().all()
+        assert len(world_exits) == 1
+        assert world_exits[0].from_scene_id == "SCENE_START"
+
+        # Check entity current_scene_id updated
+        entities = (await db.execute(select(WorldEntity).where(WorldEntity.template_id == adv_id))).scalars().all()
+        for ent in entities:
+            assert ent.current_scene_id == "SCENE_START"
+
+    # 5. Try renaming BRONZE_KEY to a duplicate (SCENE_B or CHEST) -> should fail with 409
+    resp = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={"target_type": "object", "target_id": "BRONZE_KEY", "new_id": "CHEST"}
+    )
+    assert resp.status_code == 409
+
+    # 6. Rename BRONZE_KEY to GOLDEN_KEY -> should succeed (200)
+    resp = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={"target_type": "object", "target_id": "BRONZE_KEY", "new_id": "GOLDEN_KEY"}
+    )
+    assert resp.status_code == 200
+
+    # 7. Verify Entity ID update and cascades in database
+    async with TestSessionLocal() as db:
+        entities = (await db.execute(select(WorldEntity).where(WorldEntity.template_id == adv_id))).scalars().all()
+        ent_ids = {e.id for e in entities}
+        assert "GOLDEN_KEY" in ent_ids
+        assert "BRONZE_KEY" not in ent_ids
+
+        # Check CHEST combination_ingredients and inventory updated
+        chest = next(e for e in entities if e.id == "CHEST")
+        assert chest.combination_ingredients == ["GOLDEN_KEY"]
+        assert chest.inventory == ["GOLDEN_KEY"]
+
+        # Check exit item_to_unlock updated
+        world_exits = (await db.execute(select(WorldExit).where(WorldExit.template_id == adv_id))).scalars().all()
+        assert world_exits[0].item_to_unlock == "GOLDEN_KEY"
+
+
 
 
 

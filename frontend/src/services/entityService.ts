@@ -3,6 +3,7 @@ import { API_BASE, authHeaders } from '@/services/http'
 export interface EntityEditData {
   target_type: string
   target_id: string
+  new_id?: string
   name?: string
   teaser?: string
   description?: string

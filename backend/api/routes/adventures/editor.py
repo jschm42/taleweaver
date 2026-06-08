@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 class EntityUpdateRequest(BaseModel):
     target_type: Literal["cover", "scene", "npc", "object", "protagonist", "exit"]
     target_id: str
+    new_id: Optional[str] = None
     name: Optional[str] = None
     teaser: Optional[str] = None
     description: Optional[str] = None
@@ -851,9 +852,54 @@ async def update_editor_entity(
             if payload.inventory is not None: avatar.inventory = list(payload.inventory)
             if payload.equipment is not None: avatar.equipment = dict(payload.equipment)
     elif payload.target_type == "scene":
-        sc_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.id == payload.target_id))
+        sc_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.session_id.is_(None), WorldScene.id == payload.target_id))
         scene = sc_res.scalars().first()
         if scene:
+            old_id = scene.id
+            if payload.new_id is not None:
+                new_id = payload.new_id.strip().upper()
+                if not new_id:
+                    raise HTTPException(status_code=400, detail="Scene ID cannot be empty")
+                import re
+                if not re.match(r"^[A-Z0-9_]+$", new_id):
+                    raise HTTPException(status_code=400, detail="Scene ID must contain only uppercase letters, digits, and underscores.")
+                if len(new_id) > 50:
+                    raise HTTPException(status_code=400, detail="Scene ID must be at most 50 characters.")
+                
+                if new_id != old_id:
+                    # check duplicate scene ID
+                    dup_scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.session_id.is_(None), WorldScene.id == new_id))
+                    if dup_scene_res.scalars().first():
+                        raise HTTPException(status_code=409, detail=f"Scene ID '{new_id}' already exists")
+                    
+                    # check duplicate entity ID
+                    dup_ent_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None), WorldEntity.id == new_id))
+                    if dup_ent_res.scalars().first():
+                        raise HTTPException(status_code=409, detail=f"ID '{new_id}' is already taken by an entity")
+                    
+                    # Apply scene ID update
+                    scene.id = new_id
+                    
+                    # Cascade update exits
+                    exits_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id, WorldExit.session_id.is_(None)))
+                    for world_exit in exits_res.scalars().all():
+                        if world_exit.from_scene_id == old_id:
+                            world_exit.from_scene_id = new_id
+                        if world_exit.to_scene_id == old_id:
+                            world_exit.to_scene_id = new_id
+                    
+                    # Cascade update entities positions
+                    ents_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None)))
+                    for ent in ents_res.scalars().all():
+                        if ent.current_scene_id == old_id:
+                            ent.current_scene_id = new_id
+                    
+                    # Cascade update start scene ID in manifest
+                    manifest = deepcopy(adv.original_manifest or {})
+                    if manifest.get("start_scene_id") == old_id:
+                        manifest["start_scene_id"] = new_id
+                        adv.original_manifest = manifest
+
             if payload.name is not None: scene.label = payload.name
             if payload.description is not None: scene.description = payload.description
     elif payload.target_type == "exit":
@@ -899,9 +945,111 @@ async def update_editor_entity(
                 world_exit.item_to_unlock = item
                 world_exit.rule_to_unlock = rule
     else:
-        en_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.id == payload.target_id))
+        en_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None), WorldEntity.id == payload.target_id))
         ent = en_res.scalars().first()
         if ent:
+            old_id = ent.id
+            if payload.new_id is not None:
+                new_id = payload.new_id.strip().upper()
+                if not new_id:
+                    raise HTTPException(status_code=400, detail="Entity ID cannot be empty")
+                import re
+                if not re.match(r"^[A-Z0-9_]+$", new_id):
+                    raise HTTPException(status_code=400, detail="Entity ID must contain only uppercase letters, digits, and underscores.")
+                if len(new_id) > 30:
+                    raise HTTPException(status_code=400, detail="Entity ID must be at most 30 characters.")
+                
+                if new_id != old_id:
+                    # check duplicate entity ID
+                    dup_ent_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None), WorldEntity.id == new_id))
+                    if dup_ent_res.scalars().first():
+                        raise HTTPException(status_code=409, detail=f"Entity ID '{new_id}' already exists")
+                    
+                    # check duplicate scene ID
+                    dup_scene_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.session_id.is_(None), WorldScene.id == new_id))
+                    if dup_scene_res.scalars().first():
+                        raise HTTPException(status_code=409, detail=f"ID '{new_id}' is already taken by a scene")
+                    
+                    # Apply entity ID update
+                    ent.id = new_id
+                    
+                    # Cascade update exits lock keys
+                    exits_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id, WorldExit.session_id.is_(None)))
+                    for world_exit in exits_res.scalars().all():
+                        if world_exit.item_to_unlock == old_id:
+                            world_exit.item_to_unlock = new_id
+                    
+                    # Cascade update all entities combination_ingredients, reveals_item_id, and inventory
+                    all_ents_res = await db.execute(select(WorldEntity).where(WorldEntity.template_id == template_id, WorldEntity.session_id.is_(None)))
+                    for other_ent in all_ents_res.scalars().all():
+                        if other_ent.combination_ingredients:
+                            ingredients = list(other_ent.combination_ingredients)
+                            if old_id in ingredients:
+                                other_ent.combination_ingredients = [new_id if x == old_id else x for x in ingredients]
+                        
+                        if other_ent.reveals_item_id == old_id:
+                            other_ent.reveals_item_id = new_id
+                        
+                        if other_ent.inventory:
+                            inv = list(other_ent.inventory)
+                            updated_inv = []
+                            changed = False
+                            for item in inv:
+                                if isinstance(item, str):
+                                    if item == old_id:
+                                        updated_inv.append(new_id)
+                                        changed = True
+                                    else:
+                                        updated_inv.append(item)
+                                elif isinstance(item, dict) and item.get("id") == old_id:
+                                    item = dict(item)
+                                    item["id"] = new_id
+                                    updated_inv.append(item)
+                                    changed = True
+                                else:
+                                    updated_inv.append(item)
+                            if changed:
+                                other_ent.inventory = updated_inv
+                    
+                    # Cascade update protagonist starting inventory and equipment
+                    avatar = await _get_template_avatar(db, template_id)
+                    if avatar:
+                        if avatar.inventory:
+                            inv = list(avatar.inventory)
+                            updated_inv = []
+                            changed = False
+                            for item in inv:
+                                if isinstance(item, str):
+                                    if item == old_id:
+                                        updated_inv.append(new_id)
+                                        changed = True
+                                    else:
+                                        updated_inv.append(item)
+                                elif isinstance(item, dict) and item.get("id") == old_id:
+                                    item = dict(item)
+                                    item["id"] = new_id
+                                    updated_inv.append(item)
+                                    changed = True
+                                else:
+                                    updated_inv.append(item)
+                            if changed:
+                                avatar.inventory = updated_inv
+                        
+                        if avatar.equipment:
+                            eq = dict(avatar.equipment)
+                            changed = False
+                            for slot, eq_item in eq.items():
+                                if isinstance(eq_item, str):
+                                    if eq_item == old_id:
+                                        eq[slot] = new_id
+                                        changed = True
+                                elif isinstance(eq_item, dict) and eq_item.get("id") == old_id:
+                                    eq_item = dict(eq_item)
+                                    eq_item["id"] = new_id
+                                    eq[slot] = eq_item
+                                    changed = True
+                            if changed:
+                                avatar.equipment = eq
             if payload.name is not None: ent.name = payload.name
             if payload.description is not None: ent.description = payload.description
             if payload.hp is not None: 
