@@ -669,6 +669,12 @@ class WorldGenerator:
         Calls the complex LLM to generate a coherent world structure based on the adventure theme.
         Persists the result to the WorldScene, WorldExit, and WorldEntity tables.
         """
+        import re
+        if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", template_id):
+            raise ValueError("Invalid template_id")
+        if cover_source_adventure_id and not re.match(r"^[a-zA-Z0-9_-]{1,128}$", cover_source_adventure_id):
+            raise ValueError("Invalid cover_source_adventure_id")
+
         # If no provider is given, use the one from user settings
         llm_settings = user.llm_settings or {}
         if not provider:
@@ -1279,6 +1285,12 @@ class WorldGenerator:
             source_basename = os.path.basename(safe_source_local)
             safe_source_basename = sanitize_relative_segment(source_basename)
             if not safe_source_basename:
+                return None
+
+            import re
+            if not re.match(r"^[A-Za-z0-9._-]+$", safe_source_basename):
+                return None
+            if not re.match(r"^[A-Za-z0-9_-]+$", safe_prefix):
                 return None
             try:
                 target_dir = ensure_within_data_dir(

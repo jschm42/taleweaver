@@ -281,13 +281,13 @@ async def regenerate_visual(
         await db.commit()
         return {"status": "success", "image_url": image_url}
     except asyncio.TimeoutError as exc:
-        raise HTTPException(status_code=504, detail="Visual generation timed out.") from exc
+        raise HTTPException(status_code=504, detail="Visual generation timed out.") from None
     except ValueError as exc:
         logger.warning("Visual regeneration blocked/invalid: %s", exc)
-        raise HTTPException(status_code=400, detail="Invalid visual regeneration request.") from exc
+        raise HTTPException(status_code=400, detail="Invalid visual regeneration request.") from None
     except Exception as exc:
         logger.exception("Visual regeneration failed")
-        raise HTTPException(status_code=500, detail="Visual generation failed.") from exc
+        raise HTTPException(status_code=500, detail="Visual generation failed.") from None
 
 @router.post("/suggest-prompt", response_model=SuggestPromptResponse)
 async def suggest_prompt(
@@ -377,6 +377,11 @@ async def upload_visual(
     current_user: User = Depends(get_current_user),
 ):
     """Manually upload a visual asset."""
+    if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", template_id):
+        raise HTTPException(status_code=400, detail="Invalid template ID format.")
+    if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", target_id):
+        raise HTTPException(status_code=400, detail="Invalid target ID format.")
+
     from backend.models.avatar import Avatar
     from backend.models.world_entity import WorldEntity, WorldScene
 
@@ -494,5 +499,5 @@ async def upload_visual(
         raise
     except Exception as exc:
         logger.exception("Failed to upload visual for %s", template_id)
-        raise HTTPException(status_code=500, detail="Visual upload failed.") from exc
+        raise HTTPException(status_code=500, detail="Visual upload failed.") from None
 

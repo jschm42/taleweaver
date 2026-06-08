@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 import asyncio
 import json
 import logging
@@ -226,13 +226,24 @@ class GameTurnManager:
         if not text:
             return text
 
-        open_match = re.match(r"^\[?OPEN_CONTAINER\]?\s+(.+)$", text, re.IGNORECASE)
-        if open_match and open_match.group(1).strip():
-            return f"/open {open_match.group(1).strip()}"
+        text_lower = text.lower()
+        for prefix in ("[open_container]", "open_container]", "[open_container", "open_container"):
+            if text_lower.startswith(prefix):
+                rest = text[len(prefix):]
+                if rest and rest[0].isspace():
+                    target = rest.strip()
+                    if target:
+                        return f"/open {target}"
+                break
 
-        read_match = re.match(r"^\[?OPEN_TEXT_LOG\]?\s+(.+)$", text, re.IGNORECASE)
-        if read_match and read_match.group(1).strip():
-            return f"/read {read_match.group(1).strip()}"
+        for prefix in ("[open_text_log]", "open_text_log]", "[open_text_log", "open_text_log"):
+            if text_lower.startswith(prefix):
+                rest = text[len(prefix):]
+                if rest and rest[0].isspace():
+                    target = rest.strip()
+                    if target:
+                        return f"/read {target}"
+                break
 
         return text
 
@@ -2436,7 +2447,7 @@ class GameTurnManager:
     def _sanitize_inspect_or_search_target(raw_target: str) -> str | None:
         """Normalize extracted inspect/search target and drop generic area references."""
         target = (raw_target or "").strip().strip("\"'")
-        target = re.sub(r"^[\s:,-]+|[\s\.,!?:;]+$", "", target)
+        target = target.lstrip(" \t\n\r\v\f:,-").rstrip(" \t\n\r\v\f.,!?:;")
         if not target:
             return None
 

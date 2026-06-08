@@ -343,7 +343,7 @@ async def translate_text(
     try:
         llm = GameMasterLLM(current_user, provider=small_model_provider, model_category="small")
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
     system_prompt = (
         "You are Bable Fish, a precise translation engine for RPG text logs. "
@@ -365,7 +365,7 @@ async def translate_text(
         )
     except Exception as exc:
         logger.exception("Text translation failed for session %s", game_id, exc_info=exc)
-        raise HTTPException(status_code=502, detail="Translation failed.") from exc
+        raise HTTPException(status_code=502, detail="Translation failed.") from None
 
     cleaned = str(translated or "").strip()
     if cleaned.startswith("```") and cleaned.endswith("```"):

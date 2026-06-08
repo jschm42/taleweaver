@@ -201,6 +201,10 @@ class SVGPlaceholderGenerator:
             raise ValueError("Invalid filepath: invalid filename.")
         if any(sep in filename for sep in (os.sep, os.altsep) if sep):
             raise ValueError("Invalid filepath: filename must be a single path component.")
+        if not re.match(r"^[A-Za-z0-9._-]+$", filename):
+            raise ValueError("Invalid filename pattern")
+        if ".." in filepath:
+            raise ValueError("Path traversal sequence detected")
 
         resolved_path = ensure_within_data_dir(normalized_path)
 

@@ -200,6 +200,10 @@ class AdventureLogic:
         if not template_id or not profile_image:
             return profile_image
 
+        import re
+        if not re.match(r"^[A-Za-z0-9_-]{1,128}$", template_id):
+            return profile_image
+
         if "/adventures/sessions/" in profile_image:
             abs_path = data_url_to_local_path(profile_image)
             if abs_path and os.path.isfile(abs_path):

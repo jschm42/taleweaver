@@ -137,6 +137,8 @@ def _resolve_output_dir(target_dir: str) -> str:
     candidate = str(target_dir or "").strip()
     if not candidate:
         raise ValueError("Target directory is required.")
+    if ".." in candidate:
+        raise ValueError("Directory traversal not allowed")
     if os.path.isabs(candidate):
         return _ensure_within_data_dir(candidate)
 
@@ -161,6 +163,12 @@ def _resolve_output_dir(target_dir: str) -> str:
 
 def _write_binary_file(filepath: str, payload: bytes) -> None:
     """Persist bytes to a validated DATA_DIR file path."""
+    if ".." in filepath:
+        raise ValueError("Path traversal detected")
+    filename = os.path.basename(filepath)
+    if not re.match(r"^[A-Za-z0-9._-]+$", filename):
+        raise ValueError("Invalid filename pattern")
+
     safe_filepath = _ensure_within_data_dir(filepath)
     parent_dir = os.path.dirname(safe_filepath)
     if not parent_dir:
@@ -274,11 +282,15 @@ class MediaEngine:
     async def _generate_thumbnail(filepath: str, max_size: int = 480):
         """Creates a thumbnail for the given image file if it doesn't exist."""
         try:
+            if ".." in filepath:
+                raise ValueError("Path traversal detected")
             safe_filepath = _ensure_within_data_dir(filepath)
             source_stem, ext = os.path.splitext(os.path.basename(safe_filepath))
             safe_thumb_name = sanitize_relative_segment(f"{source_stem}_thumb{ext}")
             if not safe_thumb_name:
                 raise ValueError("Invalid thumbnail filename.")
+            if not re.match(r"^[A-Za-z0-9._-]+$", safe_thumb_name):
+                raise ValueError("Invalid thumbnail filename pattern")
             thumb_path = _ensure_within_data_dir(
                 os.path.join(os.path.dirname(safe_filepath), safe_thumb_name)
             )

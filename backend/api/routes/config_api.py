@@ -1423,6 +1423,10 @@ async def upload_catalog_image(
     """Uploads a manual image for a catalog tile."""
     _ = db
     _ = current_user
+    if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", catalog_type):
+        raise HTTPException(status_code=400, detail="Invalid catalog type format.")
+    if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", target_id):
+        raise HTTPException(status_code=400, detail="Invalid target ID format.")
     try:
         safe_ext = _extension_from_content_type(file.content_type)
         filepath = _build_catalog_upload_path(catalog_type, target_id, f"upload.{safe_ext}")

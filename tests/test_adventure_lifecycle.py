@@ -301,6 +301,13 @@ async def test_adventure_import_restores_protagonist(auth_client, setup_test_db,
                 return io.BytesIO()
             return original_open(name, mode, *args, **kwargs)
             
+        original_isfile = os.path.isfile
+        def fake_isfile(path):
+            if "hero.jpg" in path:
+                return True
+            return original_isfile(path)
+
+        monkeypatch.setattr("os.path.isfile", fake_isfile)
         monkeypatch.setattr("os.makedirs", lambda *args, **kwargs: None)
         monkeypatch.setattr("builtins.open", fake_open)
         
