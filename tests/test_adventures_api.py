@@ -3751,6 +3751,126 @@ async def test_editor_asset_id_rename_and_cascade(client: AsyncClient):
         assert world_exits[0].item_to_unlock == "GOLDEN_KEY"
 
 
+async def test_editor_scene_decorative_objects_crud(client: AsyncClient):
+    """Verify creating and patching scene decorative background details in the editor."""
+    ids = await _create_adventure(client, "Decor CRUD Adventure")
+    adv_id = ids["adventure_id"]
+
+    # 1. Create a scene with decorative objects
+    create_scene_resp = await client.post(
+        f"/api/adventures/{adv_id}/editor/scene",
+        json={
+            "scene_id": "SCENE_DECOR",
+            "label": "Decor Scene",
+            "description": "A very decorated room.",
+            "decorative_objects": ["glowing orb", "rusty sword", "broken shelf"],
+        },
+    )
+    assert create_scene_resp.status_code == 200, create_scene_resp.text
+
+    # Verify via editor assets
+    assets_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    assert assets_resp.status_code == 200, assets_resp.text
+    scenes = assets_resp.json().get("scenes", [])
+    scene = next(s for s in scenes if s["id"] == "SCENE_DECOR")
+    assert scene["description"] == "A very decorated room."
+    assert scene["decorative_objects"] == ["glowing orb", "rusty sword", "broken shelf"]
+
+    # 2. Patch the scene, updating description and decorative objects
+    patch_resp = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "target_type": "scene",
+            "target_id": "SCENE_DECOR",
+            "description": "An edited room.",
+            "decorative_objects": ["glowing orb", "rusty sword", "shiny mirror", "comfy chair"],
+        },
+    )
+    assert patch_resp.status_code == 200, patch_resp.text
+
+    # Verify updates
+    assets_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    scenes = assets_resp.json().get("scenes", [])
+    scene = next(s for s in scenes if s["id"] == "SCENE_DECOR")
+    assert scene["description"] == "An edited room."
+    assert scene["decorative_objects"] == ["glowing orb", "rusty sword", "shiny mirror", "comfy chair"]
+
+    # 3. Patch the scene, updating description only (preserving decorative_objects)
+    patch_resp2 = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "target_type": "scene",
+            "target_id": "SCENE_DECOR",
+            "description": "A second description edit.",
+        },
+    )
+    assert patch_resp2.status_code == 200, patch_resp2.text
+
+    assets_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    scenes = assets_resp.json().get("scenes", [])
+    scene = next(s for s in scenes if s["id"] == "SCENE_DECOR")
+    assert scene["description"] == "A second description edit."
+    assert scene["decorative_objects"] == ["glowing orb", "rusty sword", "shiny mirror", "comfy chair"]
+
+    # 4. Patch the scene, updating decorative_objects only (preserving description)
+    patch_resp3 = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "target_type": "scene",
+            "target_id": "SCENE_DECOR",
+            "decorative_objects": ["wooden chest"],
+        },
+    )
+    assert patch_resp3.status_code == 200, patch_resp3.text
+
+    assets_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    scenes = assets_resp.json().get("scenes", [])
+    scene = next(s for s in scenes if s["id"] == "SCENE_DECOR")
+    assert scene["description"] == "A second description edit."
+    assert scene["decorative_objects"] == ["wooden chest"]
+
+    # 5. Patch the scene with more than 7 items, verify it truncates/handles max 7
+    patch_resp4 = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "target_type": "scene",
+            "target_id": "SCENE_DECOR",
+            "decorative_objects": ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        },
+    )
+    assert patch_resp4.status_code == 200, patch_resp4.text
+
+    assets_resp = await client.get(f"/api/adventures/{adv_id}/editor/assets")
+    scenes = assets_resp.json().get("scenes", [])
+    scene = next(s for s in scenes if s["id"] == "SCENE_DECOR")
+    assert len(scene["decorative_objects"]) == 7
+    assert scene["decorative_objects"] == ["1", "2", "3", "4", "5", "6", "7"]
+
+    # 6. Verify length constraint: item longer than 100 characters should return 400 Bad Request
+    long_item = "a" * 101
+    patch_resp_long = await client.patch(
+        f"/api/adventures/{adv_id}/editor/entity",
+        json={
+            "target_type": "scene",
+            "target_id": "SCENE_DECOR",
+            "decorative_objects": ["glowing orb", long_item],
+        },
+    )
+    assert patch_resp_long.status_code == 400
+
+    create_resp_long = await client.post(
+        f"/api/adventures/{adv_id}/editor/scene",
+        json={
+            "scene_id": "SCENE_LONG",
+            "label": "Long Scene",
+            "description": "Fails.",
+            "decorative_objects": [long_item],
+        },
+    )
+    assert create_resp_long.status_code == 400
+
+
+
 
 
 

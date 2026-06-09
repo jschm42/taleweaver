@@ -116,13 +116,17 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
 
   watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
     if (enabled) {
-      setTimeout(() => {
-        if (!audioService.autoSpeechEnabled.value) return
-        speakLatestAssistantMessage({ force: true })
-      }, AUTO_SPEAK_DEBOUNCE_MS)
+      // Pre-seed the spoken signature with the currently last message so that
+      // it is treated as already handled. Autoplay will only trigger for
+      // blocks that are generated *after* the user switches it on.
+      const current = findLatestSpeakableAssistantMessage(messages.value)
+      if (current) {
+        lastAutoSpokenSignature.value = getMessageSignature(current.message, current.index)
+      }
       return
     }
 
+    // On disable: reset state and stop any running audio.
     lastAutoSpokenSignature.value = null
     lastAutoSpeakAt.value = 0
     audioService.stop()

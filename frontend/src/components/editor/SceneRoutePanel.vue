@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
 import { entityService } from '@/services/entityService'
 import { visualService } from '@/services/visualService'
 import { notificationService } from '@/services/notificationService'
 import { 
-  fixNewlines, 
   isNpcEntity, 
   isObjectEntity, 
   mergeUniqueById, 
@@ -57,8 +55,69 @@ const emit = defineEmits<{
 const sceneDescFieldRef = ref<any>(null)
 const isGeneratingSceneDesc = ref(false)
 
+// Decorative Background Details editing
+const newDecorativeInput = ref('')
+
+async function addDecorativeObject() {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  const val = newDecorativeInput.value.trim()
+  if (!val) return
+  
+  const currentDecor = [...(scene.decorative_objects || [])]
+  if (currentDecor.length >= 7) {
+    notificationService.add('Maximum of 7 decorative details allowed.', 'error')
+    return
+  }
+  
+  if (currentDecor.includes(val)) {
+    notificationService.add('This detail already exists.', 'error')
+    return
+  }
+  
+  currentDecor.push(val)
+  newDecorativeInput.value = ''
+  
+  localIsSavingText.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'scene',
+      target_id: String(scene.id),
+      decorative_objects: currentDecor,
+    })
+    emit('refresh')
+    notificationService.add('Decorative background details updated.', 'success')
+  } catch (error: any) {
+    notificationService.add(error?.message || 'Failed to update decorative background details.', 'error')
+  } finally {
+    localIsSavingText.value = false
+  }
+}
+
+async function removeDecorativeObject(index: number) {
+  const scene = routeSceneDetails.value
+  if (!scene) return
+  
+  const currentDecor = [...(scene.decorative_objects || [])]
+  currentDecor.splice(index, 1)
+  
+  localIsSavingText.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'scene',
+      target_id: String(scene.id),
+      decorative_objects: currentDecor,
+    })
+    emit('refresh')
+    notificationService.add('Decorative background details updated.', 'success')
+  } catch (error: any) {
+    notificationService.add(error?.message || 'Failed to update decorative background details.', 'error')
+  } finally {
+    localIsSavingText.value = false
+  }
+}
+
 // Inline Scene ID editing
-const router = useRouter()
 const isEditingSceneId = ref(false)
 const editingSceneIdValue = ref('')
 const isSavingSceneId = ref(false)
@@ -484,6 +543,60 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
               <span class="text-sm text-slate-300 break-words flex-grow mr-2" v-html="formatObjectIds(String(value || 'No description.'))"></span>
             </template>
           </InlineEditableField>
+        </div>
+
+        <!-- Decorative Background Details Column -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Decorative Background Details <span class="text-slate-400">({{ (routeSceneDetails?.decorative_objects || []).length }}/7)</span></label>
+            <span class="text-[9px] text-slate-400 font-medium">Simple, static background details (max 7)</span>
+          </div>
+          <div class="bg-slate-950/30 border border-white/5 rounded-xl p-4 space-y-3 shadow-inner">
+            <!-- Existing Tags -->
+            <div class="flex flex-wrap gap-2">
+              <div 
+                v-for="(item, idx) in (routeSceneDetails?.decorative_objects || [])" 
+                :key="idx"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-slate-900/60 text-xs text-slate-300 hover:text-white hover:border-white/20 transition-all shadow-sm"
+              >
+                <span>{{ item }}</span>
+                <button
+                  type="button"
+                  @click="removeDecorativeObject(idx)"
+                  class="text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
+                  title="Remove detail"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div v-if="!(routeSceneDetails?.decorative_objects || []).length" class="text-xs text-slate-500 italic py-1">
+                No decorative details added yet. These fill the room with static items (e.g. "metal table", "bookshelf").
+              </div>
+            </div>
+
+            <!-- Add Input -->
+            <div v-if="(routeSceneDetails?.decorative_objects || []).length < 7" class="flex gap-2 items-center">
+              <input
+                v-model="newDecorativeInput"
+                type="text"
+                maxlength="100"
+                placeholder="e.g. metal table, light fixture, sterile kacheln..."
+                class="flex-1 bg-slate-950/80 border border-white/10 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50 focus:ring-2 ring-emerald-500/10 placeholder-slate-600 transition-all font-medium"
+                @keydown.enter="addDecorativeObject"
+              />
+              <button
+                type="button"
+                @click="addDecorativeObject"
+                :disabled="!newDecorativeInput.trim() || localIsSavingText"
+                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                Add Detail
+              </button>
+            </div>
+            <div v-else class="text-[10px] text-amber-400 font-bold uppercase tracking-wider pl-1">
+              Maximum limit of 7 decorative details reached.
+            </div>
+          </div>
         </div>
       </div>
     </div>

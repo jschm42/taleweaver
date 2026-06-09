@@ -336,3 +336,140 @@ async def test_adventure_import_restores_protagonist(auth_client, setup_test_db,
         assert avatar.stats["str"] == 12
         assert avatar.profile_image.startswith("/data/adventures/")
         assert "hero.jpg" in avatar.profile_image
+
+
+async def test_build_full_manifest_is_read_only(auth_client, setup_test_db):
+    """build_full_manifest must not mutate the database.
+
+    Regression test: previously the exporter called db.add(avatar) and
+    db.flush() while building the export, which caused "database is locked"
+    errors on SQLite when a background task (e.g. world generation) held a
+    write lock. The avatar's inventory/equipment and any newly created
+    WorldEntity rows must be left exactly as they were after a manifest build.
+    """
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        adventure_id = await _seed_adventure(db, user.id)
+
+    # Snapshot avatar state before the export
+    async with TestSessionLocal() as db:
+        av_res = await db.execute(
+            select(Avatar).where(Avatar.template_id == adventure_id)
+        )
+        avatar_before = av_res.scalars().first()
+        inv_before = list(avatar_before.inventory or [])
+        equip_before = dict(avatar_before.equipment or {})
+
+        ent_res = await db.execute(
+            select(WorldEntity).where(WorldEntity.template_id == adventure_id)
+        )
+        entities_before = sorted(ent.id for ent in ent_res.scalars().all())
+
+    # Build manifest (this used to mutate the DB)
+    async with TestSessionLocal() as db:
+        manifest = await AdventureExporter.build_full_manifest(db, adventure_id)
+
+    # Verify avatar/inventory/equipment unchanged in DB
+    async with TestSessionLocal() as db:
+        av_res = await db.execute(
+            select(Avatar).where(Avatar.template_id == adventure_id)
+        )
+        avatar_after = av_res.scalars().first()
+        assert avatar_after is not None
+        assert list(avatar_after.inventory or []) == inv_before
+        assert dict(avatar_after.equipment or {}) == equip_before
+
+        ent_res = await db.execute(
+            select(WorldEntity).where(WorldEntity.template_id == adventure_id)
+        )
+        entities_after = sorted(ent.id for ent in ent_res.scalars().all())
+        assert entities_after == entities_before
+
+    # Verify manifest itself is still well-formed and uses cleaned ID references
+    assert manifest["protagonist"]["starting_inventory"] == ["POTION_1"]
+    assert manifest["protagonist"]["starting_equipment"] == {"MainHand": "SWORD_1"}
+
+
+async def test_decorative_objects_round_trip_through_manifest(auth_client, setup_test_db, monkeypatch):
+    """Decorative objects must round-trip through the export manifest as a structured array.
+
+    Regression test: previously `decorative_objects` were stored by appending a
+    "\n\nDECORATIVE_OBJECTS:" suffix to the scene description string. The new
+    design uses a dedicated structured column on WorldScene, so the exporter
+    must emit it as its own JSON array on each scene.
+    """
+    from tests.conftest import TestSessionLocal
+
+    expected_decor = ["metal table", "hanging light fixture", "cracked stone floor"]
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        adventure_id = await _seed_adventure(db, user.id)
+
+    async with TestSessionLocal() as db:
+        scene_res = await db.execute(
+            select(WorldScene).where(WorldScene.template_id == adventure_id)
+        )
+        scene = scene_res.scalars().first()
+        assert scene is not None
+        scene.decorative_objects = list(expected_decor)
+        await db.commit()
+
+    # Build manifest — must include decorative_objects as a structured array,
+    # NOT as a suffix in the description string.
+    async with TestSessionLocal() as db:
+        manifest = await AdventureExporter.build_full_manifest(db, adventure_id)
+
+    scene_in_manifest = next(
+        (s for s in manifest["scenes"] if s["id"] == "SCENE_1"), None
+    )
+    assert scene_in_manifest is not None
+    assert scene_in_manifest.get("decorative_objects") == expected_decor
+    assert "DECORATIVE_OBJECTS:" not in (scene_in_manifest.get("description") or "")
+
+
+async def test_decorative_objects_built_from_structured_field_only(monkeypatch, auth_client, setup_test_db):
+    """Memory manager must read decorative_objects from the structured field, not the description."""
+    from tests.conftest import TestSessionLocal
+    from backend.engine.memory_manager import MemoryManager
+    from backend.models.world_entity import WorldEntity
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        adventure_id = await _seed_adventure(db, user.id)
+
+    expected_decor = ["glowing orb", "dusty bookshelf"]
+
+    async with TestSessionLocal() as db:
+        scene_res = await db.execute(
+            select(WorldScene).where(WorldScene.template_id == adventure_id)
+        )
+        scene = scene_res.scalars().first()
+        # Intentionally set ONLY the structured field — description must stay clean.
+        scene.decorative_objects = list(expected_decor)
+        scene.description = "A quiet study with faded wallpaper."
+        await db.commit()
+
+    async with TestSessionLocal() as db:
+        scene = (
+            await db.execute(
+                select(WorldScene).where(WorldScene.template_id == adventure_id)
+            )
+        ).scalars().first()
+        entities = (
+            await db.execute(
+                select(WorldEntity).where(WorldEntity.template_id == adventure_id)
+            )
+        ).scalars().all()
+
+        ctx = MemoryManager._build_location_context(scene, entities, [], "full")
+        assert "glowing orb" in ctx
+        assert "dusty bookshelf" in ctx
+        assert "DECORATIVE_OBJECTS:" not in ctx
+        # And the description must be passed through cleanly, no suffix appended.
+        assert "A quiet study with faded wallpaper." in ctx

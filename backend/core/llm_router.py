@@ -123,7 +123,7 @@ class GameMasterLLM:
         Extracts JSON/List from Markdown code blocks or strips leading/trailing junk.
         """
         content = content.strip()
-        
+
         # Check for markdown code blocks first
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0]
@@ -132,26 +132,124 @@ class GameMasterLLM:
             parts = content.split("```")
             if len(parts) >= 3:
                 content = parts[1]
-        
+
         content = content.strip()
-        
+
         # Further refine: find first [ or { and last ] or }
         first_json_char = -1
         for i, char in enumerate(content):
             if char in ('{', '['):
                 first_json_char = i
                 break
-        
+
         last_json_char = -1
         for i, char in enumerate(reversed(content)):
             if char in ('}', ']'):
                 last_json_char = len(content) - 1 - i
                 break
-                
+
         if first_json_char != -1 and last_json_char != -1 and last_json_char > first_json_char:
             return content[first_json_char : last_json_char + 1]
-            
+
         return content
+
+    @staticmethod
+    def _is_truncated_json(content: str) -> bool:
+        """
+        Heuristic: detect whether the JSON content is truncated mid-string
+        (e.g. a token-limit cutoff). Returns True when the last meaningful
+        character suggests the LLM ran out of tokens before closing the JSON.
+        """
+        if not content:
+            return False
+        stripped = content.rstrip()
+        if not stripped:
+            return False
+        # A well-formed JSON document ends with } or ]
+        if stripped[-1] in (']', '}'):
+            return False
+        # If the last non-whitespace char is a quote followed by a colon or
+        # comma, or the string appears to end mid-value, treat as truncated.
+        return True
+
+    @staticmethod
+    def _attempt_repair_truncated_json(content: str) -> str:
+        """
+        Try to close an obviously truncated JSON document so json.loads can
+        parse it. Strategy: walk the string tracking quote/escape state and
+        brace/bracket depth. If we end inside an unterminated string, find
+        the start of that incomplete string and truncate back to the last
+        safe structural delimiter (`,`, `{`, or `[`) before it. Then close
+        any unclosed braces/brackets. This is a best-effort heuristic and
+        may not produce semantically valid output, but is useful for
+        capturing more complete error context.
+        """
+        if not content:
+            return content
+
+        in_string = False
+        escape_next = False
+        string_open_at = -1
+        stack: list[str] = []
+
+        for i, ch in enumerate(content):
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == '\\':
+                escape_next = True
+                continue
+            if ch == '"':
+                if in_string:
+                    in_string = False
+                    string_open_at = -1
+                else:
+                    in_string = True
+                    string_open_at = i
+                continue
+            if in_string:
+                continue
+            if ch == '{':
+                stack.append('}')
+            elif ch == '[':
+                stack.append(']')
+            elif ch in ('}', ']'):
+                if stack and stack[-1] == ch:
+                    stack.pop()
+
+        if in_string and string_open_at >= 0:
+            # Look for the last safe structural delimiter before the
+            # unterminated string. Safe = , { [ — a colon is unsafe
+            # because it would leave a key without a value. If we land
+            # on a comma we strip it (and any preceding whitespace) so
+            # the resulting JSON doesn't have a trailing comma.
+            last_safe = -1
+            last_safe_kind = ''
+            for i in range(string_open_at - 1, -1, -1):
+                if content[i] in (',', '{', '['):
+                    last_safe = i
+                    last_safe_kind = content[i]
+                    break
+            if last_safe >= 0 and last_safe_kind == ',':
+                # Strip the trailing comma so the result is valid JSON
+                repaired = content[:last_safe].rstrip()
+            elif last_safe >= 0:
+                repaired = content[: last_safe + 1]
+            else:
+                # Nothing safe before the unterminated string at all.
+                # Drop the whole document.
+                repaired = ""
+        else:
+            repaired = content
+
+        # Strip any trailing comma (or comma+whitespace) from the close-out
+        # point so the appended closing braces/brackets produce valid JSON.
+        repaired = re.sub(r',\s*$', '', repaired)
+
+        # Close any open structures
+        while stack:
+            repaired += stack.pop()
+        return repaired
 
     @staticmethod
     def _repair_json(content: str) -> str:
@@ -1130,17 +1228,55 @@ class GameMasterLLM:
                     raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
                 raise ValueError("No content returned from LLM for complex task.")
             content = self._repair_json(content)
-            data = json.loads(content)
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError as exc:
+                if self._is_truncated_json(content):
+                    logger.error(
+                        "LLM response appears truncated. Length: %d, finish_reason: %s. Full content: %s",
+                        len(content), finish_reason, content,
+                    )
+                    raise ValueError(
+                        "LLM response was truncated (token limit). "
+                        "Please increase the token limit in Settings (Intelligence) and retry."
+                    ) from exc
+                # Best-effort: try to close the JSON and re-parse for diagnostic purposes
+                repaired = self._attempt_repair_truncated_json(content)
+                if repaired != content:
+                    try:
+                        data = json.loads(repaired)
+                        logger.warning(
+                            "LLM response was malformed but could be repaired. Original length: %d.",
+                            len(content),
+                        )
+                    except json.JSONDecodeError:
+                        data = None
+                else:
+                    data = None
+                if data is None:
+                    logger.error(
+                        "LLM response was not valid JSON. Length: %d, finish_reason: %s. Full content: %s",
+                        len(content), finish_reason, content,
+                    )
+                    preview = content[:280].replace("\n", " ").strip()
+                    raise ValueError(
+                        f"Failed to parse LLM response as JSON. Preview: {preview}"
+                    ) from exc
             if isinstance(data, list) and len(data) > 0:
                 logger.warning(f"LLM returned a list for {response_model.__name__}. Taking first element.")
                 data = data[0]
-            
+
             if not isinstance(data, dict):
                 raise ValueError(f"LLM returned {type(data).__name__} but a mapping was expected for {response_model.__name__}.")
-                
+
             return response_model(**data)
         except json.JSONDecodeError as exc:
             if finish_reason == "length":
+                raise ValueError(
+                    "LLM response was truncated (token limit). "
+                    "Please increase the token limit in Settings (Intelligence) and retry."
+                ) from exc
+            if self._is_truncated_json(content):
                 raise ValueError(
                     "LLM response was truncated (token limit). "
                     "Please increase the token limit in Settings (Intelligence) and retry."
@@ -1307,10 +1443,47 @@ class GameMasterLLM:
                     raise ValueError("LLM hit token limit during reasoning. Increase 'Max Tokens' in Settings.")
                 raise ValueError("No content returned from LLM for complex task.")
             content = self._repair_json(content)
-            data = json.loads(content)
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError as exc:
+                if self._is_truncated_json(content):
+                    logger.error(
+                        "LLM response appears truncated. Length: %d, finish_reason: %s. Full content: %s",
+                        len(content), finish_reason, content,
+                    )
+                    raise ValueError(
+                        "LLM response was truncated (token limit). "
+                        "Please increase the token limit in Settings (Intelligence) and retry."
+                    ) from exc
+                repaired = self._attempt_repair_truncated_json(content)
+                if repaired != content:
+                    try:
+                        data = json.loads(repaired)
+                        logger.warning(
+                            "LLM response was malformed but could be repaired. Original length: %d.",
+                            len(content),
+                        )
+                    except json.JSONDecodeError:
+                        data = None
+                else:
+                    data = None
+                if data is None:
+                    logger.error(
+                        "LLM response was not valid JSON. Length: %d, finish_reason: %s. Full content: %s",
+                        len(content), finish_reason, content,
+                    )
+                    preview = content[:280].replace("\n", " ").strip()
+                    raise ValueError(
+                        f"Failed to parse LLM response as JSON. Preview: {preview}"
+                    ) from exc
             return response_model(**data)
         except json.JSONDecodeError as exc:
             if finish_reason == "length":
+                raise ValueError(
+                    "LLM response was truncated (token limit). "
+                    "Please increase the token limit in Settings (Intelligence) and retry."
+                ) from exc
+            if self._is_truncated_json(content):
                 raise ValueError(
                     "LLM response was truncated (token limit). "
                     "Please increase the token limit in Settings (Intelligence) and retry."

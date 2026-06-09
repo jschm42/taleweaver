@@ -677,8 +677,11 @@ class AdventureLogic:
             metadata[MapEngine._safe_id(s.id)] = {
                 "id": s.id,
                 "label": s.label,
-                "description": s.description,
-                "image_url": AdventureLogic.resolve_existing_data_asset_url(s.image_url)
+                "description": s.description or "",
+                "image_url": AdventureLogic.resolve_existing_data_asset_url(s.image_url),
+                "decorative_objects": [
+                    str(d) for d in (s.decorative_objects or []) if isinstance(d, (str, int, float))
+                ],
             }
         return metadata
 

@@ -40,6 +40,7 @@ export interface EntityEditData {
   armor_class?: number
   exp?: number
   equipment?: Record<string, any>
+  decorative_objects?: string[]
 }
 
 export interface SceneCreateData {
@@ -47,6 +48,7 @@ export interface SceneCreateData {
   label: string
   description: string
   image_url?: string
+  decorative_objects?: string[]
 }
 
 export interface ExitCreateData {

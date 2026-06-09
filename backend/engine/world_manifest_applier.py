@@ -563,12 +563,25 @@ async def _persist_scenes(
                     category="SCENE",
                 )
 
+        description = s.get("description") or ""
+        decorative = s.get("decorative_objects") or []
+        clean_decor: list[str] = []
+        if isinstance(decorative, list):
+            for d in decorative:
+                if not isinstance(d, str):
+                    continue
+                stripped = d.strip()
+                if stripped:
+                    clean_decor.append(stripped[:100])
+            clean_decor = clean_decor[:7]
+
         db.add(WorldScene(
             id=s["id"],
             template_id=template_id,
             label=s.get("name") or s.get("label") or "Unknown Scene",
-            description=s["description"],
+            description=description,
             image_url=image_url,
+            decorative_objects=clean_decor or None,
         ))
 
 

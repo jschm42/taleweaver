@@ -88,6 +88,7 @@ class EntityUpdateRequest(BaseModel):
     armor_class: Optional[int] = None
     exp: Optional[int] = None
     equipment: Optional[dict[str, Any]] = None
+    decorative_objects: Optional[list[str]] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -99,6 +100,7 @@ class SceneCreateRequest(BaseModel):
     label: str
     description: str
     image_url: Optional[str] = None
+    decorative_objects: Optional[list[str]] = None
 
 
 class ExitCreateRequest(BaseModel):
@@ -159,6 +161,12 @@ EDITOR_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 def _serialize_model(obj):
     if not obj: return None
     data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+
+    if isinstance(obj, WorldScene):
+        decor = data.get("decorative_objects")
+        if not isinstance(decor, list):
+            decor = []
+        data["decorative_objects"] = [str(d) for d in decor if isinstance(d, (str, int, float))]
     
     # Group stats for easier frontend access
     if isinstance(obj, WorldEntity):
@@ -501,6 +509,17 @@ async def create_editor_scene(
     if not description:
         raise HTTPException(status_code=400, detail="description is required")
 
+    clean_decor: list[str] = []
+    if payload.decorative_objects:
+        for d in payload.decorative_objects:
+            s = d.strip()
+            if not s:
+                continue
+            if len(s) > 100:
+                raise HTTPException(status_code=400, detail="Each decorative object must be at most 100 characters.")
+            clean_decor.append(s)
+        clean_decor = clean_decor[:7]
+
     existing_scene = await db.execute(
         select(WorldScene).where(
             WorldScene.template_id == template_id,
@@ -528,6 +547,7 @@ async def create_editor_scene(
         label=label,
         description=description,
         image_url=str(payload.image_url or "").strip() or None,
+        decorative_objects=clean_decor or None,
     )
     db.add(scene)
     await db.commit()
@@ -1045,7 +1065,20 @@ async def update_editor_entity(
                         adv.original_manifest = manifest
 
             if payload.name is not None: scene.label = payload.name
-            if payload.description is not None: scene.description = payload.description
+
+            if payload.description is not None:
+                scene.description = payload.description.strip()
+
+            if payload.decorative_objects is not None:
+                decor_list: list[str] = []
+                for d in payload.decorative_objects:
+                    s = d.strip()
+                    if not s:
+                        continue
+                    if len(s) > 100:
+                        raise HTTPException(status_code=400, detail="Each decorative object must be at most 100 characters.")
+                    decor_list.append(s)
+                scene.decorative_objects = decor_list[:7] or None
     elif payload.target_type == "exit":
         ex_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id, WorldExit.id == payload.target_id))
         world_exit = ex_res.scalars().first()

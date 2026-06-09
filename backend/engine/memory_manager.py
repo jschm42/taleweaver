@@ -63,22 +63,34 @@ class MemoryManager:
         if not current_scene:
             return ""
 
+        description = current_scene.description or ""
+        decorative_suffix = ""
+        decorative_list = current_scene.decorative_objects or []
+        if isinstance(decorative_list, list) and decorative_list:
+            decor_items = ", ".join(str(d).strip() for d in decorative_list if str(d).strip())
+            if decor_items:
+                decorative_suffix = f"DECORATIVE BACKGROUND DETAILS (STATIC, NON-INTERACTABLE): {decor_items}\n"
+
         detail = detail_level if detail_level in {"full", "concise"} else "full"
         if detail == "concise":
-            description = (current_scene.description or "").strip().replace("\n", " ")
-            if len(description) > 240:
-                description = description[:240].rstrip() + "..."
+            short_desc = description.strip().replace("\n", " ")
+            if len(short_desc) > 240:
+                short_desc = short_desc[:240].rstrip() + "..."
 
             location_context = (
                 f"\nCURRENT LOCATION: {current_scene.label} (ID: {current_scene.id})\n"
-                f"SCENE SUMMARY: {description}\n"
+                f"SCENE SUMMARY: {short_desc}\n"
             )
+            if decorative_suffix:
+                location_context += decorative_suffix
         else:
             location_context = (
                 f"\nCURRENT LOCATION:\n"
                 f"NAME: {current_scene.label} (ID: {current_scene.id})\n"
-                f"DESCRIPTION: {current_scene.description}\n"
+                f"DESCRIPTION: {description}\n"
             )
+            if decorative_suffix:
+                location_context += decorative_suffix
 
         if entities:
             npcs = []

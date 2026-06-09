@@ -333,14 +333,120 @@ def test_repair_json():
     # 1. Test trailing commas
     assert GameMasterLLM._repair_json('{"a": 1,}') == '{"a": 1}'
     assert GameMasterLLM._repair_json('{"a": [1, 2,],}') == '{"a": [1, 2]}'
-    
+
     # 2. Test single quotes around keys
     assert GameMasterLLM._repair_json("{'key': 'value'}") == '{"key": "value"}'
     assert GameMasterLLM._repair_json("{'key_name': 123}") == '{"key_name": 123}'
-    
+
     # 3. Test single quotes around values containing escaped characters / apostrophes
     assert GameMasterLLM._repair_json("{'key': 'don\\'t'}") == '{"key": "don\'t"}'
     assert GameMasterLLM._repair_json("{'comment': 'yes, it\\'s fine'}") == '{"comment": "yes, it\'s fine"}'
+
+
+def test_is_truncated_json_detects_unterminated_string():
+    """Truncated responses end mid-string, mid-array or mid-object — not with } or ]."""
+    # The exact pattern reported in the bug: cut off mid-string value
+    truncated = (
+        '{ "protagonist": { "name": "Jack Steele", "role": "Undercover Detective", '
+        '"description": "A tough detective in a wrinkled trench coat and fedora. He has a five-o-clock shadow", '
+        '"goal": "Rescue Toothpick Charlie a'
+    )
+    assert GameMasterLLM._is_truncated_json(truncated) is True
+
+    # Unclosed object: cut off after a comma before the next key
+    assert GameMasterLLM._is_truncated_json('{"a": 1, "b":') is True
+
+    # Unclosed array
+    assert GameMasterLLM._is_truncated_json('[1, 2, 3,') is True
+
+    # Properly closed JSON should NOT be flagged as truncated
+    assert GameMasterLLM._is_truncated_json('{"a": 1, "b": 2}') is False
+    assert GameMasterLLM._is_truncated_json('[1, 2, 3]') is False
+
+    # Empty content
+    assert GameMasterLLM._is_truncated_json('') is False
+    assert GameMasterLLM._is_truncated_json('   ') is False
+
+
+def test_attempt_repair_truncated_json_closes_open_structures():
+    """The repair helper closes dangling strings, partial keys, and unclosed braces/brackets."""
+    # Mid-value truncation: the partial value gets discarded but the rest
+    # of the document is preserved.
+    truncated = '{"a": 1, "b": "hello world'
+    repaired = GameMasterLLM._attempt_repair_truncated_json(truncated)
+    assert json.loads(repaired) == {"a": 1}
+
+    # Cut off mid-key (partial token "goa")
+    truncated = '{"goa'
+    repaired = GameMasterLLM._attempt_repair_truncated_json(truncated)
+    parsed = json.loads(repaired)
+    assert isinstance(parsed, dict)
+
+    # Cut off mid-array — should close cleanly
+    truncated = '[1, 2, 3,'
+    repaired = GameMasterLLM._attempt_repair_truncated_json(truncated)
+    assert json.loads(repaired) == [1, 2, 3]
+
+    # Cut off mid-nested object: outer key is preserved, inner partial value
+    # is discarded.
+    truncated = '{"outer": {"inner": "val'
+    repaired = GameMasterLLM._attempt_repair_truncated_json(truncated)
+    parsed = json.loads(repaired)
+    assert "outer" in parsed
+    assert parsed["outer"] == {}
+
+
+@pytest.mark.asyncio
+async def test_aexecute_complex_task_truncated_json_raises_token_limit_error(monkeypatch):
+    """When the LLM response is truncated mid-string, surface a clear 'token limit' error."""
+    from backend.core.llm_router import GameMasterLLM
+
+    class _MiniSchema(BaseModel):
+        required: str
+
+    user = User(
+        username="tester",
+        llm_settings={},
+        encrypted_api_keys={"deepseek": "encrypted-placeholder"},
+    )
+    monkeypatch.setattr(
+        "backend.core.llm_router.GameMasterLLM._get_decrypted_key",
+        lambda self, provider: "sk-test",
+    )
+    router = GameMasterLLM(user, provider="deepseek")
+
+    truncated_content = (
+        '{ "protagonist": { "name": "Jack Steele", "goal": "Rescue Toothpick Charlie a'
+    )
+
+    class _Msg:
+        content = truncated_content
+
+    class _Choice:
+        message = _Msg()
+        finish_reason = "stop"  # Note: provider did NOT report "length" — bug precondition
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    with pytest.raises(ValueError) as exc_info:
+        await router.aexecute_complex_task(
+            system_prompt="sys",
+            user_prompt="prompt",
+            response_model=_MiniSchema,
+            model="deepseek-chat",
+        )
+    # The error must clearly say "token limit" so the user knows what to fix
+    assert "token limit" in str(exc_info.value).lower()
 
 def test_normalize_voice_tags():
     # 1. Unbracketed tag followed by newline
