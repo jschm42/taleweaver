@@ -14,6 +14,10 @@ from backend.core.auth import get_current_admin, get_current_user, get_password_
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
+from backend.core.prompts import (
+    USER_BIO_GENERATION_SYSTEM_PROMPT,
+    USER_BIO_GENERATION_USER_PROMPT_TEMPLATE,
+)
 from backend.core.security import encryption_util
 from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
@@ -210,14 +214,8 @@ async def generate_my_bio(current_user: User = USER_DEP, db: AsyncSession = DB_D
     model = llm_settings.get("small_model") or "gpt-4o-mini"
 
     gm = GameMasterLLM(current_user, provider=provider, model_category="small")
-    system_prompt = (
-        "Write a short, epic, and mysterious lore bio in max 3 sentences. "
-        "Keep it atmospheric and roleplay-focused."
-    )
-    user_prompt = (
-        f"Create a character bio for the legendary storyteller '{current_user.username}', "
-        "a weaver of realities in the Aether."
-    )
+    system_prompt = USER_BIO_GENERATION_SYSTEM_PROMPT
+    user_prompt = USER_BIO_GENERATION_USER_PROMPT_TEMPLATE.format(username=current_user.username)
 
     try:
         bio = await gm.aexecute_simple_task(system_prompt, user_prompt, model)

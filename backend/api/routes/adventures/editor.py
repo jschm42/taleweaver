@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import json
 import shutil
 from copy import deepcopy
 from typing import Any, Literal, Optional, Union
@@ -14,6 +15,8 @@ from backend.api.routes.adventures.schemas import (
     AdventureTemplateDebugResponse,
     BiographyGenerationRequest,
     BiographyGenerationResponse,
+    DecorativeItemsGenerationRequest,
+    DecorativeItemsGenerationResponse,
     TraitGenerationRequest,
     TraitGenerationResponse,
     QuestDescriptionGenerationRequest,
@@ -28,12 +31,18 @@ from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import (
-    TRAIT_GENERATION_SYSTEM_PROMPT,
-    TRAIT_GENERATION_USER_PROMPT_TEMPLATE,
+    BIOGRAPHY_GENERATION_SYSTEM_PROMPT,
+    BIOGRAPHY_GENERATION_USER_PROMPT_TEMPLATE,
+    DECORATIVE_ITEMS_GENERATION_SYSTEM_PROMPT,
+    DECORATIVE_ITEMS_GENERATION_USER_PROMPT_TEMPLATE,
     QUEST_DESCRIPTION_GENERATION_SYSTEM_PROMPT,
     QUEST_DESCRIPTION_GENERATION_USER_PROMPT_TEMPLATE,
     QUEST_GENERATION_SYSTEM_PROMPT,
     QUEST_GENERATION_USER_PROMPT_TEMPLATE,
+    SCENE_DESCRIPTION_GENERATION_SYSTEM_PROMPT,
+    SCENE_DESCRIPTION_GENERATION_USER_PROMPT_TEMPLATE,
+    TRAIT_GENERATION_SYSTEM_PROMPT,
+    TRAIT_GENERATION_USER_PROMPT_TEMPLATE,
 )
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -1555,24 +1564,17 @@ async def generate_entity_biography(
     llm_settings = current_user.llm_settings or {}
     provider = llm_settings.get("small_model_provider") or "openai"
     model = llm_settings.get("small_model") or "gpt-4o-mini"
-    
+
     gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
-    
-    system_prompt = (
-        "You are a creative character designer and writer for interactive text adventure RPGs.\n"
-        "Your task is to write a concise and compelling Description / Biography for a character.\n"
-        "Base your biography on the character's Name, Goal/Motivation, Personality/Traits, and the overall adventure theme.\n"
-        "Respond with ONLY the generated biography text. Do NOT include intro, outro, explanations, or quotes. Output the biography directly."
-    )
+
+    system_prompt = BIOGRAPHY_GENERATION_SYSTEM_PROMPT
 
     theme = payload.adventure_theme or adv.original_prompt or 'Fantasy Adventure'
-    user_prompt = (
-        f"Character Name: {payload.name}\n"
-        f"Goal/Motivation: {payload.goal}\n"
-        f"Personality/Traits: {payload.character}\n"
-        f"Adventure Theme: {theme}\n\n"
-        "CRITICAL CONSTRAINT: The biography must be at most 1000 characters. "
-        "Write the character's description/biography now:"
+    user_prompt = BIOGRAPHY_GENERATION_USER_PROMPT_TEMPLATE.format(
+        name=payload.name,
+        goal=payload.goal,
+        character=payload.character,
+        theme=theme,
     )
 
     try:
@@ -1606,22 +1608,15 @@ async def generate_scene_description(
     llm_settings = current_user.llm_settings or {}
     provider = llm_settings.get("small_model_provider") or "openai"
     model = llm_settings.get("small_model") or "gpt-4o-mini"
-    
+
     gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
-    
-    system_prompt = (
-        "You are a master creative writer and game designer for interactive text adventure RPGs.\n"
-        "Your task is to write an engaging, immersive, and vivid Description for a single world Scene.\n"
-        "Describe the atmosphere, look, feel, and sensory details of the scene. Do NOT mention gameplay rules or stats.\n"
-        "Respond with ONLY the generated scene description text. Do NOT wrap it in quotes or add headers. Output the text directly."
-    )
+
+    system_prompt = SCENE_DESCRIPTION_GENERATION_SYSTEM_PROMPT
 
     theme = payload.adventure_theme or adv.original_prompt or 'Fantasy Adventure'
-    user_prompt = (
-        f"Scene Name: {payload.name}\n"
-        f"Adventure Theme / Global Context: {theme}\n\n"
-        "CRITICAL CONSTRAINT: The scene description must be at most 1000 characters. "
-        "Write the scene description now:"
+    user_prompt = SCENE_DESCRIPTION_GENERATION_USER_PROMPT_TEMPLATE.format(
+        name=payload.name,
+        theme=theme,
     )
 
     try:
@@ -1638,6 +1633,91 @@ async def generate_scene_description(
     except Exception as e:
         logger.error(f"Failed to generate scene description: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{template_id}/editor/generate-decorative-items", response_model=DecorativeItemsGenerationResponse)
+async def generate_decorative_items(
+    template_id: str,
+    payload: DecorativeItemsGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates a list of decorative background details fitting a scene using the Simple LLM.
+
+    The result is a JSON array of short noun-phrase strings (e.g. "metal table", "flickering torch").
+    Existing items in `payload.existing_items` are excluded from the result and the total is capped
+    so the merged list does not exceed 7 entries.
+    """
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or adv.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found")
+
+    existing = [str(item).strip() for item in (payload.existing_items or []) if str(item or "").strip()]
+    existing_lower = {item.lower() for item in existing}
+    max_new = max(0, 7 - len(existing))
+
+    llm_settings = current_user.llm_settings or {}
+    provider = llm_settings.get("small_model_provider") or "openai"
+    model = llm_settings.get("small_model") or "gpt-4o-mini"
+
+    gm = GameMasterLLM(user=current_user, provider=provider, model_category="small")
+
+    system_prompt = DECORATIVE_ITEMS_GENERATION_SYSTEM_PROMPT
+
+    theme = payload.adventure_theme or adv.original_prompt or "Fantasy Adventure"
+    existing_block = "\n".join(f"- {item}" for item in existing) or "- (none)"
+
+    user_prompt = DECORATIVE_ITEMS_GENERATION_USER_PROMPT_TEMPLATE.format(
+        name=payload.name,
+        theme=theme,
+        description=payload.description or "(no description available)",
+        existing_block=existing_block,
+        max_new=max_new,
+    )
+
+    if max_new == 0:
+        return DecorativeItemsGenerationResponse(items=[])
+
+    try:
+        generated_text = await gm.aexecute_simple_task(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=model
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate decorative items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    parsed_items: list[str] = []
+    try:
+        cleaned = generated_text.strip()
+        # Strip optional code fences the model sometimes wraps the JSON in.
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+        data = json.loads(cleaned)
+        raw_items = data.get("items") if isinstance(data, dict) else None
+        if not isinstance(raw_items, list):
+            raise ValueError("LLM response did not contain an 'items' array.")
+        for raw in raw_items:
+            if not isinstance(raw, str):
+                continue
+            value = raw.strip().rstrip(",.;:!?").strip().lower()
+            if not value:
+                continue
+            if len(value) > 100:
+                value = value[:100]
+            if value in existing_lower:
+                continue
+            existing_lower.add(value)
+            parsed_items.append(value)
+            if len(parsed_items) >= max_new:
+                break
+    except Exception as e:
+        logger.error(f"Failed to parse decorative items response: {e}; raw=%r", generated_text)
+        raise HTTPException(status_code=500, detail="LLM returned an invalid response for decorative items.")
+
+    return DecorativeItemsGenerationResponse(items=parsed_items)
 
 
 

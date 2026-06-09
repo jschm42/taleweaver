@@ -31,6 +31,8 @@ from backend.core.llm_router import GameMasterLLM
 from backend.core.prompts import (
     STORY_IDEA_GENERATION_SYSTEM_PROMPT,
     STORY_IDEA_GENERATION_USER_PROMPT_TEMPLATE,
+    TEMPLATE_FIELD_GENERATION_SYSTEM_PROMPT,
+    TEMPLATE_FIELD_GENERATION_USER_PROMPT_TEMPLATE,
 )
 from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
 from backend.models.adventure_template import AdventureTemplate
@@ -495,25 +497,18 @@ async def generate_template_field(
     
     language_str = adv.language or "English"
 
-    system_prompt = (
-        "You are an expert game designer, creative writer, and world-builder for interactive text adventure RPGs.\n"
-        "Your task is to generate cohesive, high-quality content for a specific field of an adventure template.\n"
-        f"The language of the adventure is {language_str}.\n"
-        f"The tone of the adventure is {tone_str}.\n"
-        "Respond with ONLY the generated text. Do NOT wrap it in quotes, do NOT add markdown header labels like "
-        f"'{label}:', and do NOT include any introductory or explanatory text (e.g., 'Here is the plot:'). "
-        "Just output the content directly."
+    system_prompt = TEMPLATE_FIELD_GENERATION_SYSTEM_PROMPT.format(
+        language=language_str,
+        tone=tone_str,
+        label=label,
     )
 
-    user_prompt = (
-        f"Generate the content for the field: {label}\n\n"
-        f"Adventure Title: {context_data['title']}\n"
-        f"Core Premise / Story Prompt: {context_data['original_prompt']}\n\n"
-        "Here is the context of other defined fields in this adventure:\n"
-        f"{other_fields_block or '- No other fields are defined yet.'}\n"
-        f"CRITICAL CONSTRAINT: The generated text must be at most {max_len} characters. "
-        "Make it engaging, immersive, and highly detailed, but stay strictly within this limit. "
-        f"Generate the {label} now:"
+    user_prompt = TEMPLATE_FIELD_GENERATION_USER_PROMPT_TEMPLATE.format(
+        label=label,
+        title=context_data['title'],
+        original_prompt=context_data['original_prompt'],
+        other_fields_block=other_fields_block or '- No other fields are defined yet.',
+        max_len=max_len,
     )
 
     try:

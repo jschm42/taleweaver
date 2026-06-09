@@ -9,7 +9,7 @@ import {
   mergeUniqueById, 
   formatObjectIds,
 } from '@/utils/editor_utils'
-import { Save, X, Trash2, ArrowLeft } from 'lucide-vue-next'
+import { Save, X, Trash2, ArrowLeft, Sparkles } from 'lucide-vue-next'
 import InlineEditableField from '@/components/editor/InlineEditableField.vue'
 
 const props = defineProps<{
@@ -389,6 +389,56 @@ async function handleGenerateSceneDesc() {
   }
 }
 
+const isGeneratingDecorativeItems = ref(false)
+
+async function handleGenerateDecorativeItems() {
+  const scene = routeSceneDetails.value
+  if (!scene || !props.adventureId) return
+  const sceneName = scene.label || scene.name || scene.id
+  const currentDecor: string[] = Array.isArray(scene.decorative_objects) ? scene.decorative_objects : []
+  if (currentDecor.length >= 7) {
+    notificationService.add('Maximum of 7 decorative details allowed.', 'error')
+    return
+  }
+
+  const adventureTheme = props.debugData?.adventure?.plot || props.debugData?.adventure?.original_prompt || undefined
+  const sceneDescription = scene.description || ''
+
+  isGeneratingDecorativeItems.value = true
+  try {
+    const result = await entityService.generateDecorativeItems(
+      props.adventureId,
+      sceneName,
+      currentDecor,
+      { description: sceneDescription, adventureTheme }
+    )
+    const fresh = (result.items || []).filter((item) => item && !currentDecor.includes(item))
+    if (fresh.length === 0) {
+      notificationService.add('AI had no new suggestions for this scene.', 'info')
+      return
+    }
+    const merged = [...currentDecor, ...fresh].slice(0, 7)
+    localIsSavingText.value = true
+    try {
+      await entityService.saveEntityText(props.adventureId, {
+        target_type: 'scene',
+        target_id: String(scene.id),
+        decorative_objects: merged,
+      })
+      emit('refresh')
+      notificationService.add(`Added ${fresh.length} decorative ${fresh.length === 1 ? 'detail' : 'details'}.`, 'success')
+    } catch (error: any) {
+      notificationService.add(error?.message || 'Failed to save decorative background details.', 'error')
+    } finally {
+      localIsSavingText.value = false
+    }
+  } catch (error: any) {
+    notificationService.add(error?.message || 'Failed to generate decorative background details.', 'error')
+  } finally {
+    isGeneratingDecorativeItems.value = false
+  }
+}
+
 function shouldShowSceneGroup(filteredCount: number): boolean {
   return !hideEmptyFilteredGroups.value || filteredCount > 0
 }
@@ -547,9 +597,22 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
 
         <!-- Decorative Background Details Column -->
         <div class="space-y-2">
-          <div class="flex justify-between items-center">
+          <div class="flex flex-wrap justify-between items-center gap-2">
             <label class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Decorative Background Details <span class="text-slate-400">({{ (routeSceneDetails?.decorative_objects || []).length }}/7)</span></label>
-            <span class="text-[9px] text-slate-400 font-medium">Simple, static background details (max 7)</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[9px] text-slate-400 font-medium hidden sm:inline">Simple, static background details (max 7)</span>
+              <button
+                v-if="(routeSceneDetails?.decorative_objects || []).length < 7"
+                type="button"
+                @click="handleGenerateDecorativeItems"
+                :disabled="isGeneratingDecorativeItems || localIsSavingText"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-400/20 bg-cyan-500/10 text-cyan-300 text-[9px] font-black uppercase tracking-widest transition-all hover:bg-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                title="Use the Simple LLM to suggest decorative background details that fit this scene"
+              >
+                <Sparkles :class="['w-3 h-3', isGeneratingDecorativeItems ? 'animate-spin' : '']" />
+                {{ isGeneratingDecorativeItems ? 'Generating...' : 'AI Generate' }}
+              </button>
+            </div>
           </div>
           <div class="bg-slate-950/30 border border-white/5 rounded-xl p-4 space-y-3 shadow-inner">
             <!-- Existing Tags -->

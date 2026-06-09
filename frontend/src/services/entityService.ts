@@ -186,6 +186,29 @@ export const entityService = {
     return await res.json()
   },
 
+  async generateDecorativeItems(
+    adventureId: string,
+    name: string,
+    existingItems: string[],
+    options?: { description?: string; adventureTheme?: string }
+  ): Promise<{ items: string[] }> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-decorative-items`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        name,
+        description: options?.description,
+        adventure_theme: options?.adventureTheme,
+        existing_items: existingItems,
+      }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Failed to generate decorative items')
+    }
+    return await res.json()
+  },
+
   async generateQuestDescription(adventureId: string, title: string, isMain: boolean, otherQuests: any[]): Promise<{ description: string }> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/generate-quest-description`, {
       method: 'POST',

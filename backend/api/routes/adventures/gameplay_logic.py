@@ -30,6 +30,15 @@ from backend.core import prompts
 from backend.core.config import settings
 from backend.core.llm_logger import log_structured_event
 from backend.core.llm_router import GameMasterLLM
+from backend.core.prompts import (
+    COMBAT_SPECIAL_EVENT_SYSTEM_PROMPT,
+    COMBAT_SPECIAL_EVENT_USER_PROMPT_TEMPLATE,
+    FINAL_REPORT_COMPLETED_FALLBACK,
+    FINAL_REPORT_COMPLETED_SYSTEM_PROMPT,
+    FINAL_REPORT_GAMEOVER_FALLBACK,
+    FINAL_REPORT_GAMEOVER_SYSTEM_PROMPT,
+    INSPECT_SEARCH_INTENT_GUARD_SYSTEM_PROMPT,
+)
 from backend.engine.command_parser import CommandParser
 from backend.engine.debug_engine import DebugEngine
 from backend.engine.map_engine import MapEngine
@@ -2487,13 +2496,7 @@ class GameTurnManager:
         )
         small_model = llm_settings.get("small_model") or "gpt-4o-mini"
 
-        intent_system_prompt = (
-            "You classify the player's intent for a text-adventure turn. "
-            "Return ONLY strict JSON with schema: "
-            "{\"action\":\"inspect\"|\"search\"|\"other\",\"target\":string|null}. "
-            "Use action=inspect/search only if the player clearly intends to inspect or search a specific target. "
-            "For generic look-around or unrelated actions, return action=other and target=null."
-        )
+        intent_system_prompt = INSPECT_SEARCH_INTENT_GUARD_SYSTEM_PROMPT
 
         try:
             llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
@@ -3091,24 +3094,18 @@ class GameTurnManager:
         player_hp = int(player.get("hp") or self.avatar.hp or 0)
         player_max_hp = int(player.get("max_hp") or self.avatar.max_hp or max(player_hp, 1))
 
-        system_prompt = (
-            "You are the Game Master deciding a combat special event. "
-            "Return ONLY valid JSON with this schema: "
-            "{\"mode\":\"story\"|\"special_attack\",\"text\":string,\"damage\":number}. "
-            "Rules: Keep text to 1-2 short in-world sentences. "
-            "If mode is story, set damage to 0. "
-            "If mode is special_attack, damage must be an integer between 5 and 40. "
-            "No markdown, no code fences, no extra keys."
-        )
+        system_prompt = COMBAT_SPECIAL_EVENT_SYSTEM_PROMPT
         if self.turn_language:
             system_prompt += f" Text must be in {self.turn_language.upper()}."
 
-        user_prompt = (
-            f"Round: {int(combat.get('round') or 1)}. "
-            f"Attacker: {enemy_name} HP {enemy_hp}/{enemy_max_hp}. "
-            f"Target: {player_name} HP {player_hp}/{player_max_hp}. "
-            "Decide if this special event becomes narrative flavor or a special attack. "
-            "Return only the JSON object."
+        user_prompt = COMBAT_SPECIAL_EVENT_USER_PROMPT_TEMPLATE.format(
+            round=int(combat.get('round') or 1),
+            enemy_name=enemy_name,
+            enemy_hp=enemy_hp,
+            enemy_max_hp=enemy_max_hp,
+            player_name=player_name,
+            player_hp=player_hp,
+            player_max_hp=player_max_hp,
         )
 
         try:
@@ -5820,29 +5817,11 @@ class GameTurnManager:
         model_name = llm_settings.get("complex_model") or llm_settings.get("small_model") or "gpt-4o"
 
         if status == "completed":
-            system_prompt = (
-                "You are the Game Master. Write a warm in-world closing message and final report after main quest completion. "
-                "Congratulate the player, summarize their journey in 4-7 sentences, mention quest and award progress, "
-                "and explicitly state they can keep playing to complete side quests and earn remaining awards. "
-                "No bullet points, no markdown headings, no command lists."
-            )
-            fallback = (
-                "The Game Master smiles with quiet pride. Your main quest is complete, and your name now carries weight in this tale. "
-                "Final report: your core objectives are fulfilled, but there are still side stories to uncover and awards left to claim. "
-                "You may leave this chronicle now, or remain in the world to perfect your legacy."
-            )
+            system_prompt = FINAL_REPORT_COMPLETED_SYSTEM_PROMPT
+            fallback = FINAL_REPORT_COMPLETED_FALLBACK
         else:
-            system_prompt = (
-                "You are the Game Master. Write a compassionate in-world closing message and final report after a game over. "
-                "Use 4-7 sentences, acknowledge the loss respectfully, summarize quest and award progress, "
-                "and clearly communicate that the chronicle is now read-only. "
-                "No bullet points, no markdown headings, no command lists."
-            )
-            fallback = (
-                "The Game Master lowers their voice with sympathy. This chapter ends here, and your hero can go no further. "
-                "Final report: the journey is recorded exactly as it stands, including your completed quests and earned awards. "
-                "You can still review the world, but no further actions can alter this fate."
-            )
+            system_prompt = FINAL_REPORT_GAMEOVER_SYSTEM_PROMPT
+            fallback = FINAL_REPORT_GAMEOVER_FALLBACK
 
         if language:
             system_prompt += f" Respond only in {language.upper()}."

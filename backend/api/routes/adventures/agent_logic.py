@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from backend.core.config import settings
 from backend.core.llm_router import GameMasterLLM
+from backend.core.prompts import AGENT_PLAYER_TURN_SYSTEM_PROMPT
 from backend.models.session_state import SessionState
 from backend.models.avatar import Avatar
 from backend.models.user import User
@@ -181,47 +182,23 @@ class AgentService:
                 "If nothing obvious to break exists, attempt unusual command formats or semantically invalid actions anyway.\n"
             )
 
-        system_prompt = (
-            "You are playing an interactive text adventure game as the protagonist, staying fully in character.\n"
-            f"Character Name: {avatar.name}\n"
-            f"Class/Role: {avatar.role or 'Adventurer'}\n"
-            f"Level: {getattr(avatar, 'level', 1)} | XP: {avatar.exp or 0}\n"
-            f"Current Stats: HP: {avatar.hp}/{avatar.max_hp}, Stamina: {avatar.stamina}/{avatar.max_stamina}, Mana: {avatar.mana}/{avatar.max_mana}\n"
-            f"Inventory: {', '.join([i.get('name') if isinstance(i, dict) else str(i) for i in (avatar.inventory or [])]) or 'Empty'}\n"
-            f"Equipment: {avatar.equipment or 'None'}\n\n"
-            "--- COMMAND GUIDELINES (CRITICAL) ---\n"
-            "You can execute actions in two ways: using official slash commands or writing natural language roleplay.\n\n"
-            "1. OFFICIAL SLASH COMMANDS (Use EXACTLY this syntax):\n"
-            "   - To speak directly to NPCs: Use `/say <TEXT>` or `/speak <TEXT>` (e.g., `/say Hello, who are you?`).\n"
-            "   - `/talk` and `/chat` are removed. For direct conversation, ALWAYS use `/say`.\n"
-            "   - To use or combine items: Use `/use <item>` or `/use <item_a> on <item_b>` or `/combine <item_a> with <item_b>` (e.g., `/use key on chest`, `/combine battery with flashlight`). Wear/use consumables or combine key pieces to solve puzzles!\n"
-            "   - To take/pick up an item: Use `/take <item name>` (e.g., `/take ancient key`).\n"
-            "   - IMPORTANT for /take: The item NAME is enough. Do NOT require or invent item IDs.\n"
-            "   - To equip gear/weapons/armor: Use `/equip <item>` (e.g., `/equip iron sword`).\n"
-            "   - To remove gear: Use `/unequip <slot>` (e.g., `/unequip MainHand`).\n"
-            "   - To inspect a person, item, or place: Use `/inspect <name>` (e.g., `/inspect desk`).\n"
-            "   - To open containers/mechanisms: Use `/open <target>` (e.g., `/open chest`).\n"
-            "   - To read notes/books/signs/logs: Use `/read <target>` (e.g., `/read terminal log`).\n"
-            "   - To search the area or a target: Use `/search` or `/search <target>` (e.g., `/search desk`).\n"
-            "   - To look around the whole scene: Use `/lookaround` or `/look`.\n"
-            "   - To manipulate mechanisms: Use `/push <target>` or `/pull <target>` (e.g., `/push lever`, `/pull chain`).\n"
-            "   - To recover when safe: Use `/rest`.\n"
-            "   - To drop an item: Use `/drop <item>`.\n\n"
-            "2. NATURAL LANGUAGE ACTIONS:\n"
-            "   - For any other environmental interaction (e.g., plugging in an oven, flipping a switch, opening a standard door, moving/exiting, looking around): Write your action in natural, descriptive language (e.g., 'I plug in the oven', 'go north', 'look around', 'open the door').\n"
-            "   - NEVER invent or use custom slash commands starting with `/` that are not listed above (e.g., do NOT write `/plug`, `/go`, `/flip`, `/open`). Unrecognized commands will fail.\n\n"
-            "3. MODAL CONTENT MIRRORING (CRITICAL):\n"
-            "   - If an action opens a modal dialog (especially `/open` for containers or `/read` for text logs), ensure the discovered content/text is ALSO written explicitly into chat output.\n"
-            "   - The chat must contain the relevant listed content so future turns (and the agent) can reference it reliably.\n\n"
-            "--- GAME WORLD CONTEXT ---\n"
-            f"{ctx.mechanics_system_prompt}\n\n"
-            "--- CURRENT SCENE ITEMS (VISIBLE NOW) ---\n"
-            f"{visible_scene_items_text}\n\n"
-            "--- OFFICIAL ADVENTURE WALKTHROUGH/SOLUTION ---\n"
-            f"{walkthrough_text}\n\n"
-            "--- AGENT OBJECTIVES ---\n"
-            f"{objective_block}"
-            "Respond ONLY with a JSON object matching the schema exactly. Do not wrap in markdown or include extra text."
+        system_prompt = AGENT_PLAYER_TURN_SYSTEM_PROMPT.format(
+            name=avatar.name,
+            role=avatar.role or 'Adventurer',
+            level=getattr(avatar, 'level', 1),
+            exp=avatar.exp or 0,
+            hp=avatar.hp,
+            max_hp=avatar.max_hp,
+            stamina=avatar.stamina,
+            max_stamina=avatar.max_stamina,
+            mana=avatar.mana,
+            max_mana=avatar.max_mana,
+            inventory=', '.join([i.get('name') if isinstance(i, dict) else str(i) for i in (avatar.inventory or [])]) or 'Empty',
+            equipment=avatar.equipment or 'None',
+            mechanics_system_prompt=ctx.mechanics_system_prompt,
+            visible_scene_items_text=visible_scene_items_text,
+            walkthrough_text=walkthrough_text,
+            objective_block=objective_block,
         )
 
         user_prompt = "Based on the recent chat history and your current location, what is the single next action or command you want to perform? If you are stuck or encountered an error/bug, report it."

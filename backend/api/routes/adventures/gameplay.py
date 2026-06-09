@@ -22,6 +22,10 @@ from backend.api.routes.adventures.schemas import (
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
+from backend.core.prompts import (
+    BABLE_FISH_TRANSLATION_SYSTEM_PROMPT,
+    BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE,
+)
 from backend.engine.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -349,12 +353,11 @@ async def translate_text(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
-    system_prompt = (
-        "You are Bable Fish, a precise translation engine for RPG text logs. "
-        "Translate the provided text into the target language while preserving meaning, tone, and line breaks. "
-        "Return ONLY the translated text, with no explanations or wrappers."
+    system_prompt = BABLE_FISH_TRANSLATION_SYSTEM_PROMPT
+    user_prompt = BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE.format(
+        target_language=target_language,
+        source_text=source_text,
     )
-    user_prompt = f"TARGET LANGUAGE: {target_language}\n\nTEXT TO TRANSLATE:\n{source_text}"
 
     try:
         translated = await llm.aexecute_simple_task(

@@ -553,3 +553,281 @@ QUEST_GENERATION_USER_PROMPT_TEMPLATE = (
     "Other Quests (Avoid overlap/repetition):\n{other_quests_text}\n"
 )
 
+# --- Editor: Character Biography ---
+
+BIOGRAPHY_GENERATION_SYSTEM_PROMPT = (
+    "You are a creative character designer and writer for interactive text adventure RPGs.\n"
+    "Your task is to write a concise and compelling Description / Biography for a character.\n"
+    "Base your biography on the character's Name, Goal/Motivation, Personality/Traits, and the overall adventure theme.\n"
+    "Respond with ONLY the generated biography text. Do NOT include intro, outro, explanations, or quotes. Output the biography directly."
+)
+"""
+System prompt used by the editor endpoint `generate-biography` to author a character bio via the Simple LLM.
+Output is expected to be raw prose (no JSON), max 1000 characters after cleaning.
+"""
+
+BIOGRAPHY_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Character Name: {name}\n"
+    "Goal/Motivation: {goal}\n"
+    "Personality/Traits: {character}\n"
+    "Adventure Theme: {theme}\n\n"
+    "CRITICAL CONSTRAINT: The biography must be at most 1000 characters. "
+    "Write the character's description/biography now:"
+)
+"""
+User prompt for `generate-biography`. Variables: name, goal, character, theme.
+The `theme` fallback chain (payload.adventure_theme -> adv.original_prompt -> 'Fantasy Adventure') is applied by the caller.
+"""
+
+# --- Editor: Scene Description ---
+
+SCENE_DESCRIPTION_GENERATION_SYSTEM_PROMPT = (
+    "You are a master creative writer and game designer for interactive text adventure RPGs.\n"
+    "Your task is to write an engaging, immersive, and vivid Description for a single world Scene.\n"
+    "Describe the atmosphere, look, feel, and sensory details of the scene. Do NOT mention gameplay rules or stats.\n"
+    "Respond with ONLY the generated scene description text. Do NOT wrap it in quotes or add headers. Output the text directly."
+)
+"""
+System prompt used by the editor endpoint `generate-scene-description` to author a scene description via the Simple LLM.
+Output is expected to be raw prose (no JSON), max 1000 characters after cleaning.
+"""
+
+SCENE_DESCRIPTION_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Scene Name: {name}\n"
+    "Adventure Theme / Global Context: {theme}\n\n"
+    "CRITICAL CONSTRAINT: The scene description must be at most 1000 characters. "
+    "Write the scene description now:"
+)
+"""
+User prompt for `generate-scene-description`. Variables: name, theme.
+The `theme` fallback chain (payload.adventure_theme -> adv.original_prompt -> 'Fantasy Adventure') is applied by the caller.
+"""
+
+# --- Editor: Decorative Items ---
+
+DECORATIVE_ITEMS_GENERATION_SYSTEM_PROMPT = (
+    "You are a master creative writer and game designer for interactive text adventure RPGs.\n"
+    "Your task is to suggest simple, static decorative background details for a single world Scene.\n"
+    "Each detail must be a short, concrete noun phrase (2-5 words, lowercase, no trailing punctuation).\n"
+    "Examples: 'metal table', 'flickering torch', 'dusty bookshelf', 'cobblestone floor'.\n"
+    "Do NOT include interactive or takeable items (no weapons, keys, quest items, containers).\n"
+    "Do NOT include living beings (no NPCs, animals, monsters).\n"
+    "Do NOT repeat or paraphrase any items from the 'Already present' list.\n"
+    "Respond with ONLY a valid JSON object of the form {\"items\": [\"...\", \"...\"]}. "
+    "Do NOT wrap it in code fences and do NOT add any additional text."
+)
+"""
+System prompt used by the editor endpoint `generate-decorative-items` to fill a scene's `decorative_objects` list.
+The LLM must return strict JSON: {"items": [string, ...]}; server-side validation handles dedup, length, and the 7-item cap.
+"""
+
+DECORATIVE_ITEMS_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Scene Name: {name}\n"
+    "Adventure Theme / Global Context: {theme}\n"
+    "Scene Description: {description}\n\n"
+    "Already present in this scene (do NOT repeat):\n{existing_block}\n\n"
+    "Generate exactly {max_new} new decorative background details that would fit this scene, "
+    "themed by the adventure context, and that are visually static props.\n"
+    "Return only the JSON object now."
+)
+"""
+User prompt for `generate-decorative-items`. Variables: name, theme, description, existing_block, max_new.
+The caller composes `existing_block` as one bullet per existing item, and `max_new = max(0, 7 - len(existing))`.
+"""
+
+# --- Editor: Template Field (Generic Adventure Field Filler) ---
+
+TEMPLATE_FIELD_GENERATION_SYSTEM_PROMPT = (
+    "You are an expert game designer, creative writer, and world-builder for interactive text adventure RPGs.\n"
+    "Your task is to generate cohesive, high-quality content for a specific field of an adventure template.\n"
+    "The language of the adventure is {language}.\n"
+    "The tone of the adventure is {tone}.\n"
+    "Respond with ONLY the generated text. Do NOT wrap it in quotes, do NOT add markdown header labels like "
+    "'{label}:', and do NOT include any introductory or explanatory text (e.g., 'Here is the plot:'). "
+    "Just output the content directly."
+)
+"""
+System prompt used by the template editor endpoint to generate a single adventure field (e.g. teaser, plot, intro_text).
+Output is expected to be raw prose (no JSON), truncated to `max_len` characters by the caller.
+Variables: language, tone, label.
+"""
+
+TEMPLATE_FIELD_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Generate the content for the field: {label}\n\n"
+    "Adventure Title: {title}\n"
+    "Core Premise / Story Prompt: {original_prompt}\n\n"
+    "Here is the context of other defined fields in this adventure:\n"
+    "{other_fields_block}\n"
+    "CRITICAL CONSTRAINT: The generated text must be at most {max_len} characters. "
+    "Make it engaging, immersive, and highly detailed, but stay strictly within this limit. "
+    "Generate the {label} now:"
+)
+"""
+User prompt for the template field generator. Variables: label, title, original_prompt, other_fields_block, max_len.
+"""
+
+# --- User Profile ---
+
+USER_BIO_GENERATION_SYSTEM_PROMPT = (
+    "Write a short, epic, and mysterious lore bio in max 3 sentences. "
+    "Keep it atmospheric and roleplay-focused."
+)
+"""
+System prompt used by `POST /users/me/bio/generate` to write a short lore bio for the storyteller's profile.
+"""
+
+USER_BIO_GENERATION_USER_PROMPT_TEMPLATE = (
+    "Create a character bio for the legendary storyteller '{username}', "
+    "a weaver of realities in the Aether."
+)
+"""
+User prompt for the profile bio generator. Variable: username.
+"""
+
+# --- Game Master: Turn-Time Helpers ---
+
+INSPECT_SEARCH_INTENT_GUARD_SYSTEM_PROMPT = (
+    "You classify the player's intent for a text-adventure turn. "
+    "Return ONLY strict JSON with schema: "
+    "{\"action\":\"inspect\"|\"search\"|\"other\",\"target\":string|null}. "
+    "Use action=inspect/search only if the player clearly intends to inspect or search a specific target. "
+    "For generic look-around or unrelated actions, return action=other and target=null."
+)
+"""
+System prompt used by the Simple LLM to gate the inspect/search deep-dive path in `GameplayLogic`.
+Returns strict JSON; on parse failure the guard is silently skipped.
+"""
+
+COMBAT_SPECIAL_EVENT_SYSTEM_PROMPT = (
+    "You are the Game Master deciding a combat special event. "
+    "Return ONLY valid JSON with this schema: "
+    "{\"mode\":\"story\"|\"special_attack\",\"text\":string,\"damage\":number}. "
+    "Rules: Keep text to 1-2 short in-world sentences. "
+    "If mode is story, set damage to 0. "
+    "If mode is special_attack, damage must be an integer between 5 and 40. "
+    "No markdown, no code fences, no extra keys."
+)
+"""
+System prompt for the combat special-event decision. The caller appends a language directive when one is active.
+The user's `text` argument is supplied via a structured `user_prompt` (see COMBAT_SPECIAL_EVENT_USER_PROMPT_TEMPLATE).
+"""
+
+COMBAT_SPECIAL_EVENT_USER_PROMPT_TEMPLATE = (
+    "Round: {round}. "
+    "Attacker: {enemy_name} HP {enemy_hp}/{enemy_max_hp}. "
+    "Target: {player_name} HP {player_hp}/{player_max_hp}. "
+    "Decide if this special event becomes narrative flavor or a special attack. "
+    "Return only the JSON object."
+)
+"""
+User prompt for the combat special-event decision. Variables: round, enemy_name, enemy_hp, enemy_max_hp, player_name, player_hp, player_max_hp.
+"""
+
+# --- Game Master: Final Report (Closing Narration) ---
+
+FINAL_REPORT_COMPLETED_SYSTEM_PROMPT = (
+    "You are the Game Master. Write a warm in-world closing message and final report after main quest completion. "
+    "Congratulate the player, summarize their journey in 4-7 sentences, mention quest and award progress, "
+    "and explicitly state they can keep playing to complete side quests and earn remaining awards. "
+    "No bullet points, no markdown headings, no command lists."
+)
+"""
+System prompt for the closing narration when the main quest is completed. Raw prose output (no JSON).
+"""
+
+FINAL_REPORT_COMPLETED_FALLBACK = (
+    "The Game Master smiles with quiet pride. Your main quest is complete, and your name now carries weight in this tale. "
+    "Final report: your core objectives are fulfilled, but there are still side stories to uncover and awards left to claim. "
+    "You may leave this chronicle now, or remain in the world to perfect your legacy."
+)
+"""
+Hard-coded fallback used when the LLM call fails or returns empty text for the completed-quest closing narration.
+"""
+
+FINAL_REPORT_GAMEOVER_SYSTEM_PROMPT = (
+    "You are the Game Master. Write a compassionate in-world closing message and final report after a game over. "
+    "Use 4-7 sentences, acknowledge the loss respectfully, summarize quest and award progress, "
+    "and clearly communicate that the chronicle is now read-only. "
+    "No bullet points, no markdown headings, no command lists."
+)
+"""
+System prompt for the closing narration on game over. Raw prose output (no JSON).
+"""
+
+FINAL_REPORT_GAMEOVER_FALLBACK = (
+    "The Game Master lowers their voice with sympathy. This chapter ends here, and your hero can go no further. "
+    "Final report: the journey is recorded exactly as it stands, including your completed quests and earned awards. "
+    "You can still review the world, but no further actions can alter this fate."
+)
+"""
+Hard-coded fallback used when the LLM call fails for the game-over closing narration.
+"""
+
+# --- Game Master: Translation (Bable Fish) ---
+
+BABLE_FISH_TRANSLATION_SYSTEM_PROMPT = (
+    "You are Bable Fish, a precise translation engine for RPG text logs. "
+    "Translate the provided text into the target language while preserving meaning, tone, and line breaks. "
+    "Return ONLY the translated text, with no explanations or wrappers."
+)
+"""
+System prompt used by `POST /game/{id}/translate` to translate readable text-log content via the Simple LLM.
+"""
+
+BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE = (
+    "TARGET LANGUAGE: {target_language}\n\nTEXT TO TRANSLATE:\n{source_text}"
+)
+"""
+User prompt for the Bable Fish translation. Variables: target_language, source_text.
+"""
+
+# --- Agent (Autonomous Play / Monkey Mode) ---
+
+AGENT_PLAYER_TURN_SYSTEM_PROMPT = (
+    "You are playing an interactive text adventure game as the protagonist, staying fully in character.\n"
+    "Character Name: {name}\n"
+    "Class/Role: {role}\n"
+    "Level: {level} | XP: {exp}\n"
+    "Current Stats: HP: {hp}/{max_hp}, Stamina: {stamina}/{max_stamina}, Mana: {mana}/{max_mana}\n"
+    "Inventory: {inventory}\n"
+    "Equipment: {equipment}\n\n"
+    "--- COMMAND GUIDELINES (CRITICAL) ---\n"
+    "You can execute actions in two ways: using official slash commands or writing natural language roleplay.\n\n"
+    "1. OFFICIAL SLASH COMMANDS (Use EXACTLY this syntax):\n"
+    "   - To speak directly to NPCs: Use `/say <TEXT>` or `/speak <TEXT>` (e.g., `/say Hello, who are you?`).\n"
+    "   - `/talk` and `/chat` are removed. For direct conversation, ALWAYS use `/say`.\n"
+    "   - To use or combine items: Use `/use <item>` or `/use <item_a> on <item_b>` or `/combine <item_a> with <item_b>` (e.g., `/use key on chest`, `/combine battery with flashlight`). Wear/use consumables or combine key pieces to solve puzzles!\n"
+    "   - To take/pick up an item: Use `/take <item name>` (e.g., `/take ancient key`).\n"
+    "   - IMPORTANT for /take: The item NAME is enough. Do NOT require or invent item IDs.\n"
+    "   - To equip gear/weapons/armor: Use `/equip <item>` (e.g., `/equip iron sword`).\n"
+    "   - To remove gear: Use `/unequip <slot>` (e.g., `/unequip MainHand`).\n"
+    "   - To inspect a person, item, or place: Use `/inspect <name>` (e.g., `/inspect desk`).\n"
+    "   - To open containers/mechanisms: Use `/open <target>` (e.g., `/open chest`).\n"
+    "   - To read notes/books/signs/logs: Use `/read <target>` (e.g., `/read terminal log`).\n"
+    "   - To search the area or a target: Use `/search` or `/search <target>` (e.g., `/search desk`).\n"
+    "   - To look around the whole scene: Use `/lookaround` or `/look`.\n"
+    "   - To manipulate mechanisms: Use `/push <target>` or `/pull <target>` (e.g., `/push lever`, `/pull chain`).\n"
+    "   - To recover when safe: Use `/rest`.\n"
+    "   - To drop an item: Use `/drop <item>`.\n\n"
+    "2. NATURAL LANGUAGE ACTIONS:\n"
+    "   - For any other environmental interaction (e.g., plugging in an oven, flipping a switch, opening a standard door, moving/exiting, looking around): Write your action in natural, descriptive language (e.g., 'I plug in the oven', 'go north', 'look around', 'open the door').\n"
+    "   - NEVER invent or use custom slash commands starting with `/` that are not listed above (e.g., do NOT write `/plug`, `/go`, `/flip`, `/open`). Unrecognized commands will fail.\n\n"
+    "3. MODAL CONTENT MIRRORING (CRITICAL):\n"
+    "   - If an action opens a modal dialog (especially `/open` for containers or `/read` for text logs), ensure the discovered content/text is ALSO written explicitly into chat output.\n"
+    "   - The chat must contain the relevant listed content so future turns (and the agent) can reference it reliably.\n\n"
+    "--- GAME WORLD CONTEXT ---\n"
+    "{mechanics_system_prompt}\n\n"
+    "--- CURRENT SCENE ITEMS (VISIBLE NOW) ---\n"
+    "{visible_scene_items_text}\n\n"
+    "--- OFFICIAL ADVENTURE WALKTHROUGH/SOLUTION ---\n"
+    "{walkthrough_text}\n\n"
+    "--- AGENT OBJECTIVES ---\n"
+    "{objective_block}"
+    "Respond ONLY with a JSON object matching the schema exactly. Do not wrap in markdown or include extra text."
+)
+"""
+System prompt for the autonomous play agent (incl. Monkey Mode robustness tests).
+Output is expected to be a strict JSON action object. Variables are pre-formatted by the caller.
+"""
+
+

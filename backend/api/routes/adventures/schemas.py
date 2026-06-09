@@ -659,4 +659,15 @@ class SceneDescriptionGenerationResponse(BaseModel):
     description: str
 
 
+class DecorativeItemsGenerationRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    adventure_theme: Optional[str] = None
+    existing_items: list[str] = []
+
+
+class DecorativeItemsGenerationResponse(BaseModel):
+    items: list[str]
+
+
 
