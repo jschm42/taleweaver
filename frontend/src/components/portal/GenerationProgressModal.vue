@@ -89,53 +89,67 @@ const assetStats = computed(() => {
     npc: { generated: 0, reused: 0 },
     item: { generated: 0, reused: 0 }
   }
-  
+
+  const detectAssetType = (text: string): keyof typeof stats | null => {
+    const lower = text.toLowerCase()
+    // Order matters: check most specific prefixes first.
+    if (lower.includes('adventure cover')) return 'cover'
+    if (lower.includes('protagonist')) return 'protagonist'
+    if (lower.includes('scene ')) return 'scene'
+    if (lower.includes('scene:')) return 'scene'
+    if (lower.includes('npc:')) return 'npc'
+    if (lower.includes('item:')) return 'item'
+    return null
+  }
+
   logs.value.forEach((log, index) => {
     if (log.type !== 'image_generation') return
-    
+
     const isReused = log.content.includes('Reused source asset')
-    
+
     if (isReused) {
-      const contentLower = log.content.toLowerCase()
-      if (contentLower.includes('adventure cover')) {
-        stats.cover.reused++
-      } else if (contentLower.includes('protagonist')) {
-        stats.protagonist.reused++
-      } else if (contentLower.includes('scene:')) {
-        stats.scene.reused++
-      } else if (contentLower.includes('npc:')) {
-        stats.npc.reused++
-      } else if (contentLower.includes('item:')) {
-        stats.item.reused++
-      }
+      // Reused log content shape: "Reused source asset: <EntityType>: <name>"
+      // e.g. "Reused source asset: Adventure Cover"
+      //      "Reused source asset: Protagonist (Alice)"
+      //      "Reused source asset: Scene: Forest"
+      //      "Reused source asset: NPC: Bob"
+      //      "Reused source asset: Item: Sword"
+      const assetType = detectAssetType(log.content)
+      if (assetType) stats[assetType].reused++
     } else {
-      let assetType = 'other'
+      // For generated images, look backwards for the most recent status log.
+      // Backend status shapes:
+      //   "Painting Adventure Cover..."
+      //   "Envisioning Portrait for {avatar.name}..."      -> protagonist
+      //   "Envisioning Portrait {idx}/{total}: {name}..."  -> NPC (no "for")
+      //   "Envisioning Scene {idx}/{total}: {name}..."     -> scene
+      //   "Reifying Artifact {idx}/{total}: {name}..."     -> item
+      let assetType: keyof typeof stats | null = null
       for (let i = index - 1; i >= 0; i--) {
         if (logs.value[i].type === 'status') {
-          const statusText = logs.value[i].content.toLowerCase()
-          if (statusText.includes('adventure cover') || statusText.includes('painting cover')) {
+          const statusText = logs.value[i].content
+          const statusLower = statusText.toLowerCase()
+          if (statusLower.includes('painting adventure cover') || statusLower.includes('adventure cover')) {
             assetType = 'cover'
-          } else if (statusText.includes('portrait for npc') || statusText.includes('npc:')) {
-            assetType = 'npc'
-          } else if (statusText.includes('portrait for item') || statusText.includes('item:')) {
-            assetType = 'item'
-          } else if (statusText.includes('portrait for') || statusText.includes('protagonist')) {
+          } else if (statusLower.includes('portrait for ')) {
+            // "Envisioning Portrait for {name}..." is the protagonist.
             assetType = 'protagonist'
-          } else if (statusText.includes('scene:') || statusText.includes('drawing scene')) {
+          } else if (statusLower.includes('portrait ')) {
+            // "Envisioning Portrait {idx}/{total}: {name}..." is an NPC.
+            assetType = 'npc'
+          } else if (statusLower.includes('reifying artifact') || statusLower.includes('artifact ')) {
+            assetType = 'item'
+          } else if (statusLower.includes('scene ') || statusLower.includes('scene:')) {
             assetType = 'scene'
           }
           break
         }
       }
-      
-      if (assetType === 'cover') stats.cover.generated++
-      else if (assetType === 'protagonist') stats.protagonist.generated++
-      else if (assetType === 'scene') stats.scene.generated++
-      else if (assetType === 'npc') stats.npc.generated++
-      else if (assetType === 'item') stats.item.generated++
+
+      if (assetType) stats[assetType].generated++
     }
   })
-  
+
   return stats
 })
 

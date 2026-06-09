@@ -33,7 +33,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="rootEl" class="relative inline-flex">
+  <div ref="rootEl" class="relative inline-flex shrink-0">
     <button
       type="button"
       class="w-6 h-6 rounded-full border border-white/20 text-white/80 hover:text-white hover:border-white/40 bg-black/30 transition-all text-[11px] font-black"
@@ -45,10 +45,10 @@ onBeforeUnmount(() => {
 
     <div
       v-if="open"
-      class="absolute right-0 top-8 z-30 w-64 rounded-xl border border-cyan-400/30 bg-slate-950/95 backdrop-blur-lg shadow-2xl p-3"
+      class="absolute right-0 sm:right-0 top-8 z-30 w-[calc(100vw-2rem)] sm:w-72 max-w-sm rounded-xl border border-cyan-400/30 bg-slate-950/95 backdrop-blur-lg shadow-2xl p-3"
     >
       <p class="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300 mb-2">{{ title }}</p>
-      <p class="text-xs leading-relaxed text-slate-200">{{ text }}</p>
+      <p class="text-xs leading-relaxed text-slate-200 break-words">{{ text }}</p>
     </div>
   </div>
 </template>

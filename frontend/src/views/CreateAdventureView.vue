@@ -266,31 +266,31 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full min-h-0 overflow-y-auto bg-slate-950 text-slate-200 font-sans p-8 md:p-12">
-    <header class="max-w-7xl mx-auto mb-12 flex items-center justify-between">
+  <div class="h-full min-h-0 overflow-y-auto bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 lg:p-12">
+    <header class="max-w-7xl mx-auto mb-6 sm:mb-10 md:mb-12 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 class="text-4xl font-black text-white uppercase tracking-tight">Generate Adventure</h1>
-        <p class="text-slate-500 mt-2 tracking-wide text-sm">Weave the parameters of your next odyssey.</p>
+        <h1 class="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight">Generate Adventure</h1>
+        <p class="text-slate-500 mt-1 sm:mt-2 tracking-wide text-xs sm:text-sm">Weave the parameters of your next odyssey.</p>
       </div>
-      <button @click="router.back()" class="px-6 py-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all">Back</button>
+      <button @click="router.back()" class="self-start sm:self-auto px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border border-white/5 hover:bg-white/5 transition-all text-sm sm:text-base">Back</button>
     </header>
 
     <main class="max-w-7xl mx-auto">
-      <AdventureStatusAlerts 
+      <AdventureStatusAlerts
         :error-msg="errorMsg"
         :has-llm-config="hasLlmConfig"
         :has-t2i-config="hasT2iConfig"
         :is-loading-catalogs="isLoadingCatalogs"
       />
 
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-stretch">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-10 items-stretch">
         <!-- Configuration Panel (Left) -->
-        <div class="flex flex-col h-full space-y-8">
-          <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-3xl p-8 space-y-8 overflow-y-auto">
-            <section v-if="isCoverMode" class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 space-y-4">
+        <div class="flex flex-col h-full space-y-6 md:space-y-8">
+          <div class="flex-1 bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8 overflow-y-auto">
+            <section v-if="isCoverMode" class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 sm:p-5 space-y-4">
               <div>
                 <p class="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Cover Source</p>
-                <h3 class="text-lg font-black text-white mt-1">
+                <h3 class="text-base sm:text-lg font-black text-white mt-1">
                   {{ isLoadingCoverSource ? 'Loading source adventure...' : (sourceAdventure?.title || 'Unknown source') }}
                 </h3>
                 <p class="text-xs text-slate-300 mt-2 leading-relaxed whitespace-pre-wrap">
@@ -314,32 +314,32 @@ onMounted(() => {
                 <p class="text-[11px] text-slate-400">0% = freely inspired, 100% = very close to original.</p>
               </div>
 
-              <label class="flex items-center justify-between gap-4 p-3 rounded-xl border border-white/10 bg-black/20">
+              <label class="flex items-center justify-between gap-3 sm:gap-4 p-3 rounded-xl border border-white/10 bg-black/20">
                 <span class="text-xs font-bold text-slate-200">Allow to use old assets if they fit the new story.</span>
-                <input v-model="form.allow_reuse_source_assets" type="checkbox" class="h-4 w-4" />
+                <input v-model="form.allow_reuse_source_assets" type="checkbox" class="h-4 w-4 shrink-0" />
               </label>
             </section>
 
-            <AdventureBasicInfo 
+            <AdventureBasicInfo
               v-model="form"
               :is-suggesting-story-idea="isSuggestingStoryIdea"
               :can-suggest-story-idea="hasLlmConfig"
               @suggest-story-idea="handleSuggestStoryIdea"
             />
 
-            <AdventureGameSettings 
+            <AdventureGameSettings
               v-model="form"
             />
           </div>
         </div>
 
         <!-- Style & Tone Selection (Right) -->
-        <div class="flex flex-col gap-8 h-full">
-          <AdventureAssetSettings 
+        <div class="flex flex-col gap-6 md:gap-8 h-full">
+          <AdventureAssetSettings
             v-model="form"
           />
 
-          <AdventureCatalogSelector 
+          <AdventureCatalogSelector
             title="Visual Style"
             subtitle="Select one aesthetic direction"
             :icon="Palette"
@@ -350,7 +350,7 @@ onMounted(() => {
             @select="id => form.selected_style_id = id"
           />
 
-          <AdventureCatalogSelector 
+          <AdventureCatalogSelector
             title="Narrative Tone"
             subtitle="Atmosphere and description style"
             :icon="Flame"
@@ -364,20 +364,20 @@ onMounted(() => {
       </div>
 
       <!-- Action Button (Centered at bottom) -->
-      <div class="mt-16 flex flex-col items-center gap-6">
+      <div class="mt-10 md:mt-16 flex flex-col items-center gap-4 md:gap-6 px-2">
         <button
           @click="handleCreate"
           :disabled="isGenerating || isLoadingCatalogs || !hasLlmConfig"
-          class="group relative px-20 py-6 bg-gradient-to-br from-aether-primary to-aether-secondary rounded-3xl font-black text-white shadow-2xl shadow-aether-primary/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+          class="group relative w-full sm:w-auto px-6 sm:px-12 md:px-20 py-4 sm:py-5 md:py-6 bg-gradient-to-br from-aether-primary to-aether-secondary rounded-2xl md:rounded-3xl font-black text-white shadow-2xl shadow-aether-primary/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
         >
           <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
-          <div class="relative flex items-center gap-4">
-            <div v-if="isGenerating" class="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
-            <Sparkles v-else class="w-7 h-7" />
-            <span class="text-xl tracking-[0.2em]">{{ isGenerating ? 'WEAVING REALITY...' : (!hasLlmConfig ? 'CONFIGURATION REQUIRED' : 'BEGIN WEAVING') }}</span>
+          <div class="relative flex items-center justify-center gap-3 md:gap-4">
+            <div v-if="isGenerating" class="w-5 h-5 md:w-6 md:h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <Sparkles v-else class="w-5 h-5 md:w-7 md:h-7" />
+            <span class="text-sm sm:text-base md:text-xl tracking-[0.2em] text-center">{{ isGenerating ? 'WEAVING REALITY...' : (!hasLlmConfig ? 'CONFIGURATION REQUIRED' : 'BEGIN WEAVING') }}</span>
           </div>
         </button>
-        <p class="text-xxs text-white/20 uppercase tracking-[0.3em]">The process may take a few minutes as the world is manifest</p>
+        <p class="text-xxs text-white/20 uppercase tracking-[0.3em] text-center px-2">The process may take a few minutes as the world is manifest</p>
       </div>
     </main>
   </div>

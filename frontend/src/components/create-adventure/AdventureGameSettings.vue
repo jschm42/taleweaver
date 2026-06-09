@@ -189,93 +189,95 @@ function update(field: string, value: any) {
 </script>
 
 <template>
-  <div class="space-y-8">
+  <div class="space-y-6 md:space-y-8">
     <!-- Rule Enforcement -->
-    <div class="space-y-4">
-      <div class="flex items-center justify-between">
+    <div class="space-y-3 md:space-y-4">
+      <div class="flex items-center justify-between gap-2">
         <label class="block text-xxs font-black text-white/40 uppercase tracking-[0.2em]">Rule Enforcement Mode</label>
         <InfoPopoverButton title="Rule Enforcement" :text="CREATE_ADVENTURE_HELP_TEXTS.ruleEnforcement" />
       </div>
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-3 gap-2 sm:gap-3">
         <button
           v-for="mode in (['rpg', 'story', 'chat'] as RuleMode[])"
           :key="mode"
           @click="update('rule_enforcement_mode', mode)"
-          class="px-4 py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1"
+          class="px-2 sm:px-3 md:px-4 py-3 sm:py-3.5 md:py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1"
           :class="modelValue.rule_enforcement_mode === mode ? 'border-aether-primary bg-aether-primary/10 text-white' : 'border-white/5 bg-white/5 text-white/40 hover:border-white/10'"
         >
           <span class="text-xxs font-black uppercase tracking-widest">{{ mode === 'rpg' ? 'RPG' : mode }}</span>
         </button>
       </div>
-      <p class="text-xxs text-white/30 uppercase tracking-widest text-center">{{ ruleModeHelp }}</p>
-      
+      <p class="text-xxs text-white/30 uppercase tracking-widest text-center px-2">{{ ruleModeHelp }}</p>
+
     </div>
 
     <!-- World Pacing & Time -->
-    <div class="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl space-y-6">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-            <MapPin class="w-5 h-5" />
+    <div class="p-4 sm:p-5 md:p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl space-y-4 md:space-y-6">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            <MapPin class="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <span class="text-xs font-black text-white/80 uppercase tracking-widest">In-Game Pacing</span>
+          <span class="text-xs font-black text-white/80 uppercase tracking-widest truncate">In-Game Pacing</span>
         </div>
-        <InfoPopoverButton title="In-Game Pacing" :text="CREATE_ADVENTURE_HELP_TEXTS.pacing" />
-        <div 
-          @click="update('clock_enabled', !modelValue.clock_enabled)"
-          :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.clock_enabled ? 'bg-emerald-500' : 'bg-slate-700']"
-        >
-          <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.clock_enabled ? 'left-6' : 'left-1']"></div>
+        <div class="flex items-center gap-2 shrink-0">
+          <InfoPopoverButton title="In-Game Pacing" :text="CREATE_ADVENTURE_HELP_TEXTS.pacing" />
+          <div
+            @click="update('clock_enabled', !modelValue.clock_enabled)"
+            :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.clock_enabled ? 'bg-emerald-500' : 'bg-slate-700']"
+          >
+            <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.clock_enabled ? 'left-6' : 'left-1']"></div>
+          </div>
         </div>
       </div>
 
-      <div class="space-y-4" v-if="modelValue.clock_enabled">
+      <div class="space-y-3 md:space-y-4" v-if="modelValue.clock_enabled">
         <div class="flex justify-between items-center">
           <span class="text-xxs font-black text-white/40 uppercase tracking-widest">Pacing (Min/Action)</span>
           <span class="text-xs font-mono text-emerald-400">{{ modelValue.pacing_minutes }}m</span>
         </div>
-        <input 
-          type="range" 
+        <input
+          type="range"
           :value="modelValue.pacing_minutes"
           @input="update('pacing_minutes', Number(($event.target as HTMLInputElement).value))"
-          min="1" 
-          max="30" 
+          min="1"
+          max="30"
           class="w-full accent-emerald-500 bg-white/5 h-1.5 rounded-lg appearance-none cursor-pointer"
         />
       </div>
     </div>
 
     <!-- Consolidated World Density & Constraints Panel -->
-    <div class="p-6 bg-slate-900/80 border border-slate-700/50 rounded-2xl space-y-6 shadow-xl relative overflow-hidden">
+    <div class="p-4 sm:p-5 md:p-6 bg-slate-900/80 border border-slate-700/50 rounded-2xl space-y-5 md:space-y-6 shadow-xl relative overflow-hidden">
       <!-- Glow effect behind -->
       <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
-      
-      <div class="flex items-center justify-between border-b border-white/10 pb-4">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
-            <Box class="w-5 h-5 animate-pulse" />
+
+      <div class="flex items-center justify-between gap-2 border-b border-white/10 pb-3 md:pb-4">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+            <Box class="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
           </div>
-          <div>
-            <span class="text-sm font-black text-white uppercase tracking-wider block">World Density & Constraints</span>
+          <div class="min-w-0">
+            <span class="text-xs sm:text-sm font-black text-white uppercase tracking-wider block truncate">World Density & Constraints</span>
             <span class="text-[10px] text-white/40 uppercase tracking-widest">Adjust complexity bounds or set to Auto</span>
           </div>
         </div>
         <InfoPopoverButton title="World Constraints" :text="CREATE_ADVENTURE_HELP_TEXTS.sceneComplexity" />
       </div>
 
-      <div class="space-y-6">
+      <div class="space-y-4 md:space-y-6">
         <!-- Scenes Row -->
-        <div class="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-blue-500/20">
-          <div class="flex items-center justify-between">
-            <div>
+        <div class="p-3.5 sm:p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-blue-500/20">
+          <div class="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
+            <div class="min-w-0">
               <span class="text-xs font-black uppercase tracking-widest block" :class="isScenesAuto ? 'text-white/40' : 'text-white/80'">Scenes (Locations)</span>
               <span class="text-[10px] text-white/40 uppercase tracking-wider">Number of unique areas to explore</span>
             </div>
             <!-- Auto switch -->
-            <button 
+            <button
               type="button"
               @click="toggleAuto('scenes')"
-              class="px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
+              class="self-start sm:self-auto shrink-0 px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
               :class="isScenesAuto ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-slate-800 border-white/10 text-white/40 hover:text-white'"
             >
               {{ isScenesAuto ? 'Auto Mode' : 'Manual' }}
@@ -285,17 +287,17 @@ function update(field: string, value: any) {
           <div v-if="isScenesAuto" class="text-xs text-white/40 italic uppercase tracking-wider py-2">
             ✨ AI will automatically determine optimal scene count based on your story idea.
           </div>
-          <div v-else class="grid grid-cols-2 gap-6 pt-2">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
             <div class="space-y-2">
               <div class="flex justify-between">
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Min Scenes</label>
                 <span class="text-xs font-mono text-blue-400">{{ modelValue.min_scenes }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.min_scenes || 3"
                 @input="updateSceneMin(Number(($event.target as HTMLInputElement).value))"
-                min="1" :max="modelValue.max_scenes || 50" class="w-full accent-blue-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                min="1" :max="modelValue.max_scenes || 50" class="w-full accent-blue-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
             <div class="space-y-2">
@@ -303,28 +305,28 @@ function update(field: string, value: any) {
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Scenes</label>
                 <span class="text-xs font-mono text-blue-400">{{ modelValue.max_scenes }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.max_scenes || 6"
                 @input="updateSceneMax(Number(($event.target as HTMLInputElement).value))"
-                :min="modelValue.min_scenes || 1" max="50" class="w-full accent-blue-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                :min="modelValue.min_scenes || 1" max="50" class="w-full accent-blue-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           </div>
         </div>
 
         <!-- Items Row -->
-        <div class="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-lime-500/20">
-          <div class="flex items-center justify-between">
-            <div>
+        <div class="p-3.5 sm:p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-lime-500/20">
+          <div class="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
+            <div class="min-w-0">
               <span class="text-xs font-black uppercase tracking-widest block" :class="isItemsAuto ? 'text-white/40' : 'text-white/80'">Items & Objects</span>
               <span class="text-[10px] text-white/40 uppercase tracking-wider">Loot, weapons, keys, and quest items</span>
             </div>
             <!-- Auto switch -->
-            <button 
+            <button
               type="button"
               @click="toggleAuto('items')"
-              class="px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
+              class="self-start sm:self-auto shrink-0 px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
               :class="isItemsAuto ? 'bg-lime-500/20 border-lime-500/40 text-lime-400' : 'bg-slate-800 border-white/10 text-white/40 hover:text-white'"
             >
               {{ isItemsAuto ? 'Auto Mode' : 'Manual' }}
@@ -334,17 +336,17 @@ function update(field: string, value: any) {
           <div v-if="isItemsAuto" class="text-xs text-white/40 italic uppercase tracking-wider py-2">
             ✨ AI will generate items organically as needed for puzzles and exploration.
           </div>
-          <div v-else class="grid grid-cols-2 gap-6 pt-2">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
             <div class="space-y-2">
               <div class="flex justify-between">
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Min Items</label>
                 <span class="text-xs font-mono text-lime-400">{{ modelValue.min_items }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.min_items || 5"
                 @input="updateItemMin(Number(($event.target as HTMLInputElement).value))"
-                min="1" :max="modelValue.max_items || 100" class="w-full accent-lime-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                min="1" :max="modelValue.max_items || 100" class="w-full accent-lime-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
             <div class="space-y-2">
@@ -352,37 +354,37 @@ function update(field: string, value: any) {
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Items</label>
                 <span class="text-xs font-mono text-lime-400">{{ modelValue.max_items }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.max_items || 25"
                 @input="updateItemMax(Number(($event.target as HTMLInputElement).value))"
-                :min="modelValue.min_items || 1" max="100" class="w-full accent-lime-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                :min="modelValue.min_items || 1" max="100" class="w-full accent-lime-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           </div>
         </div>
 
         <!-- Containers Row -->
-        <div class="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-amber-500/20">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div 
+        <div class="p-3.5 sm:p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-amber-500/20">
+          <div class="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div
                 @click="update('container_generation_enabled', !modelValue.container_generation_enabled)"
-                :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.container_generation_enabled ? 'bg-amber-500' : 'bg-slate-700']"
+                :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors shrink-0', modelValue.container_generation_enabled ? 'bg-amber-500' : 'bg-slate-700']"
               >
                 <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.container_generation_enabled ? 'left-6' : 'left-1']"></div>
               </div>
-              <div>
+              <div class="min-w-0">
                 <span class="text-xs font-black uppercase tracking-widest block" :class="modelValue.container_generation_enabled ? 'text-white/80' : 'text-white/30'">Chests & Containers</span>
                 <span class="text-[10px] text-white/40 uppercase tracking-wider">Locked safes, dressers, lockboxes</span>
               </div>
             </div>
             <!-- Auto switch (only show if container generation enabled) -->
-            <button 
+            <button
               v-if="modelValue.container_generation_enabled"
               type="button"
               @click="toggleAuto('containers')"
-              class="px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
+              class="self-start sm:self-auto shrink-0 px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
               :class="isContainersAuto ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'bg-slate-800 border-white/10 text-white/40 hover:text-white'"
             >
               {{ isContainersAuto ? 'Auto Mode' : 'Manual' }}
@@ -395,17 +397,17 @@ function update(field: string, value: any) {
           <div v-else-if="isContainersAuto" class="text-xs text-white/40 italic uppercase tracking-wider py-2">
             ✨ AI determines optimal container placement to house items and puzzle clues.
           </div>
-          <div v-else class="grid grid-cols-2 gap-6 pt-2">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
             <div class="space-y-2">
               <div class="flex justify-between">
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Min Containers</label>
                 <span class="text-xs font-mono text-amber-400">{{ modelValue.min_containers }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.min_containers || 2"
                 @input="updateContainerMin(Number(($event.target as HTMLInputElement).value))"
-                min="0" :max="modelValue.max_containers || 30" class="w-full accent-amber-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                min="0" :max="modelValue.max_containers || 30" class="w-full accent-amber-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
             <div class="space-y-2">
@@ -413,37 +415,37 @@ function update(field: string, value: any) {
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Containers</label>
                 <span class="text-xs font-mono text-amber-400">{{ modelValue.max_containers }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.max_containers || 6"
                 @input="updateContainerMax(Number(($event.target as HTMLInputElement).value))"
-                :min="modelValue.min_containers || 0" max="30" class="w-full accent-amber-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                :min="modelValue.min_containers || 0" max="30" class="w-full accent-amber-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           </div>
         </div>
 
         <!-- Text Logs Row -->
-        <div class="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-cyan-500/20">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div 
+        <div class="p-3.5 sm:p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-cyan-500/20">
+          <div class="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div
                 @click="update('text_log_generation_enabled', !modelValue.text_log_generation_enabled)"
-                :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.text_log_generation_enabled ? 'bg-cyan-500' : 'bg-slate-700']"
+                :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors shrink-0', modelValue.text_log_generation_enabled ? 'bg-cyan-500' : 'bg-slate-700']"
               >
                 <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.text_log_generation_enabled ? 'left-6' : 'left-1']"></div>
               </div>
-              <div>
+              <div class="min-w-0">
                 <span class="text-xs font-black uppercase tracking-widest block" :class="modelValue.text_log_generation_enabled ? 'text-white/80' : 'text-white/30'">Readable Text Logs</span>
                 <span class="text-[10px] text-white/40 uppercase tracking-wider">Books, signs, letters, diaries</span>
               </div>
             </div>
             <!-- Auto switch (only show if text log generation enabled) -->
-            <button 
+            <button
               v-if="modelValue.text_log_generation_enabled"
               type="button"
               @click="toggleAuto('textLogs')"
-              class="px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
+              class="self-start sm:self-auto shrink-0 px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
               :class="isTextLogsAuto ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400' : 'bg-slate-800 border-white/10 text-white/40 hover:text-white'"
             >
               {{ isTextLogsAuto ? 'Auto Mode' : 'Manual' }}
@@ -456,17 +458,17 @@ function update(field: string, value: any) {
           <div v-else-if="isTextLogsAuto" class="text-xs text-white/40 italic uppercase tracking-wider py-2">
             ✨ AI creates immersive written documents, clues, or warnings contextually.
           </div>
-          <div v-else class="grid grid-cols-2 gap-6 pt-2">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
             <div class="space-y-2">
               <div class="flex justify-between">
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Min Text Logs</label>
                 <span class="text-xs font-mono text-cyan-400">{{ modelValue.min_text_logs }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.min_text_logs || 1"
                 @input="updateTextLogMin(Number(($event.target as HTMLInputElement).value))"
-                min="0" :max="modelValue.max_text_logs || 30" class="w-full accent-cyan-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                min="0" :max="modelValue.max_text_logs || 30" class="w-full accent-cyan-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
             <div class="space-y-2">
@@ -474,37 +476,37 @@ function update(field: string, value: any) {
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Text Logs</label>
                 <span class="text-xs font-mono text-cyan-400">{{ modelValue.max_text_logs }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.max_text_logs || 5"
                 @input="updateTextLogMax(Number(($event.target as HTMLInputElement).value))"
-                :min="modelValue.min_text_logs || 0" max="30" class="w-full accent-cyan-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                :min="modelValue.min_text_logs || 0" max="30" class="w-full accent-cyan-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           </div>
         </div>
 
         <!-- Quests Row -->
-        <div class="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-violet-500/20">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div 
+        <div class="p-3.5 sm:p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-violet-500/20">
+          <div class="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div
                 @click="update('quest_generation_enabled', !modelValue.quest_generation_enabled)"
-                :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.quest_generation_enabled ? 'bg-violet-500' : 'bg-slate-700']"
+                :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors shrink-0', modelValue.quest_generation_enabled ? 'bg-violet-500' : 'bg-slate-700']"
               >
                 <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.quest_generation_enabled ? 'left-6' : 'left-1']"></div>
               </div>
-              <div>
+              <div class="min-w-0">
                 <span class="text-xs font-black uppercase tracking-widest block" :class="modelValue.quest_generation_enabled ? 'text-white/80' : 'text-white/30'">Quests & Objectives</span>
                 <span class="text-[10px] text-white/40 uppercase tracking-wider">Main and side quests dynamically generated</span>
               </div>
             </div>
             <!-- Auto switch (only show if quest generation enabled) -->
-            <button 
+            <button
               v-if="modelValue.quest_generation_enabled"
               type="button"
               @click="toggleAuto('quests')"
-              class="px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
+              class="self-start sm:self-auto shrink-0 px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
               :class="isQuestsAuto ? 'bg-violet-500/20 border-violet-500/40 text-violet-400' : 'bg-slate-800 border-white/10 text-white/40 hover:text-white'"
             >
               {{ isQuestsAuto ? 'Auto Mode' : 'Manual' }}
@@ -517,17 +519,17 @@ function update(field: string, value: any) {
           <div v-else-if="isQuestsAuto" class="text-xs text-white/40 italic uppercase tracking-wider py-2">
             ✨ AI determines optimal quests dynamically based on target complexity and scenes.
           </div>
-          <div v-else class="grid grid-cols-2 gap-6 pt-2">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
             <div class="space-y-2">
               <div class="flex justify-between">
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Min Quests</label>
                 <span class="text-xs font-mono text-violet-300">{{ modelValue.min_quests }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.min_quests || 3"
                 @input="updateQuestMin(Number(($event.target as HTMLInputElement).value))"
-                min="0" :max="modelValue.max_quests || 30" class="w-full accent-violet-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                min="0" :max="modelValue.max_quests || 30" class="w-full accent-violet-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
             <div class="space-y-2">
@@ -535,37 +537,37 @@ function update(field: string, value: any) {
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Quests</label>
                 <span class="text-xs font-mono text-violet-300">{{ modelValue.max_quests }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.max_quests || 5"
                 @input="updateQuestMax(Number(($event.target as HTMLInputElement).value))"
-                :min="modelValue.min_quests || 0" max="30" class="w-full accent-violet-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                :min="modelValue.min_quests || 0" max="30" class="w-full accent-violet-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           </div>
         </div>
 
         <!-- Awards Row -->
-        <div class="p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-indigo-500/20">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div 
+        <div class="p-3.5 sm:p-4 rounded-xl bg-slate-950/40 border border-white/5 space-y-3 transition-all hover:border-indigo-500/20">
+          <div class="flex items-start sm:items-center justify-between gap-2 flex-col sm:flex-row">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div
                 @click="update('award_generation_enabled', !modelValue.award_generation_enabled)"
-                :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.award_generation_enabled ? 'bg-indigo-500' : 'bg-slate-700']"
+                :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors shrink-0', modelValue.award_generation_enabled ? 'bg-indigo-500' : 'bg-slate-700']"
               >
                 <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.award_generation_enabled ? 'left-6' : 'left-1']"></div>
               </div>
-              <div>
+              <div class="min-w-0">
                 <span class="text-xs font-black uppercase tracking-widest block" :class="modelValue.award_generation_enabled ? 'text-white/80' : 'text-white/30'">Awards & Milestones</span>
                 <span class="text-[10px] text-white/40 uppercase tracking-wider">Achievements, trophies, and rewards</span>
               </div>
             </div>
             <!-- Auto switch (only show if award generation enabled) -->
-            <button 
+            <button
               v-if="modelValue.award_generation_enabled"
               type="button"
               @click="toggleAuto('awards')"
-              class="px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
+              class="self-start sm:self-auto shrink-0 px-3 py-1 rounded-full text-xxs font-black uppercase tracking-wider transition-all border"
               :class="isAwardsAuto ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-slate-800 border-white/10 text-white/40 hover:text-white'"
             >
               {{ isAwardsAuto ? 'Auto Mode' : 'Manual' }}
@@ -578,17 +580,17 @@ function update(field: string, value: any) {
           <div v-else-if="isAwardsAuto" class="text-xs text-white/40 italic uppercase tracking-wider py-2">
             ✨ AI determines optimal achievements and awards based on quest complexity.
           </div>
-          <div v-else class="grid grid-cols-2 gap-6 pt-2">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2">
             <div class="space-y-2">
               <div class="flex justify-between">
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Min Awards</label>
                 <span class="text-xs font-mono text-indigo-400">{{ modelValue.min_awards }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.min_awards || 3"
                 @input="updateAwardMin(Number(($event.target as HTMLInputElement).value))"
-                min="0" :max="modelValue.max_awards || 20" class="w-full accent-indigo-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                min="0" :max="modelValue.max_awards || 20" class="w-full accent-indigo-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
             <div class="space-y-2">
@@ -596,57 +598,57 @@ function update(field: string, value: any) {
                 <label class="text-xxs font-black text-white/40 uppercase tracking-widest">Max Awards</label>
                 <span class="text-xs font-mono text-indigo-400">{{ modelValue.max_awards }}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="modelValue.max_awards || 8"
                 @input="updateAwardMax(Number(($event.target as HTMLInputElement).value))"
-                :min="modelValue.min_awards || 0" max="20" class="w-full accent-indigo-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer" 
+                :min="modelValue.min_awards || 0" max="20" class="w-full accent-indigo-500 bg-white/5 h-1 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           </div>
         </div>
       </div>
       
-      <div v-if="!isScenesAuto && modelValue.max_scenes && modelValue.max_scenes > 15" class="flex gap-3 items-start p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[10px] text-amber-400 uppercase tracking-wider leading-relaxed">
-        <AlertTriangle class="w-4 h-4 shrink-0" />
+      <div v-if="!isScenesAuto && modelValue.max_scenes && modelValue.max_scenes > 15" class="flex gap-2 sm:gap-3 items-start p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[10px] text-amber-400 uppercase tracking-wider leading-relaxed">
+        <AlertTriangle class="w-4 h-4 shrink-0 mt-0.5" />
         <span>Large worlds (&gt; 15 scenes) may feel sparse. Walkthrough steps, items, and NPCs do not automatically scale up due to AI model limits.</span>
       </div>
     </div>
 
     <!-- Combat Permissions -->
-    <div class="p-6 bg-rose-500/5 border border-rose-500/10 rounded-2xl space-y-6">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400">
-            <AlertTriangle class="w-5 h-5" />
+    <div class="p-4 sm:p-5 md:p-6 bg-rose-500/5 border border-rose-500/10 rounded-2xl space-y-4 md:space-y-6">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+            <AlertTriangle class="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <span class="text-xs font-black text-white/80 uppercase tracking-widest">Combat Permissions</span>
+          <span class="text-xs font-black text-white/80 uppercase tracking-widest truncate">Combat Permissions</span>
         </div>
         <InfoPopoverButton title="Combat Permissions" :text="CREATE_ADVENTURE_HELP_TEXTS.combatPermissions" />
       </div>
 
-      <div class="space-y-4">
-        <div class="flex items-center justify-between p-3 rounded-xl border border-white/10 bg-black/20">
-          <div class="space-y-1 pr-4">
+      <div class="space-y-3 md:space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border border-white/10 bg-black/20">
+          <div class="space-y-1 sm:pr-4 min-w-0">
             <p class="text-xs font-black text-white/80 uppercase tracking-widest">Protagonist Can Damage NPCs</p>
             <p class="text-[10px] text-white/40 uppercase tracking-wider">If disabled, no player attack can deal HP damage to NPCs.</p>
           </div>
-          <div 
+          <div
             @click="update('can_damage_npcs', !modelValue.can_damage_npcs)"
-            :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.can_damage_npcs ? 'bg-rose-500' : 'bg-slate-700']"
+            :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors shrink-0 self-end sm:self-auto', modelValue.can_damage_npcs ? 'bg-rose-500' : 'bg-slate-700']"
           >
             <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.can_damage_npcs ? 'left-6' : 'left-1']"></div>
           </div>
         </div>
 
-        <div class="flex items-center justify-between p-3 rounded-xl border border-white/10 bg-black/20">
-          <div class="space-y-1 pr-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border border-white/10 bg-black/20">
+          <div class="space-y-1 sm:pr-4 min-w-0">
             <p class="text-xs font-black text-white/80 uppercase tracking-widest">NPCs Can Damage Protagonist</p>
             <p class="text-[10px] text-white/40 uppercase tracking-wider">If disabled, enemy turns still happen but cannot reduce player HP.</p>
           </div>
-          <div 
+          <div
             @click="update('npcs_can_damage_protagonist', !modelValue.npcs_can_damage_protagonist)"
-            :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors', modelValue.npcs_can_damage_protagonist ? 'bg-rose-500' : 'bg-slate-700']"
+            :class="['w-10 h-5 rounded-full relative cursor-pointer transition-colors shrink-0 self-end sm:self-auto', modelValue.npcs_can_damage_protagonist ? 'bg-rose-500' : 'bg-slate-700']"
           >
             <div :class="['absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm', modelValue.npcs_can_damage_protagonist ? 'left-6' : 'left-1']"></div>
           </div>
