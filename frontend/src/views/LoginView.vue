@@ -52,8 +52,8 @@ async function handleLogin() {
 
     <div class="w-full max-w-md p-8 z-10">
       <div class="text-center mb-12">
-        <div class="inline-block p-6 rounded-[2rem] bg-white/5 border border-white/10 mb-8 shadow-[0_0_80px_rgba(78,222,163,0.1)]">
-          <img src="@/assets/svg/app-logo.svg" class="w-16 h-16 drop-shadow-[0_0_10px_rgba(78,222,163,0.4)]" alt="Logo" />
+        <div class="inline-block mb-8">
+          <img src="@/assets/svg/app-logo.svg" class="w-40 h-40 drop-shadow-[0_0_20px_rgba(78,222,163,0.4)]" alt="Logo" />
         </div>
         <h1 class="text-5xl font-black text-white font-display tracking-tighter mb-2">TaleWeaver</h1>
         <p class="text-aether-primary/40 text-xxs font-bold uppercase tracking-[0.4em]">Chronicle Intelligence v{{ configState.appVersion }}</p>
