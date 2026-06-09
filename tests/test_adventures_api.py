@@ -1971,6 +1971,66 @@ async def test_import_adz_file_marks_template_ready(client: AsyncClient):
     assert template_row.get("creation_status") == "Ready"
 
 
+async def test_import_adz_duplicate_returns_409_with_conflict_info(client: AsyncClient):
+    """Re-importing an already-existing ADZ must return 409 with structured conflict_info.
+
+    Regression test: the frontend relies on `conflict_info` (title, existing
+    version, new version, template id) being present on the 409 response to
+    open the Adventure Conflict dialog. If the backend swallows the
+    AdventureConflictError or strips the body, the frontend falls back to
+    showing the raw JSON as an error card.
+    """
+    adz_manifest = {
+        "format": "taleweaver.adz",
+        "version": "1.0",
+        "type": "ADVENTURE_BLUEPRINT",
+        "adventure": {
+            "title": "Conflict Repro Quest",
+            "context": "First import",
+            "version": "1.2.0",
+            "strict_rules": True,
+            "rule_enforcement_mode": "rpg",
+            "time_per_turn": 5,
+        },
+        "protagonist": {
+            "name": "Hero", "role": "Tester", "description": "x",
+            "inventory": [], "equipment": {}, "stats": {},
+        },
+        "scenes": [{"id": "START", "name": "Start", "description": "begin"}],
+        "exits": [], "npcs": [], "objects": [],
+    }
+
+    def _build_adz():
+        buf = BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("adventure.adv", json.dumps(adz_manifest))
+        buf.seek(0)
+        return buf.getvalue()
+
+    # First import — must succeed
+    first = await client.post(
+        "/api/adventures/import/adz",
+        files={"file": ("conflict_repro.adz", _build_adz(), "application/zip")},
+    )
+    assert first.status_code == 200, first.text
+
+    # Second import of the same payload — must return 409 with conflict_info
+    second = await client.post(
+        "/api/adventures/import/adz",
+        files={"file": ("conflict_repro.adz", _build_adz(), "application/zip")},
+    )
+    assert second.status_code == 409, second.text
+    body = second.json()
+    assert body.get("detail") == "Adventure already exists"
+    info = body.get("conflict_info")
+    assert info is not None
+    assert info.get("title") == "Conflict Repro Quest"
+    assert info.get("template_id")
+    # The conflict info carries both versions so the UI can show the diff.
+    assert "existing_version" in info
+    assert "new_version" in info
+
+
 async def test_import_adv_preserves_item_stats_from_starting_inventory_dict(client: AsyncClient):
     """ADV import should keep item stat modifiers when they are present in starting_inventory item dicts."""
     adv_payload = {

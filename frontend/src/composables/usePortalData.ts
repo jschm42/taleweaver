@@ -499,29 +499,38 @@ export function usePortalData(): UsePortalDataResult {
       }
       await fetchPortalData()
     } catch (error: any) {
-      // Check for 409 Conflict
-      if (error?.message?.includes('API 409:')) {
-        // Try to parse the conflict info from the error message or assuming we have a way to get it
-        // Our request function puts the detail in error.message.
-        // We need to parse the JSON if possible.
-        try {
-          // Extract JSON part from error message if it's formatted like "API 409: {...}"
-          const jsonStr = error.message.replace('API 409: ', '')
-          const data = JSON.parse(jsonStr)
-          if (data.conflict_info) {
-            openConflictModal({
-              ...data.conflict_info,
-              file,
-              kind
-            })
-          }
-        } catch (e) {
-          console.error('Failed to parse conflict info:', e)
-        }
-        
-        // Remove the pending card if it was created
+      // Check for 409 Conflict. The structured body (including
+      // `conflict_info`) is attached to ApiError so we don't need to
+      // re-parse a raw JSON error message.
+      const status = error?.status ?? error?.response?.status
+      const body = (error && typeof error === 'object' ? (error.body ?? null) : null) as
+        | Record<string, unknown>
+        | null
+      const conflictInfo = (body && typeof body.conflict_info === 'object'
+        ? (body.conflict_info as Record<string, unknown>)
+        : null) as Record<string, unknown> | null
+
+      if (status === 409 && conflictInfo) {
+        openConflictModal({
+          ...conflictInfo,
+          file,
+          kind,
+        } as any)
+
         if (!overwrite) {
           removePendingImportCard(tempId)
+        }
+      } else if (status === 409) {
+        // Fallback: 409 without structured conflict_info (older backend).
+        // Surface as a regular import error so the user can react.
+        if (!overwrite) {
+          updatePendingImportStatus(
+            tempId,
+            error?.message || 'Adventure already exists in your library.',
+            true
+          )
+        } else {
+          errorMsg.value = error?.message || 'Overwrite failed'
         }
       } else {
         if (!overwrite) {

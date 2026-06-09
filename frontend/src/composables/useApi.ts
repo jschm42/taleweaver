@@ -22,11 +22,18 @@ import type { ApiFetchInit } from '@/services/http'
 
 class ApiError extends Error {
   status: number
+  /**
+   * Full parsed response body, if the server returned JSON. Useful for
+   * surfacing structured details such as `conflict_info` on 409 responses
+   * (e.g. when re-importing an already-existing adventure).
+   */
+  body: Record<string, unknown> | null
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body: Record<string, unknown> | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.body = body
   }
 }
 
@@ -73,14 +80,12 @@ async function request<T>(path: string, init?: ApiFetchInit): Promise<T> {
     if (!res.ok) {
       const bodyText = await res.text()
       let detail = bodyText
+      let parsed: Record<string, unknown> | null = null
       try {
-        const parsed = JSON.parse(bodyText)
-        if (parsed && typeof parsed.detail === 'string') {
-          // If the JSON contains more than just the detail (e.g. conflict_info),
-          // keep the full JSON string so the caller can parse it.
-          if (Object.keys(parsed).length > 1) {
-            detail = bodyText
-          } else {
+        const candidate = JSON.parse(bodyText)
+        if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+          parsed = candidate as Record<string, unknown>
+          if (typeof parsed.detail === 'string') {
             detail = parsed.detail
           }
         }
@@ -91,14 +96,14 @@ async function request<T>(path: string, init?: ApiFetchInit): Promise<T> {
          // Token might have expired
          window.dispatchEvent(new CustomEvent('auth-unauthorized'))
       }
-      
+
       // If it's a 500 error, we might want to flag it as a backend issue too
       if (res.status >= 500) {
         configState.isBackendReachable = false
         configState.lastErrorMessage = `Server Error (${res.status}): ${detail}`
       }
 
-      throw new ApiError(res.status, detail)
+      throw new ApiError(res.status, detail, parsed)
     }
     // 204 No Content has no body
     if (res.status === 204) return undefined as T
@@ -133,10 +138,14 @@ async function requestBlob(path: string, init?: ApiFetchInit): Promise<Blob> {
     if (!res.ok) {
       const bodyText = await res.text()
       let detail = bodyText
+      let parsed: Record<string, unknown> | null = null
       try {
-        const parsed = JSON.parse(bodyText)
-        if (parsed && typeof parsed.detail === 'string') {
-          detail = parsed.detail
+        const candidate = JSON.parse(bodyText)
+        if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+          parsed = candidate as Record<string, unknown>
+          if (typeof parsed.detail === 'string') {
+            detail = parsed.detail
+          }
         }
       } catch {
         // Keep plain-text fallback when response is not JSON.
@@ -144,13 +153,13 @@ async function requestBlob(path: string, init?: ApiFetchInit): Promise<Blob> {
       if (res.status === 401 && authState.isAuthenticated) {
          window.dispatchEvent(new CustomEvent('auth-unauthorized'))
       }
-      
+
       if (res.status >= 500) {
         configState.isBackendReachable = false
         configState.lastErrorMessage = `Server Error (${res.status}): ${detail}`
       }
 
-      throw new ApiError(res.status, detail)
+      throw new ApiError(res.status, detail, parsed)
     }
     return res.blob()
   } catch (err: any) {
