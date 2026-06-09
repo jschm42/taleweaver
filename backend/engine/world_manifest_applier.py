@@ -1114,17 +1114,25 @@ async def apply_manifest(
                 q["status"] = "open"
         adventure.quests = quests  # type: ignore[assignment]
 
-        teaser = manifest_dict.get("teaser")
+        # In standard ADV manifests, narrative metadata is nested under
+        # `adventure`; look there first and fall back to top-level keys.
+        adv_block = manifest_dict.get("adventure") if isinstance(manifest_dict.get("adventure"), dict) else {}
+        def _adv_field(key):
+            if key in adv_block and adv_block[key] is not None:
+                return adv_block[key]
+            return manifest_dict.get(key)
+
+        teaser = _adv_field("teaser")
         if teaser:
             adventure.teaser = teaser  # type: ignore[assignment]
 
-        adventure.plot = manifest_dict.get("plot") or adventure.plot  # type: ignore[assignment]
-        adventure.rules = manifest_dict.get("rules") or adventure.rules  # type: ignore[assignment]
-        adventure.intro_text = manifest_dict.get("intro_text") or adventure.intro_text  # type: ignore[assignment]
-        adventure.walkthrough = manifest_dict.get("walkthrough") or adventure.walkthrough  # type: ignore[assignment]
-        adventure.completed_condition = manifest_dict.get("completed_condition") or adventure.completed_condition  # type: ignore[assignment]
-        adventure.gameover_condition = manifest_dict.get("gameover_condition") or adventure.gameover_condition  # type: ignore[assignment]
-        adventure.tts_director_notes = manifest_dict.get("tts_director_notes") or adventure.tts_director_notes  # type: ignore[assignment]
+        adventure.plot = _adv_field("plot") or adventure.plot  # type: ignore[assignment]
+        adventure.rules = _adv_field("rules") or adventure.rules  # type: ignore[assignment]
+        adventure.intro_text = _adv_field("intro_text") or adventure.intro_text  # type: ignore[assignment]
+        adventure.walkthrough = _adv_field("walkthrough") or adventure.walkthrough  # type: ignore[assignment]
+        adventure.completed_condition = _adv_field("completed_condition") or adventure.completed_condition  # type: ignore[assignment]
+        adventure.gameover_condition = _adv_field("gameover_condition") or adventure.gameover_condition  # type: ignore[assignment]
+        adventure.tts_director_notes = _adv_field("tts_director_notes") or adventure.tts_director_notes  # type: ignore[assignment]
 
         if manifest_dict.get("time_system"):
             adventure.time_system = manifest_dict["time_system"]  # type: ignore[assignment]
@@ -1286,15 +1294,28 @@ async def apply_manifest(
 
     # --- Persist Objects ---
     if adventure:
-        adventure.teaser = manifest_dict.get("teaser", "")  # type: ignore[assignment]
-        adventure.original_prompt = manifest_dict.get("plot", "")  # type: ignore[assignment]
-        adventure.rules = manifest_dict.get("rules", "")  # type: ignore[assignment]
-        adventure.language = manifest_dict.get("language", "")  # type: ignore[assignment]
+        # In standard ADV manifests, narrative metadata is nested under
+        # `adventure` rather than at the top level. Look there first and
+        # fall back to the top level for legacy/loose manifests. Without
+        # this fallback, importing a freshly-exported ADV would silently
+        # wipe out `teaser`, `rules`, `language`, etc. with empty strings.
+        adv_block = manifest_dict.get("adventure") if isinstance(manifest_dict.get("adventure"), dict) else {}
+        def _adv_field(key, default=""):
+            if key in adv_block and adv_block[key] is not None:
+                return adv_block[key]
+            if key in manifest_dict and manifest_dict[key] is not None:
+                return manifest_dict[key]
+            return default
+
+        adventure.teaser = _adv_field("teaser", "")  # type: ignore[assignment]
+        adventure.original_prompt = _adv_field("original_prompt", adventure.original_prompt or "")  # type: ignore[assignment]
+        adventure.rules = _adv_field("rules", "")  # type: ignore[assignment]
+        adventure.language = _adv_field("language", "")  # type: ignore[assignment]
         adventure.is_ready = False  # type: ignore[assignment]
-        adventure.origin_id = manifest_dict.get("origin_id", "")  # type: ignore[assignment]
-        adventure.is_adventure_generator = manifest_dict.get("is_adventure_generator", False)  # type: ignore[assignment]
-        adventure.can_damage_npcs = manifest_dict.get("can_damage_npcs", True)  # type: ignore[assignment]
-        adventure.npcs_can_damage_protagonist = manifest_dict.get("npcs_can_damage_protagonist", True)  # type: ignore[assignment]
+        adventure.origin_id = _adv_field("origin_id", "")  # type: ignore[assignment]
+        adventure.is_adventure_generator = _adv_field("is_adventure_generator", False)  # type: ignore[assignment]
+        adventure.can_damage_npcs = _adv_field("can_damage_npcs", True)  # type: ignore[assignment]
+        adventure.npcs_can_damage_protagonist = _adv_field("npcs_can_damage_protagonist", True)  # type: ignore[assignment]
         adventure.original_manifest = manifest_dict  # type: ignore[assignment]
 
     objects = list(manifest_dict.get("objects", []))

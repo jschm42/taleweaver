@@ -473,3 +473,80 @@ async def test_decorative_objects_built_from_structured_field_only(monkeypatch, 
         assert "DECORATIVE_OBJECTS:" not in ctx
         # And the description must be passed through cleanly, no suffix appended.
         assert "A quiet study with faded wallpaper." in ctx
+
+
+async def test_import_adv_manifest_preserves_nested_adventure_metadata(auth_client, setup_test_db):
+    """Importing a freshly-exported ADV must keep `teaser`, `rules`, `language`, etc.
+
+    Regression test: previously `apply_manifest` overwrote these fields with
+    `manifest_dict.get("teaser", "")` etc. — but in a standard ADV manifest
+    the narrative metadata lives under the `adventure` key, not at the top
+    level. The result was a silent wipe of the values to empty strings.
+    """
+    from tests.conftest import TestSessionLocal
+    from backend.engine.adventure_importer import AdventureTemplateImporter
+
+    payload = {
+        "format": "TaleWeaver",
+        "version": "1.2",
+        "adventure": {
+            "title": "Round Trip Metadata",
+            "teaser": "A teaser that must survive import.",
+            "rules": "Rules that must survive import.",
+            "language": "English",
+            "plot": "Plot that must survive import.",
+            "intro_text": "Intro that must survive import.",
+            "walkthrough": "Walkthrough that must survive import.",
+            "completed_condition": "Win",
+            "gameover_condition": "Lose",
+            "rule_enforcement_mode": "rpg",
+            "time_per_turn": 10,
+            "pacing_minutes": 5,
+            "clock_enabled": False,
+            "is_adventure_generator": False,
+            "starting_timestamp": 0,
+            "time_system": "calendar",
+            "min_scenes": 1, "max_scenes": 3,
+            "min_items": 0, "max_items": 2,
+            "min_containers": 0, "max_containers": 1,
+            "min_text_logs": 0, "max_text_logs": 1,
+            "min_quests": 0, "max_quests": 1,
+            "min_awards": 0, "max_awards": 1,
+            "version": "1.0",
+            "allow_dynamic_items": True,
+            "can_damage_npcs": True,
+            "npcs_can_damage_protagonist": True,
+        },
+        "protagonist": {
+            "name": "Hero", "role": "Adventurer", "description": "Brave",
+            "hp": 100, "stamina": 100, "mana": 50,
+            "starting_inventory": [], "starting_equipment": {},
+            "stats": {}, "status_effects": [],
+        },
+        "scenes": [
+            {"id": "START", "label": "Start", "description": "Begin", "decorative_objects": []}
+        ],
+        "exits": [], "npcs": [], "objects": [], "quests": [], "awards": [],
+    }
+
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        success = await AdventureTemplateImporter.import_adv_manifest(
+            db, payload, owner_id=user.id, allow_session=False
+        )
+        assert success, "import_adv_manifest returned False"
+
+        adv_res = await db.execute(
+            select(AdventureTemplate).where(AdventureTemplate.title == "Round Trip Metadata")
+        )
+        adv = adv_res.scalars().first()
+        assert adv is not None
+        assert adv.teaser == "A teaser that must survive import."
+        assert adv.rules == "Rules that must survive import."
+        assert adv.plot == "Plot that must survive import."
+        assert adv.intro_text == "Intro that must survive import."
+        assert adv.walkthrough == "Walkthrough that must survive import."
+        assert adv.completed_condition == "Win"
+        assert adv.gameover_condition == "Lose"
+        assert adv.language == "English"
