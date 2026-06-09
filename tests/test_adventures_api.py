@@ -3938,3 +3938,4 @@ async def test_editor_scene_decorative_objects_crud(client: AsyncClient):
 
 
 
+

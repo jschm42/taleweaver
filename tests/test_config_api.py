@@ -140,6 +140,8 @@ async def test_save_llm_settings_with_ollama_url(client: AsyncClient):
         "generator_model_provider": "ollama",
         "generator_model": "llama3-70b",
         "generator_model_provider": "ollama",
+        "generator_model": "llama3-70b",
+        "generator_model_provider": "ollama",
         "preferred_provider": "ollama",
         "ollama_url": "http://localhost:11434",
     }
@@ -166,6 +168,8 @@ async def test_save_llm_settings_normalizes_openrouter_models(client: AsyncClien
         "small_model_provider": "openrouter",
         "complex_model": "openai/gpt-5.4",
         "complex_model_provider": "openrouter",
+        "generator_model": "anthropic/claude-3-opus",
+        "generator_model_provider": "openrouter",
         "generator_model": "anthropic/claude-3-opus",
         "generator_model_provider": "openrouter",
         "generator_model": "anthropic/claude-3-opus",
@@ -257,6 +261,8 @@ async def test_get_settings_uses_installed_ollama_models(client: AsyncClient, mo
         "small_max_thinking_tokens": 1024,
         "complex_model": "qwen2.5",
         "complex_model_provider": "ollama",
+        "generator_model": "llama3-70b",
+        "generator_model_provider": "ollama",
         "complex_max_tokens": 4096,
         "complex_enable_thinking": False,
         "complex_max_thinking_tokens": 1024,
@@ -421,9 +427,13 @@ async def test_settings_are_global_for_all_users(client: AsyncClient):
         "generator_model_provider": "ollama",
         "generator_model": "llama3-70b",
         "generator_model_provider": "ollama",
+        "generator_model": "llama3-70b",
+        "generator_model_provider": "ollama",
         "complex_max_tokens": 4096,
         "complex_enable_thinking": False,
         "complex_max_thinking_tokens": 512,
+        "generator_model": "llama3.2",
+        "generator_model_provider": "ollama",
         "generator_model": "llama3.2",
         "generator_model_provider": "ollama",
         "generator_model": "llama3.2",
@@ -500,6 +510,7 @@ async def test_test_llm_connection_handles_generic_errors_without_500(client: As
     data = resp.json()
     assert data["status"] == "error"
     assert "Connection test failed" in data["message"]
+
 
 
 

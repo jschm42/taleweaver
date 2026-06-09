@@ -18,6 +18,10 @@
 > [!TIP]
 > **Put your headphones on and roleplay!** TaleWeaver works best when you immerse yourself. Don't just give commands—describe your actions, speak to NPCs, and let the AI Gamemaster narrate the consequences.
 
+## Intro Video
+
+[![TaleWeaver](docs/screenshots/taleweaver_logo_with_playbutton.jpg)](https://youtu.be/lbAxVuU0SnQ)
+
 ## 📸 Gallery
 
 <p align="center">
