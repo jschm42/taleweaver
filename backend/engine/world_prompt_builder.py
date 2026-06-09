@@ -71,7 +71,8 @@ _CONTAINER_LOCK_HINTS = (
     "- CONTAINER objects may be open or locked depending on story needs.\n"
     "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
     "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
-    "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method."
+    "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method.\n"
+    "- CONTAINER LOCK INVARIANT (CRITICAL): The engine sets `metadata_json.locked` to true only when at least one of `code_to_unlock`, `item_to_unlock`, or `rule_to_unlock` is non-empty. Therefore: if the description says the container is locked, requires a code/key/password/combination, or otherwise cannot be opened freely, you MUST set exactly one of those three unlock fields — never describe a lock in prose without binding it to a deterministic unlock field. If the container is open and freely searchable, keep all three fields empty."
 )
 
 _CONTAINER_NON_EMPTY_HINT = "\n- Every generated CONTAINER must include at least one item ID in `inventory`; do not leave container inventories empty."
