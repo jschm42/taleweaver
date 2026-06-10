@@ -7,7 +7,7 @@ passed to the manifest applier.
 """
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 
 class WorldSceneSchema(BaseModel):
@@ -76,6 +76,44 @@ class WorldNPCSchema(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SwitchGatesSchema(BaseModel):
+    item: Optional[str] = Field(default="", description="The item ID needed to pass this transition.")
+    code: Optional[str] = Field(default="", description="The code/password needed to pass this transition.")
+    rule: Optional[str] = Field(default="", description="A soft narrative rule needed to pass this transition.")
+    model_config = {"extra": "forbid"}
+
+
+class SwitchTransitionSchema(BaseModel):
+    from_state: str = Field(..., alias="from", description="The starting state of this transition.")
+    to_state: str = Field(..., alias="to", description="The target state of this transition.")
+    gates: Optional[SwitchGatesSchema] = Field(default=None, description="Optional lock gates required to allow the transition.")
+    fail_message: Optional[str] = Field(default="", description="The failure message narrated if gates are not met.")
+    
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "from": self.from_state,
+            "to": self.to_state,
+            "gates": self.gates.model_dump() if self.gates else None,
+            "fail_message": self.fail_message,
+        }
+
+    model_config = {"populate_by_name": True, "extra": "forbid"}
+
+
+class SwitchEffectSchema(BaseModel):
+    type: str = Field(..., description="The effect type: unlock_exit, unlock_container, or story_flag.")
+    target_id: Optional[str] = Field(default="", description="The ID of the target exit or container. Keep empty if not applicable.")
+    key: Optional[str] = Field(default="", description="The story flag key. Keep empty if not applicable.")
+    model_config = {"extra": "forbid"}
+
+
+class SwitchOutcomeSchema(BaseModel):
+    on_state: str = Field(..., description="The state trigger for these effects.")
+    effects: list[SwitchEffectSchema] = Field(..., description="List of effects triggered when the state is entered.")
+    model_config = {"extra": "forbid"}
+
+
 class WorldObjectSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the object, e.g., GOLDEN_KEY")
     name: str = Field(..., description="Human-readable name")
@@ -117,8 +155,8 @@ class WorldObjectSchema(BaseModel):
     text_log_format: str = Field("", description="Only for READABLE objects: one of DOCUMENT, SCROLL, BOOK, SIGN. Use empty string for non-readable items.")
     switch_states: list[str] = Field(default_factory=list, description="Only for SWITCH objects: ordered states, e.g. ['OFF','ON'].")
     switch_initial_state: str = Field("", description="Only for SWITCH objects: initial state value.")
-    switch_transitions: list[dict[str, Any]] = Field(default_factory=list, description="Only for SWITCH objects: deterministic transitions with optional gates and fail_message.")
-    switch_outcomes: list[dict[str, Any]] = Field(default_factory=list, description="Only for SWITCH objects: state-based effects (unlock_exit, unlock_container, story_flag).")
+    switch_transitions: list[SwitchTransitionSchema] = Field(default_factory=list, description="Only for SWITCH objects: deterministic transitions with optional gates and fail_message.")
+    switch_outcomes: list[SwitchOutcomeSchema] = Field(default_factory=list, description="Only for SWITCH objects: state-based effects (unlock_exit, unlock_container, story_flag).")
     source_asset_id: Optional[str] = Field(None, description="Optional source object ID to reuse an old item image.")
 
     model_config = {"extra": "forbid"}
