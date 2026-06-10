@@ -47,6 +47,18 @@ _OBJECT_ENTITY_KEYS = {
     "stat_modifier_armor_class",
     "inventory",
     "metadata_json",
+    "hp_change",
+    "stamina_change",
+    "mana_change",
+    "text_log_content",
+    "text_log_format",
+    "code_to_unlock",
+    "item_to_unlock",
+    "rule_to_unlock",
+    "switch_states",
+    "switch_initial_state",
+    "switch_transitions",
+    "switch_outcomes",
 }
 
 _NPC_ENTITY_KEYS = {
@@ -141,6 +153,55 @@ def _serialize_world_entity(entity: WorldEntity) -> dict[str, Any]:
         for stat_key in _STAT_MODIFIER_KEYS:
             if stat_key in metadata and metadata.get(stat_key) == filtered.get(stat_key):
                 metadata.pop(stat_key, None)
+
+        item_type = str(filtered.get("item_type") or "").upper()
+
+        # 1. Consumption fields
+        hp_change = metadata.pop("hp_change", None)
+        stamina_change = metadata.pop("stamina_change", None)
+        mana_change = metadata.pop("mana_change", None)
+        filtered["hp_change"] = hp_change if hp_change is not None else 0
+        filtered["stamina_change"] = stamina_change if stamina_change is not None else 0
+        filtered["mana_change"] = mana_change if mana_change is not None else 0
+
+        # 2. Readable fields
+        if item_type == "READABLE":
+            filtered["text_log_content"] = metadata.pop("text_log_content", "")
+            filtered["text_log_format"] = metadata.pop("text_log_format", "DOCUMENT")
+        else:
+            metadata.pop("text_log_content", None)
+            metadata.pop("text_log_format", None)
+
+        # 3. Container lock fields
+        if item_type == "CONTAINER":
+            filtered["code_to_unlock"] = metadata.pop("code_to_unlock", "")
+            filtered["item_to_unlock"] = metadata.pop("item_to_unlock", "")
+            filtered["rule_to_unlock"] = metadata.pop("rule_to_unlock", "")
+            metadata.pop("locked", None)
+        else:
+            metadata.pop("code_to_unlock", None)
+            metadata.pop("item_to_unlock", None)
+            metadata.pop("rule_to_unlock", None)
+            metadata.pop("locked", None)
+
+        # 4. Switch fields
+        if item_type == "SWITCH":
+            switch_config = metadata.pop("switch", {})
+            if not isinstance(switch_config, dict):
+                switch_config = {}
+            filtered["switch_states"] = switch_config.get("states") or metadata.pop("switch_states", []) or []
+            filtered["switch_initial_state"] = switch_config.get("initial_state") or metadata.pop("switch_initial_state", "") or ""
+            filtered["switch_transitions"] = switch_config.get("transitions") or metadata.pop("switch_transitions", []) or []
+            filtered["switch_outcomes"] = switch_config.get("outcomes") or []
+        else:
+            metadata.pop("switch", None)
+            metadata.pop("switch_states", None)
+            metadata.pop("switch_initial_state", None)
+            metadata.pop("switch_transitions", None)
+
+        # Clean up flat consumable effects
+        metadata.pop("effects", None)
+
         if metadata:
             filtered["metadata_json"] = metadata
         else:

@@ -202,6 +202,12 @@ def _serialize_model(obj):
                 data["locked"] = metadata_json.get("locked")
             else:
                 data["locked"] = bool(metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock") or metadata_json.get("rule_to_unlock"))
+            
+            # Serialize switch fields for the editor UI
+            switch_config = metadata_json.get("switch") or {}
+            data["switch_states"] = metadata_json.get("switch_states") or switch_config.get("states") or []
+            data["switch_initial_state"] = metadata_json.get("switch_initial_state") or switch_config.get("initial_state") or ""
+            data["switch_transitions"] = metadata_json.get("switch_transitions") or switch_config.get("transitions") or []
     return data
 
 def _is_npc_entity(ent):
@@ -1273,69 +1279,87 @@ async def update_editor_entity(
                         raise HTTPException(status_code=400, detail="current_scene_id must contain only uppercase letters, digits, and underscores.")
                     await _ensure_template_scene_exists(db, template_id, new_scene_id)
                     ent.current_scene_id = new_scene_id
-                is_readable_object = str(ent.item_type or "").upper() == "READABLE"
+                item_type = str(ent.item_type or "").upper()
+                is_readable_object = item_type == "READABLE"
+                is_container_object = item_type == "CONTAINER"
+                is_switch_object = item_type == "SWITCH"
+                is_consumable_object = item_type == "CONSUMABLE"
+
                 if payload.description is not None and is_readable_object and len(payload.description) > 200:
                     raise HTTPException(status_code=400, detail="description must be at most 200 characters for READABLE objects.")
                 if payload.is_portable is not None:
                     ent.is_portable = bool(payload.is_portable)
-                if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.rule_to_unlock is not None or payload.locked is not None:
-                    metadata_json = dict(ent.metadata_json or {})
-                    code = metadata_json.get("code_to_unlock") or ""
-                    item = metadata_json.get("item_to_unlock") or ""
-                    rule = metadata_json.get("rule_to_unlock") or ""
-                    
-                    if payload.code_to_unlock is not None:
-                        code = str(payload.code_to_unlock or "").strip()
-                    if payload.item_to_unlock is not None:
-                        item = str(payload.item_to_unlock or "").strip().upper()
-                    if payload.rule_to_unlock is not None:
-                        rule = str(payload.rule_to_unlock or "").strip()
 
-                    if code:
-                        code = code[:32]
-                        item = ""
-                        rule = ""
-                    elif item:
-                        from backend.utils.text_utils import slugify
-                        item = slugify(item).upper().replace("-", "_")[:64]
-                        code = ""
-                        rule = ""
-                    elif rule:
-                        rule = rule[:500]
-                        code = ""
-                        item = ""
-                    else:
-                        code = ""
-                        item = ""
-                        rule = ""
+                metadata_json = dict(ent.metadata_json or {})
 
-                    metadata_json["code_to_unlock"] = code
-                    metadata_json["item_to_unlock"] = item
-                    metadata_json["rule_to_unlock"] = rule
-                    if payload.locked is not None:
-                        metadata_json["locked"] = bool(payload.locked)
-                    else:
-                        metadata_json["locked"] = bool(code or item or rule)
-                    
-                    ent.metadata_json = metadata_json
-                    # Legacy free-text unlock rules are deprecated in favor of deterministic attributes.
-                    ent.unlock_rule = None
+                # 1. Container locks (only for CONTAINER items)
+                if is_container_object:
+                    if payload.code_to_unlock is not None or payload.item_to_unlock is not None or payload.rule_to_unlock is not None or payload.locked is not None:
+                        code = metadata_json.get("code_to_unlock") or ""
+                        item = metadata_json.get("item_to_unlock") or ""
+                        rule = metadata_json.get("rule_to_unlock") or ""
+                        
+                        if payload.code_to_unlock is not None:
+                            code = str(payload.code_to_unlock or "").strip()
+                        if payload.item_to_unlock is not None:
+                            item = str(payload.item_to_unlock or "").strip().upper()
+                        if payload.rule_to_unlock is not None:
+                            rule = str(payload.rule_to_unlock or "").strip()
+
+                        if code:
+                            code = code[:32]
+                            item = ""
+                            rule = ""
+                        elif item:
+                            from backend.utils.text_utils import slugify
+                            item = slugify(item).upper().replace("-", "_")[:64]
+                            code = ""
+                            rule = ""
+                        elif rule:
+                            rule = rule[:500]
+                            code = ""
+                            item = ""
+                        else:
+                            code = ""
+                            item = ""
+                            rule = ""
+
+                        metadata_json["code_to_unlock"] = code
+                        metadata_json["item_to_unlock"] = item
+                        metadata_json["rule_to_unlock"] = rule
+                        if payload.locked is not None:
+                            metadata_json["locked"] = bool(payload.locked)
+                        else:
+                            metadata_json["locked"] = bool(code or item or rule)
+                        
+                        ent.unlock_rule = None
+                else:
+                    # Clean up unlock fields if the item is not a CONTAINER anymore
+                    metadata_json.pop("code_to_unlock", None)
+                    metadata_json.pop("item_to_unlock", None)
+                    metadata_json.pop("rule_to_unlock", None)
+                    metadata_json.pop("locked", None)
+
                 if payload.inventory is not None:
                     ent.inventory = payload.inventory
-                if payload.text_log_content is not None:
-                    if len(payload.text_log_content) > 500:
-                        raise HTTPException(status_code=400, detail="text_log_content must be at most 500 characters.")
-                    metadata_json = dict(ent.metadata_json or {})
-                    metadata_json["text_log_content"] = payload.text_log_content.strip()
-                    ent.metadata_json = metadata_json
-                if payload.text_log_format is not None:
-                    normalized_format = str(payload.text_log_format).strip().upper()
-                    allowed_formats = {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}
-                    if normalized_format not in allowed_formats:
-                        raise HTTPException(status_code=400, detail="text_log_format must be one of DOCUMENT, SCROLL, BOOK, SIGN.")
-                    metadata_json = dict(ent.metadata_json or {})
-                    metadata_json["text_log_format"] = normalized_format
-                    ent.metadata_json = metadata_json
+
+                # 2. Readable log content (only for READABLE items)
+                if is_readable_object:
+                    if payload.text_log_content is not None:
+                        if len(payload.text_log_content) > 500:
+                            raise HTTPException(status_code=400, detail="text_log_content must be at most 500 characters.")
+                        metadata_json["text_log_content"] = payload.text_log_content.strip()
+                    if payload.text_log_format is not None:
+                        normalized_format = str(payload.text_log_format).strip().upper()
+                        allowed_formats = {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}
+                        if normalized_format not in allowed_formats:
+                            raise HTTPException(status_code=400, detail="text_log_format must be one of DOCUMENT, SCROLL, BOOK, SIGN.")
+                        metadata_json["text_log_format"] = normalized_format
+                else:
+                    # Clean up readable fields
+                    metadata_json.pop("text_log_content", None)
+                    metadata_json.pop("text_log_format", None)
+
                 if payload.wearable_slots is not None:
                     ent.wearable_slots = payload.wearable_slots
                 if payload.combination_ingredients is not None:
@@ -1343,22 +1367,39 @@ async def update_editor_entity(
                 if payload.stat_modifier_strength is not None:
                     ent.stat_modifier_strength = payload.stat_modifier_strength
                 
-                metadata_json = dict(ent.metadata_json or {})
-                has_meta_change = False
-                if payload.switch_states is not None:
-                    metadata_json["switch_states"] = payload.switch_states
-                    has_meta_change = True
-                if payload.switch_initial_state is not None:
-                    metadata_json["switch_initial_state"] = payload.switch_initial_state
-                    has_meta_change = True
-                if payload.switch_transitions is not None:
-                    metadata_json["switch_transitions"] = payload.switch_transitions
-                    has_meta_change = True
-                if payload.effects is not None:
-                    metadata_json["effects"] = payload.effects
-                    has_meta_change = True
-                if has_meta_change:
-                    ent.metadata_json = metadata_json
+                # 3. Switch logic (only for SWITCH items)
+                if is_switch_object:
+                    if payload.switch_states is not None or payload.switch_initial_state is not None or payload.switch_transitions is not None:
+                        switch_config = metadata_json.get("switch")
+                        if not isinstance(switch_config, dict):
+                            switch_config = {}
+                        if payload.switch_states is not None:
+                            switch_config["states"] = payload.switch_states
+                        if payload.switch_initial_state is not None:
+                            switch_config["initial_state"] = payload.switch_initial_state
+                        if payload.switch_transitions is not None:
+                            switch_config["transitions"] = payload.switch_transitions
+                        metadata_json["switch"] = switch_config
+                    
+                    # Clean up flat switch keys that were previously written as pollution
+                    metadata_json.pop("switch_states", None)
+                    metadata_json.pop("switch_initial_state", None)
+                    metadata_json.pop("switch_transitions", None)
+                else:
+                    # Clean up switch config
+                    metadata_json.pop("switch", None)
+                    metadata_json.pop("switch_states", None)
+                    metadata_json.pop("switch_initial_state", None)
+                    metadata_json.pop("switch_transitions", None)
+
+                # 4. Consumable effects (only for CONSUMABLE items)
+                if is_consumable_object:
+                    if payload.effects is not None:
+                        metadata_json["effects"] = payload.effects
+                else:
+                    metadata_json.pop("effects", None)
+
+                ent.metadata_json = metadata_json
             
     await db.commit()
     return {"status": "success"}

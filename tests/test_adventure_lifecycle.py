@@ -550,3 +550,99 @@ async def test_import_adv_manifest_preserves_nested_adventure_metadata(auth_clie
         assert adv.completed_condition == "Win"
         assert adv.gameover_condition == "Lose"
         assert adv.language == "English"
+
+
+async def test_switch_object_export_import_roundtrip(auth_client, setup_test_db):
+    """Verifies that a SWITCH object round-trips correctly through export and import."""
+    from sqlalchemy import delete
+    from tests.conftest import TestSessionLocal
+    from backend.engine.adventure_importer import AdventureTemplateImporter
+
+    # 1. Seed adventure with a SWITCH object
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        adventure_id = await _seed_adventure(db, user.id)
+
+        # Create the SWITCH entity
+        switch_obj = WorldEntity(
+            id="CHAMBER_CONTROL_SWITCH",
+            template_id=adventure_id,
+            entity_type="OBJECT",
+            name="Chamber Control Switch",
+            description="A protected lever assembly.",
+            current_scene_id="SCENE_1",
+            item_type="SWITCH",
+            is_portable=False,
+            metadata_json={
+                "switch": {
+                    "states": ["LOCKED", "ARMED", "ACTIVE"],
+                    "initial_state": "LOCKED",
+                    "transitions": [
+                        {
+                            "from": "LOCKED",
+                            "to": "ARMED",
+                            "gates": {"rule": "Has core"},
+                            "fail_message": "Chamber rejects."
+                        }
+                    ],
+                    "outcomes": [
+                        {
+                            "on_state": "ARMED",
+                            "effects": [{"type": "unlock_exit", "target_id": "EXIT_1"}]
+                        }
+                    ]
+                }
+            }
+        )
+        db.add(switch_obj)
+        await db.commit()
+
+    # 2. Export manifest
+    async with TestSessionLocal() as db:
+        manifest = await AdventureExporter.build_full_manifest(db, adventure_id)
+        
+    exported_switch = next((o for o in manifest["objects"] if o["id"] == "CHAMBER_CONTROL_SWITCH"), None)
+    assert exported_switch is not None
+    assert exported_switch.get("item_type") == "SWITCH"
+    assert exported_switch.get("switch_states") == ["LOCKED", "ARMED", "ACTIVE"]
+    assert exported_switch.get("switch_initial_state") == "LOCKED"
+    assert len(exported_switch.get("switch_transitions")) == 1
+    assert exported_switch.get("switch_transitions")[0]["from"] == "LOCKED"
+    assert len(exported_switch.get("switch_outcomes")) == 1
+    assert exported_switch.get("switch_outcomes")[0]["on_state"] == "ARMED"
+    
+    # 3. Import
+    async with TestSessionLocal() as db:
+        # Clean up database records for this template to avoid duplication conflict on import
+        await db.execute(delete(WorldEntity).where(WorldEntity.template_id == adventure_id))
+        await db.execute(delete(WorldScene).where(WorldScene.template_id == adventure_id))
+        await db.execute(delete(Avatar).where(Avatar.template_id == adventure_id))
+        await db.execute(delete(AdventureTemplate).where(AdventureTemplate.id == adventure_id))
+        await db.commit()
+
+    async with TestSessionLocal() as db:
+        success = await AdventureTemplateImporter.import_adv_manifest(
+            db, manifest, owner_id=user.id, allow_session=False
+        )
+        assert success is True
+
+    # 4. Verify in database
+    async with TestSessionLocal() as db:
+        res = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == adventure_id,
+                WorldEntity.id == "CHAMBER_CONTROL_SWITCH"
+            )
+        )
+        imported_switch = res.scalars().first()
+        assert imported_switch is not None
+        assert imported_switch.item_type == "SWITCH"
+        assert imported_switch.is_portable is False
+        
+        switch_config = imported_switch.metadata_json.get("switch")
+        assert switch_config is not None
+        assert switch_config.get("states") == ["LOCKED", "ARMED", "ACTIVE"]
+        assert switch_config.get("initial_state") == "LOCKED"
+        assert len(switch_config.get("transitions")) == 1
+        assert len(switch_config.get("outcomes")) == 1

@@ -789,9 +789,9 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     combination_ingredients_input: Array.isArray(selectedObject?.combination_ingredients)
       ? [...selectedObject.combination_ingredients]
       : (metadata?.combination_ingredients ? [...metadata.combination_ingredients] : []),
-    switch_states_json: JSON.stringify(selectedObject?.switch_states || metadata?.switch_states || [], null, 2),
-    switch_initial_state: String(selectedObject?.switch_initial_state || metadata?.switch_initial_state || ''),
-    switch_transitions_json: JSON.stringify(selectedObject?.switch_transitions || metadata?.switch_transitions || [], null, 2),
+    switch_states_json: JSON.stringify(selectedObject?.switch_states || metadata?.switch?.states || metadata?.switch_states || [], null, 2),
+    switch_initial_state: String(selectedObject?.switch_initial_state || metadata?.switch?.initial_state || metadata?.switch_initial_state || ''),
+    switch_transitions_json: JSON.stringify(selectedObject?.switch_transitions || metadata?.switch?.transitions || metadata?.switch_transitions || [], null, 2),
     effects_hp: selectedObject?.effects?.hp || metadata?.effects?.hp || 0,
     effects_stamina: selectedObject?.effects?.stamina || metadata?.effects?.stamina || 0,
     effects_mana: selectedObject?.effects?.mana || metadata?.effects?.mana || 0,
@@ -898,6 +898,12 @@ async function saveEntityText(data: any) {
             switch_states: data.switch_states || [],
             switch_initial_state: data.switch_initial_state || '',
             switch_transitions: data.switch_transitions || [],
+            switch: {
+              states: data.switch_states || [],
+              initial_state: data.switch_initial_state || '',
+              transitions: data.switch_transitions || [],
+              outcomes: []
+            }
           }
         }
         if (itemType === 'CONSUMABLE') {
@@ -1015,9 +1021,6 @@ async function saveEntityText(data: any) {
       effects: editEntityContext.value.type === 'object' ? data.effects : undefined,
       stat_modifier_strength: editEntityContext.value.type === 'object' ? data.stat_modifier_strength : undefined,
     })
-    closeEditEntityModal()
-    await Promise.all([fetchAdventure(), fetchDebugInfo()])
-
     // Redirect if we renamed the scene we are currently viewing
     if (editEntityContext.value.type === 'scene' && newId && oldId !== newId && activeMapSceneId.value === oldId) {
       router.replace({
@@ -1030,6 +1033,8 @@ async function saveEntityText(data: any) {
       })
     }
 
+    closeEditEntityModal()
+    await Promise.all([fetchAdventure(), fetchDebugInfo()])
     addNotification('Changes applied successfully.', 'success')
   } catch (error: any) {
     promptError.value = error.message
