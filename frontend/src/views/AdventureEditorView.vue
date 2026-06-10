@@ -756,7 +756,7 @@ async function handleCreateScene(data: { sceneId: string; name: string; descript
 
 function openTextEdit(type: string, id: string, currentName: string, currentDesc: string, currentTeaser: string = '', hp?: number, stamina?: number, mana?: number, goal?: string, character?: string, isKillable?: boolean) {
   const selectedObject = type === 'object'
-    ? ([...(editorObjects.value || []), ...(editorTextLogs.value || []), ...(editorSwitches.value || [])]).find((entry: any) => String(entry.id) === String(id))
+    ? ([...(editorObjects.value || []), ...(editorTextLogs.value || []), ...(editorSwitches.value || []), ...(editorContainers.value || [])]).find((entry: any) => String(entry.id) === String(id))
     : null
 
   editEntityContext.value = { type, id }
