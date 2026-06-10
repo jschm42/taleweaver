@@ -71,7 +71,12 @@ _CONTAINER_LOCK_HINTS = (
     "- CONTAINER objects may be open or locked depending on story needs.\n"
     "- Use lock mechanics frequently for containers that imply security/value (e.g. safe, strongbox, lockbox, vault, sealed crate, lootbox with lock).\n"
     "- For locked containers, provide deterministic `code_to_unlock` and/or `item_to_unlock`; for open containers, keep both empty.\n"
-    "- Every locked container must have at least one discoverable hint or riddle somewhere in scenes, readables, NPC dialogue context, or object descriptions that points to the unlock method.\n"
+    "- CRITICAL: NEVER write the unlock code directly in plain text in a single note/log (e.g., 'The code is 1234'). That is boring and provides no challenge!\n"
+    "- Instead, hide the `code_to_unlock` behind one of these three patterns:\n"
+    "  1. RIDDLES & PUZZLES: The code is the answer to a math or logic puzzle. Place this riddle in a READABLE text log or a description. Use counting puzzles (e.g., 'Count the pillars in the hall and multiply by the candles'), wordplay, or math based on lore numbers.\n"
+    "  2. SPLIT CODES (FRAGMENTS): Break the code into 2 or 3 parts (e.g. 'First part: 45', 'Second part: 89' making '4589') and distribute them across different READABLE objects (e.g., sign, book, scroll) or scene details in different locations.\n"
+    "  3. NPC COAXING / INTERROGATION: An NPC knows the code or a clue. The player must talk to them, negotiate, bribe, or help them to get the code or clue. Put this in the NPC's biography/reveal_rule or give them a READABLE item in their inventory.\n"
+    "- Explain the exact solution and clues for each container lock in the secret GM `walkthrough`.\n"
     "- CONTAINER LOCK INVARIANT (CRITICAL): The engine sets `metadata_json.locked` to true only when at least one of `code_to_unlock`, `item_to_unlock`, or `rule_to_unlock` is non-empty. Therefore: if the description says the container is locked, requires a code/key/password/combination, or otherwise cannot be opened freely, you MUST set exactly one of those three unlock fields — never describe a lock in prose without binding it to a deterministic unlock field. If the container is open and freely searchable, keep all three fields empty."
 )
 
@@ -115,7 +120,8 @@ def _build_text_log_requirement(
     base = (
         "- For every READABLE object, provide `text_log_content` with at most 500 characters and `text_log_format` as DOCUMENT, SCROLL, BOOK, or SIGN.\n"
         "- `text_log_content` for READABLE objects MUST be non-empty (never \"\" and never omitted).\n"
-        "- Keep text_log_content practical: hints, story fragments, warnings, clues. Paragraph formatting is allowed; use blank lines between paragraphs when useful."
+        "- Keep text_log_content practical: hints, story fragments, warnings, clues. Paragraph formatting is allowed; use blank lines between paragraphs when useful.\n"
+        "- CRITICAL FOR CLUES: If a READABLE contains information about a lock code, NEVER write the code directly (e.g. 'The code is 1234'). Write a riddle, a counting task (referencing decorative objects in a scene), a logic/math puzzle, or only a fragment of the full code (with other fragments located on other READABLE objects)."
     )
 
     if min_text_logs is None and max_text_logs is None:

@@ -14,7 +14,13 @@ PUZZLE_JSON_ENFORCEMENT_BLOCK = (
 )
 
 PUZZLE_DESIGN_PATTERNS_BLOCK = (
-    "PUZZLE DESIGN PRIORITIES:\n"
+    "PUZZLE DESIGN PRIORITIES & LOCK CODES:\n"
+    "- NEVER write access codes (e.g. for safes, locked doors, or containers) in plain text inside a single note/log (e.g., avoid: 'The code is 1234'). Plainly writing out the code is not a challenge!\n"
+    "- Hide any `code_to_unlock` behind one of these three engaging patterns:\n"
+    "  1. RIDDLES & PUZZLES: The code is the answer to a riddle or calculation. The puzzle must be written inside a READABLE text log, an exit's lock description, or a scene description. Use simple logical riddles, wordplay, math calculations (e.g., based on years/dates/numbers in the lore), or counting puzzles (e.g., counting specific decorative objects in scene descriptions, like 'Count the stone pillars in the hall and multiply by the candles').\n"
+    "  2. SPLIT CODES (FRAGMENTS): Divide the code into 2 or 3 separate parts/fragments (e.g., 'Part 1: 45', 'Part 2: 89' to form code '4589'). Distribute these fragments across different READABLE objects (documents, scrolls, books, signs) or scene details in different locations, forcing the player to search and combine them.\n"
+    "  3. NPC COAXING / INTERROGATION: An NPC knows the code (or a clue to it). The player must coax, persuade, bribe, help, or interrogate the NPC to get the code or clue. In the generated world, explain this in the NPC's biography/goal/reveal_rule or place a READABLE item with clues in their starting inventory.\n"
+    "- Every puzzle's solution (e.g., how the code is calculated, where fragments are hidden, or how to get it from an NPC) MUST be clearly documented in the secret GM `walkthrough`.\n"
     "- Include varied puzzle types (combination, spatial clue, social/roleplay, optional time pressure).\n"
     "- Prefer deterministic state bindings (`combination_ingredients`, `reveals_item_id`, `is_locked`, `lock_description`, `reveal_rule`).\n"
     "- Encourage at least one optional alternate solution path where plausible.\n"
