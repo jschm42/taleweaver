@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.schemas import (
     AdventureTemplateDebugResponse,
@@ -1028,8 +1029,12 @@ async def update_editor_entity(
             if payload.charisma is not None: avatar.charisma = payload.charisma
             if payload.armor_class is not None: avatar.armor_class = payload.armor_class
             if payload.exp is not None: avatar.exp = payload.exp
-            if payload.inventory is not None: avatar.inventory = list(payload.inventory)
-            if payload.equipment is not None: avatar.equipment = dict(payload.equipment)
+            if payload.inventory is not None:
+                avatar.inventory = list(payload.inventory)
+                flag_modified(avatar, "inventory")
+            if payload.equipment is not None:
+                avatar.equipment = dict(payload.equipment)
+                flag_modified(avatar, "equipment")
     elif payload.target_type == "scene":
         sc_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.session_id.is_(None), WorldScene.id == payload.target_id))
         scene = sc_res.scalars().first()
@@ -1094,6 +1099,7 @@ async def update_editor_entity(
                         raise HTTPException(status_code=400, detail="Each decorative object must be at most 100 characters.")
                     decor_list.append(s)
                 scene.decorative_objects = decor_list[:7] or None
+                flag_modified(scene, "decorative_objects")
     elif payload.target_type == "exit":
         ex_res = await db.execute(select(WorldExit).where(WorldExit.template_id == template_id, WorldExit.id == payload.target_id))
         world_exit = ex_res.scalars().first()
@@ -1257,7 +1263,9 @@ async def update_editor_entity(
                 if payload.goal is not None: ent.goal = payload.goal
                 if payload.character is not None: ent.character = payload.character
                 if payload.is_killable is not None: ent.is_killable = payload.is_killable
-                if payload.inventory is not None: ent.inventory = list(payload.inventory)
+                if payload.inventory is not None:
+                    ent.inventory = list(payload.inventory)
+                    flag_modified(ent, "inventory")
                 if payload.current_scene_id is not None:
                     new_scene_id = str(payload.current_scene_id or "").strip().upper()
                     if not new_scene_id:
@@ -1342,6 +1350,7 @@ async def update_editor_entity(
 
                 if payload.inventory is not None:
                     ent.inventory = payload.inventory
+                    flag_modified(ent, "inventory")
 
                 # 2. Readable log content (only for READABLE items)
                 if is_readable_object:
@@ -1362,8 +1371,10 @@ async def update_editor_entity(
 
                 if payload.wearable_slots is not None:
                     ent.wearable_slots = payload.wearable_slots
+                    flag_modified(ent, "wearable_slots")
                 if payload.combination_ingredients is not None:
                     ent.combination_ingredients = payload.combination_ingredients
+                    flag_modified(ent, "combination_ingredients")
                 if payload.stat_modifier_strength is not None:
                     ent.stat_modifier_strength = payload.stat_modifier_strength
                 
@@ -1400,6 +1411,7 @@ async def update_editor_entity(
                     metadata_json.pop("effects", None)
 
                 ent.metadata_json = metadata_json
+                flag_modified(ent, "metadata_json")
             
     await db.commit()
     return {"status": "success"}
