@@ -26,6 +26,10 @@ class AdventureTemplateBase(BaseModel):
     image_url: Optional[str] = None
     teaser: Optional[str] = Field(None, max_length=300)
     version: Optional[str] = Field(None, max_length=15)
+    creator: Optional[str] = Field(None, max_length=100)
+    copyright: Optional[str] = Field(None, max_length=100)
+    license: Optional[str] = Field(None, max_length=100)
+    license_url: Optional[str] = Field(None, max_length=500)
     original_prompt: Optional[str] = Field(None, max_length=20000)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     time_per_turn: Optional[int] = 5
@@ -85,6 +89,10 @@ class AdventureTemplateUpdate(BaseModel):
     title: Optional[str] = None
     teaser: Optional[str] = Field(None, max_length=300)
     version: Optional[str] = Field(None, max_length=15)
+    creator: Optional[str] = Field(None, max_length=100)
+    copyright: Optional[str] = Field(None, max_length=100)
+    license: Optional[str] = Field(None, max_length=100)
+    license_url: Optional[str] = Field(None, max_length=500)
     original_prompt: Optional[str] = Field(None, max_length=20000)
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat", "strict"]] = None
     time_per_turn: Optional[int] = None

@@ -14,6 +14,10 @@ class CreateAdventureTemplatePayload(BaseModel):
     image_url: Optional[str] = None
     teaser: Optional[str] = None
     version: Optional[str] = None
+    creator: Optional[str] = None
+    copyright: Optional[str] = None
+    license: Optional[str] = None
+    license_url: Optional[str] = None
     language: Optional[str] = None
     original_prompt: Optional[str] = None
     intro_text: Optional[str] = None
@@ -76,6 +80,24 @@ class CreateAdventureTemplatePayload(BaseModel):
         if len(value) > 15:
             raise ValueError("version must be at most 15 characters")
         return value
+
+    @field_validator("creator", "copyright", "license")
+    @classmethod
+    def validate_100_fields(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 100:
+            raise ValueError("length must be at most 100 characters")
+        return value
+
+    @field_validator("license_url")
+    @classmethod
+    def validate_license_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return None
+        if len(value) > 500:
+            raise ValueError("license_url must be at most 500 characters")
+        return value.strip()
 
     @field_validator("teaser")
     @classmethod
@@ -239,6 +261,10 @@ class AdventureTemplateResponse(BaseModel):
     title: str
     teaser: Optional[str] = None
     version: Optional[str] = None
+    creator: Optional[str] = None
+    copyright: Optional[str] = None
+    license: Optional[str] = None
+    license_url: Optional[str] = None
     language: Optional[str] = None
     origin_id: Optional[str] = None
 
@@ -314,6 +340,10 @@ class GameSessionResponse(BaseModel):
     profile_image: Optional[str] = None
     adventure_title: str
     adventure_version: Optional[str] = None
+    creator: Optional[str] = None
+    copyright: Optional[str] = None
+    license: Optional[str] = None
+    license_url: Optional[str] = None
     image_url: Optional[str] = None
     scene_id: str
     current_scene_name: Optional[str] = None
@@ -345,6 +375,10 @@ class AdventureTemplateSummaryResponse(BaseModel):
     title: str
     teaser: Optional[str] = None
     version: Optional[str] = None
+    creator: Optional[str] = None
+    copyright: Optional[str] = None
+    license: Optional[str] = None
+    license_url: Optional[str] = None
     language: Optional[str] = None
     image_url: Optional[str] = None
     is_ready: bool = True
@@ -467,6 +501,10 @@ class AdventureTemplateUpdate(BaseModel):
     title: Optional[str] = None
     teaser: Optional[str] = None
     version: Optional[str] = None
+    creator: Optional[str] = None
+    copyright: Optional[str] = None
+    license: Optional[str] = None
+    license_url: Optional[str] = None
     language: Optional[str] = None
     intro_text: Optional[str] = None
     original_prompt: Optional[str] = None
@@ -527,6 +565,24 @@ class AdventureTemplateUpdate(BaseModel):
         if len(value) > 15:
             raise ValueError("version must be at most 15 characters")
         return value
+
+    @field_validator("creator", "copyright", "license")
+    @classmethod
+    def validate_100_fields(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if len(value) > 100:
+            raise ValueError("length must be at most 100 characters")
+        return value
+
+    @field_validator("license_url")
+    @classmethod
+    def validate_license_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return None
+        if len(value) > 500:
+            raise ValueError("license_url must be at most 500 characters")
+        return value.strip()
 
     @field_validator("teaser")
     @classmethod

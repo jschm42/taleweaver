@@ -5,6 +5,7 @@ import shutil
 import time
 import uuid
 import glob
+import json
 from copy import deepcopy
 from typing import Any, Optional, Union
 
@@ -23,6 +24,7 @@ from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.models.adventure_template import AdventureTemplate
+from backend.models.base import utc_now
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
 from backend.models.game_session import GameSession
@@ -665,6 +667,24 @@ async def start_session_for_template(
         selected_tone=deepcopy(adventure.selected_tone)
     )
     db.add(new_state)
+
+    # Add Creator, Copyright, License details as a dedicated license_info message
+    # Pin created_at explicitly so the license_info row sorts before intro_text
+    if adventure.creator or adventure.copyright or adventure.license or adventure.license_url:
+        license_payload = {
+            "creator": adventure.creator,
+            "copyright": adventure.copyright,
+            "license": adventure.license,
+            "license_url": adventure.license_url,
+        }
+        license_msg = ChatMessage(
+            session_id=new_session.id,
+            role="license_info",
+            content=json.dumps(license_payload),
+        )
+        license_msg.created_at = utc_now()
+        db.add(license_msg)
+        await db.flush()  # Ensure license_info gets an id and committed timestamp
 
     intro_text = (adventure.intro_text or "").strip()
     if intro_text:
@@ -1314,6 +1334,10 @@ async def _get_session_response(db: AsyncSession, game_id: str, current_user_id:
         profile_image=AdventureLogic.resolve_session_asset(s, "protagonist", avatar_profile_image),
         adventure_title=a.title if a else (g.adventure_title or "Unknown"),
         adventure_version=a.version if a else (AdventureLogic.extract_manifest_snapshot(s).get("adventure") or {}).get("version"),
+        creator=a.creator if a else None,
+        copyright=a.copyright if a else None,
+        license=a.license if a else None,
+        license_url=a.license_url if a else None,
         image_url=AdventureLogic.resolve_session_asset(s, "cover", a.image_url if a else g.adventure_image_url),
         scene_id=s.current_scene_id if s else "START", 
         current_scene_name=scene_label or ("Exploring..." if s else "Archived"),

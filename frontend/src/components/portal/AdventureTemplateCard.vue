@@ -95,34 +95,66 @@ function dismissWarning() {
 
       <div class="card-image-fray pointer-events-none absolute inset-x-0 bottom-0 h-16 sm:h-24"></div>
 
-      <!-- Tone Badge -->
-      <div v-if="props.template.selected_tone" class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3">
-        <span class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-aether-primary/20 text-aether-primary text-[9px] sm:text-xs uppercase tracking-widest font-black border border-aether-primary/20 max-w-[7rem] truncate inline-block">
-          {{ toneLabel }}
-        </span>
-      </div>
+      <!-- Badges Stack -->
+      <div class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 flex flex-col gap-1.5 sm:gap-2 items-start z-20">
+        <!-- Tone Badge -->
+        <div v-if="props.template.selected_tone">
+          <span class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-aether-primary/20 text-aether-primary text-[9px] sm:text-xs uppercase tracking-widest font-black border border-aether-primary/20 max-w-[7rem] truncate inline-block">
+            {{ toneLabel }}
+          </span>
+        </div>
 
-      <!-- Moderation Warning Badge -->
-      <div v-if="props.template.creation_error" class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 mt-6 sm:mt-10">
-        <div class="group/warn relative">
-          <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-500/20 text-amber-500 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-amber-500/20 flex items-center gap-1 sm:gap-2 backdrop-blur-md shadow-lg shadow-amber-500/10 cursor-help">
-            <i class="ra ra-warning text-[10px] sm:text-sm"></i>
-            <span class="hidden sm:inline">Visual Issues</span>
-            <button
-              @click.stop="dismissWarning"
-              class="ml-0.5 sm:ml-1 p-0.5 hover:bg-amber-500/20 rounded-md transition-colors"
-              title="Meldung ausblenden"
-            >
-              <X class="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-            </button>
-          </div>
-          <!-- Tooltip-style detail -->
-          <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-amber-500/30 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/warn:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
-            <div class="text-amber-500 uppercase tracking-[0.2em] mb-1.5 flex items-center gap-2">
-              <i class="ra ra-scroll-unfurled"></i>
-              Generation Note
+        <!-- Moderation Warning Badge -->
+        <div v-if="props.template.creation_error">
+          <div class="group/warn relative">
+            <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-500/20 text-amber-500 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-amber-500/20 flex items-center gap-1 sm:gap-2 backdrop-blur-md shadow-lg shadow-amber-500/10 cursor-help">
+              <i class="ra ra-warning text-[10px] sm:text-sm"></i>
+              <span class="hidden sm:inline">Visual Issues</span>
+              <button
+                @click.stop="dismissWarning"
+                class="ml-0.5 sm:ml-1 p-0.5 hover:bg-amber-500/20 rounded-md transition-colors"
+                title="Meldung ausblenden"
+              >
+                <X class="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+              </button>
             </div>
-            {{ props.template.creation_error }}
+            <!-- Tooltip-style detail -->
+            <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-amber-500/30 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/warn:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
+              <div class="text-amber-500 uppercase tracking-[0.2em] mb-1.5 flex items-center gap-2">
+                <i class="ra ra-scroll-unfurled"></i>
+                Generation Note
+              </div>
+              {{ props.template.creation_error }}
+            </div>
+          </div>
+        </div>
+
+        <!-- License Badge -->
+        <div v-if="props.template.license || props.template.creator || props.template.copyright" class="group/license relative">
+          <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-slate-900/60 text-emerald-400 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-emerald-500/20 hover:border-emerald-500/40 flex items-center gap-1 sm:gap-1.5 backdrop-blur-md cursor-help shadow-lg transition-all">
+            <i class="ra ra-scroll-unfurled text-[9px] sm:text-xs"></i>
+            <span>{{ props.template.license || 'Proprietary' }}</span>
+          </div>
+          <!-- Tooltip-style details -->
+          <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-white/10 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/license:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
+            <div class="text-emerald-500 uppercase tracking-[0.2em] mb-2.5 flex items-center gap-2 border-b border-white/5 pb-1.5">
+              <i class="ra ra-book text-[10px] sm:text-xs"></i>
+              Legal & Creator Info
+            </div>
+            <div class="space-y-2">
+              <div>
+                <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">Creator</span>
+                <span class="text-white text-[11px] block">{{ props.template.creator || 'Unknown' }}</span>
+              </div>
+              <div>
+                <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">Copyright</span>
+                <span class="text-white text-[11px] block text-wrap">{{ props.template.copyright || 'All Rights Reserved' }}</span>
+              </div>
+              <div>
+                <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">License</span>
+                <span class="text-emerald-400 text-[11px] block">{{ props.template.license || 'Proprietary' }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

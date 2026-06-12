@@ -1133,6 +1133,9 @@ async def apply_manifest(
         adventure.completed_condition = _adv_field("completed_condition") or adventure.completed_condition  # type: ignore[assignment]
         adventure.gameover_condition = _adv_field("gameover_condition") or adventure.gameover_condition  # type: ignore[assignment]
         adventure.tts_director_notes = _adv_field("tts_director_notes") or adventure.tts_director_notes  # type: ignore[assignment]
+        adventure.creator = _adv_field("creator") or adventure.creator  # type: ignore[assignment]
+        adventure.copyright = _adv_field("copyright") or adventure.copyright  # type: ignore[assignment]
+        adventure.license = _adv_field("license") or adventure.license  # type: ignore[assignment]
 
         if manifest_dict.get("time_system"):
             adventure.time_system = manifest_dict["time_system"]  # type: ignore[assignment]
@@ -1311,6 +1314,9 @@ async def apply_manifest(
         adventure.original_prompt = _adv_field("original_prompt", adventure.original_prompt or "")  # type: ignore[assignment]
         adventure.rules = _adv_field("rules", "")  # type: ignore[assignment]
         adventure.language = _adv_field("language", "")  # type: ignore[assignment]
+        adventure.creator = _adv_field("creator", "")  # type: ignore[assignment]
+        adventure.copyright = _adv_field("copyright", "")  # type: ignore[assignment]
+        adventure.license = _adv_field("license", "")  # type: ignore[assignment]
         adventure.is_ready = False  # type: ignore[assignment]
         adventure.origin_id = _adv_field("origin_id", "")  # type: ignore[assignment]
         adventure.is_adventure_generator = _adv_field("is_adventure_generator", False)  # type: ignore[assignment]

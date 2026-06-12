@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import PlotTab from '@/components/editor/PlotTab.vue'
 import { Save, X } from 'lucide-vue-next'
+import { computed } from 'vue'
 
 const props = defineProps<{
   form: any
@@ -48,6 +49,14 @@ function handlePacingInput(event: Event) {
   const target = event.target as HTMLInputElement
   emit('update:pacing', parseInt(target.value))
 }
+
+const URL_PATTERN = /^(https?:\/\/)[^\s/$.?#].[^\s]*$/i
+
+const licenseUrlInvalid = computed(() => {
+  if (props.editingField !== 'license_url') return false
+  if (!props.tempValue.trim()) return false
+  return !URL_PATTERN.test(props.tempValue.trim())
+})
 </script>
 
 <template>
@@ -109,6 +118,109 @@ function handlePacingInput(event: Event) {
           </div>
         </div>
         <input :value="form.time_per_turn" @input="handlePacingInput" type="range" min="1" max="60" class="w-full accent-emerald-500 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer mt-3" />
+      </div>
+    </div>
+
+    <!-- Creator, Copyright & License Info -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
+      <!-- Creator -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-center">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Creator</label>
+          <span v-if="editingField === 'creator'" :class="['text-[10px] font-bold tracking-widest', (!tempValue.trim() || tempValue.length > 100) ? 'text-red-500' : 'text-emerald-500/50']">
+            {{ tempValue.length }} / 100
+          </span>
+        </div>
+        <div v-if="editingField === 'creator'" class="flex gap-2 animate-fade-in">
+          <input :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="(!tempValue.trim() || tempValue.length > 100) ? null : emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" maxlength="100" placeholder="e.g. Jane Doe" :class="['flex-grow bg-black/60 border rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all', (!tempValue.trim() || tempValue.length > 100) ? 'border-red-500/50' : 'border-emerald-500/50']" />
+          <button @click="emit('save-field')" :disabled="isSaving || !tempValue.trim() || tempValue.length > 100" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-50">
+            <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+            <Save v-else class="w-4 h-4" />
+          </button>
+          <button @click="emit('cancel-edit')" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+        <div v-else @click="emit('start-edit', 'creator', form.creator)" class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center">
+          <span v-if="form.creator" class="text-sm font-bold text-white">{{ form.creator }}</span>
+          <span v-else class="text-xs italic text-slate-600 uppercase tracking-widest">No creator set</span>
+          <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+        </div>
+      </div>
+
+      <!-- Copyright -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-center">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Copyright</label>
+          <span v-if="editingField === 'copyright'" :class="['text-[10px] font-bold tracking-widest', (!tempValue.trim() || tempValue.length > 100) ? 'text-red-500' : 'text-emerald-500/50']">
+            {{ tempValue.length }} / 100
+          </span>
+        </div>
+        <div v-if="editingField === 'copyright'" class="flex gap-2 animate-fade-in">
+          <input :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="(!tempValue.trim() || tempValue.length > 100) ? null : emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" maxlength="100" placeholder="e.g. Copyright (c) 2026" :class="['flex-grow bg-black/60 border rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all', (!tempValue.trim() || tempValue.length > 100) ? 'border-red-500/50' : 'border-emerald-500/50']" />
+          <button @click="emit('save-field')" :disabled="isSaving || !tempValue.trim() || tempValue.length > 100" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-50">
+            <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+            <Save v-else class="w-4 h-4" />
+          </button>
+          <button @click="emit('cancel-edit')" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+        <div v-else @click="emit('start-edit', 'copyright', form.copyright)" class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center">
+          <span v-if="form.copyright" class="text-sm font-bold text-white">{{ form.copyright }}</span>
+          <span v-else class="text-xs italic text-slate-600 uppercase tracking-widest">No copyright set</span>
+          <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+        </div>
+      </div>
+
+      <!-- License -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-center">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">License</label>
+          <span v-if="editingField === 'license'" :class="['text-[10px] font-bold tracking-widest', (!tempValue.trim() || tempValue.length > 100) ? 'text-red-500' : 'text-emerald-500/50']">
+            {{ tempValue.length }} / 100
+          </span>
+        </div>
+        <div v-if="editingField === 'license'" class="flex gap-2 animate-fade-in">
+          <input :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="(!tempValue.trim() || tempValue.length > 100) ? null : emit('save-field')" @keyup.esc="emit('cancel-edit')" type="text" maxlength="100" placeholder="e.g. MIT, CC-BY-4.0" :class="['flex-grow bg-black/60 border rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all', (!tempValue.trim() || tempValue.length > 100) ? 'border-red-500/50' : 'border-emerald-500/50']" />
+          <button @click="emit('save-field')" :disabled="isSaving || !tempValue.trim() || tempValue.length > 100" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-50">
+            <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+            <Save v-else class="w-4 h-4" />
+          </button>
+          <button @click="emit('cancel-edit')" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+        <div v-else @click="emit('start-edit', 'license', form.license)" class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center">
+          <span v-if="form.license" class="text-sm font-bold text-white">{{ form.license }}</span>
+          <span v-else class="text-xs italic text-slate-600 uppercase tracking-widest">No license set</span>
+          <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- License URL -->
+    <div class="bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl space-y-2">
+      <div class="flex justify-between items-center">
+        <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">License URL</label>
+        <span v-if="editingField === 'license_url'" :class="['text-[10px] font-bold tracking-widest', (licenseUrlInvalid || tempValue.length > 500) ? 'text-red-500' : 'text-emerald-500/50']">
+          {{ tempValue.length }} / 500
+        </span>
+      </div>
+      <div v-if="editingField === 'license_url'" class="flex gap-2 animate-fade-in">
+        <input :value="tempValue" @input="emit('update:tempValue', ($event.target as HTMLInputElement).value)" @keyup.enter="(licenseUrlInvalid || tempValue.length > 500) ? null : emit('save-field')" @keyup.esc="emit('cancel-edit')" type="url" maxlength="500" placeholder="e.g. https://creativecommons.org/licenses/by-nc/4.0/" :class="['flex-grow bg-black/60 border rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all', (licenseUrlInvalid || tempValue.length > 500) ? 'border-red-500/50' : 'border-emerald-500/50']" />
+        <button @click="emit('save-field')" :disabled="isSaving || licenseUrlInvalid || tempValue.length > 500" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-50">
+          <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+          <Save v-else class="w-4 h-4" />
+        </button>
+        <button @click="emit('cancel-edit')" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all">
+          <X class="w-4 h-4" />
+        </button>
+      </div>
+      <div v-else @click="emit('start-edit', 'license_url', form.license_url || '')" class="group cursor-pointer bg-black/20 hover:bg-black/40 border border-white/5 hover:border-emerald-500/30 rounded-xl px-4 py-2.5 transition-all duration-300 shadow-inner flex justify-between items-center gap-3">
+        <a v-if="form.license_url" :href="form.license_url" target="_blank" rel="noopener noreferrer" @click.stop class="text-sm font-bold text-aether-primary hover:underline truncate">{{ form.license_url }}</a>
+        <span v-else class="text-xs italic text-slate-600 uppercase tracking-widest">No license URL set</span>
+        <i class="ra ra-quill-pen text-xs text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
       </div>
     </div>
 

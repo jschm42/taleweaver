@@ -1,5 +1,5 @@
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system' | 'thought'
+  role: 'user' | 'assistant' | 'system' | 'thought' | 'license_info'
   content: string
   timestamp: Date
   itemIds?: string[]
@@ -10,6 +10,10 @@ export interface CharacterSheet {
   name: string
   adventure_title?: string | null
   adventure_version?: string | null
+  creator?: string | null
+  copyright?: string | null
+  license?: string | null
+  license_url?: string | null
   adventure_id?: string | null
   role?: string | null
   description?: string | null
@@ -163,6 +167,9 @@ export interface AdventureTemplateSummary {
   title: string
   teaser?: string | null
   version?: string | null
+  creator?: string | null
+  copyright?: string | null
+  license?: string | null
   image_url: string | null
   is_ready: boolean
   creation_status?: string | null
@@ -186,6 +193,9 @@ export interface CreateAdventurePayload {
   title: string
   context?: string
   version?: string
+  creator?: string | null
+  copyright?: string | null
+  license?: string | null
   image_url?: string | null
   strict_rules?: boolean
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
@@ -249,6 +259,9 @@ export interface StoryIdeaSuggestionResponse {
 /** Minimal import payload type for .ADV files (frontend-side). */
 export interface AdventureImportPayload {
   version: string
+  creator?: string
+  copyright?: string
+  license?: string
   id?: string
   title: string
   subtitle?: string

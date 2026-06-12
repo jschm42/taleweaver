@@ -333,6 +333,25 @@ async def apply_sqlite_compat_migrations() -> None:
             )
             logger.info("SQLite migration: added adventures.owner_id")
 
+        if "creator" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN creator TEXT"
+            )
+            logger.info("SQLite migration: added adventures.creator")
+
+        if "copyright" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN copyright TEXT"
+            )
+            logger.info("SQLite migration: added adventures.copyright")
+
+        if "license" not in adventure_cols:
+            await conn.exec_driver_sql(
+                "ALTER TABLE adventures ADD COLUMN license TEXT"
+            )
+            logger.info("SQLite migration: added adventures.license")
+
+
         # game_sessions fields introduced after early local schemas
         if "game_sessions" in table_names:
             game_session_cols_result = await conn.exec_driver_sql("PRAGMA table_info(game_sessions)")
@@ -417,6 +436,25 @@ async def apply_sqlite_compat_migrations() -> None:
                     "ALTER TABLE adventure_templates ADD COLUMN generation_logs TEXT"
                 )
                 logger.info("SQLite migration: added adventure_templates.generation_logs")
+
+            if "creator" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN creator TEXT"
+                )
+                logger.info("SQLite migration: added adventure_templates.creator")
+
+            if "copyright" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN copyright TEXT"
+                )
+                logger.info("SQLite migration: added adventure_templates.copyright")
+
+            if "license" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN license TEXT"
+                )
+                logger.info("SQLite migration: added adventure_templates.license")
+
 
         # Avatar link for cleanup
         avatar_cols_result = await conn.exec_driver_sql("PRAGMA table_info(avatars)")

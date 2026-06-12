@@ -171,3 +171,53 @@ async def test_session_copying(auth_client, setup_test_db):
         assert len(copied_messages) > 0
         assert any(m.role == "user" and m.content == "Hello, world" for m in copied_messages)
 
+
+async def test_session_start_emits_metadata_system_message(auth_client, setup_test_db):
+    """Verifies that starting a session for a template with metadata emits a system message before the intro."""
+    from tests.conftest import TestSessionLocal
+    
+    async with TestSessionLocal() as db:
+        user_res = await db.execute(select(User).limit(1))
+        user = user_res.scalars().first()
+        
+        # 1. Create a Template with creator, copyright, and license info
+        adv = AdventureTemplate(
+            id="template-metadata-test",
+            owner_id=user.id,
+            title="Metadata Test Adventure",
+            intro_text="Welcome to the metadata test.",
+            creator="Alice",
+            copyright="© 2026 Alice",
+            license="MIT",
+            is_ready=True
+        )
+        db.add(adv)
+        await db.commit()
+        
+        # 2. Start Session
+        result = await start_session_for_template("template-metadata-test", db, user)
+        session_id = result["game_id"]
+        
+        # 3. Retrieve chat messages for the session in order of creation/insertion
+        messages_res = await db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at.asc())
+        )
+        messages = messages_res.scalars().all()
+        
+        # We expect at least two system messages:
+        # First one should be the metadata string, second one should be the intro text
+        assert len(messages) >= 2
+        
+        # The metadata message must come before the intro text message
+        meta_msg = messages[-2]
+        intro_msg = messages[-1]
+        
+        assert meta_msg.role == "system"
+        assert meta_msg.content == "Creator: Alice | Copyright: © 2026 Alice | License: MIT"
+        
+        assert intro_msg.role == "system"
+        assert intro_msg.content == "Welcome to the metadata test."
+
+

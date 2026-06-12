@@ -443,4 +443,6 @@ You can download `.adv` or `.adz` files from there and import them into your loc
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-AI-generated content (images and text) produced by this application is subject to the terms of the respective model providers. For **Black Forest Labs FLUX.1 [schnell]** and **FLUX.2 [klein]**, commercial use is permitted under the Apache 2.0 license. Please be aware that the copyrightability of AI-generated content is subject to legal interpretation in your local jurisdiction.
+Adventure License: All adventure files in this repository (blueprints, packaged .adz/.adv adventures, concepts, documentation, and assets) are licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) License** - see the [LICENSE-SAMPLES](LICENSE-SAMPLES) file for details. You are free to share and adapt the material for non-commercial purposes, provided that appropriate credit is given to the creator. See the LICENSE file for the full legal text.
+
+AI-Generated Content: Content produced by AI models (text and images) is subject to the terms of the respective providers. Images generated with Black Forest Labs' FLUX.1 [dev] model are strictly limited to non-commercial use by their license. While other models (like FLUX.1 [schnell]) may allow commercial use, the bundled adventure packages in this repository remain under CC BY-NC 4.0 to ensure full compliance with all used AI models.

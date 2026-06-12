@@ -32,7 +32,10 @@ async def _seed_adventure(db: AsyncSession, user_id: str) -> str:
         completed_condition="Win",
         gameover_condition="Lose",
         starting_timestamp=480,
-        image_url="/data/adventures/test-adv-123/cover.jpg"
+        image_url="/data/adventures/test-adv-123/cover.jpg",
+        creator="Test Creator",
+        copyright="Test Copyright",
+        license="MIT"
     )
     db.add(adv)
     await db.flush()
@@ -197,6 +200,9 @@ async def test_adventure_adz_export_import_cycle(auth_client, setup_test_db, mon
             assert manifest["adventure"]["intro_text"] == "Welcome to the lifecycle test adventure."
             assert manifest["adventure"]["completed_condition"] == "Win"
             assert manifest["adventure"]["starting_timestamp"] == 480
+            assert manifest["adventure"]["creator"] == "Test Creator"
+            assert manifest["adventure"]["copyright"] == "Test Copyright"
+            assert manifest["adventure"]["license"] == "MIT"
             assert manifest["protagonist"]["name"] == "Test Hero"
             assert manifest["protagonist"]["profile_image"] == "assets/hero.jpg"
             assert manifest["protagonist"]["starting_inventory"] == ["POTION_1"]
@@ -516,6 +522,9 @@ async def test_import_adv_manifest_preserves_nested_adventure_metadata(auth_clie
             "allow_dynamic_items": True,
             "can_damage_npcs": True,
             "npcs_can_damage_protagonist": True,
+            "creator": "Round Trip Creator",
+            "copyright": "Round Trip Copyright",
+            "license": "CC-BY-4.0",
         },
         "protagonist": {
             "name": "Hero", "role": "Adventurer", "description": "Brave",
@@ -550,6 +559,9 @@ async def test_import_adv_manifest_preserves_nested_adventure_metadata(auth_clie
         assert adv.completed_condition == "Win"
         assert adv.gameover_condition == "Lose"
         assert adv.language == "English"
+        assert adv.creator == "Round Trip Creator"
+        assert adv.copyright == "Round Trip Copyright"
+        assert adv.license == "CC-BY-4.0"
 
 
 async def test_switch_object_export_import_roundtrip(auth_client, setup_test_db):

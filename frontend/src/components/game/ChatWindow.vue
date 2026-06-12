@@ -5,6 +5,7 @@ import { configState } from '@/store/config'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import type { ChatMessage } from '@/types'
 import CommandPopup from '@/components/game/CommandPopup.vue'
+import LicenseInfoBlock from '@/components/game/LicenseInfoBlock.vue'
 import GameActionBar from '@/components/game/GameActionBar.vue'
 import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
@@ -857,6 +858,11 @@ onUnmounted(() => {
         :data-index="visibleStart + idx"
         class="group flex flex-col pt-1"
       >
+        <template v-if="msg.role === 'license_info'">
+          <LicenseInfoBlock :msg="msg" />
+        </template>
+        <template v-else>
+
         <!-- Author info -->
         <div class="flex items-center gap-3 mb-1.5">
           <span 
@@ -1012,6 +1018,7 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+        </template>
       </div>
 
       <!-- Connecting/empty state -->

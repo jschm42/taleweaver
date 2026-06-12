@@ -52,6 +52,10 @@ General configuration and world-building constraints.
 | `container_generation_enabled` | `boolean` | Enables generation of container objects with nested inventory. |
 | `max_containers` | `number` | Hard cap for generated container objects (`0..30`). |
 | `award_generation_enabled`| `boolean` | Whether the system generated custom awards for this adventure. |
+| `creator` | `string` | Optional name or handle of the adventure creator (max 100 chars). |
+| `copyright` | `string` | Optional copyright notice for the adventure (max 100 chars). |
+| `license` | `string` | Optional license identifier or description (max 100 chars). |
+
 
 ### 2.2 Protagonist (`protagonist`)
 

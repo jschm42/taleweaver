@@ -568,6 +568,10 @@ async def list_templates(
         response.append(AdventureTemplateSummaryResponse(
             template_id=template.id, title=template.title, teaser=template.teaser,
             version=template.version,
+            creator=template.creator,
+            copyright=template.copyright,
+            license=template.license,
+            license_url=template.license_url,
             image_url=template.image_url, is_ready=template.is_ready,
             creation_status=template.creation_status, creation_error=template.creation_error,
             selected_tone=template.selected_tone,

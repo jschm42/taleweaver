@@ -6,6 +6,9 @@ export interface Adventure {
   title: string
   teaser?: string
   version?: string
+  creator?: string
+  copyright?: string
+  license?: string
   original_prompt?: string
   rule_enforcement_mode: 'rpg' | 'story' | 'chat'
   time_per_turn: number
@@ -46,6 +49,9 @@ export interface AdventureFormData {
   title: string
   teaser: string
   version: string
+  creator: string
+  copyright: string
+  license: string
   original_prompt: string
   rule_enforcement_mode: 'rpg' | 'story' | 'chat'
   time_per_turn: number

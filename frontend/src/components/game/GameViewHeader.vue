@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
-import { FileText, History, PenLine } from 'lucide-vue-next'
+import { FileText, History, PenLine, ScrollText, ExternalLink, X } from 'lucide-vue-next'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps<{
   title?: string | null
   version?: string | null
+  creator?: string | null
+  copyright?: string | null
+  license?: string | null
+  licenseUrl?: string | null
   trackedQuest?: any
   gameTime: { dateShort: string; time: string } | null
   clockTick: boolean
@@ -25,6 +30,81 @@ const emit = defineEmits<{
 const handleBack = () => {
   emit('back')
 }
+
+const showLicensePopup = ref(false)
+const licenseButtonRef = ref<HTMLElement | null>(null)
+const popupStyle = ref<Record<string, string>>({})
+
+const hasLicenseInfo = computed(() => {
+  return !!(props.creator || props.copyright || props.license || props.licenseUrl)
+})
+
+const updatePopupPosition = async () => {
+  if (!licenseButtonRef.value) return
+  await nextTick()
+  const rect = licenseButtonRef.value.getBoundingClientRect()
+  const popupWidth = Math.min(320, window.innerWidth - 16)
+  let left = rect.left
+  if (left + popupWidth > window.innerWidth - 8) {
+    left = window.innerWidth - popupWidth - 8
+  }
+  if (left < 8) left = 8
+  popupStyle.value = {
+    position: 'fixed',
+    top: `${Math.round(rect.bottom + 8)}px`,
+    left: `${Math.round(left)}px`,
+    width: `${popupWidth}px`,
+    zIndex: '9999',
+  }
+}
+
+const togglePopup = async () => {
+  if (showLicensePopup.value) {
+    showLicensePopup.value = false
+  } else {
+    await updatePopupPosition()
+    showLicensePopup.value = true
+  }
+}
+
+const closePopup = () => {
+  showLicensePopup.value = false
+}
+
+const onDocumentClick = (event: MouseEvent) => {
+  if (!showLicensePopup.value) return
+  const target = event.target as Node
+  if (licenseButtonRef.value?.contains(target)) return
+  const popupEl = document.getElementById('license-popup-teleport')
+  if (popupEl?.contains(target)) return
+  closePopup()
+}
+
+const onKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && showLicensePopup.value) {
+    closePopup()
+  }
+}
+
+const onResizeOrScroll = () => {
+  if (showLicensePopup.value) {
+    void updatePopupPosition()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', onDocumentClick)
+  document.addEventListener('keydown', onKeydown)
+  window.addEventListener('resize', onResizeOrScroll)
+  window.addEventListener('scroll', onResizeOrScroll, true)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocumentClick)
+  document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('resize', onResizeOrScroll)
+  window.removeEventListener('scroll', onResizeOrScroll, true)
+})
 </script>
 
 <template>
@@ -69,8 +149,20 @@ const handleBack = () => {
         <h1 class="text-xl md:text-3xl font-normal text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)] tracking-wide adventure-title">
           {{ props.title || 'Chronicle' }}
         </h1>
-        <div v-if="props.version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 uppercase tracking-widest mt-1">
-          v{{ props.version }}
+        <div class="flex items-center gap-2 mt-1">
+          <div v-if="props.version" class="text-[10px] font-mono font-bold text-slate-500 opacity-60 uppercase tracking-widest">
+            v{{ props.version }}
+          </div>
+          <div v-if="hasLicenseInfo" class="relative" ref="licenseButtonRef">
+            <button
+              @click.stop="togglePopup"
+              class="group inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-amber-500/15 to-amber-300/10 border border-amber-400/30 text-amber-300 hover:from-amber-500/25 hover:to-amber-300/20 hover:border-amber-400/60 hover:text-amber-200 transition-all shadow-sm"
+              :title="`License: ${props.license || 'View details'}`"
+              aria-label="License & credits"
+            >
+              <ScrollText class="w-3 h-3" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

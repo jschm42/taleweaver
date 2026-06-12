@@ -308,8 +308,12 @@ class AdventureExporter:
                 "title": adv.title,
                 "teaser": adv.teaser,
                 "version": adv.version,
+                "creator": adv.creator,
+                "copyright": adv.copyright,
+                "license": adv.license,
                 "language": adv.language,
                 "original_prompt": adv.original_prompt,
+
                 "image_url": adv.image_url,
                 "rule_enforcement_mode": adv.rule_enforcement_mode,
                 "time_per_turn": adv.time_per_turn,

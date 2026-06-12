@@ -93,3 +93,10 @@ class AdventureTemplate(Base, TimestampMixin):
     
     # Adventure Generator Mode
     is_adventure_generator: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Creator, Copyright, License Metadata
+    creator: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    copyright: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    license: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    license_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    

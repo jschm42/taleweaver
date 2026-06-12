@@ -992,6 +992,10 @@ watch(
     <GameViewHeader
       :title="sheet?.adventure_title"
       :version="sheet?.adventure_version"
+      :creator="sheet?.creator"
+      :copyright="sheet?.copyright"
+      :license="sheet?.license"
+      :license-url="sheet?.license_url"
       :tracked-quest="displayedTrackedQuest"
       :game-time="gameTime"
       :clock-tick="clockTick"

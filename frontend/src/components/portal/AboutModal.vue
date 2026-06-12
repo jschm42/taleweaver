@@ -95,6 +95,19 @@ const currentYear = new Date().getFullYear()
             </div>
           </div>
 
+          <!-- Sample Content License -->
+          <div class="p-4 rounded-xl bg-aether-primary/[0.04] border border-aether-primary/20 space-y-2">
+            <p class="text-[10px] font-black text-aether-primary uppercase tracking-[0.2em]">Sample & Default Adventures</p>
+            <p class="text-[11px] leading-relaxed text-slate-300">
+              The pre-installed sample and default adventures shipped with TaleWeaver are released under the
+              <span class="font-bold text-white">Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)</span> license.
+            </p>
+            <p class="text-[10px] leading-relaxed text-slate-400 italic">
+              You are free to use, modify, and share them for non-commercial purposes. Please retain attribution to the original creators.
+              User-generated adventures are not subject to this license.
+            </p>
+          </div>
+
           <div class="p-4 rounded-xl bg-white/[0.02] border border-white/5">
             <p class="text-[11px] leading-relaxed text-slate-400 italic">
               "TaleWeaver is an advanced agentic storytelling engine, designed to weave infinite chronicles through the power of artificial intelligence. Every choice is a thread, every word a destiny."
