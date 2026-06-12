@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
-import { MoreHorizontal, X } from 'lucide-vue-next'
+import { MoreHorizontal, X, ExternalLink } from 'lucide-vue-next'
 
 const props = defineProps<{
   template: AdventureTemplateSummary
@@ -130,29 +130,41 @@ function dismissWarning() {
         </div>
 
         <!-- License Badge -->
-        <div v-if="props.template.license || props.template.creator || props.template.copyright" class="group/license relative">
+        <div v-if="props.template.license || props.template.creator || props.template.copyright || props.template.license_url" class="group/license relative">
           <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-slate-900/60 text-emerald-400 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-emerald-500/20 hover:border-emerald-500/40 flex items-center gap-1 sm:gap-1.5 backdrop-blur-md cursor-help shadow-lg transition-all">
             <i class="ra ra-scroll-unfurled text-[9px] sm:text-xs"></i>
             <span>{{ props.template.license || 'Proprietary' }}</span>
           </div>
           <!-- Tooltip-style details -->
-          <div class="absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-white/10 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/license:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
+          <div class="absolute left-0 top-full mt-2 w-72 p-3 rounded-xl bg-slate-900/95 border border-white/10 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/license:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
             <div class="text-emerald-500 uppercase tracking-[0.2em] mb-2.5 flex items-center gap-2 border-b border-white/5 pb-1.5">
               <i class="ra ra-book text-[10px] sm:text-xs"></i>
               Legal & Creator Info
             </div>
             <div class="space-y-2">
-              <div>
+              <div v-if="props.template.creator">
                 <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">Creator</span>
-                <span class="text-white text-[11px] block">{{ props.template.creator || 'Unknown' }}</span>
+                <span class="text-white text-[11px] block break-words">{{ props.template.creator }}</span>
               </div>
-              <div>
+              <div v-if="props.template.copyright">
                 <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">Copyright</span>
-                <span class="text-white text-[11px] block text-wrap">{{ props.template.copyright || 'All Rights Reserved' }}</span>
+                <span class="text-white text-[11px] block text-wrap">{{ props.template.copyright }}</span>
               </div>
-              <div>
+              <div v-if="props.template.license">
                 <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">License</span>
-                <span class="text-emerald-400 text-[11px] block">{{ props.template.license || 'Proprietary' }}</span>
+                <span class="text-emerald-400 text-[11px] block">{{ props.template.license }}</span>
+              </div>
+              <div v-if="props.template.license_url">
+                <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">License URL</span>
+                <a
+                  :href="props.template.license_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-start gap-1 text-cyan-400 hover:text-cyan-300 hover:underline text-[11px] break-all transition-colors"
+                >
+                  <span class="break-all">{{ props.template.license_url }}</span>
+                  <ExternalLink class="w-2.5 h-2.5 mt-0.5 shrink-0" />
+                </a>
               </div>
             </div>
           </div>

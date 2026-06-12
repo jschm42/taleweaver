@@ -170,6 +170,7 @@ export interface AdventureTemplateSummary {
   creator?: string | null
   copyright?: string | null
   license?: string | null
+  license_url?: string | null
   image_url: string | null
   is_ready: boolean
   creation_status?: string | null
