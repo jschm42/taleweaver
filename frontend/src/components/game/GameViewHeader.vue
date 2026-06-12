@@ -156,11 +156,15 @@ onBeforeUnmount(() => {
           <div v-if="hasLicenseInfo" class="relative" ref="licenseButtonRef">
             <button
               @click.stop="togglePopup"
-              class="group inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-amber-500/15 to-amber-300/10 border border-amber-400/30 text-amber-300 hover:from-amber-500/25 hover:to-amber-300/20 hover:border-amber-400/60 hover:text-amber-200 transition-all shadow-sm"
+              :class="[
+                'group inline-flex items-center rounded-md bg-gradient-to-br from-amber-500/15 to-amber-300/10 border border-amber-400/30 text-amber-300 hover:from-amber-500/25 hover:to-amber-300/20 hover:border-amber-400/60 hover:text-amber-200 transition-all shadow-sm',
+                props.license ? 'h-6 px-2 gap-1.5 text-[9px] font-black uppercase tracking-[0.15em]' : 'justify-center w-6 h-6'
+              ]"
               :title="`License: ${props.license || 'View details'}`"
               aria-label="License & credits"
             >
-              <ScrollText class="w-3 h-3" />
+              <ScrollText class="w-3 h-3 shrink-0" />
+              <span v-if="props.license" class="leading-none">{{ props.license }}</span>
             </button>
           </div>
         </div>
@@ -189,7 +193,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Collapse Button -->
-    <button 
+    <button
       v-if="!props.collapsed"
       @click="emit('collapse')"
       class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-20 px-3 py-1 rounded-full border border-slate-800/80 bg-slate-900/95 text-slate-500 hover:text-slate-300 hover:scale-105 transition-all shadow-lg flex items-center justify-center cursor-pointer pointer-events-auto opacity-0 group-hover/header:opacity-100 focus:opacity-100"
@@ -199,6 +203,61 @@ onBeforeUnmount(() => {
         <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
       </svg>
     </button>
+
+    <!-- License popup (teleported to body to escape overflow-hidden parents) -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0 -translate-y-1 scale-95"
+        enter-to-class="opacity-100 translate-y-0 scale-100"
+        leave-active-class="transition duration-150 ease-in"
+        leave-from-class="opacity-100 translate-y-0 scale-100"
+        leave-to-class="opacity-0 -translate-y-1 scale-95"
+      >
+        <div
+          v-if="showLicensePopup"
+          id="license-popup-teleport"
+          :style="popupStyle"
+          class="p-4 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-amber-400/30 shadow-2xl shadow-black/50"
+        >
+          <div class="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-amber-400/20">
+            <div class="flex items-center gap-2">
+              <div class="p-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30">
+                <ScrollText class="w-3.5 h-3.5 text-amber-300" />
+              </div>
+              <span class="text-[10px] font-black text-amber-300 uppercase tracking-[0.25em]">License & Credits</span>
+            </div>
+            <button @click="closePopup" class="p-1 rounded-md text-slate-500 hover:text-white hover:bg-white/5 transition-colors" title="Close">
+              <X class="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <dl class="space-y-2.5 text-[11px]">
+            <div v-if="props.license">
+              <dt class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">License</dt>
+              <dd class="text-amber-100 font-bold break-words">{{ props.license }}</dd>
+            </div>
+            <div v-if="props.licenseUrl">
+              <dt class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">License URL</dt>
+              <dd>
+                <a :href="props.licenseUrl" target="_blank" rel="noopener noreferrer" class="inline-flex items-start gap-1 text-emerald-400 hover:text-emerald-300 hover:underline break-all transition-colors">
+                  <span class="break-all">{{ props.licenseUrl }}</span>
+                  <ExternalLink class="w-3 h-3 mt-0.5 shrink-0" />
+                </a>
+              </dd>
+            </div>
+            <div v-if="props.creator">
+              <dt class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">Creator</dt>
+              <dd class="text-slate-200 break-words">{{ props.creator }}</dd>
+            </div>
+            <div v-if="props.copyright">
+              <dt class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">Copyright</dt>
+              <dd class="text-slate-200 break-words">{{ props.copyright }}</dd>
+            </div>
+          </dl>
+        </div>
+      </Transition>
+    </Teleport>
   </header>
 </template>
 
