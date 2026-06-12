@@ -100,11 +100,15 @@ async def import_examples(
     """Manually triggers import of example adventures."""
     user_id = current_user.id
     samples_dir = os.path.join("adventures", "samples")
-    await AdventureTemplateImporter.import_from_directory(db, samples_dir, owner_id=user_id, delete_after=False)
-    
+    await AdventureTemplateImporter.import_from_directory(
+        db, samples_dir, owner_id=user_id, delete_after=False, overwrite=True
+    )
+
     presets_dir = os.path.join(settings.DATA_DIR, "presets", "adventures")
     if os.path.exists(presets_dir):
-        await AdventureTemplateImporter.import_from_directory(db, presets_dir, owner_id=user_id, delete_after=False)
+        await AdventureTemplateImporter.import_from_directory(
+            db, presets_dir, owner_id=user_id, delete_after=False, overwrite=True
+        )
     return {"status": "success", "message": "Example adventures imported successfully."}
 
 @router.post("/import-defaults")
@@ -128,9 +132,11 @@ async def reimport_defaults(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manually re-triggers import of default adventures."""
+    """Manually re-triggers import of default adventures (overwrites existing)."""
     defaults_dir = os.path.join("adventures", "default")
-    await AdventureTemplateImporter.import_from_directory(db, defaults_dir, owner_id=current_user.id, delete_after=False)
+    await AdventureTemplateImporter.import_from_directory(
+        db, defaults_dir, owner_id=current_user.id, delete_after=False, overwrite=True
+    )
     return {"status": "success", "message": "Default adventures re-imported successfully."}
 
 @router.post("/import", status_code=201)

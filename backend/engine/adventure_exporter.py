@@ -311,6 +311,7 @@ class AdventureExporter:
                 "creator": adv.creator,
                 "copyright": adv.copyright,
                 "license": adv.license,
+                "license_url": adv.license_url,
                 "language": adv.language,
                 "original_prompt": adv.original_prompt,
 

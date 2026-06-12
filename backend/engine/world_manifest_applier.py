@@ -1136,6 +1136,7 @@ async def apply_manifest(
         adventure.creator = _adv_field("creator") or adventure.creator  # type: ignore[assignment]
         adventure.copyright = _adv_field("copyright") or adventure.copyright  # type: ignore[assignment]
         adventure.license = _adv_field("license") or adventure.license  # type: ignore[assignment]
+        adventure.license_url = _adv_field("license_url") or adventure.license_url  # type: ignore[assignment]
 
         if manifest_dict.get("time_system"):
             adventure.time_system = manifest_dict["time_system"]  # type: ignore[assignment]
@@ -1317,6 +1318,7 @@ async def apply_manifest(
         adventure.creator = _adv_field("creator", "")  # type: ignore[assignment]
         adventure.copyright = _adv_field("copyright", "")  # type: ignore[assignment]
         adventure.license = _adv_field("license", "")  # type: ignore[assignment]
+        adventure.license_url = _adv_field("license_url", "")  # type: ignore[assignment]
         adventure.is_ready = False  # type: ignore[assignment]
         adventure.origin_id = _adv_field("origin_id", "")  # type: ignore[assignment]
         adventure.is_adventure_generator = _adv_field("is_adventure_generator", False)  # type: ignore[assignment]

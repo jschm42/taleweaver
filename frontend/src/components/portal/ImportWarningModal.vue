@@ -57,7 +57,7 @@ const conflictList = computed(() => props.conflicts.filter(c => c.already_exists
         </div>
 
         <p class="text-slate-400 text-sm mb-8 leading-relaxed">
-          Importing them again will skip the duplicates to avoid confusion. Do you want to proceed with the import?
+          Importing them again will <span class="text-amber-300 font-bold">replace</span> the existing ones with the latest manifest data (new fields, license info, etc.). Do you want to proceed?
         </p>
 
         <!-- Actions -->

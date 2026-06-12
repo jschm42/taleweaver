@@ -56,7 +56,7 @@ def _build_local_default_user() -> User:
 
 class AdventureTemplateImporter:
     @staticmethod
-    async def import_from_directory(db: AsyncSession, directory: str, owner_id: Optional[str] = None, delete_after: bool = False, allow_session: bool = False):
+    async def import_from_directory(db: AsyncSession, directory: str, owner_id: Optional[str] = None, delete_after: bool = False, allow_session: bool = False, overwrite: bool = False):
         """Scans a directory for .adv or .adz files and imports them."""
         if not os.path.exists(directory):
             logger.warning(f"Import directory {directory} does not exist.")
@@ -67,16 +67,24 @@ class AdventureTemplateImporter:
             return
 
         logger.info(f"Found {len(files)} potential adventures to import in {directory}")
-        
+
         for filename in files:
             file_path = os.path.abspath(os.path.join(directory, filename))
             try:
-                success = await AdventureTemplateImporter.import_file(db, file_path, owner_id=owner_id, allow_session=allow_session)
+                success = await AdventureTemplateImporter.import_file(
+                    db,
+                    file_path,
+                    owner_id=owner_id,
+                    allow_session=allow_session,
+                    overwrite=overwrite,
+                )
                 if success and delete_after:
                     os.remove(file_path)
                     logger.info(f"Successfully imported and deleted {filename}")
                 elif success:
                     logger.info(f"Successfully imported {filename}")
+            except AdventureConflictError as e:
+                logger.warning(f"Skipping '{filename}': already exists (title='{e.title}')")
             except Exception as e:
                 logger.error(f"Error during import of {file_path}: {e}")
 
@@ -700,6 +708,7 @@ class AdventureTemplateImporter:
                     creator=adv_meta.get("creator") or manifest.get("creator"),
                     copyright=adv_meta.get("copyright") or manifest.get("copyright"),
                     license=adv_meta.get("license") or manifest.get("license"),
+                    license_url=adv_meta.get("license_url") or manifest.get("license_url"),
                     original_prompt=adv_meta.get("original_prompt") or adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
                     image_url=adv_meta.get("image_url") or manifest.get("image_url"),
                     strict_rules=is_strict,
