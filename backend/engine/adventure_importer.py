@@ -36,6 +36,42 @@ def _ensure_within_data_dir(path: str) -> str:
     return resolved
 
 
+# Canonical URLs for well-known license identifiers. Used to auto-fill the
+# license_url field during import when a manifest only specifies a short
+# license name like "CC BY-NC 4.0" or "MIT".
+_LICENSE_URL_DEFAULTS: dict[str, str] = {
+    "cc by-nc 4.0": "https://creativecommons.org/licenses/by-nc/4.0/",
+    "cc by 4.0": "https://creativecommons.org/licenses/by/4.0/",
+    "cc by-sa 4.0": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "cc by-nc-sa 4.0": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "cc by-nd 4.0": "https://creativecommons.org/licenses/by-nd/4.0/",
+    "cc by-nc-nd 4.0": "https://creativecommons.org/licenses/by-nc-nd/4.0/",
+    "cc0 1.0": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "mit": "https://opensource.org/licenses/MIT",
+    "apache-2.0": "https://www.apache.org/licenses/LICENSE-2.0",
+    "apache 2.0": "https://www.apache.org/licenses/LICENSE-2.0",
+    "gpl-3.0": "https://www.gnu.org/licenses/gpl-3.0.html",
+    "gpl-3.0-or-later": "https://www.gnu.org/licenses/gpl-3.0.html",
+    "lgpl-3.0": "https://www.gnu.org/licenses/lgpl-3.0.html",
+    "bsd-3-clause": "https://opensource.org/licenses/BSD-3-Clause",
+    "bsd-2-clause": "https://opensource.org/licenses/BSD-2-Clause",
+    "isc": "https://opensource.org/licenses/ISC",
+    "unlicense": "https://unlicense.org/",
+    "proprietary": "",
+}
+
+
+def _resolve_license_url(explicit_url: Optional[str], license_name: Optional[str]) -> Optional[str]:
+    """Return the license URL, falling back to a known canonical URL for the
+    license name if no explicit URL is provided. Returns None when neither is
+    available or the license is unknown."""
+    if explicit_url:
+        return explicit_url
+    if not license_name:
+        return None
+    return _LICENSE_URL_DEFAULTS.get(license_name.strip().lower())
+
+
 class AdventureConflictError(Exception):
     """Raised when an adventure being imported already exists."""
     def __init__(self, title: str, existing_version: Optional[str], new_version: Optional[str], template_id: str):
@@ -171,6 +207,11 @@ class AdventureTemplateImporter:
                 is_strict = adv_data.get("strict_rules") if "strict_rules" in adv_data else (enforcement_mode != "chat")
                 
                 # Create AdventureTemplate record
+                resolved_license = adv_data.get("license") or manifest_data.get("license")
+                resolved_license_url = _resolve_license_url(
+                    adv_data.get("license_url") or manifest_data.get("license_url"),
+                    resolved_license,
+                )
                 new_template = AdventureTemplate(
                     id=new_template_id,
                     owner_id=owner_id,
@@ -178,8 +219,8 @@ class AdventureTemplateImporter:
                     version=adv_data.get("version"),
                     creator=adv_data.get("creator") or manifest_data.get("creator"),
                     copyright=adv_data.get("copyright") or manifest_data.get("copyright"),
-                    license=adv_data.get("license") or manifest_data.get("license"),
-                    license_url=adv_data.get("license_url") or manifest_data.get("license_url"),
+                    license=resolved_license,
+                    license_url=resolved_license_url,
                     original_prompt=adv_data.get("original_prompt") or adv_data.get("context"),
                     strict_rules=is_strict,
                     rule_enforcement_mode=enforcement_mode,
@@ -413,6 +454,10 @@ class AdventureTemplateImporter:
                     "completed_condition": manifest_data.get("completed_condition") or adv_data.get("completed_condition"),
                     "gameover_condition": manifest_data.get("gameover_condition") or adv_data.get("gameover_condition"),
                     "tts_director_notes": manifest_data.get("tts_director_notes") or adv_data.get("tts_director_notes"),
+                    "creator": adv_data.get("creator") or manifest_data.get("creator"),
+                    "copyright": adv_data.get("copyright") or manifest_data.get("copyright"),
+                    "license": adv_data.get("license") or manifest_data.get("license"),
+                    "license_url": resolved_license_url,
                 }
 
                 default_scene_id = manifest_data["scenes"][0]["id"] if manifest_data.get("scenes") else "START"
@@ -534,7 +579,7 @@ class AdventureTemplateImporter:
                     creator=old_adv.get("creator"),
                     copyright=old_adv.get("copyright"),
                     license=old_adv.get("license"),
-                    license_url=old_adv.get("license_url"),
+                    license_url=_resolve_license_url(old_adv.get("license_url"), old_adv.get("license")),
                     original_prompt=old_adv.get("original_prompt") or old_adv.get("context"),
                     image_url=old_adv.get("image_url"),
                     strict_rules=old_adv.get("strict_rules", True),
@@ -708,7 +753,10 @@ class AdventureTemplateImporter:
                     creator=adv_meta.get("creator") or manifest.get("creator"),
                     copyright=adv_meta.get("copyright") or manifest.get("copyright"),
                     license=adv_meta.get("license") or manifest.get("license"),
-                    license_url=adv_meta.get("license_url") or manifest.get("license_url"),
+                    license_url=_resolve_license_url(
+                        adv_meta.get("license_url") or manifest.get("license_url"),
+                        adv_meta.get("license") or manifest.get("license"),
+                    ),
                     original_prompt=adv_meta.get("original_prompt") or adv_meta.get("context") or manifest.get("description") or "Restored from blueprint.",
                     image_url=adv_meta.get("image_url") or manifest.get("image_url"),
                     strict_rules=is_strict,

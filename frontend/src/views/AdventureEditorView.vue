@@ -488,6 +488,7 @@ const form = ref({
   creator: '',
   copyright: '',
   license: '',
+  license_url: '',
   original_prompt: '',
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
@@ -565,6 +566,7 @@ async function saveField() {
     creator: 100,
     copyright: 100,
     license: 100,
+    license_url: 500,
     teaser: 300,
     plot: 5000,
     rules: 5000,
@@ -668,6 +670,7 @@ async function fetchAdventure() {
     form.value.creator = data.creator || ''
     form.value.copyright = data.copyright || ''
     form.value.license = data.license || ''
+    form.value.license_url = data.license_url || ''
     form.value.original_prompt = data.original_prompt || ''
     form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
