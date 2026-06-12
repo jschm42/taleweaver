@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import type { AdventureTemplateSummary } from '@/types'
-import { MoreHorizontal, X, ExternalLink } from 'lucide-vue-next'
+import { MoreHorizontal, X, ScrollText } from 'lucide-vue-next'
+import LicenseInfoPopup from '@/components/common/LicenseInfoPopup.vue'
 
 const props = defineProps<{
   template: AdventureTemplateSummary
@@ -21,6 +22,9 @@ const emit = defineEmits<{
 
 const isMenuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
+
+const isLicenseOpen = ref(false)
+const licenseTriggerRef = ref<HTMLElement | null>(null)
 
 function toggleMenu() {
   isMenuOpen.value = !isMenuOpen.value
@@ -49,6 +53,13 @@ function runAction(action: 'cover' | 'edit' | 'adz' | 'adv' | 'delete'): void {
   isMenuOpen.value = false
 }
 
+function openLicenseInfo() {
+  isMenuOpen.value = false
+  nextTick(() => {
+    isLicenseOpen.value = true
+  })
+}
+
 const toneLabel = computed(() => {
   const tone = props.template.selected_tone
   if (!tone) return ''
@@ -75,6 +86,14 @@ function dismissWarning() {
   emit('dismissWarning', props.template.template_id)
 }
 
+const hasLicenseInfo = computed(() => {
+  return !!(
+    props.template.license ||
+    props.template.creator ||
+    props.template.copyright ||
+    props.template.license_url
+  )
+})
 </script>
 
 <template>
@@ -128,47 +147,6 @@ function dismissWarning() {
             </div>
           </div>
         </div>
-
-        <!-- License Badge -->
-        <div v-if="props.template.license || props.template.creator || props.template.copyright || props.template.license_url" class="group/license relative">
-          <div class="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-slate-900/60 text-emerald-400 text-[9px] sm:text-xs uppercase tracking-widest font-black border border-emerald-500/20 hover:border-emerald-500/40 flex items-center gap-1 sm:gap-1.5 backdrop-blur-md cursor-help shadow-lg transition-all">
-            <i class="ra ra-scroll-unfurled text-[9px] sm:text-xs"></i>
-            <span>{{ props.template.license || 'Proprietary' }}</span>
-          </div>
-          <!-- Tooltip-style details -->
-          <div class="absolute left-0 top-full mt-2 w-72 p-3 rounded-xl bg-slate-900/95 border border-white/10 text-[10px] text-slate-300 font-bold leading-relaxed shadow-2xl opacity-0 group-hover/license:opacity-100 transition-opacity pointer-events-none z-40 backdrop-blur-xl">
-            <div class="text-emerald-500 uppercase tracking-[0.2em] mb-2.5 flex items-center gap-2 border-b border-white/5 pb-1.5">
-              <i class="ra ra-book text-[10px] sm:text-xs"></i>
-              Legal & Creator Info
-            </div>
-            <div class="space-y-2">
-              <div v-if="props.template.creator">
-                <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">Creator</span>
-                <span class="text-white text-[11px] block break-words">{{ props.template.creator }}</span>
-              </div>
-              <div v-if="props.template.copyright">
-                <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">Copyright</span>
-                <span class="text-white text-[11px] block text-wrap">{{ props.template.copyright }}</span>
-              </div>
-              <div v-if="props.template.license">
-                <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">License</span>
-                <span class="text-emerald-400 text-[11px] block">{{ props.template.license }}</span>
-              </div>
-              <div v-if="props.template.license_url">
-                <span class="text-slate-500 uppercase tracking-widest text-[8px] block mb-0.5">License URL</span>
-                <a
-                  :href="props.template.license_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-start gap-1 text-cyan-400 hover:text-cyan-300 hover:underline text-[11px] break-all transition-colors"
-                >
-                  <span class="break-all">{{ props.template.license_url }}</span>
-                  <ExternalLink class="w-2.5 h-2.5 mt-0.5 shrink-0" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- Action Dots -->
@@ -217,6 +195,13 @@ function dismissWarning() {
             >
               Export (.adv)
             </button>
+            <button
+              class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-500/10 flex items-center gap-2"
+              @click="openLicenseInfo"
+            >
+              <ScrollText class="w-3.5 h-3.5" />
+              License Info
+            </button>
             <div class="h-[1px] bg-white/5 mx-2 my-1"></div>
             <button
               class="w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-widest text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
@@ -227,6 +212,18 @@ function dismissWarning() {
           </div>
         </Transition>
       </div>
+
+      <!-- License Trigger (bottom-right of cover, opens shared LicenseInfoPopup) -->
+      <button
+        v-if="hasLicenseInfo"
+        ref="licenseTriggerRef"
+        @click.stop="isLicenseOpen = !isLicenseOpen"
+        class="absolute bottom-1.5 right-1.5 sm:bottom-3 sm:right-3 z-20 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-slate-900/60 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 hover:bg-slate-900/80 flex items-center justify-center backdrop-blur-md shadow-lg transition-all"
+        :title="`License: ${props.template.license || 'View details'}`"
+        aria-label="View license & credits"
+      >
+        <i class="ra ra-scroll-unfurled text-[10px] sm:text-xs"></i>
+      </button>
     </div>
 
     <!-- Content Area -->
@@ -256,6 +253,17 @@ function dismissWarning() {
         <span class="truncate">{{ props.isStartingThisTemplate ? 'Starting...' : 'Start' }}</span>
       </button>
     </div>
+
+    <!-- License info popup (teleported to body) -->
+    <LicenseInfoPopup
+      v-model:open="isLicenseOpen"
+      :license="props.template.license"
+      :license-url="props.template.license_url"
+      :creator="props.template.creator"
+      :copyright="props.template.copyright"
+      :anchor-el="licenseTriggerRef"
+      accent="emerald"
+    />
   </article>
 </template>
 
@@ -270,4 +278,3 @@ function dismissWarning() {
   );
 }
 </style>
-

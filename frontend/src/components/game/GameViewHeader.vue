@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
-import { FileText, History, PenLine, ScrollText, ExternalLink, X } from 'lucide-vue-next'
-import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import LicenseInfoPopup from '@/components/common/LicenseInfoPopup.vue'
+import { FileText, History, PenLine, ScrollText } from 'lucide-vue-next'
+import { ref, computed } from 'vue'
 
 const props = defineProps<{
   title?: string | null
@@ -33,77 +34,9 @@ const handleBack = () => {
 
 const showLicensePopup = ref(false)
 const licenseButtonRef = ref<HTMLElement | null>(null)
-const popupStyle = ref<Record<string, string>>({})
 
 const hasLicenseInfo = computed(() => {
   return !!(props.creator || props.copyright || props.license || props.licenseUrl)
-})
-
-const updatePopupPosition = async () => {
-  if (!licenseButtonRef.value) return
-  await nextTick()
-  const rect = licenseButtonRef.value.getBoundingClientRect()
-  const popupWidth = Math.min(320, window.innerWidth - 16)
-  let left = rect.left
-  if (left + popupWidth > window.innerWidth - 8) {
-    left = window.innerWidth - popupWidth - 8
-  }
-  if (left < 8) left = 8
-  popupStyle.value = {
-    position: 'fixed',
-    top: `${Math.round(rect.bottom + 8)}px`,
-    left: `${Math.round(left)}px`,
-    width: `${popupWidth}px`,
-    zIndex: '9999',
-  }
-}
-
-const togglePopup = async () => {
-  if (showLicensePopup.value) {
-    showLicensePopup.value = false
-  } else {
-    await updatePopupPosition()
-    showLicensePopup.value = true
-  }
-}
-
-const closePopup = () => {
-  showLicensePopup.value = false
-}
-
-const onDocumentClick = (event: MouseEvent) => {
-  if (!showLicensePopup.value) return
-  const target = event.target as Node
-  if (licenseButtonRef.value?.contains(target)) return
-  const popupEl = document.getElementById('license-popup-teleport')
-  if (popupEl?.contains(target)) return
-  closePopup()
-}
-
-const onKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && showLicensePopup.value) {
-    closePopup()
-  }
-}
-
-const onResizeOrScroll = () => {
-  if (showLicensePopup.value) {
-    void updatePopupPosition()
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('mousedown', onDocumentClick)
-  document.addEventListener('keydown', onKeydown)
-  window.addEventListener('resize', onResizeOrScroll)
-  window.addEventListener('scroll', onResizeOrScroll, true)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', onDocumentClick)
-  document.removeEventListener('keydown', onKeydown)
-  window.removeEventListener('resize', onResizeOrScroll)
-  window.removeEventListener('scroll', onResizeOrScroll, true)
 })
 </script>
 
@@ -155,7 +88,7 @@ onBeforeUnmount(() => {
           </div>
           <div v-if="hasLicenseInfo" class="relative" ref="licenseButtonRef">
             <button
-              @click.stop="togglePopup"
+              @click.stop="showLicensePopup = !showLicensePopup"
               :class="[
                 'group inline-flex items-center rounded-md bg-gradient-to-br from-amber-500/15 to-amber-300/10 border border-amber-400/30 text-amber-300 hover:from-amber-500/25 hover:to-amber-300/20 hover:border-amber-400/60 hover:text-amber-200 transition-all shadow-sm',
                 props.license ? 'h-6 px-2 gap-1.5 text-[9px] font-black uppercase tracking-[0.15em]' : 'justify-center w-6 h-6'
@@ -205,59 +138,15 @@ onBeforeUnmount(() => {
     </button>
 
     <!-- License popup (teleported to body to escape overflow-hidden parents) -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0 -translate-y-1 scale-95"
-        enter-to-class="opacity-100 translate-y-0 scale-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100 translate-y-0 scale-100"
-        leave-to-class="opacity-0 -translate-y-1 scale-95"
-      >
-        <div
-          v-if="showLicensePopup"
-          id="license-popup-teleport"
-          :style="popupStyle"
-          class="p-4 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-amber-400/30 shadow-2xl shadow-black/50"
-        >
-          <div class="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-amber-400/20">
-            <div class="flex items-center gap-2">
-              <div class="p-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30">
-                <ScrollText class="w-3.5 h-3.5 text-amber-300" />
-              </div>
-              <span class="text-[10px] font-black text-amber-300 uppercase tracking-[0.25em]">License & Credits</span>
-            </div>
-            <button @click="closePopup" class="p-1 rounded-md text-slate-500 hover:text-white hover:bg-white/5 transition-colors" title="Close">
-              <X class="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <dl class="space-y-2.5 text-[11px]">
-            <div v-if="props.license">
-              <dt class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">License</dt>
-              <dd class="text-amber-100 font-bold break-words">{{ props.license }}</dd>
-            </div>
-            <div v-if="props.licenseUrl">
-              <dt class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">License URL</dt>
-              <dd>
-                <a :href="props.licenseUrl" target="_blank" rel="noopener noreferrer" class="inline-flex items-start gap-1 text-emerald-400 hover:text-emerald-300 hover:underline break-all transition-colors">
-                  <span class="break-all">{{ props.licenseUrl }}</span>
-                  <ExternalLink class="w-3 h-3 mt-0.5 shrink-0" />
-                </a>
-              </dd>
-            </div>
-            <div v-if="props.creator">
-              <dt class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">Creator</dt>
-              <dd class="text-slate-200 break-words">{{ props.creator }}</dd>
-            </div>
-            <div v-if="props.copyright">
-              <dt class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-0.5">Copyright</dt>
-              <dd class="text-slate-200 break-words">{{ props.copyright }}</dd>
-            </div>
-          </dl>
-        </div>
-      </Transition>
-    </Teleport>
+    <LicenseInfoPopup
+      v-model:open="showLicensePopup"
+      :license="props.license"
+      :license-url="props.licenseUrl"
+      :creator="props.creator"
+      :copyright="props.copyright"
+      :anchor-el="licenseButtonRef"
+      accent="amber"
+    />
   </header>
 </template>
 
