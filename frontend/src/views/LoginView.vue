@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/composables/useApi'
 import { authState, setToken } from '@/store/auth'
@@ -10,6 +10,16 @@ const username = ref('')
 const password = ref('')
 const error = ref('')
 const isLoggingIn = ref(false)
+const rememberMe = ref(false)
+const showPassword = ref(false)
+
+onMounted(() => {
+  const savedUsername = localStorage.getItem('remembered_username')
+  if (savedUsername) {
+    username.value = savedUsername
+    rememberMe.value = true
+  }
+})
 
 async function handleLogin() {
   if (!username.value || !password.value) return
@@ -19,7 +29,13 @@ async function handleLogin() {
   
   try {
     const res = await api.login(username.value, password.value)
-    setToken(res.access_token)
+    setToken(res.access_token, rememberMe.value)
+    
+    if (rememberMe.value) {
+      localStorage.setItem('remembered_username', username.value)
+    } else {
+      localStorage.removeItem('remembered_username')
+    }
     
     // Fetch user details
     const user = await api.getMe()
@@ -80,12 +96,32 @@ async function handleLogin() {
             <i class="ra ra-hood absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
             <input 
               v-model="password"
-              type="password" 
+              :type="showPassword ? 'text' : 'password'" 
               required
               class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-aether-primary/50 focus:ring-1 focus:ring-aether-primary/20 transition-all"
-              placeholder="••••••••"
+              placeholder="Your password..."
             />
           </div>
+        </div>
+
+        <!-- Remember Me & Show Password Checkboxes -->
+        <div class="flex items-center justify-between px-1 text-xxs font-bold uppercase tracking-wider text-slate-400 select-none">
+          <label class="flex items-center gap-2 cursor-pointer hover:text-aether-primary transition-colors">
+            <input 
+              v-model="rememberMe" 
+              type="checkbox" 
+              class="rounded border-white/10 bg-white/5 text-aether-primary focus:ring-0 focus:ring-offset-0 accent-aether-primary h-4 w-4 cursor-pointer"
+            />
+            Remember Me
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer hover:text-aether-primary transition-colors">
+            <input 
+              v-model="showPassword" 
+              type="checkbox" 
+              class="rounded border-white/10 bg-white/5 text-aether-primary focus:ring-0 focus:ring-offset-0 accent-aether-primary h-4 w-4 cursor-pointer"
+            />
+            Show Password
+          </label>
         </div>
 
         <div v-if="error" class="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold text-center animate-shake">

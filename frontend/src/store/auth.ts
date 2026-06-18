@@ -9,12 +9,9 @@ function loadAccessToken(): string | null {
     return sessionToken
   }
 
-  const legacyToken = localStorage.getItem(ACCESS_TOKEN_KEY)
-  if (legacyToken) {
-    // One-time migration away from persistent browser storage.
-    sessionStorage.setItem(ACCESS_TOKEN_KEY, legacyToken)
-    localStorage.removeItem(ACCESS_TOKEN_KEY)
-    return legacyToken
+  const persistentToken = localStorage.getItem(ACCESS_TOKEN_KEY)
+  if (persistentToken) {
+    return persistentToken
   }
 
   return null
@@ -40,8 +37,13 @@ export const authState = reactive({
   isInitialized: false
 })
 
-export function setToken(token: string) {
+export function setToken(token: string, rememberMe: boolean = false) {
   authState.token = token
+  if (rememberMe || localStorage.getItem(ACCESS_TOKEN_KEY)) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, token)
+  } else {
+    localStorage.removeItem(ACCESS_TOKEN_KEY)
+  }
   sessionStorage.setItem(ACCESS_TOKEN_KEY, token)
 }
 
