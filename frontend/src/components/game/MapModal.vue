@@ -45,6 +45,7 @@ const zoom = ref(1)
 const offset = ref({ x: 0, y: 0 })
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
+const lastFocusedSceneId = ref<string | null>(null)
 
 const margin = 100
 const EXIT_CIRCLE_EDGE_OFFSET = 30
@@ -79,7 +80,10 @@ function resetView() {
   offset.value = { x: 0, y: 0 }
   if (props.mapData?.current_scene_id) {
     // Center on current node so the player sees where they are right now
-    nextTick(() => focusOnCurrentNode())
+    nextTick(() => {
+      focusOnCurrentNode()
+      lastFocusedSceneId.value = props.mapData?.current_scene_id || null
+    })
   }
 }
 
@@ -99,10 +103,13 @@ function focusOnCurrentNode() {
   const isCompact = containerRect.width < 640
   const targetZoom = isCompact ? Math.max(0.9, zoom.value) : Math.max(1, zoom.value)
 
+  const containerWidth = layoutData.value.width + margin * 2
+  const containerHeight = layoutData.value.height + margin * 2
+
   // Center the node in the viewport
   offset.value = {
-    x: containerRect.width / 2 - nodeCenterX * targetZoom,
-    y: containerRect.height / 2 - nodeCenterY * targetZoom
+    x: (containerWidth / 2 - nodeCenterX) * targetZoom,
+    y: (containerHeight / 2 - nodeCenterY) * targetZoom
   }
   zoom.value = targetZoom
 }
@@ -453,20 +460,37 @@ function handleExitMouseMove(event: MouseEvent) {
   hoveredExitPos.value = { x: event.clientX, y: event.clientY }
 }
 
-watch(() => [props.open, props.mapData], () => {
-  if (props.open) {
+watch(() => props.open, (isOpen) => {
+  if (isOpen) {
     updateLayout()
-    // After the layout has been computed, center the viewport on the current scene
     nextTick(() => {
       focusOnCurrentNode()
+      lastFocusedSceneId.value = props.mapData?.current_scene_id || null
     })
+  } else {
+    lastFocusedSceneId.value = null
   }
 })
+
+watch(() => props.mapData, (newMapData) => {
+  if (props.open) {
+    updateLayout()
+    if (newMapData && newMapData.current_scene_id !== lastFocusedSceneId.value) {
+      nextTick(() => {
+        focusOnCurrentNode()
+        lastFocusedSceneId.value = newMapData.current_scene_id || null
+      })
+    }
+  }
+}, { deep: true })
 
 onMounted(() => {
   if (props.open) {
     updateLayout()
-    nextTick(() => focusOnCurrentNode())
+    nextTick(() => {
+      focusOnCurrentNode()
+      lastFocusedSceneId.value = props.mapData?.current_scene_id || null
+    })
   }
 })
 </script>
