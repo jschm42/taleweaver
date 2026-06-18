@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { authState, clearAuth } from '@/store/auth'
 import { configState } from '@/store/config'
 import ChangeCredentialsModal from '@/components/portal/ChangeCredentialsModal.vue'
+import { isMobileSidebarOpen, openMobileSidebar } from '@/store/layout'
 
 const router = useRouter()
+const route = useRoute()
 const isMenuOpen = ref(false)
 const isChangeCredentialsOpen = ref(false)
 
@@ -41,23 +43,38 @@ function handleLogout() {
 <template>
   <header v-if="authState.isAuthenticated" class="h-12 bg-[#050b14] border-b border-white/5 px-6 my-1 flex items-center justify-between z-[100] relative">
     <!-- Left: Branding -->
-    <router-link 
-      to="/"
-      class="flex items-center gap-3 select-none cursor-pointer group/logo decoration-none"
-      title="Return to Portal"
-    >
-      <div class="w-12 h-12 flex items-center justify-center">
-        <img 
-          src="@/assets/svg/app-logo.svg" 
-          class="w-10 h-10 drop-shadow-[0_0_8px_rgba(78,222,163,0.4)] group-hover/logo:drop-shadow-[0_0_12px_rgba(78,222,163,0.7)] transition-all" 
-          alt="Logo" 
-        />
-      </div>
-      <div class="flex items-baseline gap-2">
-        <span class="text-sm font-black text-white font-display tracking-tight">TaleWeaver</span>
-        <span class="text-xs font-bold text-slate-600 uppercase tracking-[0.2em]">v{{ configState.appVersion }}</span>
-      </div>
-    </router-link>
+    <div class="flex items-center gap-3">
+      <!-- Mobile Sidebar Toggle -->
+      <button
+        v-if="route.name === 'portal'"
+        @click="openMobileSidebar"
+        class="lg:hidden w-8 h-8 rounded-lg bg-slate-800/60 border border-slate-700/50 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-all flex items-center justify-center cursor-pointer shadow-lg group/sidebar-btn"
+        title="Open menu"
+        aria-label="Open menu"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-200 group-hover/sidebar-btn:text-emerald-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+        </svg>
+      </button>
+
+      <router-link 
+        to="/"
+        class="flex items-center gap-3 select-none cursor-pointer group/logo decoration-none"
+        title="Return to Portal"
+      >
+        <div class="w-12 h-12 flex items-center justify-center">
+          <img 
+            src="@/assets/svg/app-logo.svg" 
+            class="w-10 h-10 drop-shadow-[0_0_8px_rgba(78,222,163,0.4)] group-hover/logo:drop-shadow-[0_0_12px_rgba(78,222,163,0.7)] transition-all" 
+            alt="Logo" 
+          />
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span class="text-sm font-black text-white font-display tracking-tight">TaleWeaver</span>
+          <span class="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">v{{ configState.appVersion }}</span>
+        </div>
+      </router-link>
+    </div>
 
     <!-- Right: User Profile -->
     <div class="relative">
