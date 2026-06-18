@@ -1187,7 +1187,50 @@ onUnmounted(() => {
 
         <!-- Tool Buttons & Adventure Menu -->
         <div class="flex items-center justify-end gap-2 shrink-0">
-          <div class="relative shrink-0 adventure-menu-container">
+          <!-- Desktop/Tablet Inline Panels (md:flex) -->
+          <div class="hidden md:flex items-center gap-1.5 sm:gap-2">
+            <!-- Character Sheet -->
+            <button
+              class="p-1 sm:p-2 transition-all active:scale-95 group flex items-center justify-center hover:-translate-y-1 cursor-pointer"
+              title="Character Sheet"
+              @click="emit('openSheet')"
+            >
+              <img 
+                src="@/assets/svg/warrior-upper-body-bust-silhouette.svg" 
+                class="h-8 w-8 sm:h-11 sm:w-11 invert brightness-200 contrast-75 transition-all shrink-0 hover:scale-110"
+                :class="[props.inventoryGlow ? 'glow-inventory' : 'group-hover:drop-shadow-[0_0_15px_rgba(129,140,248,0.8)]']"
+              />
+            </button>
+
+            <!-- World Map -->
+            <button
+              class="p-1 sm:p-2 transition-all active:scale-95 group flex items-center justify-center hover:-translate-y-1 cursor-pointer"
+              title="World Map"
+              @click="emit('openMap')"
+            >
+              <img 
+                src="@/assets/svg/fantasy-rpg-map.svg" 
+                class="h-8 w-8 sm:h-11 sm:w-11 brightness-110 transition-all shrink-0 hover:scale-110" 
+                :class="[props.mapGlow ? 'glow-map' : 'group-hover:brightness-125 group-hover:drop-shadow-[0_0_15px_rgba(251,191,36,0.8)]']"
+              />
+            </button>
+
+            <!-- Quest Log -->
+            <button
+              class="p-1 sm:p-2 transition-all active:scale-95 group flex items-center justify-center hover:-translate-y-1 cursor-pointer"
+              title="Quest Log"
+              @click="emit('openQuests')"
+            >
+              <img 
+                src="@/assets/svg/fantasy-spellbook.svg" 
+                class="h-8 w-8 sm:h-11 sm:w-11 invert brightness-200 contrast-75 transition-all shrink-0 hover:scale-110" 
+                :class="[props.questGlow ? 'glow-quest' : 'group-hover:drop-shadow-[0_0_15px_rgba(124,58,237,0.8)]']"
+              />
+            </button>
+          </div>
+
+          <!-- Mobile Adventure Menu (md:hidden) -->
+          <div class="md:hidden relative shrink-0 adventure-menu-container">
             <button
               class="p-1 sm:p-2 transition-all active:scale-90 group flex items-center justify-center hover:-translate-y-1"
               :class="{ 'glow-gear': isAnyGlowActive }"
