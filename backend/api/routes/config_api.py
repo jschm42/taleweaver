@@ -703,6 +703,24 @@ def _normalize_t2i_settings(t2i_settings: Optional[dict]) -> dict:
     return normalized
 
 
+def _normalize_game_settings(game_settings: Optional[dict]) -> dict:
+    fallback = {
+        "clock_24h": False,
+        "date_format": "DD.MM.YY",
+        "whisper_model": "tiny",
+    }
+    if not game_settings:
+        return fallback
+    normalized = dict(game_settings)
+    if "clock_24h" not in normalized:
+        normalized["clock_24h"] = False
+    if "date_format" not in normalized:
+        normalized["date_format"] = "DD.MM.YY"
+    if "whisper_model" not in normalized:
+        normalized["whisper_model"] = "tiny"
+    return normalized
+
+
 def _is_llm_configured(user: User, db_keys: dict) -> bool:
     llm = _normalize_llm_settings(user.llm_settings)
     small_provider = llm.get("small_model_provider", "openai")
@@ -815,6 +833,7 @@ class T2ISettingsPayload(BaseModel):
 class GameSettingsPayload(BaseModel):
     clock_24h: bool = False
     date_format: str = "DD.MM.YY"
+    whisper_model: str = "tiny"
 
 
 class TTSSettingsPayload(BaseModel):
@@ -895,10 +914,7 @@ async def get_settings(
             "is_t2i_configured": False,
             "image_styles_catalog": _default_image_styles_catalog(),
             "tone_catalog": _default_tone_catalog(),
-            "game_settings": {
-                "clock_24h": False,
-                "date_format": "DD.MM.YY"
-            },
+            "game_settings": _normalize_game_settings(None),
             "available_constants": {
                 **default_available_constants,
             }
@@ -932,10 +948,7 @@ async def get_settings(
             user.tone_catalog,
             fallback=_default_tone_catalog(),
         ),
-        "game_settings": user.game_settings or {
-            "clock_24h": False,
-            "date_format": "DD.MM.YY"
-        },
+        "game_settings": _normalize_game_settings(user.game_settings),
         "tts_settings": _normalize_tts_settings(user.tts_settings),
         "available_constants": available_constants,
     }

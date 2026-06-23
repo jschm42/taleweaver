@@ -51,6 +51,7 @@ from backend.api.routes import (
     config_api,
     data,
     map_api,
+    stt_api,
     tts_api,
     users_api,
 )
@@ -156,6 +157,7 @@ app.include_router(map_api.router, prefix="/api")
 app.include_router(auth_api.router, prefix="/api")
 app.include_router(users_api.router, prefix="/api")
 app.include_router(tts_api.router, prefix="/api")
+app.include_router(stt_api.router, prefix="/api")
 
 
 

@@ -11,7 +11,7 @@ import { useGameSocket, type ConnectionStatus } from '@/composables/useGameSocke
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { formatObjectIds } from '@/utils/editor_utils'
-import { Compass, SendHorizontal } from 'lucide-vue-next'
+import { Compass, SendHorizontal, Mic } from 'lucide-vue-next'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -61,6 +61,17 @@ const emit = defineEmits<{
 const inputText = ref('')
 const inputEl = ref<HTMLInputElement | null>(null)
 const fontSize = ref<'small' | 'medium' | 'large'>((localStorage.getItem('tw_chat_font_size') as any) || 'medium')
+
+// Speech-to-Text (STT) Recording State
+const isRecording = ref(false)
+const isTranscribing = ref(false)
+const mediaStream = ref<MediaStream | null>(null)
+const audioContext = ref<AudioContext | null>(null)
+const scriptProcessor = ref<ScriptProcessorNode | null>(null)
+const leftChannel = ref<Float32Array[]>([])
+const pttKeyPressed = ref(false)
+const recordStartTime = ref<number>(0)
+let globalMouseUpListener: (() => void) | null = null
 const logEl = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
 const showMenuPopup = ref(false)
@@ -697,13 +708,177 @@ function handleRetry() {
 }
 
 
-function handleGlobalKeydown(e: KeyboardEvent) {
-  if (e.code !== 'Space' || !configState.isTtsEnabled) return
-  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+// WAV helper functions
+function writeString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i))
+  }
+}
+
+function bufferToWav(buffer: Float32Array, sampleRate: number): ArrayBuffer {
+  const bufferLength = buffer.length
+  const wavBuffer = new ArrayBuffer(44 + bufferLength * 2)
+  const view = new DataView(wavBuffer)
+
+  /* RIFF identifier */
+  writeString(view, 0, 'RIFF')
+  /* file length */
+  view.setUint32(4, 36 + bufferLength * 2, true)
+  /* RIFF type */
+  writeString(view, 8, 'WAVE')
+  /* format chunk identifier */
+  writeString(view, 12, 'fmt ')
+  /* format chunk length */
+  view.setUint32(16, 16, true)
+  /* sample format (raw PCM) */
+  view.setUint16(20, 1, true)
+  /* channel count */
+  view.setUint16(22, 1, true)
+  /* sample rate */
+  view.setUint32(24, sampleRate, true)
+  /* byte rate (sample rate * block align) */
+  view.setUint32(28, sampleRate * 2, true)
+  /* block align (channel count * bytes per sample) */
+  view.setUint16(32, 2, true)
+  /* bits per sample */
+  view.setUint16(34, 16, true)
+  /* data chunk identifier */
+  writeString(view, 36, 'data')
+  /* data chunk length */
+  view.setUint32(40, bufferLength * 2, true)
+
+  // Write PCM audio samples
+  let offset = 44
+  for (let i = 0; i < buffer.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, buffer[i]))
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+  }
+
+  return wavBuffer
+}
+
+async function startVoiceRecording() {
+  if (isRecording.value || props.inputLocked || props.sheet?.agent_active) return
   
-  // Don't hijack space while typing
+  try {
+    leftChannel.value = []
+    
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaStream.value = stream
+    
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+    const audioCtx = new AudioCtx({ sampleRate: 16000 })
+    audioContext.value = audioCtx
+    
+    const source = audioCtx.createMediaStreamSource(stream)
+    const processor = audioCtx.createScriptProcessor(4096, 1, 1)
+    scriptProcessor.value = processor
+    
+    processor.onaudioprocess = (e) => {
+      const inputData = e.inputBuffer.getChannelData(0)
+      leftChannel.value.push(new Float32Array(inputData))
+    }
+    
+    source.connect(processor)
+    processor.connect(audioCtx.destination)
+    
+    isRecording.value = true
+    recordStartTime.value = Date.now()
+    
+  } catch (err) {
+    console.error('Failed to start recording:', err)
+  }
+}
+
+async function stopVoiceRecording() {
+  if (!isRecording.value) return
+  isRecording.value = false
+  
+  if (scriptProcessor.value) {
+    scriptProcessor.value.disconnect()
+    scriptProcessor.value = null
+  }
+  if (audioContext.value) {
+    void audioContext.value.close()
+    audioContext.value = null
+  }
+  if (mediaStream.value) {
+    mediaStream.value.getTracks().forEach(track => track.stop())
+    mediaStream.value = null
+  }
+  
+  if (Date.now() - recordStartTime.value < 500) {
+    console.warn('Recording discarded: too short.')
+    return
+  }
+  
+  const totalLength = leftChannel.value.reduce((acc, chunk) => acc + chunk.length, 0)
+  const flattened = new Float32Array(totalLength)
+  let offset = 0
+  for (const chunk of leftChannel.value) {
+    flattened.set(chunk, offset)
+    offset += chunk.length
+  }
+  
+  const wavBuffer = bufferToWav(flattened, 16000)
+  const audioBlob = new Blob([wavBuffer], { type: 'audio/wav' })
+  
+  isTranscribing.value = true
+  try {
+    const { api } = await import('@/composables/useApi')
+    const result = await api.transcribeAudio(audioBlob)
+    const text = result.text.trim()
+    if (text) {
+      if (inputText.value.trim()) {
+        inputText.value = `${inputText.value.trim()} ${text}`
+      } else {
+        inputText.value = text
+      }
+      void nextTick(() => {
+        inputEl.value?.focus()
+      })
+    }
+  } catch (err) {
+    console.error('Failed to transcribe audio:', err)
+  } finally {
+    isTranscribing.value = false
+  }
+}
+
+function handleMicButtonMousedown(e: MouseEvent | TouchEvent) {
+  e.preventDefault()
+  if (!canSendInput.value || props.sheet?.agent_active) return
+  
+  void startVoiceRecording()
+  
+  globalMouseUpListener = () => {
+    void stopVoiceRecording()
+    if (globalMouseUpListener) {
+      window.removeEventListener('mouseup', globalMouseUpListener)
+      window.removeEventListener('touchend', globalMouseUpListener)
+      globalMouseUpListener = null
+    }
+  }
+  window.addEventListener('mouseup', globalMouseUpListener)
+  window.addEventListener('touchend', globalMouseUpListener)
+}
+
+function handleGlobalKeydown(e: KeyboardEvent) {
   const target = e.target as HTMLElement
   const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+
+  // PTT key: 'KeyV' or 'v'
+  if (e.code === 'KeyV' && !isTyping && !props.sheet?.agent_active) {
+    e.preventDefault()
+    if (!pttKeyPressed.value) {
+      pttKeyPressed.value = true
+      void startVoiceRecording()
+    }
+    return
+  }
+
+  if (e.code !== 'Space' || !configState.isTtsEnabled) return
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
   if (isTyping) return
 
   e.preventDefault()
@@ -729,6 +904,14 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
+function handleGlobalKeyup(e: KeyboardEvent) {
+  if (e.code === 'KeyV' && pttKeyPressed.value) {
+    e.preventDefault()
+    pttKeyPressed.value = false
+    void stopVoiceRecording()
+  }
+}
+
 function handleDocumentClick(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (showMenuPopup.value && !target.closest('.adventure-menu-container')) {
@@ -738,11 +921,13 @@ function handleDocumentClick(e: MouseEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('keyup', handleGlobalKeyup)
   document.addEventListener('click', handleDocumentClick)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('keyup', handleGlobalKeyup)
   document.removeEventListener('click', handleDocumentClick)
 })
 </script>
@@ -1132,7 +1317,29 @@ onUnmounted(() => {
     />
 
     <!-- Input bar -->
-    <div class="border-t border-slate-800 bg-slate-950 p-3 sm:p-4 shrink-0">
+    <div class="border-t border-slate-800 bg-slate-950 p-3 sm:p-4 shrink-0 relative">
+      <!-- Recording Overlay / Visualizer -->
+      <div v-if="isRecording || isTranscribing" class="absolute left-4 right-4 bottom-full mb-3 p-4 rounded-xl border backdrop-blur-md flex items-center justify-between gap-3 shadow-2xl z-50 animate-fade-in"
+        :class="[
+          isRecording 
+            ? 'border-red-500/30 bg-red-950/40 text-red-200 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+            : 'border-amber-500/30 bg-amber-950/40 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+        ]"
+      >
+        <div class="flex items-center gap-2">
+          <span v-if="isRecording" class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+          </span>
+          <span v-else class="w-3 h-3 rounded-full border-t-2 border-amber-400 animate-spin"></span>
+          <span>{{ isRecording ? "PTT Active: Recording Audio..." : "Transcribing speech..." }}</span>
+        </div>
+        <div class="text-[10px] uppercase tracking-wider font-bold"
+          :class="isRecording ? 'text-red-400' : 'text-amber-400'"
+        >
+          {{ isRecording ? (pttKeyPressed ? "Release 'V' key to finish" : "Release mouse button to finish") : "Please wait" }}
+        </div>
+      </div>
       <div class="flex items-center gap-2 sm:gap-3">
         <!-- Text Input & Send Row -->
         <div class="flex items-center gap-1.5 sm:gap-2 flex-grow min-w-0">
@@ -1173,6 +1380,25 @@ onUnmounted(() => {
               @update:active-index="val => commandPopupIndex = val"
             />
           </div>
+
+          <!-- Speech Input Button -->
+          <button
+            type="button"
+            :disabled="!canSendInput || props.sheet?.agent_active || isTranscribing"
+            class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-xl transition-all duration-300 border flex items-center justify-center cursor-pointer shadow-lg active:scale-95 touch-none group/stt-btn"
+            :class="[
+              isRecording
+                ? 'bg-red-500/20 border-red-500/40 text-red-400 shadow-[0_0_12px_rgba(239,68,68,0.25)] animate-pulse'
+                : isTranscribing
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                  : 'bg-slate-900/60 border-slate-700/70 text-slate-400 hover:bg-slate-800/80 hover:border-slate-500 hover:text-slate-200'
+            ]"
+            title="Speech Input (Hold V to talk / hold button to talk)"
+            @mousedown="handleMicButtonMousedown"
+            @touchstart="handleMicButtonMousedown"
+          >
+            <Mic class="h-4 w-4 sm:h-5 sm:w-5" />
+          </button>
 
           <!-- Send Button (Primary Action) -->
           <button

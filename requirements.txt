@@ -23,3 +23,7 @@ mypy
 types-Pillow
 types-python-jose
 types-cryptography
+
+# Audio Transcription
+openai-whisper
+

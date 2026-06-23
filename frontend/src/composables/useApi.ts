@@ -700,6 +700,15 @@ export const api = {
       body: formData,
       timeoutMs: 60000,
     })
+  },
+
+  transcribeAudio(fileBlob: Blob): Promise<{ text: string }> {
+    const formData = new FormData()
+    formData.append('file', fileBlob, 'audio.wav')
+    return request('/stt/transcribe', {
+      method: 'POST',
+      body: formData,
+      timeoutMs: 60000,
+    })
   }
 }
-
