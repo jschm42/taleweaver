@@ -54,23 +54,6 @@ watch(() => props.gameForm, (newVal) => {
           </select>
         </div>
 
-        <!-- Speech-to-Text Model (Whisper) Settings -->
-        <div class="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-white/5">
-          <div>
-            <div class="text-sm font-bold text-white">Speech-to-Text Model (OpenAI Whisper)</div>
-            <div class="text-xs text-slate-500">Choose the Whisper model size. Larger models are more accurate but consume more CPU/RAM.</div>
-          </div>
-          <select 
-            v-model="localForm.whisper_model"
-            class="bg-slate-950 border border-slate-800 text-white text-xs rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 px-4"
-          >
-            <option value="tiny">Tiny (Default - fastest)</option>
-            <option value="base">Base</option>
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large (slowest)</option>
-          </select>
-        </div>
       </div>
 
       <button type="button" @click="emit('save', localForm)" :disabled="isSubmitting" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg shadow-blue-500/20">

@@ -11,7 +11,7 @@ import { testService } from '@/services/testService'
 const router = useRouter()
 
 // ============ NAVIGATION & UI STATE ============
-type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'styles' | 'tones' | 'game' | 'users'
+type Section = 'keys' | 'llm' | 't2i' | 'tts' | 'stt' | 'styles' | 'tones' | 'game' | 'users'
 const activeSection = ref<Section>('keys')
 
 // ============ MODAL STATE (UI only, not shared with services) ============
@@ -36,6 +36,7 @@ import ProviderKeysSection from '@/components/admin/ProviderKeysSection.vue'
 import IntelligenceSection from '@/components/admin/IntelligenceSection.vue'
 import VisualsSection from '@/components/admin/VisualsSection.vue'
 import SpeechSection from '@/components/admin/SpeechSection.vue'
+import SpeechToTextSection from '@/components/admin/SpeechToTextSection.vue'
 import CatalogSection from '@/components/admin/CatalogSection.vue'
 import GameSettingsSection from '@/components/admin/GameSettingsSection.vue'
 import UserManagementSection from '@/components/admin/UserManagementSection.vue'
@@ -226,7 +227,8 @@ onMounted(() => {
             { id: 'keys', label: 'Provider Keys', icon: 'ra-locked', color: 'emerald' },
             { id: 'llm', label: 'Intelligence', icon: 'ra-brain', color: 'purple' },
             { id: 't2i', label: 'Visuals', icon: 'ra-camera', color: 'cyan' },
-            { id: 'tts', label: 'Speech (TTS)', icon: 'ra-microphone', color: 'blue' },
+            { id: 'tts', label: 'Speech (TTS)', icon: 'ra-speech-bubble', color: 'blue' },
+            { id: 'stt', label: 'Speech to Text (STT)', icon: 'ra-microphone', color: 'emerald' },
             { id: 'styles', label: 'Image Styles', icon: 'ra-paint-brush', color: 'amber' },
             { id: 'tones', label: 'Narrative Tones', icon: 'ra-scroll', color: 'indigo' },
             { id: 'game', label: 'Game Settings', icon: 'ra-gear', color: 'blue' },
@@ -234,9 +236,8 @@ onMounted(() => {
           ]"
           :key="section.id"
           @click="activeSection = section.id as Section"
-          :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300', activeSection === section.id ? `bg-${section.color}-500/10 text-${section.color}-400 border border-${section.color}-500/20` : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
+          :class="['w-full flex items-center text-left justify-start px-4 py-3 rounded-xl transition-all duration-300', activeSection === section.id ? `bg-${section.color}-500/10 text-${section.color}-400 border border-${section.color}-500/20` : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300']"
         >
-          <i :class="['ra', section.icon || 'opacity-0']"></i>
           <span class="font-bold text-md font-mono uppercase tracking-widest">{{ section.label }}</span>
         </button>
       </nav>
@@ -313,6 +314,13 @@ onMounted(() => {
           @save="handleSaveTTSSettings"
           @test="handleTestTTS"
           @switch-section="(s) => activeSection = s as Section"
+        />
+
+        <SpeechToTextSection 
+          v-if="activeSection === 'stt'"
+          :game-form="settingsService.gameForm.value"
+          :is-submitting="settingsService.isSubmitting.value"
+          @save="handleSaveGameSettings"
         />
 
         <CatalogSection 
