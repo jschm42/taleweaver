@@ -1928,9 +1928,13 @@ async def test_combat_loot_done_spawns_visible_scene_loot_with_stale_overrides(s
         assert any(ent.get("id") == "RAT_TOOTH" for ent in visible_entities)
 
 
-async def test_build_session_entities_hides_items_inside_container_inventory(setup_test_db):
+async def test_build_session_entities_hides_items_inside_container_inventory(setup_test_db, monkeypatch: pytest.MonkeyPatch):
     from backend.api.routes.adventures.logic import AdventureLogic
     from tests.conftest import TestSessionLocal
+    import os
+
+    original_isfile = os.path.isfile
+    monkeypatch.setattr("os.path.isfile", lambda p: True if "crumpled-receipt.png" in p else original_isfile(p))
 
     async with TestSessionLocal() as db:
         _user, _adv, _avatar, state = await _seed_game_context(db)

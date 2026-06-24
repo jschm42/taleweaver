@@ -21,6 +21,7 @@ def test_augment_map_data_adds_return_edge_for_known_target_scene():
             to_scene_id="DINER_ENTRANCE",
             label="back to entrance",
             is_locked=False,
+            exit_type="directional",
         )
     ]
 
@@ -47,6 +48,7 @@ def test_augment_map_data_still_adds_placeholder_for_unknown_target_scene():
             to_scene_id="KITCHEN",
             label="kitchen door",
             is_locked=False,
+            exit_type="directional",
         )
     ]
 

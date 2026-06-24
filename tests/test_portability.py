@@ -146,6 +146,9 @@ async def test_full_portability_cycle(setup_test_db, monkeypatch):
         # Only mock 'wb' opens (asset extraction)
         monkeypatch.setattr("builtins.open", lambda *a, **k: MockFile() if (len(a) > 1 and "wb" in a[1]) else original_open(*a, **k))
 
+        original_isfile = os.path.isfile
+        monkeypatch.setattr("os.path.isfile", lambda p: True if "portability-test-999" in p or "library" in p or "cover.jpg" in p or "hero.jpg" in p or "start.jpg" in p else original_isfile(p))
+
         # Mock MediaEngine to avoid actual thumbnail generation
         monkeypatch.setattr("backend.engine.media_engine.MediaEngine.ensure_thumbnails", AsyncMock())
         monkeypatch.setattr("backend.engine.media_engine.MediaEngine.generate_placeholder", AsyncMock(return_value="/data/placeholder.jpg"))

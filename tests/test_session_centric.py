@@ -214,8 +214,12 @@ async def test_session_start_emits_metadata_system_message(auth_client, setup_te
         meta_msg = messages[-2]
         intro_msg = messages[-1]
         
-        assert meta_msg.role == "system"
-        assert meta_msg.content == "Creator: Alice | Copyright: © 2026 Alice | License: MIT"
+        import json
+        assert meta_msg.role == "license_info"
+        meta_data = json.loads(meta_msg.content)
+        assert meta_data["creator"] == "Alice"
+        assert "Alice" in meta_data["copyright"]
+        assert meta_data["license"] == "MIT"
         
         assert intro_msg.role == "system"
         assert intro_msg.content == "Welcome to the metadata test."

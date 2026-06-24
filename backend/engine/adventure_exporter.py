@@ -291,7 +291,7 @@ class AdventureExporter:
         # 2. Serialize to Dictionary
         def to_dict(obj):
             if not obj: return None
-            data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns if c.name != "template_id"}
+            data = {c.name: getattr(obj, c.name) for c in obj.__table__.columns if c.name not in _SYSTEM_ENTITY_KEYS}
             if isinstance(obj, WorldScene):
                 decor = data.get("decorative_objects")
                 if not isinstance(decor, list):

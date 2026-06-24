@@ -3148,8 +3148,11 @@ async def test_start_session_honors_manifest_start_scene_id_when_graph_has_no_en
         assert state.current_scene_id == "LOBBY"
 
 
-async def test_started_sessions_keep_snapshot_images_after_template_avatar_edit(client: AsyncClient):
+async def test_started_sessions_keep_snapshot_images_after_template_avatar_edit(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
     """Started sessions keep their snapshot cover/protagonist images after later template edits."""
+    original_isfile = os.path.isfile
+    monkeypatch.setattr("os.path.isfile", lambda p: True if "cover_old.png" in p or "protagonist_old.png" in p else original_isfile(p))
+
     ids = await _create_adventure(client, "Snapshot Image Isolation Quest")
 
     old_cover = "/data/adventures/test/cover_old.png"

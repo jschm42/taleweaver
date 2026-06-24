@@ -94,8 +94,8 @@ def test_world_generation_prompts_define_directional_exit_contract() -> None:
     system_prompt = prompts.WORLD_GENERATION_SYSTEM_PROMPT
     user_prompt = prompts.WORLD_GENERATION_USER_PROMPT_TEMPLATE
 
-    assert "Every exit object is directional" in system_prompt
-    assert "you MUST create two separate exit objects" in system_prompt
-    assert "Only emit a single exit object when the path is intentionally one-way" in system_prompt
-    assert "Treat exits as strictly directional edges" in user_prompt
-    assert "For a normal two-way passage, emit both directions as separate exit objects" in user_prompt
+    assert "Every exit object represents ONE defined path." in system_prompt
+    assert "Use `is_bidirectional: true` (the default) for all normal passages" in system_prompt
+    assert "Set `is_bidirectional: false` ONLY for intentionally one-way transitions" in system_prompt
+    assert "Use `is_bidirectional: true` (default) for every normal passage" in user_prompt
+    assert "Only set `is_bidirectional: false` for genuinely one-way transitions" in user_prompt

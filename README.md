@@ -60,6 +60,12 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 ### 🧠 The Omniscient AI Gamemaster
 * **Limitless Generative Worlds:** The AI generates entire plots, puzzles, and explorable scenes "on the fly". No two playthroughs are ever the same.
 * **Dynamic NPCs:** Engage in fluid, natural conversations where the AI fully embodies the persona of every character you meet. NPCs can move between scenes and have their own goals and motivations.
+* **Cover Mode (Sequels & Variations):** Generate sequels, spin-offs, or variations by choosing an existing adventure as a "Cover Source". Adjust the similarity index (0% = freely inspired, 100% = very close) and toggle the reuse of visual assets.
+
+### 🛠️ Fully-Featured Adventure Editor
+* **Complete World Customization:** The Adventure Editor is now fully functional to edit, refine, and build adventure templates.
+* **Full CRUD Management:** Create and edit scenes, exits, quests, NPCs, items, containers, and switch outcomes directly from the UI.
+* **Asset Integration:** Assign visual styles, upload custom assets, and configure bidirectional route maps.
 
 ### 🎯 Quests & Meta-Progression
 * **Dynamic Objectives:** Follow main storylines or explore optional side quests. The AI Gamemaster evaluates your actions and dynamically updates your quest log.
@@ -73,9 +79,11 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Container Gameplay:** Containers can be generated in scenes and inventory, support locked/unlocked states, and may require a code or item condition before access.
 * **Text-Log Discovery System:** Readable objects can contain structured text logs (document, scroll, book, sign) that can be opened directly from scene and inventory interactions.
 
-### 🎧 The Playable Audiobook (Cinematic Audio)
+### 🎧 The Playable Audiobook & Voice Input (Cinematic Audio)
 * **Next-Gen Voice Acting:** Powered by **Google Gemini 3.5 Flash (TTS)** and **ElevenLabs**, the AI Gamemaster narrates your adventure with cinematic quality and emotional depth.
-* **Director's Cut:** The engine automatically parses vocal tags and director notes to build dramatic tension[cite: 1]. It is not just reading text; it is performing a high-budget audio drama.
+* **Speech-to-Text & Push-to-Talk (PTT):** True hands-free roleplaying! Hold down the interactive microphone UI button or hotkeys (`V`, `B`, or `T`) to record and speak directly to NPCs and the GM. Releases auto-transcribe and submit immediately.
+* **In-Character Speech Shortcuts:** Hold down `B`, `T`, or `Shift` to automatically prepend `/say ` to your transcription, allowing seamless in-character dialogue.
+* **Background Whisper Model Loading:** Configurable local Whisper model preloads in a background thread to prevent UI blocking, with real-time state logging (idle, loading, active, error).
 
 ### 🗺️ Visuals & Sensory Immersion
 * **Dynamic Cartography:** Automatic rendering of hand-drawn style directed graph maps of your discovered scenes using rough.js and dagre[cite: 1].
@@ -99,8 +107,10 @@ Instead of a static, predefined story, the AI acts as an intelligent, omniscient
 * **Offline Image Generation:** Local providers are supported, including **Ollama** and **Stable Diffusion via Automatic1111/Forge API**.
 
 ### Recent Feature Highlights
+* **Whisper Speech-to-Text & Push-to-Talk** (`1f14273`, `6c3f1c2`, `52e7312`): OpenAI Whisper integration featuring background model preloading, hands-free recording overlays, automatic transcription submission, and a Shift/hotkey (B/T) shortcut to speak in-character (`/say `) to NPCs.
 * **Interactive World Map with Pathfinding** (`3e66a99`): Fully interactive world map visualization with pathfinding, panning, and zooming capabilities for navigating adventure scenes.
-* **Adventure Editor API** (`ec53b2e`, `50e1657`): Complete CRUD endpoints for scenes, entities, and exits in the adventure editor, with reference components for entity selection and bidirectional exit persistence.
+* **Fully Functional Adventure Editor** (`ec53b2e`, `50e1657`): The Adventure Editor is now fully functional to edit, refine, and build adventure templates. Includes full CRUD management for scenes, exits, quests, NPCs, items, containers, and switch outcomes directly from the UI, with visual asset configuration and bidirectional route mapping.
+* **Cover Mode (Sequels & Variations)**: Generate sequels, spin-offs, or variations by choosing an existing adventure as a "Cover Source". Adjust the similarity index (0% = freely inspired, 100% = very close) and toggle the reuse of visual assets to preserve the sensory feel of the original adventure.
 * **Centralized API Client + Proxy Config** (`47f4fa5`): Refactored frontend to use a centralized API client with backend configuration routes and updated nginx proxy configuration for security.
 * **Exit Unlock Rules + Bidirectional Exits** (`2825346`, `109f5c2`, `59ecf98`): Global soft unlock rules for exits and containers, bidirectional exit persistence as a single database row, and explicit rule distraction for container unlocks.
 * **SWITCH Item Type** (`be98796`): Added support for the SWITCH item type and related gameplay mechanics.
@@ -127,9 +137,7 @@ TaleWeaver is evolving rapidly. Here is what we are building next to push the bo
 *   **Epic Campaigns (Endless Scale):** Breaking the boundaries of single adventures. We are building a system to link multiple `.adv` blueprints into massive, persistent campaigns with overarching plots and carrying over character progression.
 *   **Deep Immersion Overhaul:** Upgrading the event engine for more complex NPC behaviors, advanced item crafting, and dynamic world events.
 *   **100% Local TTS:** Cutting the cord to cloud audio. We will integrate local Text-to-Speech models so your adventure remains fully offline and private, matching our local Ollama vision.
-*   **Voice Control & Speech-to-Text:** True hands-free roleplaying. Talk directly to the AI Gamemaster and NPCs using your microphone for the ultimate "holodeck" experience.
 *   **Experience & Growth:** Complete objectives to earn EXP and progress your character's journey.
-*   **Fully featured Wold-Editor. Edit every aspect of the generated world and adventures.
 
 ---
 

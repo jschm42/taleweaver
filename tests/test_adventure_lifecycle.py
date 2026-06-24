@@ -130,7 +130,7 @@ async def test_export_adv_objects_omit_null_and_npc_fields(auth_client, setup_te
 
         assert exported_obj is not None
         assert exported_obj.get("stat_modifier_strength") == 0
-        assert exported_obj.get("metadata_json", {}).get("hp_change") == 0
+        assert exported_obj.get("hp_change") == 0
         assert "stat_modifier_strength" not in exported_obj.get("metadata_json", {})
 
         # Null and NPC-only attributes should be excluded from object payloads.
@@ -641,9 +641,16 @@ async def test_switch_object_export_import_roundtrip(auth_client, setup_test_db)
 
     # 4. Verify in database
     async with TestSessionLocal() as db:
+        template_res = await db.execute(
+            select(AdventureTemplate).where(AdventureTemplate.title == manifest["adventure"]["title"])
+        )
+        new_template = template_res.scalars().first()
+        assert new_template is not None
+        new_template_id = new_template.id
+
         res = await db.execute(
             select(WorldEntity).where(
-                WorldEntity.template_id == adventure_id,
+                WorldEntity.template_id == new_template_id,
                 WorldEntity.id == "CHAMBER_CONTROL_SWITCH"
             )
         )
