@@ -49,7 +49,7 @@ async def test_stt_transcribe_success(monkeypatch: pytest.MonkeyPatch, client: A
             captured_args["audio_data"] = audio_data
             return {"text": "Hello, world! This is a test."}
 
-    def fake_load_model(model_name):
+    def fake_load_model(model_name, *args, **kwargs):
         captured_args["model_name"] = model_name
         return MockWhisperModel()
 
@@ -82,3 +82,40 @@ async def test_stt_transcribe_invalid_samplerate(client: AsyncClient) -> None:
 
     assert response.status_code == 400
     assert "sample rate" in response.json()["detail"].lower()
+
+
+async def test_stt_status_and_preload(monkeypatch: pytest.MonkeyPatch, client: AsyncClient) -> None:
+    await _create_test_user(username="stt_user_status")
+    
+    from backend.api.routes.stt_api import _whisper_model_states, _whisper_models
+    _whisper_model_states.clear()
+    _whisper_models.clear()
+
+    loaded_models = []
+    
+    def fake_get_whisper_model(model_name, *args, **kwargs):
+        loaded_models.append(model_name)
+        class FakeModel:
+            pass
+        return FakeModel()
+
+    monkeypatch.setattr("backend.api.routes.stt_api.get_whisper_model", fake_get_whisper_model)
+
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'stt_user_status'})}"}
+    
+    # 1. Check initial status (should be "not_loaded")
+    status_response = await client.get("/api/stt/status", headers=headers)
+    assert status_response.status_code == 200
+    assert status_response.json()["model_name"] == "tiny"
+    assert status_response.json()["status"] == "not_loaded"
+
+    # 2. Trigger preload
+    preload_response = await client.post("/api/stt/preload", headers=headers)
+    assert preload_response.status_code == 200
+    assert preload_response.json()["model_name"] == "tiny"
+    assert preload_response.json()["status"] in ("loading", "loaded")
+
+    # Check status again
+    status_response = await client.get("/api/stt/status", headers=headers)
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] in ("loading", "loaded")

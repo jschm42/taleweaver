@@ -710,5 +710,17 @@ export const api = {
       body: formData,
       timeoutMs: 60000,
     })
+  },
+
+  getSttStatus(): Promise<{ model_name: string; status: 'not_loaded' | 'loading' | 'loaded' | 'error' }> {
+    return request('/stt/status', {
+      method: 'GET',
+    })
+  },
+
+  preloadSttModel(): Promise<{ model_name: string; status: 'not_loaded' | 'loading' | 'loaded' | 'error' }> {
+    return request('/stt/preload', {
+      method: 'POST',
+    })
   }
 }

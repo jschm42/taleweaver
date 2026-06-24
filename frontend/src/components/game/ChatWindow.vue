@@ -72,6 +72,51 @@ const leftChannel = ref<Float32Array[]>([])
 const pttKeyPressed = ref(false)
 const recordStartTime = ref<number>(0)
 let globalMouseUpListener: (() => void) | null = null
+
+// Whisper STT Status State
+const whisperStatus = ref<'not_loaded' | 'loading' | 'loaded' | 'error'>('not_loaded')
+const whisperModelName = ref('tiny')
+const pttPrefixSay = ref(false)
+const pttKeyActiveCode = ref('')
+let whisperStatusTimer: any = null
+
+async function checkWhisperStatus() {
+  try {
+    const { api } = await import('@/composables/useApi')
+    const res = await api.getSttStatus()
+    whisperStatus.value = res.status
+    whisperModelName.value = res.model_name
+    
+    if (res.status === 'loading') {
+      if (!whisperStatusTimer) {
+        whisperStatusTimer = setInterval(checkWhisperStatus, 2000)
+      }
+    } else {
+      if (whisperStatusTimer) {
+        clearInterval(whisperStatusTimer)
+        whisperStatusTimer = null
+      }
+    }
+  } catch (err) {
+    console.error('Failed to get STT status:', err)
+  }
+}
+
+async function triggerWhisperPreload() {
+  try {
+    const { api } = await import('@/composables/useApi')
+    const res = await api.preloadSttModel()
+    whisperStatus.value = res.status
+    whisperModelName.value = res.model_name
+    if (res.status === 'loading') {
+      if (!whisperStatusTimer) {
+        whisperStatusTimer = setInterval(checkWhisperStatus, 2000)
+      }
+    }
+  } catch (err) {
+    console.error('Failed to preload STT model:', err)
+  }
+}
 const logEl = ref<HTMLElement | null>(null)
 const brokenImages = ref<Record<string, boolean>>({})
 const showMenuPopup = ref(false)
@@ -827,16 +872,16 @@ async function stopVoiceRecording() {
   try {
     const { api } = await import('@/composables/useApi')
     const result = await api.transcribeAudio(audioBlob)
-    const text = result.text.trim()
+    let text = result.text.trim()
     if (text) {
+      const prefix = pttPrefixSay.value ? '/say ' : ''
       if (inputText.value.trim()) {
-        inputText.value = `${inputText.value.trim()} ${text}`
+        inputText.value = `${inputText.value.trim()} ${prefix}${text}`
       } else {
-        inputText.value = text
+        inputText.value = `${prefix}${text}`
       }
-      void nextTick(() => {
-        inputEl.value?.focus()
-      })
+      // Directly trigger message submission so user doesn't need to press Enter
+      handleSend()
     }
   } catch (err) {
     console.error('Failed to transcribe audio:', err)
@@ -849,6 +894,8 @@ function handleMicButtonMousedown(e: MouseEvent | TouchEvent) {
   e.preventDefault()
   if (!canSendInput.value || props.sheet?.agent_active) return
   
+  pttPrefixSay.value = e.shiftKey
+  pttKeyActiveCode.value = ''
   void startVoiceRecording()
   
   globalMouseUpListener = () => {
@@ -867,11 +914,16 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   const target = e.target as HTMLElement
   const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
 
-  // PTT key: 'KeyV' or 'v'
-  if (e.code === 'KeyV' && !isTyping && !props.sheet?.agent_active) {
+  // PTT keys: 'KeyV' (normal), 'KeyB' or 'KeyT' (for direct speech /say), or Shift + V
+  const isV = e.code === 'KeyV'
+  const isB = e.code === 'KeyB'
+  const isT = e.code === 'KeyT'
+  if ((isV || isB || isT) && !isTyping && !props.sheet?.agent_active) {
     e.preventDefault()
     if (!pttKeyPressed.value) {
       pttKeyPressed.value = true
+      pttKeyActiveCode.value = e.code
+      pttPrefixSay.value = isB || isT || e.shiftKey
       void startVoiceRecording()
     }
     return
@@ -905,9 +957,11 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 }
 
 function handleGlobalKeyup(e: KeyboardEvent) {
-  if (e.code === 'KeyV' && pttKeyPressed.value) {
+  const activeCode = pttKeyActiveCode.value || 'KeyV'
+  if (e.code === activeCode && pttKeyPressed.value) {
     e.preventDefault()
     pttKeyPressed.value = false
+    pttKeyActiveCode.value = ''
     void stopVoiceRecording()
   }
 }
@@ -919,16 +973,25 @@ function handleDocumentClick(e: MouseEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('keyup', handleGlobalKeyup)
   document.addEventListener('click', handleDocumentClick)
+  
+  // Check and trigger Whisper STT preloading
+  await checkWhisperStatus()
+  if (whisperStatus.value === 'not_loaded') {
+    await triggerWhisperPreload()
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('keyup', handleGlobalKeyup)
   document.removeEventListener('click', handleDocumentClick)
+  if (whisperStatusTimer) {
+    clearInterval(whisperStatusTimer)
+  }
 })
 </script>
 
@@ -1323,7 +1386,9 @@ onUnmounted(() => {
         :class="[
           isRecording 
             ? 'border-red-500/30 bg-red-950/40 text-red-200 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
-            : 'border-amber-500/30 bg-amber-950/40 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+            : isTranscribing && whisperStatus === 'loading'
+              ? 'border-yellow-500/30 bg-yellow-950/40 text-yellow-200 shadow-[0_0_15px_rgba(234,179,8,0.2)]'
+              : 'border-amber-500/30 bg-amber-950/40 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
         ]"
       >
         <div class="flex items-center gap-2">
@@ -1331,13 +1396,28 @@ onUnmounted(() => {
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
             <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
           </span>
+          <span v-else-if="isTranscribing && whisperStatus === 'loading'" class="w-3 h-3 rounded-full border-t-2 border-yellow-400 animate-spin"></span>
           <span v-else class="w-3 h-3 rounded-full border-t-2 border-amber-400 animate-spin"></span>
-          <span>{{ isRecording ? "PTT Active: Recording Audio..." : "Transcribing speech..." }}</span>
+          <span>
+            {{ 
+              isRecording 
+                ? "PTT Active: Recording Audio..." 
+                : isTranscribing && whisperStatus === 'loading'
+                  ? `Waiting for Whisper model (${whisperModelName}) to finish loading...`
+                  : "Transcribing speech..."
+            }}
+          </span>
         </div>
         <div class="text-[10px] uppercase tracking-wider font-bold"
-          :class="isRecording ? 'text-red-400' : 'text-amber-400'"
+          :class="isRecording ? 'text-red-400' : isTranscribing && whisperStatus === 'loading' ? 'text-yellow-400' : 'text-amber-400'"
         >
-          {{ isRecording ? (pttKeyPressed ? "Release 'V' key to finish" : "Release mouse button to finish") : "Please wait" }}
+          {{ 
+            isRecording 
+              ? (pttKeyPressed ? `Release '${pttKeyActiveCode || 'V'}' key to finish` : "Release mouse button to finish") 
+              : isTranscribing && whisperStatus === 'loading'
+                ? "Please wait (~30s)"
+                : "Please wait" 
+          }}
         </div>
       </div>
       <div class="flex items-center gap-2 sm:gap-3">
@@ -1391,13 +1471,20 @@ onUnmounted(() => {
                 ? 'bg-red-500/20 border-red-500/40 text-red-400 shadow-[0_0_12px_rgba(239,68,68,0.25)] animate-pulse'
                 : isTranscribing
                   ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-                  : 'bg-slate-900/60 border-slate-700/70 text-slate-400 hover:bg-slate-800/80 hover:border-slate-500 hover:text-slate-200'
+                  : whisperStatus === 'loading'
+                    ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 animate-pulse'
+                    : 'bg-slate-900/60 border-slate-700/70 text-slate-400 hover:bg-slate-800/80 hover:border-slate-500 hover:text-slate-200'
             ]"
-            title="Speech Input (Hold V to talk / hold button to talk)"
+            :title="whisperStatus === 'loading'
+              ? `Whisper Model (${whisperModelName}) is loading... (This takes ~30s on first load)`
+              : whisperStatus === 'error'
+                ? `Whisper Model (${whisperModelName}) failed to load. Please check logs.`
+                : `Speech Input (Hold V/B/T to talk / hold button to talk)`"
             @mousedown="handleMicButtonMousedown"
             @touchstart="handleMicButtonMousedown"
           >
-            <Mic class="h-4 w-4 sm:h-5 sm:w-5" />
+            <span v-if="whisperStatus === 'loading' && !isRecording && !isTranscribing" class="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></span>
+            <Mic v-else class="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
 
           <!-- Send Button (Primary Action) -->

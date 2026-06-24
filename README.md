@@ -433,7 +433,7 @@ You can download `.adv` or `.adz` files from there and import them into your loc
 ## 7. Credits & Assets
 
 * **AI & LLM:** Image generation is powered by **FLUX.1 [schnell]** and **FLUX.2 [klein]** by [Black Forest Labs](https://blackforestlabs.ai/). Multi-provider LLM abstraction is handled via [LiteLLM](https://github.com/BerriAI/litellm).
-* **Voice & TTS:** Cinematic narration provided by **Google Gemini 2.5 Flash (TTS)** and **ElevenLabs**.
+* **Voice & Audio:** Cinematic narration provided by **Google Gemini 2.5 Flash (TTS)** and **ElevenLabs**, with speech-to-text input transcribing powered by **OpenAI Whisper**.
 * **Mapping:** Dynamic hand-drawn world maps are rendered using [rough.js](https://roughjs.com/) and [dagre](https://github.com/dagrejs/dagre).
 * **Visual Assets:** Special thanks to [Recraft.ai](https://www.recraft.ai) for the high-quality vector graphics and SVG assets, and [DiceBear](https://www.dicebear.com/) for the procedural user avatars.
 * **Icons:** RPG-specific iconography provided by [RPG-Awesome](https://nagoshiashumari.github.io/Rpg-Awesome/) and system icons by [Lucide](https://lucide.dev/).

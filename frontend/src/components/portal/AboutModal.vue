@@ -66,9 +66,10 @@ const currentYear = new Date().getFullYear()
                 <p class="text-[11px] text-slate-300">LiteLLM Abstraction</p>
               </div>
               <div class="space-y-1">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voice & TTS</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voice & Audio</p>
                 <p class="text-[11px] text-slate-300">Google Gemini TTS</p>
                 <p class="text-[11px] text-slate-300">ElevenLabs</p>
+                <p class="text-[11px] text-slate-300">OpenAI Whisper (STT)</p>
               </div>
               <div class="space-y-1">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mapping</p>
