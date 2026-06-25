@@ -33,7 +33,7 @@ const showDebugRumors = ref(false)
       <div class="flex items-center gap-2">
         <i class="ra ra-quill text-amber-500 group-hover:scale-110 transition-transform"></i>
         <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-amber-500/80 group-hover:text-amber-400 transition-colors">
-          Welt-Erinnerungen
+          World Memories
         </h3>
       </div>
       <i
@@ -50,7 +50,7 @@ const showDebugRumors = ref(false)
       <div v-show="isOpen" class="mt-4 overflow-hidden">
         <!-- Memories List -->
         <div v-if="memories.length === 0" class="text-xs text-slate-500 italic py-2">
-          Keine bleibenden Erinnerungen verzeichnet. Deine Taten werden die Welt formen.
+          No lasting memories recorded. Your deeds will shape the world.
         </div>
         <div v-else class="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
           <transition-group name="list">

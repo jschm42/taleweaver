@@ -239,12 +239,12 @@ GM_MECHANICS_SUFFIX = (
     "- If a remembered fact is obsolete or wrong, list it in `forget_notes`.\n"
     "- Use `clear_notes: true` only for explicit full memory reset requests.\n"
     "WORLD MEMORIES & RUMORS:\n"
-    "- If the player's action has a lasting consequence (e.g. treating an NPC badly, doing a big favor, committing a crime), add a memory object to `new_world_memories` (with fields: `description`, `npc_id` [optional], and `emotion` ['positive', 'negative', or 'neutral']).\n"
+    "- If the player's action has a lasting consequence (e.g. treating an NPC badly, doing a big favor, committing a crime), add a memory object to `new_world_memories` (with fields: `description` [must be written in English], `npc_id` [optional], and `emotion` ['positive', 'negative', or 'neutral']).\n"
     "- If the player does something groundbreaking (e.g. defeating a boss, saving a scene, starting a tavern brawl), also generate a rumor object in `new_rumors` (with fields: `text` [description of the rumor], `source_scene_id` [current scene ID], and `target_scene_ids` [list of other scene IDs where it spreads]).\n"
     "GAME OVER & COMPLETION:\n"
     "- If the situation is hopeless or the player has violated core rules, set `game_over: true` and provide a `status_note` explanation.\n"
     "- If the story has reached its logical conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
-    "Your 'narrative_description' will be used as a draft/log; keep it short.\n\n"
+    "Your 'narrative_description' will be used as a draft/log; keep it short. CRITICAL DRAFT NARRATION RULE: In your 'narrative_description' draft, do NOT describe any actions, movements, or dialogue for NPCs that are not physically PRESENT in the current scene. Only present NPCs may speak or act.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
     + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
@@ -277,7 +277,7 @@ GM_STORY_MECHANICS_SUFFIX = (
     "- If a remembered fact is obsolete or wrong, list it in `forget_notes`.\n"
     "- Use `clear_notes: true` only for explicit full memory reset requests.\n"
     "WORLD MEMORIES & RUMORS:\n"
-    "- If the player's action has a lasting consequence (e.g. treating an NPC badly, doing a big favor, committing a crime), add a memory object to `new_world_memories` (with fields: `description`, `npc_id` [optional], and `emotion` ['positive', 'negative', or 'neutral']).\n"
+    "- If the player's action has a lasting consequence (e.g. treating an NPC badly, doing a big favor, committing a crime), add a memory object to `new_world_memories` (with fields: `description` [must be written in English], `npc_id` [optional], and `emotion` ['positive', 'negative', or 'neutral']).\n"
     "- If the player does something groundbreaking (e.g. defeating a boss, saving a scene, starting a tavern brawl), also generate a rumor object in `new_rumors` (with fields: `text` [description of the rumor], `source_scene_id` [current scene ID], and `target_scene_ids` [list of other scene IDs where it spreads]).\n"
     "GAME OVER & COMPLETION:\n"
     "- If the story has reached a logical turning point or conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
@@ -286,7 +286,7 @@ GM_STORY_MECHANICS_SUFFIX = (
     "- If an NPC moves to a different scene, use `moved_entities` with `to_scene_id` and `to_spatial_position`.\n"
     "- If an NPC changes their spot within the current scene, use `updated_entities` with `spatial_position`.\n"
     "IMPORTANT: `new_status_effects` is strictly for the PROTAGONIST's condition (e.g., 'Poisoned', 'Exhausted'). Do NOT use it for NPC actions or world state descriptions. "
-    "Your 'narrative_description' will be used as a draft/log; keep it short.\n\n"
+    "Your 'narrative_description' will be used as a draft/log; keep it short. CRITICAL DRAFT NARRATION RULE: In your 'narrative_description' draft, do NOT describe any actions, movements, or dialogue for NPCs that are not physically PRESENT in the current scene. Only present NPCs may speak or act.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
     + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
@@ -400,7 +400,7 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "If a detail should be remembered, add short facts to `remember_notes`. "
     "If a remembered detail is obsolete, list it in `forget_notes`. "
     "Use `clear_notes` only for explicit full memory reset requests. "
-    "If the player's action has a lasting consequence, record it in `new_world_memories` (fields: `description`, `npc_id` [optional], `emotion`). "
+    "If the player's action has a lasting consequence, record it in `new_world_memories` (fields: `description` [must be written in English], `npc_id` [optional], `emotion`). "
     "If the player does something groundbreaking, also generate a rumor in `new_rumors` (fields: `text`, `source_scene_id`, `target_scene_ids`). "
     "Use `game_completed` and optional `status_note` only when all main objectives are clearly complete. "
     "Use `game_over` and optional `status_note` only for explicit terminal failure outcomes. "
@@ -443,7 +443,7 @@ GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "SESSION NOTES (REDUCED):\n"
     "{notes_json}\n\n"
     "WORLD MEMORIES & RUMORS:\n"
-    "- If the player's action has a lasting consequence, add a memory object to `new_world_memories` (fields: `description`, `npc_id`, `emotion`).\n"
+    "- If the player's action has a lasting consequence, add a memory object to `new_world_memories` (fields: `description` [must be written in English], `npc_id`, `emotion`).\n"
     "- If the player does something groundbreaking, generate a rumor in `new_rumors` (fields: `text`, `source_scene_id`, `target_scene_ids`).\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
     + PUZZLE_DESIGN_PATTERNS_BLOCK
