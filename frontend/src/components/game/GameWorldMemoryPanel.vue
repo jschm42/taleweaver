@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { ChevronDown, ChevronRight } from 'lucide-vue-next'
 
 defineProps<{
   memories: Array<{
@@ -21,21 +22,14 @@ const isOpen = ref(false)
     <!-- Header/Toggle Button -->
     <button
       @click="isOpen = !isOpen"
-      class="flex items-center justify-between w-full text-left group focus:outline-none cursor-pointer"
+      class="flex items-center gap-1.5 w-full text-left focus:outline-none cursor-pointer mb-4 select-none"
     >
-      <div class="flex items-center gap-2">
-        <i class="ra ra-quill text-amber-500 group-hover:scale-110 transition-transform"></i>
-        <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-amber-500/80 group-hover:text-amber-400 transition-colors">
-          World Memories
-        </h3>
-      </div>
-      <i
-        :class="[
-          'text-slate-500 group-hover:text-slate-300 transition-all duration-200 text-[10px] transform',
-          isOpen ? 'rotate-180' : 'rotate-0'
-        ]"
-        class="ra ra-chevron-down"
-      ></i>
+      <ChevronDown v-if="isOpen" class="w-3.5 h-3.5 text-slate-500 transition-all shrink-0" />
+      <ChevronRight v-else class="w-3.5 h-3.5 text-slate-500 transition-all shrink-0" />
+      <i class="ra ra-quill text-amber-500 group-hover:scale-110 transition-transform"></i>
+      <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-amber-500/80">
+        World Memories
+      </h3>
     </button>
 
     <!-- Collapsible Container -->
@@ -115,7 +109,7 @@ const isOpen = ref(false)
 .expand-enter-active,
 .expand-leave-active {
   transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
-  max-height: 300px;
+  max-height: 500px;
 }
 .expand-enter-from,
 .expand-leave-to {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { ChevronDown, ChevronRight } from 'lucide-vue-next'
 import { getItemIcon, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 
 interface SceneHoverPayload {
@@ -32,47 +33,72 @@ const hoverPayload = computed<any>(() => ({
   image_url: props.sceneImage,
   entity_type: 'SCENE'
 }))
+
+const isOpen = ref(true)
 </script>
 
 <template>
   <div class="mb-8">
-    <div class="flex items-center gap-2 mb-4">
+    <button
+      @click="isOpen = !isOpen"
+      class="flex items-center gap-1.5 w-full text-left focus:outline-none cursor-pointer mb-4 select-none"
+    >
+      <ChevronDown v-if="isOpen" class="w-3.5 h-3.5 text-slate-500 transition-all shrink-0" />
+      <ChevronRight v-else class="w-3.5 h-3.5 text-slate-500 transition-all shrink-0" />
       <i class="ra ra-mountain-cave text-indigo-500"></i>
       <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-indigo-500/80">Location</h3>
-    </div>
-    <div
-      class="relative group cursor-help overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 transition-all hover:border-indigo-500/50"
-      @mouseenter="emit('hover', hoverPayload, $event)"
-      @mousemove="emit('move', $event)"
-      @mouseleave="emit('leave')"
-      @contextmenu.prevent="emit('contextmenu', hoverPayload, $event)"
-      @click="emit('click', hoverPayload)"
-    >
-      <div class="aspect-video w-full relative overflow-hidden bg-slate-900 flex items-center justify-center">
-        <img
-          v-if="sceneImage && showImage(sceneImage)"
-          :src="getImageUrl(sceneImage, { thumbnail: true })"
-          class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-          @error="(e) => {
-            const target = e.target as HTMLImageElement
-            if (target.src.includes('_thumb')) {
-              target.src = getOriginalImageUrl(sceneImage)
-            } else {
-              emit('imageError', sceneImage!)
-            }
-          }"
-        />
-        <div v-else class="w-full h-full flex items-center justify-center bg-slate-800">
-          <i :class="['ra text-7xl opacity-20', getItemIcon('SCENE'), 'text-indigo-400']"></i>
-        </div>
-        <div class="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-slate-950 to-transparent">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-xs font-bold text-white uppercase tracking-wider truncate block overflow-hidden shadow-sm">{{ sceneName || 'Unknown' }}</span>
-            <span v-if="isDebug && sceneId" class="text-[10px] font-mono text-indigo-300 opacity-60">ID: {{ sceneId }}</span>
+    </button>
+    <transition name="expand">
+      <div v-show="isOpen" class="overflow-hidden">
+        <div
+          class="relative group cursor-help overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 transition-all hover:border-indigo-500/50"
+          @mouseenter="emit('hover', hoverPayload, $event)"
+          @mousemove="emit('move', $event)"
+          @mouseleave="emit('leave')"
+          @contextmenu.prevent="emit('contextmenu', hoverPayload, $event)"
+          @click="emit('click', hoverPayload)"
+        >
+          <div class="aspect-video w-full relative overflow-hidden bg-slate-900 flex items-center justify-center">
+            <img
+              v-if="sceneImage && showImage(sceneImage)"
+              :src="getImageUrl(sceneImage, { thumbnail: true })"
+              class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              @error="(e) => {
+                const target = e.target as HTMLImageElement
+                if (target.src.includes('_thumb')) {
+                  target.src = getOriginalImageUrl(sceneImage)
+                } else {
+                  emit('imageError', sceneImage!)
+                }
+              }"
+            />
+            <div v-else class="w-full h-full flex items-center justify-center bg-slate-800">
+              <i :class="['ra text-7xl opacity-20', getItemIcon('SCENE'), 'text-indigo-400']"></i>
+            </div>
+            <div class="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-slate-950 to-transparent">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-bold text-white uppercase tracking-wider truncate block overflow-hidden shadow-sm">{{ sceneName || 'Unknown' }}</span>
+                <span v-if="isDebug && sceneId" class="text-[10px] font-mono text-indigo-300 opacity-60">ID: {{ sceneId }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </transition>
   </div>
 </template>
+
+<style scoped>
+/* Collapsible expansion animation */
+.expand-enter-active,
+.expand-leave-active {
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+  max-height: 400px;
+}
+.expand-enter-from,
+.expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+</style>
 
