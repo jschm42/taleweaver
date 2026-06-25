@@ -1108,10 +1108,7 @@ watch(
         />
 
         <GameWorldMemoryPanel
-          v-if="!!sheet?.debug_mode"
           :memories="worldMemories"
-          :rumors="worldRumors"
-          :is-debug="!!sheet?.debug_mode"
         />
       </aside>
 

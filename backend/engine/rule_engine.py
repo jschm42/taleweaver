@@ -146,11 +146,8 @@ class WorldMemoryUpdate(BaseModel):
     description: str
     npc_id: Optional[str] = None
     emotion: Literal["positive", "negative", "neutral"] = "neutral"
-
-class RumorUpdate(BaseModel):
-    text: str
-    source_scene_id: str
-    target_scene_ids: Optional[list[str]] = None
+    scope: Literal["local", "global"] = "global"
+    scene_id: Optional[str] = None
 
 
 class AdventureGeneratorToolIntent(BaseModel):
@@ -175,7 +172,6 @@ class AdventureGeneratorToolIntent(BaseModel):
     forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
     new_world_memories: Optional[list[WorldMemoryUpdate]] = None
-    new_rumors: Optional[list[RumorUpdate]] = None
     new_status_effects: Optional[list[str]] = None
     game_over: bool = False
     game_completed: bool = False
@@ -248,7 +244,6 @@ class GameEvent(BaseModel):
     forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
     new_world_memories: Optional[list[WorldMemoryUpdate]] = None
-    new_rumors: Optional[list[RumorUpdate]] = None
 
     # Status Updates
     game_over: bool = False

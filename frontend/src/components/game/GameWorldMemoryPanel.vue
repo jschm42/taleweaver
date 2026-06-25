@@ -8,19 +8,12 @@ defineProps<{
     description: string
     npc_id?: string | null
     emotion: 'positive' | 'negative' | 'neutral'
+    scope?: 'local' | 'global'
+    scene_id?: string | null
   }>
-  rumors: Array<{
-    id: string
-    timestamp: string
-    text: string
-    source_scene_id: string
-    target_scene_ids: string[]
-  }>
-  isDebug?: boolean
 }>()
 
-const isOpen = ref(true)
-const showDebugRumors = ref(false)
+const isOpen = ref(false)
 </script>
 
 <template>
@@ -59,6 +52,7 @@ const showDebugRumors = ref(false)
               :key="mem.id"
               :class="[
                 'p-3 rounded-xl border text-xs leading-relaxed transition-all shadow-md flex items-start gap-2.5',
+                mem.scope === 'local' ? 'border-dashed border-opacity-70' : '',
                 mem.emotion === 'positive'
                   ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-300/90 shadow-emerald-950/10'
                   : mem.emotion === 'negative'
@@ -82,42 +76,20 @@ const showDebugRumors = ref(false)
               <!-- Content -->
               <div class="flex-grow min-w-0">
                 <p>{{ mem.description }}</p>
+                <div class="flex items-center justify-between mt-1.5 text-[8px] uppercase tracking-wider select-none">
+                  <span 
+                    :class="[
+                      'flex items-center gap-1 font-semibold',
+                      mem.scope === 'local' ? 'text-amber-500/60' : 'text-slate-500/60'
+                    ]"
+                  >
+                    <i :class="mem.scope === 'local' ? 'ra ra-compass' : 'ra ra-world'"></i>
+                    {{ mem.scope === 'local' ? 'Szenen-lokal' : 'Global' }}
+                  </span>
+                </div>
               </div>
             </div>
           </transition-group>
-        </div>
-
-        <!-- Debug Rumors section -->
-        <div v-if="isDebug" class="mt-4 border-t border-slate-850 pt-4">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-1.5 text-rose-500/80">
-              <i class="ra ra-microphone text-xxs"></i>
-              <span class="text-[10px] font-bold uppercase tracking-wider">Debug: Rumors</span>
-            </div>
-            <label class="relative inline-flex items-center cursor-pointer select-none">
-              <input type="checkbox" v-model="showDebugRumors" class="sr-only peer" />
-              <div class="w-7 h-4 bg-slate-805 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-500 after:border-slate-400 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-rose-500/60 peer-checked:after:bg-white"></div>
-            </label>
-          </div>
-          
-          <transition name="expand">
-            <div v-show="showDebugRumors" class="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
-              <div v-if="rumors.length === 0" class="text-[10px] text-slate-500 italic">
-                No rumors circulating.
-              </div>
-              <div 
-                v-else 
-                v-for="rum in rumors" 
-                :key="rum.id"
-                class="bg-slate-950/60 border border-rose-500/10 p-2 rounded-lg text-[10px] text-slate-400 font-mono leading-snug"
-              >
-                <div class="text-[8px] font-bold text-rose-400 uppercase tracking-tight mb-0.5">
-                  Source: {{ rum.source_scene_id }} &rarr; Target: {{ rum.target_scene_ids.join(', ') || '*' }}
-                </div>
-                <div>{{ rum.text }}</div>
-              </div>
-            </div>
-          </transition>
         </div>
       </div>
     </transition>

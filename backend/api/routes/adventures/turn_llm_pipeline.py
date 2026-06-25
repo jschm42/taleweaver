@@ -327,9 +327,8 @@ class TurnLlmContextBuilder:
         narration_system_prompt += notes_prompt_block
 
         memories_prompt_block = self.manager._build_world_memories_prompt_block()
-        rumors_prompt_block = self.manager._build_rumors_prompt_block()
-        mechanics_system_prompt += memories_prompt_block + rumors_prompt_block
-        narration_system_prompt += memories_prompt_block + rumors_prompt_block
+        mechanics_system_prompt += memories_prompt_block
+        narration_system_prompt += memories_prompt_block
         if global_unlock_rules_prompt_block:
             mechanics_system_prompt += global_unlock_rules_prompt_block
         mechanics_awards = self.manager._build_mechanics_awards()
