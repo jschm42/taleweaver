@@ -178,6 +178,8 @@ class TurnProgressionBuilder:
             remember_notes=intent.remember_notes,
             forget_notes=intent.forget_notes,
             clear_notes=bool(intent.clear_notes),
+            new_world_memories=intent.new_world_memories,
+            new_rumors=intent.new_rumors,
             game_over=bool(intent.game_over),
             game_completed=bool(intent.game_completed),
             status_note=intent.status_note,
@@ -315,6 +317,25 @@ class TurnSessionStateHelper:
             return "\n\nSESSION NOTES:\n- none"
         lines = "\n".join(f"- {note}" for note in notes)
         return "\n\nSESSION NOTES:\n" + lines
+
+    def build_world_memories_prompt_block(self) -> str:
+        memories = getattr(self.manager.state, "world_memories", None) or []
+        if not memories:
+            return ""
+        lines = "\n".join(f"- {m['description']} (Emotion: {m['emotion']})" for m in memories)
+        return "\n\nWORLD MEMORIES (LONG-TERM CONSEQUENCES):\n" + lines
+
+    def build_rumors_prompt_block(self, current_scene_id: str) -> str:
+        rumors = getattr(self.manager.state, "world_rumors", None) or []
+        local_rumors = []
+        for r in rumors:
+            targets = r.get("target_scene_ids") or []
+            if "*" in targets or current_scene_id in targets or not targets:
+                local_rumors.append(r)
+        if not local_rumors:
+            return ""
+        lines = "\n".join(f"- {r['text']}" for r in local_rumors)
+        return "\n\nACTIVE RUMORS IN THIS LOCATION (NPCs in this scene know these and will gossip or comment on them):\n" + lines
 
 
 class TurnCombatStateHelper:

@@ -17,6 +17,7 @@ import DebugModal from '@/components/game/DebugModal.vue'
 import GameScenePanel from '@/components/game/GameScenePanel.vue'
 import GameNpcsPanel from '@/components/game/GameNpcsPanel.vue'
 import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
+import GameWorldMemoryPanel from '@/components/game/GameWorldMemoryPanel.vue'
 import GameViewHeader from '@/components/game/GameViewHeader.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
@@ -150,6 +151,8 @@ const {
   inputLocked,
   pendingTerminalEpilogue,
   promptSuggestions,
+  worldMemories,
+  worldRumors,
   statusText,
   debugLogs,
   inventoryGlow,
@@ -1102,6 +1105,12 @@ watch(
           @click="handleEntityClick"
           @image-error="(path) => handleImageError(path)"
           @take-direct="handleTakeDirect"
+        />
+
+        <GameWorldMemoryPanel
+          :memories="worldMemories"
+          :rumors="worldRumors"
+          :is-debug="!!sheet?.debug_mode"
         />
       </aside>
 

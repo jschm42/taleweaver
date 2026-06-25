@@ -703,6 +703,13 @@ class GameTurnManager:
     def _build_gm_notes_prompt_block(self) -> str:
         return self._session_helper.build_gm_notes_prompt_block()
 
+    def _build_world_memories_prompt_block(self) -> str:
+        return self._session_helper.build_world_memories_prompt_block()
+
+    def _build_rumors_prompt_block(self) -> str:
+        current_scene_id = self.state.current_scene_id if self.state else "START"
+        return self._session_helper.build_rumors_prompt_block(current_scene_id)
+
     @staticmethod
     def _build_progression_event(intent: AdventureGeneratorToolIntent) -> GameEvent:
         return TurnProgressionBuilder.build_progression_event(intent)
@@ -4384,6 +4391,8 @@ class GameTurnManager:
             'entities': await AdventureLogic.build_session_entities(self.db, self.state),
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'quests': self.state.quests,
+            'world_memories': self.state.world_memories or [],
+            'world_rumors': self.state.world_rumors or [],
             **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
             'status': 'success',
@@ -4721,6 +4730,8 @@ class GameTurnManager:
             'combat': AdventureLogic.get_combat_snapshot(self.state),
             'quests': self.state.quests,
             'awards': await self._build_awards_payload(adventure),
+            'world_memories': self.state.world_memories or [],
+            'world_rumors': self.state.world_rumors or [],
             **self._build_prompt_suggestions_payload(),
             **self._build_terminal_flags_payload(),
             'status': 'success'
@@ -5390,6 +5401,44 @@ class GameTurnManager:
                         states[npc.id] = {}
                     states[npc.id]["inventory"] = cleaned_inv
                     state_dirty = True
+
+        if event.new_world_memories:
+            import uuid
+            from datetime import datetime
+            existing_memories = list(self.state.world_memories or [])
+            for mem in event.new_world_memories:
+                new_mem = {
+                    "id": str(uuid.uuid4()),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "description": mem.description,
+                    "npc_id": mem.npc_id,
+                    "emotion": mem.emotion
+                }
+                existing_memories.append(new_mem)
+                emotion_label = "positiv" if mem.emotion == "positive" else ("negativ" if mem.emotion == "negative" else "neutral")
+                msg = f"Erinnerung gespeichert ({emotion_label}): {mem.description}"
+                await self._save_chat_message("system", msg)
+                system_messages.append(msg)
+            self.state.world_memories = existing_memories
+            flag_modified(self.state, "world_memories")
+            self._queue_checkpoint("world_memories_updated")
+
+        if event.new_rumors:
+            import uuid
+            from datetime import datetime
+            existing_rumors = list(self.state.world_rumors or [])
+            for rum in event.new_rumors:
+                new_rum = {
+                    "id": str(uuid.uuid4()),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "text": rum.text,
+                    "source_scene_id": rum.source_scene_id,
+                    "target_scene_ids": rum.target_scene_ids or []
+                }
+                existing_rumors.append(new_rum)
+                logger.info("[Turn %s] Rumor registered: %s (spanned to %s)", self.game_id, rum.text, rum.target_scene_ids)
+            self.state.world_rumors = existing_rumors
+            flag_modified(self.state, "world_rumors")
 
         if state_dirty:
             self.state.entity_states = states

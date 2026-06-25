@@ -29,6 +29,8 @@ class SessionState(Base, TimestampMixin):
     exit_states = Column(JSON, nullable=True, default={})
     discovered_scenes = Column(JSON, nullable=True, default=[])
     quests = Column(JSON, nullable=True, default=[])
+    world_memories = Column(JSON, nullable=True, default=[])
+    world_rumors = Column(JSON, nullable=True, default=[])
     start_datetime = Column(String(36), nullable=True)
     
     # Session-specific overrides/copies from template

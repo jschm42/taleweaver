@@ -460,6 +460,8 @@ class ChatResponse(BaseModel):
     input_locked: bool = False
     pending_terminal_epilogue: bool = False
     prompt_suggestions: list[str] = Field(default_factory=list)
+    world_memories: Optional[list[dict[str, Any]]] = Field(default_factory=list)
+    world_rumors: Optional[list[dict[str, Any]]] = Field(default_factory=list)
     full_world: Optional[AdventureTemplateDebugResponse] = None
 
 class AdventureTemplateImportPayload(BaseModel):

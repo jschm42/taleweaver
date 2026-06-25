@@ -141,6 +141,8 @@ async def get_chat_history(
         input_locked=input_locked,
         pending_terminal_epilogue=pending_terminal_epilogue,
         prompt_suggestions=GameTurnManager.extract_prompt_suggestions(state.exit_states or {}),
+        world_memories=state.world_memories or [],
+        world_rumors=state.world_rumors or [],
     )
 
 @router.post("/{game_id}/chat")
