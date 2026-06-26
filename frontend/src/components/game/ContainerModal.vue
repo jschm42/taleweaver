@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
-import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { getItemIcon, getTypeColor, getImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 
 const props = defineProps<{
   open: boolean
@@ -18,6 +18,20 @@ const emit = defineEmits<{
 }>()
 
 const hasItems = computed(() => (props.items || []).length > 0)
+
+const brokenImages = ref<Record<string, boolean>>({})
+
+function itemKey(item: any): string {
+  return String(item.id || item.name || 'unknown-item')
+}
+
+function onItemImageError(item: any): void {
+  brokenImages.value[itemKey(item)] = true
+}
+
+function canShowImage(item: any): boolean {
+  return hasRenderableImagePath(item.image_url) && !brokenImages.value[itemKey(item)]
+}
 
 const onKeyDown = (event: KeyboardEvent) => {
   if (event.key === 'Escape' && props.open) {
@@ -59,9 +73,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
               >
                 <div class="w-14 h-14 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center">
                   <img
-                    v-if="item.image_url"
+                    v-if="canShowImage(item)"
                     :src="getImageUrl(item.image_url)"
                     class="w-full h-full object-cover object-top"
+                    :alt="item.name || 'container item'"
+                    @error="onItemImageError(item)"
                   />
                   <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/60">
                     <i :class="['ra text-xl', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>

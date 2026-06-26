@@ -14,6 +14,7 @@ from backend.core.adventure_format import validate_manifest_version
 from backend.core.auth import get_password_hash
 from backend.core.config import settings
 from backend.engine.world_generator import WorldGenerator
+from backend.engine.item_logic import normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -668,7 +669,7 @@ class AdventureTemplateImporter:
                         character=old_avatar.get("character", ""),
                         stats=old_avatar["stats"], 
                         inventory=old_avatar["inventory"],
-                        equipment=old_avatar["equipment"], 
+                        equipment=normalize_equipment_keys(old_avatar.get("equipment")),
                         status_effects=old_avatar.get("status_effects", [])
                     )
                     db.add(new_avatar)

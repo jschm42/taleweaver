@@ -35,6 +35,7 @@ from backend.core.prompts import (
     TEMPLATE_FIELD_GENERATION_USER_PROMPT_TEMPLATE,
 )
 from backend.engine.world_generator import WorldGenerator, is_image_moderation_error
+from backend.engine.item_logic import normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -216,11 +217,26 @@ async def _materialize_initial_session_from_template(
             armor_class=avatar.armor_class,
             stats=deepcopy(avatar.stats or {}),
             inventory=deepcopy(avatar.inventory or []),
-            equipment=deepcopy(avatar.equipment or {}),
+            equipment=normalize_equipment_keys(avatar.equipment),
             status_effects=deepcopy(avatar.status_effects or []),
         )
         db.add(session_avatar)
         await db.flush()
+
+        # Resolve any string item IDs in equipment/inventory to full item dicts.
+        # The template avatar stores equipment as ID references (e.g. "MainHand": "LONGSWORD");
+        # this step expands them to full item dictionaries so the char sheet renders them correctly.
+        template_entity_rows = await db.execute(
+            select(WorldEntity).where(
+                WorldEntity.template_id == template_id,
+                WorldEntity.session_id.is_(None),
+                WorldEntity.entity_type == "OBJECT",
+            )
+        )
+        template_entities_by_id = {e.id: e for e in template_entity_rows.scalars().all() if e.id}
+        if template_entities_by_id:
+            from backend.api.routes.adventures.sessions import _backfill_avatar_items_from_template_entities
+            _backfill_avatar_items_from_template_entities(session_avatar, template_entities_by_id)
 
         # Link session and state to the cloned session avatar
         game_session.avatar_id = session_avatar.id
@@ -1566,7 +1582,7 @@ async def export_adventure_session(
         "stamina": avatar.stamina,
         "mana": avatar.mana,
         "inventory": avatar.inventory or [],
-        "equipment": avatar.equipment or {},
+        "equipment": normalize_equipment_keys(avatar.equipment),
     }
 
     return {"avatar": avatar_payload}

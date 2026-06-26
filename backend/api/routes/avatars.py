@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
 from backend.engine.stat_aggregator import calculate_total_stats
+from backend.engine.item_logic import normalize_equipment_keys
 from backend.models.avatar import Avatar
 from backend.schemas.avatar import Avatar as AvatarSchema
 from backend.schemas.avatar import AvatarUpdate
@@ -70,6 +71,8 @@ async def update_avatar(
         raise HTTPException(status_code=404, detail="Avatar not found.")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "equipment" in update_data:
+        update_data["equipment"] = normalize_equipment_keys(update_data["equipment"])
     for field, value in update_data.items():
         setattr(avatar, field, value)
 

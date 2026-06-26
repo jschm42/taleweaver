@@ -49,6 +49,7 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.api.routes.adventures.sessions import _backfill_avatar_items_from_template_entities
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.engine.item_logic import normalize_equipment_keys
 from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -1033,7 +1034,7 @@ async def update_editor_entity(
                 avatar.inventory = list(payload.inventory)
                 flag_modified(avatar, "inventory")
             if payload.equipment is not None:
-                avatar.equipment = dict(payload.equipment)
+                avatar.equipment = normalize_equipment_keys(payload.equipment)
                 flag_modified(avatar, "equipment")
     elif payload.target_type == "scene":
         sc_res = await db.execute(select(WorldScene).where(WorldScene.template_id == template_id, WorldScene.session_id.is_(None), WorldScene.id == payload.target_id))
