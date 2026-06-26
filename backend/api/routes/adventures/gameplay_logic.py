@@ -3516,18 +3516,21 @@ class GameTurnManager:
         # Regular Weapon Action (Stamina/Mana checks)
         if weapon_cost_type == "mana":
             if enemy_mana < weapon_cost_value:
-                # Enemy rests (stamina only — mana does not recover in combat)
+                # Enemy rests (stamina + mana both recover)
                 enemy_stamina = min(enemy_max_stamina, enemy_stamina + 40)
-                
+                enemy_mana = min(enemy_max_mana, enemy_mana + 40)
+
                 combat["enemy"]["stamina"] = enemy_stamina
+                combat["enemy"]["mana"] = enemy_mana
                 states = dict(self.state.entity_states or {})
                 if enemy_id not in states:
                     states[enemy_id] = {}
                 states[enemy_id]["stamina"] = enemy_stamina
+                states[enemy_id]["mana"] = enemy_mana
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
 
-                text = f"{enemy_ent.name} is out of mana and rests to recover stamina (+40 Stamina). Mana cannot be recovered in combat."
+                text = f"{enemy_ent.name} is out of mana and rests to recover (+40 Stamina, +40 Mana)."
                 self._sync_combat_player_snapshot(combat)
                 self._append_combat_log(combat, text, "enemy_action")
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': text})}\n\n"
@@ -3540,18 +3543,22 @@ class GameTurnManager:
             enemy_mana = max(0, enemy_mana - weapon_cost_value)
         else:
             if enemy_max_stamina > 0 and enemy_stamina < weapon_cost_value:
-                # Enemy rests (stamina only — mana does not recover in combat)
+                # Enemy rests (stamina + mana both recover)
                 enemy_stamina = min(enemy_max_stamina, enemy_stamina + 40)
-                
+                if enemy_max_mana > 0:
+                    enemy_mana = min(enemy_max_mana, enemy_mana + 40)
+
                 combat["enemy"]["stamina"] = enemy_stamina
+                combat["enemy"]["mana"] = enemy_mana
                 states = dict(self.state.entity_states or {})
                 if enemy_id not in states:
                     states[enemy_id] = {}
                 states[enemy_id]["stamina"] = enemy_stamina
+                states[enemy_id]["mana"] = enemy_mana
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
 
-                text = f"{enemy_ent.name} is exhausted and rests to recover stamina (+40 Stamina). Mana cannot be recovered in combat."
+                text = f"{enemy_ent.name} is exhausted and rests to recover (+40 Stamina{', +40 Mana' if enemy_max_mana > 0 else ''})."
                 self._sync_combat_player_snapshot(combat)
                 self._append_combat_log(combat, text, "enemy_action")
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': text})}\n\n"
