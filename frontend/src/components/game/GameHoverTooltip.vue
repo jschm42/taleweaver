@@ -26,10 +26,38 @@ const hasHeroImage = computed(() =>
   hasRenderableImagePath(props.hoveredEntity?.image_url) && !props.tooltipImageFailed,
 )
 
+const isWeapon = computed(() => {
+  const entity = props.hoveredEntity
+  if (!entity) return false
+  if (String(entity.item_type || '').toUpperCase() === 'WEAPON') return true
+  if (typeof entity.damage_dice === 'string' && entity.damage_dice.trim()) return true
+  if (entity.slot && String(entity.slot).toLowerCase().includes('mainhand')) return true
+  return false
+})
+
+const weaponCostLabel = computed(() => {
+  const entity = props.hoveredEntity
+  if (!entity) return ''
+  const type = String(entity.weapon_cost_type || '').toLowerCase()
+  const value = Number(entity.weapon_cost_value)
+  if (!type || !Number.isFinite(value) || value <= 0) return ''
+  const tag = type === 'mana' ? 'MP' : 'STA'
+  return `${value} ${tag}`
+})
+
+const hasWeaponDetails = computed(() => {
+  const entity = props.hoveredEntity
+  if (!entity || !isWeapon.value) return false
+  if (typeof entity.damage_dice === 'string' && entity.damage_dice.trim()) return true
+  if (weaponCostLabel.value) return true
+  return false
+})
+
 const hasObjectDetails = computed(() => {
   const entity = props.hoveredEntity
   if (!entity) return false
   if (entity.slot) return true
+  if (hasWeaponDetails.value) return true
 
   if (props.isConsumableHover) {
     if (hasNonZero(entity.hp_change)) return true
@@ -147,6 +175,23 @@ const hasObjectDetails = computed(() => {
                   <div v-if="props.hoveredEntity.slot" class="col-span-2 text-slate-500 lowercase italic font-medium">
                     {{ props.hoveredEntity.slot.replace('_', ' ') }}
                   </div>
+
+                  <template v-if="hasWeaponDetails">
+                    <div v-if="props.hoveredEntity.damage_dice" class="col-span-2 flex items-center justify-between px-2 py-1 rounded bg-rose-950/40 border border-rose-500/30 text-rose-300 shadow-[inset_0_0_6px_rgba(244,63,94,0.15)]">
+                      <span class="flex items-center gap-1.5">
+                        <i class="ra ra-crossed-swords text-[11px]"></i>
+                        Damage Dice
+                      </span>
+                      <span class="font-mono text-rose-200 text-sm">{{ props.hoveredEntity.damage_dice }}</span>
+                    </div>
+                    <div v-if="weaponCostLabel" class="col-span-2 flex items-center justify-between px-2 py-1 rounded bg-slate-900/60 border border-slate-700/50 text-slate-300">
+                      <span class="flex items-center gap-1.5">
+                        <i class="ra ra-lightning-bolt text-[11px]"></i>
+                        Attack Cost
+                      </span>
+                      <span class="font-mono text-slate-100 text-sm">{{ weaponCostLabel }}</span>
+                    </div>
+                  </template>
 
                   <template v-if="props.isConsumableHover">
                     <div v-if="hasNonZero(props.hoveredEntity.hp_change)" class="text-red-400 flex justify-between">

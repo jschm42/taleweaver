@@ -828,7 +828,9 @@ const restSlotClass = computed(() => {
                       {{ mainHandItem ? mainHandItem.name : 'Bare Fists' }}
                     </div>
                     <div class="text-xs text-slate-400 truncate">
-                      {{ mainHandItem && mainHandItem.damage ? `Dmg: ${mainHandItem.damage}` : 'Click to punch' }}
+                      {{ mainHandItem && (mainHandItem.damage_dice || mainHandItem.damage)
+                          ? `Dmg: ${mainHandItem.damage_dice || mainHandItem.damage}`
+                          : 'Click to punch' }}
                     </div>
                   </div>
                 </div>

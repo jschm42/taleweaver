@@ -579,6 +579,12 @@ class AdventureLogic:
                             pass
                 return None
 
+            def _get_str(*candidates):
+                for c in candidates:
+                    if isinstance(c, str) and c.strip():
+                        return c.strip()
+                return None
+
             return {
                 "id": ent.id,
                 "name": ent.name,
@@ -596,6 +602,9 @@ class AdventureLogic:
                 "hp_change": _get_val(metadata.get("hp_change"), effects.get("hp")),
                 "stamina_change": _get_val(metadata.get("stamina_change"), effects.get("stamina")),
                 "mana_change": _get_val(metadata.get("mana_change"), effects.get("mana")),
+                "damage_dice": _get_str(metadata.get("damage_dice")),
+                "weapon_cost_type": _get_str(metadata.get("weapon_cost_type")),
+                "weapon_cost_value": _get_val(metadata.get("weapon_cost_value")),
             }
 
         # Pre-load entity records for any string item IDs (legacy format: equipment stored as IDs)
