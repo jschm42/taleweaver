@@ -52,7 +52,7 @@ from backend.api.routes.adventures.logic import AdventureLogic
 from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
-from backend.utils.path_security import data_url_to_local_path, ensure_within_data_dir, local_path_to_data_url
+from backend.utils.path_security import data_url_to_local_path, local_path_to_data_url
 
 router = APIRouter(tags=["Editor"])
 logger = logging.getLogger(__name__)
@@ -292,24 +292,29 @@ async def _clone_entity_image(
     safe_ext = raw_ext.lower() if raw_ext.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"} else ".png"
 
     safe_entity_id = re.sub(r"[^A-Za-z0-9_-]", "_", new_entity_id).strip("_") or "entity"
+    data_root = os.path.realpath(settings.DATA_DIR)
     suffix = ""
     counter = 1
     while True:
         candidate_name = f"{safe_entity_id}_clone{suffix}{safe_ext}"
-        candidate_path = os.path.join(target_dir, candidate_name)
+        candidate_path = os.path.realpath(os.path.join(target_dir, candidate_name))
+        try:
+            if os.path.commonpath([candidate_path, data_root]) != data_root:
+                return None
+        except ValueError:
+            return None
         if not os.path.exists(candidate_path):
             break
         counter += 1
         suffix = f"_{counter}"
 
     try:
-        target_path = ensure_within_data_dir(candidate_path)
-        shutil.copy2(source_path, target_path)
-    except (OSError, ValueError) as exc:
+        shutil.copy2(source_path, candidate_path)
+    except OSError as exc:
         logger.warning("Failed to clone image for entity %s: %s", new_entity_id, exc)
         return None
 
-    return local_path_to_data_url(target_path)
+    return local_path_to_data_url(candidate_path)
 
 
 def _normalize_lock_fields(

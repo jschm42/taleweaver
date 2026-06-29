@@ -216,17 +216,29 @@ class AdventureLogic:
                 library_dir = ensure_within_data_dir(library_dir_raw)
             except ValueError:
                 return profile_image
+            data_root = os.path.realpath(settings.DATA_DIR)
             if os.path.isdir(library_dir):
                 for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
-                    candidate_path = os.path.join(library_dir, f"PROTAGONIST{ext}")
+                    candidate_path = os.path.realpath(os.path.join(library_dir, f"PROTAGONIST{ext}"))
+                    try:
+                        if os.path.commonpath([candidate_path, data_root]) != data_root:
+                            continue
+                    except ValueError:
+                        continue
                     if os.path.isfile(candidate_path):
                         return local_path_to_data_url(candidate_path)
 
                 pattern = os.path.join(library_dir, "*PROTAGONIST*")
                 for match in glob.glob(pattern):
-                    if os.path.isfile(match):
+                    match_resolved = os.path.realpath(match)
+                    try:
+                        if os.path.commonpath([match_resolved, data_root]) != data_root:
+                            continue
+                    except ValueError:
+                        continue
+                    if os.path.isfile(match_resolved):
                         try:
-                            return local_path_to_data_url(ensure_within_data_dir(match))
+                            return local_path_to_data_url(match_resolved)
                         except ValueError:
                             continue
 

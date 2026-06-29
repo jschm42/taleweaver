@@ -128,12 +128,17 @@ def _copy_source_asset_to_current_adventure(
         return None
 
     target_root_real = os.path.realpath(safe_target_dir)
-    if os.path.commonpath([os.path.realpath(target_local), target_root_real]) != target_root_real:
+    source_local_resolved = os.path.realpath(safe_source_local)
+    target_local_resolved = os.path.realpath(target_local)
+    try:
+        if os.path.commonpath([target_local_resolved, target_root_real]) != target_root_real:
+            return None
+    except ValueError:
         return None
 
-    if not os.path.isfile(target_local):
+    if not os.path.isfile(target_local_resolved):
         try:
-            shutil.copy2(safe_source_local, target_local)
+            shutil.copy2(source_local_resolved, target_local_resolved)
         except Exception as exc:
             logger.warning(
                 "Failed to localize reused source asset for %s/%s from %s: %s",
@@ -144,7 +149,7 @@ def _copy_source_asset_to_current_adventure(
             )
             return None
 
-    return _local_path_to_public_data_url(target_local)
+    return _local_path_to_public_data_url(target_local_resolved)
 
 
 def _resolve_source_asset_image(

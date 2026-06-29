@@ -352,8 +352,9 @@ async def translate_text(
 
     try:
         llm = GameMasterLLM(current_user, provider=small_model_provider, model_category="small")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except ValueError:
+        logger.warning("Invalid LLM configuration for translation (user %s)", current_user.id)
+        raise HTTPException(status_code=400, detail="Selected translation model is unavailable.") from None
 
     system_prompt = BABLE_FISH_TRANSLATION_SYSTEM_PROMPT
     user_prompt = BABLE_FISH_TRANSLATION_USER_PROMPT_TEMPLATE.format(
