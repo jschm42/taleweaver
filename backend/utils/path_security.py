@@ -1,7 +1,10 @@
+import ipaddress
 import os
 import re
+import socket
 from pathlib import PurePosixPath
 from typing import Optional
+from urllib.parse import urlparse
 
 from backend.core.config import settings
 
@@ -107,3 +110,85 @@ def local_path_to_data_url(path: str) -> str:
     data_root = os.path.realpath(settings.DATA_DIR)
     rel = os.path.relpath(resolved, data_root).replace("\\", "/")
     return f"/data/{rel}"
+
+
+def _resolve_host_ips(host: str) -> list[ipaddress._BaseAddress]:
+    """Resolve a hostname to its IP addresses (best-effort DNS lookup).
+
+    Returns an empty list on failure. Used for SSRF checks before connecting.
+    """
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError, ValueError):
+        return []
+    ips: list[ipaddress._BaseAddress] = []
+    for info in infos:
+        try:
+            sockaddr = info[4]
+            ips.append(ipaddress.ip_address(sockaddr[0]))
+        except (KeyError, ValueError):
+            continue
+    return ips
+
+
+def _ip_is_disallowed(ip: ipaddress._BaseAddress) -> bool:
+    """Return True if the IP must not be contacted via user-supplied URLs."""
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_unspecified
+        or ip.is_reserved
+    )
+
+
+def validate_provider_url(
+    url: Optional[str],
+    *,
+    allow_private: Optional[bool] = None,
+    max_length: Optional[int] = None,
+) -> str:
+    """Validate a user-supplied provider URL to prevent SSRF.
+
+    Only ``http`` and ``https`` schemes are accepted. By default, hosts that
+    resolve to loopback, RFC1918, link-local, multicast, or reserved IPs are
+    rejected — set ``ALLOW_PRIVATE_NETWORK_MODELS=true`` to allow them
+    (required for local Ollama / Automatic1111 setups).
+
+    Returns the normalized URL on success. Raises ValueError on rejection.
+    """
+    if not url or not isinstance(url, str):
+        raise ValueError("URL must be a non-empty string.")
+
+    normalized = url.strip()
+    if not normalized:
+        raise ValueError("URL must be a non-empty string.")
+
+    max_len = max_length if max_length is not None else settings.MAX_PROVIDER_URL_LENGTH
+    if len(normalized) > max_len:
+        raise ValueError(f"URL exceeds maximum length of {max_len} characters.")
+
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("URL scheme must be http or https.")
+    if not parsed.hostname:
+        raise ValueError("URL must include a hostname.")
+
+    if allow_private is None:
+        allow_private = settings.ALLOW_PRIVATE_NETWORK_MODELS
+
+    if not allow_private:
+        ips = _resolve_host_ips(parsed.hostname)
+        # When the host is a literal IP, getaddrinfo returns it as-is.
+        # When it is unresolvable, treat as suspicious and reject.
+        if not ips:
+            raise ValueError("Could not resolve hostname.")
+        for ip in ips:
+            if _ip_is_disallowed(ip):
+                raise ValueError(
+                    "URL points to a private/loopback address. Set "
+                    "ALLOW_PRIVATE_NETWORK_MODELS=true to allow local providers."
+                )
+
+    return normalized

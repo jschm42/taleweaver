@@ -1,11 +1,12 @@
 from typing import Optional, Union
 from datetime import timedelta
+import ipaddress
 import time
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,7 @@ from backend.core.auth import (
     create_access_token,
     get_current_user,
     get_password_hash,
+    validate_password_strength,
 )
 from backend.core.database import get_db
 from backend.core.config import settings
@@ -25,6 +27,33 @@ router = APIRouter()
 _login_attempts = defaultdict(list)
 LOGIN_RATE_LIMIT = 5 # attempts
 LOGIN_WINDOW = 60 # seconds
+
+# Simple in-memory rate limiting for setup-root bootstrap
+_setup_root_attempts = defaultdict(list)
+SETUP_ROOT_RATE_LIMIT = 3  # attempts
+SETUP_ROOT_WINDOW = 3600  # seconds (1 hour)
+
+# IPs allowed to invoke the unauthenticated /setup-root bootstrap endpoint.
+_SETUP_ROOT_ALLOWED_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"}
+
+
+def _client_ip_in_setup_allowlist(request: Request) -> bool:
+    """Return True if the request originates from a loopback address.
+
+    The setup-root bootstrap endpoint is only reachable from the local host
+    unless the operator explicitly opts-in via ``ALLOW_REMOTE_SETUP=true``.
+    """
+    if settings.ALLOW_REMOTE_SETUP:
+        return True
+    client_host = request.client.host if request.client else ""
+    if not client_host:
+        return False
+    try:
+        ip = ipaddress.ip_address(client_host)
+        return ip.is_loopback
+    except ValueError:
+        return client_host in _SETUP_ROOT_ALLOWED_IPS
+
 
 class Token(BaseModel):
     access_token: str
@@ -45,8 +74,8 @@ class UserResponse(BaseModel):
     total_xp: Optional[int] = 0
 
 class SetupRootRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=10, max_length=256)
 
 
 class BootstrapStatusResponse(BaseModel):
@@ -179,12 +208,45 @@ async def read_users_me(
     return user_data
 
 @router.post("/auth/setup-root")
-async def setup_root_admin(request: SetupRootRequest, db: AsyncSession = Depends(get_db)):
+async def setup_root_admin(
+    http_request: Request,
+    request: SetupRootRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Bootstrap the first root admin.
+
+    This endpoint is **only** reachable from loopback addresses unless the
+    operator has explicitly set ``ALLOW_REMOTE_SETUP=true`` in the environment.
+    It also enforces strict rate limiting and password-strength requirements.
+    """
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    now = time.time()
+    attempts = [t for t in _setup_root_attempts[client_ip] if now - t < SETUP_ROOT_WINDOW]
+    _setup_root_attempts[client_ip] = attempts
+    if len(attempts) >= SETUP_ROOT_RATE_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many setup attempts from this IP. Try again later.",
+        )
+
+    if not _client_ip_in_setup_allowlist(http_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Setup is only allowed from the local host. Set ALLOW_REMOTE_SETUP=true to override.",
+        )
+
     # Check if any ADMIN exists
     result = await db.execute(select(User).filter(User.role == "admin").limit(1))
     if result.scalars().first() is not None:
         raise HTTPException(status_code=400, detail="A root administrator already exists.")
-    
+
+    try:
+        validate_password_strength(request.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    _setup_root_attempts[client_ip].append(now)
+
     hashed_password = get_password_hash(request.password)
     new_admin = User(
         username=request.username,

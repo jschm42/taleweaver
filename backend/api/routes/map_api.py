@@ -5,6 +5,9 @@ REST endpoints for the World Map.
 GET  /api/adventures/{template_id}/map          — returns raw graph JSON
 POST /api/adventures/{template_id}/map/visit    — register a scene visit (internal / debug)
 POST /api/adventures/{template_id}/map/exit     — register an exit between scenes
+
+All endpoints require authentication and are scoped to the owner of the
+AdventureTemplate (admins always allowed).
 """
 import logging
 
@@ -14,9 +17,11 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.engine.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
+from backend.models.user import User
 from backend.models.world_map import WorldMap
 from backend.models.world_entity import WorldExit
 
@@ -41,14 +46,31 @@ class ExitPayload(BaseModel):
 
 # ── Route helpers ─────────────────────────────────────────────────────────────
 
+async def _get_owned_adventure_or_404(
+    db: AsyncSession, template_id: str, user_id: str, is_admin: bool
+) -> AdventureTemplate:
+    adv = await db.get(AdventureTemplate, template_id)
+    if not adv or (adv.owner_id != user_id and not is_admin):
+        raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
+    return adv
+
+
 # _get_or_create_map moved to AdventureLogic.get_or_create_map
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/adventures/{template_id}/map")
-async def get_map(template_id: str, session_id: Optional[str] = None, db: AsyncSession = Depends(get_db)) -> dict:
-    """Return the raw scene-graph JSON (nodes + edges)."""
+async def get_map(
+    template_id: str,
+    session_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Return the raw scene-graph JSON (nodes + edges) for an owned template."""
+    await _get_owned_adventure_or_404(
+        db, template_id, current_user.id, current_user.role == "admin"
+    )
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     if not world_map:
         return {"nodes": {}, "edges": [], "current_scene_id": None}
@@ -83,12 +105,12 @@ async def post_visit(
     payload: VisitPayload,
     session_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Register a scene visit — upserts the node and sets it as current."""
-    # Validate adventure exists
-    adv = await db.execute(select(AdventureTemplate).where(AdventureTemplate.id == template_id))
-    if not adv.scalars().first():
-        raise HTTPException(status_code=404, detail="AdventureTemplate not found.")
+    """Register a scene visit — upserts the node and sets it as current (owner only)."""
+    await _get_owned_adventure_or_404(
+        db, template_id, current_user.id, current_user.role == "admin"
+    )
 
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     MapEngine.register_visit(
@@ -108,8 +130,12 @@ async def post_exit(
     payload: ExitPayload,
     session_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Register a directed exit between two scenes."""
+    """Register a directed exit between two scenes (owner only)."""
+    await _get_owned_adventure_or_404(
+        db, template_id, current_user.id, current_user.role == "admin"
+    )
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     MapEngine.register_exit(world_map, payload.from_scene, payload.to_scene, payload.exit_label or "")
     await db.commit()

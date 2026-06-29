@@ -142,10 +142,29 @@ async def add_security_headers(request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    # Security: HSTS (Strict-Transport-Security) - Disabled in dev/test to avoid 307 redirects
-    # response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+    # HSTS: enabled by default; nginx is expected to terminate TLS in production.
+    # Disable in dev (when proxy_headers are not TLS-terminated) via
+    # setting the ``Strict-Transport-Security`` response header to empty in
+    # an upstream proxy, or by setting ``ENABLE_HSTS=false`` here.
+    if getattr(settings, "ENABLE_HSTS", True):
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # CSP keeps 'unsafe-inline' on style-src only (Vue/Vite dev requires it).
+    # script-src remains strict ('self'); use nonces for any inline scripts.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "connect-src 'self' ws: wss:; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'"
+    )
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    )
     return response
 
 app.include_router(config_api.router, prefix="/api")
@@ -177,10 +196,23 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
 class SafeStaticFiles(StaticFiles):
-    """Custom StaticFiles that blocks access to sensitive files like the database."""
+    """Custom StaticFiles that blocks access to sensitive files like the database
+    and LLM debug logs.
+
+    Blocked extensions:
+      - Database files (.db, .db-shm, .db-wal)
+      - LLM debug logs (.jsonl, .log)
+      - Agent markdown notes and arbitrary text files (.md, .txt, .env)
+    """
+    _BLOCKED_EXTENSIONS = (
+        ".db", ".db-shm", ".db-wal",
+        ".jsonl", ".log",
+        ".md", ".env", ".ini",
+    )
+
     async def get_response(self, path: str, scope) -> Response:
-        # Block database files
-        if path.lower().endswith((".db", ".db-shm", ".db-wal")):
+        lowered = path.lower()
+        if any(lowered.endswith(ext) for ext in self._BLOCKED_EXTENSIONS):
             raise StarletteHTTPException(status_code=403, detail="Access denied")
         return await super().get_response(path, scope)
 

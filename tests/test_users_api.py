@@ -175,7 +175,7 @@ async def test_update_credentials_success(client: AsyncClient) -> None:
     payload = {
         "current_password": "old_password",
         "username": "new_cred_user",
-        "password": "new_password"
+        "password": "New_Passw0rd!"
     }
     
     response = await client.put("/api/users/me/credentials", headers=headers, json=payload)

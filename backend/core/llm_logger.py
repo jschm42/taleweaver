@@ -6,7 +6,11 @@ from typing import Any, Optional
 
 from backend.core.config import settings
 
-LOG_DIR = os.path.join(settings.DATA_DIR, "logs")
+# Logs may be sensitive (system prompts, full LLM I/O). Prefer a dedicated
+# directory outside DATA_DIR (set LLM_LOG_DIR). When unset we fall back to
+# DATA_DIR/logs which is served by SafeStaticFiles (with the .jsonl extension
+# explicitly blocked at the HTTP layer).
+LOG_DIR = settings.LLM_LOG_DIR or os.path.join(settings.DATA_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "llm_debug.jsonl")
 
 logger = logging.getLogger(__name__)

@@ -21,14 +21,6 @@ def get_app_version() -> str:
 
 logger = logging.getLogger(__name__)
 
-def generate_temp_key() -> str:
-    logger.warning(
-        "No ENCRYPTION_KEY found in environment! "
-        "Generating a random ephemeral key for this session. "
-        "WARNING: Any API keys saved during this session will become unreadable upon server restart. "
-        "Please generate a persistent key using 'python scripts/generate_fernet_key.py' and add it to your .env file."
-    )
-    return base64.urlsafe_b64encode(os.urandom(32)).decode()
 
 class TTSSettings(BaseModel):
     enabled: bool = True
@@ -54,12 +46,13 @@ class Settings(BaseSettings):
     BACKEND_PORT: int = 8000
     FRONTEND_PORT: int = 5173
     LOG_LEVEL: str = "INFO"
-    
+
     # Comma-separated list of allowed host headers.
-    # Default "*" works for local dev and Docker-behind-nginx deployments.
-    # In a public non-proxied deployment set this to your actual domain,
-    # e.g. ALLOWED_HOSTS=myserver.example.com
-    ALLOWED_HOSTS: str = "*"
+    # Default restricted to loopback + common local-dev / test hostnames;
+    # explicitly set "*" for Docker-behind-nginx, or set a comma-separated list
+    # (e.g. "taleweaver.example.com,www.example.com") for a public deployment
+    # behind a reverse proxy that performs TLS termination.
+    ALLOWED_HOSTS: str = "localhost,127.0.0.1,0.0.0.0,taleweaver,test,testserver"
 
     @property
     def allowed_hosts_list(self) -> list[str]:
@@ -68,8 +61,12 @@ class Settings(BaseSettings):
 
 
     DATA_DIR: str = "data"
+    # When set, LLM debug logs are written here (recommended: outside DATA_DIR).
+    # When unset (default), logs are written to DATA_DIR/logs — in that case
+    # the SafeStaticFiles mount blocks access to .jsonl files via HTTP.
+    LLM_LOG_DIR: Optional[str] = None
     SESSION_EMPTY_DIR_CLEANUP_DAYS: int = 7
-    
+
     VISUAL_TIMEOUT: int = 300
     INTELLIGENCE_TIMEOUT: int = 60
     WORLDBUILDING_TIMEOUT: int = 600
@@ -83,6 +80,22 @@ class Settings(BaseSettings):
     TTS_RATE_LIMIT_JITTER_MIN: float = 0.9
     TTS_RATE_LIMIT_JITTER_MAX: float = 1.15
 
+    # SSRF: allow private/loopback hosts in user-supplied URLs (Ollama, Automatic1111, etc.)
+    # Default False rejects calls to 127.0.0.1, ::1, RFC1918 ranges, link-local, etc.
+    ALLOW_PRIVATE_NETWORK_MODELS: bool = True
+
+    # setup-root hardening: allow the bootstrap endpoint to be reached from
+    # non-loopback addresses. Must be explicitly enabled; defaults to False.
+    ALLOW_REMOTE_SETUP: bool = False
+
+    # Toggle Strict-Transport-Security header (production deployments should
+    # leave this on; development behind plain HTTP may want to disable it to
+    # avoid browsers caching the HSTS directive locally).
+    ENABLE_HSTS: bool = True
+
+    # Maximum number of HTTPS scheme bytes accepted in user-supplied URLs.
+    MAX_PROVIDER_URL_LENGTH: int = 512
+
     @model_validator(mode="before")
     @classmethod
     def normalize_data_dir(cls, values):
@@ -91,16 +104,17 @@ class Settings(BaseSettings):
             if not isinstance(data_dir, str) or not data_dir.strip():
                 values["DATA_DIR"] = "data"
         return values
-    
+
     @model_validator(mode="after")
     def assemble_db_url(self) -> "Settings":
         if not self.DATABASE_URL:
             # Construct default path in data dir
             self.DATABASE_URL = f"sqlite+aiosqlite:///./{self.DATA_DIR}/taleweaver.db"
         return self
-    
-    # Use existing key from environment or generate a temporary one
-    ENCRYPTION_KEY: str = Field(default_factory=generate_temp_key)
+
+    # ENCRYPTION_KEY MUST be set; we no longer silently fall back to an
+    # ephemeral key. Generate one with `python scripts/generate_fernet_key.py`.
+    ENCRYPTION_KEY: Optional[str] = None
     SECRET_KEY: Optional[str] = None
 
     # API Keys from Environment (Optional)
@@ -121,7 +135,7 @@ class Settings(BaseSettings):
 
     # Debug / Development
     TALEWEAVER_DEBUG_ENABLED: bool = False
-    
+
     def get_env_api_key(self, provider: str) -> Optional[str]:
         """Returns the API key for a provider if set in environment variables."""
         p = provider.lower()

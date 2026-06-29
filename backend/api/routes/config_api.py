@@ -48,37 +48,11 @@ from backend.utils.path_security import (
     ensure_within_data_dir,
     safe_data_path,
     sanitize_path_component,
+    validate_provider_url,
 )
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 print(f"DEBUG: Loading config_api module, router prefix: {router.prefix}")
-
-try:
-    import sqlite3
-    import os
-    db_path = "data/taleweaver.db"
-    out_path = "C:/Users/jean/.gemini/antigravity-ide/scratch/db_output.txt"
-    if os.path.exists(db_path):
-        conn = sqlite3.connect(db_path)
-        c = conn.cursor()
-        lines = []
-        lines.append("--- SCENES ---")
-        c.execute("select id, name, template_id, session_id from world_scenes")
-        for row in c.fetchall():
-            lines.append(str(row))
-            
-        lines.append("\n--- EXITS ---")
-        c.execute("select id, from_scene_id, to_scene_id, exit_type, template_id, session_id from world_exits")
-        for row in c.fetchall():
-            lines.append(str(row))
-            
-        conn.close()
-        
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-        print("MIGRATION: Wrote DB output to " + out_path)
-except Exception as e:
-    print("MIGRATION ERROR in query: " + str(e))
 
 DEFAULT_SMALL_MAX_TOKENS = 12288
 DEFAULT_COMPLEX_MAX_TOKENS = 24576
@@ -378,6 +352,18 @@ async def _fetch_openai_compatible_models(
     except (httpx.HTTPError, ValueError, TypeError):
         _log_model_fetch_failure_once_per_interval(provider, endpoint)
         return []
+
+
+def _safe_provider_url(url: Optional[str], *, default: Optional[str] = None) -> str:
+    """Validate a user-supplied provider URL with a sensible default fallback.
+
+    Raises HTTPException(400) on SSRF rejection or invalid format.
+    """
+    candidate = (url or default or "").strip()
+    try:
+        return validate_provider_url(candidate)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _log_model_fetch_failure_once_per_interval(provider: str, endpoint: str) -> None:
@@ -955,14 +941,29 @@ async def get_settings(
 
 
 @router.get("/ollama-models")
-async def get_ollama_models(ollama_url: Optional[str] = None):
-    """Return installed Ollama model names for the configured Ollama endpoint."""
-    return {"models": await _fetch_ollama_models(ollama_url)}
+async def get_ollama_models(
+    ollama_url: Optional[str] = None,
+    _user: User = Depends(get_current_user),
+):
+    """Return installed Ollama model names for the configured Ollama endpoint.
+
+    Requires authentication. ``ollama_url`` is validated against SSRF
+    (loopback/RFC1918 rejected unless ALLOW_PRIVATE_NETWORK_MODELS=true).
+    """
+    validated_url = _safe_provider_url(ollama_url, default="http://localhost:11434")
+    return {"models": await _fetch_ollama_models(validated_url)}
 
 @router.get("/stable-diffusion-models")
-async def get_stable_diffusion_models(stable_diffusion_url: Optional[str] = None):
-    """Return available Stable Diffusion checkpoints for the configured endpoint."""
-    return {"models": await _fetch_stable_diffusion_models(stable_diffusion_url)}
+async def get_stable_diffusion_models(
+    stable_diffusion_url: Optional[str] = None,
+    _user: User = Depends(get_current_user),
+):
+    """Return available Stable Diffusion checkpoints for the configured endpoint.
+
+    Requires authentication. ``stable_diffusion_url`` is validated against SSRF.
+    """
+    validated_url = _safe_provider_url(stable_diffusion_url, default="http://127.0.0.1:7860")
+    return {"models": await _fetch_stable_diffusion_models(validated_url)}
 
 @router.get("/minimax-models")
 async def get_minimax_models(
@@ -980,7 +981,12 @@ async def get_minimax_models(
         elif settings.MINIMAX_API_KEY:
             api_key = settings.MINIMAX_API_KEY
 
-    return {"models": await _fetch_minimax_models(api_key, api_base or settings.MINIMAX_API_BASE)}
+    try:
+        validated_base = validate_provider_url(api_base or settings.MINIMAX_API_BASE)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"models": await _fetch_minimax_models(api_key, validated_base)}
 
 
 async def _resolve_provider_api_key_for_models(
@@ -1008,10 +1014,19 @@ async def get_llm_models(
     provider_lower = provider.lower()
     if provider_lower == "minimax":
         api_key = await _resolve_provider_api_key_for_models(db, current_user, "minimax")
-        models = await _fetch_minimax_models(api_key, api_base or settings.MINIMAX_API_BASE)
+        try:
+            validated_base = validate_provider_url(api_base or settings.MINIMAX_API_BASE)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        models = await _fetch_minimax_models(api_key, validated_base)
     elif provider_lower in _OPENAI_COMPATIBLE_PROVIDERS:
         api_key = await _resolve_provider_api_key_for_models(db, current_user, provider_lower)
-        models = await _fetch_openai_compatible_models(provider_lower, api_key, api_base)
+        default_base = _OPENAI_COMPATIBLE_PROVIDERS[provider_lower]["default_base"]
+        try:
+            validated_base = validate_provider_url(api_base or default_base)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        models = await _fetch_openai_compatible_models(provider_lower, api_key, validated_base)
     else:
         raise HTTPException(status_code=400, detail=f"Model discovery not supported for provider '{provider}'.")
     return {"models": models}

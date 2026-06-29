@@ -10,9 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.engine.stat_aggregator import calculate_total_stats
 from backend.models.avatar import Avatar
+from backend.models.user import User
 from backend.schemas.avatar import Avatar as AvatarSchema
 from backend.schemas.avatar import AvatarUpdate
 
@@ -20,10 +22,30 @@ router = APIRouter(prefix="/avatars", tags=["Avatars"])
 logger = logging.getLogger(__name__)
 
 
+async def _get_owned_avatar_or_404(
+    db: AsyncSession, avatar_id: str, user_id: str
+) -> Avatar:
+    """Fetch an avatar only if it belongs to the given user (or user is admin)."""
+    result = await db.execute(
+        select(Avatar).where(Avatar.id == avatar_id, Avatar.user_id == user_id)
+    )
+    avatar = result.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+    return avatar
+
+
 @router.get("/{avatar_id}", response_model=AvatarSchema)
-async def get_avatar(avatar_id: str, db: AsyncSession = Depends(get_db)) -> Avatar:
-    """Returns the full character sheet for a given avatar."""
-    result = await db.execute(select(Avatar).where(Avatar.id == avatar_id))
+async def get_avatar(
+    avatar_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Avatar:
+    """Returns the full character sheet for a given avatar (owner only)."""
+    query = select(Avatar).where(Avatar.id == avatar_id)
+    if current_user.role != "admin":
+        query = query.where(Avatar.user_id == current_user.id)
+    result = await db.execute(query)
     avatar = result.scalars().first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar not found.")
@@ -31,14 +53,21 @@ async def get_avatar(avatar_id: str, db: AsyncSession = Depends(get_db)) -> Avat
 
 
 @router.get("/{avatar_id}/stats")
-async def get_avatar_stats(avatar_id: str, db: AsyncSession = Depends(get_db)) -> dict:
+async def get_avatar_stats(
+    avatar_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
     """
-    Returns the dynamically aggregated stats for an avatar.
+    Returns the dynamically aggregated stats for an avatar (owner only).
 
     Combines base stats, equipment modifiers, and active status-effect
     modifiers into a single O(1) stat snapshot.
     """
-    result = await db.execute(select(Avatar).where(Avatar.id == avatar_id))
+    query = select(Avatar).where(Avatar.id == avatar_id)
+    if current_user.role != "admin":
+        query = query.where(Avatar.user_id == current_user.id)
+    result = await db.execute(query)
     avatar = result.scalars().first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar not found.")
@@ -59,12 +88,17 @@ async def update_avatar(
     avatar_id: str,
     payload: AvatarUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Avatar:
     """
     Partially updates an avatar's fields (stats, HP, inventory, equipment, etc.).
     Only provided fields are written; omitted fields remain unchanged.
+    Only the owner (or an admin) may modify an avatar.
     """
-    result = await db.execute(select(Avatar).where(Avatar.id == avatar_id))
+    query = select(Avatar).where(Avatar.id == avatar_id)
+    if current_user.role != "admin":
+        query = query.where(Avatar.user_id == current_user.id)
+    result = await db.execute(query)
     avatar = result.scalars().first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar not found.")
@@ -84,12 +118,16 @@ async def remove_status_effect(
     avatar_id: str,
     effect_name: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> None:
     """
-    Removes a single named status effect from an avatar.
+    Removes a single named status effect from an avatar (owner only).
     Returns 404 if the avatar or the effect does not exist.
     """
-    result = await db.execute(select(Avatar).where(Avatar.id == avatar_id))
+    query = select(Avatar).where(Avatar.id == avatar_id)
+    if current_user.role != "admin":
+        query = query.where(Avatar.user_id == current_user.id)
+    result = await db.execute(query)
     avatar = result.scalars().first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar not found.")

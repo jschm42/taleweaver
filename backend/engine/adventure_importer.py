@@ -24,6 +24,14 @@ from backend.engine.media_engine import MediaEngine
 
 logger = logging.getLogger(__name__)
 
+# ZIP-bomb / resource-exhaustion guards for .adz imports.
+# Tuned to be permissive enough for legitimate adventures but tight enough
+# to stop "decompression bomb" payloads (small archive → huge extracted tree).
+MAX_ADZ_TOTAL_ENTRIES = 1000
+MAX_ADZ_ENTRY_BYTES = 50 * 1024 * 1024  # 50 MB per file
+MAX_ADZ_TOTAL_BYTES = 500 * 1024 * 1024  # 500 MB cumulative
+MAX_ADZ_COMPRESSION_RATIO = 100  # uncompressed/compressed size cap
+
 
 def _ensure_within_data_dir(path: str) -> str:
     data_root = os.path.abspath(settings.DATA_DIR)
@@ -156,8 +164,42 @@ class AdventureTemplateImporter:
         """Logic for ADZ (ZIP) import, including assets."""
         try:
             zip_buffer = io.BytesIO(adz_data)
-            
+
             with zipfile.ZipFile(zip_buffer, "r") as zip_file:
+                infos = zip_file.infolist()
+
+                # Zip-bomb / resource-exhaustion guards.
+                if len(infos) > MAX_ADZ_TOTAL_ENTRIES:
+                    logger.error(
+                        "Refusing ADZ import: %d entries exceeds limit of %d.",
+                        len(infos), MAX_ADZ_TOTAL_ENTRIES,
+                    )
+                    return False
+
+                total_uncompressed = 0
+                for info in infos:
+                    if info.file_size > MAX_ADZ_ENTRY_BYTES:
+                        logger.error(
+                            "Refusing ADZ import: entry '%s' is %d bytes (limit %d).",
+                            info.filename, info.file_size, MAX_ADZ_ENTRY_BYTES,
+                        )
+                        return False
+                    total_uncompressed += info.file_size
+                    if total_uncompressed > MAX_ADZ_TOTAL_BYTES:
+                        logger.error(
+                            "Refusing ADZ import: total uncompressed size exceeds %d bytes.",
+                            MAX_ADZ_TOTAL_BYTES,
+                        )
+                        return False
+                    if info.compress_size > 0:
+                        ratio = info.file_size / info.compress_size
+                        if ratio > MAX_ADZ_COMPRESSION_RATIO:
+                            logger.error(
+                                "Refusing ADZ import: entry '%s' compression ratio %.1fx exceeds %dx.",
+                                info.filename, ratio, MAX_ADZ_COMPRESSION_RATIO,
+                            )
+                            return False
+
                 if "adventure.adv" not in zip_file.namelist():
                     logger.error("Invalid ADZ: Missing adventure.adv")
                     return False

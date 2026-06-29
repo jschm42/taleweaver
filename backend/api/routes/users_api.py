@@ -10,7 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.auth_api import UserResponse
-from backend.core.auth import get_current_admin, get_current_user, get_password_hash, verify_password
+from backend.core.auth import (
+    get_current_admin,
+    get_current_user,
+    get_password_hash,
+    validate_password_strength,
+    verify_password,
+)
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
@@ -116,7 +122,12 @@ async def create_user(
     result = await db.execute(select(User).filter(User.username == request.username))
     if result.scalars().first():
         raise HTTPException(status_code=400, detail="Username already registered")
-        
+
+    try:
+        validate_password_strength(request.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     new_user = User(
         username=request.username,
         hashed_password=get_password_hash(request.password),
@@ -150,6 +161,10 @@ async def update_user(
     if request.role:
         user.role = request.role
     if request.password:
+        try:
+            validate_password_strength(request.password)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         user.hashed_password = get_password_hash(request.password)
     if request.bio is not None:
         user.bio = request.bio
@@ -333,11 +348,10 @@ async def update_my_credentials(
 
     if request.password is not None:
         new_password = request.password
-        if len(new_password) < 4:
-            raise HTTPException(
-                status_code=400,
-                detail="Password must be at least 4 characters long."
-            )
+        try:
+            validate_password_strength(new_password)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         current_user.hashed_password = get_password_hash(new_password)
 
     await db.commit()

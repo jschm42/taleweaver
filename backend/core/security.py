@@ -8,11 +8,19 @@ logger = logging.getLogger(__name__)
 
 class EncryptionUtil:
     def __init__(self):
+        key = settings.ENCRYPTION_KEY
+        if not key or not str(key).strip():
+            raise RuntimeError(
+                "ENCRYPTION_KEY is not configured. Generate one with "
+                "`python scripts/generate_fernet_key.py` and set it in your .env file. "
+                "Refusing to start: persisting API keys without a stable key would make "
+                "them unreadable after the next restart."
+            )
         try:
-            self._fernet = Fernet(settings.ENCRYPTION_KEY.encode('utf-8'))
+            self._fernet = Fernet(str(key).encode('utf-8'))
         except Exception as e:
             logger.error(f"Failed to initialize Fernet with provided key: {e}")
-            raise ValueError("Invalid ENCRYPTION_KEY format. Must be a valid 32-byte base64-encoded string.")
+            raise ValueError("Invalid ENCRYPTION_KEY format. Must be a valid 32-byte base64-encoded string.") from e
 
     def encrypt_key(self, plain_key: str) -> str:
         """Encrypt a plain text API key."""

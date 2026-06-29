@@ -185,8 +185,29 @@ See `frontend/public/assets/fonts/licenses/README.txt` for the mapping between f
 ## 3. Architecture & Concepts
 
 ### LLM Abstraction & Secure Key Management
-* **Adapter Pattern:** Using a higher-level LLM router (e.g., `litellm`) to map providers to a standardized interface.
+* **Adapter Pattern:** Using a higher-level LLM router (e.g. `litellm`) to map providers to a standardized interface.
 * **Security:** API keys entered via the frontend are encrypted (AES) before being stored in the SQLite database.
+
+### Security & Hardening
+TaleWeaver is intended for **self-hosted single-tenant use**, and ships with a number of hardening defaults out of the box:
+
+* **Path traversal protection** — All file operations go through central helpers in `backend/utils/path_security.py` (`safe_data_path`, `ensure_within_data_dir`, `data_url_to_local_path`). The `.adz` (ZIP) importer strips directory components via `os.path.basename`, preventing classic Zip-Slip attacks.
+* **Encrypted secret storage** — Provider API keys entered in the UI are encrypted at rest with Fernet (AES-128-CBC + HMAC-SHA256) using `ENCRYPTION_KEY`. The server **fails closed** if `ENCRYPTION_KEY` is missing or empty — no ephemeral key is generated, and encrypted values cannot become unreadable on restart.
+* **JWT session tokens** — Bearer tokens are signed with `SECRET_KEY` (HS256, algorithm pinned) and have a 24-hour lifetime by default.
+* **Password policy** — Passwords must be at least 10 characters and contain lower-, uppercase, digit, and special characters. PBKDF2-HMAC-SHA256 is used with 600 000 iterations (OWASP 2023 baseline).
+* **SSRF protection** — User-supplied provider URLs (Ollama, Automatic1111, OpenAI-compatible endpoints) are validated via DNS resolution before being contacted. Loopback / RFC1918 / link-local / multicast / reserved IPs are rejected unless `ALLOW_PRIVATE_NETWORK_MODELS=true` (default `true` to keep local Ollama setups working out of the box).
+* **Resource-exhaustion guards** — Avatar/character image uploads are capped at 10 MB raw size and `Pillow.MAX_IMAGE_PIXELS = 50_000_000`. `.adz` archives are bounded to ≤ 1 000 entries, ≤ 50 MB per entry, ≤ 500 MB cumulative uncompressed, and a per-entry compression ratio of ≤ 100×.
+* **Static-mount blocklist** — The `/data` static mount refuses `.db`, `.db-shm`, `.db-wal`, `.jsonl`, `.log`, `.md`, `.env`, and `.ini` requests.
+* **Tenant isolation** — All authenticated routes that read or mutate per-user resources (avatars, editor data, world maps, image uploads) are scoped to the authenticated user. Admins retain a documented override for support workflows.
+* **Setup bootstrap lockdown** — The unauthenticated `POST /api/auth/setup-root` endpoint is **loopback-only by default** and rate-limited per source IP. Set `ALLOW_REMOTE_SETUP=true` to opt in for remote bootstraps.
+* **HTTP security headers** — Responses include `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera/microphone/geolocation/payment/usb disabled), and a strict `Content-Security-Policy`. `Strict-Transport-Security` is enabled by default and can be disabled via `ENABLE_HSTS=false` for plain-HTTP local development.
+
+For public-facing deployments, make sure to:
+
+1. Set `ALLOWED_HOSTS` to your actual domain (the default is restricted to `localhost,127.0.0.1,0.0.0.0,taleweaver,test,testserver`).
+2. Terminate TLS at the reverse proxy (nginx is the expected boundary) — HSTS is enforced but only meaningful when TLS is active.
+3. Restrict `ALLOW_PRIVATE_NETWORK_MODELS=false` so that the SSRF guard blocks loopback/RFC1918 IPs in user-supplied URLs.
+4. Keep `ENCRYPTION_KEY` and `SECRET_KEY` out of version control (the repo's `.gitignore` already excludes `.env`).
 
 ## 4. Workflows & Internal Logic
 
@@ -196,7 +217,7 @@ For a deeper look into the backend processes, check out the Mermaid diagrams in 
 
 ### ⚡ Quick Setup (Automatic)
 
-The fastest way to set up TaleWeaver manually is to use the provided setup scripts. These scripts will automatically create a virtual environment, install all dependencies (backend & frontend), generate security keys in a `.env` file, and run database migrations.
+The fastest way to set up TaleWeaver manually is to use the provided setup scripts. These scripts will automatically create a virtual environment, install all dependencies (backend & frontend), generate the required security keys in a `.env` file (`ENCRYPTION_KEY` and `SECRET_KEY`), and run database migrations. The backend will **refuse to start** if either key is missing.
 
 #### Windows (PowerShell)
 Open PowerShell as an administrator (if needed) in the project root and run:
@@ -235,7 +256,14 @@ You can tune process behavior using environment variables such as `WEB_CONCURREN
     -   **Windows:** `scripts\docker-setup.bat`
 
 3.  **Configure Environment:**
-    The setup script will create a `.env` file from `.env.example`. Open it and set your `ENCRYPTION_KEY`. (You can generate one using `python scripts/generate_fernet_key.py` or use any persistent 32-byte base64 string).
+    The setup script will create a `.env` file from `.env.example`. You **must** set both `ENCRYPTION_KEY` and `SECRET_KEY` before the backend will start — the server fails closed if either key is missing. Generate them with:
+
+    ```bash
+    python scripts/generate_fernet_key.py            # writes a 32-byte base64 ENCRYPTION_KEY
+    python -c "import secrets; print(secrets.token_hex(32))"  # random SECRET_KEY
+    ```
+
+    If you plan to expose this instance publicly, also set `ALLOWED_HOSTS` to your domain (e.g. `ALLOWED_HOSTS=taleweaver.example.com,www.taleweaver.example.com`) and `ALLOW_PRIVATE_NETWORK_MODELS=false` if you do not need local Ollama/Automatic1111 access.
 
 4.  **Access the App:**
     Open your browser and go to `http://localhost:8000`.
@@ -288,6 +316,10 @@ cp .env.example .env
 # Generate a secure ENCRYPTION_KEY and follow the script's instructions
 # to place the generated key into your new .env file
 python scripts/generate_fernet_key.py
+
+# Generate a random SECRET_KEY (used to sign JWT tokens)
+python -c "import secrets; print(secrets.token_hex(32))"
+# ...and paste it as SECRET_KEY=... in your .env file
 
 # Apply database migrations
 python -m alembic upgrade head
@@ -394,6 +426,7 @@ Notes:
 - TaleWeaver first tries image generation via LiteLLM integration and falls back to direct Ollama HTTP calls when needed.
 - No cloud API key is required for local Stable Diffusion generation via Automatic1111/Forge.
 - TaleWeaver can query available local SD checkpoints and generate images over the local `sdapi` endpoints.
+- The URLs above point to loopback addresses. This works out of the box because `ALLOW_PRIVATE_NETWORK_MODELS=true` by default. If you set `ALLOW_PRIVATE_NETWORK_MODELS=false` (recommended for public deployments) you must keep provider URLs on loopback/RFC1918 ranges reachable from the backend container (e.g. use `host.docker.internal` instead of `localhost` from inside the container).
 
 ## 6. Automated Adventure Import
 
@@ -412,6 +445,18 @@ Both formats use the same top-level blueprint structure and must include format 
 * On import, the backend validates `format` and `version`.
 * If a file version is below the minimum supported version, import is rejected with an explicit error (HTTP 400), e.g.:
 	* `Import version 0.9 is too old. Minimum supported version is 1.0.`
+
+### Import Limits
+To protect against ZIP-bomb / decompression-bomb attacks, the importer enforces the following caps on every `.adz` archive it processes:
+
+| Limit | Default |
+| --- | --- |
+| Maximum entries | 1 000 |
+| Maximum uncompressed size per entry | 50 MB |
+| Maximum cumulative uncompressed size | 500 MB |
+| Maximum per-entry compression ratio | 100× |
+
+Archives exceeding any of these bounds are rejected with a logged error and no data is extracted. Tune these in `backend/engine/adventure_importer.py` if you have a legitimate use case that requires raising them.
 
 ### Watch Directories
 The backend monitors three specific directories relative to the project root:
