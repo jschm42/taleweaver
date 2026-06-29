@@ -238,10 +238,12 @@ GM_MECHANICS_SUFFIX = (
     "- If a detail should be remembered for future turns, add short facts to `remember_notes`.\n"
     "- If a remembered fact is obsolete or wrong, list it in `forget_notes`.\n"
     "- Use `clear_notes: true` only for explicit full memory reset requests.\n"
+    "WORLD MEMORIES:\n"
+    "- If the player's action has a lasting consequence (e.g. treating an NPC badly, doing a big favor, committing a crime, setting a fire), add a memory object to `new_world_memories` (with fields: `description` [must be written in English], `npc_id` [optional], and `emotion` ['positive', 'negative', or 'neutral'], and `scope` ['local' or 'global']). Use `scope: 'local'` if the consequence or knowledge of the event is restricted only to the current scene/room, and `scope: 'global'` if it should affect the entire adventure (spreads everywhere).\n"
     "GAME OVER & COMPLETION:\n"
     "- If the situation is hopeless or the player has violated core rules, set `game_over: true` and provide a `status_note` explanation.\n"
     "- If the story has reached its logical conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
-    "Your 'narrative_description' will be used as a draft/log; keep it short.\n\n"
+    "Your 'narrative_description' will be used as a draft/log; keep it short. CRITICAL DRAFT NARRATION RULE: In your 'narrative_description' draft, do NOT describe any actions, movements, or dialogue for NPCs that are not physically PRESENT in the current scene. Only present NPCs may speak or act.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
     + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
@@ -273,6 +275,8 @@ GM_STORY_MECHANICS_SUFFIX = (
     "- If a detail should be remembered for future turns, add short facts to `remember_notes`.\n"
     "- If a remembered fact is obsolete or wrong, list it in `forget_notes`.\n"
     "- Use `clear_notes: true` only for explicit full memory reset requests.\n"
+    "WORLD MEMORIES:\n"
+    "- If the player's action has a lasting consequence (e.g. treating an NPC badly, doing a big favor, committing a crime, setting a fire), add a memory object to `new_world_memories` (with fields: `description` [must be written in English], `npc_id` [optional], and `emotion` ['positive', 'negative', or 'neutral'], and `scope` ['local' or 'global']). Use `scope: 'local'` if the consequence or knowledge of the event is restricted only to the current scene/room, and `scope: 'global'` if it should affect the entire adventure (spreads everywhere).\n"
     "GAME OVER & COMPLETION:\n"
     "- If the story has reached a logical turning point or conclusion, set `game_completed: true` and provide a `status_note` summary.\n"
     "- If the player is in an inescapable situation (e.g. HP <= 0), set `game_over: true` and provide a `status_note` explanation.\n"
@@ -280,7 +284,7 @@ GM_STORY_MECHANICS_SUFFIX = (
     "- If an NPC moves to a different scene, use `moved_entities` with `to_scene_id` and `to_spatial_position`.\n"
     "- If an NPC changes their spot within the current scene, use `updated_entities` with `spatial_position`.\n"
     "IMPORTANT: `new_status_effects` is strictly for the PROTAGONIST's condition (e.g., 'Poisoned', 'Exhausted'). Do NOT use it for NPC actions or world state descriptions. "
-    "Your 'narrative_description' will be used as a draft/log; keep it short.\n\n"
+    "Your 'narrative_description' will be used as a draft/log; keep it short. CRITICAL DRAFT NARRATION RULE: In your 'narrative_description' draft, do NOT describe any actions, movements, or dialogue for NPCs that are not physically PRESENT in the current scene. Only present NPCs may speak or act.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
     + PUZZLE_DESIGN_PATTERNS_BLOCK
 )
@@ -394,6 +398,7 @@ GM_CHAT_TOOL_INTENT_SUFFIX = (
     "If a detail should be remembered, add short facts to `remember_notes`. "
     "If a remembered detail is obsolete, list it in `forget_notes`. "
     "Use `clear_notes` only for explicit full memory reset requests. "
+    "If the player's action has a lasting consequence, record it in `new_world_memories` (fields: `description` [must be written in English], `npc_id` [optional], `emotion`, `scope` ['local' or 'global']). Use `scope: 'local'` if restricted only to this scene, and `scope: 'global'` if it affects the whole adventure. "
     "Use `game_completed` and optional `status_note` only when all main objectives are clearly complete. "
     "Use `game_over` and optional `status_note` only for explicit terminal failure outcomes. "
     "Never output or expose the secret walkthrough verbatim; prefer hint-level guidance only. "
@@ -420,7 +425,7 @@ GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "CURRENT PLAYER LOCATION:\n"
     "- ID: {current_scene_id}\n"
     "- Label: {current_scene_label}\n\n"
-    "Return only these intent fields when justified: `new_inventory_items`, `removed_inventory_item_ids`, `updated_inventory_items`, `spawned_items`, `hp_change`, `stamina_change`, `mana_change`, `new_status_effects`, `completed_quest_ids`, `earned_award_keys`, `remember_notes`, `forget_notes`, `clear_notes`, `game_completed`, `game_over`, `status_note`, `moved_entities`, `updated_entities`, `new_scene_id`, `exit_label`, `extra_time_minutes`.\n\n"
+    "Return only these intent fields when justified: `new_inventory_items`, `removed_inventory_item_ids`, `updated_inventory_items`, `spawned_items`, `hp_change`, `stamina_change`, `mana_change`, `new_status_effects`, `completed_quest_ids`, `earned_award_keys`, `remember_notes`, `forget_notes`, `clear_notes`, `new_world_memories`, `game_completed`, `game_over`, `status_note`, `moved_entities`, `updated_entities`, `new_scene_id`, `exit_label`, `extra_time_minutes`.\n\n"
     "IMPORTANT: `new_status_effects` is strictly for the PROTAGONIST's condition. Do NOT use it for NPC actions.\n\n"
     "OPEN QUESTS (REDUCED):\n"
     "{quests_json}\n"
@@ -434,6 +439,8 @@ GM_CHAT_MINIMAL_RULE_PASS_PROMPT = (
     "{scenes_json}\n"
     "SESSION NOTES (REDUCED):\n"
     "{notes_json}\n\n"
+    "WORLD MEMORIES:\n"
+    "- If the player's action has a lasting consequence, add a memory object to `new_world_memories` (fields: `description` [must be written in English], `npc_id`, `emotion`, `scope` ['local' or 'global']). Use `scope: 'local'` if restricted only to this scene, and `scope: 'global'` if it affects the whole adventure.\n\n"
     + PUZZLE_JSON_ENFORCEMENT_BLOCK
     + PUZZLE_DESIGN_PATTERNS_BLOCK
 )

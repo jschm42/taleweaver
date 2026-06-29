@@ -33,6 +33,8 @@ export interface UseGameSocket {
   inputLocked: Ref<boolean>
   pendingTerminalEpilogue: Ref<boolean>
   promptSuggestions: Ref<string[]>
+  worldMemories: Ref<any[]>
+  worldRumors: Ref<any[]>
   debugLogs: Ref<{ timestamp: string, content: string }[]>
   inventoryGlow: Ref<boolean>
   mapGlow: Ref<boolean>
@@ -81,6 +83,8 @@ export function useGameSocket(): UseGameSocket {
   const inputLocked = ref(false)
   const pendingTerminalEpilogue = ref(false)
   const promptSuggestions = ref<string[]>([])
+  const worldMemories = ref<any[]>([])
+  const worldRumors = ref<any[]>([])
   const debugLogs = ref<{ timestamp: string, content: string }[]>([])
   const inventoryGlow = ref(false)
   const mapGlow = ref(false)
@@ -220,6 +224,12 @@ export function useGameSocket(): UseGameSocket {
     if (data.prompt_suggestions !== undefined) {
       promptSuggestions.value = Array.isArray(data.prompt_suggestions) ? data.prompt_suggestions : []
     }
+    if (data.world_memories !== undefined) {
+      worldMemories.value = Array.isArray(data.world_memories) ? data.world_memories : []
+    }
+    if (data.world_rumors !== undefined) {
+      worldRumors.value = Array.isArray(data.world_rumors) ? data.world_rumors : []
+    }
 
     if (data.status_note !== undefined) {
       statusNote.value = data.status_note || ''
@@ -321,6 +331,8 @@ export function useGameSocket(): UseGameSocket {
     inputLocked.value = false
     pendingTerminalEpilogue.value = false
     promptSuggestions.value = []
+    worldMemories.value = []
+    worldRumors.value = []
     debugLogs.value = []
   }
 
@@ -791,6 +803,8 @@ export function useGameSocket(): UseGameSocket {
     inputLocked,
     pendingTerminalEpilogue,
     promptSuggestions,
+    worldMemories,
+    worldRumors,
     debugLogs,
     inventoryGlow,
     mapGlow,

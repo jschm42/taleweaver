@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -142,6 +142,14 @@ class ToolResults(BaseModel):
     generation_error: Optional[str] = None
 
 
+class WorldMemoryUpdate(BaseModel):
+    description: str
+    npc_id: Optional[str] = None
+    emotion: Literal["positive", "negative", "neutral"] = "neutral"
+    scope: Literal["local", "global"] = "global"
+    scene_id: Optional[str] = None
+
+
 class AdventureGeneratorToolIntent(BaseModel):
     """Lightweight intent payload for adventure-generator tools in chat mode."""
     model_config = ConfigDict(extra="forbid")
@@ -163,6 +171,7 @@ class AdventureGeneratorToolIntent(BaseModel):
     remember_notes: Optional[list[str]] = None
     forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
+    new_world_memories: Optional[list[WorldMemoryUpdate]] = None
     new_status_effects: Optional[list[str]] = None
     game_over: bool = False
     game_completed: bool = False
@@ -234,6 +243,7 @@ class GameEvent(BaseModel):
     remember_notes: Optional[list[str]] = None
     forget_notes: Optional[list[str]] = None
     clear_notes: bool = False
+    new_world_memories: Optional[list[WorldMemoryUpdate]] = None
 
     # Status Updates
     game_over: bool = False
