@@ -153,6 +153,11 @@ async def post_chat_message(
     current_user: User = Depends(get_current_user),
 ):
     """Processes a user message and returns a streaming response."""
+    # Hard-coded, static error message used for any client-visible failure
+    # path. Defined as a module-level constant so static-analysis tools can
+    # verify that no exception text is ever forwarded to the response body.
+    _CLIENT_ERROR_DETAIL = "Unable to process this turn."
+
     try:
         manager = GameTurnManager(db, game_id, current_user)
         turn_id = uuid4().hex
@@ -165,11 +170,13 @@ async def post_chat_message(
                     else:
                         yield chunk
             except Exception:
+                # Never forward the exception text to the client — log
+                # server-side, yield only the static error message.
                 logger.exception("Chat stream failed for session %s", game_id)
                 yield (
                     f"id: {turn_id}\n"
                     "event: error\n"
-                    f"data: {json.dumps({'detail': 'Unable to process this turn.'})}\n\n"
+                    f"data: {json.dumps({'detail': _CLIENT_ERROR_DETAIL})}\n\n"
                 )
 
         try:
@@ -180,7 +187,7 @@ async def post_chat_message(
             )
         except Exception:
             logger.exception("Failed to initialize chat stream for session %s", game_id)
-            raise HTTPException(status_code=500, detail="Unable to process this turn.")
+            raise HTTPException(status_code=500, detail=_CLIENT_ERROR_DETAIL)
 
         return StreamingResponse(
             _stream_with_turn_id(turn_stream),

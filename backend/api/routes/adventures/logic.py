@@ -17,7 +17,12 @@ from backend.models.game_session import GameSession
 from backend.models.session_state import SessionState
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.models.world_map import WorldMap
-from backend.utils.path_security import data_url_to_local_path, ensure_within_data_dir, local_path_to_data_url
+from backend.utils.path_security import (
+    assert_within_data_dir,
+    data_url_to_local_path,
+    ensure_within_data_dir,
+    local_path_to_data_url,
+)
 
 logger = logging.getLogger(__name__)
 SESSION_MANIFEST_SNAPSHOT_KEY = "__manifest_snapshot__"
@@ -225,6 +230,12 @@ class AdventureLogic:
                             continue
                     except ValueError:
                         continue
+                    # Re-validate at the sink so static analysers (CodeQL)
+                    # see the value as verified-safe before reading from it.
+                    try:
+                        candidate_path = assert_within_data_dir(candidate_path)
+                    except ValueError:
+                        continue
                     if os.path.isfile(candidate_path):
                         return local_path_to_data_url(candidate_path)
 
@@ -234,6 +245,12 @@ class AdventureLogic:
                     try:
                         if os.path.commonpath([match_resolved, data_root]) != data_root:
                             continue
+                    except ValueError:
+                        continue
+                    # Re-validate at the sink so static analysers (CodeQL)
+                    # see the value as verified-safe before reading from it.
+                    try:
+                        match_resolved = assert_within_data_dir(match_resolved)
                     except ValueError:
                         continue
                     if os.path.isfile(match_resolved):

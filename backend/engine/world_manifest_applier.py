@@ -136,6 +136,18 @@ def _copy_source_asset_to_current_adventure(
     except ValueError:
         return None
 
+    # Re-validate at the sink to satisfy taint-tracking static analysers
+    # (CodeQL path-injection alerts). The values have already been
+    # validated above; this re-affirms the guarantee before the actual
+    # filesystem mutation.
+    from backend.utils.path_security import (
+        assert_within_base_dir,
+        assert_within_data_dir,
+    )
+
+    source_local_resolved = assert_within_data_dir(source_local_resolved)
+    target_local_resolved = assert_within_base_dir(target_local_resolved, target_root_real)
+
     if not os.path.isfile(target_local_resolved):
         try:
             shutil.copy2(source_local_resolved, target_local_resolved)

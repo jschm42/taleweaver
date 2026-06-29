@@ -52,7 +52,11 @@ from backend.api.routes.adventures.logic import AdventureLogic
 from backend.engine.media_engine import MediaEngine
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
-from backend.utils.path_security import data_url_to_local_path, local_path_to_data_url
+from backend.utils.path_security import (
+    assert_within_data_dir,
+    data_url_to_local_path,
+    local_path_to_data_url,
+)
 
 router = APIRouter(tags=["Editor"])
 logger = logging.getLogger(__name__)
@@ -303,6 +307,9 @@ async def _clone_entity_image(
                 return None
         except ValueError:
             return None
+        # Re-validate at the sink so static analysers (CodeQL) see the value
+        # as verified-safe before we touch the filesystem.
+        candidate_path = assert_within_data_dir(candidate_path)
         if not os.path.exists(candidate_path):
             break
         counter += 1

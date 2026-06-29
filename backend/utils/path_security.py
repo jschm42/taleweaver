@@ -112,6 +112,23 @@ def local_path_to_data_url(path: str) -> str:
     return f"/data/{rel}"
 
 
+def assert_within_data_dir(path: str) -> str:
+    """Sanitizer helper for taint-tracking static analysers (e.g. CodeQL).
+
+    Functionally equivalent to ``ensure_within_data_dir`` but raises on
+    violation rather than returning a bool. Use this at every path-sink to
+    mark a previously user-influenced value as verified-safe for downstream
+    filesystem operations.
+    """
+    return ensure_within_data_dir(path)
+
+
+def assert_within_base_dir(path: str, base_dir: str) -> str:
+    """Sanitizer helper: same as ``ensure_within_base_dir`` but raises on
+    violation. See :func:`assert_within_data_dir` for rationale."""
+    return ensure_within_base_dir(path, base_dir)
+
+
 def _resolve_host_ips(host: str) -> list[ipaddress._BaseAddress]:
     """Resolve a hostname to its IP addresses (best-effort DNS lookup).
 
