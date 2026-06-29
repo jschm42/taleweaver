@@ -97,6 +97,23 @@ class Settings(BaseSettings):
     # avoid browsers caching the HSTS directive locally).
     ENABLE_HSTS: bool = True
 
+    # Hard upper bound on number of scenes before AI validation is skipped.
+    # Larger adventures overflow typical LLM context windows and incur
+    # disproportionate cost. Structural validation always runs regardless.
+    # Only relevant for the manual "Run full validation" button in the
+    # editor's Validation tab; structural-only saves are never affected.
+    MAX_AI_VALIDATION_SCENES: int = 50
+
+    # Validation panel limits.
+    # Hard upper bound on number of scenes before AI validation is skipped.
+    # Larger adventures overflow typical LLM context windows and incur
+    # disproportionate cost. Structural validation always runs regardless.
+    MAX_AI_VALIDATION_SCENES: int = 50
+
+    # Per-user rate limit on POST /editor/validate (covers both modes).
+    VALIDATION_RATE_LIMIT_MAX: int = 5
+    VALIDATION_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     # Maximum number of HTTPS scheme bytes accepted in user-supplied URLs.
     MAX_PROVIDER_URL_LENGTH: int = 512
 

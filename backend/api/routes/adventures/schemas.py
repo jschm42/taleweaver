@@ -728,4 +728,24 @@ class DecorativeItemsGenerationResponse(BaseModel):
     items: list[str]
 
 
+class AIValidationFindingItem(BaseModel):
+    """One row inside the AI validation response wrapper."""
+
+    severity: str
+    code: str
+    message: str
+    location: Optional[str] = None
+    context: Optional[dict[str, Any]] = None
+
+
+class AIValidationResponse(BaseModel):
+    """Top-level wrapper returned by the AI validation pass.
+
+    Always a single object — not a bare list — because litellm / DeepSeek /
+    Claude only support ``response_format`` on object schemas.
+    """
+
+    findings: list[AIValidationFindingItem] = []
+
+
 

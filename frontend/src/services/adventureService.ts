@@ -204,4 +204,54 @@ export const adventureService = {
     )
     return payload
   },
+
+  async runValidation(
+    adventureId: string,
+    includeAi: boolean,
+  ): Promise<ValidationRunResponse> {
+    const res = await fetch(
+      `${API_BASE}/adventures/${adventureId}/editor/validate`,
+      {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ include_ai: includeAi }),
+      },
+    )
+    if (!res.ok) {
+      const respData = await res.json().catch(() => ({}))
+      throw new Error(respData.detail || 'Failed to run validation.')
+    }
+    return res.json()
+  },
+}
+
+export type ValidationSeverity = 'error' | 'warn'
+
+export interface ValidationFinding {
+  severity: ValidationSeverity
+  code: string
+  message: string
+  location?: string | null
+  context?: Record<string, any> | null
+}
+
+/**
+ * A finding annotated with its source (structural vs AI).
+ * The backend returns these as two separate lists; the UI merges and tags them.
+ */
+export interface AnnotatedValidationFinding extends ValidationFinding {
+  source: 'structural' | 'ai'
+}
+
+export type ValidationAiSkippedReason =
+  | 'ai_not_requested'
+  | 'scene_limit_exceeded'
+  | 'ai_error'
+  | null
+
+export interface ValidationRunResponse {
+  structural_findings: ValidationFinding[]
+  ai_findings: ValidationFinding[]
+  ai_skipped_reason?: ValidationAiSkippedReason
+  run_at: string
 }

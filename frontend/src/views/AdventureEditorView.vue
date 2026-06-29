@@ -23,6 +23,7 @@ import MapTab from '@/components/editor/MapTab.vue'
 import QuestTab from '@/components/editor/QuestTab.vue'
 import AwardsTab from '@/components/editor/AwardsTab.vue'
 import AdvancedTab from '@/components/editor/AdvancedTab.vue'
+import ValidationTab from '@/components/editor/ValidationTab.vue'
 import EntityTooltip from '@/components/editor/EntityTooltip.vue'
 import NotificationToast from '@/components/editor/NotificationToast.vue'
 import EditEntityModal from '@/components/editor/EditEntityModal.vue'
@@ -317,9 +318,9 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-const activeTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('world')
-const sceneEditorReturnTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('scenes')
-const exitEditorReturnTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced'>('map')
+const activeTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced' | 'validation'>('world')
+const sceneEditorReturnTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced' | 'validation'>('scenes')
+const exitEditorReturnTab = ref<'world' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'tone' | 'advanced' | 'validation'>('map')
 
 const selectedVisual = ref<{ kind: VisualKind; id: string; label: string; description: string; hint: string } | null>(null)
 const selectedUploadTarget = ref<{ kind: VisualKind; id: string; label: string } | null>(null)
@@ -388,6 +389,7 @@ const editorTabs = [
   { key: 'visuals', label: 'Visual Style' },
   { key: 'tone', label: 'Tone' },
   { key: 'advanced', label: 'Advanced' },
+  { key: 'validation', label: 'Validation' },
 ] as const
 
 function getTabLabel(key: string): string {
@@ -1076,6 +1078,17 @@ async function saveChanges() {
       await fetchDebugInfo()
     }
     addNotification('Adventure configuration updated.', 'success')
+
+    // Auto-run structural validation after every save. Only structural —
+    // AI validation remains a manual action in the Validation tab to keep
+    // save latency low and avoid uncontrolled LLM costs.
+    if (activeTab.value === 'validation') {
+      try {
+        await adventureService.runValidation(props.adventureId, false)
+      } catch {
+        // Silent: validation is best-effort; user can retry manually.
+      }
+    }
   } catch (error: any) {
     errorMsg.value = error?.message || 'Network error while saving.'
     addNotification(errorMsg.value, 'error')
@@ -2207,6 +2220,13 @@ watch(
               @update:npcs-can-damage-protagonist="form.npcs_can_damage_protagonist = $event; saveChanges()"
               @show-debug="showDebug = true"
               @save-changes="saveChanges"
+            />
+
+            <ValidationTab
+              v-if="activeTab === 'validation'"
+              :template-id="adventureId"
+              :adventure-title="adventure?.title"
+              @notify="addNotification"
             />
           </div>
         </div>
