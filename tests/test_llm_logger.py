@@ -11,6 +11,7 @@ def test_structured_logging_appends_jsonl_entries(tmp_path, monkeypatch):
     log_file = log_dir / "llm_debug.jsonl"
     monkeypatch.setattr(llm_logger, "LOG_DIR", str(log_dir))
     monkeypatch.setattr(llm_logger, "LOG_FILE", str(log_file))
+    monkeypatch.setattr(llm_logger, "_TELEMETRY_ENABLED", True)
 
     llm_logger.log_structured_event(
         "adventure.generation.started",
@@ -44,3 +45,24 @@ def test_structured_logging_appends_jsonl_entries(tmp_path, monkeypatch):
     assert second["event_type"] == "gm.turn.response"
     assert second["game_id"] == "game-123"
     assert second["metadata"]["scene_count"] == 5
+
+
+def test_logging_is_noop_when_telemetry_disabled(tmp_path, monkeypatch):
+    """When LLM_TELEMETRY_ENABLED is False (the default), no file is written."""
+    log_dir = tmp_path / "logs"
+    log_file = log_dir / "llm_debug.jsonl"
+    monkeypatch.setattr(llm_logger, "LOG_DIR", str(log_dir))
+    monkeypatch.setattr(llm_logger, "LOG_FILE", str(log_file))
+    monkeypatch.setattr(llm_logger, "_TELEMETRY_ENABLED", False)
+
+    llm_logger.log_structured_event("any.event", foo="bar")
+    llm_logger.log_llm_interaction(
+        model="gpt-4o-mini",
+        provider="openai",
+        system_prompt="x",
+        user_prompt="y",
+        response_content="z",
+    )
+
+    assert not log_file.exists()
+    assert not log_dir.exists()

@@ -17,6 +17,17 @@ logger = logging.getLogger(__name__)
 
 MAX_LOG_TEXT_LENGTH = 12000
 
+# Master switch: when False, log_llm_interaction / log_structured_event are
+# no-ops and no JSONL file is written. This is independent of LOG_LEVEL —
+# the JSONL log captures every LLM round-trip (system prompts, full responses,
+# token usage) and is **only** intended for active development or debugging.
+_TELEMETRY_ENABLED = bool(getattr(settings, "LLM_TELEMETRY_ENABLED", False))
+logger.info(
+    "LLM telemetry log: %s (LLM_TELEMETRY_ENABLED=%s)",
+    "ENABLED — writing to %s" % LOG_FILE if _TELEMETRY_ENABLED else "DISABLED",
+    _TELEMETRY_ENABLED,
+)
+
 
 def _truncate_text(value: Any, max_length: int = MAX_LOG_TEXT_LENGTH) -> Any:
     if isinstance(value, str) and len(value) > max_length:
@@ -35,6 +46,9 @@ def _prepare_value(value: Any) -> Any:
 
 
 def _write_entry(entry: dict[str, Any]) -> None:
+    if not _TELEMETRY_ENABLED:
+        return
+
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -46,7 +60,12 @@ def _write_entry(entry: dict[str, Any]) -> None:
 
 
 def log_structured_event(event_type: str, **fields: Any) -> None:
-    """Appends a structured lifecycle event to the JSONL debug log."""
+    """Appends a structured lifecycle event to the JSONL debug log.
+
+    No-op when LLM_TELEMETRY_ENABLED is False (the default).
+    """
+    if not _TELEMETRY_ENABLED:
+        return
     _write_entry(
         {
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -72,7 +91,14 @@ def log_llm_interaction(
 ):
     """
     Logs an LLM interaction to a local JSONL file for debugging.
+
+    No-op (no file write, no token-usage print) when LLM_TELEMETRY_ENABLED is
+    False. The standard Python logging system (LOG_LEVEL) is independent and
+    continues to emit its own messages to stdout/stderr.
     """
+    if not _TELEMETRY_ENABLED:
+        return
+
     entry = {
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "event_type": event_type,

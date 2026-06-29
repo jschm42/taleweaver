@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     # When unset (default), logs are written to DATA_DIR/logs — in that case
     # the SafeStaticFiles mount blocks access to .jsonl files via HTTP.
     LLM_LOG_DIR: Optional[str] = None
+    # Master switch for the JSONL LLM telemetry log. Persists every LLM
+    # round-trip (system_prompt, user_prompt, raw response, token usage) to
+    # disk — must be opted in explicitly. Default off.
+    LLM_TELEMETRY_ENABLED: bool = False
     SESSION_EMPTY_DIR_CLEANUP_DAYS: int = 7
 
     VISUAL_TIMEOUT: int = 300
