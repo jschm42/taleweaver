@@ -239,6 +239,8 @@ class GameEvent(BaseModel):
     # Award System
     earned_award_keys: Optional[list[str]] = None
 
+    combination_intent: bool = Field(False, description="Set to true if the player's message indicates they are attempting to combine, craft, mix, assemble, or use multiple items together (in any language).")
+
     # Notes Tool
     remember_notes: Optional[list[str]] = None
     forget_notes: Optional[list[str]] = None

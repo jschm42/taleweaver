@@ -2419,6 +2419,7 @@ async def create_editor_entity(
         current_scene_id=scene_id,
         image_url=str(payload.image_url or "").strip() or None,
         item_type=item_type,
+        is_hidden=True if item_type == "CONSTRUCTABLE" else False,
         is_portable=bool(payload.is_portable) if payload.is_portable is not None else True,
         goal=str(payload.goal or "").strip() or None,
         character=str(payload.character or "").strip() or None,
@@ -3111,6 +3112,11 @@ async def update_editor_entity(
 
                 ent.metadata_json = metadata_json
                 flag_modified(ent, "metadata_json")
+
+                if ent.item_type == "CONSTRUCTABLE":
+                    ent.is_hidden = True
+                elif new_item_type_value is not None:
+                    ent.is_hidden = False
             
     await db.commit()
     return {"status": "success"}

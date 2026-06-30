@@ -601,7 +601,7 @@ class GameTurnManager:
         visible_objects: list[str] = []
         for ent in entities:
             ov = states.get(ent.id) or {}
-            is_hidden = bool(ov.get("is_hidden", ent.is_hidden))
+            is_hidden = bool(ov.get("is_hidden", True if str(ent.item_type or "").upper() == "CONSTRUCTABLE" else ent.is_hidden))
             is_in_inventory = bool(ov.get("is_in_inventory", ent.is_in_inventory))
             if is_hidden or is_in_inventory:
                 continue
@@ -1863,10 +1863,15 @@ class GameTurnManager:
             return []
 
         combine_intent = (
-            lowered.startswith("use ")
+            bool(event.combination_intent)
+            or lowered.startswith("use ")
+            or lowered.startswith("benutz")
             or any(
                 kw in lowered
-                for kw in ("combine", "assembl", "craft", " mix ", "put together")
+                for kw in (
+                    "combine", "assembl", "craft", " mix ", "put together",
+                    "kombi", "misch", "zusammen", "herstell", "erzeug", "bastel", "bau "
+                )
             )
         )
         if not combine_intent:
@@ -1890,6 +1895,8 @@ class GameTurnManager:
             ov = states_snapshot.get(e.id, {})
             if "is_hidden" in ov and ov["is_hidden"] is not None:
                 return bool(ov["is_hidden"])
+            if str(e.item_type or "").upper() == "CONSTRUCTABLE":
+                return True
             return bool(e.is_hidden)
 
         # Inventory ingredient ids (preserve original case for removal matching).

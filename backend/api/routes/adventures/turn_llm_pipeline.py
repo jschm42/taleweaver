@@ -205,6 +205,8 @@ class TurnLlmContextBuilder:
                 ent.current_scene_id = ov["current_scene_id"]
             if "is_hidden" in ov:
                 ent.is_hidden = ov["is_hidden"]
+            elif str(ent.item_type or "").upper() == "CONSTRUCTABLE":
+                ent.is_hidden = True
             if "is_in_inventory" in ov:
                 ent.is_in_inventory = ov["is_in_inventory"]
             if "inventory" in ov:
