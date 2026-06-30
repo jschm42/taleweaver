@@ -392,6 +392,44 @@ const editorTabs = [
   { key: 'validation', label: 'Validation' },
 ] as const
 
+const validationTabBadge = ref<{
+  total: number
+  errors: number
+  warnings: number
+  ai: number
+  structural: number
+} | null>(null)
+
+function onValidationFindingsCount(
+  total: number,
+  errors: number,
+  warnings: number,
+  ai: number,
+  structural: number,
+) {
+  validationTabBadge.value = { total, errors, warnings, ai, structural }
+}
+
+function validationBadgeText(): string {
+  const badge = validationTabBadge.value
+  if (!badge || badge.total <= 0) return ''
+  if (badge.errors > 0) {
+    return String(badge.errors)
+  }
+  if (badge.warnings > 0) {
+    return String(badge.warnings)
+  }
+  return String(badge.total)
+}
+
+function validationBadgeClass(): string {
+  const badge = validationTabBadge.value
+  if (!badge || badge.total <= 0) return ''
+  if (badge.errors > 0) return 'bg-rose-500/20 border-rose-500/60 text-rose-200'
+  if (badge.warnings > 0) return 'bg-amber-500/20 border-amber-500/60 text-amber-200'
+  return 'bg-cyan-500/20 border-cyan-500/60 text-cyan-200'
+}
+
 function getTabLabel(key: string): string {
   const tab = editorTabs.find((t) => t.key === key)
   return tab ? tab.label : 'Scenes'
@@ -1956,13 +1994,19 @@ watch(
             :key="tab.key"
             @click="activeTab = tab.key"
             :class="[
-              'shrink-0 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-[0.15em] transition-all border',
+              'shrink-0 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-[0.15em] transition-all border flex items-center gap-2',
               activeTab === tab.key
                 ? 'bg-emerald-600/80 border-emerald-500 text-white'
                 : 'bg-slate-900/50 border-white/10 text-slate-400 hover:text-slate-200'
             ]"
           >
-            {{ tab.label }}
+            <span>{{ tab.label }}</span>
+            <span
+              v-if="tab.key === 'validation' && validationBadgeText()"
+              :class="['px-1.5 py-0.5 rounded-md text-[9px] font-black border leading-none', validationBadgeClass()]"
+            >
+              {{ validationBadgeText() }}
+            </span>
           </button>
         </nav>
 
@@ -1975,13 +2019,19 @@ watch(
                   :key="tab.key"
                   @click="activeTab = tab.key"
                   :class="[
-                    'w-full text-left px-3 py-2 rounded-xl text-xs font-black uppercase tracking-[0.18em] transition-all',
+                    'w-full text-left px-3 py-2 rounded-xl text-xs font-black uppercase tracking-[0.18em] transition-all flex items-center justify-between gap-2',
                     activeTab === tab.key
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
                   ]"
                 >
-                  {{ tab.label }}
+                  <span>{{ tab.label }}</span>
+                  <span
+                    v-if="tab.key === 'validation' && validationBadgeText()"
+                    :class="['px-1.5 py-0.5 rounded-md text-[9px] font-black border leading-none', validationBadgeClass()]"
+                  >
+                    {{ validationBadgeText() }}
+                  </span>
                 </button>
               </div>
             </div>
@@ -2227,6 +2277,7 @@ watch(
               :template-id="adventureId"
               :adventure-title="adventure?.title"
               @notify="addNotification"
+              @findings-count="onValidationFindingsCount"
             />
           </div>
         </div>

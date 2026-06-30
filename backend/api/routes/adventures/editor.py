@@ -32,11 +32,19 @@ from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.llm_router import GameMasterLLM
 from backend.core.validators_prompts import (
+    AI_FIX_SUGGESTIONS_SYSTEM_PROMPT,
+    AI_FIX_SUGGESTIONS_USER_PROMPT_TEMPLATE,
     AI_VALIDATION_SYSTEM_PROMPT,
     AI_VALIDATION_USER_PROMPT_TEMPLATE,
 )
 from backend.core.world_validator import validate_adventure
 from backend.schemas.validation import (
+    AIFixApplyRequest,
+    AIFixApplyResponse,
+    AIFixSuggestionsRequest,
+    AIFixSuggestionsResponse,
+    FixProposal,
+    FixProposalEntityPatch,
     ValidationFinding,
     ValidationRunRequest,
     ValidationRunResponse,
@@ -56,7 +64,9 @@ from backend.core.prompts import (
     TRAIT_GENERATION_USER_PROMPT_TEMPLATE,
 )
 from backend.models.adventure_template import AdventureTemplate
+from backend.models.ai_fix_cache import AIFixCache
 from backend.models.avatar import Avatar
+from backend.models.validation_run import ValidationRun
 from backend.api.routes.adventures.sessions import _backfill_avatar_items_from_template_entities
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.engine.media_engine import MediaEngine
@@ -684,12 +694,1489 @@ async def run_editor_validation(
                 logger.exception("AI validation failed for %s: %s", template_id, exc)
                 ai_skipped_reason = "ai_error"
 
+    run_at_dt = datetime.now(timezone.utc)
+    structural_dicts = [f.model_dump() for f in structural]
+    ai_dicts = [f.model_dump() for f in ai_findings]
+
+    persisted = ValidationRun(
+        template_id=template_id,
+        user_id=current_user.id,
+        include_ai=bool(payload.include_ai),
+        structural_findings=structural_dicts,
+        ai_findings=ai_dicts,
+        ai_skipped_reason=ai_skipped_reason,
+        structural_finding_count=len(structural_dicts),
+        ai_finding_count=len(ai_dicts),
+        error_count=sum(1 for f in structural_dicts + ai_dicts if f.get("severity") == "error"),
+        warning_count=sum(1 for f in structural_dicts + ai_dicts if f.get("severity") == "warn"),
+        run_at=run_at_dt,
+    )
+    db.add(persisted)
+    try:
+        await db.commit()
+    except Exception as exc:
+        logger.exception("Failed to persist validation run for %s: %s", template_id, exc)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to persist validation run.") from exc
+
     return ValidationRunResponse(
         structural_findings=structural,
         ai_findings=ai_findings,
         ai_skipped_reason=ai_skipped_reason,
-        run_at=datetime.now(timezone.utc).isoformat(),
+        run_at=run_at_dt.isoformat(),
     )
+
+
+@router.get(
+    "/{template_id}/editor/validation/latest",
+    response_model=None,
+)
+async def get_latest_validation_run(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the latest persisted ValidationRun for the (template, user) pair.
+
+    Returns ``null`` when no validation has been run yet for this user on
+    this adventure. The editor uses this to rehydrate the findings state on
+    tab open without forcing the user to re-run validation.
+    """
+
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    res = await db.execute(
+        select(ValidationRun)
+        .where(
+            ValidationRun.template_id == template_id,
+            ValidationRun.user_id == current_user.id,
+        )
+        .order_by(ValidationRun.run_at.desc(), ValidationRun.created_at.desc())
+        .limit(1)
+    )
+    run = res.scalars().first()
+    if run is None:
+        return None
+
+    return {
+        "structural_findings": list(run.structural_findings or []),
+        "ai_findings": list(run.ai_findings or []),
+        "ai_skipped_reason": run.ai_skipped_reason,
+        "run_at": run.run_at.isoformat() if run.run_at else None,
+        "structural_finding_count": run.structural_finding_count,
+        "ai_finding_count": run.ai_finding_count,
+        "error_count": run.error_count,
+        "warning_count": run.warning_count,
+    }
+
+
+# ---------------------------------------------------------------------------
+# AI fix suggestions / apply
+# ---------------------------------------------------------------------------
+
+
+def _finding_signature(finding: ValidationFinding) -> str:
+    """Stable signature used to round-trip a finding through the suggestion / apply pipeline."""
+    location = (finding.location or "").strip()
+    context = finding.context or {}
+    payload = json.dumps(context, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return f"{finding.severity}|{finding.code}|{location}|{payload}"
+
+
+def _short_state(value: Any, *, limit: int = 400) -> str:
+    text = "" if value is None else str(value)
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
+
+
+def _scene_summary(scene: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": scene.get("id"),
+        "label": scene.get("label"),
+        "description": _short_state(scene.get("description")),
+        "decorative_objects": scene.get("decorative_objects") or [],
+    }
+
+
+def _exit_summary(exit_row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": exit_row.get("id"),
+        "from_scene_id": exit_row.get("from_scene_id"),
+        "to_scene_id": exit_row.get("to_scene_id"),
+        "label": exit_row.get("label"),
+        "exit_type": exit_row.get("exit_type"),
+        "is_locked": exit_row.get("is_locked"),
+        "lock_description": _short_state(exit_row.get("lock_description"), limit=200),
+        "code_to_unlock": exit_row.get("code_to_unlock"),
+        "item_to_unlock": exit_row.get("item_to_unlock"),
+        "rule_to_unlock": _short_state(exit_row.get("rule_to_unlock"), limit=200),
+    }
+
+
+def _npc_summary(entity: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": entity.get("id"),
+        "name": entity.get("name"),
+        "description": _short_state(entity.get("description")),
+        "current_scene_id": entity.get("current_scene_id"),
+        "goal": _short_state(entity.get("goal")),
+        "character": _short_state(entity.get("character")),
+        "is_killable": entity.get("is_killable"),
+        "stats": entity.get("stats") or {},
+    }
+
+
+def _object_summary(entity: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": entity.get("id"),
+        "name": entity.get("name"),
+        "description": _short_state(entity.get("description")),
+        "current_scene_id": entity.get("current_scene_id"),
+        "item_type": entity.get("item_type"),
+        "is_portable": entity.get("is_portable"),
+        "locked": entity.get("locked"),
+        "code_to_unlock": entity.get("code_to_unlock"),
+        "item_to_unlock": entity.get("item_to_unlock"),
+        "rule_to_unlock": _short_state(entity.get("rule_to_unlock"), limit=200),
+        "text_log_content": _short_state(entity.get("text_log_content"), limit=400),
+        "text_log_format": entity.get("text_log_format"),
+        "stats": entity.get("stats") or {},
+    }
+
+
+def _summarize_world_for_fix(payload: Any) -> dict[str, Any]:
+    """Build a trimmed JSON-friendly snapshot of the world for the fix prompts."""
+
+    def _adventure_dict() -> dict[str, Any]:
+        adventure_raw = getattr(payload, "adventure", None) or {}
+        if isinstance(adventure_raw, dict):
+            return adventure_raw
+        return {}
+
+    adventure = _adventure_dict()
+    adventure_payload: dict[str, Any] = {}
+    for key in (
+        "id", "title", "teaser", "plot", "rules", "intro_text",
+        "walkthrough", "tts_director_notes", "completed_condition",
+        "gameover_condition", "language", "selected_tone",
+        "rule_enforcement_mode",
+    ):
+        value = adventure.get(key)
+        if isinstance(value, str):
+            adventure_payload[key] = _short_state(value, limit=1500)
+        else:
+            adventure_payload[key] = value
+
+    scenes = [s for s in (getattr(payload, "scenes", None) or []) if isinstance(s, dict)]
+    exits = [e for e in (getattr(payload, "exits", None) or []) if isinstance(e, dict)]
+    npcs = [n for n in (getattr(payload, "npcs", None) or []) if isinstance(n, dict)]
+    objects = [o for o in (getattr(payload, "objects", None) or []) if isinstance(o, dict)]
+
+    raw_quests = adventure.get("quests") or []
+    if not isinstance(raw_quests, list):
+        raw_quests = []
+    quests = []
+    for q in raw_quests:
+        if not isinstance(q, dict):
+            continue
+        quests.append({
+            "id": q.get("id"),
+            "title": q.get("title"),
+            "description": _short_state(q.get("description"), limit=400),
+        })
+
+    return {
+        "adventure": adventure_payload,
+        "scenes": [_scene_summary(s) for s in scenes],
+        "exits": [_exit_summary(e) for e in exits],
+        "npcs": [_npc_summary(n) for n in npcs],
+        "objects": [_object_summary(o) for o in objects],
+        "quests": quests,
+    }
+
+
+def _signing(finding_or_payload: AIFixSuggestionsRequest) -> str:
+    context_blob = json.dumps(
+        finding_or_payload.finding_context or {},
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return (
+        f"{finding_or_payload.finding_severity}|{finding_or_payload.finding_code}"
+        f"|{(finding_or_payload.finding_location or '').strip()}|{context_blob}"
+    )
+
+
+_FIX_PROTAGONIST_FIELDS = frozenset(
+    {
+        "name", "description", "goal", "character",
+        "hp", "mana", "stamina", "strength", "intelligence", "wisdom",
+        "dexterity", "charisma", "armor_class", "exp",
+    }
+)
+
+_FIX_ADVENTURE_FIELDS = frozenset(
+    {
+        "title", "teaser", "plot", "rules", "intro_text",
+        "walkthrough", "tts_director_notes",
+        "completed_condition", "gameover_condition",
+    }
+)
+
+_FIX_SCENE_FIELDS = frozenset(
+    {"label", "description", "decorative_objects"}
+)
+
+_FIX_EXIT_FIELDS = frozenset(
+    {
+        "label", "lock_description", "exit_type", "locked",
+        "code_to_unlock", "item_to_unlock", "rule_to_unlock",
+    }
+)
+
+_FIX_NPC_FIELDS = frozenset(
+    {
+        "name", "description", "goal", "character",
+        "is_killable", "current_scene_id",
+    }
+)
+
+_FIX_OBJECT_FIELDS = frozenset(
+    {
+        "name", "description", "is_portable", "current_scene_id",
+        "locked", "code_to_unlock", "item_to_unlock", "rule_to_unlock",
+        "text_log_content", "text_log_format",
+    }
+)
+
+
+def _allowed_fields_for(target_type: str) -> frozenset[str]:
+    return {
+        "scene": _FIX_SCENE_FIELDS,
+        "exit": _FIX_EXIT_FIELDS,
+        "npc": _FIX_NPC_FIELDS,
+        "object": _FIX_OBJECT_FIELDS,
+        "protagonist": _FIX_PROTAGONIST_FIELDS,
+        "adventure": _FIX_ADVENTURE_FIELDS,
+    }.get(target_type, frozenset())
+
+
+def _normalize_field_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(k): _normalize_field_value(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_normalize_field_value(v) for v in value]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if value is None:
+        return None
+    return str(value)
+
+
+async def _resolve_exit_target(
+    *,
+    db: AsyncSession,
+    template_id: str,
+    raw_target_id: str,
+) -> Optional[WorldExit]:
+    """Resolve an exit target_id in multiple ways.
+
+    The AI sometimes emits ``target_id`` as:
+      * the exit's primary key UUID (e.g. ``019EFF1D-8885-...``)
+      * the ``from_scene_id -> to_scene_id`` composite (``"A->B"``)
+      * one of the two scene IDs alone
+      * the exit's human-readable ``label`` (case-insensitive, unique)
+
+    We try the most specific match first, then relax. This keeps the
+    apply-fix resilient against stale cached proposals whose original
+    UUID no longer exists, and against AI proposals that picked a more
+    human-readable identifier.
+    """
+    raw = str(raw_target_id or "").strip()
+    if not raw:
+        return None
+
+    base_filter = (
+        WorldExit.template_id == template_id,
+    )
+
+    res = await db.execute(
+        select(WorldExit)
+        .where(*base_filter, WorldExit.id == raw)
+        .limit(1)
+    )
+    match = res.scalars().first()
+    if match is not None:
+        return match
+
+    if "->" in raw:
+        left, right = raw.split("->", 1)
+        from_id = left.strip().upper()
+        to_id = right.strip().upper()
+        res = await db.execute(
+            select(WorldExit)
+            .where(
+                *base_filter,
+                WorldExit.from_scene_id == from_id,
+                WorldExit.to_scene_id == to_id,
+            )
+            .limit(1)
+        )
+        match = res.scalars().first()
+        if match is not None:
+            return match
+
+    upper = raw.upper()
+    res = await db.execute(
+        select(WorldExit)
+        .where(*base_filter, WorldExit.id == upper)
+        .limit(1)
+    )
+    match = res.scalars().first()
+    if match is not None:
+        return match
+
+    res = await db.execute(
+        select(WorldExit)
+        .where(
+            *base_filter,
+            WorldExit.from_scene_id == upper,
+        )
+        .limit(1)
+    )
+    match = res.scalars().first()
+    if match is not None:
+        return match
+
+    res = await db.execute(
+        select(WorldExit)
+        .where(
+            *base_filter,
+            WorldExit.to_scene_id == upper,
+        )
+        .limit(1)
+    )
+    match = res.scalars().first()
+    if match is not None:
+        return match
+
+    label_ci = raw.strip().lower()
+    res = await db.execute(
+        select(WorldExit)
+        .where(*base_filter)
+    )
+    candidates = []
+    for row in res.scalars().all():
+        if (row.label or "").strip().lower() == label_ci:
+            candidates.append(row)
+    if len(candidates) == 1:
+        return candidates[0]
+
+    return None
+
+
+async def _resolve_entity_target(
+    *,
+    db: AsyncSession,
+    template_id: str,
+    entity_type: str,
+    raw_target_id: str,
+) -> Optional[WorldEntity]:
+    """Resolve a scene/object/npc target_id; matches by exact ID, label, or unique label."""
+    raw = str(raw_target_id or "").strip()
+    if not raw:
+        return None
+
+    upper = raw.upper()
+    res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+            WorldEntity.id == upper,
+        )
+    )
+    match = res.scalars().first()
+    if match is not None and match.entity_type == entity_type.upper():
+        return match
+
+    if match is not None and match.entity_type != entity_type.upper():
+        return None
+
+    label_ci = raw.strip().lower()
+    res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.template_id == template_id,
+            WorldEntity.session_id.is_(None),
+            WorldEntity.entity_type == entity_type.upper(),
+        )
+    )
+    candidates = []
+    for row in res.scalars().all():
+        if (row.name or "").strip().lower() == label_ci:
+            candidates.append(row)
+    if len(candidates) == 1:
+        return candidates[0]
+
+    return None
+
+
+async def _resolve_scene_target(
+    *,
+    db: AsyncSession,
+    template_id: str,
+    raw_target_id: str,
+) -> Optional[WorldScene]:
+    """Resolve a scene target_id; matches by exact ID or unique label."""
+    raw = str(raw_target_id or "").strip()
+    if not raw:
+        return None
+
+    upper = raw.upper()
+    res = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+            WorldScene.id == upper,
+        )
+    )
+    match = res.scalars().first()
+    if match is not None:
+        return match
+
+    label_ci = raw.strip().lower()
+    res = await db.execute(
+        select(WorldScene).where(
+            WorldScene.template_id == template_id,
+            WorldScene.session_id.is_(None),
+        )
+    )
+    candidates = []
+    for row in res.scalars().all():
+        if (row.label or "").strip().lower() == label_ci:
+            candidates.append(row)
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
+async def _apply_proposal_patch(
+    *,
+    db: AsyncSession,
+    template_id: str,
+    adv: AdventureTemplate,
+    patch: FixProposalEntityPatch,
+) -> Optional[str]:
+    """Apply a single FixProposalEntityPatch. Returns a 'type:id' tag on success."""
+
+    allowed = _allowed_fields_for(patch.target_type)
+    if not allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported target_type '{patch.target_type}'")
+
+    updates: dict[str, Any] = {}
+    for field, value in (patch.field_updates or {}).items():
+        if field not in allowed:
+            continue
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        updates[field] = value
+
+    if not updates:
+        return None
+
+    target_tag = f"{patch.target_type}:{patch.target_id or ''}"
+
+    if patch.target_type == "adventure":
+        for field, value in updates.items():
+            setattr(adv, field, _normalize_field_value(value))
+        return target_tag
+
+    if patch.target_type == "protagonist":
+        avatar = await _get_template_avatar(db, template_id)
+        if not avatar:
+            avatar = await _restore_missing_template_avatar(db, template_id, adv)
+        if not avatar:
+            raise HTTPException(status_code=400, detail="Protagonist not found for AI fix")
+        for field, value in updates.items():
+            if field == "hp":
+                avatar.hp = int(value)
+                avatar.max_hp = int(value)
+            elif field == "mana":
+                avatar.mana = int(value)
+                avatar.max_mana = int(value)
+            elif field == "stamina":
+                avatar.stamina = int(value)
+                avatar.max_stamina = int(value)
+            else:
+                setattr(avatar, field, _normalize_field_value(value))
+        return target_tag
+
+    raw_target_id = str(patch.target_id or "").strip()
+    if not raw_target_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{patch.target_type} patch is missing target_id",
+        )
+
+    if patch.target_type == "scene":
+        scene = await _resolve_scene_target(
+            db=db, template_id=template_id, raw_target_id=raw_target_id,
+        )
+        if scene is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"scene '{raw_target_id}' could not be resolved in this "
+                    f"adventure. The AI reference is stale; please retry."
+                ),
+            )
+        target_tag = f"scene:{scene.id}"
+        if "label" in updates:
+            scene.label = str(updates["label"]).strip()[:120]
+        if "description" in updates:
+            scene.description = str(updates["description"]).strip()
+        if "decorative_objects" in updates:
+            decor: list[str] = []
+            for d in updates["decorative_objects"] or []:
+                s = str(d).strip()
+                if not s:
+                    continue
+                if len(s) > 100:
+                    raise HTTPException(status_code=400, detail="decorative_objects entries must be <= 100 chars")
+                decor.append(s)
+            scene.decorative_objects = decor[:7] or None
+            flag_modified(scene, "decorative_objects")
+        return target_tag
+
+    if patch.target_type == "exit":
+        world_exit = await _resolve_exit_target(
+            db=db, template_id=template_id, raw_target_id=raw_target_id,
+        )
+        if world_exit is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"exit '{raw_target_id}' could not be resolved in this "
+                    f"adventure. The AI reference is stale; please retry."
+                ),
+            )
+        target_tag = f"exit:{world_exit.id}"
+        if "label" in updates:
+            world_exit.label = str(updates["label"]).strip()[:120]
+        if "lock_description" in updates:
+            world_exit.lock_description = str(updates["lock_description"]).strip() or None
+        if "exit_type" in updates:
+            world_exit.exit_type = str(updates["exit_type"]).strip().lower()
+        if "locked" in updates:
+            world_exit.is_locked = bool(updates["locked"])
+
+        lock_keys_present = any(
+            k in updates for k in ("code_to_unlock", "item_to_unlock", "rule_to_unlock")
+        )
+        if lock_keys_present:
+            code = str(updates.get("code_to_unlock", world_exit.code_to_unlock or "")).strip()
+            item = str(updates.get("item_to_unlock", world_exit.item_to_unlock or "")).strip().upper()
+            rule = str(updates.get("rule_to_unlock", world_exit.rule_to_unlock or "")).strip()
+
+            if code:
+                code = code[:32]; item = ""; rule = ""
+            elif item:
+                from backend.utils.text_utils import slugify
+                item = slugify(item).upper().replace("-", "_")[:64]; code = ""; rule = ""
+            elif rule:
+                rule = rule[:500]; code = ""; item = ""
+            else:
+                code = ""; item = ""; rule = ""
+
+            world_exit.code_to_unlock = code or None
+            world_exit.item_to_unlock = item or None
+            world_exit.rule_to_unlock = rule or None
+            if "locked" not in updates:
+                world_exit.is_locked = bool(code or item or rule)
+        return target_tag
+
+    if patch.target_type in ("npc", "object"):
+        ent = await _resolve_entity_target(
+            db=db, template_id=template_id,
+            entity_type=patch.target_type, raw_target_id=raw_target_id,
+        )
+        if ent is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{patch.target_type} '{raw_target_id}' could not be "
+                    f"resolved in this adventure. The AI reference is stale; "
+                    f"please retry."
+                ),
+            )
+        target_tag = f"{patch.target_type}:{ent.id}"
+
+        if "name" in updates:
+            ent.name = str(updates["name"]).strip()[:120]
+        if "description" in updates:
+            text = str(updates["description"]).strip()
+            if ent.entity_type == "OBJECT":
+                item_type = str(ent.item_type or "").upper()
+                if item_type == "READABLE" and len(text) > 200:
+                    raise HTTPException(status_code=400, detail="READABLE descriptions must be <= 200 chars")
+            ent.description = text
+        if "is_portable" in updates and ent.entity_type == "OBJECT":
+            ent.is_portable = bool(updates["is_portable"])
+        if "current_scene_id" in updates:
+            new_scene = str(updates["current_scene_id"] or "").strip().upper()
+            if not new_scene:
+                raise HTTPException(status_code=400, detail="current_scene_id cannot be empty")
+            await _ensure_template_scene_exists(db, template_id, new_scene)
+            ent.current_scene_id = new_scene
+
+        if ent.entity_type == "NPC":
+            if "goal" in updates:
+                ent.goal = str(updates["goal"]).strip() or None
+            if "character" in updates:
+                ent.character = str(updates["character"]).strip() or None
+            if "is_killable" in updates:
+                ent.is_killable = bool(updates["is_killable"])
+        elif ent.entity_type == "OBJECT":
+            item_type = str(ent.item_type or "").upper()
+            is_container = item_type == "CONTAINER"
+            is_readable = item_type == "READABLE"
+            metadata_json = dict(ent.metadata_json or {})
+            lock_keys_present = any(
+                k in updates for k in ("locked", "code_to_unlock", "item_to_unlock", "rule_to_unlock")
+            )
+            if lock_keys_present and is_container:
+                code = str(updates.get("code_to_unlock", metadata_json.get("code_to_unlock") or "")).strip()
+                item = str(updates.get("item_to_unlock", metadata_json.get("item_to_unlock") or "")).strip().upper()
+                rule = str(updates.get("rule_to_unlock", metadata_json.get("rule_to_unlock") or "")).strip()
+                if code:
+                    code = code[:32]; item = ""; rule = ""
+                elif item:
+                    from backend.utils.text_utils import slugify
+                    item = slugify(item).upper().replace("-", "_")[:64]; code = ""; rule = ""
+                elif rule:
+                    rule = rule[:500]; code = ""; item = ""
+                else:
+                    code = ""; item = ""; rule = ""
+                metadata_json["code_to_unlock"] = code
+                metadata_json["item_to_unlock"] = item
+                metadata_json["rule_to_unlock"] = rule
+                if "locked" in updates:
+                    metadata_json["locked"] = bool(updates["locked"])
+                else:
+                    metadata_json["locked"] = bool(code or item or rule)
+            elif lock_keys_present and not is_container:
+                metadata_json.pop("code_to_unlock", None)
+                metadata_json.pop("item_to_unlock", None)
+                metadata_json.pop("rule_to_unlock", None)
+                metadata_json.pop("locked", None)
+
+            if "text_log_content" in updates and is_readable:
+                text = str(updates["text_log_content"]).strip()
+                if len(text) > 500:
+                    raise HTTPException(status_code=400, detail="text_log_content must be <= 500 chars")
+                metadata_json["text_log_content"] = text
+            if "text_log_format" in updates and is_readable:
+                fmt = str(updates["text_log_format"]).strip().upper()
+                if fmt not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
+                    raise HTTPException(status_code=400, detail="text_log_format invalid")
+                metadata_json["text_log_format"] = fmt
+
+            ent.metadata_json = metadata_json
+            flag_modified(ent, "metadata_json")
+
+        return target_tag
+
+    raise HTTPException(status_code=400, detail=f"Unsupported target_type '{patch.target_type}'")
+
+
+def _format_finding_context_block(payload: AIFixSuggestionsRequest) -> str:
+    if not payload.finding_context:
+        return ""
+    try:
+        formatted = json.dumps(payload.finding_context, ensure_ascii=False, indent=2)
+    except TypeError:
+        formatted = str(payload.finding_context)
+    return f"- Context:\n```json\n{formatted}\n```"
+
+
+def _format_proposal_patches_block(proposal: FixProposal) -> str:
+    lines = []
+    for i, patch in enumerate(proposal.patches or [], start=1):
+        try:
+            updates = json.dumps(patch.field_updates or {}, ensure_ascii=False, indent=2)
+        except TypeError:
+            updates = str(patch.field_updates)
+        lines.append(
+            f"Patch #{i}:\n"
+            f"  target_type: {patch.target_type}\n"
+            f"  target_id: {patch.target_id or ''}\n"
+            f"  description: {patch.description}\n"
+            f"  field_updates:\n{updates}"
+        )
+    return "\n\n".join(lines) if lines else "(no patches)"
+
+
+def _format_world_context_block(summary: dict[str, Any]) -> str:
+    """Return the shared adventure + world context block used by both AI fix prompts."""
+    adventure = summary.get("adventure") or {}
+    return (
+        f"Adventure Title: {adventure.get('title', '')}\n"
+        f"Language: {adventure.get('language', '')}\n"
+        f"Rule Mode: {adventure.get('rule_enforcement_mode', 'rpg')}\n\n"
+        f"=== STORY METADATA ===\n"
+        f"Teaser: {adventure.get('teaser', '') or ''}\n"
+        f"Plot: {adventure.get('plot', '') or ''}\n"
+        f"Rules: {adventure.get('rules', '') or ''}\n"
+        f"Intro Text: {adventure.get('intro_text', '') or ''}\n\n"
+        f"=== SCENES ({len(summary.get('scenes') or [])}) ===\n"
+        f"{json.dumps(summary.get('scenes') or [], ensure_ascii=False)}\n\n"
+        f"=== EXITS ({len(summary.get('exits') or [])}) ===\n"
+        f"{json.dumps(summary.get('exits') or [], ensure_ascii=False)}\n\n"
+        f"=== NPCs ({len(summary.get('npcs') or [])}) ===\n"
+        f"{json.dumps(summary.get('npcs') or [], ensure_ascii=False)}\n\n"
+        f"=== OBJECTS ({len(summary.get('objects') or [])}) ===\n"
+        f"{json.dumps(summary.get('objects') or [], ensure_ascii=False)}\n\n"
+        f"=== QUESTS ({len(summary.get('quests') or [])}) ===\n"
+        f"{json.dumps(summary.get('quests') or [], ensure_ascii=False)}\n\n"
+        f"=== WALKTHROUGH ===\n"
+        f"{adventure.get('walkthrough', '') or ''}\n"
+    )
+
+
+def _parse_finding_location(
+    location: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Return ``(target_type, target_id)`` from a finding location like ``'object:SAFE_01'``."""
+    if not location or not isinstance(location, str):
+        return None, None
+    parts = location.split(":", 1)
+    if len(parts) != 2:
+        return None, None
+    ttype = parts[0].strip().lower()
+    tid = parts[1].strip()
+    if ttype not in {"scene", "object", "npc", "exit"} or not tid:
+        return None, None
+    return ttype, tid
+
+
+def _format_focused_world_block(
+    summary: dict[str, Any],
+    *,
+    location: Optional[str],
+) -> str:
+    """Build a small world context focused on the targeted finding.
+
+    Drops full entity lists and instead ships only the targeted entity plus a
+    few neighbors. For large adventures this turns a multi-thousand-token
+    prompt into a few hundred tokens, which is the difference between an
+    instant response and a provider timeout.
+    """
+    adventure = summary.get("adventure") or {}
+    target_type, target_id = _parse_finding_location(location)
+
+    target_block = ""
+    neighbors: list[tuple[str, Any]] = []
+
+    if target_type == "scene":
+        scene = next(
+            (s for s in (summary.get("scenes") or []) if s.get("id") == target_id),
+            None,
+        )
+        if scene:
+            target_block = (
+                f"=== TARGET SCENE ({scene.get('id')}) ===\n"
+                f"{json.dumps(scene, ensure_ascii=False)}\n"
+            )
+            scene_id_upper = str(scene.get("id") or "").upper()
+            for obj in summary.get("objects") or []:
+                if str(obj.get("current_scene_id") or "").upper() == scene_id_upper:
+                    neighbors.append(("object", obj))
+            for npc in summary.get("npcs") or []:
+                if str(npc.get("current_scene_id") or "").upper() == scene_id_upper:
+                    neighbors.append(("npc", npc))
+            for ex in summary.get("exits") or []:
+                if (
+                    str(ex.get("from_scene_id") or "").upper() == scene_id_upper
+                    or str(ex.get("to_scene_id") or "").upper() == scene_id_upper
+                ):
+                    neighbors.append(("exit", ex))
+    elif target_type in ("object", "npc"):
+        entity_list = (
+            summary.get("objects") if target_type == "object" else summary.get("npcs")
+        ) or []
+        target_entity = next(
+            (e for e in entity_list if e.get("id") == target_id),
+            None,
+        )
+        if target_entity:
+            target_block = (
+                f"=== TARGET {target_type.upper()} ({target_entity.get('id')}) ===\n"
+                f"{json.dumps(target_entity, ensure_ascii=False)}\n"
+            )
+            scene_id = str(target_entity.get("current_scene_id") or "").upper()
+            if scene_id:
+                scene = next(
+                    (s for s in (summary.get("scenes") or []) if str(s.get("id") or "").upper() == scene_id),
+                    None,
+                )
+                if scene:
+                    neighbors.append(("scene", scene))
+    elif target_type == "exit":
+        ex = next(
+            (e for e in (summary.get("exits") or []) if e.get("id") == target_id),
+            None,
+        )
+        if ex:
+            target_block = (
+                f"=== TARGET EXIT ({ex.get('id')}) ===\n"
+                f"{json.dumps(ex, ensure_ascii=False)}\n"
+            )
+            from_id = str(ex.get("from_scene_id") or "").upper()
+            to_id = str(ex.get("to_scene_id") or "").upper()
+            for s in summary.get("scenes") or []:
+                sid = str(s.get("id") or "").upper()
+                if sid in (from_id, to_id):
+                    neighbors.append(("scene", s))
+
+    neighbor_block = ""
+    if neighbors:
+        grouped: dict[str, list[Any]] = {}
+        for kind, ent in neighbors[:12]:
+            grouped.setdefault(kind, []).append(ent)
+        chunks: list[str] = []
+        for kind, ents in grouped.items():
+            chunks.append(
+                f"--- {kind.upper()} ({len(ents)}) ---\n"
+                f"{json.dumps(ents, ensure_ascii=False)}"
+            )
+        neighbor_block = "\n\n".join(chunks) + "\n"
+
+    return (
+        f"Adventure Title: {adventure.get('title', '')}\n"
+        f"Language: {adventure.get('language', '')}\n"
+        f"Rule Mode: {adventure.get('rule_enforcement_mode', 'rpg')}\n\n"
+        f"=== STORY METADATA ===\n"
+        f"Plot: {_short_state(adventure.get('plot') or '', limit=600)}\n"
+        f"Rules: {_short_state(adventure.get('rules') or '', limit=400)}\n"
+        f"Walkthrough: {_short_state(adventure.get('walkthrough') or '', limit=1200)}\n\n"
+        f"{target_block}\n"
+        f"=== ADJACENT ENTITIES ===\n"
+        f"{neighbor_block or '(none)'}\n"
+    )
+
+
+class _AIAttemptOutcome:
+    """Outcome class for a single AI provider attempt."""
+
+    SKIPPED_MISSING_KEY = "missing_key"
+    SKIPPED_INIT_ERROR = "init_error"
+    TIMEOUT = "timeout"
+    CALL_ERROR = "call_error"
+
+    def __init__(self, reason: str, *, provider: str, detail: str = "") -> None:
+        self.reason = reason
+        self.provider = provider
+        self.detail = detail
+
+
+class _AllProvidersFailed(Exception):
+    """Raised when every AI provider in the chain failed.
+
+    The ``outcomes`` list records the reason each provider failed so the
+    caller can craft a user-facing message tailored to the actual failure
+    pattern (e.g. all-missing-keys vs all-timeouts).
+    """
+
+    def __init__(self, outcomes: list[_AIAttemptOutcome]) -> None:
+        self.outcomes = outcomes
+        summary = ", ".join(
+            f"{o.provider}({o.reason})" for o in outcomes
+        )
+        super().__init__(f"All AI providers failed: {summary}")
+
+
+def _summarize_outcomes(outcomes: list[_AIAttemptOutcome]) -> str:
+    """Produce a short, anbieter-neutrale user-facing message."""
+    if not outcomes:
+        return "The AI service did not respond. Please retry in a moment."
+    reasons = {o.reason for o in outcomes}
+    if reasons == {_AIAttemptOutcome.SKIPPED_MISSING_KEY}:
+        return (
+            "No AI provider is fully configured with an API key. "
+            "Please add one in the LLM provider settings, "
+            "or ask an admin to set the AI_FIX_FALLBACK_PROVIDER."
+        )
+    if reasons == {_AIAttemptOutcome.TIMEOUT}:
+        return (
+            "All AI providers are slow to respond right now. "
+            "Please retry in a moment."
+        )
+    return "The AI service is currently unavailable. Please retry in a moment."
+
+
+async def _generate_llm_proposals(
+    *,
+    user_prompt: str,
+    current_user: User,
+    response_model: type,
+    gm_kwargs: dict[str, Any],
+    timeout_seconds: Optional[float] = None,
+    allow_fallback: bool = True,
+) -> tuple[Any, Optional[str]]:
+    """Call the LLM with a hard wall-clock cap and an optional fallback chain.
+
+    Builds a candidate list straight from ``user.llm_settings``:
+
+    1. ``complex_model_provider`` / ``complex_model`` (best reasoning).
+    2. ``small_model_provider`` / ``small_model`` (typically small, fast).
+    3. ``AI_FIX_FALLBACK_PROVIDER`` / ``AI_FIX_FALLBACK_MODEL`` env defaults.
+
+    Each candidate is tried in order; provider construction errors
+    (missing API key, configuration problems, …) and per-call timeouts
+    cause the next candidate to take over. The first success wins.
+
+    Returns ``(response, provider_label)``.
+
+    On total failure, raises ``_AllProvidersFailed`` whose ``outcomes`` list
+    captures the reason for each skipped/timed-out provider. Callers use
+    this to decide whether to surface "no provider configured" vs
+    "all timeouts" vs "generic unavailable" to the user.
+    """
+    llm_settings = current_user.llm_settings or {}
+    seen: set[tuple[str, str]] = set()
+    attempts: list[tuple[str, str]] = []
+
+    def _add(provider: Optional[str], model: Optional[str]) -> None:
+        if not provider:
+            return
+        candidate = (str(provider), str(model) if model else "")
+        if candidate in seen:
+            return
+        seen.add(candidate)
+        attempts.append(candidate)
+
+    _add(
+        llm_settings.get("complex_model_provider"),
+        llm_settings.get("complex_model") or "gpt-4o",
+    )
+    _add(
+        llm_settings.get("small_model_provider"),
+        llm_settings.get("small_model") or "gpt-4o-mini",
+    )
+    if allow_fallback:
+        _add(
+            settings.AI_FIX_FALLBACK_PROVIDER,
+            settings.AI_FIX_FALLBACK_MODEL or None,
+        )
+
+    if not attempts:
+        attempts.append(("openai", "gpt-4o"))
+
+    import asyncio as _asyncio
+
+    outcomes: list[_AIAttemptOutcome] = []
+    last_error: Optional[BaseException] = None
+    for idx, (provider, model) in enumerate(attempts):
+        try:
+            gm = GameMasterLLM(
+                user=current_user, provider=provider, model_category="complex"
+            )
+        except ValueError as exc:
+            last_error = exc
+            outcomes.append(
+                _AIAttemptOutcome(
+                    _AIAttemptOutcome.SKIPPED_MISSING_KEY,
+                    provider=provider,
+                    detail=str(exc),
+                )
+            )
+            logger.info(
+                "Skipping AI provider '%s' (model '%s'): %s",
+                provider, model or "<default>", exc,
+            )
+            continue
+        except Exception as exc:
+            last_error = exc
+            outcomes.append(
+                _AIAttemptOutcome(
+                    _AIAttemptOutcome.SKIPPED_INIT_ERROR,
+                    provider=provider,
+                    detail=str(exc),
+                )
+            )
+            logger.warning(
+                "Skipping AI provider '%s' (model '%s'): %s",
+                provider, model or "<default>", exc,
+            )
+            continue
+
+        coro = gm.aexecute_complex_task(
+            system_prompt=gm_kwargs["system_prompt"],
+            user_prompt=user_prompt,
+            response_model=response_model,
+            model=model,
+        )
+        try:
+            if timeout_seconds and timeout_seconds > 0:
+                result = await _asyncio.wait_for(coro, timeout=timeout_seconds)
+            else:
+                result = await coro
+            return result, provider
+        except _asyncio.TimeoutError as exc:
+            last_error = TimeoutError(
+                f"AI request to '{provider}' exceeded the {timeout_seconds:.0f}s cap"
+            )
+            outcomes.append(
+                _AIAttemptOutcome(
+                    _AIAttemptOutcome.TIMEOUT,
+                    provider=provider,
+                    detail=str(last_error),
+                )
+            )
+            logger.warning(
+                "AI call to '%s' (model '%s') timed out after %.0fs",
+                provider, model, timeout_seconds or 0,
+            )
+            if idx < len(attempts) - 1:
+                continue
+            raise last_error from exc
+        except Exception as exc:
+            last_error = exc
+            outcomes.append(
+                _AIAttemptOutcome(
+                    _AIAttemptOutcome.CALL_ERROR,
+                    provider=provider,
+                    detail=str(exc),
+                )
+            )
+            logger.warning(
+                "AI call to '%s' (model '%s') raised: %s",
+                provider, model, exc,
+            )
+            if idx < len(attempts) - 1:
+                continue
+            raise
+
+    if outcomes:
+        logger.info(
+            "All %d AI provider attempt(s) failed for user '%s'; reasons=%s",
+            len(outcomes),
+            current_user.username,
+            ";".join(f"{o.provider}({o.reason})" for o in outcomes),
+        )
+    if last_error is not None:
+        if outcomes:
+            raise _AllProvidersFailed(outcomes) from last_error
+        raise last_error
+    return None, None
+
+
+AIFIX_CACHE_TTL_SECONDS = 60 * 60  # 1 hour
+
+
+async def _get_cached_suggestions(
+    *,
+    db: AsyncSession,
+    template_id: str,
+    user_id: str,
+    signature: str,
+) -> Optional[dict[str, Any]]:
+    from datetime import datetime, timezone
+
+    res = await db.execute(
+        select(AIFixCache).where(
+            AIFixCache.template_id == template_id,
+            AIFixCache.user_id == user_id,
+            AIFixCache.finding_signature == signature,
+        )
+    )
+    row = res.scalars().first()
+    if row is None:
+        return None
+    expires = row.expires_at
+    if expires is not None:
+        now = datetime.now(timezone.utc)
+        compare_to = expires if expires.tzinfo else expires.replace(tzinfo=timezone.utc)
+        if compare_to < now:
+            try:
+                await db.delete(row)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+            return None
+    return dict(row.response or {})
+
+
+async def _write_cached_suggestions(
+    *,
+    db: AsyncSession,
+    template_id: str,
+    user_id: str,
+    signature: str,
+    response_payload: dict[str, Any],
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    res = await db.execute(
+        select(AIFixCache).where(
+            AIFixCache.template_id == template_id,
+            AIFixCache.user_id == user_id,
+            AIFixCache.finding_signature == signature,
+        )
+    )
+    row = res.scalars().first()
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=AIFIX_CACHE_TTL_SECONDS)
+    if row is None:
+        row = AIFixCache(
+            template_id=template_id,
+            user_id=user_id,
+            finding_signature=signature,
+            response=response_payload,
+            expires_at=expires_at,
+        )
+        db.add(row)
+    else:
+        row.response = response_payload
+        row.expires_at = expires_at
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+
+async def _evict_cached_suggestions(
+    *,
+    db: AsyncSession,
+    template_id: str,
+    user_id: str,
+    signature: str,
+) -> None:
+    res = await db.execute(
+        select(AIFixCache).where(
+            AIFixCache.template_id == template_id,
+            AIFixCache.user_id == user_id,
+            AIFixCache.finding_signature == signature,
+        )
+    )
+    for row in res.scalars().all():
+        try:
+            await db.delete(row)
+        except Exception:
+            pass
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+
+@router.post(
+    "/{template_id}/editor/validate/findings/suggest-fix",
+    response_model=AIFixSuggestionsResponse,
+)
+
+
+async def ai_suggest_fix_for_finding(
+    template_id: str,
+    payload: AIFixSuggestionsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Suggest up to 3 different fixes for an AI-detected validation finding.
+
+    Fast-path on cache hit (per (template, user, finding_signature)).
+    Otherwise: focused world context, hard watchdog, provider fallback,
+    persist on success. Always returns HTTP 200 with either proposals or a
+    short, anbieter-neutral ``error`` string.
+    """
+
+    from datetime import datetime, timezone
+
+    from backend.api.routes.adventures.schemas import (
+        AISuggestFixWrapperResponse,
+    )
+
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    user_id = current_user.id
+
+    signature = _signing(payload)
+
+    cached = await _get_cached_suggestions(
+        db=db,
+        template_id=template_id,
+        user_id=user_id,
+        signature=signature,
+    )
+    if cached:
+        cached = dict(cached)
+        cached.setdefault("error", None)
+        return AIFixSuggestionsResponse(**cached)
+
+    debug_payload = await _build_adventure_editor_assets(template_id, db)
+    summary = _summarize_world_for_fix(debug_payload)
+
+    base_kwargs = {"system_prompt": AI_FIX_SUGGESTIONS_SYSTEM_PROMPT}
+    world_block = _format_focused_world_block(
+        summary, location=payload.finding_location,
+    )
+    context_block = _format_finding_context_block(payload)
+    finding_block = (
+        f"=== ORIGINAL FINDING ===\n"
+        f"- Code: {payload.finding_code}\n"
+        f"- Severity: {payload.finding_severity}\n"
+        f"- Location: {(payload.finding_location or '').strip()}\n"
+        f"- Message: {payload.finding_message}\n"
+        f"{context_block}\n\n"
+        f"{world_block}\n"
+        f"Produce up to 3 distinct, immediately applicable fix proposals for the finding above.\n"
+        f"Return ONLY the JSON object with a top-level 'proposals' key."
+    )
+    generated_at = datetime.now(timezone.utc).isoformat()
+
+    try:
+        wrapper, served_provider = await _generate_llm_proposals(
+            user_prompt=finding_block,
+            current_user=current_user,
+            response_model=AISuggestFixWrapperResponse,
+            gm_kwargs=base_kwargs,
+            timeout_seconds=settings.AI_FIX_SUGGEST_TIMEOUT_SECONDS,
+            allow_fallback=True,
+        )
+    except _AllProvidersFailed as exc:
+        logger.warning(
+            "AI fix suggestion unavailable for %s: %s",
+            template_id, exc,
+        )
+        return AIFixSuggestionsResponse(
+            finding_signature=signature,
+            proposals=[],
+            generated_at=generated_at,
+            error=_summarize_outcomes(exc.outcomes),
+        )
+    except TimeoutError as exc:
+        logger.warning(
+            "AI fix suggestion timed out for %s after %.0fs: %s",
+            template_id, settings.AI_FIX_SUGGEST_TIMEOUT_SECONDS, exc,
+        )
+        return AIFixSuggestionsResponse(
+            finding_signature=signature,
+            proposals=[],
+            generated_at=generated_at,
+            error="The AI service did not respond in time. Please retry in a moment.",
+        )
+    except Exception as exc:
+        logger.exception("AI fix suggestion failed for %s: %s", template_id, exc)
+        return AIFixSuggestionsResponse(
+            finding_signature=signature,
+            proposals=[],
+            generated_at=generated_at,
+            error="The AI service is currently unavailable. Please retry in a moment.",
+        )
+
+    proposals_in = (wrapper.proposals if wrapper else []) or []
+
+    def _as_dict(value: Any) -> Optional[dict[str, Any]]:
+        if isinstance(value, dict):
+            return value
+        if value is None:
+            return None
+        if hasattr(value, "model_dump"):
+            try:
+                dumped = value.model_dump()
+                return dumped if isinstance(dumped, dict) else None
+            except Exception:
+                return None
+        fields = ("title", "summary", "rationale", "patches",
+                  "target_type", "target_id", "description", "field_updates", "note")
+        collected = {}
+        for f in fields:
+            if hasattr(value, f):
+                collected[f] = getattr(value, f)
+        return collected or None
+
+    proposals: list[FixProposal] = []
+    for raw in proposals_in[:3]:
+        raw_dict = _as_dict(raw)
+        if raw_dict is None:
+            continue
+        title = str(raw_dict.get("title") or "").strip()
+        summary_text = str(raw_dict.get("summary") or "").strip()
+        if not title or not summary_text:
+            continue
+        rationale = raw_dict.get("rationale")
+        patches_in = raw_dict.get("patches") or []
+        clean_patches: list[FixProposalEntityPatch] = []
+        for p in patches_in:
+            p_dict = _as_dict(p)
+            if p_dict is None:
+                continue
+            target_type = str(p_dict.get("target_type") or "").strip()
+            if target_type not in {"scene", "object", "npc", "exit", "protagonist", "adventure"}:
+                continue
+            field_updates = p_dict.get("field_updates") or {}
+            if not isinstance(field_updates, dict) or not field_updates:
+                continue
+            clean_patches.append(
+                FixProposalEntityPatch(
+                    target_type=target_type,  # type: ignore[arg-type]
+                    target_id=(str(p_dict.get("target_id")).strip() if p_dict.get("target_id") is not None else None),
+                    description=str(p_dict.get("description") or "").strip()[:280],
+                    field_updates={str(k): v for k, v in field_updates.items() if k in _allowed_fields_for(target_type)},
+                )
+            )
+        if not clean_patches:
+            continue
+        proposals.append(
+            FixProposal(
+                title=title[:120],
+                summary=summary_text[:600],
+                rationale=(str(rationale).strip()[:400] if rationale else None),
+                patches=clean_patches,
+            )
+        )
+
+    response = AIFixSuggestionsResponse(
+        finding_signature=signature,
+        proposals=proposals,
+        generated_at=generated_at,
+    )
+    if proposals:
+        try:
+            await _write_cached_suggestions(
+                db=db,
+                template_id=template_id,
+                user_id=user_id,
+                signature=signature,
+                response_payload=response.model_dump(),
+            )
+        except Exception as cache_exc:
+            logger.warning(
+                "Failed to persist AI fix cache for %s/%s: %s",
+                template_id, signature, cache_exc,
+            )
+    return response
+
+
+@router.post(
+    "/{template_id}/editor/validate/findings/apply-fix",
+    response_model=AIFixApplyResponse,
+)
+async def ai_apply_fix_proposal(
+    template_id: str,
+    payload: AIFixApplyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Apply the chosen fix proposal directly to the adventure template.
+
+    The proposal's ``patches[]`` are treated as the authoritative source of
+    truth; no second LLM call is made. Field updates that fall outside the
+    per-target allowlist are silently dropped.
+    """
+
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    user_id = current_user.id
+
+    proposal_patches = payload.proposal.patches or []
+    if not proposal_patches:
+        return AIFixApplyResponse(
+            status="no_op",
+            applied_targets=[],
+            message="The selected proposal contained no patches to apply.",
+        )
+
+    applied_tags: list[str] = []
+    seen_keys: set[tuple[str, str]] = set()
+    failed_resolution = False
+
+    for proposal_patch in proposal_patches:
+        allowed = _allowed_fields_for(proposal_patch.target_type)
+        if not allowed:
+            continue
+        clean_updates: dict[str, Any] = {}
+        for field, value in (proposal_patch.field_updates or {}).items():
+            if field not in allowed:
+                continue
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            clean_updates[field] = value
+        if not clean_updates:
+            continue
+
+        try:
+            tag = await _apply_proposal_patch(
+                db=db,
+                template_id=template_id,
+                adv=adv,
+                patch=FixProposalEntityPatch(
+                    target_type=proposal_patch.target_type,  # type: ignore[arg-type]
+                    target_id=proposal_patch.target_id,
+                    description=proposal_patch.description,
+                    field_updates=clean_updates,
+                ),
+            )
+        except HTTPException as exc:
+            if exc.status_code == 400 and "could not be resolved" in str(exc.detail):
+                failed_resolution = True
+                continue
+            raise
+        if not tag:
+            continue
+        key = (str(proposal_patch.target_type), (proposal_patch.target_id or "").strip())
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        applied_tags.append(tag)
+
+    if applied_tags:
+        await db.commit()
+        await _evict_cached_suggestions(
+            db=db,
+            template_id=template_id,
+            user_id=user_id,
+            signature=payload.finding_signature,
+        )
+    else:
+        await db.rollback()
+        if failed_resolution:
+            await _evict_cached_suggestions(
+                db=db,
+                template_id=template_id,
+                user_id=user_id,
+                signature=payload.finding_signature,
+            )
+
+    if applied_tags and len(applied_tags) < len(proposal_patches):
+        status: Literal["applied", "no_op", "partial"] = "partial"
+    elif applied_tags:
+        status = "applied"
+    else:
+        status = "no_op"
+
+    message = (
+        f"Applied {len(applied_tags)} patch(es) out of {len(proposal_patches)}."
+        if applied_tags
+        else "No changes were applied."
+    )
+    if failed_resolution and not applied_tags:
+        message = (
+            "The cached AI reference is out of date. "
+            "Please click AI-Fix again to regenerate."
+        )
+
+    return AIFixApplyResponse(
+        status=status,
+        applied_targets=applied_tags,
+        message=message,
+    )
+
 
 
 @router.post("/{template_id}/editor/scene")

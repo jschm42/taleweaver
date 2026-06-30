@@ -223,6 +223,78 @@ export const adventureService = {
     }
     return res.json()
   },
+
+  async getLatestValidation(
+    adventureId: string,
+  ): Promise<PersistedValidationRun | null> {
+    const res = await fetch(
+      `${API_BASE}/adventures/${adventureId}/editor/validation/latest`,
+      { method: 'GET', headers: authHeaders(false) },
+    )
+    if (!res.ok) {
+      if (res.status === 404) return null
+      const respData = await res.json().catch(() => ({}))
+      throw new Error(respData.detail || 'Failed to load the latest validation.')
+    }
+    if (res.status === 204) return null
+    const raw = await res.json().catch(() => null)
+    if (!raw) return null
+    return raw as PersistedValidationRun
+  },
+
+  async runValidationAll(adventureId: string): Promise<ValidationRunResponse> {
+    return adventureService.runValidation(adventureId, true)
+  },
+
+  async runValidationStructuralOnly(
+    adventureId: string,
+  ): Promise<ValidationRunResponse> {
+    return adventureService.runValidation(adventureId, false)
+  },
+
+  async runValidationAiOnly(
+    adventureId: string,
+  ): Promise<ValidationRunResponse> {
+    return adventureService.runValidation(adventureId, true)
+  },
+
+  async requestAIFixSuggestions(
+    adventureId: string,
+    request: AIFixSuggestionsRequest,
+  ): Promise<AIFixSuggestionsResponse> {
+    const res = await fetch(
+      `${API_BASE}/adventures/${adventureId}/editor/validate/findings/suggest-fix`,
+      {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify(request),
+      },
+    )
+    if (!res.ok) {
+      const respData = await res.json().catch(() => ({}))
+      throw new Error(respData.detail || 'Failed to request AI fix suggestions.')
+    }
+    return res.json()
+  },
+
+  async applyAIFix(
+    adventureId: string,
+    request: AIFixApplyRequest,
+  ): Promise<AIFixApplyResponse> {
+    const res = await fetch(
+      `${API_BASE}/adventures/${adventureId}/editor/validate/findings/apply-fix`,
+      {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify(request),
+      },
+    )
+    if (!res.ok) {
+      const respData = await res.json().catch(() => ({}))
+      throw new Error(respData.detail || 'Failed to apply AI fix.')
+    }
+    return res.json()
+  },
 }
 
 export type ValidationSeverity = 'error' | 'warn'
@@ -254,4 +326,59 @@ export interface ValidationRunResponse {
   ai_findings: ValidationFinding[]
   ai_skipped_reason?: ValidationAiSkippedReason
   run_at: string
+}
+
+export interface PersistedValidationRun extends ValidationRunResponse {
+  structural_finding_count?: number
+  ai_finding_count?: number
+  error_count?: number
+  warning_count?: number
+}
+
+export type FixTargetType =
+  | 'scene'
+  | 'object'
+  | 'npc'
+  | 'exit'
+  | 'protagonist'
+  | 'adventure'
+
+export interface FixProposalEntityPatch {
+  target_type: FixTargetType
+  target_id?: string | null
+  description?: string | null
+  field_updates: Record<string, any>
+}
+
+export interface FixProposal {
+  title: string
+  summary: string
+  rationale?: string | null
+  patches: FixProposalEntityPatch[]
+}
+
+export interface AIFixSuggestionsRequest {
+  finding_code: string
+  finding_message: string
+  finding_location?: string | null
+  finding_context?: Record<string, any> | null
+  finding_severity?: ValidationSeverity
+}
+
+export interface AIFixSuggestionsResponse {
+  finding_signature: string
+  proposals: FixProposal[]
+  generated_at: string
+  error?: string | null
+}
+
+export interface AIFixApplyRequest {
+  finding_signature: string
+  proposal: FixProposal
+}
+
+export interface AIFixApplyResponse {
+  status: 'applied' | 'no_op' | 'partial'
+  applied_targets: string[]
+  message?: string | null
 }

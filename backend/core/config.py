@@ -114,6 +114,17 @@ class Settings(BaseSettings):
     VALIDATION_RATE_LIMIT_MAX: int = 5
     VALIDATION_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # Hard wall-clock cap on a single AI fix-suggestion round. Even if the
+    # upstream provider hangs past its own request_timeout, this watchdog
+    # returns control to the client so we can show a clean inline retry.
+    AI_FIX_SUGGEST_TIMEOUT_SECONDS: float = 30.0
+
+    # Provider/model used as a fallback when the user's configured
+    # complex_model_provider times out or errors. Empty string disables
+    # the fallback and surfaces the original error to the caller.
+    AI_FIX_FALLBACK_PROVIDER: str = "openai"
+    AI_FIX_FALLBACK_MODEL: str = "gpt-4o-mini"
+
     # Maximum number of HTTPS scheme bytes accepted in user-supplied URLs.
     MAX_PROVIDER_URL_LENGTH: int = 512
 

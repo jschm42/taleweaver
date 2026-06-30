@@ -1,12 +1,27 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import {
+  Bug,
+  Download,
+  Eraser,
+  Loader2,
+  ShieldCheck,
+  Sparkles,
+  Wand2,
+} from 'lucide-vue-next'
+import {
   adventureService,
   type AnnotatedValidationFinding,
+  type AIFixSuggestionsRequest,
+  type AIFixSuggestionsResponse,
+  type FixProposal,
+  type PersistedValidationRun,
   type ValidationAiSkippedReason,
+  type ValidationFinding,
   type ValidationRunResponse,
   type ValidationSeverity,
 } from '@/services/adventureService'
+import AIFixSuggestionsModal from '@/components/editor/AIFixSuggestionsModal.vue'
 
 type FilterKey = 'all' | 'errors' | 'warnings' | 'structural' | 'ai'
 
@@ -17,12 +32,21 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'notify', message: string, type: 'error' | 'success' | 'info'): void
+  (
+    e: 'findings-count',
+    total: number,
+    errors: number,
+    warnings: number,
+    ai: number,
+    structural: number,
+  ): void
 }>()
 
 const findings = ref<AnnotatedValidationFinding[]>([])
 const aiSkippedReason = ref<ValidationAiSkippedReason>(null)
 const lastRunAt = ref<string | null>(null)
 const isRunning = ref(false)
+const isHydrating = ref(false)
 const activeFilter = ref<FilterKey>('all')
 const hasAutoRun = ref(false)
 
@@ -31,6 +55,12 @@ const errorCount = computed(
 )
 const warningCount = computed(
   () => findings.value.filter((f) => f.severity === 'warn').length,
+)
+const aiFindingCount = computed(
+  () => findings.value.filter((f) => f.source === 'ai').length,
+)
+const structuralFindingCount = computed(
+  () => findings.value.filter((f) => f.source === 'structural').length,
 )
 
 const filteredFindings = computed(() => {
@@ -56,17 +86,7 @@ async function runValidation(includeAi: boolean) {
       props.templateId,
       includeAi,
     )
-    const extended: AnnotatedValidationFinding[] = [
-      ...resp.structural_findings.map(
-        (f): AnnotatedValidationFinding => ({ ...f, source: 'structural' }),
-      ),
-      ...resp.ai_findings.map(
-        (f): AnnotatedValidationFinding => ({ ...f, source: 'ai' }),
-      ),
-    ]
-    findings.value = extended
-    aiSkippedReason.value = resp.ai_skipped_reason ?? null
-    lastRunAt.value = resp.run_at
+    mergeValidationResponse(resp)
     if (includeAi && aiSkippedReason.value === null && resp.ai_findings.length === 0) {
       emit('notify', 'AI validation finished with no findings.', 'success')
     }
@@ -81,22 +101,83 @@ async function runValidation(includeAi: boolean) {
   }
 }
 
+function mergeValidationResponse(resp: ValidationRunResponse) {
+  const extended: AnnotatedValidationFinding[] = [
+    ...resp.structural_findings.map(
+      (f): AnnotatedValidationFinding => ({ ...f, source: 'structural' }),
+    ),
+    ...resp.ai_findings.map(
+      (f): AnnotatedValidationFinding => ({ ...f, source: 'ai' }),
+    ),
+  ]
+  findings.value = extended
+  aiSkippedReason.value = resp.ai_skipped_reason ?? null
+  lastRunAt.value = resp.run_at
+  emitFindingsCount()
+}
+
+function _findingKey(
+  finding: AnnotatedValidationFinding,
+): string {
+  return `${finding.source}|${finding.code}|${finding.location || ''}`
+}
+
 function runStructuralOnly() {
   return runValidation(false)
 }
 
-function runFullValidation() {
+function runAiOnly() {
   return runValidation(true)
+}
+
+async function runAllValidations() {
+  if (isRunning.value) return
+  isRunning.value = true
+  try {
+    const structural: ValidationRunResponse =
+      await adventureService.runValidation(props.templateId, false)
+    mergeValidationResponse(structural)
+    try {
+      const ai: ValidationRunResponse =
+        await adventureService.runValidation(props.templateId, true)
+      mergeValidationResponse(ai)
+      if (ai.ai_findings.length === 0 && ai.ai_skipped_reason === null) {
+        emit('notify', 'AI validation finished with no findings.', 'success')
+      }
+    } catch (err: any) {
+      emit(
+        'notify',
+        err?.message || 'AI validation failed; structural pass still completed.',
+        'error',
+      )
+    }
+  } catch (err: any) {
+    emit(
+      'notify',
+      err?.message || 'Validation failed. See server logs for details.',
+      'error',
+    )
+  } finally {
+    isRunning.value = false
+  }
 }
 
 function clearAll() {
   findings.value = []
   aiSkippedReason.value = null
   lastRunAt.value = null
+  emitFindingsCount()
 }
 
-function dismiss(index: number) {
-  findings.value.splice(index, 1)
+function emitFindingsCount() {
+  emit(
+    'findings-count',
+    findings.value.length,
+    errorCount.value,
+    warningCount.value,
+    aiFindingCount.value,
+    structuralFindingCount.value,
+  )
 }
 
 function severityClass(severity: ValidationSeverity): string {
@@ -147,8 +228,6 @@ function formatTimestamp(ts: string | null): string {
 }
 
 function escapeMarkdown(value: string): string {
-  // Escape characters that have special meaning in Markdown tables / code spans
-  // so that user-supplied content never breaks the document structure.
   return value.replace(/[\\|`*_{}[\]<>]/g, (ch) => '\\' + ch)
 }
 
@@ -156,10 +235,10 @@ function buildMarkdown() {
   const title = (props.adventureTitle ?? '').trim() || 'Adventure'
   const safeTitle = title.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 60) || 'adventure'
   const runAt = lastRunAt.value ? new Date(lastRunAt.value) : new Date()
-  const stamp = runAt.toISOString().replace(/[:.]/g, '-').slice(0, 19) // 2026-06-29T12-34-56
+  const stamp = runAt.toISOString().replace(/[:.]/g, '-').slice(0, 19)
 
   const lines: string[] = []
-  lines.push(`# Validation Report — ${title}`)
+  lines.push(`# Validation Report \u2014 ${title}`)
   lines.push('')
   lines.push(`- Adventure ID: \`${props.templateId}\``)
   lines.push(`- Generated: ${runAt.toISOString()}`)
@@ -174,8 +253,8 @@ function buildMarkdown() {
   lines.push('')
   lines.push('| Severity | Count |')
   lines.push('| --- | ---: |')
-  lines.push(`| 🔴 Error | ${errors.length} |`)
-  lines.push(`| 🟡 Warning | ${warnings.length} |`)
+  lines.push(`| \ud83d\udd34 Error | ${errors.length} |`)
+  lines.push(`| \ud83d\udfe1 Warning | ${warnings.length} |`)
   lines.push('')
 
   const groups: Array<{ title: string; items: AnnotatedValidationFinding[] }> = []
@@ -186,10 +265,10 @@ function buildMarkdown() {
     lines.push(`## ${group.title}`)
     lines.push('')
     for (const finding of group.items) {
-      const emoji = finding.severity === 'error' ? '🔴' : '🟡'
+      const emoji = finding.severity === 'error' ? '\ud83d\udd34' : '\ud83d\udfe1'
       const code = finding.code
       const source = finding.source === 'ai' ? 'AI logic check' : 'Structural check'
-      const location = finding.location ? ` — \`${escapeMarkdown(finding.location)}\`` : ''
+      const location = finding.location ? ` \u2014 \`${escapeMarkdown(finding.location)}\`` : ''
       lines.push(`### ${emoji} \`${code}\`${location}`)
       lines.push('')
       lines.push(`- Source: ${source}`)
@@ -220,7 +299,7 @@ function buildMarkdown() {
 
 function exportMarkdown() {
   if (findings.value.length === 0) {
-    emit('notify', 'Nothing to export — run a validation first.', 'info')
+    emit('notify', 'Nothing to export \u2014 run a validation first.', 'info')
     return
   }
   const { markdown, filename } = buildMarkdown()
@@ -233,7 +312,6 @@ function exportMarkdown() {
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-    // Revoke after a short delay so the browser has time to start the download.
     setTimeout(() => URL.revokeObjectURL(url), 1000)
     emit('notify', `Exported ${findings.value.length} finding(s) to ${filename}.`, 'success')
   } catch (err: any) {
@@ -241,12 +319,185 @@ function exportMarkdown() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// AI fix suggestions
+// ---------------------------------------------------------------------------
+
+const aiFixModalOpen = ref(false)
+const aiFixLoading = ref(false)
+const aiFixApplying = ref(false)
+const aiFixProposals = ref<FixProposal[]>([])
+const aiFixSelectedIndex = ref<number>(0)
+const aiFixFindingSignature = ref<string>('')
+const aiFixFinding = ref<AnnotatedValidationFinding | null>(null)
+const aiFixBackupConfirmed = ref(false)
+const aiFixErrorMessage = ref<string | null>(null)
+
+function findingKey(finding: AnnotatedValidationFinding, index: number): string {
+  return `${finding.source}-${finding.code}-${finding.location || ''}-${index}`
+}
+
+async function openAIFixSuggestions(
+  finding: AnnotatedValidationFinding,
+  index: number,
+) {
+  if (aiFixLoading.value || aiFixApplying.value) return
+  aiFixFinding.value = finding
+  aiFixProposals.value = []
+  aiFixSelectedIndex.value = 0
+  aiFixBackupConfirmed.value = false
+  aiFixFindingSignature.value = ''
+  aiFixErrorMessage.value = null
+  aiFixModalOpen.value = true
+  await runAIFixRequest(finding)
+
+  // unused param avoidance
+  void findingKey
+  void index
+}
+
+async function runAIFixRequest(finding: AnnotatedValidationFinding) {
+  aiFixLoading.value = true
+  aiFixErrorMessage.value = null
+  try {
+    const request: AIFixSuggestionsRequest = {
+      finding_code: finding.code,
+      finding_message: finding.message,
+      finding_location: finding.location ?? null,
+      finding_context: (finding.context ?? null) as Record<string, any> | null,
+      finding_severity: finding.severity,
+    }
+    const resp: AIFixSuggestionsResponse =
+      await adventureService.requestAIFixSuggestions(props.templateId, request)
+    aiFixProposals.value = resp.proposals ?? []
+    aiFixFindingSignature.value = resp.finding_signature
+    aiFixErrorMessage.value = resp.error ?? null
+    if (aiFixSelectedIndex.value >= aiFixProposals.value.length) {
+      aiFixSelectedIndex.value = aiFixProposals.value.length > 0 ? 0 : -1
+    }
+  } catch (err: any) {
+    aiFixErrorMessage.value =
+      err?.message || 'AI fix suggestions failed. See server logs for details.'
+    emit(
+      'notify',
+      aiFixErrorMessage.value ?? '',
+      'error',
+    )
+  } finally {
+    aiFixLoading.value = false
+  }
+}
+
+function retryAIFix() {
+  if (!aiFixFinding.value || aiFixLoading.value || aiFixApplying.value) return
+  aiFixProposals.value = []
+  aiFixSelectedIndex.value = 0
+  void runAIFixRequest(aiFixFinding.value)
+}
+
+function selectFixProposal(index: number) {
+  aiFixSelectedIndex.value = index
+}
+
+function toggleBackupConfirmation(checked: boolean) {
+  aiFixBackupConfirmed.value = checked
+}
+
+async function applySelectedFix() {
+  const proposal = aiFixProposals.value[aiFixSelectedIndex.value]
+  if (!proposal) return
+  if (!aiFixBackupConfirmed.value) {
+    emit('notify', 'Please confirm you made a backup first.', 'error')
+    return
+  }
+  aiFixApplying.value = true
+  aiFixErrorMessage.value = null
+  try {
+    const resp = await adventureService.applyAIFix(props.templateId, {
+      finding_signature: aiFixFindingSignature.value,
+      proposal,
+    })
+    if (resp.status === 'applied' || resp.status === 'partial') {
+      emit(
+        'notify',
+        resp.message ||
+          `AI fix applied to ${resp.applied_targets.length} target(s).`,
+        resp.status === 'applied' ? 'success' : 'info',
+      )
+      aiFixModalOpen.value = false
+      removeAppliedFinding()
+    } else {
+      aiFixErrorMessage.value =
+        resp.message ||
+        'No changes were applied. The AI reference is out of date — please retry to regenerate suggestions.'
+    }
+  } catch (err: any) {
+    aiFixErrorMessage.value =
+      err?.message ||
+      'Failed to apply AI fix. See server logs for details.'
+  } finally {
+    aiFixApplying.value = false
+  }
+}
+
+function removeAppliedFinding() {
+  const target = aiFixFinding.value
+  if (!target) return
+  const targetKey = `${target.source}|${target.code}|${target.location || ''}`
+  const before = findings.value.length
+  findings.value = findings.value.filter((f) => _findingKey(f) !== targetKey)
+  if (findings.value.length !== before) {
+    emitFindingsCount()
+  }
+}
+
+function closeAIFixModal() {
+  if (aiFixApplying.value) return
+  aiFixModalOpen.value = false
+}
+
 onMounted(async () => {
-  if (!hasAutoRun.value && findings.value.length === 0) {
-    hasAutoRun.value = true
+  if (hasAutoRun.value) {
+    emitFindingsCount()
+    return
+  }
+  hasAutoRun.value = true
+
+  isHydrating.value = true
+  try {
+    const persisted = await adventureService.getLatestValidation(props.templateId)
+    if (persisted) {
+      applyPersistedRun(persisted)
+    }
+  } catch (err: any) {
+    emit(
+      'notify',
+      err?.message || 'Failed to load the latest validation snapshot.',
+      'info',
+    )
+  } finally {
+    isHydrating.value = false
+  }
+
+  if (findings.value.length === 0) {
     await runStructuralOnly()
   }
 })
+
+function applyPersistedRun(run: PersistedValidationRun) {
+  const extended: AnnotatedValidationFinding[] = [
+    ...((run.structural_findings ?? []) as ValidationFinding[]).map(
+      (f): AnnotatedValidationFinding => ({ ...f, source: 'structural' }),
+    ),
+    ...((run.ai_findings ?? []) as ValidationFinding[]).map(
+      (f): AnnotatedValidationFinding => ({ ...f, source: 'ai' }),
+    ),
+  ]
+  findings.value = extended
+  aiSkippedReason.value = (run.ai_skipped_reason ?? null) as ValidationAiSkippedReason
+  lastRunAt.value = run.run_at ?? null
+  emitFindingsCount()
+}
 
 defineExpose({
   runStructuralOnly,
@@ -255,12 +506,12 @@ defineExpose({
 
 <template>
   <div class="space-y-6 animate-page-in">
-    <!-- Header card with stats and actions -->
     <div class="p-6 bg-slate-900/50 border border-white/5 rounded-3xl space-y-5">
       <div class="flex items-center justify-between gap-4 flex-wrap">
         <div class="space-y-1 min-w-0">
           <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
-            <i class="ra ra-gavel text-rose-500"></i> Validation
+            <ShieldCheck class="w-4 h-4 text-rose-400" />
+            Validation
           </h4>
           <p class="text-xs text-slate-400 leading-relaxed">
             Inspect this adventure for structural issues and, optionally, AI-detected inconsistencies.
@@ -288,35 +539,48 @@ defineExpose({
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="grid sm:grid-cols-3 gap-3">
         <button
-          id="btn-run-full-validation"
+          id="btn-run-all-validation"
           type="button"
           :disabled="isRunning"
-          @click="runFullValidation"
-          class="px-5 py-3 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center gap-2"
+          @click="runAllValidations"
+          class="px-5 py-4 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-rose-900/30"
         >
-          <i class="ra ra-burning-embers"></i>
-          <span>Run full validation</span>
+          <ShieldCheck class="w-4 h-4" />
+          <span>Validate all</span>
+        </button>
+        <button
+          id="btn-run-ai-validation"
+          type="button"
+          :disabled="isRunning"
+          @click="runAiOnly"
+          class="px-5 py-4 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-900/30"
+        >
+          <Sparkles class="w-4 h-4" />
+          <span>AI-Validation</span>
         </button>
         <button
           id="btn-run-structural-validation"
           type="button"
           :disabled="isRunning"
           @click="runStructuralOnly"
-          class="px-5 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center gap-2"
+          class="px-5 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/30"
         >
-          <i class="ra ra-anvil"></i>
-          <span>Structural validations only</span>
+          <Bug class="w-4 h-4" />
+          <span>Structural validation</span>
         </button>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
         <button
           id="btn-clear-validation"
           type="button"
           :disabled="isRunning || findings.length === 0"
           @click="clearAll"
-          class="px-5 py-3 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-200 text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center gap-2"
+          class="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-200 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2"
         >
-          <i class="ra ra-broom"></i>
+          <Eraser class="w-3.5 h-3.5" />
           <span>Clear all</span>
         </button>
         <button
@@ -324,36 +588,41 @@ defineExpose({
           type="button"
           :disabled="isRunning || findings.length === 0"
           @click="exportMarkdown"
-          class="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-900 disabled:text-slate-600 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-2xl transition-all flex items-center gap-2"
+          class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-900 disabled:text-slate-600 disabled:cursor-not-allowed text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2"
           title="Download all current findings as a Markdown file"
         >
-          <i class="ra ra-scroll-quill"></i>
+          <Download class="w-3.5 h-3.5" />
           <span>Export MD</span>
         </button>
         <div v-if="isRunning" class="text-[10px] text-slate-500 uppercase tracking-widest flex items-center gap-2">
-          <i class="ra ra-spinner ra-spin"></i> Running…
+          <Loader2 class="w-3 h-3 animate-spin" /> Running&hellip;
         </div>
       </div>
 
-      <!-- AI skipped reason banner -->
       <div
         v-if="aiSkippedMessage(aiSkippedReason)"
-        class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200"
+        class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2"
       >
-        <i class="ra ra-warning-sign mr-2"></i>
+        <ShieldCheck class="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
         {{ aiSkippedMessage(aiSkippedReason) }}
+      </div>
+
+      <div
+        v-if="isHydrating"
+        class="text-[10px] text-slate-500 uppercase tracking-widest flex items-center gap-2"
+      >
+        <Loader2 class="w-3 h-3 animate-spin" /> Loading last validation&hellip;
       </div>
     </div>
 
-    <!-- Filter bar -->
     <div v-if="findings.length > 0" class="flex items-center gap-2 flex-wrap">
       <button
         v-for="opt in [
-          { key: 'all', label: 'All' },
+          { key: 'all', label: `All (${findings.length})` },
           { key: 'errors', label: `Errors (${errorCount})` },
           { key: 'warnings', label: `Warnings (${warningCount})` },
-          { key: 'structural', label: 'Structural' },
-          { key: 'ai', label: 'AI' },
+          { key: 'structural', label: `Structural (${structuralFindingCount})` },
+          { key: 'ai', label: `AI (${aiFindingCount})` },
         ]"
         :key="opt.key"
         type="button"
@@ -369,11 +638,10 @@ defineExpose({
       </button>
     </div>
 
-    <!-- Findings list -->
     <div v-if="filteredFindings.length > 0" class="space-y-3">
       <div
         v-for="(finding, idx) in filteredFindings"
-        :key="`${finding.source}-${finding.code}-${finding.location || ''}-${idx}`"
+        :key="findingKey(finding, idx)"
         :class="['p-4 border rounded-2xl flex items-start gap-4', severityClass(finding.severity)]"
       >
         <i :class="[severityIcon(finding.severity), severityColor(finding.severity), 'text-lg mt-0.5']"></i>
@@ -391,25 +659,42 @@ defineExpose({
             </span>
           </div>
           <p class="text-sm text-slate-200 leading-relaxed">{{ finding.message }}</p>
+
+          <div
+            v-if="finding.source === 'ai'"
+            class="flex items-center gap-2 pt-1"
+          >
+            <button
+              type="button"
+              class="px-3 py-1.5 rounded-lg border border-violet-500/40 bg-violet-500/15 text-violet-200 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/25 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isRunning || aiFixLoading || aiFixApplying"
+              @click="openAIFixSuggestions(finding, idx)"
+            >
+              <Wand2 class="w-3 h-3" />
+              <span>AI-Fix</span>
+            </button>
+            <span class="text-[10px] text-slate-500 leading-snug">
+              Generate up to 3 fix proposals and apply one.
+            </span>
+          </div>
         </div>
         <button
           type="button"
-          @click="dismiss(findings.indexOf(finding))"
           class="text-slate-500 hover:text-slate-200 transition-colors p-1"
           title="Dismiss"
           aria-label="Dismiss finding"
+          @click="() => { findings.splice(findings.indexOf(finding), 1); emitFindingsCount(); }"
         >
           <i class="ra ra-crossed-swords"></i>
         </button>
       </div>
     </div>
 
-    <!-- Empty state -->
     <div
       v-else-if="!isRunning && findings.length === 0"
       class="p-12 bg-slate-900/50 border border-white/5 rounded-3xl text-center space-y-3"
     >
-      <i class="ra ra-crown text-4xl text-emerald-400"></i>
+      <ShieldCheck class="w-10 h-10 mx-auto text-emerald-400" />
       <h5 class="text-sm font-black text-white uppercase tracking-widest">
         All clear
       </h5>
@@ -419,13 +704,30 @@ defineExpose({
       </p>
     </div>
 
-    <!-- Filtered empty state -->
     <div
       v-else-if="!isRunning && filteredFindings.length === 0 && findings.length > 0"
       class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl text-center text-xs text-slate-500"
     >
       No findings match the current filter.
     </div>
+
+    <AIFixSuggestionsModal
+      :open="aiFixModalOpen"
+      :proposals="aiFixProposals"
+      :loading="aiFixLoading"
+      :applying="aiFixApplying"
+      :selected-index="aiFixSelectedIndex"
+      :finding-code="aiFixFinding?.code ?? ''"
+      :finding-message="aiFixFinding?.message ?? ''"
+      :finding-location="aiFixFinding?.location ?? null"
+      :has-backup-confirmed="aiFixBackupConfirmed"
+      :error-message="aiFixErrorMessage"
+      @close="closeAIFixModal"
+      @select="selectFixProposal"
+      @apply="applySelectedFix"
+      @toggle-backup="toggleBackupConfirmation"
+      @retry="retryAIFix"
+    />
   </div>
 </template>
 

@@ -748,4 +748,35 @@ class AIValidationResponse(BaseModel):
     findings: list[AIValidationFindingItem] = []
 
 
+# ---------------------------------------------------------------------------
+# AI fix-suggestion response models
+# ---------------------------------------------------------------------------
+
+
+class AISuggestFixProposalPatch(BaseModel):
+    """Single raw patch inside one AI-generated fix proposal."""
+
+    target_type: str
+    target_id: Optional[str] = None
+    description: Optional[str] = None
+    field_updates: dict[str, Any] = Field(default_factory=dict)
+
+
+class AISuggestFixProposal(BaseModel):
+    title: str
+    summary: str
+    rationale: Optional[str] = None
+    patches: list[AISuggestFixProposalPatch] = Field(default_factory=list)
+
+
+class AISuggestFixWrapperResponse(BaseModel):
+    """Top-level wrapper for AI fix suggestions.
+
+    The AI is asked to emit up to 3 proposals; we always wrap in an object so
+    response_format=json_object works across all providers.
+    """
+
+    proposals: list[AISuggestFixProposal] = Field(default_factory=list)
+
+
 
