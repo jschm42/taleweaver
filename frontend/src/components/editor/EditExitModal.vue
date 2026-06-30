@@ -37,14 +37,36 @@ const emit = defineEmits<{
   }): void
 }>()
 
-const form = ref({ ...props.initialForm })
+const EMPTY_FORM = {
+  from_scene_id: '',
+  to_scene_id: '',
+  label: '',
+  exit_type: 'one_way' as 'one_way' | 'bidirectional',
+  lock_description: '',
+  code_to_unlock: '',
+  item_to_unlock: '',
+  rule_to_unlock: '',
+}
+
+const form = ref({ ...(props.initialForm || EMPTY_FORM) })
 
 watch(
   () => props.initialForm,
   (newVal) => {
-    form.value = { ...newVal }
+    form.value = { ...(newVal || EMPTY_FORM) }
   },
   { deep: true, immediate: true }
+)
+
+watch(
+  () => props.show,
+  (open) => {
+    if (open) {
+      form.value = { ...(props.initialForm || EMPTY_FORM) }
+    } else {
+      form.value = { ...EMPTY_FORM }
+    }
+  },
 )
 
 const itemReferenceOptions = computed(() => {
@@ -163,7 +185,7 @@ function submit() {
               <label class="text-xs text-slate-300 space-y-1">
                 <span>Item ID To Unlock</span>
                 <EntityReferenceCombobox
-                  v-model="form.item_to_unlock"
+                  v-model="form.item_to_unlock as string"
                   :options="itemReferenceOptions"
                   placeholder="Select key item reference"
                   :enable-search="true"

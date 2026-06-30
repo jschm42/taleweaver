@@ -83,7 +83,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
-              <div class="text-[9px] text-cyan-200/80 uppercase tracking-widest mt-1">{{ (obj.metadata_json?.text_log_format || 'DOCUMENT') }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
             </div>
           </div>
           <div class="absolute top-1.5 right-1.5 z-40">
@@ -140,6 +140,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
             </div>
           </div>
           <div class="absolute top-1.5 right-1.5 z-40">
@@ -196,7 +197,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
-              <div class="text-[9px] text-lime-200/80 uppercase tracking-widest mt-1">{{ String(obj.item_type || 'SWITCH').toUpperCase() }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
             </div>
           </div>
 
@@ -253,6 +254,7 @@ function buildVisualImageUrl(imagePath?: string | null) {
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
               <div v-if="ruleEnforcementMode !== 'chat' && obj.stats && Object.keys(obj.stats).length > 0" class="flex gap-1 mt-1">
                 <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
               </div>

@@ -1847,8 +1847,9 @@ async function saveExitModal(formData: any) {
 
   isSavingText.value = true
   promptError.value = ''
+  const wasCreate = isCreateExitMode.value
   try {
-    if (isCreateExitMode.value) {
+    if (wasCreate) {
       await entityService.createExit(props.adventureId, {
         from_scene_id: fromSceneId,
         to_scene_id: toSceneId,
@@ -1875,10 +1876,20 @@ async function saveExitModal(formData: any) {
         code_to_unlock: formData.code_to_unlock,
         item_to_unlock: formData.item_to_unlock,
         rule_to_unlock: formData.rule_to_unlock,
+        locked:
+          formData.locked !== undefined
+            ? formData.locked
+            : Boolean(
+                formData.code_to_unlock ||
+                  formData.item_to_unlock ||
+                  formData.rule_to_unlock,
+              ),
       })
       addNotification('Exit updated.', 'success')
     }
-    closeExitEditModal()
+    activeEditExitId.value = null
+    isCreateExitMode.value = false
+    showExitModal.value = false
     await fetchDebugInfo()
   } catch (error: any) {
     promptError.value = error?.message || 'Failed to save exit.'
@@ -2342,6 +2353,7 @@ watch(
     />
 
     <EditExitModal
+      :key="`exit-modal-${activeEditExitId || (isCreateExitMode ? 'new' : 'closed')}`"
       :show="showExitModal"
       :is-create-mode="isCreateExitMode"
       :from-scene-id="exitModalForm.from_scene_id || activeMapSceneId || ''"

@@ -76,7 +76,7 @@ const isOpen = ref(true)
             </div>
             <span class="text-xs font-bold text-slate-400 group-hover:text-amber-400 transition-colors uppercase tracking-tight truncate w-full text-center px-1 leading-tight">
               {{ ent.name }}
-              <span v-if="isDebug" class="block text-[8px] font-mono opacity-50 mt-0.5">ID: {{ ent.id }}</span>
+              <span class="block text-[9px] font-mono text-slate-500/70 mt-0.5 truncate" :title="ent.id">ID: {{ ent.id }}</span>
             </span>
           </div>
         </div>

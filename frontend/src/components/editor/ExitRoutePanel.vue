@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { entityService } from '@/services/entityService'
+import {
+  entityService,
+  type EntityEditData,
+} from '@/services/entityService'
 import { notificationService } from '@/services/notificationService'
 import ReferenceTextarea from '@/components/editor/ReferenceTextarea.vue'
 import EntityReferenceCombobox from '@/components/editor/EntityReferenceCombobox.vue'
@@ -89,21 +92,30 @@ async function saveRouteExit() {
   const exit = routeExitDetails.value
   if (!exit) return
   if (isFormInvalid.value) return
-  
+
+  const trimmedLabel = exitEditForm.value.label.trim()
+  const trimmedLockDesc = exitEditForm.value.lock_description.trim()
+  const rawCode = exitEditForm.value.code_to_unlock
+  const rawItem = exitEditForm.value.item_to_unlock
+  const rawRule = exitEditForm.value.rule_to_unlock
+
+  const payload: EntityEditData = {
+    target_type: 'exit',
+    target_id: String(exit.id),
+    name: trimmedLabel,
+    description: trimmedLockDesc,
+    exit_type: exitEditForm.value.exit_type,
+    code_to_unlock: rawCode,
+    item_to_unlock: rawItem,
+    rule_to_unlock: rawRule,
+    locked: Boolean(rawCode || rawItem || rawRule),
+  }
+
   localIsSaving.value = true
   try {
-    await entityService.saveEntityText(props.adventureId, {
-      target_type: 'exit',
-      target_id: String(exit.id),
-      name: exitEditForm.value.label.trim(),
-      description: exitEditForm.value.lock_description.trim(),
-      exit_type: exitEditForm.value.exit_type,
-      code_to_unlock: exitEditForm.value.code_to_unlock || undefined,
-      item_to_unlock: exitEditForm.value.item_to_unlock || undefined,
-      rule_to_unlock: exitEditForm.value.rule_to_unlock || undefined,
-    })
-    emit('refresh')
+    await entityService.saveEntityText(props.adventureId, payload)
     notificationService.add('Exit updated.', 'success')
+    emit('refresh')
   } catch (error: any) {
     notificationService.add(error?.message || 'Failed to update exit.', 'error')
   } finally {

@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import create_access_token
+from backend.core.config import settings as app_settings
 from backend.main import app
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
@@ -85,6 +86,15 @@ async def _seed_simple_adventure(db: AsyncSession, *, owner: User) -> str:
     ))
     await db.commit()
     return tpl.id
+
+
+def test_default_ai_fix_suggest_timeout_is_generous():
+    """The watchdog default must give slow providers (Deepseek etc.) room to respond.
+
+    Regression guard: bumping the default back to a too-aggressive value would
+    re-trigger the timeout cascade users were hitting.
+    """
+    assert app_settings.AI_FIX_SUGGEST_TIMEOUT_SECONDS >= 60.0
 
 
 @pytest.fixture

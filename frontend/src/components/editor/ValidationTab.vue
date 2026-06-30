@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import {
   Bug,
+  CheckCheck,
   Download,
   Eraser,
   Loader2,
@@ -451,6 +452,16 @@ function removeAppliedFinding() {
   }
 }
 
+function dismissFinding(finding: AnnotatedValidationFinding) {
+  const targetKey = _findingKey(finding)
+  const before = findings.value.length
+  findings.value = findings.value.filter((f) => _findingKey(f) !== targetKey)
+  if (findings.value.length !== before) {
+    emitFindingsCount()
+    emit('notify', 'Marked as manually fixed.', 'info')
+  }
+}
+
 function closeAIFixModal() {
   if (aiFixApplying.value) return
   aiFixModalOpen.value = false
@@ -680,12 +691,13 @@ defineExpose({
         </div>
         <button
           type="button"
-          class="text-slate-500 hover:text-slate-200 transition-colors p-1"
-          title="Dismiss"
-          aria-label="Dismiss finding"
-          @click="() => { findings.splice(findings.indexOf(finding), 1); emitFindingsCount(); }"
+          class="px-2.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/25 transition-colors flex items-center gap-1.5 shrink-0 self-start"
+          :title="`Mark ${finding.code} as manually fixed`"
+          aria-label="Mark finding as manually fixed"
+          @click="dismissFinding(finding)"
         >
-          <i class="ra ra-crossed-swords"></i>
+          <CheckCheck class="w-3 h-3" />
+          <span>Manually fixed</span>
         </button>
       </div>
     </div>

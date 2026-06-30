@@ -117,7 +117,11 @@ class Settings(BaseSettings):
     # Hard wall-clock cap on a single AI fix-suggestion round. Even if the
     # upstream provider hangs past its own request_timeout, this watchdog
     # returns control to the client so we can show a clean inline retry.
-    AI_FIX_SUGGEST_TIMEOUT_SECONDS: float = 30.0
+    # Slow providers (Deepseek, large-context reasoning models) regularly
+    # need more than 30s for a non-trivial suggestion, so the default is
+    # intentionally generous. The client also gets a 200 with a clean error
+    # message on timeout so the user can retry without losing modal state.
+    AI_FIX_SUGGEST_TIMEOUT_SECONDS: float = 90.0
 
     # Provider/model used as a fallback when the user's configured
     # complex_model_provider times out or errors. Empty string disables

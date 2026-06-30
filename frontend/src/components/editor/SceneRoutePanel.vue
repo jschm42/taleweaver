@@ -793,6 +793,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button
@@ -860,6 +861,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/20 text-lime-100">SWITCH</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button
@@ -927,6 +929,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">CONTAINER</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button
@@ -994,6 +997,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name || obj.id }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="obj.id">ID: {{ obj.id }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button
@@ -1042,7 +1046,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-emerald-400/50 bg-emerald-500/20 text-emerald-100">EXIT</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ worldExit.label || worldExit.id }}</div>
-              <div class="text-[9px] text-emerald-200/80 uppercase tracking-widest truncate mt-1">{{ worldExit.exit_type || 'one_way' }}</div>
+              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="worldExit.id">ID: {{ worldExit.id }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button
