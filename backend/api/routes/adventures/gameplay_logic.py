@@ -2219,6 +2219,92 @@ class GameTurnManager:
 
         return reasons
 
+    async def _enforce_switch_transition_guardrails(self, event: GameEvent, user_msg: str) -> list[str]:
+        if not event.updated_entities:
+            return []
+
+        reasons = []
+        lowered = (user_msg or "").strip().lower()
+        session_states = self.state.entity_states or {}
+
+        for update in list(event.updated_entities):
+            if not update.switch_state:
+                continue
+
+            eid = update.entity_id
+            ent_res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.id == eid,
+                    WorldEntity.session_id == self.game_id,
+                )
+            )
+            switch_entity = ent_res.scalars().first()
+            if not switch_entity or str(switch_entity.item_type or "").upper() != "SWITCH":
+                continue
+
+            entry = dict(session_states.get(switch_entity.id) or {})
+            metadata_json = switch_entity.metadata_json or {}
+            config = metadata_json.get("switch") or {}
+            configured_current = config.get("initial_state") or metadata_json.get("switch_initial_state") or ""
+            current_state = str(entry.get("switch_state") or configured_current).strip().upper()
+            target_state = str(update.switch_state).strip().upper()
+
+            if current_state == target_state:
+                continue
+
+            transitions = metadata_json.get("switch_transitions") or config.get("transitions") or []
+            trans = None
+            for t in transitions:
+                if str(t.get("from_state")).strip().upper() == current_state and str(t.get("to_state")).strip().upper() == target_state:
+                    trans = t
+                    break
+
+            transition_allowed = True
+            reason = ""
+
+            if not trans:
+                transition_allowed = False
+                reason = f"{switch_entity.name} cannot transition from {current_state} to {target_state}."
+            else:
+                required_item = trans.get("required_item")
+                required_code = trans.get("code")
+                required_rule = trans.get("required_rule")
+                fail_message = trans.get("fail_message")
+
+                if required_code:
+                    code_match = re.search(r"(?:code|pin|access|keypad)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
+                    attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
+                    if not attempted_code or attempted_code.lower() != str(required_code).lower():
+                        transition_allowed = False
+                        reason = fail_message or f"{switch_entity.name} requires a valid code to switch from {current_state} to {target_state}."
+
+                if transition_allowed and required_item:
+                    inventory_ids = {
+                        str(item.get("id") or "").strip().upper()
+                        for item in (self.avatar.inventory or [])
+                        if isinstance(item, dict)
+                    }
+                    if required_item.upper() not in inventory_ids:
+                        transition_allowed = False
+                        reason = fail_message or f"You need {required_item} in your inventory to flip {switch_entity.name} to {target_state}."
+
+                if transition_allowed and required_rule:
+                    if not self._switch_story_flags().get(required_rule, False):
+                        transition_allowed = False
+                        reason = fail_message or f"{switch_entity.name} requires rule '{required_rule}' to transition to {target_state}."
+
+            if not transition_allowed:
+                update.switch_state = current_state
+                reasons.append(reason or f"{switch_entity.name} cannot be flipped.")
+                event.completed_quest_ids = []
+                event.earned_award_keys = []
+                event.new_inventory_items = []
+                event.updated_inventory_items = []
+                event.removed_inventory_item_ids = []
+                event.spawned_items = []
+
+        return reasons
+
     async def _enforce_quest_and_award_guardrails(self, event: GameEvent) -> None:
         """
         Validates that any quest completed or award granted in this turn
@@ -4340,6 +4426,11 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                switch_guardrail_messages = await self._enforce_switch_transition_guardrails(game_event, user_msg)
+                for gm in switch_guardrail_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 await self._enforce_quest_and_award_guardrails(game_event)
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
@@ -4540,6 +4631,11 @@ class GameTurnManager:
 
                 exit_guardrail_messages = await self._enforce_exit_unlock_guardrails(game_event, user_msg)
                 for gm in exit_guardrail_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
+                switch_guardrail_messages = await self._enforce_switch_transition_guardrails(game_event, user_msg)
+                for gm in switch_guardrail_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
@@ -5264,6 +5360,8 @@ class GameTurnManager:
                     states[eid]["is_attackable"] = update.is_attackable
                 if update.is_killable is not None:
                     states[eid]["is_killable"] = update.is_killable
+                if update.switch_state is not None:
+                    states[eid]["switch_state"] = update.switch_state
                 if update.is_defeated is not None:
                     was_defeated = self.state.entity_states.get(eid, {}).get("is_defeated", False)
                     if not was_defeated and update.is_defeated is True:

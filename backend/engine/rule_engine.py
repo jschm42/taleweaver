@@ -62,6 +62,7 @@ class WorldEntityUpdate(BaseModel):
     is_killable: Optional[bool] = None
     locked: Optional[bool] = None
     inventory: Optional[list[InventoryItem]] = None
+    switch_state: Optional[str] = None
 
 class AttackRequest(BaseModel):
     """Requested by the GM to perform a combat action."""
