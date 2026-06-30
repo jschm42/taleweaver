@@ -1378,8 +1378,8 @@ async def _apply_proposal_patch(
 
             if "text_log_content" in updates and is_readable:
                 text = str(updates["text_log_content"]).strip()
-                if len(text) > 500:
-                    raise HTTPException(status_code=400, detail="text_log_content must be <= 500 chars")
+                if len(text) > 1000:
+                    raise HTTPException(status_code=400, detail="text_log_content must be <= 1000 chars")
                 metadata_json["text_log_content"] = text
             if "text_log_format" in updates and is_readable:
                 fmt = str(updates["text_log_format"]).strip().upper()
@@ -2958,6 +2958,33 @@ async def update_editor_entity(
                         raise HTTPException(status_code=400, detail="current_scene_id must contain only uppercase letters, digits, and underscores.")
                     await _ensure_template_scene_exists(db, template_id, new_scene_id)
                     ent.current_scene_id = new_scene_id
+                # Apply type change first so the cascade branches below run against
+                # the NEW type. The old code computed `is_readable_object` etc.
+                # against the pre-PATCH value, which silently dropped the user's
+                # choice when changing e.g. CONTAINER -> READABLE.
+                new_item_type_value: Optional[str] = None
+                if payload.item_type is not None:
+                    normalized_new_type = str(payload.item_type or "").strip().upper()
+                    if normalized_new_type and normalized_new_type != str(ent.item_type or "").upper():
+                        if normalized_new_type not in {
+                            "DEFAULT",
+                            "CONSUMABLE",
+                            "WEARABLE",
+                            "WEAPON",
+                            "COMBINABLE",
+                            "READABLE",
+                            "CONTAINER",
+                            "SWITCH",
+                        }:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=(
+                                    "item_type must be one of DEFAULT, CONSUMABLE, WEARABLE, "
+                                    "WEAPON, COMBINABLE, READABLE, CONTAINER, SWITCH."
+                                ),
+                            )
+                        new_item_type_value = normalized_new_type
+                        ent.item_type = normalized_new_type
                 item_type = str(ent.item_type or "").upper()
                 is_readable_object = item_type == "READABLE"
                 is_container_object = item_type == "CONTAINER"
@@ -3026,8 +3053,8 @@ async def update_editor_entity(
                 # 2. Readable log content (only for READABLE items)
                 if is_readable_object:
                     if payload.text_log_content is not None:
-                        if len(payload.text_log_content) > 500:
-                            raise HTTPException(status_code=400, detail="text_log_content must be at most 500 characters.")
+                        if len(payload.text_log_content) > 1000:
+                            raise HTTPException(status_code=400, detail="text_log_content must be at most 1000 characters.")
                         metadata_json["text_log_content"] = payload.text_log_content.strip()
                     if payload.text_log_format is not None:
                         normalized_format = str(payload.text_log_format).strip().upper()

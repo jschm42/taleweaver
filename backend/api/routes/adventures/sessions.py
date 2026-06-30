@@ -313,7 +313,7 @@ def _backfill_item_from_entity(item: dict, entity: WorldEntity) -> dict:
 
     if item_type == "READABLE":
         if not merged.get("text_log_content"):
-            merged["text_log_content"] = str(metadata.get("text_log_content") or "").strip()[:500]
+            merged["text_log_content"] = str(metadata.get("text_log_content") or "").strip()[:1000]     
         if not merged.get("text_log_format"):
             text_log_format = str(metadata.get("text_log_format") or "DOCUMENT").strip().upper()
             if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
@@ -338,7 +338,7 @@ def _reconstruct_item_dict_from_entity(entity: WorldEntity) -> dict:
     effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
     item_type = entity.item_type or "PICKABLE"
 
-    text_log_content = str(metadata.get("text_log_content") or "").strip()[:500]
+    text_log_content = str(metadata.get("text_log_content") or "").strip()[:1000]     
     text_log_format = str(metadata.get("text_log_format") or "DOCUMENT").strip().upper()
     if text_log_format not in {"DOCUMENT", "SCROLL", "BOOK", "SIGN"}:
         text_log_format = "DOCUMENT"

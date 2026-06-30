@@ -15,6 +15,7 @@ import { Save, X, Trash2, ArrowLeft } from 'lucide-vue-next'
 import WorldTab from '@/components/editor/WorldTab.vue'
 import ProtagonistTab from '@/components/editor/ProtagonistTab.vue'
 import ItemsTab from '@/components/editor/ItemsTab.vue'
+import MoveItemToSceneModal from '@/components/editor/MoveItemToSceneModal.vue'
 import VisualsTab from '@/components/editor/VisualsTab.vue'
 import ToneTab from '@/components/editor/ToneTab.vue'
 import InhabitantsTab from '@/components/editor/InhabitantsTab.vue'
@@ -339,6 +340,14 @@ type PendingDeleteTarget = {
 }
 const showDeleteConfirmDialog = ref(false)
 const pendingDeleteTarget = ref<PendingDeleteTarget | null>(null)
+
+const showItemTypeChangeModal = ref(false)
+const itemTypeChangeTarget = ref<{ id: string; name: string; currentItemType: string } | null>(null)
+const isChangingItemType = ref(false)
+
+const showMoveItemModal = ref(false)
+const moveItemTarget = ref<{ id: string; name: string; currentSceneId: string } | null>(null)
+const isMovingItem = ref(false)
 const isUploading = ref(false)
 const isSettingStartScene = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
@@ -1033,8 +1042,8 @@ async function saveEntityText(data: any) {
     }
   }
 
-  if (editEntityContext.value.type === 'object' && (data.text_log_content || '').length > 500) {
-    addNotification('Text logs must be 500 characters or less.', 'error')
+  if (editEntityContext.value.type === 'object' && (data.text_log_content || '').length > 1000) {
+    addNotification('Text logs must be 1000 characters or less.', 'error')
     return
   }
 
@@ -1777,6 +1786,108 @@ function requestDeleteRouteEntity(entityId: string) {
   showDeleteConfirmDialog.value = true
 }
 
+function requestDeleteItem(itemId: string, itemName?: string) {
+  const normalized = String(itemId || '').trim()
+  if (!normalized) return
+  activeMenuId.value = null
+  pendingDeleteTarget.value = {
+    kind: 'entity',
+    id: normalized,
+    title: `Delete Item "${itemName || normalized}"?`,
+    description:
+      'This permanently removes the item from the world. References to this item (e.g. container inventories, unlock requirements) will need to be re-attached afterwards.',
+  }
+  showDeleteConfirmDialog.value = true
+}
+
+function requestChangeItemType(itemId: string, itemName: string, currentItemType: string) {
+  const normalized = String(itemId || '').trim()
+  if (!normalized) return
+  activeMenuId.value = null
+  itemTypeChangeTarget.value = {
+    id: normalized,
+    name: String(itemName || normalized),
+    currentItemType: String(currentItemType || 'DEFAULT').toUpperCase(),
+  }
+  showItemTypeChangeModal.value = true
+}
+
+function closeChangeItemTypeModal() {
+  if (isChangingItemType.value) return
+  showItemTypeChangeModal.value = false
+  itemTypeChangeTarget.value = null
+}
+
+async function confirmChangeItemType(newItemType: string) {
+  const target = itemTypeChangeTarget.value
+  if (!target) return
+  const normalized = String(newItemType || '').trim().toUpperCase()
+  if (!normalized || normalized === target.currentItemType) {
+    closeChangeItemTypeModal()
+    return
+  }
+  isChangingItemType.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'object',
+      target_id: target.id,
+      item_type: normalized,
+    })
+    await fetchDebugInfo()
+    addNotification(`Item "${target.name}" is now ${normalized}.`, 'success')
+    closeChangeItemTypeModal()
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to change item type.', 'error')
+  } finally {
+    isChangingItemType.value = false
+  }
+}
+
+function requestMoveItemToScene(itemId: string, itemName: string, currentSceneId: string) {
+  const normalized = String(itemId || '').trim()
+  if (!normalized) return
+  activeMenuId.value = null
+  moveItemTarget.value = {
+    id: normalized,
+    name: String(itemName || normalized),
+    currentSceneId: String(currentSceneId || '').trim().toUpperCase(),
+  }
+  showMoveItemModal.value = true
+}
+
+function closeMoveItemModal() {
+  if (isMovingItem.value) return
+  showMoveItemModal.value = false
+  moveItemTarget.value = null
+}
+
+async function confirmMoveItemToScene(targetSceneId: string) {
+  const target = moveItemTarget.value
+  if (!target) return
+  const normalizedSceneId = String(targetSceneId || '').trim().toUpperCase()
+  if (
+    !normalizedSceneId ||
+    normalizedSceneId === target.currentSceneId
+  ) {
+    return
+  }
+  isMovingItem.value = true
+  try {
+    await entityService.saveEntityText(props.adventureId, {
+      target_type: 'object',
+      target_id: target.id,
+      current_scene_id: normalizedSceneId,
+    })
+    await fetchDebugInfo()
+    addNotification(`Item "${target.name}" moved to ${normalizedSceneId}.`, 'success')
+    closeMoveItemModal()
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to move item.', 'error')
+  } finally {
+    isMovingItem.value = false
+  }
+}
+
 async function handleCloneRouteEntity(entityType: 'npc' | 'object', entityId: string) {
   const normalized = String(entityId || '').trim()
   if (!normalized) return
@@ -2097,7 +2208,7 @@ watch(
               @create-new-item="createNewItemForProtagonist"
             />
 
-            <ItemsTab 
+            <ItemsTab
               v-if="activeTab === 'items'"
               :editor-objects="editorObjects"
               :editor-switches="editorSwitches"
@@ -2108,6 +2219,8 @@ watch(
               :active-menu-id="activeMenuId"
               :rule-enforcement-mode="form.rule_enforcement_mode"
               :visuals-cache-version="visualsCacheVersion"
+              :editor-scenes="editorScenes"
+              :active-map-scene-id="activeMapSceneId"
               @quick-regen="quickRegenerateVisual"
               @regen-all="requestRegenerateAll"
               @open-regen-dialog="openRegenerateDialog"
@@ -2117,6 +2230,9 @@ watch(
               @toggle-menu="toggleMenu"
               @handle-hover="handleHover"
               @clear-hover="clearHover"
+              @request-change-item-type="requestChangeItemType"
+              @request-move-item-to-scene="requestMoveItemToScene"
+              @request-delete-item="requestDeleteItem"
             />
 
             <InhabitantsTab
@@ -2342,6 +2458,15 @@ watch(
       @select="handleItemTypeSelected"
     />
 
+    <ItemTypeSelectorModal
+      :show="showItemTypeChangeModal"
+      mode="change"
+      :current-item-name="itemTypeChangeTarget?.name || ''"
+      :current-item-type="itemTypeChangeTarget?.currentItemType || ''"
+      @close="closeChangeItemTypeModal"
+      @select="confirmChangeItemType"
+    />
+
     <AddExistingItemModal
       :show="showAddExistingItemModal"
       :kind="addExistingItemKind"
@@ -2350,6 +2475,17 @@ watch(
       :visuals-cache-version="visualsCacheVersion"
       @close="closeAddExistingItemModal"
       @select="handleAddExistingItemSelected"
+    />
+
+    <MoveItemToSceneModal
+      :show="showMoveItemModal"
+      :item-id="moveItemTarget?.id || ''"
+      :item-name="moveItemTarget?.name || ''"
+      :current-scene-id="moveItemTarget?.currentSceneId || ''"
+      :scene-options="sceneReferenceOptions"
+      :is-saving="isMovingItem"
+      @close="closeMoveItemModal"
+      @confirm="confirmMoveItemToScene"
     />
 
     <EditExitModal

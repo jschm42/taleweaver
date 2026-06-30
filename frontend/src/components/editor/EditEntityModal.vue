@@ -380,7 +380,7 @@ async function handleGenerateTextLogContent() {
       props.adventureId,
       `Text log for ${localForm.value.name}`
     )
-    localForm.value.text_log_content = result.description.slice(0, 500)
+    localForm.value.text_log_content = result.description.slice(0, 1000)
   } catch (error) {
     console.error('Failed to generate text log content:', error)
   } finally {
@@ -1055,13 +1055,13 @@ const textLogPreviewClass = computed(() => {
                   </div>
                   <div class="flex justify-between items-center">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Text Log Content</label>
-                    <span :class="['text-xs font-bold tracking-widest', (localForm.text_log_content || '').length > 500 ? 'text-red-500' : 'text-emerald-500/50']">
-                      {{ (localForm.text_log_content || '').length }} / 500
+                    <span :class="['text-xs font-bold tracking-widest', (localForm.text_log_content || '').length > 1000 ? 'text-red-500' : 'text-emerald-500/50']">
+                      {{ (localForm.text_log_content || '').length }} / 1000
                     </span>
                   </div>
                   <ReferenceTextarea
                     v-model="localForm.text_log_content"
-                    :maxlength="500"
+                    :maxlength="1000"
                     :rows="3"
                     :options="props.referenceOptions || []"
                     :class-name="['w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-300 resize-y focus:border-cyan-500/50 outline-none transition-all', textLogPreviewClass].join(' ')"

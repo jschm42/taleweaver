@@ -43,7 +43,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "NPC 'description' (bio) MUST be max 400 characters.\n"
     "NPC 'goal' (motivation) and 'character' (traits) fields MUST be concise (max 200 characters each).\n"
     "For OBJECTS, assign a specific 'item_type': CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH.\n"
-    "If an OBJECT has item_type READABLE, include text_log_content (max 500 characters, MUST be non-empty) and text_log_format (DOCUMENT, SCROLL, BOOK, SIGN).\n"
+    "If an OBJECT has item_type READABLE, include text_log_content (max 1000 characters, MUST be non-empty) and text_log_format (DOCUMENT, SCROLL, BOOK, SIGN).\n"
     "If an OBJECT has item_type CONTAINER, decide whether it is open or locked based on story context.\n"
     "If an OBJECT has item_type SWITCH, provide deterministic switch fields: switch_states (at least two values), switch_initial_state, switch_transitions, and optional switch_outcomes.\n"
     "Each switch transition should be deterministic and use this shape: {from, to, gates{item,code,rule}, fail_message}.\n"
