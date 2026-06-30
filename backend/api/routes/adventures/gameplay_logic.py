@@ -4182,6 +4182,7 @@ class GameTurnManager:
         game_event = None
         pre_inventory_ids = set()
         response_text = ""
+        rule_violations = []
 
         # Pass 1: Mechanics (strict adventures), chat progression intent (normal chat),
         # or adventure-generator tool-intent pass (generator chat mode).
@@ -4412,21 +4413,25 @@ class GameTurnManager:
             }
             try:
                 constructable_messages = await self._enforce_constructable_combination(game_event, user_msg)
+                rule_violations.extend(constructable_messages)
                 for gm in constructable_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
                 guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
+                rule_violations.extend(guardrail_messages)
                 for gm in guardrail_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
                 exit_guardrail_messages = await self._enforce_exit_unlock_guardrails(game_event, user_msg)
+                rule_violations.extend(exit_rail_messages if 'exit_rail_messages' in locals() else exit_guardrail_messages)
                 for gm in exit_guardrail_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
                 switch_guardrail_messages = await self._enforce_switch_transition_guardrails(game_event, user_msg)
+                rule_violations.extend(switch_guardrail_messages)
                 for gm in switch_guardrail_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
@@ -4620,21 +4625,25 @@ class GameTurnManager:
 
             try:
                 constructable_messages = await self._enforce_constructable_combination(game_event, user_msg)
+                rule_violations.extend(constructable_messages)
                 for gm in constructable_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
                 guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
+                rule_violations.extend(guardrail_messages)
                 for gm in guardrail_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
                 exit_guardrail_messages = await self._enforce_exit_unlock_guardrails(game_event, user_msg)
+                rule_violations.extend(exit_rail_messages if 'exit_rail_messages' in locals() else exit_guardrail_messages)
                 for gm in exit_guardrail_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
                 switch_guardrail_messages = await self._enforce_switch_transition_guardrails(game_event, user_msg)
+                rule_violations.extend(switch_guardrail_messages)
                 for gm in switch_guardrail_messages:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
@@ -4682,11 +4691,21 @@ class GameTurnManager:
         tts_settings = self.user.tts_settings or {}
         use_vocal_tags = tts_settings.get("use_vocal_tags", True)
         
+        violations_str = ""
+        if rule_violations:
+            violations_str = (
+                "\n\nCRITICAL RULE VIOLATIONS / REVERTS:\n"
+                "The following actions/state updates were REVERTED because they violated game rules or preconditions. "
+                "You MUST narrate that these actions FAILED in this turn and explain the reason to the player:\n"
+                + "\n".join(f"- {v}" for v in rule_violations)
+            )
+
         narration_prompt = (
             narration_system_prompt + "\n\n" + 
             prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
                 outcome_json=game_event.model_dump_json() if game_event else "{}"
-            ) + "\n\n" +
+            ) + 
+            violations_str + "\n\n" +
             prompts.GM_NARRATION_MANDATORY_FORMATTING
         )
         
