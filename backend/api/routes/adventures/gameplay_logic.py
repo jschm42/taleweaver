@@ -2012,80 +2012,178 @@ class GameTurnManager:
         event.moved_entities.append(EntityMovement(entity_id=entity_id, to_scene_id=to_scene_id))
 
     async def _enforce_container_unlock_guardrails(self, event: GameEvent, user_msg: str) -> list[str]:
-        lowered = (user_msg or "").strip().lower()
-        if not lowered:
-            return []
-
-        resolved = await self._resolve_container_from_free_text(lowered)
-        if not resolved:
-            return []
-
-        container_id, container_name, required_code, required_item_id, required_rule, is_locked = resolved
-        if not is_locked:
-            return []
-
-        is_being_unlocked = any(
-            update.entity_id == container_id and update.locked is False
-            for update in (event.updated_entities or [])
+        container_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.entity_type == "OBJECT",
+                WorldEntity.item_type == "CONTAINER",
+            )
         )
+        db_containers = list(container_res.scalars().all())
 
-        unlock_allowed = True
-        reason = ""
+        inventory_containers = []
+        for item in (self.avatar.inventory or []):
+            if isinstance(item, dict) and str(item.get("item_type") or "").upper() == "CONTAINER":
+                inventory_containers.append(item)
 
-        if required_rule and not is_being_unlocked:
-            unlock_allowed = False
-            hinted_actor = ""
-            distract_match = re.search(r"\bdistract\w*\s+([A-Za-z0-9_\- ]{2,60})", required_rule, re.IGNORECASE)
-            if distract_match:
-                hinted_actor = distract_match.group(1).strip(" .,:;!?")
+        reasons = []
+        lowered = (user_msg or "").strip().lower()
 
-            if hinted_actor:
-                reason = (
-                    f"{container_name} stays shut. {hinted_actor} seems to keep a close eye on it. "
-                    "A clever distraction might create an opening."
-                )
-            else:
-                reason = (
-                    f"{container_name} stays shut. The moment does not feel right yet. "
-                    "A different approach might open a window."
-                )
-
-        if required_code:
-            code_match = re.search(r"(?:code|pin|access)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
-            attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
-            if not attempted_code or attempted_code.lower() != required_code.lower():
-                unlock_allowed = False
-                reason = f"{container_name} gives a mocking click. That code won't do the trick."
-
-        if unlock_allowed and required_item_id:
-            inventory_ids = {
-                str(item.get("id") or "").strip().upper()
-                for item in (self.avatar.inventory or [])
-                if isinstance(item, dict)
-            }
-            if required_item_id.upper() not in inventory_ids:
-                unlock_allowed = False
-                reason = f"You need {required_item_id} to unlock {container_name}."
-
-        if unlock_allowed:
-            return []
-
-        sanitized_updates: list[WorldEntityUpdate] = []
-        for update in (event.updated_entities or []):
-            if update.entity_id == container_id and update.locked is False:
+        for ent in db_containers:
+            is_locked = self._is_container_locked(ent, None)
+            if not is_locked:
                 continue
-            sanitized_updates.append(update)
-        sanitized_updates.append(WorldEntityUpdate(entity_id=container_id, locked=True))
-        event.updated_entities = sanitized_updates
 
-        event.completed_quest_ids = []
-        event.earned_award_keys = []
-        event.new_inventory_items = []
-        event.updated_inventory_items = []
-        event.removed_inventory_item_ids = []
-        event.spawned_items = []
+            is_being_unlocked = any(
+                update.entity_id == ent.id and update.locked is False
+                for update in (event.updated_entities or [])
+            )
 
-        return [reason or f"{container_name} stays locked."]
+            if not is_being_unlocked:
+                continue
+
+            metadata_json = dict(ent.metadata_json or {})
+            required_code = str(metadata_json.get("code_to_unlock") or "").strip()
+            required_item_id = str(metadata_json.get("item_to_unlock") or "").strip().upper()
+            required_rule = str(metadata_json.get("rule_to_unlock") or "").strip()
+
+            unlock_allowed = True
+            reason = ""
+
+            if required_rule:
+                if not self._switch_story_flags().get(required_rule, False):
+                    unlock_allowed = False
+                    hinted_actor = ""
+                    distract_match = re.search(r"\bdistract\w*\s+([A-Za-z0-9_\- ]{2,60})", required_rule, re.IGNORECASE)
+                    if distract_match:
+                        hinted_actor = distract_match.group(1).strip(" .,:;!?")
+
+                    if hinted_actor:
+                        reason = (
+                            f"{ent.name} stays shut. {hinted_actor} seems to keep a close eye on it. "
+                            "A clever distraction might create an opening."
+                        )
+                    else:
+                        reason = (
+                            f"{ent.name} stays shut. The moment does not feel right yet. "
+                            "A different approach might open a window."
+                        )
+
+            if unlock_allowed and required_code:
+                code_match = re.search(r"(?:code|pin|access|keypad)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
+                attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
+                if not attempted_code or attempted_code.lower() != required_code.lower():
+                    unlock_allowed = False
+                    reason = f"{ent.name} gives a mocking click. That code won't do the trick."
+
+            if unlock_allowed and required_item_id:
+                inventory_ids = {
+                    str(item.get("id") or "").strip().upper()
+                    for item in (self.avatar.inventory or [])
+                    if isinstance(item, dict)
+                }
+                if required_item_id.upper() not in inventory_ids:
+                    unlock_allowed = False
+                    reason = f"You need {required_item_id} to unlock {ent.name}."
+
+            if not unlock_allowed:
+                sanitized_updates: list[WorldEntityUpdate] = []
+                for update in (event.updated_entities or []):
+                    if update.entity_id == ent.id and update.locked is False:
+                        continue
+                    sanitized_updates.append(update)
+                sanitized_updates.append(WorldEntityUpdate(entity_id=ent.id, locked=True))
+                event.updated_entities = sanitized_updates
+
+                event.completed_quest_ids = []
+                event.earned_award_keys = []
+                event.new_inventory_items = []
+                event.updated_inventory_items = []
+                event.removed_inventory_item_ids = []
+                event.spawned_items = []
+
+                reasons.append(reason or f"{ent.name} stays locked.")
+
+        for item in inventory_containers:
+            inv_id = str(item.get("id") or "").strip()
+            if not inv_id:
+                continue
+
+            is_locked = self._is_container_locked(None, item)
+            if not is_locked:
+                continue
+
+            is_being_unlocked = any(
+                update.entity_id == inv_id and update.locked is False
+                for update in (event.updated_entities or [])
+            )
+
+            if not is_being_unlocked:
+                continue
+
+            metadata_json = item.get("metadata_json") or {}
+            required_code = str(metadata_json.get("code_to_unlock") or "").strip()
+            required_item_id = str(metadata_json.get("item_to_unlock") or "").strip().upper()
+            required_rule = str(metadata_json.get("rule_to_unlock") or "").strip()
+
+            unlock_allowed = True
+            reason = ""
+
+            if required_rule:
+                if not self._switch_story_flags().get(required_rule, False):
+                    unlock_allowed = False
+                    hinted_actor = ""
+                    distract_match = re.search(r"\bdistract\w*\s+([A-Za-z0-9_\- ]{2,60})", required_rule, re.IGNORECASE)
+                    if distract_match:
+                        hinted_actor = distract_match.group(1).strip(" .,:;!?")
+
+                    if hinted_actor:
+                        reason = (
+                            f"{item.get('name', 'Container')} stays shut. {hinted_actor} seems to keep a close eye on it. "
+                            "A clever distraction might create an opening."
+                        )
+                    else:
+                        reason = (
+                            f"{item.get('name', 'Container')} stays shut. The moment does not feel right yet. "
+                            "A different approach might open a window."
+                        )
+
+            if unlock_allowed and required_code:
+                code_match = re.search(r"(?:code|pin|access|keypad)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
+                attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
+                if not attempted_code or attempted_code.lower() != required_code.lower():
+                    unlock_allowed = False
+                    reason = f"{item.get('name', 'Container')} gives a mocking click. That code won't do the trick."
+
+            if unlock_allowed and required_item_id:
+                inventory_ids = {
+                    str(entry.get("id") or "").strip().upper()
+                    for entry in (self.avatar.inventory or [])
+                    if isinstance(entry, dict)
+                }
+                if required_item_id.upper() not in inventory_ids:
+                    unlock_allowed = False
+                    reason = f"You need {required_item_id} to unlock {item.get('name', 'Container')}."
+
+            if not unlock_allowed:
+                sanitized_updates: list[WorldEntityUpdate] = []
+                for update in (event.updated_entities or []):
+                    if update.entity_id == inv_id and update.locked is False:
+                        continue
+                    sanitized_updates.append(update)
+                sanitized_updates.append(WorldEntityUpdate(entity_id=inv_id, locked=True))
+                event.updated_entities = sanitized_updates
+
+                event.completed_quest_ids = []
+                event.earned_award_keys = []
+                event.new_inventory_items = []
+                event.updated_inventory_items = []
+                event.removed_inventory_item_ids = []
+                event.spawned_items = []
+
+                reasons.append(reason or f"{item.get('name', 'Container')} stays locked.")
+
+        return reasons
 
     async def _enforce_exit_unlock_guardrails(self, event: GameEvent, user_msg: str) -> list[str]:
         lowered = (user_msg or "").strip().lower()
