@@ -124,21 +124,83 @@ class MemoryManager:
                     if items_list:
                         inv_str = f" [Inventory: {', '.join(items_list)}]"
                 defeated_str = " [DEFEATED]" if getattr(e, 'is_defeated', False) else ""
-                npcs.append(f"{e.name}{stat_str}{pos_str}{goal_str}{char_str}{hidden_str}{defeated_str}{inv_str}")
+                desc_str = f" - Description: {e.description}" if (e.description and detail != "concise") else ""
+                npcs.append(f"{e.name} (ID: {e.id}){stat_str}{pos_str}{goal_str}{char_str}{hidden_str}{defeated_str}{inv_str}{desc_str}")
 
             objects = []
             for e in entities:
                 if e.entity_type == "OBJECT":
                     pos_str = f" (Position: {e.spatial_position})" if e.spatial_position else ""
                     hidden_str = " [HIDDEN]" if getattr(e, 'is_hidden', False) else ""
-                    objects.append(f"{e.name}{pos_str}{hidden_str}")
+                    
+                    item_type = str(e.item_type or "DEFAULT").upper()
+                    type_str = f" [Type: {item_type}]"
+                    
+                    switch_details = ""
+                    if item_type == "SWITCH":
+                        metadata = e.metadata_json or {}
+                        switch_cfg = metadata.get("switch") or {}
+                        states = metadata.get("switch_states") or switch_cfg.get("states") or []
+                        states_str = f" (Possible states: {', '.join(states)})" if states else ""
+                        
+                        current_st = getattr(e, "current_switch_state", None)
+                        if not current_st:
+                            current_st = switch_cfg.get("initial_state") or metadata.get("switch_initial_state") or ""
+                        
+                        current_str = f" [Current State: {current_st}]" if current_st else ""
+                        switch_details = f"{states_str}{current_str}"
+                    
+                    container_details = ""
+                    if item_type == "CONTAINER":
+                        lock_parts = []
+                        if getattr(e, "locked", False):
+                            lock_parts.append("LOCKED")
+                        if getattr(e, "code_to_unlock", None):
+                            lock_parts.append(f"Requires Code: {e.code_to_unlock}")
+                        if getattr(e, "item_to_unlock", None):
+                            lock_parts.append(f"Requires Item: {e.item_to_unlock}")
+                        if getattr(e, "unlock_rule", None):
+                            lock_parts.append(f"Unlock Rule: {e.unlock_rule}")
+                        lock_str = f" [{', '.join(lock_parts)}]" if lock_parts else " [UNLOCKED]"
+                        
+                        cont_items = []
+                        if e.inventory:
+                            for item in e.inventory:
+                                if isinstance(item, dict):
+                                    item_name = item.get("name")
+                                    item_id = item.get("id")
+                                    if item_name and item_id:
+                                        cont_items.append(f"{item_name} (ID: {item_id})")
+                                    elif item_name:
+                                        cont_items.append(item_name)
+                                elif isinstance(item, str):
+                                    cont_items.append(item)
+                        cont_str = f" [Contains: {', '.join(cont_items)}]" if cont_items else " [Empty]"
+                        container_details = f"{lock_str}{cont_str}"
+
+                    readable_details = ""
+                    if item_type == "READABLE":
+                        metadata = e.metadata_json or {}
+                        fmt = metadata.get("text_log_format") or getattr(e, "text_log_format", "DOCUMENT")
+                        content = metadata.get("text_log_content") or ""
+                        readable_details = f" [Format: {fmt}] [Readable text content: \"{content}\"]"
+
+                    if detail == "concise":
+                        objects.append(f"{e.name} (ID: {e.id}){type_str}{pos_str}{hidden_str}{switch_details}{container_details}{readable_details}")
+                    else:
+                        desc_str = f" - Description: {e.description}" if e.description else ""
+                        objects.append(f"- {e.name} (ID: {e.id}):{type_str}{desc_str}{pos_str}{hidden_str}{switch_details}{container_details}{readable_details}")
 
             if npcs:
-                prefix = "NPCS" if detail == "concise" else "PRESENT NPCs"
-                location_context += f"{prefix}: {', '.join(npcs)}\n"
+                if detail == "concise":
+                    location_context += f"NPCS: {', '.join(npcs)}\n"
+                else:
+                    location_context += "PRESENT NPCs:\n" + "\n".join(f"- {npc}" for npc in npcs) + "\n"
             if objects:
-                prefix = "OBJECTS" if detail == "concise" else "INTERACTABLE OBJECTS"
-                location_context += f"{prefix}: {', '.join(objects)}\n"
+                if detail == "concise":
+                    location_context += f"OBJECTS: {', '.join(objects)}\n"
+                else:
+                    location_context += "INTERACTABLE OBJECTS:\n" + "\n".join(objects) + "\n"
 
         if exits:
             if detail == "concise":

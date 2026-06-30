@@ -211,6 +211,8 @@ class TurnLlmContextBuilder:
                 ent.is_in_inventory = ov["is_in_inventory"]
             if "inventory" in ov:
                 ent.inventory = ov["inventory"]
+            if "switch_state" in ov:
+                ent.current_switch_state = ov["switch_state"]
             ent.is_defeated = bool(ov.get("is_defeated", False))
 
         container_payloads = [
