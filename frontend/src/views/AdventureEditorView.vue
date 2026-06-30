@@ -808,6 +808,7 @@ async function handleCreateScene(data: { sceneId: string; name: string; descript
     })
     await fetchDebugInfo()
     addNotification(`Scene "${data.name}" created.`, 'success')
+    isCreatingScene.value = false
   } catch (error: any) {
     addNotification(error?.message || 'Failed to create scene.', 'error')
   } finally {
@@ -2285,7 +2286,6 @@ watch(
               v-if="activeTab === 'scenes' && isCreatingScene"
               :is-saving="isSavingText"
               :editor-scenes="editorScenes"
-              :reference-options="referenceOptions"
               @close="cancelCreateScene"
               @create="handleCreateScene"
             />

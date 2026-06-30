@@ -10,6 +10,7 @@ export const getItemIcon = (type?: string) => {
     case 'KEY': return 'ra-key'
     case 'KEYS': return 'ra-key'
     case 'COMBINABLE': return 'ra-wrench'
+    case 'CONSTRUCTABLE': return 'ra-hammer'
     case 'WEARABLE': return 'ra-helmet'
     case 'NPC': return 'ra-player'
     case 'PLAYER': return 'ra-player'
@@ -27,6 +28,7 @@ export const getTypeColor = (type?: string) => {
     case 'READABLE': return 'text-indigo-400'
     case 'WEARABLE': return 'text-blue-500'
     case 'COMBINABLE': return 'text-fuchsia-500'
+    case 'CONSTRUCTABLE': return 'text-orange-500'
     case 'NPC': return 'text-amber-500'
     default: return 'text-slate-400'
   }

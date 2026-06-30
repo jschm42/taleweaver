@@ -4,7 +4,6 @@ import { ref, onMounted, computed, watch } from 'vue'
 const props = defineProps<{
   isSaving: boolean
   editorScenes: any[]
-  referenceOptions?: Array<{ id: string; name?: string; imageUrl?: string | null; type?: string }>
 }>()
 
 const emit = defineEmits<{
@@ -35,10 +34,7 @@ const idError = computed(() => {
     return 'ID must be 30 characters or less.'
   }
 
-  const takenIds = new Set((props.referenceOptions || []).map((entry) => String(entry.id || '').toUpperCase()))
-  console.log('DEBUG referenceOptions:', props.referenceOptions)
-  console.log('DEBUG takenIds:', Array.from(takenIds))
-  console.log('DEBUG val:', val)
+  const takenIds = new Set((props.editorScenes || []).map((scene) => String(scene.id || '').toUpperCase()))
   if (takenIds.has(val.toUpperCase())) {
     return `ID "${val}" already exists in this adventure.`
   }

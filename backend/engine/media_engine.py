@@ -55,6 +55,7 @@ _FRONTEND_SVG_ROOT = os.path.abspath(
 _ITEM_PLACEHOLDER_ASSET_BY_TYPE = {
     "CONTAINER": "chest.svg",
     "COMBINABLE": "combinable.svg",
+    "CONSTRUCTABLE": "constructable.svg",
     "CONSUMABLE": "potion.svg",
     "READABLE": "scroll.svg",
     "WEAPON": "sword.svg",

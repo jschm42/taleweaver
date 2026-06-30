@@ -1,6 +1,10 @@
 # TaleWeaver Setup Script (PowerShell)
 # This script sets up the Python environment, database, and frontend dependencies.
 
+param (
+    [switch]$SkipStart
+)
+
 $ErrorActionPreference = "Stop"
 Write-Host "--- TaleWeaver Setup ---" -ForegroundColor Cyan
 
@@ -84,9 +88,11 @@ Write-Host "Backend: .\venv\Scripts\python.exe -m backend.main"
 Write-Host "Frontend: cd frontend; npm run dev`n"
 
 # 7. Start (Optional / Interactive)
-$start = Read-Host "Would you like to start the application now? (y/n)"
-if ($start -eq "y") {
-    Write-Host "[*] Starting backend and frontend in new windows..." -ForegroundColor Cyan
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", ".\venv\Scripts\python.exe -m backend.main"
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"
+if (-not $SkipStart) {
+    $start = Read-Host "Would you like to start the application now? (y/n)"
+    if ($start -eq "y") {
+        Write-Host "[*] Starting backend and frontend in new windows..." -ForegroundColor Cyan
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", ".\venv\Scripts\python.exe -m backend.main"
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd frontend; npm run dev"
+    }
 }

@@ -2972,6 +2972,7 @@ async def update_editor_entity(
                             "WEARABLE",
                             "WEAPON",
                             "COMBINABLE",
+                            "CONSTRUCTABLE",
                             "READABLE",
                             "CONTAINER",
                             "SWITCH",
@@ -2980,7 +2981,7 @@ async def update_editor_entity(
                                 status_code=400,
                                 detail=(
                                     "item_type must be one of DEFAULT, CONSUMABLE, WEARABLE, "
-                                    "WEAPON, COMBINABLE, READABLE, CONTAINER, SWITCH."
+                                    "WEAPON, COMBINABLE, CONSTRUCTABLE, READABLE, CONTAINER, SWITCH."
                                 ),
                             )
                         new_item_type_value = normalized_new_type

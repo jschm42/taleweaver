@@ -198,7 +198,7 @@ const isFormInvalid = computed(() => {
   const idInvalid = hasEditableId
     ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > maxIdLen || !!entityIdError.value)
     : false
-  const combinationInvalid = currentItemType.value === 'COMBINABLE' &&
+  const combinationInvalid = (currentItemType.value === 'COMBINABLE' || currentItemType.value === 'CONSTRUCTABLE') &&
     (!Array.isArray(localForm.value.combination_ingredients_input) ||
      localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 2)
   const uniqueStates = new Set(switchStates.value.map(s => s.trim().toUpperCase()))
@@ -234,6 +234,13 @@ watch(() => localForm.value.item_type, (newType) => {
     localForm.value.is_portable = true
   } else {
     localForm.value.is_portable = true
+  }
+  if (type === 'CONSTRUCTABLE') {
+    // Constructables materialize only once all ingredients are combined.
+    if (!Array.isArray(localForm.value.combination_ingredients_input) ||
+        localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 2) {
+      localForm.value.combination_ingredients_input = ['', '']
+    }
   }
 })
 
@@ -667,7 +674,8 @@ const textLogPreviewClass = computed(() => {
                       <option value="CONSUMABLE">CONSUMABLE</option>
                       <option value="WEARABLE">WEARABLE</option>
                       <option value="WEAPON">WEAPON</option>
-                      <option value="COMBINABLE">COMBINABLE</option>
+                      <option value="COMBINABLE">COMBINABLE (deprecated)</option>
+                      <option value="CONSTRUCTABLE">CONSTRUCTABLE</option>
                       <option value="READABLE">READABLE</option>
                       <option value="CONTAINER">CONTAINER</option>
                       <option value="SWITCH">SWITCH</option>
@@ -774,9 +782,15 @@ const textLogPreviewClass = computed(() => {
                   <p class="text-[10px] text-slate-500 uppercase tracking-wider">Positive values restore stats, negative values drain them.</p>
                 </div>
 
-                <!-- COMBINABLE: Ingredients -->
-                <div v-if="currentItemType === 'COMBINABLE'" class="space-y-3">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Combination Ingredients</label>
+                <!-- COMBINABLE / CONSTRUCTABLE: Ingredients -->
+                <div v-if="currentItemType === 'COMBINABLE' || currentItemType === 'CONSTRUCTABLE'" class="space-y-3">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">
+                    {{ currentItemType === 'CONSTRUCTABLE' ? 'Construction Ingredients' : 'Combination Ingredients' }}
+                  </label>
+                  <div v-if="currentItemType === 'CONSTRUCTABLE'" class="px-3 py-2 rounded-lg border border-orange-500/30 bg-orange-500/5 text-[11px] text-orange-200/90 leading-relaxed flex items-start gap-2">
+                    <i class="ra ra-hammer text-orange-400 mt-0.5 shrink-0"></i>
+                    <span>Constructables stay hidden until the player combines ALL ingredients (min. 2). The engine then consumes the ingredients and reveals this item automatically — no reveal rule needed.</span>
+                  </div>
                   <div class="space-y-2">
                     <div
                       v-for="(ing, idx) in localForm.combination_ingredients_input"
@@ -805,7 +819,11 @@ const textLogPreviewClass = computed(() => {
                       + Add Ingredient
                     </button>
                   </div>
-                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Select item references required to combine with this item.</p>
+                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                    {{ currentItemType === 'CONSTRUCTABLE'
+                      ? 'Select ALL item references required to construct this item (min. 2). They are consumed on construction.'
+                      : 'Select item references required to combine with this item.' }}
+                  </p>
                 </div>
 
                 <!-- SWITCH: Visual Configurator -->

@@ -337,8 +337,77 @@ def _check_container_inventory(
     return findings
 
 
-def _check_npc_stats(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
+def _check_constructable_ingredients(
+    entities: list[dict[str, Any]],
+) -> list[ValidationFinding]:
+    """Validate CONSTRUCTABLE objects.
+
+    A CONSTRUCTABLE is a hidden item that materializes deterministically when the
+    player combines all of its ``combination_ingredients``. The engine requires
+    at least two distinct ingredients that reference real entities, and the
+    constructable should start hidden (reveal is automatic, so ``reveal_rule``
+    /``reveals_item_id`` are ignored for this type).
+    """
+    known_ids = {_entity_id(e) for e in entities if _entity_id(e)}
     findings: list[ValidationFinding] = []
+    for e in entities:
+        if _entity_kind(e) != "OBJECT":
+            continue
+        if (e.get("item_type") or "").upper() != "CONSTRUCTABLE":
+            continue
+        eid = _entity_id(e) or "?"
+        raw = e.get("combination_ingredients")
+        ingredients = [i for i in (raw or []) if isinstance(i, str) and i.strip()]
+        distinct = {i.strip() for i in ingredients}
+
+        if len(ingredients) < 2:
+            findings.append(
+                _f(
+                    "error",
+                    "constructable_needs_ingredients",
+                    f"CONSTRUCTABLE '{eid}' requires at least 2 combination_ingredients (found {len(ingredients)}).",
+                    location=f"entity:{eid}",
+                    context={"entity_id": eid, "count": len(ingredients)},
+                )
+            )
+        elif len(distinct) != len(ingredients):
+            findings.append(
+                _f(
+                    "warn",
+                    "constructable_duplicate_ingredients",
+                    f"CONSTRUCTABLE '{eid}' has duplicate ingredient ids.",
+                    location=f"entity:{eid}",
+                    context={"entity_id": eid, "ingredients": ingredients},
+                )
+            )
+
+        for ref in ingredients:
+            if ref.strip() not in known_ids:
+                findings.append(
+                    _f(
+                        "error",
+                        "constructable_ingredient_missing",
+                        f"CONSTRUCTABLE '{eid}' references unknown ingredient '{ref}'.",
+                        location=f"entity:{eid}",
+                        context={"entity_id": eid, "missing_ref": ref},
+                    )
+                )
+
+        if not e.get("is_hidden"):
+            findings.append(
+                _f(
+                    "warn",
+                    "constructable_not_hidden",
+                    f"CONSTRUCTABLE '{eid}' should start is_hidden=true (it auto-reveals on construction).",
+                    location=f"entity:{eid}",
+                    context={"entity_id": eid},
+                )
+            )
+    return findings
+
+
+def _check_npc_stats(entities: list[dict[str, Any]]) -> list[ValidationFinding]:
+    findings = []
     for e in entities:
         if _entity_kind(e) != "NPC":
             continue
@@ -636,6 +705,7 @@ def validate_adventure(payload: dict[str, Any]) -> list[ValidationFinding]:
     findings.extend(_check_duplicate_ids(scenes, entities))
     findings.extend(_check_item_references(entities))
     findings.extend(_check_container_inventory(entities))
+    findings.extend(_check_constructable_ingredients(entities))
     findings.extend(_check_npc_stats(entities))
     findings.extend(_check_image_coverage(adventure, scenes, entities))
     findings.extend(_check_rpg_mode_with_combatants(adventure, entities))

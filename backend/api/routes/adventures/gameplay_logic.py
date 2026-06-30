@@ -50,6 +50,7 @@ from backend.engine.rule_engine import (
     AdventureGenerationRequest,
     AdventureGeneratorToolIntent,
     AttackResult,
+    EntityMovement,
     ExitUpdate,
     GameEvent,
     GameOverException,
@@ -1844,6 +1845,168 @@ class GameTurnManager:
 
         _, cid, cname, code_to_unlock, item_to_unlock, rule_to_unlock, locked = best_match
         return cid, cname, code_to_unlock, item_to_unlock, rule_to_unlock, locked
+
+    async def _enforce_constructable_combination(self, event: GameEvent, user_msg: str) -> list[str]:
+        """Deterministically resolve CONSTRUCTABLE items.
+
+        A CONSTRUCTABLE is a hidden object that materializes when the player
+        combines ALL of its ``combination_ingredients`` (minimum 2). When the
+        player issues a combine/use action and every ingredient is currently
+        accessible (in the protagonist's inventory or visible in the current
+        scene) and at least one ingredient is referenced in the message, the
+        engine consumes the ingredients (they vanish) and auto-reveals the
+        constructable in the player's current scene. ``reveals_item_id`` and
+        ``reveal_rule`` are intentionally ignored for this type.
+        """
+        lowered = (user_msg or "").strip().lower()
+        if not lowered:
+            return []
+
+        combine_intent = (
+            lowered.startswith("use ")
+            or any(
+                kw in lowered
+                for kw in ("combine", "assembl", "craft", " mix ", "put together")
+            )
+        )
+        if not combine_intent:
+            return []
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(WorldEntity.session_id == self.game_id)
+        )
+        all_entities = list(ent_res.scalars().all())
+        if not any(str(e.item_type or "").upper() == "CONSTRUCTABLE" for e in all_entities):
+            return []
+
+        ent_by_id_upper: dict[str, WorldEntity] = {
+            (e.id or "").upper(): e for e in all_entities if e.id
+        }
+
+        current_scene_id = self.state.current_scene_id
+        states_snapshot = dict(self.state.entity_states or {})
+
+        def _is_hidden_now(e: WorldEntity) -> bool:
+            ov = states_snapshot.get(e.id, {})
+            if "is_hidden" in ov and ov["is_hidden"] is not None:
+                return bool(ov["is_hidden"])
+            return bool(e.is_hidden)
+
+        # Inventory ingredient ids (preserve original case for removal matching).
+        inventory_id_lookup: dict[str, str] = {}
+        for item in (self.avatar.inventory or []):
+            if isinstance(item, dict) and item.get("id"):
+                inventory_id_lookup[str(item["id"]).strip().upper()] = str(item["id"])
+
+        # Visible entities in the current scene (inventory items are tracked separately).
+        scene_entity_ids: set[str] = set()
+        for e in all_entities:
+            if e.current_scene_id != current_scene_id:
+                continue
+            if e.is_in_inventory:
+                continue
+            if _is_hidden_now(e):
+                continue
+            if e.id:
+                scene_entity_ids.add(e.id.upper())
+
+        accessible_ids: set[str] = set(inventory_id_lookup.keys()) | scene_entity_ids
+
+        consumed: set[str] = set()
+        messages: list[str] = []
+
+        for e in all_entities:
+            if str(e.item_type or "").upper() != "CONSTRUCTABLE":
+                continue
+            raw_ingredients = e.combination_ingredients or []
+            needed = [str(i).strip() for i in raw_ingredients if i and str(i).strip()]
+            needed_upper = {i.upper() for i in needed}
+            if len(needed_upper) < 2:
+                continue
+            if e.id and e.id.upper() in consumed:
+                continue
+            # Skip already-revealed constructables.
+            if not _is_hidden_now(e):
+                continue
+            # An ingredient already consumed by a prior constructable this turn?
+            if needed_upper & consumed:
+                continue
+            # All ingredients must be accessible right now.
+            if not needed_upper.issubset(accessible_ids):
+                continue
+
+            # At least one ingredient must be referenced (by name or id) in the
+            # player's message, to avoid accidental construction.
+            referenced = False
+            for ing_upper in needed_upper:
+                ing_ent = ent_by_id_upper.get(ing_upper)
+                tokens = [ing_upper]
+                if ing_ent and ing_ent.name:
+                    tokens.append(ing_ent.name)
+                for tok in tokens:
+                    tok_low = (tok or "").lower()
+                    if len(tok_low) >= 3 and re.search(r"\b" + re.escape(tok_low) + r"\b", lowered):
+                        referenced = True
+                        break
+                if referenced:
+                    break
+            if not referenced:
+                continue
+
+            # CONSTRUCT — consume ingredients, reveal result.
+            for ing_upper in needed_upper:
+                if ing_upper in inventory_id_lookup:
+                    if event.removed_inventory_item_ids is None:
+                        event.removed_inventory_item_ids = []
+                    original = inventory_id_lookup[ing_upper]
+                    if original not in event.removed_inventory_item_ids:
+                        event.removed_inventory_item_ids.append(original)
+                else:
+                    self._upsert_entity_update(event, ing_upper, is_hidden=True)
+                consumed.add(ing_upper)
+
+            self._upsert_entity_update(event, e.id, is_hidden=False)
+            self._upsert_entity_movement(event, e.id, current_scene_id)
+
+            ing_names: list[str] = []
+            for ing_upper in needed_upper:
+                ing_ent = ent_by_id_upper.get(ing_upper)
+                ing_names.append(ing_ent.name if ing_ent and ing_ent.name else ing_upper)
+            msg = f"You combine {', '.join(ing_names)} to create {e.name}!"
+            messages.append(msg)
+            logger.info(
+                "[Turn %s] CONSTRUCTABLE '%s' materialized from ingredients %s",
+                self.game_id,
+                e.id,
+                sorted(needed_upper),
+            )
+
+        return messages
+
+    def _upsert_entity_update(self, event: GameEvent, entity_id: str, **fields: object) -> None:
+        """Insert or merge a WorldEntityUpdate for ``entity_id`` into the event."""
+        if not entity_id:
+            return
+        if event.updated_entities is None:
+            event.updated_entities = []
+        for up in event.updated_entities:
+            if up.entity_id == entity_id:
+                for key, value in fields.items():
+                    setattr(up, key, value)
+                return
+        event.updated_entities.append(WorldEntityUpdate(entity_id=entity_id, **fields))  # type: ignore[arg-type]
+
+    def _upsert_entity_movement(self, event: GameEvent, entity_id: str, to_scene_id: str) -> None:
+        """Insert or merge an EntityMovement for ``entity_id`` into the event."""
+        if not entity_id or not to_scene_id:
+            return
+        if event.moved_entities is None:
+            event.moved_entities = []
+        for move in event.moved_entities:
+            if move.entity_id == entity_id:
+                move.to_scene_id = to_scene_id
+                return
+        event.moved_entities.append(EntityMovement(entity_id=entity_id, to_scene_id=to_scene_id))
 
     async def _enforce_container_unlock_guardrails(self, event: GameEvent, user_msg: str) -> list[str]:
         lowered = (user_msg or "").strip().lower()
@@ -4155,6 +4318,11 @@ class GameTurnManager:
                 if isinstance(item, dict) and item.get("id")
             }
             try:
+                constructable_messages = await self._enforce_constructable_combination(game_event, user_msg)
+                for gm in constructable_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
                 for gm in guardrail_messages:
                     await self._save_chat_message("system", gm)
@@ -4353,6 +4521,11 @@ class GameTurnManager:
             game_event = self._build_progression_event(progression_intent)
 
             try:
+                constructable_messages = await self._enforce_constructable_combination(game_event, user_msg)
+                for gm in constructable_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
                 for gm in guardrail_messages:
                     await self._save_chat_message("system", gm)
