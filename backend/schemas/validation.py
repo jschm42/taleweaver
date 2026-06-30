@@ -144,3 +144,42 @@ class AIFixApplyResponse(BaseModel):
     message: Optional[str] = Field(
         None, description="Optional human-readable summary of what was changed."
     )
+
+
+class DeleteValidationFindingRef(BaseModel):
+    """Reference to a single finding to remove from the latest ValidationRun."""
+
+    source: Literal["structural", "ai"] = Field(
+        ...,
+        description=(
+            "Which bucket of the ValidationRun the finding lives in. "
+            "The pair (source, code, location) uniquely identifies the entry "
+            "in the JSON arrays on the row."
+        ),
+    )
+    code: str = Field(..., description="The ValidationFinding.code of the entry to remove.")
+    location: str = Field(
+        "",
+        description=(
+            "The ValidationFinding.location of the entry to remove. Empty string "
+            "matches findings whose location is None or empty."
+        ),
+    )
+
+
+class DeleteValidationFindingsRequest(BaseModel):
+    findings: List[DeleteValidationFindingRef] = Field(
+        default_factory=list,
+        description=(
+            "Findings to remove. Empty list is a no-op. The endpoint only mutates "
+            "the latest persisted ValidationRun for the (template, user) pair; "
+            "previous runs are untouched."
+        ),
+    )
+    delete_all: bool = Field(
+        False,
+        description=(
+            "When True, wipes both structural_findings and ai_findings on the "
+            "latest ValidationRun. Use for 'Delete all'."
+        ),
+    )

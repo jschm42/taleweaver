@@ -332,3 +332,186 @@ async def test_text_log_content_rejects_over_1000_characters(client, setup_test_
     )
     assert res.status_code == 400, res.text
     assert "1000" in res.text
+
+
+async def test_combinable_supports_single_ingredient(client, setup_test_db):
+    """Combinable items must accept any non-negative number of ingredients (min = 1)."""
+    user_id, tpl_id, item_id, item_pk = await _seed_template_with_item({"item_type": "COMBINABLE"})
+    headers = _auth_headers("type_change_user")
+
+    res_single = await client.patch(
+        f"/api/adventures/{tpl_id}/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "object",
+            "target_id": item_id,
+            "combination_ingredients": ["SINGLE_INGREDIENT"],
+        },
+    )
+    assert res_single.status_code == 200, res_single.text
+
+    async with TestSessionLocal() as db:
+        item = await db.get(WorldEntity, item_pk)
+        assert item is not None
+        assert item.combination_ingredients == ["SINGLE_INGREDIENT"]
+
+
+async def test_combinable_supports_empty_ingredient_list(client, setup_test_db):
+    """Wiping ingredients must succeed — the field is fully optional."""
+    user_id, tpl_id, item_id, item_pk = await _seed_template_with_item({
+        "item_type": "COMBINABLE",
+        "combination_ingredients": ["WILL_BE_WIPED"],
+    })
+    headers = _auth_headers("type_change_user")
+
+    res = await client.patch(
+        f"/api/adventures/{tpl_id}/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "object",
+            "target_id": item_id,
+            "combination_ingredients": [],
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    async with TestSessionLocal() as db:
+        item = await db.get(WorldEntity, item_pk)
+        assert item is not None
+        assert item.combination_ingredients == []
+
+
+async def test_persist_combinable_metadata_fields(client, setup_test_db):
+    """reveal_rule, is_hidden, spatial_position, reveals_item_id all round-trip cleanly."""
+    user_id, tpl_id, item_id, item_pk = await _seed_template_with_item({"item_type": "COMBINABLE"})
+    headers = _auth_headers("type_change_user")
+
+    res = await client.patch(
+        f"/api/adventures/{tpl_id}/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "object",
+            "target_id": item_id,
+            "combination_ingredients": ["a", "b"],
+            "reveal_rule": "If the prot searches under the table",
+            "is_hidden": True,
+            "spatial_position": "behind the vault",
+            "reveals_item_id": "ancient_key",
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    async with TestSessionLocal() as db:
+        item = await db.get(WorldEntity, item_pk)
+        assert item is not None
+        assert item.reveal_rule == "If the prot searches under the table"
+        assert item.is_hidden is True
+        assert item.spatial_position == "behind the vault"
+        # Backend normalizes to upper-case to match entity-id convention.
+        assert item.reveals_item_id == "ANCIENT_KEY"
+
+
+async def test_combinable_metadata_fields_can_be_cleared(client, setup_test_db):
+    """Setting each field to its zero-value (empty string / False) must persist cleanly."""
+    user_id, tpl_id, item_id, item_pk = await _seed_template_with_item({
+        "item_type": "COMBINABLE",
+        "reveal_rule": "old",
+        "is_hidden": True,
+        "spatial_position": "old place",
+        "reveals_item_id": "OLD_KEY",
+    })
+    headers = _auth_headers("type_change_user")
+
+    res = await client.patch(
+        f"/api/adventures/{tpl_id}/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "object",
+            "target_id": item_id,
+            "reveal_rule": "",
+            "is_hidden": False,
+            "spatial_position": "",
+            "reveals_item_id": "",
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    async with TestSessionLocal() as db:
+        item = await db.get(WorldEntity, item_pk)
+        assert item is not None
+        assert item.reveal_rule is None
+        assert item.is_hidden is False
+        assert item.spatial_position is None
+        assert item.reveals_item_id is None
+
+
+async def test_combinable_metadata_fields_omitted_unchanged(client, setup_test_db):
+    """Omitting fields in PATCH must NOT clear them — empty values are explicit."""
+    user_id, tpl_id, item_id, item_pk = await _seed_template_with_item({
+        "item_type": "COMBINABLE",
+        "reveal_rule": "untouched",
+        "spatial_position": "untouched",
+    })
+    headers = _auth_headers("type_change_user")
+
+    res = await client.patch(
+        f"/api/adventures/{tpl_id}/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "object",
+            "target_id": item_id,
+            "combination_ingredients": ["x"],
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    async with TestSessionLocal() as db:
+        item = await db.get(WorldEntity, item_pk)
+        assert item is not None
+        # reveal_rule / spatial_position were not in payload, must remain.
+        assert item.reveal_rule == "untouched"
+        assert item.spatial_position == "untouched"
+
+
+async def test_combinable_reveal_rule_length_capped_at_500(client, setup_test_db):
+    """Hard cap mirrors the schema column size to prevent DB errors."""
+    user_id, tpl_id, item_id, item_pk = await _seed_template_with_item({"item_type": "COMBINABLE"})
+    headers = _auth_headers("type_change_user")
+
+    res = await client.patch(
+        f"/api/adventures/{tpl_id}/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "object",
+            "target_id": item_id,
+            "reveal_rule": "z" * 600,
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    async with TestSessionLocal() as db:
+        item = await db.get(WorldEntity, item_pk)
+        assert item is not None
+        assert len(item.reveal_rule) == 500
+
+
+async def test_combinable_spatial_position_length_capped_at_255(client, setup_test_db):
+    """Hard cap mirrors the schema column size to prevent DB errors."""
+    user_id, tpl_id, item_id, item_pk = await _seed_template_with_item({"item_type": "COMBINABLE"})
+    headers = _auth_headers("type_change_user")
+
+    res = await client.patch(
+        f"/api/adventures/{tpl_id}/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "object",
+            "target_id": item_id,
+            "spatial_position": "z" * 400,
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    async with TestSessionLocal() as db:
+        item = await db.get(WorldEntity, item_pk)
+        assert item is not None
+        assert len(item.spatial_position) == 255

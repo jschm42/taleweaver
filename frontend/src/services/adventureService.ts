@@ -295,6 +295,25 @@ export const adventureService = {
     }
     return res.json()
   },
+
+  async deleteValidationFindings(
+    adventureId: string,
+    request: DeleteValidationFindingsRequest,
+  ): Promise<DeleteValidationFindingsResponse> {
+    const res = await fetch(
+      `${API_BASE}/adventures/${adventureId}/editor/validation/latest/findings/delete`,
+      {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify(request),
+      },
+    )
+    if (!res.ok) {
+      const respData = await res.json().catch(() => ({}))
+      throw new Error(respData.detail || 'Failed to delete validation findings.')
+    }
+    return res.json()
+  },
 }
 
 export type ValidationSeverity = 'error' | 'warn'
@@ -381,4 +400,23 @@ export interface AIFixApplyResponse {
   status: 'applied' | 'no_op' | 'partial'
   applied_targets: string[]
   message?: string | null
+}
+
+export interface DeleteValidationFindingRef {
+  source: 'structural' | 'ai'
+  code: string
+  location: string
+}
+
+export interface DeleteValidationFindingsResponse {
+  status: 'success'
+  deleted: number
+  structural_remaining: number
+  ai_remaining: number
+  validation_run: PersistedValidationRun | null
+}
+
+export interface DeleteValidationFindingsRequest {
+  findings: DeleteValidationFindingRef[]
+  delete_all: boolean
 }

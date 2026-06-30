@@ -28,6 +28,10 @@ const props = defineProps<{
     entity_id: string
     wearable_slots_input: string[]
     combination_ingredients_input: string[]
+    reveal_rule: string
+    is_hidden: boolean
+    spatial_position: string
+    reveals_item_id: string
     switch_states_json: string
     switch_initial_state: string
     switch_transitions_json: string
@@ -198,9 +202,11 @@ const isFormInvalid = computed(() => {
   const idInvalid = hasEditableId
     ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > maxIdLen || !!entityIdError.value)
     : false
+  // Combinable items now only require at least one ingredient to be useful.
+  // Saving zero is allowed (acts as a placeholder combinable the GM can fill in later).
   const combinationInvalid = currentItemType.value === 'COMBINABLE' &&
     (!Array.isArray(localForm.value.combination_ingredients_input) ||
-     localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 2)
+     localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 1)
   const uniqueStates = new Set(switchStates.value.map(s => s.trim().toUpperCase()))
   const switchInvalid = currentItemType.value === 'SWITCH' && (
     switchStates.value.length < 2 ||
@@ -300,6 +306,14 @@ function handleSave() {
       : []
   }
 
+  // Normalize the four combinable metadata fields here so the form state and
+  // backend stay in sync (e.g. reveals_item_id is upper-cased to match the
+  // entity-id convention; an empty string becomes `null` server-side so the
+  // combination has no revealed item).
+  const revealsItemId = String(localForm.value.reveals_item_id || '').trim().toUpperCase()
+  const revealRule = String(localForm.value.reveal_rule || '').trim()
+  const spatialPosition = String(localForm.value.spatial_position || '').trim()
+
   emit('save', {
     ...localForm.value,
     entity_id: (localForm.value.entity_id || '').trim().toUpperCase(),
@@ -309,6 +323,10 @@ function handleSave() {
     switch_transitions: parsedSwitchTransitions,
     effects: parsedEffects,
     combination_ingredients: parsedIngredients,
+    reveal_rule: revealRule,
+    is_hidden: Boolean(localForm.value.is_hidden),
+    spatial_position: spatialPosition,
+    reveals_item_id: revealsItemId,
   })
 }
 
@@ -805,7 +823,90 @@ const textLogPreviewClass = computed(() => {
                       + Add Ingredient
                     </button>
                   </div>
-                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">Select item references required to combine with this item.</p>
+                  <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                    Pick at least one item to combine. Saving with zero ingredients
+                    is allowed — leaves the combinable in a placeholder state.
+                  </p>
+                </div>
+
+                <!-- COMBINABLE: spatial / hidden / reveal-rule / reveals-item -->
+                <div v-if="currentItemType === 'COMBINABLE'" class="space-y-5 pt-4 border-t border-violet-500/20">
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveal Rule</label>
+                      <span class="text-[10px] font-mono text-slate-500 tracking-widest">
+                        {{ (localForm.reveal_rule || '').length }} / 500
+                      </span>
+                    </div>
+                    <ReferenceTextarea
+                      v-model="localForm.reveal_rule"
+                      :options="referenceOptions || []"
+                      :rows="3"
+                      :maxlength="500"
+                      placeholder="GM narration rule that triggers the reveal (e.g. 'If the prot searches under the table'). Use ##ITEM_ID to inject references."
+                      class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-200 focus:border-violet-500/50 outline-none transition-all resize-none"
+                    />
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                      Free-form narration rule, evaluated when this item would be revealed.
+                    </p>
+                  </div>
+
+                  <div class="grid md:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                      <div class="flex justify-between items-center">
+                        <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Spatial Position</label>
+                        <span class="text-[10px] font-mono text-slate-500 tracking-widest">
+                          {{ (localForm.spatial_position || '').length }} / 255
+                        </span>
+                      </div>
+                      <input
+                        v-model="localForm.spatial_position"
+                        type="text"
+                        maxlength="255"
+                        placeholder="e.g. inside the desk, behind the safe"
+                        class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-2.5 text-sm text-white focus:border-violet-500/50 outline-none transition-all"
+                      />
+                      <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                        Free-text location hint used by narrators when describing the scene.
+                      </p>
+                    </div>
+
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Initially Hidden</label>
+                      <div class="flex items-center justify-between p-3 rounded-2xl bg-black/30 border border-white/10">
+                        <p class="text-xs text-slate-300 leading-relaxed pr-3">
+                          When enabled, the player must explicitly search or
+                          satisfy a rule before discovering this item.
+                        </p>
+                        <button
+                          type="button"
+                          @click="localForm.is_hidden = !localForm.is_hidden"
+                          :aria-pressed="!!localForm.is_hidden"
+                          :class="['w-14 h-8 rounded-full transition-colors shrink-0', localForm.is_hidden ? 'bg-violet-600' : 'bg-slate-700']"
+                          :title="localForm.is_hidden ? 'Currently hidden — click to expose' : 'Currently exposed — click to hide'"
+                        >
+                          <span
+                            :class="['block w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_hidden ? 'translate-x-7' : 'translate-x-1']"
+                          ></span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveals Item</label>
+                    <EntityReferenceCombobox
+                      v-model="localForm.reveals_item_id"
+                      :options="itemReferenceOptions"
+                      placeholder="Optional — pick the item spawned by this combination"
+                      search-placeholder="Search object items by id or name"
+                      :enable-search="true"
+                    />
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                      If set, the engine will spawn / reveal this item when
+                      the combination occurs. Leave empty to spawn nothing.
+                    </p>
+                  </div>
                 </div>
 
                 <!-- SWITCH: Visual Configurator -->
