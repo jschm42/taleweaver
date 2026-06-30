@@ -556,7 +556,7 @@ const form = ref({
   min_text_logs: null as number | null,
   max_text_logs: null as number | null,
   awards: [] as any[],
-  allow_dynamic_items: true,
+  allow_dynamic_items: false,
   can_damage_npcs: true,
   npcs_can_damage_protagonist: true,
   plot: '',
@@ -738,7 +738,7 @@ async function fetchAdventure() {
     form.value.min_text_logs = data.min_text_logs !== undefined ? data.min_text_logs : null
     form.value.max_text_logs = data.max_text_logs !== undefined ? data.max_text_logs : null
     form.value.awards = data.awards || []
-    form.value.allow_dynamic_items = data.allow_dynamic_items ?? true
+    form.value.allow_dynamic_items = data.allow_dynamic_items ?? false
     form.value.plot = data.plot || ''
     form.value.can_damage_npcs = data.can_damage_npcs ?? true
     form.value.npcs_can_damage_protagonist = data.npcs_can_damage_protagonist ?? true

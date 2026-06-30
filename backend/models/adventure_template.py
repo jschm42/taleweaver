@@ -78,7 +78,7 @@ class AdventureTemplate(Base, TimestampMixin):
     tts_director_notes: Mapped[Optional[str]] = mapped_column(String(5000), nullable=True)
     original_prompt: Mapped[Optional[str]] = mapped_column(String(20000), nullable=True)
     starting_timestamp: Mapped[int] = mapped_column(Integer, default=0, nullable=False) # Minutes from Day 1, 00:00
-    allow_dynamic_items: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    allow_dynamic_items: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     can_damage_npcs: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     npcs_can_damage_protagonist: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

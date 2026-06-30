@@ -1492,36 +1492,32 @@ class GameTurnManager:
             return f"{switch_entity.name} is already set to {target_state}."
 
         transitions = config.get("transitions")
-        if not isinstance(transitions, list) or not transitions:
-            return f"{switch_entity.name} has no transition map configured."
-
         transition = None
-        for candidate in transitions:
-            if not isinstance(candidate, dict):
-                continue
-            from_state = str(candidate.get("from") or "").strip().upper()
-            to_state = str(candidate.get("to") or "").strip().upper()
-            if from_state == current_state and to_state == target_state:
-                transition = candidate
-                break
+        if isinstance(transitions, list):
+            for candidate in transitions:
+                if not isinstance(candidate, dict):
+                    continue
+                from_state = str(candidate.get("from") or "").strip().upper()
+                to_state = str(candidate.get("to") or "").strip().upper()
+                if from_state == current_state and to_state == target_state:
+                    transition = candidate
+                    break
 
-        if transition is None:
-            return f"{switch_entity.name} cannot switch from {current_state} to {target_state}."
+        if transition is not None:
+            gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
+            required_item = str(gates.get("item") or "").strip().upper()
+            required_code = str(gates.get("code") or "").strip()
+            required_rule = str(gates.get("rule") or "").strip()
+            fail_message = str(transition.get("fail_message") or "").strip()
 
-        gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
-        required_item = str(gates.get("item") or "").strip().upper()
-        required_code = str(gates.get("code") or "").strip()
-        required_rule = str(gates.get("rule") or "").strip()
-        fail_message = str(transition.get("fail_message") or "").strip()
+            if required_item and required_item not in self._avatar_inventory_ids():
+                return fail_message or f"{switch_entity.name} does not move."
 
-        if required_item and required_item not in self._avatar_inventory_ids():
-            return fail_message or f"{switch_entity.name} requires item {required_item}."
+            if required_code and str(provided_code or "").strip() != required_code:
+                return fail_message or f"{switch_entity.name} does not move."
 
-        if required_code and str(provided_code or "").strip() != required_code:
-            return fail_message or f"{switch_entity.name} requires a valid code."
-
-        if required_rule and not self._switch_story_flags().get(required_rule, False):
-            return fail_message or f"{switch_entity.name} requires rule '{required_rule}'."
+            if required_rule and not self._switch_story_flags().get(required_rule, False):
+                return fail_message or f"{switch_entity.name} does not move."
 
         entry["switch_state"] = target_state
         session_states[switch_entity.id] = entry
@@ -2254,29 +2250,32 @@ class GameTurnManager:
 
             transitions = metadata_json.get("switch_transitions") or config.get("transitions") or []
             trans = None
-            for t in transitions:
-                if str(t.get("from_state")).strip().upper() == current_state and str(t.get("to_state")).strip().upper() == target_state:
-                    trans = t
-                    break
+            if isinstance(transitions, list):
+                for t in transitions:
+                    if not isinstance(t, dict):
+                        continue
+                    from_s = str(t.get("from") or t.get("from_state") or "").strip().upper()
+                    to_s = str(t.get("to") or t.get("to_state") or "").strip().upper()
+                    if from_s == current_state and to_s == target_state:
+                        trans = t
+                        break
 
             transition_allowed = True
             reason = ""
 
-            if not trans:
-                transition_allowed = False
-                reason = f"{switch_entity.name} cannot transition from {current_state} to {target_state}."
-            else:
-                required_item = trans.get("required_item")
-                required_code = trans.get("code")
-                required_rule = trans.get("required_rule")
-                fail_message = trans.get("fail_message")
+            if trans is not None:
+                gates = trans.get("gates") if isinstance(trans.get("gates"), dict) else {}
+                required_item = str(gates.get("item") or trans.get("required_item") or "").strip().upper()
+                required_code = str(gates.get("code") or trans.get("code") or "").strip()
+                required_rule = str(gates.get("rule") or trans.get("required_rule") or "").strip()
+                fail_message = str(trans.get("fail_message") or "").strip()
 
                 if required_code:
                     code_match = re.search(r"(?:code|pin|access|keypad)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
                     attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
-                    if not attempted_code or attempted_code.lower() != str(required_code).lower():
+                    if not attempted_code or attempted_code.lower() != required_code.lower():
                         transition_allowed = False
-                        reason = fail_message or f"{switch_entity.name} requires a valid code to switch from {current_state} to {target_state}."
+                        reason = fail_message or f"{switch_entity.name} does not move."
 
                 if transition_allowed and required_item:
                     inventory_ids = {
@@ -2286,12 +2285,12 @@ class GameTurnManager:
                     }
                     if required_item.upper() not in inventory_ids:
                         transition_allowed = False
-                        reason = fail_message or f"You need {required_item} in your inventory to flip {switch_entity.name} to {target_state}."
+                        reason = fail_message or f"{switch_entity.name} does not move."
 
                 if transition_allowed and required_rule:
                     if not self._switch_story_flags().get(required_rule, False):
                         transition_allowed = False
-                        reason = fail_message or f"{switch_entity.name} requires rule '{required_rule}' to transition to {target_state}."
+                        reason = fail_message or f"{switch_entity.name} does not move."
 
             if not transition_allowed:
                 update.switch_state = current_state

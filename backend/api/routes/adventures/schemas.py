@@ -318,7 +318,7 @@ class AdventureTemplateResponse(BaseModel):
         return v
 
     # GM Capabilities
-    allow_dynamic_items: bool = True
+    allow_dynamic_items: bool = False
 
     # Narrative Meta (User editable in Plot tab)
     plot: Optional[str] = None
