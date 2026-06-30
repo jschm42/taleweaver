@@ -106,6 +106,8 @@ const editForm = ref({
   is_killable: true,
   item_type: 'DEFAULT',
   is_portable: true,
+  is_hidden: false,
+  reveal_rule: '',
   locked: false,
   code_to_unlock: '',
   item_to_unlock: '',
@@ -277,6 +279,8 @@ function handleItemTypeSelected(itemType: string, isFixed = false, preselectedSl
     is_killable: true,
     item_type: itemType,
     is_portable: String(itemType).toUpperCase() !== 'SWITCH',
+    is_hidden: false,
+    reveal_rule: '',
     locked: false,
     code_to_unlock: '',
     item_to_unlock: '',
@@ -838,6 +842,8 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     is_killable: isKillable ?? true,
     item_type: selectedObject?.item_type || 'DEFAULT',
     is_portable: selectedObject?.is_portable !== false,
+    is_hidden: selectedObject?.is_hidden === true,
+    reveal_rule: selectedObject?.reveal_rule || '',
     locked: selectedObject?.locked === true,
     code_to_unlock: selectedObject?.code_to_unlock || '',
     item_to_unlock: selectedObject?.item_to_unlock || '',
@@ -947,6 +953,8 @@ async function saveEntityText(data: any) {
           wearable_slots: data.wearable_slots || undefined,
           combination_ingredients: data.combination_ingredients || undefined,
           stat_modifier_strength: data.stat_modifier_strength || undefined,
+          is_hidden: data.is_hidden,
+          reveal_rule: data.reveal_rule || undefined,
         }
         if (itemType === 'READABLE') {
           createPayload.metadata_json = {
@@ -1082,6 +1090,8 @@ async function saveEntityText(data: any) {
       switch_transitions: editEntityContext.value.type === 'object' ? data.switch_transitions : undefined,
       effects: editEntityContext.value.type === 'object' ? data.effects : undefined,
       stat_modifier_strength: editEntityContext.value.type === 'object' ? data.stat_modifier_strength : undefined,
+      is_hidden: editEntityContext.value.type === 'object' ? data.is_hidden : undefined,
+      reveal_rule: editEntityContext.value.type === 'object' ? data.reveal_rule : undefined,
     })
     // Redirect if we renamed the scene we are currently viewing
     if (editEntityContext.value.type === 'scene' && newId && oldId !== newId && activeMapSceneId.value === oldId) {

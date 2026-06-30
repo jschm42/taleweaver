@@ -99,21 +99,23 @@ function submit() {
     <Transition name="modal">
       <div v-if="show" class="fixed inset-0 z-[190] flex items-center justify-center p-6 backdrop-blur-xl bg-slate-950/60">
         <div class="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-          <div class="p-6 pb-28 space-y-5 overflow-y-auto flex-1 text-slate-200">
-            <div class="flex justify-between items-center">
-              <div class="space-y-1">
-                <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">
-                  {{ isCreateMode ? 'Create Exit' : 'Edit Exit' }}
-                </h3>
-                <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">
-                  {{ isCreateMode ? `From: ${form.from_scene_id || fromSceneId || 'n/a'}` : `ID: ${activeEditExitId || 'n/a'}` }}
-                </p>
-              </div>
-              <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors">
-                <i class="ra ra-cancel text-xl"></i>
-              </button>
+          <!-- Fixed Header -->
+          <div class="px-6 py-5 flex justify-between items-center border-b border-white/10 text-slate-200">
+            <div class="space-y-1">
+              <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">
+                {{ isCreateMode ? 'Create Exit' : 'Edit Exit' }}
+              </h3>
+              <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">
+                {{ isCreateMode ? `From: ${form.from_scene_id || fromSceneId || 'n/a'}` : `ID: ${activeEditExitId || 'n/a'}` }}
+              </p>
             </div>
+            <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors">
+              <i class="ra ra-cancel text-xl"></i>
+            </button>
+          </div>
 
+          <!-- Scrollable Content -->
+          <div class="p-6 space-y-5 overflow-y-auto flex-1 text-slate-200">
             <div class="grid md:grid-cols-2 gap-3">
               <label class="text-xs text-slate-300 space-y-1">
                 <span>From Scene</span>
@@ -204,7 +206,8 @@ function submit() {
             </label>
           </div>
 
-          <div class="p-4 border-t border-white/10 flex justify-end gap-2">
+          <!-- Fixed Footer -->
+          <div class="px-6 py-5 border-t border-white/10 flex justify-end gap-3 bg-slate-900/55 rounded-b-[2.5rem]">
             <button class="px-4 py-2 rounded-xl border border-white/15 text-slate-300 hover:bg-white/5" @click="emit('close')">Cancel</button>
             <button class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50" :disabled="isSavingText || isFormInvalid" @click="submit">
               {{ isCreateMode ? 'Create Exit' : 'Save Exit' }}

@@ -123,6 +123,8 @@ class EntityUpdateRequest(BaseModel):
     exp: Optional[int] = None
     equipment: Optional[dict[str, Any]] = None
     decorative_objects: Optional[list[str]] = None
+    is_hidden: Optional[bool] = None
+    reveal_rule: Optional[str] = None
 
 
 class StartSceneUpdateRequest(BaseModel):
@@ -169,6 +171,8 @@ class EntityCreateRequest(BaseModel):
     combination_ingredients: Optional[list[str]] = None
     stat_modifier_strength: Optional[int] = None
     inventory: Optional[list] = None
+    is_hidden: Optional[bool] = None
+    reveal_rule: Optional[str] = None
 
 
 class QuestCreateRequest(BaseModel):
@@ -2419,7 +2423,8 @@ async def create_editor_entity(
         current_scene_id=scene_id,
         image_url=str(payload.image_url or "").strip() or None,
         item_type=item_type,
-        is_hidden=True if item_type == "CONSTRUCTABLE" else False,
+        is_hidden=True if item_type == "CONSTRUCTABLE" else (bool(payload.is_hidden) if payload.is_hidden is not None else False),
+        reveal_rule=str(payload.reveal_rule or "").strip() or None,
         is_portable=bool(payload.is_portable) if payload.is_portable is not None else True,
         goal=str(payload.goal or "").strip() or None,
         character=str(payload.character or "").strip() or None,
@@ -3115,8 +3120,15 @@ async def update_editor_entity(
 
                 if ent.item_type == "CONSTRUCTABLE":
                     ent.is_hidden = True
-                elif new_item_type_value is not None:
-                    ent.is_hidden = False
+                    ent.reveal_rule = None
+                else:
+                    if payload.is_hidden is not None:
+                        ent.is_hidden = bool(payload.is_hidden)
+                    elif new_item_type_value is not None:
+                        ent.is_hidden = False
+                    
+                    if payload.reveal_rule is not None:
+                        ent.reveal_rule = str(payload.reveal_rule or "").strip() or None
             
     await db.commit()
     return {"status": "success"}
