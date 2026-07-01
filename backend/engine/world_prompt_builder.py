@@ -157,7 +157,7 @@ def _build_switch_requirement(original_prompt: str) -> str:
             "\n\nSWITCH MECHANISMS:\n"
             "- Generate at least one object with item_type SWITCH if the story idea mentions a switch/lever/mechanism.\n"
             "- Every SWITCH must include switch_states (>=2), switch_initial_state, and switch_transitions.\n"
-            "- Transition objects must use: from, to, gates{item,code,rule}, fail_message.\n"
+            "- Transition objects must use: from (optional — omit to apply regardless of current state), to, gates{item,code,rule}, fail_message.\n"
             "- Optionally include switch_outcomes with deterministic effects: unlock_exit, unlock_container, story_flag."
         )
     return (

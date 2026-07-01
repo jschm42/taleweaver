@@ -30,7 +30,7 @@ const codeInput = ref('')
 const selectedItemId = ref<string>('')
 
 const resolvedMetadata = computed(() => {
-  let meta = props.switchEntity?.metadata_json || {}
+  let meta: any = props.switchEntity?.metadata_json
   if (typeof meta === 'string') {
     try {
       meta = JSON.parse(meta)
@@ -38,24 +38,48 @@ const resolvedMetadata = computed(() => {
       meta = {}
     }
   }
-  return meta
+  return meta && typeof meta === 'object' ? meta : {}
+})
+
+const switchTransitions = computed<any[]>(() => {
+  const meta = resolvedMetadata.value
+  const nested = (meta.switch && typeof meta.switch === 'object') ? meta.switch : {}
+  if (Array.isArray(nested.transitions) && nested.transitions.length > 0) return nested.transitions
+  if (Array.isArray(meta.switch_transitions)) return meta.switch_transitions
+  if (Array.isArray(props.switchEntity?.switch_transitions)) return props.switchEntity.switch_transitions
+  return []
+})
+
+const switchInitialState = computed(() => {
+  const meta = resolvedMetadata.value
+  const nested = (meta.switch && typeof meta.switch === 'object') ? meta.switch : {}
+  return String(nested.initial_state || meta.switch_initial_state || props.switchEntity?.switch_initial_state || '').trim().toUpperCase()
 })
 
 const activeTransition = computed(() => {
-  const config = resolvedMetadata.value.switch || {}
-  const transitions = config.transitions || []
-  if (!Array.isArray(transitions)) return null
+  const transitions = switchTransitions.value
+  if (!Array.isArray(transitions) || transitions.length === 0) return null
 
-  const states = Array.isArray(config.states) ? config.states : []
-  const configuredCurrent = config.initial_state || ''
-  const currentState = String(props.switchEntity.switch_state || configuredCurrent).trim().toUpperCase()
+  const currentState = String(props.switchEntity?.switch_state || switchInitialState.value || '').trim().toUpperCase()
   const targetState = String(props.targetState || '').trim().toUpperCase()
 
-  return transitions.find((t: any) => {
-    const fromVal = String(t.from || '').trim().toUpperCase()
-    const toVal = String(t.to || '').trim().toUpperCase()
-    return fromVal === currentState && toVal === targetState
-  }) || null
+  let exactMatch: any = null
+  let wildcardMatch: any = null
+  for (const t of transitions) {
+    if (!t || typeof t !== 'object') continue
+    const fromVal = String(t.from || t.from_state || '').trim().toUpperCase()
+    const toVal = String(t.to || t.to_state || '').trim().toUpperCase()
+    if (!toVal || toVal !== targetState) continue
+    if (fromVal) {
+      if (fromVal === currentState) {
+        exactMatch = t
+        break
+      }
+    } else if (!wildcardMatch) {
+      wildcardMatch = t
+    }
+  }
+  return exactMatch || wildcardMatch || null
 })
 
 const gates = computed(() => {

@@ -146,8 +146,8 @@ function updateStateValue(index: number, val: string) {
 
 function addTransition() {
   switchTransitions.value.push({
-    from: switchStates.value[0] || '',
-    to: switchStates.value[1] || switchStates.value[0] || '',
+    from: '',
+    to: switchStates.value[0] || '',
     gates: {
       item: '',
       code: '',
@@ -164,11 +164,25 @@ function removeTransition(index: number) {
 const itemReferenceOptions = computed(() => {
   const source = props.referenceOptions || []
   return source
-    .filter((option) => String(option.type || '').toUpperCase() === 'OBJECT')
+    .filter((option) => {
+      if (String(option.type || '').toUpperCase() !== 'OBJECT') return false
+      const itemType = String((option as any).itemType || '').toUpperCase()
+      if (itemType === 'CONTAINER') return false
+      if (itemType === 'SWITCH') return false
+      return true
+    })
     .map((option) => ({
       ...option,
       name: option.name || option.id || '',
     }))
+})
+
+const currentEntityId = computed(() => String(localForm.value.entity_id || props.initialForm?.entity_id || '').trim().toUpperCase())
+
+const containedItemReferenceOptions = computed(() => {
+  return itemReferenceOptions.value.filter((option) => {
+    return String(option.id || '').toUpperCase() !== currentEntityId.value
+  })
 })
 
 const currentItemType = computed(() => String(localForm.value.item_type || '').toUpperCase())
@@ -226,7 +240,7 @@ const isFormInvalid = computed(() => {
     switchStates.value.some(s => !s.trim()) ||
     !(localForm.value.switch_initial_state || '').trim() ||
     !uniqueStates.has(String(localForm.value.switch_initial_state).trim().toUpperCase()) ||
-    switchTransitions.value.some(t => !t.from || !t.to || !uniqueStates.has(t.from) || !uniqueStates.has(t.to))
+    switchTransitions.value.some(t => !t.to || !uniqueStates.has(t.to) || (t.from && !uniqueStates.has(t.from)))
   )
   return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid
 })
@@ -306,9 +320,11 @@ function handleSave() {
         if (t.gates?.rule) gates.rule = t.gates.rule.trim()
 
         const transition: Record<string, any> = {
-          from: t.from.trim().toUpperCase(),
           to: t.to.trim().toUpperCase(),
           gates,
+        }
+        if (t.from && String(t.from).trim()) {
+          transition.from = String(t.from).trim().toUpperCase()
         }
         if (t.fail_message?.trim()) {
           transition.fail_message = t.fail_message.trim()
@@ -1053,11 +1069,12 @@ const textLogPreviewClass = computed(() => {
                         <!-- From/To Row -->
                         <div class="grid grid-cols-2 gap-4 mr-8">
                           <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">From State</span>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">From State (optional)</span>
                             <select
                               v-model="t.from"
                               class="w-full bg-slate-900 border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold uppercase outline-none"
                             >
+                              <option value="">ANY</option>
                               <option v-for="state in switchStates" :key="state" :value="state">{{ state }}</option>
                             </select>
                           </div>
@@ -1186,7 +1203,7 @@ const textLogPreviewClass = computed(() => {
                     >
                       <EntityReferenceCombobox
                         v-model="localForm.inventory_input[idx]"
-                        :options="itemReferenceOptions"
+                        :options="containedItemReferenceOptions"
                         placeholder="Select contained item"
                         :enable-search="true"
                       />

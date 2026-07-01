@@ -1494,14 +1494,22 @@ class GameTurnManager:
         transitions = config.get("transitions")
         transition = None
         if isinstance(transitions, list):
+            wildcard_candidate = None
             for candidate in transitions:
                 if not isinstance(candidate, dict):
                     continue
                 from_state = str(candidate.get("from") or "").strip().upper()
                 to_state = str(candidate.get("to") or "").strip().upper()
-                if from_state == current_state and to_state == target_state:
-                    transition = candidate
-                    break
+                if not to_state or to_state != target_state:
+                    continue
+                if from_state:
+                    if from_state == current_state:
+                        transition = candidate
+                        break
+                elif wildcard_candidate is None:
+                    wildcard_candidate = candidate
+            if transition is None:
+                transition = wildcard_candidate
 
         if transition is not None:
             gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
@@ -2349,14 +2357,21 @@ class GameTurnManager:
             transitions = metadata_json.get("switch_transitions") or config.get("transitions") or []
             trans = None
             if isinstance(transitions, list):
+                wildcard_trans = None
                 for t in transitions:
                     if not isinstance(t, dict):
                         continue
                     from_s = str(t.get("from") or t.get("from_state") or "").strip().upper()
                     to_s = str(t.get("to") or t.get("to_state") or "").strip().upper()
-                    if from_s == current_state and to_s == target_state:
+                    if not to_s or to_s != target_state:
+                        continue
+                    if from_s and from_s == current_state:
                         trans = t
                         break
+                    if not from_s and wildcard_trans is None:
+                        wildcard_trans = t
+                if trans is None:
+                    trans = wildcard_trans
 
             transition_allowed = True
             reason = ""

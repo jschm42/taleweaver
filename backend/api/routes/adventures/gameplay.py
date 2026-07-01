@@ -630,18 +630,29 @@ def _get_switch_config(entity: WorldEntity) -> dict:
 
 
 def _resolve_switch_transition(config: dict, current_state: str, target_state: str) -> dict | None:
-    """Finds the matching transition definition for current -> target (or None)."""
+    """Finds the matching transition definition for current -> target (or None).
+
+    Matching precedence:
+    1. Exact from/to match (both fields specified).
+    2. Wildcard match (only ``to`` specified) — applies regardless of current state.
+    """
     transitions = config.get("transitions") or []
     if not isinstance(transitions, list):
         return None
+
+    wildcard_match: dict | None = None
     for t in transitions:
         if not isinstance(t, dict):
             continue
         from_s = str(t.get("from") or "").strip().upper()
         to_s = str(t.get("to") or "").strip().upper()
-        if from_s == current_state and to_s == target_state:
+        if not to_s or to_s != target_state:
+            continue
+        if from_s and from_s == current_state:
             return t
-    return None
+        if not from_s and wildcard_match is None:
+            wildcard_match = t
+    return wildcard_match
 
 
 @router.post("/{game_id}/switches/{entity_id}/flip-code")

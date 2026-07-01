@@ -84,19 +84,21 @@ class SwitchGatesSchema(BaseModel):
 
 
 class SwitchTransitionSchema(BaseModel):
-    from_state: str = Field(..., alias="from", description="The starting state of this transition.")
+    from_state: Optional[str] = Field(default="", alias="from", description="The starting state of this transition. Omit or leave empty to apply to any current state.")
     to_state: str = Field(..., alias="to", description="The target state of this transition.")
     gates: Optional[SwitchGatesSchema] = Field(default=None, description="Optional lock gates required to allow the transition.")
     fail_message: Optional[str] = Field(default="", description="The failure message narrated if gates are not met.")
-    
+
     @model_serializer
     def serialize_model(self) -> dict[str, Any]:
-        return {
-            "from": self.from_state,
+        payload: dict[str, Any] = {
             "to": self.to_state,
             "gates": self.gates.model_dump() if self.gates else None,
             "fail_message": self.fail_message,
         }
+        if self.from_state:
+            payload["from"] = self.from_state
+        return payload
 
     model_config = {"populate_by_name": True, "extra": "forbid"}
 

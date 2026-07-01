@@ -338,25 +338,53 @@ const isSwitchEntity = (entity: any): boolean => {
   return String(entity.item_type || '').toUpperCase() === 'SWITCH'
 }
 
-const getSwitchTransitionGates = (entity: any, targetState: string): { code: string; item: string; rule: string } => {
-  const metadata = (entity?.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
-  const config = (metadata.switch && typeof metadata.switch === 'object') ? metadata.switch : {}
-  const transitions = Array.isArray(config.transitions) ? config.transitions : []
+const resolveSwitchTransitions = (entity: any): { transitions: any[]; initialState: string } => {
+  let metadata: any = entity?.metadata_json
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata) } catch { metadata = {} }
+  }
+  if (!metadata || typeof metadata !== 'object') metadata = {}
 
-  const configuredCurrent = String(entity.switch_state || config.initial_state || '').trim().toUpperCase()
+  // Prefer nested form (metadata.switch.transitions) but fall back to flat
+  // (metadata.switch_transitions / entity.switch_transitions) for compatibility.
+  const nested = (metadata.switch && typeof metadata.switch === 'object') ? metadata.switch : {}
+  const transitions = (Array.isArray(nested.transitions) && nested.transitions.length > 0)
+    ? nested.transitions
+    : (Array.isArray(metadata.switch_transitions) ? metadata.switch_transitions
+      : (Array.isArray(entity?.switch_transitions) ? entity.switch_transitions : []))
+  const initialState = String(nested.initial_state || metadata.switch_initial_state || entity?.switch_initial_state || '').trim().toUpperCase()
+
+  return { transitions, initialState }
+}
+
+const getSwitchTransitionGates = (entity: any, targetState: string): { code: string; item: string; rule: string } => {
+  const { transitions, initialState } = resolveSwitchTransitions(entity)
+  const configuredCurrent = String(entity?.switch_state || initialState || '').trim().toUpperCase()
   const targetUpper = String(targetState || '').trim().toUpperCase()
 
-  const trans = transitions.find((t: any) => {
-    if (!t || typeof t !== 'object') return false
-    return String(t.from || '').trim().toUpperCase() === configuredCurrent &&
-           String(t.to || '').trim().toUpperCase() === targetUpper
-  })
+  let exactMatch: any = null
+  let wildcardMatch: any = null
+  for (const t of transitions) {
+    if (!t || typeof t !== 'object') continue
+    const fromVal = String(t.from || t.from_state || '').trim().toUpperCase()
+    const toVal = String(t.to || t.to_state || '').trim().toUpperCase()
+    if (!toVal || toVal !== targetUpper) continue
+    if (fromVal) {
+      if (fromVal === configuredCurrent) {
+        exactMatch = t
+        break
+      }
+    } else if (!wildcardMatch) {
+      wildcardMatch = t
+    }
+  }
+  const trans = exactMatch || wildcardMatch || null
 
   const gates = (trans?.gates && typeof trans.gates === 'object') ? trans.gates : {}
   return {
     code: String(gates.code || '').trim(),
-    item: String(gates.item || '').trim(),
-    rule: String(gates.rule || '').trim(),
+    item: String(gates.item || gates.required_item || '').trim(),
+    rule: String(gates.rule || gates.required_rule || '').trim(),
   }
 }
 

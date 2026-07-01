@@ -1598,8 +1598,8 @@ const routeExitDetails = computed<any | null>(() => {
   return exits.find((worldExit: any) => String(worldExit.id) === exitId) || null
 })
 
-const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: string | null; type: string }>>(() => {
-  const entries: Array<{ id: string; name: string; imageUrl?: string | null; type: string }> = []
+const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: string | null; type: string; itemType?: string }>>(() => {
+  const entries: Array<{ id: string; name: string; imageUrl?: string | null; type: string; itemType?: string }> = []
   
   const editorNpcs = Array.isArray(debugData.value?.npcs) ? debugData.value.npcs : []
   const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
@@ -1632,6 +1632,7 @@ const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: s
       name: String(obj.name || obj.id || ''),
       imageUrl: obj.image_url ? buildVisualImageUrl(obj.image_url) : null,
       type: 'OBJECT',
+      itemType: String(obj.item_type || '').toUpperCase(),
     })
   }
   return entries.filter((entry) => entry.id)
