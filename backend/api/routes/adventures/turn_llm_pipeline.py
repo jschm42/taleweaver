@@ -205,10 +205,14 @@ class TurnLlmContextBuilder:
                 ent.current_scene_id = ov["current_scene_id"]
             if "is_hidden" in ov:
                 ent.is_hidden = ov["is_hidden"]
+            elif str(ent.item_type or "").upper() == "CONSTRUCTABLE":
+                ent.is_hidden = True
             if "is_in_inventory" in ov:
                 ent.is_in_inventory = ov["is_in_inventory"]
             if "inventory" in ov:
                 ent.inventory = ov["inventory"]
+            if "switch_state" in ov:
+                ent.current_switch_state = ov["switch_state"]
             ent.is_defeated = bool(ov.get("is_defeated", False))
 
         container_payloads = [

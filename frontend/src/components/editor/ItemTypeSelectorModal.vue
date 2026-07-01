@@ -37,6 +37,7 @@ interface ItemTypeOption {
   icon: string
   color: string
   borderColor: string
+  deprecated?: boolean
 }
 
 const normalizedMode = computed(() => props.mode || 'create')
@@ -96,10 +97,19 @@ const itemTypes: ItemTypeOption[] = [
   {
     type: 'COMBINABLE',
     label: 'Combinable',
-    description: 'An item that can be combined with others to create new items.',
+    description: 'Deprecated — use Constructable. Legacy combine marker without deterministic engine behavior.',
     icon: 'ra-cycle',
     color: 'text-violet-300',
     borderColor: 'border-violet-500/20',
+    deprecated: true,
+  },
+  {
+    type: 'CONSTRUCTABLE',
+    label: 'Constructable',
+    description: 'A hidden item that materializes when all its ingredients (min. 2) are combined. Ingredients are consumed automatically.',
+    icon: 'ra-hammer',
+    color: 'text-orange-300',
+    borderColor: 'border-orange-500/20',
   },
   {
     type: 'READABLE',
@@ -248,6 +258,13 @@ function handleConfirmChange() {
                   class="absolute top-2 right-2 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-500/80 text-slate-950 shadow-md"
                 >
                   Current
+                </span>
+                <span
+                  v-if="itemType.deprecated && !isStagedType(itemType.type)"
+                  class="absolute top-2 right-2 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-red-500/80 text-slate-950 shadow-md"
+                  :class="{ '!bg-amber-500/80': isCurrentType(itemType.type) }"
+                >
+                  Deprecated
                 </span>
                 <div
                   class="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-900 border border-white/10 shrink-0 transition-colors group-hover:border-emerald-500/30"

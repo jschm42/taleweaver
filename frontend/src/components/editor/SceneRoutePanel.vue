@@ -720,7 +720,6 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div v-if="isQuickGenerating['npc_' + npc.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
-            <div v-if="hasMissingImage(npc)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-sky-400/50 bg-sky-500/20 text-sky-100">NPC</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -788,7 +787,6 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
-            <div v-if="hasMissingImage(obj)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-white/20 bg-white/10 text-slate-200">{{ obj.item_type || 'ITEM' }}</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -856,7 +854,6 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
-            <div v-if="hasMissingImage(obj)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-lime-400/50 bg-lime-500/20 text-lime-100">SWITCH</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -924,7 +921,6 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
-            <div v-if="hasMissingImage(obj)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-amber-400/50 bg-amber-500/25 text-amber-100">CONTAINER</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
@@ -992,7 +988,6 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
-            <div v-if="hasMissingImage(obj)" class="absolute top-2 right-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-rose-400/50 bg-rose-500/25 text-rose-100 z-20">MISSING</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent opacity-80"></div>
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-cyan-500/40 bg-cyan-500/20 text-cyan-200">LOG</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">

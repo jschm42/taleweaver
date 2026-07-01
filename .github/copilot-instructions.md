@@ -110,6 +110,10 @@ To understand the internal processes of TaleWeaver, refer to the following Merma
   * If a target is outside this scope, block the action before downstream GM/mechanics processing.
 * **Fail-Safe Behavior:**
   * If intent extraction is uncertain or unavailable, fall back to deterministic safeguards and prefer the safe outcome (no state-advancing side effects).
+* **Systematic State-Based Enforcements (Pass 1.5) Over Text Parsing:**
+  * Do **not** try to pre-parse or guess which entity (such as a container or switch) the player is interacting with by searching for their exact name/ID in the raw user message text.
+  * Instead, systematically inspect any state updates requested by the LLM in Pass 1 (e.g., `update.locked = False` for containers, or `update.switch_state` changes for switches).
+  * Validate these updates directly against the DB rules/gates (required items, codes, story flags) and the player's inventory/state. Revert any illegal changes back to their pre-turn state, and pass these revert notifications to the Pass 2 narration prompt as `rule_violations` to ensure the narration describes the failure accurately.
 * **Agent Compliance Rule (Required):**
   * If an agent changes gameplay intent-routing or visibility guard logic, it must run targeted regression tests in `tests/test_game_loop.py` that cover:
     * blocking off-scene inspect/search exploits,

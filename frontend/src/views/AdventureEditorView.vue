@@ -560,7 +560,7 @@ const form = ref({
   min_text_logs: null as number | null,
   max_text_logs: null as number | null,
   awards: [] as any[],
-  allow_dynamic_items: true,
+  allow_dynamic_items: false,
   can_damage_npcs: true,
   npcs_can_damage_protagonist: true,
   plot: '',
@@ -742,7 +742,7 @@ async function fetchAdventure() {
     form.value.min_text_logs = data.min_text_logs !== undefined ? data.min_text_logs : null
     form.value.max_text_logs = data.max_text_logs !== undefined ? data.max_text_logs : null
     form.value.awards = data.awards || []
-    form.value.allow_dynamic_items = data.allow_dynamic_items ?? true
+    form.value.allow_dynamic_items = data.allow_dynamic_items ?? false
     form.value.plot = data.plot || ''
     form.value.can_damage_npcs = data.can_damage_npcs ?? true
     form.value.npcs_can_damage_protagonist = data.npcs_can_damage_protagonist ?? true
@@ -816,6 +816,7 @@ async function handleCreateScene(data: { sceneId: string; name: string; descript
     })
     await fetchDebugInfo()
     addNotification(`Scene "${data.name}" created.`, 'success')
+    isCreatingScene.value = false
   } catch (error: any) {
     addNotification(error?.message || 'Failed to create scene.', 'error')
   } finally {
@@ -958,6 +959,8 @@ async function saveEntityText(data: any) {
           wearable_slots: data.wearable_slots || undefined,
           combination_ingredients: data.combination_ingredients || undefined,
           stat_modifier_strength: data.stat_modifier_strength || undefined,
+          is_hidden: data.is_hidden,
+          reveal_rule: data.reveal_rule || undefined,
         }
         if (itemType === 'READABLE') {
           createPayload.metadata_json = {
@@ -1088,8 +1091,6 @@ async function saveEntityText(data: any) {
         : undefined,
       wearable_slots: editEntityContext.value.type === 'object' ? data.wearable_slots : undefined,
       combination_ingredients: editEntityContext.value.type === 'object' ? data.combination_ingredients : undefined,
-      reveal_rule: editEntityContext.value.type === 'object' ? data.reveal_rule : undefined,
-      is_hidden: editEntityContext.value.type === 'object' ? data.is_hidden : undefined,
       spatial_position: editEntityContext.value.type === 'object' ? data.spatial_position : undefined,
       reveals_item_id: editEntityContext.value.type === 'object' ? data.reveals_item_id : undefined,
       switch_states: editEntityContext.value.type === 'object' ? data.switch_states : undefined,
@@ -1097,6 +1098,8 @@ async function saveEntityText(data: any) {
       switch_transitions: editEntityContext.value.type === 'object' ? data.switch_transitions : undefined,
       effects: editEntityContext.value.type === 'object' ? data.effects : undefined,
       stat_modifier_strength: editEntityContext.value.type === 'object' ? data.stat_modifier_strength : undefined,
+      is_hidden: editEntityContext.value.type === 'object' ? data.is_hidden : undefined,
+      reveal_rule: editEntityContext.value.type === 'object' ? data.reveal_rule : undefined,
     })
     // Redirect if we renamed the scene we are currently viewing
     if (editEntityContext.value.type === 'scene' && newId && oldId !== newId && activeMapSceneId.value === oldId) {
@@ -2301,7 +2304,6 @@ watch(
               v-if="activeTab === 'scenes' && isCreatingScene"
               :is-saving="isSavingText"
               :editor-scenes="editorScenes"
-              :reference-options="referenceOptions"
               @close="cancelCreateScene"
               @create="handleCreateScene"
             />

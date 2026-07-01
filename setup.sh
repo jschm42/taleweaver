@@ -4,6 +4,14 @@
 
 set -e
 
+# Parse arguments
+SKIP_START=false
+for arg in "$@"; do
+    if [ "$arg" == "--skip-start" ]; then
+        SKIP_START=true
+    fi
+done
+
 echo "--- TaleWeaver Setup ---"
 
 # 1. Environment Variables (.env)
@@ -103,23 +111,25 @@ fi
 echo "Frontend: cd frontend && npm run dev"
 
 # 7. Start (Optional)
-echo
-read -p "Would you like to start the application now? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "[*] Starting backend..."
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-        ./venv/Scripts/python -m backend.main &
-    else
-        ./venv/bin/python3 -m backend.main &
+if [ "$SKIP_START" = false ]; then
+    echo
+    read -p "Would you like to start the application now? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "[*] Starting backend..."
+        if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+            ./venv/Scripts/python -m backend.main &
+        else
+            ./venv/bin/python3 -m backend.main &
+        fi
+        BACKEND_PID=$!
+        
+        echo "[*] Starting frontend..."
+        cd frontend && npm run dev &
+        FRONTEND_PID=$!
+        
+        echo "Processes started. PIDs: Backend=$BACKEND_PID, Frontend=$FRONTEND_PID"
+        echo "Press Ctrl+C to stop (though background processes might need manual kill if shell exits)"
+        wait
     fi
-    BACKEND_PID=$!
-    
-    echo "[*] Starting frontend..."
-    cd frontend && npm run dev &
-    FRONTEND_PID=$!
-    
-    echo "Processes started. PIDs: Backend=$BACKEND_PID, Frontend=$FRONTEND_PID"
-    echo "Press Ctrl+C to stop (though background processes might need manual kill if shell exits)"
-    wait
 fi

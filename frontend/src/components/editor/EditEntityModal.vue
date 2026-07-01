@@ -54,7 +54,11 @@ const emit = defineEmits<{
   (e: 'save', data: any): void
 }>()
 
-const localForm = ref({ ...props.initialForm })
+const localForm = ref({
+  is_hidden: false,
+  reveal_rule: '',
+  ...props.initialForm
+})
 const switchStates = ref<string[]>([])
 const switchTransitions = ref<any[]>([])
 
@@ -204,9 +208,12 @@ const isFormInvalid = computed(() => {
     : false
   // Combinable items now only require at least one ingredient to be useful.
   // Saving zero is allowed (acts as a placeholder combinable the GM can fill in later).
-  const combinationInvalid = currentItemType.value === 'COMBINABLE' &&
-    (!Array.isArray(localForm.value.combination_ingredients_input) ||
-     localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 1)
+  const ingredientsCount = Array.isArray(localForm.value.combination_ingredients_input)
+    ? localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length
+    : 0
+  const combinationInvalid =
+    (currentItemType.value === 'COMBINABLE' && ingredientsCount !== 0 && ingredientsCount < 1) ||
+    (currentItemType.value === 'CONSTRUCTABLE' && ingredientsCount < 2)
   const uniqueStates = new Set(switchStates.value.map(s => s.trim().toUpperCase()))
   const switchInvalid = currentItemType.value === 'SWITCH' && (
     switchStates.value.length < 2 ||
@@ -218,7 +225,11 @@ const isFormInvalid = computed(() => {
 })
 
 watch(() => props.initialForm, (newVal) => {
-  localForm.value = { ...newVal }
+  localForm.value = {
+    is_hidden: false,
+    reveal_rule: '',
+    ...newVal
+  }
   syncFromForm()
 }, { deep: true })
 
@@ -240,6 +251,13 @@ watch(() => localForm.value.item_type, (newType) => {
     localForm.value.is_portable = true
   } else {
     localForm.value.is_portable = true
+  }
+  if (type === 'CONSTRUCTABLE') {
+    // Constructables materialize only once all ingredients are combined.
+    if (!Array.isArray(localForm.value.combination_ingredients_input) ||
+        localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 2) {
+      localForm.value.combination_ingredients_input = ['', '']
+    }
   }
 })
 
@@ -428,17 +446,19 @@ const textLogPreviewClass = computed(() => {
     <Transition name="modal">
       <div v-if="show && context" class="fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-xl bg-slate-950/60">
         <div class="modal-content w-full max-w-2xl bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-          <div class="p-6 space-y-5 overflow-y-auto flex-1">
-            <div class="flex justify-between items-center">
-              <div class="space-y-1">
-                <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">Editing {{ context.type }}</h3>
-                <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">ID: {{ context.id }}</p>
-              </div>
-              <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors">
-                <i class="ra ra-cancel text-xl"></i>
-              </button>
+          <!-- Fixed Header -->
+          <div class="px-8 py-5 flex justify-between items-center border-b border-white/5">
+            <div class="space-y-1">
+              <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">Editing {{ context.type }}</h3>
+              <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">ID: {{ context.id }}</p>
             </div>
-            <div class="space-y-6">
+            <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors">
+              <i class="ra ra-cancel text-xl"></i>
+            </button>
+          </div>
+
+          <!-- Scrollable Content -->
+          <div class="px-8 py-6 space-y-6 overflow-y-auto flex-1">
               <!-- Editable ID (create mode or scene/npc/object edit mode) -->
               <div v-if="isCreateEntityMode || ['npc', 'object', 'scene'].includes(context.type)" class="space-y-3">
                 <div class="flex justify-between items-center">
@@ -685,7 +705,8 @@ const textLogPreviewClass = computed(() => {
                       <option value="CONSUMABLE">CONSUMABLE</option>
                       <option value="WEARABLE">WEARABLE</option>
                       <option value="WEAPON">WEAPON</option>
-                      <option value="COMBINABLE">COMBINABLE</option>
+                      <option value="COMBINABLE">COMBINABLE (deprecated)</option>
+                      <option value="CONSTRUCTABLE">CONSTRUCTABLE</option>
                       <option value="READABLE">READABLE</option>
                       <option value="CONTAINER">CONTAINER</option>
                       <option value="SWITCH">SWITCH</option>
@@ -712,6 +733,34 @@ const textLogPreviewClass = computed(() => {
                     <div class="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-2 text-slate-400 font-bold uppercase tracking-widest">
                       TRUE (Fixed)
                     </div>
+                  </div>
+                </div>
+
+                <!-- Hidden state & Reveal rule (only for non-constructable types) -->
+                <div v-if="props.context?.type === 'object' && ['DEFAULT', 'CONSUMABLE', 'WEARABLE', 'WEAPON', 'READABLE', 'CONTAINER', 'SWITCH'].includes(currentItemType)" class="space-y-4 border-t border-white/5 pt-4">
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Start Hidden</label>
+                      <button
+                        type="button"
+                        @click="localForm.is_hidden = !localForm.is_hidden"
+                        :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_hidden ? 'bg-emerald-600' : 'bg-slate-700']"
+                      >
+                        <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_hidden ? 'translate-x-6' : 'translate-x-0']"></div>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveal Rule</label>
+                    <input
+                      v-model="localForm.reveal_rule"
+                      placeholder="e.g. player inspects the desk, player defeats boss"
+                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all shadow-inner"
+                    />
+                    <span class="block text-[10px] text-slate-500 leading-normal">
+                      Specify the action or event that triggers this item to reveal in the room. Keep empty if visible by default.
+                    </span>
                   </div>
                 </div>
 
@@ -792,9 +841,15 @@ const textLogPreviewClass = computed(() => {
                   <p class="text-[10px] text-slate-500 uppercase tracking-wider">Positive values restore stats, negative values drain them.</p>
                 </div>
 
-                <!-- COMBINABLE: Ingredients -->
-                <div v-if="currentItemType === 'COMBINABLE'" class="space-y-3">
-                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Combination Ingredients</label>
+                <!-- COMBINABLE / CONSTRUCTABLE: Ingredients -->
+                <div v-if="currentItemType === 'COMBINABLE' || currentItemType === 'CONSTRUCTABLE'" class="space-y-3">
+                  <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">
+                    {{ currentItemType === 'CONSTRUCTABLE' ? 'Construction Ingredients' : 'Combination Ingredients' }}
+                  </label>
+                  <div v-if="currentItemType === 'CONSTRUCTABLE'" class="px-3 py-2 rounded-lg border border-orange-500/30 bg-orange-500/5 text-[11px] text-orange-200/90 leading-relaxed flex items-start gap-2">
+                    <i class="ra ra-hammer text-orange-400 mt-0.5 shrink-0"></i>
+                    <span>Constructables stay hidden until the player combines ALL ingredients (min. 2). The engine then consumes the ingredients and reveals this item automatically — no reveal rule needed.</span>
+                  </div>
                   <div class="space-y-2">
                     <div
                       v-for="(ing, idx) in localForm.combination_ingredients_input"
@@ -824,8 +879,9 @@ const textLogPreviewClass = computed(() => {
                     </button>
                   </div>
                   <p class="text-[10px] text-slate-500 uppercase tracking-wider">
-                    Pick at least one item to combine. Saving with zero ingredients
-                    is allowed — leaves the combinable in a placeholder state.
+                    {{ currentItemType === 'CONSTRUCTABLE'
+                      ? 'Select ALL item references required to construct this item (min. 2). They are consumed on construction.'
+                      : 'Pick at least one item to combine. Saving with zero ingredients is allowed — leaves the combinable in a placeholder state.' }}
                   </p>
                 </div>
 
@@ -1217,13 +1273,13 @@ const textLogPreviewClass = computed(() => {
               </div>
             </div>
 
-            <div class="flex justify-end gap-4 pt-3 border-t border-white/5 mt-2">
-              <button @click="emit('close')" class="px-6 py-2.5 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
-              <button @click="handleSave" :disabled="isSaving || isFormInvalid" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
-                <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
-                <span>{{ isSaving ? 'Saving...' : 'Apply Changes' }}</span>
-              </button>
-            </div>
+          <!-- Fixed Footer -->
+          <div class="px-8 py-5 border-t border-white/5 flex justify-end gap-4 bg-slate-900/55 rounded-b-[2.5rem]">
+            <button @click="emit('close')" class="px-6 py-2.5 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">Discard</button>
+            <button @click="handleSave" :disabled="isSaving || isFormInvalid" class="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center gap-3">
+              <i v-if="isSaving" class="ra ra-cycle animate-spin"></i>
+              <span>{{ isSaving ? 'Saving...' : 'Apply Changes' }}</span>
+            </button>
           </div>
         </div>
       </div>

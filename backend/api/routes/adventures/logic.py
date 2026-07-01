@@ -471,6 +471,10 @@ class AdventureLogic:
             eid = ent.get("id")
             if eid in session_overrides:
                 ent.update(session_overrides[eid])
+            if str(ent.get("item_type") or "").upper() == "CONSTRUCTABLE":
+                override = session_overrides.get(eid, {})
+                if "is_hidden" not in override:
+                    ent["is_hidden"] = True
             metadata_json = ent.get("metadata_json") if isinstance(ent.get("metadata_json"), dict) else {}
             discovery_visibility = metadata_json.get("discovery_visibility") if isinstance(metadata_json.get("discovery_visibility"), dict) else {}
             listed_in_discoveries = discovery_visibility.get("listed_in_discoveries")

@@ -62,6 +62,7 @@ class WorldEntityUpdate(BaseModel):
     is_killable: Optional[bool] = None
     locked: Optional[bool] = None
     inventory: Optional[list[InventoryItem]] = None
+    switch_state: Optional[str] = None
 
 class AttackRequest(BaseModel):
     """Requested by the GM to perform a combat action."""
@@ -238,6 +239,8 @@ class GameEvent(BaseModel):
     
     # Award System
     earned_award_keys: Optional[list[str]] = None
+
+    combination_intent: bool = Field(False, description="Set to true if the player's message indicates they are attempting to combine, craft, mix, assemble, or use multiple items together (in any language).")
 
     # Notes Tool
     remember_notes: Optional[list[str]] = None

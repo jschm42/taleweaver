@@ -121,7 +121,7 @@ class WorldObjectSchema(BaseModel):
     start_scene_id: str = Field(..., description="The ID of the scene where the object starts.")
     spatial_position: str = Field(..., description="Precise micro-location in the scene, e.g., 'on the dusty shelf', 'under the rug'")
 
-    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH")
+    item_type: str = Field(..., description="One of: CONSUMABLE, WEARABLE, STATIC, COMBINABLE (deprecated), CONSTRUCTABLE, PICKABLE, WEAPON, TOOL, KEY, READABLE, CONTAINER, SWITCH")
     wearable_slots: list[str] = Field(..., description="If WEARABLE, which slots? e.g. ['Head'], ['MainHand']. Use [] if none.")
     is_hidden: bool = Field(..., description="If True, the player must SEARCH or trigger an event to see this.")
     reveal_rule: str = Field(
@@ -136,8 +136,8 @@ class WorldObjectSchema(BaseModel):
     code_to_unlock: str = Field("", description="Deterministic access code for locked containers, e.g. ALPHA or 4711. May be empty for open containers.")
     item_to_unlock: str = Field("", description="Deterministic item ID required to unlock this container. May be empty for open containers.")
     rule_to_unlock: str = Field("", description="A soft narrative rule for unlocking locked containers, e.g. 'Protagonist defeats NPC_2'. May be empty for open containers.")
-    combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. Use [] if none.")
-    reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Use empty string if none.")
+    combination_ingredients: list[str] = Field(..., description="Item IDs required to trigger a combination. For CONSTRUCTABLE, list ALL ingredient ids (minimum 2) that must be combined to materialize this item; the item must start is_hidden=True and is auto-revealed once every ingredient is combined. Use [] if none.")
+    reveals_item_id: str = Field(..., description="Item slug revealed when combination occurs. Ignored for CONSTRUCTABLE (reveal is automatic). Use empty string if none.")
 
     # Stat Modifiers
     stat_modifier_strength: int = Field(..., description="Strength bonus. Use 0 if none.")

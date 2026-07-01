@@ -79,7 +79,7 @@ class AdventureTemplateBase(BaseModel):
     tts_director_notes: Optional[str] = None
 
     # GM Capabilities
-    allow_dynamic_items: Optional[bool] = True
+    allow_dynamic_items: Optional[bool] = False
 
 
 class AdventureTemplateCreate(AdventureTemplateBase):
