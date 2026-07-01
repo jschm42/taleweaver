@@ -26,11 +26,15 @@ export interface EntityEditData {
   text_log_format?: string
   wearable_slots?: string[]
   combination_ingredients?: string[]
-  switch_states?: string[]
-  switch_initial_state?: string
-  switch_transitions?: any[]
-  effects?: Record<string, any>
-  stat_modifier_strength?: number
+  reveal_rule?: string | null
+  is_hidden?: boolean | null
+  spatial_position?: string | null
+  reveals_item_id?: string | null
+  switch_states?: string[] | null
+  switch_initial_state?: string | null
+  switch_transitions?: any[] | null
+  effects?: Record<string, any> | null
+  stat_modifier_strength?: number | null
   current_scene_id?: string
   strength?: number
   intelligence?: number
@@ -39,7 +43,7 @@ export interface EntityEditData {
   charisma?: number
   armor_class?: number
   exp?: number
-  equipment?: Record<string, any>
+  equipment?: Record<string, any> | null
   decorative_objects?: string[]
 }
 

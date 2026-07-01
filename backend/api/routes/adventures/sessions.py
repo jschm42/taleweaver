@@ -644,13 +644,15 @@ async def start_session_for_template(
         if str(getattr(ent, "entity_type", "") or "").upper() != "OBJECT":
             continue
         metadata_json = dict(getattr(ent, "metadata_json", None) or {})
-        locked = metadata_json.get("locked")
-        if isinstance(locked, bool):
-            initial_entity_states[ent.id] = {"locked": locked}
-            continue
-
-        if metadata_json.get("code_to_unlock") or metadata_json.get("item_to_unlock") or metadata_json.get("rule_to_unlock"):
+        code_to_unlock = metadata_json.get("code_to_unlock")
+        item_to_unlock = metadata_json.get("item_to_unlock")
+        rule_to_unlock = metadata_json.get("rule_to_unlock")
+        if code_to_unlock or item_to_unlock or rule_to_unlock:
             initial_entity_states[ent.id] = {"locked": True}
+        else:
+            locked = metadata_json.get("locked")
+            if isinstance(locked, bool):
+                initial_entity_states[ent.id] = {"locked": locked}
 
     new_state = SessionState(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,

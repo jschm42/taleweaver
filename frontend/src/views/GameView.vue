@@ -23,6 +23,9 @@ import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
+import ContainerUnlockModal from '@/components/game/ContainerUnlockModal.vue'
+import SwitchStateModal from '@/components/game/SwitchStateModal.vue'
+import SwitchUnlockModal from '@/components/game/SwitchUnlockModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
@@ -95,6 +98,10 @@ const restoringCheckpointId = ref<string | null>(null)
 const checkpoints = ref<SessionCheckpoint[]>([])
 const pendingRestoreCheckpoint = ref<SessionCheckpoint | null>(null)
 const showContainerModal = ref(false)
+const showUnlockModal = ref(false)
+const unlockModalContainer = ref<any>(null)
+const unlockModalBusy = ref(false)
+const unlockModalError = ref('')
 const containerBusy = ref(false)
 const containerCodeBusy = ref(false)
 const showTextLogModal = ref(false)
@@ -113,6 +120,14 @@ const activeContainer = ref<{
 const activeCodeContainer = ref<{ id: string; name: string; source: 'scene' | 'inventory' } | null>(null)
 const awaitingContainerCodeInput = ref(false)
 const dialogPanel = ref<any>(null)
+
+// --- Switch unlock modal state ---
+const showSwitchUnlockModal = ref(false)
+const switchUnlockModalEntity = ref<any>(null)
+const switchUnlockTargetState = ref('')
+const switchUnlockBusy = ref(false)
+const switchUnlockError = ref('')
+const showSwitchStateModal = ref(false)   // primary state-picker modal
 
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
@@ -292,6 +307,11 @@ const handleEntityClick = async (entity: any) => {
       await handlePlayerInput(command)
     }
   } else {
+    if (isSwitchEntity(entity)) {
+      openSwitchStateModal(entity)
+      return
+    }
+
     if (isReadableEntity(entity)) {
       await openTextLogFromEntity(entity)
       return
@@ -313,6 +333,136 @@ const CONTAINER_OPEN_PREFIX = '[OPEN_CONTAINER] '
 const TEXT_LOG_OPEN_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
 
+const isSwitchEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'SWITCH'
+}
+
+const resolveSwitchTransitions = (entity: any): { transitions: any[]; initialState: string } => {
+  let metadata: any = entity?.metadata_json
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata) } catch { metadata = {} }
+  }
+  if (!metadata || typeof metadata !== 'object') metadata = {}
+
+  // Prefer nested form (metadata.switch.transitions) but fall back to flat
+  // (metadata.switch_transitions / entity.switch_transitions) for compatibility.
+  const nested = (metadata.switch && typeof metadata.switch === 'object') ? metadata.switch : {}
+  const transitions = (Array.isArray(nested.transitions) && nested.transitions.length > 0)
+    ? nested.transitions
+    : (Array.isArray(metadata.switch_transitions) ? metadata.switch_transitions
+      : (Array.isArray(entity?.switch_transitions) ? entity.switch_transitions : []))
+  const initialState = String(nested.initial_state || metadata.switch_initial_state || entity?.switch_initial_state || '').trim().toUpperCase()
+
+  return { transitions, initialState }
+}
+
+const getSwitchTransitionGates = (entity: any, targetState: string): { code: string; item: string; rule: string } => {
+  const { transitions, initialState } = resolveSwitchTransitions(entity)
+  const configuredCurrent = String(entity?.switch_state || initialState || '').trim().toUpperCase()
+  const targetUpper = String(targetState || '').trim().toUpperCase()
+
+  let exactMatch: any = null
+  let wildcardMatch: any = null
+  for (const t of transitions) {
+    if (!t || typeof t !== 'object') continue
+    const fromVal = String(t.from || t.from_state || '').trim().toUpperCase()
+    const toVal = String(t.to || t.to_state || '').trim().toUpperCase()
+    if (!toVal || toVal !== targetUpper) continue
+    if (fromVal) {
+      if (fromVal === configuredCurrent) {
+        exactMatch = t
+        break
+      }
+    } else if (!wildcardMatch) {
+      wildcardMatch = t
+    }
+  }
+  const trans = exactMatch || wildcardMatch || null
+
+  const gates = (trans?.gates && typeof trans.gates === 'object') ? trans.gates : {}
+  return {
+    code: String(gates.code || '').trim(),
+    item: String(gates.item || gates.required_item || '').trim(),
+    rule: String(gates.rule || gates.required_rule || '').trim(),
+  }
+}
+
+/** Opens the primary state-picker modal for a switch entity. */
+const openSwitchStateModal = (entity: any): void => {
+  switchUnlockModalEntity.value = entity
+  switchUnlockError.value = ''
+  showSwitchStateModal.value = true
+}
+
+/**
+ * Called when the player selects a target state in SwitchStateModal.
+ * If a gate (code/item/rule) exists, opens SwitchUnlockModal.
+ * Otherwise sends the /switch command directly.
+ */
+const handleSwitchStateSelect = (targetState: string): void => {
+  const entity = switchUnlockModalEntity.value
+  if (!entity) return
+
+  showSwitchStateModal.value = false
+
+  const gates = getSwitchTransitionGates(entity, targetState)
+  if (gates.code || gates.item || gates.rule) {
+    switchUnlockTargetState.value = targetState
+    switchUnlockError.value = ''
+    showSwitchUnlockModal.value = true
+    return
+  }
+
+  // No gate — send the /switch command directly
+  void sendMessage(`/switch "${entity.name}" ${targetState}`)
+}
+
+const handleSwitchFlipCodeSubmit = async (code: string) => {
+  if (!switchUnlockModalEntity.value || switchUnlockBusy.value) return
+  const entityId = String(switchUnlockModalEntity.value.id || '').trim()
+  if (!entityId) return
+
+  switchUnlockBusy.value = true
+  switchUnlockError.value = ''
+  try {
+    const result = await api.flipSwitchWithCode(props.id, entityId, switchUnlockTargetState.value, code)
+    // Update the local entity state immediately so the UI reflects the change
+    const override = (entities.value || []).find((e: any) => String(e.id || '').toLowerCase() === entityId.toLowerCase())
+    if (override) override.switch_state = result.switch_state
+    addNotification(`${switchUnlockModalEntity.value.name || 'Switch'} flipped to ${result.switch_state}.`, 'success')
+    showSwitchUnlockModal.value = false
+    switchUnlockModalEntity.value = null
+    switchUnlockTargetState.value = ''
+  } catch (error: any) {
+    switchUnlockError.value = error?.message || 'Incorrect code. The switch does not move.'
+  } finally {
+    switchUnlockBusy.value = false
+  }
+}
+
+const handleSwitchFlipItemSubmit = async (itemId: string) => {
+  if (!switchUnlockModalEntity.value || switchUnlockBusy.value) return
+  const entityId = String(switchUnlockModalEntity.value.id || '').trim()
+  if (!entityId) return
+
+  switchUnlockBusy.value = true
+  switchUnlockError.value = ''
+  try {
+    const result = await api.flipSwitchWithItem(props.id, entityId, switchUnlockTargetState.value, itemId)
+    const override = (entities.value || []).find((e: any) => String(e.id || '').toLowerCase() === entityId.toLowerCase())
+    if (override) override.switch_state = result.switch_state
+    addNotification(`${switchUnlockModalEntity.value.name || 'Switch'} flipped to ${result.switch_state}.`, 'success')
+    showSwitchUnlockModal.value = false
+    switchUnlockModalEntity.value = null
+    switchUnlockTargetState.value = ''
+  } catch (error: any) {
+    switchUnlockError.value = error?.message || 'Failed to activate the switch with this item.'
+  } finally {
+    switchUnlockBusy.value = false
+  }
+}
+
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
   return String(entity.item_type || '').toUpperCase() === 'CONTAINER'
@@ -320,16 +470,42 @@ const isContainerEntity = (entity: any): boolean => {
 
 const isContainerLocked = (container: any): boolean => {
   if (!isContainerEntity(container)) return false
-  if (typeof container?.locked === 'boolean') {
-    return container.locked
+
+  let metadata = container?.metadata_json || {}
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata)
+    } catch {
+      metadata = {}
+    }
   }
-  const metadata = (container?.metadata_json && typeof container.metadata_json === 'object') ? container.metadata_json : {}
-  return Boolean(metadata.code_to_unlock || metadata.item_to_unlock || metadata.rule_to_unlock)
+
+  const code = String(container?.code_to_unlock || metadata?.code_to_unlock || '').trim()
+  const item = String(container?.item_to_unlock || metadata?.item_to_unlock || '').trim()
+  const rule = String(container?.rule_to_unlock || metadata?.rule_to_unlock || '').trim()
+
+  const hasUnlockRequirements = Boolean(code || item || rule)
+
+  if (hasUnlockRequirements) {
+    if (container?.locked === false) {
+      return false
+    }
+    return true
+  }
+
+  return container?.locked === true || metadata?.locked === true
 }
 
 const getContainerCodeRequirement = (container: any): string => {
-  const metadata = (container?.metadata_json && typeof container.metadata_json === 'object') ? container.metadata_json : {}
-  return String(metadata.code_to_unlock || '').trim()
+  let metadata = container?.metadata_json || {}
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata)
+    } catch {
+      metadata = {}
+    }
+  }
+  return String(container?.code_to_unlock || metadata?.code_to_unlock || '').trim()
 }
 
 const markContainerUnlockedLocally = (containerId: string) => {
@@ -420,21 +596,14 @@ const normalizeContainerItems = (rawItems: any[]): any[] => {
 const openContainerFromEntity = (entity: any): boolean => {
   if (!isContainerEntity(entity)) return false
   if (isContainerLocked(entity)) {
-    const requiredCode = getContainerCodeRequirement(entity)
-    if (requiredCode) {
-      activeCodeContainer.value = {
-        id: String(entity.id || entity.name || '').trim(),
-        name: String(entity.name || entity.id || 'Container'),
-        source: 'scene',
-      }
-      awaitingContainerCodeInput.value = true
-      const promptMessage = `🔐 ${activeCodeContainer.value.name} is locked. Enter the code in chat (or use /cancel to abort).`
-      addNotification(promptMessage, 'info')
-      emitSystemMessage(promptMessage)
-      dialogPanel.value?.setInputText('/code ')
-      return false
+    activeCodeContainer.value = {
+      id: String(entity.id || entity.name || '').trim(),
+      name: String(entity.name || entity.id || 'Container'),
+      source: 'scene',
     }
-    addNotification(`${entity?.name || 'Container'} is locked.`, 'info')
+    unlockModalContainer.value = entity
+    unlockModalError.value = ''
+    showUnlockModal.value = true
     return false
   }
 
@@ -450,21 +619,14 @@ const openContainerFromEntity = (entity: any): boolean => {
 const openContainerFromInventoryItem = (item: any): boolean => {
   if (!isContainerEntity(item)) return false
   if (isContainerLocked(item)) {
-    const requiredCode = getContainerCodeRequirement(item)
-    if (requiredCode) {
-      activeCodeContainer.value = {
-        id: String(item.id || item.name || '').trim(),
-        name: String(item.name || item.id || 'Container'),
-        source: 'inventory',
-      }
-      awaitingContainerCodeInput.value = true
-      const promptMessage = `🔐 ${activeCodeContainer.value.name} is locked. Enter the code in chat (or use /cancel to abort).`
-      addNotification(promptMessage, 'info')
-      emitSystemMessage(promptMessage)
-      dialogPanel.value?.setInputText('/code ')
-      return false
+    activeCodeContainer.value = {
+      id: String(item.id || item.name || '').trim(),
+      name: String(item.name || item.id || 'Container'),
+      source: 'inventory',
     }
-    addNotification(`${item?.name || 'Container'} is locked.`, 'info')
+    unlockModalContainer.value = item
+    unlockModalError.value = ''
+    showUnlockModal.value = true
     return false
   }
 
@@ -475,6 +637,68 @@ const openContainerFromInventoryItem = (item: any): boolean => {
   }
   showContainerModal.value = true
   return true
+}
+
+const handleUnlockCodeSubmit = async (code: string) => {
+  if (!unlockModalContainer.value || unlockModalBusy.value) return
+  const containerId = String(unlockModalContainer.value.id || '').trim()
+  if (!containerId) return
+
+  unlockModalBusy.value = true
+  unlockModalError.value = ''
+  try {
+    await api.unlockContainerWithCode(props.id, containerId, code)
+    markContainerUnlockedLocally(containerId)
+    addNotification(`${unlockModalContainer.value.name || 'Container'} unlocked.`, 'success')
+    
+    const source = activeCodeContainer.value?.source
+    showUnlockModal.value = false
+    unlockModalContainer.value = null
+    clearContainerCodeState()
+    
+    if (source === 'scene') {
+      const container = (items.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromEntity(container)
+    } else {
+      const container = (inventoryItems.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromInventoryItem(container)
+    }
+  } catch (error: any) {
+    unlockModalError.value = error?.message || "The lock gives a mocking click. That code won't open this container."
+  } finally {
+    unlockModalBusy.value = false
+  }
+}
+
+const handleUnlockItemSubmit = async (itemId: string) => {
+  if (!unlockModalContainer.value || unlockModalBusy.value) return
+  const containerId = String(unlockModalContainer.value.id || '').trim()
+  if (!containerId) return
+
+  unlockModalBusy.value = true
+  unlockModalError.value = ''
+  try {
+    await api.unlockContainerWithItem(props.id, containerId, itemId)
+    markContainerUnlockedLocally(containerId)
+    addNotification(`${unlockModalContainer.value.name || 'Container'} unlocked.`, 'success')
+    
+    const source = activeCodeContainer.value?.source
+    showUnlockModal.value = false
+    unlockModalContainer.value = null
+    clearContainerCodeState()
+    
+    if (source === 'scene') {
+      const container = (items.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromEntity(container)
+    } else {
+      const container = (inventoryItems.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromInventoryItem(container)
+    }
+  } catch (error: any) {
+    unlockModalError.value = error?.message || "Failed to unlock container with item."
+  } finally {
+    unlockModalBusy.value = false
+  }
 }
 
 const openContainerByHint = (hint: string): boolean => {
@@ -675,6 +899,7 @@ const isListedInDiscoveries = (entity: any): boolean => {
 }
 
 const items = computed(() => entities.value.filter((e: any) => isListedInDiscoveries(e)))
+const sceneSwitches = computed(() => entities.value.filter((e: any) => isSwitchEntity(e)))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
 const lootPopupItems = computed(() => (combat.value?.loot_items || []) as any[])
@@ -729,6 +954,8 @@ const handleTakeDirect = async (entity: any) => {
   await sendMessage(`/take_direct ${entity.id || entity.name}`)
 }
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
+
+const hasSceneContext = computed(() => Boolean(entities.length || currentSceneImage || sheet.value?.current_scene || sheet.value?.scene_id))
 
 const {
   showWalkthrough,
@@ -827,6 +1054,11 @@ const {
       const prefill = npcName ? `/say to ${npcName}: ` : '/say to '
       dialogPanel.value?.setInputText(prefill)
       return true
+    }
+
+    if (action.startsWith(FLIP_SWITCH_PREFIX)) {
+      const hint = action.replace(FLIP_SWITCH_PREFIX, '').trim()
+      return handleSwitchFlipByHint(hint)
     }
 
     if (!action.startsWith(CONTAINER_OPEN_PREFIX)) {
@@ -1049,15 +1281,15 @@ watch(
       </div>
 
       <!-- Backdrop for mobile sidebar drawer -->
-      <div 
-        v-if="isMobileSidebarOpen && (entities.length > 0 || currentSceneImage)" 
+      <div
+        v-if="isMobileSidebarOpen && hasSceneContext"
         class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 xl:hidden animate-fade-in"
         @click="isMobileSidebarOpen = false"
       ></div>
 
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
-      <aside 
-        v-if="entities.length > 0 || currentSceneImage" 
+      <aside
+        v-if="hasSceneContext" 
         :class="[
           'bg-slate-900/95 xl:bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex flex-col p-6 shrink-0 overflow-y-auto custom-scrollbar shadow-2xl transition-all duration-300 ease-in-out',
           // Mobile/Tablet drawer placement & translate behavior
@@ -1106,6 +1338,48 @@ watch(
           @image-error="(path) => handleImageError(path)"
           @take-direct="handleTakeDirect"
         />
+
+        <!-- Switches Panel -->
+        <div v-if="sceneSwitches.length > 0" class="mb-8">
+          <button
+            class="flex items-center gap-1.5 w-full text-left focus:outline-none cursor-pointer mb-4 select-none"
+          >
+            <i class="ra ra-lever text-lime-500 text-sm"></i>
+            <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-lime-500/80">Switches</h3>
+          </button>
+          <div class="flex flex-col gap-2">
+            <div
+              v-for="sw in sceneSwitches"
+              :key="sw.id"
+              class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group transition-all hover:border-lime-500/40 hover:bg-slate-900/50 p-3 flex items-center gap-3 cursor-pointer shadow-lg"
+              @click="!isActionInputBlocked && openSwitchStateModal(sw)"
+              @contextmenu.prevent="!isActionInputBlocked && openSwitchStateModal(sw)"
+              @mouseenter="handleHover(sw, $event)"
+              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+              @mouseleave="hoveredEntity = null"
+            >
+              <div class="w-10 h-10 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0">
+                <img
+                  v-if="sw.image_url && showImage(sw.image_url)"
+                  :src="sw.image_url"
+                  class="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
+                  @error="handleImageError(sw.image_url)"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
+                  <i class="ra ra-lever text-xl text-lime-400"></i>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-black text-slate-300 group-hover:text-lime-400 transition-colors uppercase tracking-tight truncate">{{ sw.name }}</p>
+                <p class="text-[10px] text-slate-500 mt-0.5 font-mono truncate" v-if="!!sheet?.debug_mode">ID: {{ sw.id }}</p>
+              </div>
+              <span class="px-2 py-0.5 bg-lime-500/10 border border-lime-500/20 rounded-full text-[9px] font-black text-lime-400 uppercase tracking-wider shrink-0">
+                {{ String(sw.switch_state || (sw.metadata_json?.switch?.initial_state) || '—').toUpperCase() }}
+              </span>
+            </div>
+          </div>
+        </div>
+
 
         <GameWorldMemoryPanel
           :memories="worldMemories"
@@ -1287,6 +1561,38 @@ watch(
       @item-hover="(item, event) => handleHover(item, event)"
       @item-leave="hoveredEntity = null"
     />
+
+    <ContainerUnlockModal
+      :open="showUnlockModal"
+      :container="unlockModalContainer"
+      :inventory-items="inventoryItems"
+      :busy="unlockModalBusy"
+      :error-message="unlockModalError"
+      @close="showUnlockModal = false"
+      @submit-code="handleUnlockCodeSubmit"
+      @use-key-item="handleUnlockItemSubmit"
+    />
+
+    <SwitchStateModal
+      :open="showSwitchStateModal"
+      :switch-entity="switchUnlockModalEntity"
+      :inventory-items="inventoryItems"
+      @close="showSwitchStateModal = false"
+      @select-state="handleSwitchStateSelect"
+    />
+
+    <SwitchUnlockModal
+      :open="showSwitchUnlockModal"
+      :switch-entity="switchUnlockModalEntity"
+      :target-state="switchUnlockTargetState"
+      :inventory-items="inventoryItems"
+      :busy="switchUnlockBusy"
+      :error-message="switchUnlockError"
+      @close="showSwitchUnlockModal = false"
+      @submit-code="handleSwitchFlipCodeSubmit"
+      @use-key-item="handleSwitchFlipItemSubmit"
+    />
+
 
     <TextLogModal
       :open="showTextLogModal"

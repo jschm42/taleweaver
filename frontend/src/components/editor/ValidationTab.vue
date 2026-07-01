@@ -4,10 +4,13 @@ import {
   Bug,
   CheckCheck,
   Download,
-  Eraser,
+  Eye,
+  EyeOff,
   Loader2,
+  RotateCcw,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Wand2,
 } from 'lucide-vue-next'
 import {
@@ -15,6 +18,7 @@ import {
   type AnnotatedValidationFinding,
   type AIFixSuggestionsRequest,
   type AIFixSuggestionsResponse,
+  type DeleteValidationFindingRef,
   type FixProposal,
   type PersistedValidationRun,
   type ValidationAiSkippedReason,
@@ -48,8 +52,17 @@ const aiSkippedReason = ref<ValidationAiSkippedReason>(null)
 const lastRunAt = ref<string | null>(null)
 const isRunning = ref(false)
 const isHydrating = ref(false)
+const isMutating = ref(false)
 const activeFilter = ref<FilterKey>('all')
 const hasAutoRun = ref(false)
+const showResolved = ref(false)
+
+// Dismissed findings: only hidden by default, can be reactivated via the toggle.
+// Persisted UI-only state (Set is reactive via shallowReactive for size tracking).
+const dismissedKeys = ref<Set<string>>(new Set())
+
+// Deleted keys never reappear (trash + Delete all paths set them).
+const deletedKeys = ref<Set<string>>(new Set())
 
 const errorCount = computed(
   () => findings.value.filter((f) => f.severity === 'error').length,
@@ -64,18 +77,36 @@ const structuralFindingCount = computed(
   () => findings.value.filter((f) => f.source === 'structural').length,
 )
 
+const dismissedCount = computed(
+  () => findings.value.filter((f) => isDismissed(f)).length,
+)
+
+function isDismissed(finding: AnnotatedValidationFinding): boolean {
+  return dismissedKeys.value.has(_findingKey(finding))
+}
+
+function isDeleted(finding: AnnotatedValidationFinding): boolean {
+  return deletedKeys.value.has(_findingKey(finding))
+}
+
 const filteredFindings = computed(() => {
+  const list = findings.value.filter((f) => {
+    if (isDeleted(f)) return false
+    const dismissed = isDismissed(f)
+    if (dismissed && !showResolved.value) return false
+    return true
+  })
   switch (activeFilter.value) {
     case 'errors':
-      return findings.value.filter((f) => f.severity === 'error')
+      return list.filter((f) => f.severity === 'error')
     case 'warnings':
-      return findings.value.filter((f) => f.severity === 'warn')
+      return list.filter((f) => f.severity === 'warn')
     case 'structural':
-      return findings.value.filter((f) => f.source === 'structural')
+      return list.filter((f) => f.source === 'structural')
     case 'ai':
-      return findings.value.filter((f) => f.source === 'ai')
+      return list.filter((f) => f.source === 'ai')
     default:
-      return findings.value
+      return list
   }
 })
 
@@ -161,13 +192,6 @@ async function runAllValidations() {
   } finally {
     isRunning.value = false
   }
-}
-
-function clearAll() {
-  findings.value = []
-  aiSkippedReason.value = null
-  lastRunAt.value = null
-  emitFindingsCount()
 }
 
 function emitFindingsCount() {
@@ -321,6 +345,133 @@ function exportMarkdown() {
 }
 
 // ---------------------------------------------------------------------------
+// Finding lifecycle: dismiss (UI-only) / reactivate / permanently delete
+// ---------------------------------------------------------------------------
+
+function dismissFinding(finding: AnnotatedValidationFinding) {
+  const key = _findingKey(finding)
+  if (dismissedKeys.value.has(key)) return
+  const next = new Set(dismissedKeys.value)
+  next.add(key)
+  dismissedKeys.value = next
+  emit('notify', 'Marked as manually fixed. Toggle "Show resolved" to bring it back.', 'info')
+}
+
+function reactivateFinding(finding: AnnotatedValidationFinding) {
+  const key = _findingKey(finding)
+  if (!dismissedKeys.value.has(key)) return
+  const next = new Set(dismissedKeys.value)
+  next.delete(key)
+  dismissedKeys.value = next
+}
+
+function toggleDismissedFor(finding: AnnotatedValidationFinding) {
+  if (isDismissed(finding)) {
+    reactivateFinding(finding)
+  } else {
+    dismissFinding(finding)
+  }
+}
+
+function _makeRef(finding: AnnotatedValidationFinding): DeleteValidationFindingRef {
+  return {
+    source: finding.source,
+    code: String(finding.code || ''),
+    location: String(finding.location || ''),
+  }
+}
+
+const deletingKey = ref<string | null>(null)
+
+async function permanentlyDeleteFinding(finding: AnnotatedValidationFinding) {
+  if (isMutating.value || deletingKey.value) return
+  const key = _findingKey(finding)
+  deletingKey.value = key
+  isMutating.value = true
+  try {
+    const resp = await adventureService.deleteValidationFindings(props.templateId, {
+      findings: [_makeRef(finding)],
+      delete_all: false,
+    })
+    // Drop from local state immediately + remember so rehydrate doesn't echo it back.
+    findings.value = findings.value.filter((f) => _findingKey(f) !== key)
+    const deletedNext = new Set(deletedKeys.value)
+    deletedNext.add(key)
+    deletedKeys.value = deletedNext
+    // Dismissed-state is meaningless once it's gone.
+    const dismissedNext = new Set(dismissedKeys.value)
+    dismissedNext.delete(key)
+    dismissedKeys.value = dismissedNext
+    if (resp.validation_run) {
+      applyPersistedRun(resp.validation_run)
+    } else {
+      emitFindingsCount()
+    }
+    emit('notify', 'Finding permanently deleted.', 'success')
+  } catch (err: any) {
+    emit(
+      'notify',
+      err?.message || 'Failed to delete finding. See server logs for details.',
+      'error',
+    )
+  } finally {
+    deletingKey.value = null
+    isMutating.value = false
+  }
+}
+
+const showDeleteAllConfirm = ref(false)
+const isDeletingAll = ref(false)
+
+function requestDeleteAll() {
+  if (findings.value.length === 0 || isMutating.value) return
+  showDeleteAllConfirm.value = true
+}
+
+function cancelDeleteAll() {
+  if (isDeletingAll.value) return
+  showDeleteAllConfirm.value = false
+}
+
+async function confirmDeleteAll() {
+  if (findings.value.length === 0) {
+    showDeleteAllConfirm.value = false
+    return
+  }
+  isDeletingAll.value = true
+  isMutating.value = true
+  try {
+    const resp = await adventureService.deleteValidationFindings(props.templateId, {
+      findings: [],
+      delete_all: true,
+    })
+    // Wipe every local state so the UI shows an empty list with "no findings",
+    // even if the backend ever returns a 0-count validation_run we'd already know.
+    findings.value = []
+    dismissedKeys.value = new Set()
+    deletedKeys.value = new Set()
+    aiSkippedReason.value = null
+    lastRunAt.value = null
+    if (resp.validation_run) {
+      applyPersistedRun(resp.validation_run)
+    } else {
+      emitFindingsCount()
+    }
+    showDeleteAllConfirm.value = false
+    emit('notify', 'All findings permanently deleted.', 'success')
+  } catch (err: any) {
+    emit(
+      'notify',
+      err?.message || 'Failed to clear findings. See server logs for details.',
+      'error',
+    )
+  } finally {
+    isDeletingAll.value = false
+    isMutating.value = false
+  }
+}
+
+// ---------------------------------------------------------------------------
 // AI fix suggestions
 // ---------------------------------------------------------------------------
 
@@ -447,18 +598,14 @@ function removeAppliedFinding() {
   const targetKey = `${target.source}|${target.code}|${target.location || ''}`
   const before = findings.value.length
   findings.value = findings.value.filter((f) => _findingKey(f) !== targetKey)
+  const dismissedNext = new Set(dismissedKeys.value)
+  dismissedNext.delete(targetKey)
+  dismissedKeys.value = dismissedNext
+  const deletedNext = new Set(deletedKeys.value)
+  deletedNext.add(targetKey)
+  deletedKeys.value = deletedNext
   if (findings.value.length !== before) {
     emitFindingsCount()
-  }
-}
-
-function dismissFinding(finding: AnnotatedValidationFinding) {
-  const targetKey = _findingKey(finding)
-  const before = findings.value.length
-  findings.value = findings.value.filter((f) => _findingKey(f) !== targetKey)
-  if (findings.value.length !== before) {
-    emitFindingsCount()
-    emit('notify', 'Marked as manually fixed.', 'info')
   }
 }
 
@@ -585,14 +732,14 @@ defineExpose({
 
       <div class="flex flex-wrap items-center gap-3">
         <button
-          id="btn-clear-validation"
+          id="btn-delete-all-validation"
           type="button"
-          :disabled="isRunning || findings.length === 0"
-          @click="clearAll"
-          class="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-200 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2"
+          :disabled="isRunning || isMutating || findings.length === 0"
+          @click="requestDeleteAll"
+          class="px-4 py-2 bg-rose-700/80 hover:bg-rose-600 disabled:bg-slate-900 disabled:text-slate-600 disabled:cursor-not-allowed text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2"
         >
-          <Eraser class="w-3.5 h-3.5" />
-          <span>Clear all</span>
+          <Trash2 class="w-3.5 h-3.5" />
+          <span>Delete all</span>
         </button>
         <button
           id="btn-export-markdown"
@@ -626,79 +773,160 @@ defineExpose({
       </div>
     </div>
 
-    <div v-if="findings.length > 0" class="flex items-center gap-2 flex-wrap">
-      <button
-        v-for="opt in [
-          { key: 'all', label: `All (${findings.length})` },
-          { key: 'errors', label: `Errors (${errorCount})` },
-          { key: 'warnings', label: `Warnings (${warningCount})` },
-          { key: 'structural', label: `Structural (${structuralFindingCount})` },
-          { key: 'ai', label: `AI (${aiFindingCount})` },
-        ]"
-        :key="opt.key"
-        type="button"
-        @click="activeFilter = opt.key as FilterKey"
-        :class="[
-          'px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border',
-          activeFilter === opt.key
-            ? 'bg-white/10 text-white border-white/20'
-            : 'bg-transparent text-slate-400 border-white/5 hover:border-white/10',
-        ]"
-      >
-        {{ opt.label }}
-      </button>
+    <div v-if="findings.length > 0" class="space-y-3">
+      <!-- Severity / source filter row -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <button
+          v-for="opt in [
+            { key: 'all', label: `All (${findings.length})` },
+            { key: 'errors', label: `Errors (${errorCount})` },
+            { key: 'warnings', label: `Warnings (${warningCount})` },
+            { key: 'structural', label: `Structural (${structuralFindingCount})` },
+            { key: 'ai', label: `AI (${aiFindingCount})` },
+          ]"
+          :key="opt.key"
+          type="button"
+          @click="activeFilter = opt.key as FilterKey"
+          :class="[
+            'px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border',
+            activeFilter === opt.key
+              ? 'bg-white/10 text-white border-white/20'
+              : 'bg-transparent text-slate-400 border-white/5 hover:border-white/10',
+          ]"
+        >
+          {{ opt.label }}
+        </button>
+      </div>
+
+      <!-- Show-resolved toggle (separate from severity/source filters so they compose) -->
+      <div class="flex items-center gap-2">
+        <button
+          id="btn-toggle-resolved"
+          type="button"
+          @click="showResolved = !showResolved"
+          :disabled="dismissedCount === 0"
+          :class="[
+            'px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5',
+            showResolved
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+              : 'bg-transparent text-slate-500 border-white/5 hover:border-white/10 hover:text-slate-300',
+            dismissedCount === 0 ? 'opacity-50 cursor-not-allowed' : '',
+          ]"
+          :title="dismissedCount === 0 ? 'No dismissed findings to show' : 'Toggle visibility of manually-fixed findings'"
+        >
+          <component :is="showResolved ? Eye : EyeOff" class="w-3 h-3" />
+          <span>
+            {{ showResolved ? 'Hide resolved' : 'Show resolved' }}
+            <span v-if="dismissedCount > 0" class="ml-1 text-emerald-300/80">({{ dismissedCount }})</span>
+          </span>
+        </button>
+        <p v-if="dismissedCount > 0" class="text-[10px] text-slate-500">
+          Resolved findings are still in the database; use the trash icon to permanently delete them.
+        </p>
+      </div>
     </div>
 
     <div v-if="filteredFindings.length > 0" class="space-y-3">
       <div
         v-for="(finding, idx) in filteredFindings"
         :key="findingKey(finding, idx)"
-        :class="['p-4 border rounded-2xl flex items-start gap-4', severityClass(finding.severity)]"
+        :class="[
+          'p-4 border rounded-2xl flex flex-col gap-3',
+          severityClass(finding.severity),
+          isDismissed(finding) ? 'opacity-65 ring-1 ring-emerald-500/30' : '',
+        ]"
       >
-        <i :class="[severityIcon(finding.severity), severityColor(finding.severity), 'text-lg mt-0.5']"></i>
-        <div class="flex-1 min-w-0 space-y-2">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span :class="['px-2 py-0.5 rounded-md border text-[10px] font-black uppercase tracking-widest', sourceClass(finding.source)]">
-              {{ sourceLabel(finding.source) }}
-            </span>
-            <code class="text-[11px] font-mono text-slate-400">{{ finding.code }}</code>
-            <span
-              v-if="finding.location"
-              class="text-[10px] text-slate-500 font-mono"
-            >
-              {{ finding.location }}
-            </span>
+        <div class="flex items-start gap-4">
+          <i :class="[severityIcon(finding.severity), severityColor(finding.severity), 'text-lg mt-0.5']"></i>
+          <div class="flex-1 min-w-0 space-y-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span :class="['px-2 py-0.5 rounded-md border text-[10px] font-black uppercase tracking-widest', sourceClass(finding.source)]">
+                {{ sourceLabel(finding.source) }}
+              </span>
+              <code class="text-[11px] font-mono text-slate-400">{{ finding.code }}</code>
+              <span
+                v-if="finding.location"
+                class="text-[10px] text-slate-500 font-mono"
+              >
+                {{ finding.location }}
+              </span>
+              <span
+                v-if="isDismissed(finding)"
+                class="px-2 py-0.5 rounded-md border border-emerald-500/40 bg-emerald-500/15 text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1"
+                title="This finding was marked as manually fixed. Use the Reactivate button to bring it back."
+              >
+                <CheckCheck class="w-3 h-3" />
+                Resolved
+              </span>
+            </div>
+            <p class="text-sm text-slate-200 leading-relaxed">{{ finding.message }}</p>
           </div>
-          <p class="text-sm text-slate-200 leading-relaxed">{{ finding.message }}</p>
+        </div>
 
+        <!-- Action row: AI-Fix (only AI findings), Manually Fixed / Reactivate toggle, trash.
+             Lives at the bottom-right of the card per spec. -->
+        <div class="flex items-center justify-between gap-2 pt-1 border-t border-white/5">
           <div
             v-if="finding.source === 'ai'"
-            class="flex items-center gap-2 pt-1"
+            class="flex items-center gap-2"
           >
             <button
               type="button"
               class="px-3 py-1.5 rounded-lg border border-violet-500/40 bg-violet-500/15 text-violet-200 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/25 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="isRunning || aiFixLoading || aiFixApplying"
+              :disabled="isRunning || isMutating || aiFixLoading || aiFixApplying || isDismissed(finding)"
+              :title="isDismissed(finding) ? 'Reactivate this finding first to use AI-Fix' : 'Generate up to 3 fix proposals and apply one'"
               @click="openAIFixSuggestions(finding, idx)"
             >
               <Wand2 class="w-3 h-3" />
               <span>AI-Fix</span>
             </button>
-            <span class="text-[10px] text-slate-500 leading-snug">
-              Generate up to 3 fix proposals and apply one.
+            <span class="text-[10px] text-slate-500 leading-snug hidden sm:inline">
+              Generate up to 3 fix proposals.
             </span>
           </div>
+          <div v-else class="text-[10px] text-slate-500">
+            Structural finding &mdash; resolve through "Manually fixed" or fix the underlying entity.
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              v-if="!isDismissed(finding)"
+              type="button"
+              class="px-2.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/25 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isRunning || isMutating"
+              :title="`Mark ${finding.code} as manually fixed (UI-only, can be undone via Show resolved)`"
+              aria-label="Mark finding as manually fixed"
+              @click="dismissFinding(finding)"
+            >
+              <CheckCheck class="w-3 h-3" />
+              <span>Manually fixed</span>
+            </button>
+            <button
+              v-else
+              type="button"
+              class="px-2.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/25 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isRunning || isMutating"
+              :title="`Reactivate ${finding.code} (un-hide this finding)`"
+              aria-label="Reactivate finding"
+              @click="reactivateFinding(finding)"
+            >
+              <RotateCcw class="w-3 h-3" />
+              <span>Reactivate</span>
+            </button>
+            <button
+              type="button"
+              class="px-2.5 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/15 text-rose-200 text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/25 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="isRunning || isMutating"
+              :title="`Permanently delete ${finding.code} (this cannot be undone)`"
+              aria-label="Permanently delete finding"
+              @click="permanentlyDeleteFinding(finding)"
+            >
+              <Loader2 v-if="deletingKey === _findingKey(finding)" class="w-3 h-3 animate-spin" />
+              <Trash2 v-else class="w-3 h-3" />
+              <span>{{ deletingKey === _findingKey(finding) ? 'Deleting…' : 'Delete' }}</span>
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          class="px-2.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/25 transition-colors flex items-center gap-1.5 shrink-0 self-start"
-          :title="`Mark ${finding.code} as manually fixed`"
-          aria-label="Mark finding as manually fixed"
-          @click="dismissFinding(finding)"
-        >
-          <CheckCheck class="w-3 h-3" />
-          <span>Manually fixed</span>
-        </button>
       </div>
     </div>
 
@@ -721,6 +949,14 @@ defineExpose({
       class="p-8 bg-slate-900/50 border border-white/5 rounded-3xl text-center text-xs text-slate-500"
     >
       No findings match the current filter.
+      <span v-if="dismissedCount > 0 && !showResolved" class="block mt-2 text-slate-400">
+        There are {{ dismissedCount }} resolved finding(s) hidden by the default filter — turn on
+        <button
+          type="button"
+          @click="showResolved = true"
+          class="underline text-emerald-300 hover:text-emerald-200"
+        >Show resolved</button> to see them.
+      </span>
     </div>
 
     <AIFixSuggestionsModal
@@ -740,6 +976,51 @@ defineExpose({
       @toggle-backup="toggleBackupConfirmation"
       @retry="retryAIFix"
     />
+
+    <!-- Delete-all confirmation modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showDeleteAllConfirm"
+          class="fixed inset-0 z-[240] flex items-center justify-center p-6 backdrop-blur-xl bg-slate-950/60"
+          @click.self="cancelDeleteAll"
+        >
+          <div class="modal-content w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-white/5">
+              <h3 class="text-xs font-black text-rose-400 uppercase tracking-widest flex items-center gap-2">
+                <Trash2 class="w-4 h-4" />
+                Delete all findings
+              </h3>
+              <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                This permanently removes all <strong class="text-white">{{ findings.length }}</strong> finding(s) from the database.
+                Dismissing via "Manually fixed" is the reversible alternative — only use "Delete all"
+                when you want to start a fresh validation run.
+              </p>
+            </div>
+            <div class="p-4 border-t border-white/5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                @click="cancelDeleteAll"
+                :disabled="isDeletingAll"
+                class="px-5 py-2 text-slate-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                @click="confirmDeleteAll"
+                :disabled="isDeletingAll"
+                class="px-5 py-2 rounded-lg font-black uppercase text-xs tracking-widest transition-colors flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Loader2 v-if="isDeletingAll" class="w-3 h-3 animate-spin" />
+                <Trash2 v-else class="w-3 h-3" />
+                <span>{{ isDeletingAll ? 'Deleting…' : 'Delete all' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -751,5 +1032,31 @@ defineExpose({
 @keyframes pageIn {
   from { opacity: 0; transform: translateY(20px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-active .modal-content {
+  animation: modalScaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-leave-active .modal-content {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: scale(0.95);
+}
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 </style>

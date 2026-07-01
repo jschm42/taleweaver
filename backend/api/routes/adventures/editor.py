@@ -43,6 +43,7 @@ from backend.schemas.validation import (
     AIFixApplyResponse,
     AIFixSuggestionsRequest,
     AIFixSuggestionsResponse,
+    DeleteValidationFindingsRequest,
     FixProposal,
     FixProposalEntityPatch,
     ValidationFinding,
@@ -108,6 +109,10 @@ class EntityUpdateRequest(BaseModel):
     exit_type: Optional[str] = None
     wearable_slots: Optional[list[str]] = None
     combination_ingredients: Optional[list[str]] = None
+    reveal_rule: Optional[str] = None
+    is_hidden: Optional[bool] = None
+    spatial_position: Optional[str] = None
+    reveals_item_id: Optional[str] = None
     switch_states: Optional[list[str]] = None
     switch_initial_state: Optional[str] = None
     switch_transitions: Optional[list[dict[str, Any]]] = None
@@ -771,6 +776,120 @@ async def get_latest_validation_run(
         "ai_finding_count": run.ai_finding_count,
         "error_count": run.error_count,
         "warning_count": run.warning_count,
+    }
+
+
+def _recount_validation_findings(run: ValidationRun) -> None:
+    """Recompute the *_count columns on the ValidationRun from its JSON arrays.
+
+    Called after any in-place mutation (deletion of entries) so the response and
+    badge counts stay accurate.
+    """
+    structural = list(run.structural_findings or [])
+    ai_list = list(run.ai_findings or [])
+    combined = structural + ai_list
+    run.structural_finding_count = len(structural)
+    run.ai_finding_count = len(ai_list)
+    run.error_count = sum(1 for e in combined if str(e.get("severity", "")).lower() == "error")
+    run.warning_count = sum(1 for e in combined if str(e.get("severity", "")).lower() == "warn")
+
+
+@router.post(
+    "/{template_id}/editor/validation/latest/findings/delete",
+)
+async def delete_validation_findings(
+    template_id: str,
+    payload: DeleteValidationFindingsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Permanently remove findings from the latest persisted ValidationRun.
+
+    Unlike dismissals (which are UI-only state), this mutation persists so the
+    next rehydrate via ``GET /validation/latest`` no longer returns the entries.
+    The endpoint only touches the latest run for the (template, user) pair —
+    previous runs remain intact for audit.
+    """
+    await _get_owned_adventure_or_404(db, template_id, current_user.id)
+
+    res = await db.execute(
+        select(ValidationRun)
+        .where(
+            ValidationRun.template_id == template_id,
+            ValidationRun.user_id == current_user.id,
+        )
+        .order_by(ValidationRun.run_at.desc(), ValidationRun.created_at.desc())
+        .limit(1)
+    )
+    run = res.scalars().first()
+
+    if run is None:
+        # No persisted state to mutate. Mirror the no-op shape so the client
+        # can keep the in-memory state authoritative.
+        return {
+            "status": "success",
+            "deleted": 0,
+            "structural_remaining": 0,
+            "ai_remaining": 0,
+            "validation_run": None,
+        }
+
+    before_structural = list(run.structural_findings or [])
+    before_ai = list(run.ai_findings or [])
+
+    if payload.delete_all:
+        run.structural_findings = []
+        run.ai_findings = []
+        flag_modified(run, "structural_findings")
+        flag_modified(run, "ai_findings")
+        deleted = len(before_structural) + len(before_ai)
+    else:
+        targets_structural: set[tuple[str, str]] = set()
+        targets_ai: set[tuple[str, str]] = set()
+        for ref in payload.findings:
+            key = (str(ref.code or "").strip(), str(ref.location or "").strip())
+            if not key[0]:
+                continue
+            if ref.source == "ai":
+                targets_ai.add(key)
+            else:
+                targets_structural.add(key)
+
+        def _matches(entry: Any, targets: set[tuple[str, str]]) -> bool:
+            return (str(entry.get("code") or "").strip(), str(entry.get("location") or "").strip()) in targets
+
+        new_structural = [e for e in before_structural if not _matches(e, targets_structural)]
+        new_ai = [e for e in before_ai if not _matches(e, targets_ai)]
+        deleted = (len(before_structural) - len(new_structural)) + (len(before_ai) - len(new_ai))
+        run.structural_findings = new_structural
+        run.ai_findings = new_ai
+        flag_modified(run, "structural_findings")
+        flag_modified(run, "ai_findings")
+
+    _recount_validation_findings(run)
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to persist validation deletion.") from exc
+
+    await db.refresh(run)
+
+    return {
+        "status": "success",
+        "deleted": deleted,
+        "structural_remaining": run.structural_finding_count,
+        "ai_remaining": run.ai_finding_count,
+        "validation_run": {
+            "structural_findings": list(run.structural_findings or []),
+            "ai_findings": list(run.ai_findings or []),
+            "ai_skipped_reason": run.ai_skipped_reason,
+            "run_at": run.run_at.isoformat() if run.run_at else None,
+            "structural_finding_count": run.structural_finding_count,
+            "ai_finding_count": run.ai_finding_count,
+            "error_count": run.error_count,
+            "warning_count": run.warning_count,
+        },
     }
 
 
@@ -2413,6 +2532,22 @@ async def create_editor_entity(
         raise HTTPException(status_code=409, detail="ID already exists as a scene")
 
     item_type = str(payload.item_type or "").strip().upper() if payload.entity_type == "OBJECT" else None
+    metadata_json = dict(payload.metadata_json or {})
+    if item_type == "SWITCH":
+        switch_config = metadata_json.get("switch") or {}
+        states = switch_config.get("states") or []
+        states_list = [str(s).strip().upper() for s in states if str(s).strip()]
+        if len(states_list) < 2:
+            raise HTTPException(status_code=400, detail="A switch must have at least 2 states.")
+        initial_state = str(switch_config.get("initial_state") or "").strip().upper()
+        if not initial_state:
+            raise HTTPException(status_code=400, detail="An initial state must be defined for the switch.")
+        if initial_state not in states_list:
+            raise HTTPException(status_code=400, detail=f"Initial state '{initial_state}' is not one of the switch states: {', '.join(states_list)}.")
+        switch_config["states"] = states_list
+        switch_config["initial_state"] = initial_state
+        metadata_json["switch"] = switch_config
+
     entity = WorldEntity(
         id=entity_id,
         template_id=template_id,
@@ -2435,7 +2570,7 @@ async def create_editor_entity(
         stamina=payload.stamina,
         max_stamina=payload.stamina,
         is_killable=bool(payload.is_killable) if payload.is_killable is not None else True,
-        metadata_json=dict(payload.metadata_json or {}),
+        metadata_json=metadata_json,
         inventory=list(payload.inventory or []),
         wearable_slots=payload.wearable_slots,
         combination_ingredients=payload.combination_ingredients,
@@ -3082,6 +3217,22 @@ async def update_editor_entity(
                     flag_modified(ent, "combination_ingredients")
                 if payload.stat_modifier_strength is not None:
                     ent.stat_modifier_strength = payload.stat_modifier_strength
+
+                # COMBINABLE-specific metadata columns. Applied regardless of
+                # current item_type so the field can be edited (or cleared) before
+                # the user switches type — the value is dropped on type change if
+                # it becomes irrelevant.
+                if payload.reveal_rule is not None:
+                    normalized = str(payload.reveal_rule or "").strip()
+                    ent.reveal_rule = normalized[:500] if normalized else None
+                if payload.is_hidden is not None:
+                    ent.is_hidden = bool(payload.is_hidden)
+                if payload.spatial_position is not None:
+                    normalized = str(payload.spatial_position or "").strip()
+                    ent.spatial_position = normalized[:255] if normalized else None
+                if payload.reveals_item_id is not None:
+                    normalized = str(payload.reveals_item_id or "").strip().upper()
+                    ent.reveals_item_id = normalized or None
                 
                 # 3. Switch logic (only for SWITCH items)
                 if is_switch_object:
@@ -3095,6 +3246,19 @@ async def update_editor_entity(
                             switch_config["initial_state"] = payload.switch_initial_state
                         if payload.switch_transitions is not None:
                             switch_config["transitions"] = payload.switch_transitions
+                        
+                        states = switch_config.get("states") or []
+                        states_list = [str(s).strip().upper() for s in states if str(s).strip()]
+                        if len(states_list) < 2:
+                            raise HTTPException(status_code=400, detail="A switch must have at least 2 states.")
+                        initial_state = str(switch_config.get("initial_state") or "").strip().upper()
+                        if not initial_state:
+                            raise HTTPException(status_code=400, detail="An initial state must be defined for the switch.")
+                        if initial_state not in states_list:
+                            raise HTTPException(status_code=400, detail=f"Initial state '{initial_state}' is not one of the switch states: {', '.join(states_list)}.")
+                        
+                        switch_config["states"] = states_list
+                        switch_config["initial_state"] = initial_state
                         metadata_json["switch"] = switch_config
                     
                     # Clean up flat switch keys that were previously written as pollution
@@ -3128,7 +3292,8 @@ async def update_editor_entity(
                         ent.is_hidden = False
                     
                     if payload.reveal_rule is not None:
-                        ent.reveal_rule = str(payload.reveal_rule or "").strip() or None
+                        normalized = str(payload.reveal_rule or "").strip()
+                        ent.reveal_rule = normalized[:500] if normalized else None
             
     await db.commit()
     return {"status": "success"}

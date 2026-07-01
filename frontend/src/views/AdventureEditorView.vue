@@ -106,8 +106,6 @@ const editForm = ref({
   is_killable: true,
   item_type: 'DEFAULT',
   is_portable: true,
-  is_hidden: false,
-  reveal_rule: '',
   locked: false,
   code_to_unlock: '',
   item_to_unlock: '',
@@ -115,8 +113,12 @@ const editForm = ref({
   text_log_content: '',
   text_log_format: 'DOCUMENT',
   entity_id: '',
-  wearable_slots_input: [],
+  wearable_slots_input: [] as string[],
   combination_ingredients_input: [] as string[],
+  reveal_rule: '',
+  is_hidden: false,
+  spatial_position: '',
+  reveals_item_id: '',
   switch_states_json: '[]',
   switch_initial_state: '',
   switch_transitions_json: '[]',
@@ -279,8 +281,6 @@ function handleItemTypeSelected(itemType: string, isFixed = false, preselectedSl
     is_killable: true,
     item_type: itemType,
     is_portable: String(itemType).toUpperCase() !== 'SWITCH',
-    is_hidden: false,
-    reveal_rule: '',
     locked: false,
     code_to_unlock: '',
     item_to_unlock: '',
@@ -290,6 +290,10 @@ function handleItemTypeSelected(itemType: string, isFixed = false, preselectedSl
     entity_id: defaultId,
     wearable_slots_input: preselectedSlots,
     combination_ingredients_input: [],
+    reveal_rule: '',
+    is_hidden: false,
+    spatial_position: '',
+    reveals_item_id: '',
     switch_states_json: '[]',
     switch_initial_state: '',
     switch_transitions_json: '[]',
@@ -842,8 +846,6 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     is_killable: isKillable ?? true,
     item_type: selectedObject?.item_type || 'DEFAULT',
     is_portable: selectedObject?.is_portable !== false,
-    is_hidden: selectedObject?.is_hidden === true,
-    reveal_rule: selectedObject?.reveal_rule || '',
     locked: selectedObject?.locked === true,
     code_to_unlock: selectedObject?.code_to_unlock || '',
     item_to_unlock: selectedObject?.item_to_unlock || '',
@@ -857,6 +859,10 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     combination_ingredients_input: Array.isArray(selectedObject?.combination_ingredients)
       ? [...selectedObject.combination_ingredients]
       : (metadata?.combination_ingredients ? [...metadata.combination_ingredients] : []),
+    reveal_rule: String(selectedObject?.reveal_rule || metadata?.reveal_rule || ''),
+    is_hidden: !!(selectedObject?.is_hidden ?? metadata?.is_hidden ?? false),
+    spatial_position: String(selectedObject?.spatial_position || metadata?.spatial_position || ''),
+    reveals_item_id: String(selectedObject?.reveals_item_id || metadata?.reveals_item_id || ''),
     switch_states_json: JSON.stringify(selectedObject?.switch_states || metadata?.switch?.states || metadata?.switch_states || [], null, 2),
     switch_initial_state: String(selectedObject?.switch_initial_state || metadata?.switch?.initial_state || metadata?.switch_initial_state || ''),
     switch_transitions_json: JSON.stringify(selectedObject?.switch_transitions || metadata?.switch?.transitions || metadata?.switch_transitions || [], null, 2),
@@ -1085,6 +1091,8 @@ async function saveEntityText(data: any) {
         : undefined,
       wearable_slots: editEntityContext.value.type === 'object' ? data.wearable_slots : undefined,
       combination_ingredients: editEntityContext.value.type === 'object' ? data.combination_ingredients : undefined,
+      spatial_position: editEntityContext.value.type === 'object' ? data.spatial_position : undefined,
+      reveals_item_id: editEntityContext.value.type === 'object' ? data.reveals_item_id : undefined,
       switch_states: editEntityContext.value.type === 'object' ? data.switch_states : undefined,
       switch_initial_state: editEntityContext.value.type === 'object' ? data.switch_initial_state : undefined,
       switch_transitions: editEntityContext.value.type === 'object' ? data.switch_transitions : undefined,
@@ -1590,8 +1598,8 @@ const routeExitDetails = computed<any | null>(() => {
   return exits.find((worldExit: any) => String(worldExit.id) === exitId) || null
 })
 
-const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: string | null; type: string }>>(() => {
-  const entries: Array<{ id: string; name: string; imageUrl?: string | null; type: string }> = []
+const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: string | null; type: string; itemType?: string }>>(() => {
+  const entries: Array<{ id: string; name: string; imageUrl?: string | null; type: string; itemType?: string }> = []
   
   const editorNpcs = Array.isArray(debugData.value?.npcs) ? debugData.value.npcs : []
   const allEntities = Array.isArray(debugData.value?.entities_all) ? debugData.value.entities_all : []
@@ -1624,6 +1632,7 @@ const referenceOptions = computed<Array<{ id: string; name: string; imageUrl?: s
       name: String(obj.name || obj.id || ''),
       imageUrl: obj.image_url ? buildVisualImageUrl(obj.image_url) : null,
       type: 'OBJECT',
+      itemType: String(obj.item_type || '').toUpperCase(),
     })
   }
   return entries.filter((entry) => entry.id)

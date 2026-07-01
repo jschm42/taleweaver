@@ -361,6 +361,31 @@ export const api = {
     })
   },
 
+  /** Attempts to unlock one container using a key item from inventory. */
+  unlockContainerWithItem(gameId: string, entityId: string, itemId: string): Promise<{ status: string; entity_id: string; locked: boolean }> {
+    return request(`/adventures/${gameId}/containers/${encodeURIComponent(entityId)}/unlock-item`, {
+      method: 'POST',
+      body: JSON.stringify({ item_id: itemId }),
+    })
+  },
+
+  /** Flips a switch to a target state by providing the correct gate code. */
+  flipSwitchWithCode(gameId: string, entityId: string, targetState: string, code: string): Promise<{ status: string; entity_id: string; switch_state: string }> {
+    return request(`/adventures/${gameId}/switches/${encodeURIComponent(entityId)}/flip-code`, {
+      method: 'POST',
+      body: JSON.stringify({ target_state: targetState, code }),
+    })
+  },
+
+  /** Flips a switch to a target state using a required item from inventory. */
+  flipSwitchWithItem(gameId: string, entityId: string, targetState: string, itemId: string): Promise<{ status: string; entity_id: string; switch_state: string }> {
+    return request(`/adventures/${gameId}/switches/${encodeURIComponent(entityId)}/flip-item`, {
+      method: 'POST',
+      body: JSON.stringify({ target_state: targetState, item_id: itemId }),
+    })
+  },
+
+
   /** @deprecated Use listSessions() instead. */
   listGameSessions(): Promise<GameSession[]> {
     return request<GameSession[]>('/adventures/')

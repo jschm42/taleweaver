@@ -28,6 +28,10 @@ const props = defineProps<{
     entity_id: string
     wearable_slots_input: string[]
     combination_ingredients_input: string[]
+    reveal_rule: string
+    is_hidden: boolean
+    spatial_position: string
+    reveals_item_id: string
     switch_states_json: string
     switch_initial_state: string
     switch_transitions_json: string
@@ -70,6 +74,11 @@ function syncFromForm() {
     states = ['OFF', 'ON']
   }
   switchStates.value = states
+
+  const initial = String(localForm.value.switch_initial_state || '').trim().toUpperCase()
+  if (!initial || !states.includes(initial)) {
+    localForm.value.switch_initial_state = states[0] || ''
+  }
 
   let transitions: any[] = []
   try {
@@ -137,8 +146,8 @@ function updateStateValue(index: number, val: string) {
 
 function addTransition() {
   switchTransitions.value.push({
-    from: switchStates.value[0] || '',
-    to: switchStates.value[1] || switchStates.value[0] || '',
+    from: '',
+    to: switchStates.value[0] || '',
     gates: {
       item: '',
       code: '',
@@ -155,11 +164,25 @@ function removeTransition(index: number) {
 const itemReferenceOptions = computed(() => {
   const source = props.referenceOptions || []
   return source
-    .filter((option) => String(option.type || '').toUpperCase() === 'OBJECT')
+    .filter((option) => {
+      if (String(option.type || '').toUpperCase() !== 'OBJECT') return false
+      const itemType = String((option as any).itemType || '').toUpperCase()
+      if (itemType === 'CONTAINER') return false
+      if (itemType === 'SWITCH') return false
+      return true
+    })
     .map((option) => ({
       ...option,
       name: option.name || option.id || '',
     }))
+})
+
+const currentEntityId = computed(() => String(localForm.value.entity_id || props.initialForm?.entity_id || '').trim().toUpperCase())
+
+const containedItemReferenceOptions = computed(() => {
+  return itemReferenceOptions.value.filter((option) => {
+    return String(option.id || '').toUpperCase() !== currentEntityId.value
+  })
 })
 
 const currentItemType = computed(() => String(localForm.value.item_type || '').toUpperCase())
@@ -202,15 +225,22 @@ const isFormInvalid = computed(() => {
   const idInvalid = hasEditableId
     ? (!(localForm.value.entity_id || '').trim() || (localForm.value.entity_id || '').length > maxIdLen || !!entityIdError.value)
     : false
-  const combinationInvalid = (currentItemType.value === 'COMBINABLE' || currentItemType.value === 'CONSTRUCTABLE') &&
-    (!Array.isArray(localForm.value.combination_ingredients_input) ||
-     localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 2)
+  // Combinable items now only require at least one ingredient to be useful.
+  // Saving zero is allowed (acts as a placeholder combinable the GM can fill in later).
+  const ingredientsCount = Array.isArray(localForm.value.combination_ingredients_input)
+    ? localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length
+    : 0
+  const combinationInvalid =
+    (currentItemType.value === 'COMBINABLE' && ingredientsCount !== 0 && ingredientsCount < 1) ||
+    (currentItemType.value === 'CONSTRUCTABLE' && ingredientsCount < 2)
   const uniqueStates = new Set(switchStates.value.map(s => s.trim().toUpperCase()))
   const switchInvalid = currentItemType.value === 'SWITCH' && (
     switchStates.value.length < 2 ||
     uniqueStates.size !== switchStates.value.length ||
     switchStates.value.some(s => !s.trim()) ||
-    switchTransitions.value.some(t => !t.from || !t.to || !uniqueStates.has(t.from) || !uniqueStates.has(t.to))
+    !(localForm.value.switch_initial_state || '').trim() ||
+    !uniqueStates.has(String(localForm.value.switch_initial_state).trim().toUpperCase()) ||
+    switchTransitions.value.some(t => !t.to || !uniqueStates.has(t.to) || (t.from && !uniqueStates.has(t.from)))
   )
   return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid
 })
@@ -237,6 +267,9 @@ watch(() => localForm.value.item_type, (newType) => {
     localForm.value.is_portable = false
     if (switchStates.value.length === 0) {
       switchStates.value = ['OFF', 'ON']
+    }
+    if (!localForm.value.switch_initial_state) {
+      localForm.value.switch_initial_state = switchStates.value[0] || 'OFF'
     }
   } else if (type === 'WEARABLE') {
     localForm.value.is_portable = true
@@ -287,9 +320,11 @@ function handleSave() {
         if (t.gates?.rule) gates.rule = t.gates.rule.trim()
 
         const transition: Record<string, any> = {
-          from: t.from.trim().toUpperCase(),
           to: t.to.trim().toUpperCase(),
           gates,
+        }
+        if (t.from && String(t.from).trim()) {
+          transition.from = String(t.from).trim().toUpperCase()
         }
         if (t.fail_message?.trim()) {
           transition.fail_message = t.fail_message.trim()
@@ -315,10 +350,16 @@ function handleSave() {
       : []
   }
 
+  // Normalize the four combinable metadata fields here so the form state and
+  // backend stay in sync (e.g. reveals_item_id is upper-cased to match the
+  // entity-id convention; an empty string becomes `null` server-side so the
+  // combination has no revealed item).
+  const revealsItemId = String(localForm.value.reveals_item_id || '').trim().toUpperCase()
+  const revealRule = String(localForm.value.reveal_rule || '').trim()
+  const spatialPosition = String(localForm.value.spatial_position || '').trim()
+
   emit('save', {
     ...localForm.value,
-    is_hidden: Boolean(localForm.value.is_hidden),
-    reveal_rule: String(localForm.value.reveal_rule || '').trim() || null,
     entity_id: (localForm.value.entity_id || '').trim().toUpperCase(),
     inventory: parsedInventory,
     wearable_slots: parsedWearableSlots,
@@ -326,6 +367,10 @@ function handleSave() {
     switch_transitions: parsedSwitchTransitions,
     effects: parsedEffects,
     combination_ingredients: parsedIngredients,
+    reveal_rule: revealRule,
+    is_hidden: Boolean(localForm.value.is_hidden),
+    spatial_position: spatialPosition,
+    reveals_item_id: revealsItemId,
   })
 }
 
@@ -862,8 +907,88 @@ const textLogPreviewClass = computed(() => {
                   <p class="text-[10px] text-slate-500 uppercase tracking-wider">
                     {{ currentItemType === 'CONSTRUCTABLE'
                       ? 'Select ALL item references required to construct this item (min. 2). They are consumed on construction.'
-                      : 'Select item references required to combine with this item.' }}
+                      : 'Pick at least one item to combine. Saving with zero ingredients is allowed — leaves the combinable in a placeholder state.' }}
                   </p>
+                </div>
+
+                <!-- COMBINABLE: spatial / hidden / reveal-rule / reveals-item -->
+                <div v-if="currentItemType === 'COMBINABLE'" class="space-y-5 pt-4 border-t border-violet-500/20">
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveal Rule</label>
+                      <span class="text-[10px] font-mono text-slate-500 tracking-widest">
+                        {{ (localForm.reveal_rule || '').length }} / 500
+                      </span>
+                    </div>
+                    <ReferenceTextarea
+                      v-model="localForm.reveal_rule"
+                      :options="referenceOptions || []"
+                      :rows="3"
+                      :maxlength="500"
+                      placeholder="GM narration rule that triggers the reveal (e.g. 'If the prot searches under the table'). Use ##ITEM_ID to inject references."
+                      class-name="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm text-slate-200 focus:border-violet-500/50 outline-none transition-all resize-none"
+                    />
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                      Free-form narration rule, evaluated when this item would be revealed.
+                    </p>
+                  </div>
+
+                  <div class="grid md:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                      <div class="flex justify-between items-center">
+                        <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Spatial Position</label>
+                        <span class="text-[10px] font-mono text-slate-500 tracking-widest">
+                          {{ (localForm.spatial_position || '').length }} / 255
+                        </span>
+                      </div>
+                      <input
+                        v-model="localForm.spatial_position"
+                        type="text"
+                        maxlength="255"
+                        placeholder="e.g. inside the desk, behind the safe"
+                        class="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-2.5 text-sm text-white focus:border-violet-500/50 outline-none transition-all"
+                      />
+                      <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                        Free-text location hint used by narrators when describing the scene.
+                      </p>
+                    </div>
+
+                    <div class="space-y-2">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Initially Hidden</label>
+                      <div class="flex items-center justify-between p-3 rounded-2xl bg-black/30 border border-white/10">
+                        <p class="text-xs text-slate-300 leading-relaxed pr-3">
+                          When enabled, the player must explicitly search or
+                          satisfy a rule before discovering this item.
+                        </p>
+                        <button
+                          type="button"
+                          @click="localForm.is_hidden = !localForm.is_hidden"
+                          :aria-pressed="!!localForm.is_hidden"
+                          :class="['w-14 h-8 rounded-full transition-colors shrink-0', localForm.is_hidden ? 'bg-violet-600' : 'bg-slate-700']"
+                          :title="localForm.is_hidden ? 'Currently hidden — click to expose' : 'Currently exposed — click to hide'"
+                        >
+                          <span
+                            :class="['block w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_hidden ? 'translate-x-7' : 'translate-x-1']"
+                          ></span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveals Item</label>
+                    <EntityReferenceCombobox
+                      v-model="localForm.reveals_item_id"
+                      :options="itemReferenceOptions"
+                      placeholder="Optional — pick the item spawned by this combination"
+                      search-placeholder="Search object items by id or name"
+                      :enable-search="true"
+                    />
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider">
+                      If set, the engine will spawn / reveal this item when
+                      the combination occurs. Leave empty to spawn nothing.
+                    </p>
+                  </div>
                 </div>
 
                 <!-- SWITCH: Visual Configurator -->
@@ -944,11 +1069,12 @@ const textLogPreviewClass = computed(() => {
                         <!-- From/To Row -->
                         <div class="grid grid-cols-2 gap-4 mr-8">
                           <div class="space-y-1">
-                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">From State</span>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">From State (optional)</span>
                             <select
                               v-model="t.from"
                               class="w-full bg-slate-900 border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold uppercase outline-none"
                             >
+                              <option value="">ANY</option>
                               <option v-for="state in switchStates" :key="state" :value="state">{{ state }}</option>
                             </select>
                           </div>
@@ -1077,7 +1203,7 @@ const textLogPreviewClass = computed(() => {
                     >
                       <EntityReferenceCombobox
                         v-model="localForm.inventory_input[idx]"
-                        :options="itemReferenceOptions"
+                        :options="containedItemReferenceOptions"
                         placeholder="Select contained item"
                         :enable-search="true"
                       />

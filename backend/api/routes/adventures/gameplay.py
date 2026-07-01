@@ -519,3 +519,299 @@ async def unlock_container_with_code(
     await db.commit()
 
     return {"status": "ok", "entity_id": entity.id, "locked": False}
+
+
+class ContainerUnlockItemRequest(BaseModel):
+    item_id: str
+
+
+@router.post("/{game_id}/containers/{entity_id}/unlock-item")
+async def unlock_container_with_item(
+    game_id: str,
+    entity_id: str,
+    payload: ContainerUnlockItemRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deterministically unlocks a container when the player possesses the required item."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.id == entity_id,
+        )
+    )
+    entity = ent_res.scalars().first()
+    if not entity or entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "CONTAINER":
+        raise HTTPException(status_code=404, detail="Container not found.")
+
+    metadata_json = dict(entity.metadata_json or {})
+    expected_item_id = str(metadata_json.get("item_to_unlock") or "").strip().upper()
+    if not expected_item_id:
+        raise HTTPException(status_code=400, detail="This container does not require an item to unlock.")
+
+    submitted_item_id = str(payload.item_id or "").strip().upper()
+    if not submitted_item_id:
+        raise HTTPException(status_code=400, detail="Item ID is required.")
+    if submitted_item_id != expected_item_id:
+        raise HTTPException(status_code=403, detail="This item cannot unlock this container.")
+
+    # Check if the player possesses the item in their inventory
+    cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+    avatar = cv_res.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+
+    inventory_ids = {
+        str(item.get("id") or "").strip().upper() if isinstance(item, dict) else str(item).strip().upper()
+        for item in (avatar.inventory or [])
+    }
+
+    if submitted_item_id not in inventory_ids:
+        raise HTTPException(status_code=403, detail="You do not possess the required key item.")
+
+    entity_states = dict(state.entity_states or {})
+    entry = dict(entity_states.get(entity.id) or {})
+    
+    was_locked = entry.get("locked") if "locked" in entry else True
+
+    entry["locked"] = False
+    entity_states[entity.id] = entry
+    state.entity_states = entity_states
+    
+    if was_locked:
+        xp_reward = metadata_json.get("exp_reward") or metadata_json.get("xp_reward") or 100
+        avatar.exp = (avatar.exp or 0) + xp_reward
+        
+        # Resolve item name for narration
+        item_name = submitted_item_id
+        for item in (avatar.inventory or []):
+            if isinstance(item, dict) and str(item.get("id") or "").strip().upper() == submitted_item_id:
+                item_name = item.get("name") or item_name
+                break
+
+        db.add(
+            ChatMessage(
+                session_id=state.session_id,
+                role="system",
+                content=f"Unlocked {entity.name} using {item_name}!",
+            )
+        )
+        db.add(
+            ChatMessage(
+                session_id=state.session_id,
+                role="system",
+                content=f"you gained {xp_reward} XP",
+            )
+        )
+        
+    await db.commit()
+
+    return {"status": "ok", "entity_id": entity.id, "locked": False}
+
+
+class SwitchFlipCodeRequest(BaseModel):
+    target_state: str
+    code: str
+
+
+class SwitchFlipItemRequest(BaseModel):
+    target_state: str
+    item_id: str
+
+
+def _get_switch_config(entity: WorldEntity) -> dict:
+    """Returns the parsed switch config from metadata_json."""
+    raw = entity.metadata_json or {}
+    return raw.get("switch") or {}
+
+
+def _resolve_switch_transition(config: dict, current_state: str, target_state: str) -> dict | None:
+    """Finds the matching transition definition for current -> target (or None).
+
+    Matching precedence:
+    1. Exact from/to match (both fields specified).
+    2. Wildcard match (only ``to`` specified) — applies regardless of current state.
+    """
+    transitions = config.get("transitions") or []
+    if not isinstance(transitions, list):
+        return None
+
+    wildcard_match: dict | None = None
+    for t in transitions:
+        if not isinstance(t, dict):
+            continue
+        from_s = str(t.get("from") or "").strip().upper()
+        to_s = str(t.get("to") or "").strip().upper()
+        if not to_s or to_s != target_state:
+            continue
+        if from_s and from_s == current_state:
+            return t
+        if not from_s and wildcard_match is None:
+            wildcard_match = t
+    return wildcard_match
+
+
+@router.post("/{game_id}/switches/{entity_id}/flip-code")
+async def flip_switch_with_code(
+    game_id: str,
+    entity_id: str,
+    payload: SwitchFlipCodeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deterministically flips a switch when the provided code matches the transition gate code."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.id == entity_id,
+        )
+    )
+    entity = ent_res.scalars().first()
+    if not entity or entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "SWITCH":
+        raise HTTPException(status_code=404, detail="Switch not found.")
+
+    config = _get_switch_config(entity)
+    states = config.get("states") or []
+    allowed_states = [str(s).strip().upper() for s in states if str(s).strip()]
+
+    target_state = str(payload.target_state or "").strip().upper()
+    if target_state not in allowed_states:
+        raise HTTPException(status_code=400, detail=f"Invalid target state '{target_state}'.")
+
+    session_states = dict(state.entity_states or {})
+    entry = dict(session_states.get(entity.id) or {})
+    configured_current = str(config.get("initial_state") or (allowed_states[0] if allowed_states else "")).strip().upper()
+    current_state = str(entry.get("switch_state") or configured_current).strip().upper()
+
+    if current_state == target_state:
+        raise HTTPException(status_code=400, detail=f"Switch is already in state '{target_state}'.")
+
+    transition = _resolve_switch_transition(config, current_state, target_state)
+    if transition is None:
+        raise HTTPException(status_code=400, detail="No transition definition found for this state change.")
+
+    gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
+    required_code = str(gates.get("code") or "").strip()
+    if not required_code:
+        raise HTTPException(status_code=400, detail="This transition does not require a code.")
+
+    submitted_code = str(payload.code or "").strip()
+    if not submitted_code:
+        raise HTTPException(status_code=400, detail="Code is required.")
+    if submitted_code.lower() != required_code.lower():
+        fail_message = str(transition.get("fail_message") or "").strip()
+        raise HTTPException(status_code=403, detail=fail_message or "Incorrect code. The switch does not move.")
+
+    entry["switch_state"] = target_state
+    session_states[entity.id] = entry
+    state.entity_states = session_states
+
+    db.add(
+        ChatMessage(
+            session_id=state.session_id,
+            role="system",
+            content=f"{entity.name} switched to {target_state} using the correct code.",
+        )
+    )
+
+    await db.commit()
+    return {"status": "ok", "entity_id": entity.id, "switch_state": target_state}
+
+
+@router.post("/{game_id}/switches/{entity_id}/flip-item")
+async def flip_switch_with_item(
+    game_id: str,
+    entity_id: str,
+    payload: SwitchFlipItemRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deterministically flips a switch when the player possesses the required item."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.id == entity_id,
+        )
+    )
+    entity = ent_res.scalars().first()
+    if not entity or entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "SWITCH":
+        raise HTTPException(status_code=404, detail="Switch not found.")
+
+    config = _get_switch_config(entity)
+    states = config.get("states") or []
+    allowed_states = [str(s).strip().upper() for s in states if str(s).strip()]
+
+    target_state = str(payload.target_state or "").strip().upper()
+    if target_state not in allowed_states:
+        raise HTTPException(status_code=400, detail=f"Invalid target state '{target_state}'.")
+
+    session_states = dict(state.entity_states or {})
+    entry = dict(session_states.get(entity.id) or {})
+    configured_current = str(config.get("initial_state") or (allowed_states[0] if allowed_states else "")).strip().upper()
+    current_state = str(entry.get("switch_state") or configured_current).strip().upper()
+
+    if current_state == target_state:
+        raise HTTPException(status_code=400, detail=f"Switch is already in state '{target_state}'.")
+
+    transition = _resolve_switch_transition(config, current_state, target_state)
+    if transition is None:
+        raise HTTPException(status_code=400, detail="No transition definition found for this state change.")
+
+    gates = transition.get("gates") if isinstance(transition.get("gates"), dict) else {}
+    required_item_id = str(gates.get("item") or "").strip().upper()
+    if not required_item_id:
+        raise HTTPException(status_code=400, detail="This transition does not require an item.")
+
+    submitted_item_id = str(payload.item_id or "").strip().upper()
+    if not submitted_item_id:
+        raise HTTPException(status_code=400, detail="Item ID is required.")
+    if submitted_item_id != required_item_id:
+        fail_message = str(transition.get("fail_message") or "").strip()
+        raise HTTPException(status_code=403, detail=fail_message or "This item cannot activate the switch.")
+
+    # Verify the player has the item
+    cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+    avatar = cv_res.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+
+    inventory_ids = {
+        str(item.get("id") or "").strip().upper() if isinstance(item, dict) else str(item).strip().upper()
+        for item in (avatar.inventory or [])
+    }
+    if submitted_item_id not in inventory_ids:
+        raise HTTPException(status_code=403, detail="You do not possess the required item.")
+
+    entry["switch_state"] = target_state
+    session_states[entity.id] = entry
+    state.entity_states = session_states
+
+    # Resolve item name for narration
+    item_name = submitted_item_id
+    for item in (avatar.inventory or []):
+        if isinstance(item, dict) and str(item.get("id") or "").strip().upper() == submitted_item_id:
+            item_name = item.get("name") or item_name
+            break
+
+    db.add(
+        ChatMessage(
+            session_id=state.session_id,
+            role="system",
+            content=f"{entity.name} switched to {target_state} using {item_name}.",
+        )
+    )
+
+    await db.commit()
+    return {"status": "ok", "entity_id": entity.id, "switch_state": target_state}
