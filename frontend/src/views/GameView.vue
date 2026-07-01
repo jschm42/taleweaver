@@ -24,6 +24,7 @@ import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
 import ContainerUnlockModal from '@/components/game/ContainerUnlockModal.vue'
+import SwitchStateModal from '@/components/game/SwitchStateModal.vue'
 import SwitchUnlockModal from '@/components/game/SwitchUnlockModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
@@ -47,7 +48,7 @@ import { refreshUser } from '@/store/auth'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { type GameSettings } from '@/services/gameViewService'
-import { gameCommandService, FLIP_SWITCH_PREFIX } from '@/services/gameCommandService'
+import { gameCommandService } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
 
@@ -126,6 +127,7 @@ const switchUnlockModalEntity = ref<any>(null)
 const switchUnlockTargetState = ref('')
 const switchUnlockBusy = ref(false)
 const switchUnlockError = ref('')
+const showSwitchStateModal = ref(false)   // primary state-picker modal
 
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
@@ -305,6 +307,11 @@ const handleEntityClick = async (entity: any) => {
       await handlePlayerInput(command)
     }
   } else {
+    if (isSwitchEntity(entity)) {
+      openSwitchStateModal(entity)
+      return
+    }
+
     if (isReadableEntity(entity)) {
       await openTextLogFromEntity(entity)
       return
@@ -353,36 +360,34 @@ const getSwitchTransitionGates = (entity: any, targetState: string): { code: str
   }
 }
 
-const openSwitchFlipModal = (entity: any, targetState: string): void => {
+/** Opens the primary state-picker modal for a switch entity. */
+const openSwitchStateModal = (entity: any): void => {
   switchUnlockModalEntity.value = entity
-  switchUnlockTargetState.value = targetState
   switchUnlockError.value = ''
-  showSwitchUnlockModal.value = true
+  showSwitchStateModal.value = true
 }
 
-const handleSwitchFlipByHint = (hint: string): boolean => {
-  // hint format: '<entityId>|<targetState>'
-  const sepIdx = hint.lastIndexOf('|')
-  if (sepIdx === -1) return false
-  const entityId = hint.slice(0, sepIdx).trim()
-  const targetState = hint.slice(sepIdx + 1).trim()
-  if (!entityId || !targetState) return false
+/**
+ * Called when the player selects a target state in SwitchStateModal.
+ * If a gate (code/item/rule) exists, opens SwitchUnlockModal.
+ * Otherwise sends the /switch command directly.
+ */
+const handleSwitchStateSelect = (targetState: string): void => {
+  const entity = switchUnlockModalEntity.value
+  if (!entity) return
 
-  // Locate the switch in the current scene entities
-  const switchEntity = (entities.value || []).find((e: any) =>
-    isSwitchEntity(e) && String(e.id || '').toLowerCase() === entityId.toLowerCase()
-  )
-  if (!switchEntity) return false
+  showSwitchStateModal.value = false
 
-  const gates = getSwitchTransitionGates(switchEntity, targetState)
+  const gates = getSwitchTransitionGates(entity, targetState)
   if (gates.code || gates.item || gates.rule) {
-    openSwitchFlipModal(switchEntity, targetState)
-    return true
+    switchUnlockTargetState.value = targetState
+    switchUnlockError.value = ''
+    showSwitchUnlockModal.value = true
+    return
   }
 
-  // No gate — send the command directly
-  void sendMessage(`/switch "${switchEntity.name}" ${targetState}`)
-  return true
+  // No gate — send the /switch command directly
+  void sendMessage(`/switch "${entity.name}" ${targetState}`)
 }
 
 const handleSwitchFlipCodeSubmit = async (code: string) => {
@@ -1317,8 +1322,8 @@ watch(
               v-for="sw in sceneSwitches"
               :key="sw.id"
               class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group transition-all hover:border-lime-500/40 hover:bg-slate-900/50 p-3 flex items-center gap-3 cursor-pointer shadow-lg"
-              @contextmenu.prevent="openContextMenu(sw, $event)"
-              @click="openContextMenu(sw, $event)"
+              @click="!isActionInputBlocked && openSwitchStateModal(sw)"
+              @contextmenu.prevent="!isActionInputBlocked && openSwitchStateModal(sw)"
               @mouseenter="handleHover(sw, $event)"
               @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
               @mouseleave="hoveredEntity = null"
@@ -1344,6 +1349,7 @@ watch(
             </div>
           </div>
         </div>
+
 
         <GameWorldMemoryPanel
           :memories="worldMemories"
@@ -1537,6 +1543,14 @@ watch(
       @use-key-item="handleUnlockItemSubmit"
     />
 
+    <SwitchStateModal
+      :open="showSwitchStateModal"
+      :switch-entity="switchUnlockModalEntity"
+      :inventory-items="inventoryItems"
+      @close="showSwitchStateModal = false"
+      @select-state="handleSwitchStateSelect"
+    />
+
     <SwitchUnlockModal
       :open="showSwitchUnlockModal"
       :switch-entity="switchUnlockModalEntity"
@@ -1548,6 +1562,7 @@ watch(
       @submit-code="handleSwitchFlipCodeSubmit"
       @use-key-item="handleSwitchFlipItemSubmit"
     />
+
 
     <TextLogModal
       :open="showTextLogModal"
