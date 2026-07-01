@@ -23,6 +23,7 @@ import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
+import ContainerUnlockModal from '@/components/game/ContainerUnlockModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
@@ -95,6 +96,10 @@ const restoringCheckpointId = ref<string | null>(null)
 const checkpoints = ref<SessionCheckpoint[]>([])
 const pendingRestoreCheckpoint = ref<SessionCheckpoint | null>(null)
 const showContainerModal = ref(false)
+const showUnlockModal = ref(false)
+const unlockModalContainer = ref<any>(null)
+const unlockModalBusy = ref(false)
+const unlockModalError = ref('')
 const containerBusy = ref(false)
 const containerCodeBusy = ref(false)
 const showTextLogModal = ref(false)
@@ -320,16 +325,42 @@ const isContainerEntity = (entity: any): boolean => {
 
 const isContainerLocked = (container: any): boolean => {
   if (!isContainerEntity(container)) return false
-  if (typeof container?.locked === 'boolean') {
-    return container.locked
+
+  let metadata = container?.metadata_json || {}
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata)
+    } catch {
+      metadata = {}
+    }
   }
-  const metadata = (container?.metadata_json && typeof container.metadata_json === 'object') ? container.metadata_json : {}
-  return Boolean(metadata.code_to_unlock || metadata.item_to_unlock || metadata.rule_to_unlock)
+
+  const code = String(container?.code_to_unlock || metadata?.code_to_unlock || '').trim()
+  const item = String(container?.item_to_unlock || metadata?.item_to_unlock || '').trim()
+  const rule = String(container?.rule_to_unlock || metadata?.rule_to_unlock || '').trim()
+
+  const hasUnlockRequirements = Boolean(code || item || rule)
+
+  if (hasUnlockRequirements) {
+    if (container?.locked === false) {
+      return false
+    }
+    return true
+  }
+
+  return container?.locked === true || metadata?.locked === true
 }
 
 const getContainerCodeRequirement = (container: any): string => {
-  const metadata = (container?.metadata_json && typeof container.metadata_json === 'object') ? container.metadata_json : {}
-  return String(metadata.code_to_unlock || '').trim()
+  let metadata = container?.metadata_json || {}
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata)
+    } catch {
+      metadata = {}
+    }
+  }
+  return String(container?.code_to_unlock || metadata?.code_to_unlock || '').trim()
 }
 
 const markContainerUnlockedLocally = (containerId: string) => {
@@ -420,21 +451,14 @@ const normalizeContainerItems = (rawItems: any[]): any[] => {
 const openContainerFromEntity = (entity: any): boolean => {
   if (!isContainerEntity(entity)) return false
   if (isContainerLocked(entity)) {
-    const requiredCode = getContainerCodeRequirement(entity)
-    if (requiredCode) {
-      activeCodeContainer.value = {
-        id: String(entity.id || entity.name || '').trim(),
-        name: String(entity.name || entity.id || 'Container'),
-        source: 'scene',
-      }
-      awaitingContainerCodeInput.value = true
-      const promptMessage = `🔐 ${activeCodeContainer.value.name} is locked. Enter the code in chat (or use /cancel to abort).`
-      addNotification(promptMessage, 'info')
-      emitSystemMessage(promptMessage)
-      dialogPanel.value?.setInputText('/code ')
-      return false
+    activeCodeContainer.value = {
+      id: String(entity.id || entity.name || '').trim(),
+      name: String(entity.name || entity.id || 'Container'),
+      source: 'scene',
     }
-    addNotification(`${entity?.name || 'Container'} is locked.`, 'info')
+    unlockModalContainer.value = entity
+    unlockModalError.value = ''
+    showUnlockModal.value = true
     return false
   }
 
@@ -450,21 +474,14 @@ const openContainerFromEntity = (entity: any): boolean => {
 const openContainerFromInventoryItem = (item: any): boolean => {
   if (!isContainerEntity(item)) return false
   if (isContainerLocked(item)) {
-    const requiredCode = getContainerCodeRequirement(item)
-    if (requiredCode) {
-      activeCodeContainer.value = {
-        id: String(item.id || item.name || '').trim(),
-        name: String(item.name || item.id || 'Container'),
-        source: 'inventory',
-      }
-      awaitingContainerCodeInput.value = true
-      const promptMessage = `🔐 ${activeCodeContainer.value.name} is locked. Enter the code in chat (or use /cancel to abort).`
-      addNotification(promptMessage, 'info')
-      emitSystemMessage(promptMessage)
-      dialogPanel.value?.setInputText('/code ')
-      return false
+    activeCodeContainer.value = {
+      id: String(item.id || item.name || '').trim(),
+      name: String(item.name || item.id || 'Container'),
+      source: 'inventory',
     }
-    addNotification(`${item?.name || 'Container'} is locked.`, 'info')
+    unlockModalContainer.value = item
+    unlockModalError.value = ''
+    showUnlockModal.value = true
     return false
   }
 
@@ -475,6 +492,68 @@ const openContainerFromInventoryItem = (item: any): boolean => {
   }
   showContainerModal.value = true
   return true
+}
+
+const handleUnlockCodeSubmit = async (code: string) => {
+  if (!unlockModalContainer.value || unlockModalBusy.value) return
+  const containerId = String(unlockModalContainer.value.id || '').trim()
+  if (!containerId) return
+
+  unlockModalBusy.value = true
+  unlockModalError.value = ''
+  try {
+    await api.unlockContainerWithCode(props.id, containerId, code)
+    markContainerUnlockedLocally(containerId)
+    addNotification(`${unlockModalContainer.value.name || 'Container'} unlocked.`, 'success')
+    
+    const source = activeCodeContainer.value?.source
+    showUnlockModal.value = false
+    unlockModalContainer.value = null
+    clearContainerCodeState()
+    
+    if (source === 'scene') {
+      const container = (items.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromEntity(container)
+    } else {
+      const container = (inventoryItems.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromInventoryItem(container)
+    }
+  } catch (error: any) {
+    unlockModalError.value = error?.message || "The lock gives a mocking click. That code won't open this container."
+  } finally {
+    unlockModalBusy.value = false
+  }
+}
+
+const handleUnlockItemSubmit = async (itemId: string) => {
+  if (!unlockModalContainer.value || unlockModalBusy.value) return
+  const containerId = String(unlockModalContainer.value.id || '').trim()
+  if (!containerId) return
+
+  unlockModalBusy.value = true
+  unlockModalError.value = ''
+  try {
+    await api.unlockContainerWithItem(props.id, containerId, itemId)
+    markContainerUnlockedLocally(containerId)
+    addNotification(`${unlockModalContainer.value.name || 'Container'} unlocked.`, 'success')
+    
+    const source = activeCodeContainer.value?.source
+    showUnlockModal.value = false
+    unlockModalContainer.value = null
+    clearContainerCodeState()
+    
+    if (source === 'scene') {
+      const container = (items.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromEntity(container)
+    } else {
+      const container = (inventoryItems.value || []).find((entry: any) => String(entry.id || '').trim().toLowerCase() === containerId.toLowerCase())
+      if (container) openContainerFromInventoryItem(container)
+    }
+  } catch (error: any) {
+    unlockModalError.value = error?.message || "Failed to unlock container with item."
+  } finally {
+    unlockModalBusy.value = false
+  }
 }
 
 const openContainerByHint = (hint: string): boolean => {
@@ -1286,6 +1365,17 @@ watch(
       @drop-to-scene="handleContainerDropToScene"
       @item-hover="(item, event) => handleHover(item, event)"
       @item-leave="hoveredEntity = null"
+    />
+
+    <ContainerUnlockModal
+      :open="showUnlockModal"
+      :container="unlockModalContainer"
+      :inventory-items="inventoryItems"
+      :busy="unlockModalBusy"
+      :error-message="unlockModalError"
+      @close="showUnlockModal = false"
+      @submit-code="handleUnlockCodeSubmit"
+      @use-key-item="handleUnlockItemSubmit"
     />
 
     <TextLogModal

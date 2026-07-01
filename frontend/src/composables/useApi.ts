@@ -361,6 +361,14 @@ export const api = {
     })
   },
 
+  /** Attempts to unlock one container using a key item from inventory. */
+  unlockContainerWithItem(gameId: string, entityId: string, itemId: string): Promise<{ status: string; entity_id: string; locked: boolean }> {
+    return request(`/adventures/${gameId}/containers/${encodeURIComponent(entityId)}/unlock-item`, {
+      method: 'POST',
+      body: JSON.stringify({ item_id: itemId }),
+    })
+  },
+
   /** @deprecated Use listSessions() instead. */
   listGameSessions(): Promise<GameSession[]> {
     return request<GameSession[]>('/adventures/')

@@ -519,3 +519,96 @@ async def unlock_container_with_code(
     await db.commit()
 
     return {"status": "ok", "entity_id": entity.id, "locked": False}
+
+
+class ContainerUnlockItemRequest(BaseModel):
+    item_id: str
+
+
+@router.post("/{game_id}/containers/{entity_id}/unlock-item")
+async def unlock_container_with_item(
+    game_id: str,
+    entity_id: str,
+    payload: ContainerUnlockItemRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deterministically unlocks a container when the player possesses the required item."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    ent_res = await db.execute(
+        select(WorldEntity).where(
+            WorldEntity.session_id == state.session_id,
+            WorldEntity.id == entity_id,
+        )
+    )
+    entity = ent_res.scalars().first()
+    if not entity or entity.entity_type != "OBJECT" or str(entity.item_type or "").upper() != "CONTAINER":
+        raise HTTPException(status_code=404, detail="Container not found.")
+
+    metadata_json = dict(entity.metadata_json or {})
+    expected_item_id = str(metadata_json.get("item_to_unlock") or "").strip().upper()
+    if not expected_item_id:
+        raise HTTPException(status_code=400, detail="This container does not require an item to unlock.")
+
+    submitted_item_id = str(payload.item_id or "").strip().upper()
+    if not submitted_item_id:
+        raise HTTPException(status_code=400, detail="Item ID is required.")
+    if submitted_item_id != expected_item_id:
+        raise HTTPException(status_code=403, detail="This item cannot unlock this container.")
+
+    # Check if the player possesses the item in their inventory
+    cv_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+    avatar = cv_res.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+
+    inventory_ids = {
+        str(item.get("id") or "").strip().upper() if isinstance(item, dict) else str(item).strip().upper()
+        for item in (avatar.inventory or [])
+    }
+
+    if submitted_item_id not in inventory_ids:
+        raise HTTPException(status_code=403, detail="You do not possess the required key item.")
+
+    entity_states = dict(state.entity_states or {})
+    entry = dict(entity_states.get(entity.id) or {})
+    
+    was_locked = entry.get("locked") if "locked" in entry else True
+
+    entry["locked"] = False
+    entity_states[entity.id] = entry
+    state.entity_states = entity_states
+    
+    if was_locked:
+        xp_reward = metadata_json.get("exp_reward") or metadata_json.get("xp_reward") or 100
+        avatar.exp = (avatar.exp or 0) + xp_reward
+        
+        # Resolve item name for narration
+        item_name = submitted_item_id
+        for item in (avatar.inventory or []):
+            if isinstance(item, dict) and str(item.get("id") or "").strip().upper() == submitted_item_id:
+                item_name = item.get("name") or item_name
+                break
+
+        db.add(
+            ChatMessage(
+                session_id=state.session_id,
+                role="system",
+                content=f"Unlocked {entity.name} using {item_name}!",
+            )
+        )
+        db.add(
+            ChatMessage(
+                session_id=state.session_id,
+                role="system",
+                content=f"you gained {xp_reward} XP",
+            )
+        )
+        
+    await db.commit()
+
+    return {"status": "ok", "entity_id": entity.id, "locked": False}
+

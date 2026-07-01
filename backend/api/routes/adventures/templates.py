@@ -768,6 +768,24 @@ async def create_adventure(
         "entity_images": entity_images,
     }
 
+    initial_entity_states = {
+        AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot,
+        "__asset_snapshot__": asset_snapshot,
+    }
+    for ent in template_entities:
+        if str(getattr(ent, "entity_type", "") or "").upper() != "OBJECT":
+            continue
+        metadata_json = dict(getattr(ent, "metadata_json", None) or {})
+        code_to_unlock = metadata_json.get("code_to_unlock")
+        item_to_unlock = metadata_json.get("item_to_unlock")
+        rule_to_unlock = metadata_json.get("rule_to_unlock")
+        if code_to_unlock or item_to_unlock or rule_to_unlock:
+            initial_entity_states[ent.id] = {"locked": True}
+        else:
+            locked = metadata_json.get("locked")
+            if isinstance(locked, bool):
+                initial_entity_states[ent.id] = {"locked": locked}
+
     new_state = SessionState(
         session_id=session.id,
         user_id=current_user.id,
@@ -776,10 +794,7 @@ async def create_adventure(
         current_scene_id="START",
         in_game_time=0,
         quests=deepcopy(adv.quests or []),
-        entity_states={
-            AdventureLogic.SESSION_MANIFEST_SNAPSHOT_KEY: manifest_snapshot,
-            "__asset_snapshot__": asset_snapshot,
-        },
+        entity_states=initial_entity_states,
         start_datetime=AdventureLogic.resolve_start_datetime(adv.original_manifest),
         plot=adv.plot,
         rules=adv.rules,
