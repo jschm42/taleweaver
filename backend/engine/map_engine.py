@@ -171,21 +171,42 @@ class MapEngine:
                     "is_unknown": True
                 }
 
-            # Check if this edge already exists
-            edge_exists = any(
-                (MapEngine._safe_id(e["from"]) == current_safe_id and MapEngine._safe_id(e["to"]) == target_safe_id) or
-                (ex.exit_type == "bidirectional" and MapEngine._safe_id(e["from"]) == target_safe_id and MapEngine._safe_id(e["to"]) == current_safe_id)
-                for e in edges
-            )
+            # Check if this edge already exists and sync its lock state
+            matched_edge = None
+            for e in edges:
+                if (MapEngine._safe_id(e["from"]) == current_safe_id and MapEngine._safe_id(e["to"]) == target_safe_id):
+                    matched_edge = e
+                    break
+                if ex.exit_type == "bidirectional" and MapEngine._safe_id(e["from"]) == target_safe_id and MapEngine._safe_id(e["to"]) == current_safe_id:
+                    matched_edge = e
+                    break
 
-            if not edge_exists:
+            if matched_edge is None:
                 edges.append({
+                    "id": ex.id,
                     "from": current_scene_id if is_from_current else target_raw_id,
                     "to": target_raw_id if is_from_current else current_scene_id,
                     "label": ex.label or "",
                     "is_locked": ex.is_locked,
-                    "exit_type": ex.exit_type
+                    "exit_type": ex.exit_type,
+                    "lock_description": ex.lock_description or "",
+                    "code_to_unlock": ex.code_to_unlock or "",
+                    "item_to_unlock": ex.item_to_unlock or "",
+                    "rule_to_unlock": ex.rule_to_unlock or "",
                 })
+            else:
+                # Always refresh the gate state and label from the source-of-truth WorldExit.
+                # `label` may have been populated previously by `register_exit` with an empty
+                # value; make sure it now reflects the canonical WorldExit label so the UI
+                # never falls back to the id.
+                if not matched_edge.get("id"):
+                    matched_edge["id"] = ex.id
+                matched_edge["label"] = ex.label or ""
+                matched_edge["is_locked"] = ex.is_locked
+                matched_edge["lock_description"] = ex.lock_description or ""
+                matched_edge["code_to_unlock"] = ex.code_to_unlock or ""
+                matched_edge["item_to_unlock"] = ex.item_to_unlock or ""
+                matched_edge["rule_to_unlock"] = ex.rule_to_unlock or ""
 
         map_dict["nodes"] = nodes
         map_dict["edges"] = edges

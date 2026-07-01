@@ -79,12 +79,21 @@ const itemReferenceOptions = computed(() => {
     }))
 })
 
+const hasGate = computed(() => {
+  return Boolean(
+    (form.value.code_to_unlock || '').trim()
+    || (form.value.item_to_unlock || '').trim()
+    || (form.value.rule_to_unlock || '').trim()
+  )
+})
+
 const isFormInvalid = computed(() => {
   const labelText = (form.value.label || '').trim()
   if (!labelText || labelText.length > 100) return true
   if ((form.value.lock_description || '').length > 255) return true
   if ((form.value.code_to_unlock || '').length > 32) return true
   if ((form.value.rule_to_unlock || '').length > 500) return true
+  if (hasGate.value && !(form.value.lock_description || '').trim()) return true
   return false
 })
 
@@ -103,10 +112,10 @@ function submit() {
           <div class="px-6 py-5 flex justify-between items-center border-b border-white/10 text-slate-200">
             <div class="space-y-1">
               <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest">
-                {{ isCreateMode ? 'Create Exit' : 'Edit Exit' }}
+                {{ isCreateMode ? 'Create Exit' : (form.label || 'Edit Exit') }}
               </h3>
               <p class="text-slate-500 text-xs uppercase font-bold tracking-tighter">
-                {{ isCreateMode ? `From: ${form.from_scene_id || fromSceneId || 'n/a'}` : `ID: ${activeEditExitId || 'n/a'}` }}
+                {{ isCreateMode ? `From: ${form.from_scene_id || fromSceneId || 'n/a'}` : (activeEditExitId ? `ID: ${activeEditExitId}` : '') }}
               </p>
             </div>
             <button @click="emit('close')" class="text-slate-500 hover:text-white transition-colors">
@@ -160,7 +169,7 @@ function submit() {
 
             <label class="text-xs text-slate-300 space-y-1 block">
               <div class="flex justify-between items-center">
-                <span>Lock Description</span>
+                <span>Lock Description<span v-if="hasGate" class="text-red-400"> *</span></span>
                 <span :class="['text-[10px] font-mono', (form.lock_description || '').length > 255 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
                   {{ (form.lock_description || '').length }} / 255
                 </span>

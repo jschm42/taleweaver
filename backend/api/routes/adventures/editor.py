@@ -1417,6 +1417,12 @@ async def _apply_proposal_patch(
             else:
                 code = ""; item = ""; rule = ""
 
+            if (code or item or rule) and not str(world_exit.lock_description or "").strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="A lock description is required when a code, item, or rule gate is configured on an exit."
+                )
+
             world_exit.code_to_unlock = code or None
             world_exit.item_to_unlock = item or None
             world_exit.rule_to_unlock = rule or None
@@ -2448,6 +2454,13 @@ async def create_editor_exit(
         rule_to_unlock=payload.rule_to_unlock,
     )
 
+    lock_description = str(payload.lock_description or "").strip()
+    if (code or item or rule) and not lock_description:
+        raise HTTPException(
+            status_code=400,
+            detail="A lock description is required when a code, item, or rule gate is configured on an exit."
+        )
+
     world_exit = WorldExit(
         template_id=template_id,
         session_id=None,
@@ -2456,7 +2469,7 @@ async def create_editor_exit(
         label=label,
         exit_type=payload.exit_type,
         is_locked=bool(payload.is_locked or code or item or rule),
-        lock_description=str(payload.lock_description or "").strip() or None,
+        lock_description=lock_description or None,
         code_to_unlock=code or None,
         item_to_unlock=item or None,
         rule_to_unlock=rule or None,
@@ -2950,6 +2963,12 @@ async def update_editor_entity(
                     code = ""
                     item = ""
                     rule = ""
+
+                if (code or item or rule) and not str(world_exit.lock_description or "").strip():
+                    raise HTTPException(
+                        status_code=400,
+                        detail="A lock description is required when a code, item, or rule gate is configured on an exit."
+                    )
 
                 world_exit.code_to_unlock = code
                 world_exit.item_to_unlock = item

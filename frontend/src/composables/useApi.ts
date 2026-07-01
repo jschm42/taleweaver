@@ -369,6 +369,30 @@ export const api = {
     })
   },
 
+  /** Unlocks an exit by validating a submitted access code. */
+  unlockExitWithCode(gameId: string, exitId: string, code: string): Promise<{ status: string; exit_id: string; is_locked: boolean }> {
+    return request(`/adventures/${gameId}/exits/${encodeURIComponent(exitId)}/unlock-code`, {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    })
+  },
+
+  /** Unlocks an exit when the player possesses the required key item. */
+  unlockExitWithItem(gameId: string, exitId: string, itemId: string): Promise<{ status: string; exit_id: string; is_locked: boolean }> {
+    return request(`/adventures/${gameId}/exits/${encodeURIComponent(exitId)}/unlock-item`, {
+      method: 'POST',
+      body: JSON.stringify({ item_id: itemId }),
+    })
+  },
+
+  /** Moves the player through an unlocked exit to the target scene. */
+  traverseExit(gameId: string, exitId: string): Promise<{ status: string; exit_id: string; scene_id: string }> {
+    return request(`/adventures/${gameId}/exits/${encodeURIComponent(exitId)}/traverse`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    })
+  },
+
   /** Flips a switch to a target state by providing the correct gate code. */
   flipSwitchWithCode(gameId: string, entityId: string, targetState: string, code: string): Promise<{ status: string; entity_id: string; switch_state: string }> {
     return request(`/adventures/${gameId}/switches/${encodeURIComponent(entityId)}/flip-code`, {

@@ -185,6 +185,12 @@ export function useGameSocket(): UseGameSocket {
     }
   }
 
+  async function refreshSession(): Promise<void> {
+    if (!currentGameId) return
+    const data = await fetchSessionSnapshot(currentGameId)
+    if (data) applySessionSnapshot(data, false)
+  }
+
   function applySessionSnapshot(data: any, updateMessages = true): void {
     if (!data) return
 
@@ -815,6 +821,7 @@ export function useGameSocket(): UseGameSocket {
     connect,
     disconnect,
     haltActiveOperations,
+    refreshSession,
     sendMessage,
     emitSystemMessage,
     runAgentTurn,

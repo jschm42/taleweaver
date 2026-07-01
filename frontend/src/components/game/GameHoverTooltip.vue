@@ -48,6 +48,30 @@ const hasObjectDetails = computed(() => {
 
   return false
 })
+
+const entityTypeUpper = computed(() =>
+  String(props.hoveredEntity?.entity_type || '').toUpperCase()
+)
+const isExit = computed(() => entityTypeUpper.value === 'EXIT')
+const isNpc = computed(() => entityTypeUpper.value === 'NPC')
+const isScene = computed(() => entityTypeUpper.value === 'SCENE')
+
+const headerPaddingClass = computed(() => isExit.value ? 'px-3 pt-2' : 'p-3.5')
+const bodyPaddingClass = computed(() => isExit.value ? 'px-3 pb-2' : 'px-3.5')
+const detailsPaddingClass = computed(() => isExit.value ? 'px-3 pb-2' : 'mt-1 px-3.5 pb-3.5')
+const headerLabelClass = computed(() => isExit.value ? 'text-[11px]' : 'text-sm')
+const bodyTextClass = computed(() => isExit.value ? 'text-[13px] mb-2' : 'text-xs mb-2')
+
+const badgeBorderClass = computed(() => {
+  if (isScene.value) return 'border-indigo-500/50 text-indigo-400'
+  if (isExit.value) return 'border-cyan-500/50 text-cyan-300'
+  return 'border-amber-500/50 text-amber-400'
+})
+
+const entityTypeLabel = computed(() => props.hoveredEntity?.entity_type || 'OBJECT')
+const entityName = computed(() => props.hoveredEntity?.name || '')
+const entityDescription = computed(() => props.hoveredEntity?.description || '')
+const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
 </script>
 
 <template>
@@ -75,17 +99,18 @@ const hasObjectDetails = computed(() => {
             <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent"></div>
              <div class="tooltip-image-fray absolute left-0 right-0 bottom-0 h-12"></div>
           </div>
-          <div v-else class="h-20 w-full relative bg-slate-950 flex items-center justify-center shrink-0">
+          <div v-else :class="['w-full relative bg-slate-950 flex items-center justify-center shrink-0', isExit ? 'h-16' : 'h-20']">
             <div
-              v-if="props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' && (props.hoveredEntity.is_defeated || props.hoveredEntity.hp === 0)"
+              v-if="isNpc && (props.hoveredEntity.is_defeated || props.hoveredEntity.hp === 0)"
               class="absolute -right-8 top-2 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.12em] py-0.5 w-24 text-center rotate-45 shadow-lg z-20"
             >
               Defeated
             </div>
             <i
               :class="[
-                'ra text-4xl',
-                props.hoveredEntity.entity_type?.toUpperCase() === 'NPC' ? 'ra-player text-cyan-400/80' : 'ra-vest text-amber-400/80'
+                isNpc ? 'ra text-4xl ra-player text-cyan-400/80' :
+                isExit ? 'ra text-3xl ' + (isEntityLocked ? 'ra-lock text-rose-400/80' : 'ra-double-doors text-cyan-400/80') :
+                'ra text-4xl ra-vest text-amber-400/80'
               ]"
             ></i>
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.12),transparent_65%)]"></div>
@@ -130,60 +155,68 @@ const hasObjectDetails = computed(() => {
           <!-- Non-NPC: original single-column layout -->
           <template v-else>
           <div :class="['min-h-0 overflow-y-auto', hasHeroImage ? 'tooltip-content-overlap' : '']">
-            <div class="p-3.5">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-sm font-bold text-white uppercase tracking-wider">{{ props.hoveredEntity.name }}</span>
-                <span
-                  class="text-xxs px-1.5 py-0.5 rounded border font-mono uppercase"
-                  :class="props.hoveredEntity.entity_type?.toUpperCase() === 'SCENE' ? 'border-indigo-500/50 text-indigo-400' : 'border-amber-500/50 text-amber-400'"
-                >
-                  {{ props.hoveredEntity.entity_type || 'OBJECT' }}
-                </span>
-              </div>
-              <p class="text-xs text-slate-400 leading-relaxed italic mb-2 whitespace-pre-wrap break-words tooltip-readable-text" v-html="formatObjectIds(props.hoveredEntity.description)"></p>
+            <div :class="['flex items-center justify-between mb-1', headerPaddingClass]">
+              <span :class="['font-bold text-white uppercase tracking-wider', headerLabelClass]">{{ entityName }}</span>
+              <span
+                class="text-xxs px-1.5 py-0.5 rounded border font-mono uppercase"
+                :class="badgeBorderClass"
+              >
+                {{ entityTypeLabel }}
+              </span>
+            </div>
 
-              <div v-if="(props.hoveredEntity.entity_type === 'OBJECT' || props.hoveredEntity.entity_type === 'ITEM') && props.ruleMode !== 'chat' && hasObjectDetails" class="mt-1">
-                <div class="grid grid-cols-2 gap-2 text-xxs uppercase font-bold tracking-wider">
-                  <div v-if="props.hoveredEntity.slot" class="col-span-2 text-slate-500 lowercase italic font-medium">
-                    {{ props.hoveredEntity.slot.replace('_', ' ') }}
-                  </div>
+            <div :class="bodyPaddingClass">
+              <p :class="['text-slate-300 leading-relaxed italic whitespace-pre-wrap break-words tooltip-readable-text', bodyTextClass]"
+                 v-html="formatObjectIds(entityDescription)"></p>
 
-                  <template v-if="props.isConsumableHover">
-                    <div v-if="hasNonZero(props.hoveredEntity.hp_change)" class="text-red-400 flex justify-between">
-                      <span>HP</span>
-                      <span>{{ Number(props.hoveredEntity.hp_change) >= 0 ? '+' : '' }}{{ props.hoveredEntity.hp_change }}</span>
-                    </div>
-                    <div v-if="hasNonZero(props.hoveredEntity.mana_change)" class="text-blue-400 flex justify-between">
-                      <span>Mana</span>
-                      <span>{{ Number(props.hoveredEntity.mana_change) >= 0 ? '+' : '' }}{{ props.hoveredEntity.mana_change }}</span>
-                    </div>
-                    <div v-if="hasNonZero(props.hoveredEntity.stamina_change)" class="text-emerald-400 flex justify-between">
-                      <span>Stamina</span>
-                      <span>{{ Number(props.hoveredEntity.stamina_change) >= 0 ? '+' : '' }}{{ props.hoveredEntity.stamina_change }}</span>
-                    </div>
-                  </template>
+              <p v-if="isExit && isEntityLocked"
+                 class="text-[11px] uppercase tracking-widest text-rose-300 font-bold border-t border-slate-800 pt-2 mt-2 flex items-center gap-1.5">
+                <i class="ra ra-lock text-rose-400"></i>
+                This exit is locked
+              </p>
+            </div>
 
-                  <template v-if="props.showsMechanics">
-                    <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_strength)" class="text-red-400 flex justify-between">
-                      <span>STR</span> <span>+{{ props.hoveredEntity.stat_modifier_strength }}</span>
-                    </div>
-                    <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_dexterity)" class="text-emerald-400 flex justify-between">
-                      <span>DEX</span> <span>+{{ props.hoveredEntity.stat_modifier_dexterity }}</span>
-                    </div>
-                    <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_intelligence)" class="text-blue-400 flex justify-between">
-                      <span>INT</span> <span>+{{ props.hoveredEntity.stat_modifier_intelligence }}</span>
-                    </div>
-                    <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_wisdom)" class="text-purple-400 flex justify-between">
-                      <span>WIS</span> <span>+{{ props.hoveredEntity.stat_modifier_wisdom }}</span>
-                    </div>
-                    <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_charisma)" class="text-pink-400 flex justify-between">
-                      <span>CHA</span> <span>+{{ props.hoveredEntity.stat_modifier_charisma }}</span>
-                    </div>
-                    <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_armor_class)" class="text-amber-400 flex justify-between">
-                      <span>AC</span> <span>+{{ props.hoveredEntity.stat_modifier_armor_class }}</span>
-                    </div>
-                  </template>
+            <div v-if="(props.hoveredEntity.entity_type === 'OBJECT' || props.hoveredEntity.entity_type === 'ITEM') && props.ruleMode !== 'chat' && hasObjectDetails" :class="detailsPaddingClass">
+              <div class="grid grid-cols-2 gap-2 text-xxs uppercase font-bold tracking-wider">
+                <div v-if="props.hoveredEntity.slot" class="col-span-2 text-slate-500 lowercase italic font-medium">
+                  {{ props.hoveredEntity.slot.replace('_', ' ') }}
                 </div>
+
+                <template v-if="props.isConsumableHover">
+                  <div v-if="hasNonZero(props.hoveredEntity.hp_change)" class="text-red-400 flex justify-between">
+                    <span>HP</span>
+                    <span>{{ Number(props.hoveredEntity.hp_change) >= 0 ? '+' : '' }}{{ props.hoveredEntity.hp_change }}</span>
+                  </div>
+                  <div v-if="hasNonZero(props.hoveredEntity.mana_change)" class="text-blue-400 flex justify-between">
+                    <span>Mana</span>
+                    <span>{{ Number(props.hoveredEntity.mana_change) >= 0 ? '+' : '' }}{{ props.hoveredEntity.mana_change }}</span>
+                  </div>
+                  <div v-if="hasNonZero(props.hoveredEntity.stamina_change)" class="text-emerald-400 flex justify-between">
+                    <span>Stamina</span>
+                    <span>{{ Number(props.hoveredEntity.stamina_change) >= 0 ? '+' : '' }}{{ props.hoveredEntity.stamina_change }}</span>
+                  </div>
+                </template>
+
+                <template v-if="props.showsMechanics">
+                  <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_strength)" class="text-red-400 flex justify-between">
+                    <span>STR</span> <span>+{{ props.hoveredEntity.stat_modifier_strength }}</span>
+                  </div>
+                  <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_dexterity)" class="text-emerald-400 flex justify-between">
+                    <span>DEX</span> <span>+{{ props.hoveredEntity.stat_modifier_dexterity }}</span>
+                  </div>
+                  <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_intelligence)" class="text-blue-400 flex justify-between">
+                    <span>INT</span> <span>+{{ props.hoveredEntity.stat_modifier_intelligence }}</span>
+                  </div>
+                  <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_wisdom)" class="text-purple-400 flex justify-between">
+                    <span>WIS</span> <span>+{{ props.hoveredEntity.stat_modifier_wisdom }}</span>
+                  </div>
+                  <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_charisma)" class="text-pink-400 flex justify-between">
+                    <span>CHA</span> <span>+{{ props.hoveredEntity.stat_modifier_charisma }}</span>
+                  </div>
+                  <div v-if="hasNonZero(props.hoveredEntity.stat_modifier_armor_class)" class="text-amber-400 flex justify-between">
+                    <span>AC</span> <span>+{{ props.hoveredEntity.stat_modifier_armor_class }}</span>
+                  </div>
+                </template>
               </div>
             </div>
           </div>

@@ -17,6 +17,11 @@ const props = defineProps<{
   inventoryItems: any[]
   busy?: boolean
   errorMessage?: string
+  kind?: 'container' | 'exit'
+  headerLabel?: string
+  title?: string
+  accentColor?: 'amber' | 'cyan'
+  icon?: 'Lock' | 'Key'
 }>()
 
 const emit = defineEmits<{
@@ -28,7 +33,7 @@ const emit = defineEmits<{
 const codeInput = ref('')
 
 const resolvedMetadata = computed(() => {
-  let meta = props.container?.metadata_json || {}
+  let meta: any = props.container?.metadata_json
   if (typeof meta === 'string') {
     try {
       meta = JSON.parse(meta)
@@ -36,20 +41,53 @@ const resolvedMetadata = computed(() => {
       meta = {}
     }
   }
-  return meta
+  return meta && typeof meta === 'object' ? meta : {}
 })
 
 const requiredCode = computed(() => {
-  return String(props.container?.code_to_unlock || resolvedMetadata.value.code_to_unlock || '').trim()
+  return String(
+    props.container?.code_to_unlock
+    || resolvedMetadata.value.code_to_unlock
+    || props.container?.metadata?.code_to_unlock
+    || ''
+  ).trim()
 })
 
 const requiredItemId = computed(() => {
-  return String(props.container?.item_to_unlock || resolvedMetadata.value.item_to_unlock || '').trim().toUpperCase()
+  return String(
+    props.container?.item_to_unlock
+    || resolvedMetadata.value.item_to_unlock
+    || props.container?.metadata?.item_to_unlock
+    || ''
+  ).trim().toUpperCase()
 })
 
 const requiredRule = computed(() => {
-  return String(props.container?.rule_to_unlock || resolvedMetadata.value.rule_to_unlock || '').trim()
+  return String(
+    props.container?.rule_to_unlock
+    || resolvedMetadata.value.rule_to_unlock
+    || props.container?.metadata?.rule_to_unlock
+    || ''
+  ).trim()
 })
+
+const effectiveKind = computed(() => props.kind || (props.container?.exit_type ? 'exit' : 'container'))
+const effectiveTitle = computed(() => props.title || props.container?.name || props.container?.label || (effectiveKind.value === 'exit' ? 'Exit' : 'Container'))
+const effectiveHeader = computed(() => props.headerLabel || (effectiveKind.value === 'exit' ? 'Locked Exit' : 'Locked Container'))
+const effectiveAccent = computed(() => props.accentColor || (effectiveKind.value === 'exit' ? 'cyan' : 'amber'))
+
+const accentColorClass = computed(() => {
+  if (effectiveAccent.value === 'cyan') {
+    return { text: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', label: 'text-cyan-500' }
+  }
+  return { text: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'text-amber-500' }
+})
+
+const effectiveDescription = computed(() => {
+  return String(props.container?.description || props.container?.lock_description || '').trim()
+})
+
+const entityNoun = computed(() => (effectiveKind.value === 'exit' ? 'exit' : 'container'))
 
 // Helper to format ID to readable name (e.g. BRONZE_KEY -> Bronze Key)
 const formatIdToName = (id: string): string => {
@@ -120,12 +158,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
           <!-- Header -->
           <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
             <div class="flex items-center gap-2.5">
-              <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                <Lock class="w-4 h-4 text-amber-400" />
+              <div :class="['w-8 h-8 rounded-lg flex items-center justify-center', accentColorClass.bg, accentColorClass.border]">
+                <Lock :class="['w-4 h-4', accentColorClass.text]" />
               </div>
               <div>
-                <p class="text-[9px] uppercase tracking-[0.25em] text-amber-500 font-black">Locked Container</p>
-                <h3 class="text-lg font-black text-white leading-tight mt-0.5">{{ container.name || 'Container' }}</h3>
+                <p :class="['text-[9px] uppercase tracking-[0.25em] font-black', accentColorClass.label]">{{ effectiveHeader }}</p>
+                <h3 class="text-lg font-black text-white leading-tight mt-0.5">{{ effectiveTitle }}</h3>
               </div>
             </div>
             <button
@@ -139,9 +177,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
 
           <!-- Body -->
           <div class="p-6 space-y-5">
-            <!-- Container Description -->
-            <p v-if="container.description" class="text-sm text-slate-400 leading-relaxed italic">
-              "{{ container.description }}"
+            <!-- Container/Exit Description -->
+            <p v-if="effectiveDescription" class="text-sm text-slate-400 leading-relaxed italic">
+              "{{ effectiveDescription }}"
             </p>
 
             <!-- Error message -->
@@ -162,13 +200,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
                   placeholder="Enter code..."
                   maxlength="32"
                   :disabled="busy"
-                  class="flex-1 bg-slate-950/60 border border-slate-800 focus:border-amber-500/60 rounded-xl px-4 py-3 text-white placeholder-slate-600 outline-none transition-all font-mono font-bold tracking-wider"
+                  :class="['flex-1 bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 outline-none transition-all font-mono font-bold tracking-wider', accentColorClass.border.replace('border-', 'focus:border-')]"
                   autofocus
                 />
                 <button
                   type="submit"
                   :disabled="busy || !codeInput.trim()"
-                  class="px-5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 disabled:text-slate-600 font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10"
+                  :class="['px-5 disabled:bg-slate-800 text-slate-950 disabled:text-slate-600 font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg',
+                    effectiveAccent === 'cyan' ? 'bg-cyan-500 hover:bg-cyan-400 shadow-cyan-500/10' : 'bg-amber-500 hover:bg-amber-400 shadow-amber-500/10']"
                 >
                   <Unlock class="w-4.5 h-4.5" />
                   <span>Unlock</span>
@@ -188,7 +227,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
                     {{ hasRequiredKey ? 'Item Available' : 'Item Required' }}
                   </p>
                   <p class="text-sm text-slate-300">
-                    This container requires a special item to unlock.
+                    This {{ entityNoun }} requires a special item to unlock.
                   </p>
                 </div>
               </div>

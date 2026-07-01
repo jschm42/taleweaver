@@ -1040,8 +1040,7 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-85"></div>
             <div class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border border-emerald-400/50 bg-emerald-500/20 text-emerald-100">EXIT</div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
-              <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ worldExit.label || worldExit.id }}</div>
-              <div class="text-[9px] font-mono text-slate-200/80 tracking-widest mt-1 truncate" :title="worldExit.id">ID: {{ worldExit.id }}</div>
+              <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md" :title="worldExit.label || worldExit.id">{{ worldExit.label || 'Exit' }}</div>
             </div>
             <div class="absolute top-2 right-2 z-40">
               <button

@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.gameplay_logic import GameTurnManager
@@ -815,3 +815,186 @@ async def flip_switch_with_item(
 
     await db.commit()
     return {"status": "ok", "entity_id": entity.id, "switch_state": target_state}
+
+
+# ---------------------------------------------------------------------------
+# Exit unlock & traversal endpoints
+# ---------------------------------------------------------------------------
+
+INVALID_EXIT_CODE_MESSAGE = "That code does not open this way."
+
+
+async def _resolve_session_exit(db: AsyncSession, state: SessionState, exit_id: str) -> WorldExit | None:
+    """Returns the exit used for the current session, preferring the session-scoped row."""
+    res = await db.execute(
+        select(WorldExit).where(
+            or_(
+                WorldExit.session_id == state.session_id,
+                and_(
+                    WorldExit.template_id == state.template_id,
+                    WorldExit.session_id.is_(None),
+                ),
+            ),
+            WorldExit.id == exit_id,
+        )
+    )
+    return res.scalars().first()
+
+
+class ExitUnlockCodeRequest(BaseModel):
+    code: str
+
+
+class ExitUnlockItemRequest(BaseModel):
+    item_id: str
+
+
+@router.post("/{game_id}/exits/{exit_id}/unlock-code")
+async def unlock_exit_with_code(
+    game_id: str,
+    exit_id: str,
+    payload: ExitUnlockCodeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Unlocks an exit by validating a submitted access code."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    world_exit = await _resolve_session_exit(db, state, exit_id)
+    if not world_exit:
+        raise HTTPException(status_code=404, detail="Exit not found.")
+
+    expected = str(world_exit.code_to_unlock or "").strip()
+    if not expected:
+        raise HTTPException(status_code=400, detail="This exit does not require a code.")
+
+    submitted = str(payload.code or "").strip()
+    if not submitted:
+        raise HTTPException(status_code=400, detail="Code is required.")
+    if submitted.lower() != expected.lower():
+        raise HTTPException(status_code=403, detail=INVALID_EXIT_CODE_MESSAGE)
+
+    world_exit.is_locked = False
+    db.add(
+        ChatMessage(
+            session_id=state.session_id,
+            role="system",
+            content=f"{world_exit.label or 'The exit'} accepts the code and the way is open.",
+        )
+    )
+    await db.commit()
+    return {"status": "ok", "exit_id": world_exit.id, "is_locked": False}
+
+
+@router.post("/{game_id}/exits/{exit_id}/unlock-item")
+async def unlock_exit_with_item(
+    game_id: str,
+    exit_id: str,
+    payload: ExitUnlockItemRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Unlocks an exit when the player possesses the required key item."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    world_exit = await _resolve_session_exit(db, state, exit_id)
+    if not world_exit:
+        raise HTTPException(status_code=404, detail="Exit not found.")
+
+    expected_item = str(world_exit.item_to_unlock or "").strip().upper()
+    if not expected_item:
+        raise HTTPException(status_code=400, detail="This exit does not require an item to unlock.")
+
+    submitted_item = str(payload.item_id or "").strip().upper()
+    if not submitted_item:
+        raise HTTPException(status_code=400, detail="Item ID is required.")
+    if submitted_item != expected_item:
+        raise HTTPException(status_code=403, detail="This item cannot unlock this exit.")
+
+    av_res = await db.execute(select(Avatar).where(Avatar.id == state.avatar_id))
+    avatar = av_res.scalars().first()
+    if not avatar:
+        raise HTTPException(status_code=404, detail="Avatar not found.")
+
+    inventory_ids = {
+        str(item.get("id") or "").strip().upper() if isinstance(item, dict) else str(item).strip().upper()
+        for item in (avatar.inventory or [])
+    }
+    if submitted_item not in inventory_ids:
+        raise HTTPException(status_code=403, detail="You do not possess the required key item.")
+
+    item_name = submitted_item
+    for item in (avatar.inventory or []):
+        if isinstance(item, dict) and str(item.get("id") or "").strip().upper() == submitted_item:
+            item_name = item.get("name") or item_name
+            break
+
+    world_exit.is_locked = False
+    db.add(
+        ChatMessage(
+            session_id=state.session_id,
+            role="system",
+            content=f"{world_exit.label or 'The exit'} yields to {item_name} and the way is open.",
+        )
+    )
+    await db.commit()
+    return {"status": "ok", "exit_id": world_exit.id, "is_locked": False}
+
+
+@router.post("/{game_id}/exits/{exit_id}/traverse")
+async def traverse_exit(
+    game_id: str,
+    exit_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Moves the player through an unlocked exit to the target scene."""
+    state = await AdventureLogic.resolve_session_state(db, game_id, user_id=current_user.id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    world_exit = await _resolve_session_exit(db, state, exit_id)
+    if not world_exit:
+        raise HTTPException(status_code=404, detail="Exit not found.")
+
+    if world_exit.is_locked:
+        raise HTTPException(status_code=403, detail=str(world_exit.lock_description or "The way is locked."))
+
+    current_scene_id = str(state.current_scene_id or "").strip().upper()
+    if world_exit.from_scene_id == current_scene_id:
+        target_scene_id = world_exit.to_scene_id
+    elif world_exit.exit_type.lower() == "bidirectional" and world_exit.to_scene_id == current_scene_id:
+        target_scene_id = world_exit.from_scene_id
+    else:
+        raise HTTPException(status_code=400, detail="This exit does not connect to the current scene.")
+
+    scene_res = await db.execute(
+        select(WorldScene).where(
+            or_(
+                WorldScene.session_id == state.session_id,
+                and_(
+                    WorldScene.template_id == state.template_id,
+                    WorldScene.session_id.is_(None),
+                ),
+            ),
+            WorldScene.id == target_scene_id,
+        )
+    )
+    if not scene_res.scalars().first():
+        raise HTTPException(status_code=400, detail="The target scene is not available.")
+
+    state.current_scene_id = target_scene_id
+
+    db.add(
+        ChatMessage(
+            session_id=state.session_id,
+            role="system",
+            content=f"You pass through {world_exit.label or 'the exit'} into {target_scene_id}.",
+        )
+    )
+    await db.commit()
+    return {"status": "ok", "exit_id": world_exit.id, "scene_id": target_scene_id}

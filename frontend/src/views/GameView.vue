@@ -129,6 +129,12 @@ const switchUnlockBusy = ref(false)
 const switchUnlockError = ref('')
 const showSwitchStateModal = ref(false)   // primary state-picker modal
 
+const showExitUnlockModal = ref(false)
+const exitUnlockModalTarget = ref<any>(null)
+const exitUnlockBusy = ref(false)
+const exitUnlockError = ref('')
+const exitTraversalBusy = ref<string>('')
+
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
   try {
@@ -179,6 +185,7 @@ const {
   connect,
   disconnect,
   haltActiveOperations,
+  refreshSession,
   sendMessage,
   emitSystemMessage,
   runAgentTurn,
@@ -701,6 +708,100 @@ const handleUnlockItemSubmit = async (itemId: string) => {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Exit interactions
+// ---------------------------------------------------------------------------
+
+const handleExitClick = async (exit: any) => {
+  if (!exit || isActionInputBlocked.value) return
+  if (exitTraversalBusy.value || exitUnlockBusy.value) return
+
+  const exitId = String(exit.id || '').trim()
+  if (!exitId) return
+
+  if (isExitLocked(exit)) {
+    exitUnlockModalTarget.value = { ...exit, id: exitId, name: exit.label || 'Exit' }
+    exitUnlockError.value = ''
+    showExitUnlockModal.value = true
+    return
+  }
+
+  await traverseSceneExit(exit, exitId)
+}
+
+const traverseSceneExit = async (exit: any, exitId: string) => {
+  exitTraversalBusy.value = exitId
+  try {
+    const result = await api.traverseExit(props.id, exitId)
+    addNotification(`You pass through ${exit?.label || 'the exit'}.`, 'success')
+    if (typeof refreshSession === 'function') {
+      await refreshSession()
+    }
+    void result?.scene_id
+  } catch (error: any) {
+    addNotification(error?.message || 'Failed to traverse the exit.', 'error')
+  } finally {
+    exitTraversalBusy.value = ''
+  }
+}
+
+const handleExitUnlockCodeSubmit = async (code: string) => {
+  if (!exitUnlockModalTarget.value || exitUnlockBusy.value) return
+  const exitId = String(exitUnlockModalTarget.value.id || '').trim()
+  if (!exitId) return
+
+  exitUnlockBusy.value = true
+  exitUnlockError.value = ''
+  try {
+    await api.unlockExitWithCode(props.id, exitId, code)
+    markExitUnlockedLocally(exitId)
+    const target = exitUnlockModalTarget.value
+    addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
+    showExitUnlockModal.value = false
+    exitUnlockModalTarget.value = null
+    await traverseSceneExit({ ...(target || {}), is_locked: false }, exitId)
+  } catch (error: any) {
+    exitUnlockError.value = error?.message || "That code didn't open the way."
+  } finally {
+    exitUnlockBusy.value = false
+  }
+}
+
+const handleExitUnlockItemSubmit = async (itemId: string) => {
+  if (!exitUnlockModalTarget.value || exitUnlockBusy.value) return
+  const exitId = String(exitUnlockModalTarget.value.id || '').trim()
+  if (!exitId) return
+
+  exitUnlockBusy.value = true
+  exitUnlockError.value = ''
+  try {
+    await api.unlockExitWithItem(props.id, exitId, itemId)
+    markExitUnlockedLocally(exitId)
+    const target = exitUnlockModalTarget.value
+    addNotification(`${target?.name || target?.label || 'Exit'} unlocked.`, 'success')
+    showExitUnlockModal.value = false
+    exitUnlockModalTarget.value = null
+    await traverseSceneExit({ ...(target || {}), is_locked: false }, exitId)
+  } catch (error: any) {
+    exitUnlockError.value = error?.message || 'Failed to unlock the exit with this item.'
+  } finally {
+    exitUnlockBusy.value = false
+  }
+}
+
+const markExitUnlockedLocally = (exitId: string) => {
+  const normalized = String(exitId || '').trim()
+  if (!normalized || !mapData.value) return
+  const edges = Array.isArray(mapData.value.edges) ? mapData.value.edges : []
+  for (const edge of edges) {
+    if (!edge || String(edge.id || '').trim() !== normalized) continue
+    edge.is_locked = false
+    edge.code_to_unlock = ''
+    edge.item_to_unlock = ''
+    edge.rule_to_unlock = ''
+  }
+}
+
 const openContainerByHint = (hint: string): boolean => {
   const normalized = String(hint || '').trim().toLowerCase()
   if (!normalized) return false
@@ -902,6 +1003,56 @@ const items = computed(() => entities.value.filter((e: any) => isListedInDiscove
 const sceneSwitches = computed(() => entities.value.filter((e: any) => isSwitchEntity(e)))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
+
+// Exits currently accessible from the player's scene (one-way + bidirectional edges)
+const sceneExits = computed<any[]>(() => {
+  const edges = Array.isArray(mapData.value?.edges) ? mapData.value.edges : []
+  const current = String(sheet.value?.scene_id || '').trim().toUpperCase()
+  if (!current) return []
+  const result: any[] = []
+  for (const edge of edges) {
+    if (!edge || typeof edge !== 'object') continue
+    const fromId = String(edge.from || '').trim().toUpperCase()
+    const toId = String(edge.to || '').trim().toUpperCase()
+    const exitType = String(edge.exit_type || '').toLowerCase()
+    if (fromId === current) {
+      result.push({ ...edge, direction: 'forward' })
+    } else if (exitType === 'bidirectional' && toId === current) {
+      result.push({ ...edge, direction: 'backward' })
+    }
+  }
+  return result
+})
+
+const isExitLocked = (exit: any): boolean => {
+  if (!exit) return false
+  const code = String(exit.code_to_unlock || '').trim()
+  const item = String(exit.item_to_unlock || '').trim()
+  const rule = String(exit.rule_to_unlock || '').trim()
+  if (!code && !item && !rule) return Boolean(exit.is_locked)
+  return Boolean(exit.is_locked)
+}
+
+const exitDisplayName = (exit: any): string => {
+  if (!exit) return 'Exit'
+  const raw = String(exit.label || '').trim()
+  if (!raw) return 'Exit'
+  const arrowMatch = raw.match(/^(.+?)\s*(?:->|→)\s*.+$/)
+  if (arrowMatch) return arrowMatch[1].trim()
+  return raw
+}
+
+// Recover from stale snapshots where edges lack the WorldExit UUID by refreshing once.
+watch(sceneExits, (exits) => {
+  if (!exits || exits.length === 0) return
+  const needsRefresh = exits.some((e: any) => {
+    const id = String(e?.id || '').trim()
+    return !id
+  })
+  if (needsRefresh && typeof refreshSession === 'function') {
+    void refreshSession()
+  }
+})
 const lootPopupItems = computed(() => (combat.value?.loot_items || []) as any[])
 const isCombatActive = computed(() => !!combat.value?.active)
 const showCombatDialog = computed(() => {
@@ -1306,12 +1457,53 @@ watch(
           :show-image="showImage"
           :is-debug="!!sheet?.debug_mode"
           @hover="(payload, event) => handleHover(payload, event)"
-          @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
+          @move="(event) => mousePos = { x: event.clientX, y: $event.clientY }"
           @leave="hoveredEntity = null"
           @contextmenu="(payload, event) => openContextMenu(payload, event)"
           @click="handleEntityClick"
           @image-error="(path) => handleImageError(path)"
         />
+
+        <!-- Exits Panel (directly under Location) -->
+        <div v-if="sceneExits.length > 0" class="mb-8">
+          <div class="flex items-center gap-1.5 w-full mb-3 select-none">
+            <i class="ra ra-double-doors text-cyan-500 text-sm"></i>
+            <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-500/80">Exits</h3>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5">
+            <div
+              v-for="ex in sceneExits"
+              :key="ex.id"
+              role="button"
+              tabindex="0"
+              :aria-disabled="isActionInputBlocked || exitTraversalBusy === ex.id || exitUnlockBusy"
+              :class="[
+                'relative border rounded-xl group transition-all px-2.5 py-2 flex items-center gap-1.5 text-left select-none outline-none focus:ring-2 focus:ring-cyan-500/50',
+                (isActionInputBlocked || exitTraversalBusy === ex.id || exitUnlockBusy)
+                  ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                  : 'cursor-pointer',
+                isExitLocked(ex)
+                  ? 'bg-rose-950/30 border-rose-700/50 hover:border-rose-500 hover:bg-rose-900/30'
+                  : 'bg-slate-950/40 border-slate-800/40 hover:border-cyan-500/40 hover:bg-slate-900/50'
+              ]"
+              @click.stop="handleExitClick(ex)"
+              @keydown.enter="handleExitClick(ex)"
+              @keydown.space.prevent="handleExitClick(ex)"
+              @mouseenter="handleHover({ id: ex.id, name: ex.label, description: ex.lock_description, entity_type: 'EXIT', is_locked: isExitLocked(ex) }, $event)"
+              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+              @mouseleave="hoveredEntity = null"
+            >
+              <i :class="['ra text-sm shrink-0', isExitLocked(ex) ? 'ra-lock text-rose-300' : 'ra-double-doors text-cyan-400']"></i>
+              <p :class="['flex-1 min-w-0 text-[10px] font-bold uppercase tracking-tight truncate transition-colors',
+                isExitLocked(ex) ? 'text-rose-200 group-hover:text-rose-100' : 'text-slate-200 group-hover:text-cyan-300']"
+                :title="ex.label || 'Exit'">
+                {{ exitDisplayName(ex) }}
+              </p>
+              <i v-if="exitTraversalBusy === ex.id" class="ra ra-hourglass text-xs animate-spin opacity-50 shrink-0"></i>
+              <i v-else-if="isExitLocked(ex)" class="ra ra-key text-[10px] text-rose-300 shrink-0" title="Locked"></i>
+            </div>
+          </div>
+        </div>
 
         <GameNpcsPanel
           :npcs="npcs"
@@ -1380,6 +1572,7 @@ watch(
           </div>
         </div>
 
+        <!-- Exits Panel (moved to follow the Location panel via separate insertion above) -->
 
         <GameWorldMemoryPanel
           :memories="worldMemories"
@@ -1571,6 +1764,20 @@ watch(
       @close="showUnlockModal = false"
       @submit-code="handleUnlockCodeSubmit"
       @use-key-item="handleUnlockItemSubmit"
+    />
+
+    <ContainerUnlockModal
+      :open="showExitUnlockModal"
+      :container="exitUnlockModalTarget"
+      :inventory-items="inventoryItems"
+      :busy="exitUnlockBusy"
+      :error-message="exitUnlockError"
+      kind="exit"
+      header-label="Locked Exit"
+      :accent-color="'cyan'"
+      @close="showExitUnlockModal = false"
+      @submit-code="handleExitUnlockCodeSubmit"
+      @use-key-item="handleExitUnlockItemSubmit"
     />
 
     <SwitchStateModal

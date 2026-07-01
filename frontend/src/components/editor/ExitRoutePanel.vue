@@ -77,12 +77,21 @@ const itemReferenceOptions = computed(() => {
     }))
 })
 
+const hasGate = computed(() => {
+  return Boolean(
+    (exitEditForm.value.code_to_unlock || '').trim()
+    || (exitEditForm.value.item_to_unlock || '').trim()
+    || (exitEditForm.value.rule_to_unlock || '').trim()
+  )
+})
+
 const isFormInvalid = computed(() => {
   const labelText = (exitEditForm.value.label || '').trim()
   if (!labelText || labelText.length > 100) return true
   if ((exitEditForm.value.lock_description || '').length > 255) return true
   if ((exitEditForm.value.code_to_unlock || '').length > 32) return true
   if ((exitEditForm.value.rule_to_unlock || '').length > 500) return true
+  if (hasGate.value && !(exitEditForm.value.lock_description || '').trim()) return true
   return false
 })
 
@@ -145,7 +154,7 @@ async function saveRouteExit() {
 
     <div>
       <p class="text-xs uppercase tracking-widest text-emerald-300">Exit Route</p>
-      <h3 class="text-lg font-bold text-white">{{ routeExitDetails?.label || routeExitDetails?.id || exitId }}</h3>
+      <h3 class="text-lg font-bold text-white">{{ routeExitDetails?.label || 'Exit' }}</h3>
       <p class="text-sm text-slate-300 mt-1">
         {{ routeExitDetails?.from_scene_id }} -> {{ routeExitDetails?.to_scene_id }}
       </p>
@@ -172,7 +181,7 @@ async function saveRouteExit() {
 
     <label class="text-xs text-slate-300 space-y-1 block">
       <div class="flex justify-between items-center">
-        <span>Lock Description</span>
+        <span>Lock Description<span v-if="hasGate" class="text-red-400"> *</span></span>
         <span :class="['text-[10px] font-mono', (exitEditForm.lock_description || '').length > 255 ? 'text-red-500 font-bold' : 'text-emerald-500/40']">
           {{ (exitEditForm.lock_description || '').length }} / 255
         </span>
