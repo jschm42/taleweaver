@@ -15,6 +15,7 @@ export const getItemIcon = (type?: string) => {
     case 'NPC': return 'ra-player'
     case 'PLAYER': return 'ra-player'
     case 'SCENE': return 'ra-mountains'
+    case 'SWITCH': return 'ra-lever'
     default: return 'ra-emerald'
   }
 }
@@ -30,6 +31,7 @@ export const getTypeColor = (type?: string) => {
     case 'COMBINABLE': return 'text-fuchsia-500'
     case 'CONSTRUCTABLE': return 'text-orange-500'
     case 'NPC': return 'text-amber-500'
+    case 'SWITCH': return 'text-lime-500'
     default: return 'text-slate-400'
   }
 }

@@ -21,6 +21,7 @@ export type ContextMenuModel = {
 const OPEN_CONTAINER_PREFIX = '[OPEN_CONTAINER] '
 const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
+export const FLIP_SWITCH_PREFIX = '[FLIP_SWITCH] '
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -182,6 +183,20 @@ export const gameCommandService = {
 
       if (isReadableEntity(entity)) {
         items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${entity.id || entity.name}` })
+      }
+
+      if (isSwitchEntity(entity)) {
+        // Generate one "Flip to <state>" entry per non-current state
+        const metadata = (entity.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
+        const switchConfig = (metadata.switch && typeof metadata.switch === 'object') ? metadata.switch : {}
+        const switchStates: string[] = Array.isArray(switchConfig.states) ? switchConfig.states : []
+        const configuredCurrent = String(entity.switch_state || switchConfig.initial_state || '').trim().toUpperCase()
+        for (const s of switchStates) {
+          const stateUpper = String(s || '').trim().toUpperCase()
+          if (stateUpper && stateUpper !== configuredCurrent) {
+            items.push({ label: `Flip to ${stateUpper}`, action: `${FLIP_SWITCH_PREFIX}${entity.id}|${stateUpper}` })
+          }
+        }
       }
     }
 

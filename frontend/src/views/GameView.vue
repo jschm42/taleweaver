@@ -24,6 +24,7 @@ import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
 import ContainerUnlockModal from '@/components/game/ContainerUnlockModal.vue'
+import SwitchUnlockModal from '@/components/game/SwitchUnlockModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
@@ -46,7 +47,7 @@ import { refreshUser } from '@/store/auth'
 import { getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import { type GameSettings } from '@/services/gameViewService'
-import { gameCommandService } from '@/services/gameCommandService'
+import { gameCommandService, FLIP_SWITCH_PREFIX } from '@/services/gameCommandService'
 import { gameActionService } from '@/services/gameActionService'
 import type { SessionCheckpoint } from '@/types'
 
@@ -118,6 +119,13 @@ const activeContainer = ref<{
 const activeCodeContainer = ref<{ id: string; name: string; source: 'scene' | 'inventory' } | null>(null)
 const awaitingContainerCodeInput = ref(false)
 const dialogPanel = ref<any>(null)
+
+// --- Switch unlock modal state ---
+const showSwitchUnlockModal = ref(false)
+const switchUnlockModalEntity = ref<any>(null)
+const switchUnlockTargetState = ref('')
+const switchUnlockBusy = ref(false)
+const switchUnlockError = ref('')
 
 const saveSessionNote = async (note: string) => {
   isSavingNote.value = true
@@ -317,6 +325,110 @@ const handleEntityClick = async (entity: any) => {
 const CONTAINER_OPEN_PREFIX = '[OPEN_CONTAINER] '
 const TEXT_LOG_OPEN_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
+
+const isSwitchEntity = (entity: any): boolean => {
+  if (!entity) return false
+  return String(entity.item_type || '').toUpperCase() === 'SWITCH'
+}
+
+const getSwitchTransitionGates = (entity: any, targetState: string): { code: string; item: string; rule: string } => {
+  const metadata = (entity?.metadata_json && typeof entity.metadata_json === 'object') ? entity.metadata_json : {}
+  const config = (metadata.switch && typeof metadata.switch === 'object') ? metadata.switch : {}
+  const transitions = Array.isArray(config.transitions) ? config.transitions : []
+
+  const configuredCurrent = String(entity.switch_state || config.initial_state || '').trim().toUpperCase()
+  const targetUpper = String(targetState || '').trim().toUpperCase()
+
+  const trans = transitions.find((t: any) => {
+    if (!t || typeof t !== 'object') return false
+    return String(t.from || '').trim().toUpperCase() === configuredCurrent &&
+           String(t.to || '').trim().toUpperCase() === targetUpper
+  })
+
+  const gates = (trans?.gates && typeof trans.gates === 'object') ? trans.gates : {}
+  return {
+    code: String(gates.code || '').trim(),
+    item: String(gates.item || '').trim(),
+    rule: String(gates.rule || '').trim(),
+  }
+}
+
+const openSwitchFlipModal = (entity: any, targetState: string): void => {
+  switchUnlockModalEntity.value = entity
+  switchUnlockTargetState.value = targetState
+  switchUnlockError.value = ''
+  showSwitchUnlockModal.value = true
+}
+
+const handleSwitchFlipByHint = (hint: string): boolean => {
+  // hint format: '<entityId>|<targetState>'
+  const sepIdx = hint.lastIndexOf('|')
+  if (sepIdx === -1) return false
+  const entityId = hint.slice(0, sepIdx).trim()
+  const targetState = hint.slice(sepIdx + 1).trim()
+  if (!entityId || !targetState) return false
+
+  // Locate the switch in the current scene entities
+  const switchEntity = (entities.value || []).find((e: any) =>
+    isSwitchEntity(e) && String(e.id || '').toLowerCase() === entityId.toLowerCase()
+  )
+  if (!switchEntity) return false
+
+  const gates = getSwitchTransitionGates(switchEntity, targetState)
+  if (gates.code || gates.item || gates.rule) {
+    openSwitchFlipModal(switchEntity, targetState)
+    return true
+  }
+
+  // No gate — send the command directly
+  void sendMessage(`/switch "${switchEntity.name}" ${targetState}`)
+  return true
+}
+
+const handleSwitchFlipCodeSubmit = async (code: string) => {
+  if (!switchUnlockModalEntity.value || switchUnlockBusy.value) return
+  const entityId = String(switchUnlockModalEntity.value.id || '').trim()
+  if (!entityId) return
+
+  switchUnlockBusy.value = true
+  switchUnlockError.value = ''
+  try {
+    const result = await api.flipSwitchWithCode(props.id, entityId, switchUnlockTargetState.value, code)
+    // Update the local entity state immediately so the UI reflects the change
+    const override = (entities.value || []).find((e: any) => String(e.id || '').toLowerCase() === entityId.toLowerCase())
+    if (override) override.switch_state = result.switch_state
+    addNotification(`${switchUnlockModalEntity.value.name || 'Switch'} flipped to ${result.switch_state}.`, 'success')
+    showSwitchUnlockModal.value = false
+    switchUnlockModalEntity.value = null
+    switchUnlockTargetState.value = ''
+  } catch (error: any) {
+    switchUnlockError.value = error?.message || 'Incorrect code. The switch does not move.'
+  } finally {
+    switchUnlockBusy.value = false
+  }
+}
+
+const handleSwitchFlipItemSubmit = async (itemId: string) => {
+  if (!switchUnlockModalEntity.value || switchUnlockBusy.value) return
+  const entityId = String(switchUnlockModalEntity.value.id || '').trim()
+  if (!entityId) return
+
+  switchUnlockBusy.value = true
+  switchUnlockError.value = ''
+  try {
+    const result = await api.flipSwitchWithItem(props.id, entityId, switchUnlockTargetState.value, itemId)
+    const override = (entities.value || []).find((e: any) => String(e.id || '').toLowerCase() === entityId.toLowerCase())
+    if (override) override.switch_state = result.switch_state
+    addNotification(`${switchUnlockModalEntity.value.name || 'Switch'} flipped to ${result.switch_state}.`, 'success')
+    showSwitchUnlockModal.value = false
+    switchUnlockModalEntity.value = null
+    switchUnlockTargetState.value = ''
+  } catch (error: any) {
+    switchUnlockError.value = error?.message || 'Failed to activate the switch with this item.'
+  } finally {
+    switchUnlockBusy.value = false
+  }
+}
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -754,6 +866,7 @@ const isListedInDiscoveries = (entity: any): boolean => {
 }
 
 const items = computed(() => entities.value.filter((e: any) => isListedInDiscoveries(e)))
+const sceneSwitches = computed(() => entities.value.filter((e: any) => isSwitchEntity(e)))
 const inventoryItems = computed(() => sheet.value?.inventory ?? [])
 const combatConsumables = computed(() => (sheet.value?.inventory ?? []).filter((item: any) => item?.item_type === 'CONSUMABLE'))
 const lootPopupItems = computed(() => (combat.value?.loot_items || []) as any[])
@@ -906,6 +1019,11 @@ const {
       const prefill = npcName ? `/say to ${npcName}: ` : '/say to '
       dialogPanel.value?.setInputText(prefill)
       return true
+    }
+
+    if (action.startsWith(FLIP_SWITCH_PREFIX)) {
+      const hint = action.replace(FLIP_SWITCH_PREFIX, '').trim()
+      return handleSwitchFlipByHint(hint)
     }
 
     if (!action.startsWith(CONTAINER_OPEN_PREFIX)) {
@@ -1186,6 +1304,47 @@ watch(
           @take-direct="handleTakeDirect"
         />
 
+        <!-- Switches Panel -->
+        <div v-if="sceneSwitches.length > 0" class="mb-8">
+          <button
+            class="flex items-center gap-1.5 w-full text-left focus:outline-none cursor-pointer mb-4 select-none"
+          >
+            <i class="ra ra-lever text-lime-500 text-sm"></i>
+            <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-lime-500/80">Switches</h3>
+          </button>
+          <div class="flex flex-col gap-2">
+            <div
+              v-for="sw in sceneSwitches"
+              :key="sw.id"
+              class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group transition-all hover:border-lime-500/40 hover:bg-slate-900/50 p-3 flex items-center gap-3 cursor-pointer shadow-lg"
+              @contextmenu.prevent="openContextMenu(sw, $event)"
+              @click="openContextMenu(sw, $event)"
+              @mouseenter="handleHover(sw, $event)"
+              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+              @mouseleave="hoveredEntity = null"
+            >
+              <div class="w-10 h-10 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0">
+                <img
+                  v-if="sw.image_url && showImage(sw.image_url)"
+                  :src="sw.image_url"
+                  class="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
+                  @error="handleImageError(sw.image_url)"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
+                  <i class="ra ra-lever text-xl text-lime-400"></i>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-black text-slate-300 group-hover:text-lime-400 transition-colors uppercase tracking-tight truncate">{{ sw.name }}</p>
+                <p class="text-[10px] text-slate-500 mt-0.5 font-mono truncate" v-if="!!sheet?.debug_mode">ID: {{ sw.id }}</p>
+              </div>
+              <span class="px-2 py-0.5 bg-lime-500/10 border border-lime-500/20 rounded-full text-[9px] font-black text-lime-400 uppercase tracking-wider shrink-0">
+                {{ String(sw.switch_state || (sw.metadata_json?.switch?.initial_state) || '—').toUpperCase() }}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <GameWorldMemoryPanel
           :memories="worldMemories"
         />
@@ -1376,6 +1535,18 @@ watch(
       @close="showUnlockModal = false"
       @submit-code="handleUnlockCodeSubmit"
       @use-key-item="handleUnlockItemSubmit"
+    />
+
+    <SwitchUnlockModal
+      :open="showSwitchUnlockModal"
+      :switch-entity="switchUnlockModalEntity"
+      :target-state="switchUnlockTargetState"
+      :inventory-items="inventoryItems"
+      :busy="switchUnlockBusy"
+      :error-message="switchUnlockError"
+      @close="showSwitchUnlockModal = false"
+      @submit-code="handleSwitchFlipCodeSubmit"
+      @use-key-item="handleSwitchFlipItemSubmit"
     />
 
     <TextLogModal

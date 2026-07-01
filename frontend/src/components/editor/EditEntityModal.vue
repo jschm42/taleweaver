@@ -75,6 +75,11 @@ function syncFromForm() {
   }
   switchStates.value = states
 
+  const initial = String(localForm.value.switch_initial_state || '').trim().toUpperCase()
+  if (!initial || !states.includes(initial)) {
+    localForm.value.switch_initial_state = states[0] || ''
+  }
+
   let transitions: any[] = []
   try {
     const parsed = JSON.parse(localForm.value.switch_transitions_json || '[]')
@@ -219,6 +224,8 @@ const isFormInvalid = computed(() => {
     switchStates.value.length < 2 ||
     uniqueStates.size !== switchStates.value.length ||
     switchStates.value.some(s => !s.trim()) ||
+    !(localForm.value.switch_initial_state || '').trim() ||
+    !uniqueStates.has(String(localForm.value.switch_initial_state).trim().toUpperCase()) ||
     switchTransitions.value.some(t => !t.from || !t.to || !uniqueStates.has(t.from) || !uniqueStates.has(t.to))
   )
   return nameInvalid || descInvalid || personaInvalid || teaserInvalid || idInvalid || combinationInvalid || switchInvalid
@@ -246,6 +253,9 @@ watch(() => localForm.value.item_type, (newType) => {
     localForm.value.is_portable = false
     if (switchStates.value.length === 0) {
       switchStates.value = ['OFF', 'ON']
+    }
+    if (!localForm.value.switch_initial_state) {
+      localForm.value.switch_initial_state = switchStates.value[0] || 'OFF'
     }
   } else if (type === 'WEARABLE') {
     localForm.value.is_portable = true

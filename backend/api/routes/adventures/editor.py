@@ -2532,6 +2532,22 @@ async def create_editor_entity(
         raise HTTPException(status_code=409, detail="ID already exists as a scene")
 
     item_type = str(payload.item_type or "").strip().upper() if payload.entity_type == "OBJECT" else None
+    metadata_json = dict(payload.metadata_json or {})
+    if item_type == "SWITCH":
+        switch_config = metadata_json.get("switch") or {}
+        states = switch_config.get("states") or []
+        states_list = [str(s).strip().upper() for s in states if str(s).strip()]
+        if len(states_list) < 2:
+            raise HTTPException(status_code=400, detail="A switch must have at least 2 states.")
+        initial_state = str(switch_config.get("initial_state") or "").strip().upper()
+        if not initial_state:
+            raise HTTPException(status_code=400, detail="An initial state must be defined for the switch.")
+        if initial_state not in states_list:
+            raise HTTPException(status_code=400, detail=f"Initial state '{initial_state}' is not one of the switch states: {', '.join(states_list)}.")
+        switch_config["states"] = states_list
+        switch_config["initial_state"] = initial_state
+        metadata_json["switch"] = switch_config
+
     entity = WorldEntity(
         id=entity_id,
         template_id=template_id,
@@ -2554,7 +2570,7 @@ async def create_editor_entity(
         stamina=payload.stamina,
         max_stamina=payload.stamina,
         is_killable=bool(payload.is_killable) if payload.is_killable is not None else True,
-        metadata_json=dict(payload.metadata_json or {}),
+        metadata_json=metadata_json,
         inventory=list(payload.inventory or []),
         wearable_slots=payload.wearable_slots,
         combination_ingredients=payload.combination_ingredients,
@@ -3230,6 +3246,19 @@ async def update_editor_entity(
                             switch_config["initial_state"] = payload.switch_initial_state
                         if payload.switch_transitions is not None:
                             switch_config["transitions"] = payload.switch_transitions
+                        
+                        states = switch_config.get("states") or []
+                        states_list = [str(s).strip().upper() for s in states if str(s).strip()]
+                        if len(states_list) < 2:
+                            raise HTTPException(status_code=400, detail="A switch must have at least 2 states.")
+                        initial_state = str(switch_config.get("initial_state") or "").strip().upper()
+                        if not initial_state:
+                            raise HTTPException(status_code=400, detail="An initial state must be defined for the switch.")
+                        if initial_state not in states_list:
+                            raise HTTPException(status_code=400, detail=f"Initial state '{initial_state}' is not one of the switch states: {', '.join(states_list)}.")
+                        
+                        switch_config["states"] = states_list
+                        switch_config["initial_state"] = initial_state
                         metadata_json["switch"] = switch_config
                     
                     # Clean up flat switch keys that were previously written as pollution
@@ -3263,7 +3292,8 @@ async def update_editor_entity(
                         ent.is_hidden = False
                     
                     if payload.reveal_rule is not None:
-                        ent.reveal_rule = str(payload.reveal_rule or "").strip() or None
+                        normalized = str(payload.reveal_rule or "").strip()
+                        ent.reveal_rule = normalized[:500] if normalized else None
             
     await db.commit()
     return {"status": "success"}
