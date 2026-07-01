@@ -1039,9 +1039,9 @@ const textLogPreviewClass = computed(() => {
                     <button
                       type="button"
                       @click="localForm.locked = !localForm.locked"
-                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.locked ? 'bg-amber-600' : 'bg-emerald-600']"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.locked ? 'bg-emerald-600' : 'bg-slate-700']"
                     >
-                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.locked ? 'translate-x-0' : 'translate-x-6']"></div>
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.locked ? 'translate-x-6' : 'translate-x-0']"></div>
                     </button>
                   </div>
                 </div>
