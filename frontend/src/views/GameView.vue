@@ -955,6 +955,8 @@ const handleTakeDirect = async (entity: any) => {
 }
 const currentSceneDescription = computed(() => nodes.value[sheet.value?.scene_id || '']?.description || 'The current location of your adventure.')
 
+const hasSceneContext = computed(() => Boolean(entities.length || currentSceneImage || sheet.value?.current_scene || sheet.value?.scene_id))
+
 const {
   showWalkthrough,
   showDebug,
@@ -1279,15 +1281,15 @@ watch(
       </div>
 
       <!-- Backdrop for mobile sidebar drawer -->
-      <div 
-        v-if="isMobileSidebarOpen && (entities.length > 0 || currentSceneImage)" 
+      <div
+        v-if="isMobileSidebarOpen && hasSceneContext"
         class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 xl:hidden animate-fade-in"
         @click="isMobileSidebarOpen = false"
       ></div>
 
       <!-- Left Sidebar: Scene, inhabitants & Discovery -->
-      <aside 
-        v-if="entities.length > 0 || currentSceneImage" 
+      <aside
+        v-if="hasSceneContext" 
         :class="[
           'bg-slate-900/95 xl:bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex flex-col p-6 shrink-0 overflow-y-auto custom-scrollbar shadow-2xl transition-all duration-300 ease-in-out',
           // Mobile/Tablet drawer placement & translate behavior
