@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { Lock, Key, Unlock, AlertCircle } from 'lucide-vue-next'
+import { Lock, Key, Unlock, AlertCircle, Check } from 'lucide-vue-next'
 import { getItemIcon, getTypeColor, getImageUrl } from '@/utils/game_icons'
 
 const brokenImages = ref<Record<string, boolean>>({})
@@ -27,6 +27,7 @@ const emit = defineEmits<{
 }>()
 
 const codeInput = ref('')
+const selectedItemId = ref<string>('')
 
 const resolvedMetadata = computed(() => {
   let meta = props.switchEntity?.metadata_json || {}
@@ -73,36 +74,38 @@ const requiredRule = computed(() => {
   return String(gates.value.rule || '').trim()
 })
 
-// Helper to format ID to readable name (e.g. BRONZE_KEY -> Bronze Key)
-const formatIdToName = (id: string): string => {
-  if (!id) return ''
-  return id
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-}
-
-// Find matching key item in inventory
-const matchingInventoryKey = computed(() => {
-  if (!requiredItemId.value) return null
-  return props.inventoryItems.find(item => {
-    const itemId = String(item?.id || '').trim().toUpperCase()
-    const itemName = String(item?.name || '').trim().toUpperCase()
-    return itemId === requiredItemId.value || itemName === requiredItemId.value
+// Filter inventory: only usable items (exclude switches/containers) for the unlock grid
+const usableItems = computed(() => {
+  return (props.inventoryItems || []).filter((item: any) => {
+    if (!item) return false
+    const type = String(item.item_type || '').trim().toUpperCase()
+    if (type === 'SWITCH') return false
+    if (type === 'CONTAINER') return false
+    if (item.is_portable === false) return false
+    return true
   })
 })
 
-const hasRequiredKey = computed(() => !!matchingInventoryKey.value)
+const selectedItem = computed(() => {
+  if (!selectedItemId.value) return null
+  return usableItems.value.find((it: any) => String(it.id || '') === selectedItemId.value) || null
+})
+
+const hasSelection = computed(() => !!selectedItem.value)
+
+const selectItem = (itemId: string) => {
+  if (props.busy) return
+  selectedItemId.value = itemId
+}
 
 const handleCodeSubmit = () => {
   if (!codeInput.value.trim() || props.busy) return
   emit('submitCode', codeInput.value.trim())
 }
 
-const handleUseKey = () => {
-  if (!hasRequiredKey.value || props.busy) return
-  const itemId = matchingInventoryKey.value.id || requiredItemId.value
-  emit('useKeyItem', itemId)
+const handleActivate = () => {
+  if (!hasSelection.value || props.busy) return
+  emit('useKeyItem', selectedItem.value.id)
 }
 
 const onKeyDown = (event: KeyboardEvent) => {
@@ -111,10 +114,11 @@ const onKeyDown = (event: KeyboardEvent) => {
   }
 }
 
-// Clear input on open
+// Reset state on open
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     codeInput.value = ''
+    selectedItemId.value = ''
   }
 })
 
@@ -131,7 +135,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
         @click.self="emit('close')"
       >
         <div class="w-full max-w-md bg-slate-900 border border-slate-700/60 rounded-3xl shadow-2xl overflow-hidden" @click.stop>
-          
+
           <!-- Header -->
           <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
             <div class="flex items-center gap-2.5">
@@ -199,56 +203,78 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
             <!-- ITEM REQUIREMENT -->
             <div v-else-if="requiredItemId" class="space-y-4">
               <div class="p-4 rounded-2xl bg-slate-950/40 border border-slate-800/80 flex items-start gap-3">
-                <div class="w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 mt-0.5"
-                     :class="hasRequiredKey ? 'bg-emerald-500/15 border-emerald-500/30' : 'bg-rose-500/15 border-rose-500/30'">
-                  <Key class="w-4.5 h-4.5" :class="hasRequiredKey ? 'text-emerald-400' : 'text-rose-400'" />
+                <div class="w-9 h-9 rounded-lg bg-lime-500/15 border border-lime-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                  <Key class="w-4.5 h-4.5 text-lime-400" />
                 </div>
                 <div class="space-y-1">
-                  <p class="text-xs font-black uppercase tracking-wider" :class="hasRequiredKey ? 'text-emerald-400' : 'text-rose-400'">
-                    {{ hasRequiredKey ? 'Item Available' : 'Item Required' }}
-                  </p>
+                  <p class="text-xs font-black uppercase tracking-wider text-lime-400">Item Required</p>
                   <p class="text-sm text-slate-300">
-                    This switch requires a special item to unlock the transition.
+                    Select an item from your inventory and press <span class="text-lime-300 font-bold">Activate</span> to flip this switch.
                   </p>
                 </div>
               </div>
 
-              <!-- Hydrated Item Card -->
-              <div v-if="hasRequiredKey && matchingInventoryKey" class="flex items-center gap-4 p-3.5 bg-slate-950/60 border border-slate-800/60 rounded-2xl">
-                <div class="w-14 h-14 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0">
-                  <img
-                    v-if="matchingInventoryKey.image_url && showImage(matchingInventoryKey.image_url)"
-                    :src="getImageUrl(matchingInventoryKey.image_url)"
-                    class="w-full h-full object-cover object-top"
-                    @error="handleImageError(matchingInventoryKey.image_url)"
-                  />
-                  <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/30">
-                    <i :class="['ra text-xl', getItemIcon(matchingInventoryKey.item_type ?? undefined), getTypeColor(matchingInventoryKey.item_type ?? undefined)]"></i>
-                  </div>
+              <!-- Item selection grid -->
+              <div>
+                <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                  Choose an Item
+                </label>
+
+                <div v-if="usableItems.length === 0" class="w-full text-center text-xs font-bold text-slate-500 uppercase tracking-widest border border-slate-800 py-6 rounded-xl bg-slate-950/20">
+                  Your inventory contains no usable items
                 </div>
-                <div class="flex-1 min-w-0 text-left">
-                  <h4 class="text-xs font-black text-amber-400 uppercase tracking-wider truncate">
-                    {{ matchingInventoryKey.name || matchingInventoryKey.id }}
-                  </h4>
-                  <p class="text-[11px] text-slate-400 mt-1 leading-normal line-clamp-2">
-                    {{ matchingInventoryKey.description || 'A special item carried in your inventory.' }}
-                  </p>
+
+                <div v-else class="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto p-1">
+                  <button
+                    v-for="item in usableItems"
+                    :key="item.id"
+                    type="button"
+                    :disabled="busy"
+                    @click="selectItem(item.id)"
+                    class="relative aspect-square rounded-xl border bg-slate-950/40 transition-all overflow-hidden group focus:outline-none cursor-pointer"
+                    :class="selectedItemId === item.id
+                      ? 'border-lime-500/70 ring-2 ring-lime-500/40 shadow-lg shadow-lime-500/10'
+                      : 'border-slate-800/60 hover:border-slate-600 hover:bg-slate-900/60'"
+                    :title="item.name || item.id"
+                  >
+                    <div class="absolute inset-0 flex items-center justify-center">
+                      <img
+                        v-if="item.image_url && showImage(item.image_url)"
+                        :src="getImageUrl(item.image_url)"
+                        class="w-full h-full object-cover object-top"
+                        @error="handleImageError(item.image_url)"
+                      />
+                      <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/40">
+                        <i :class="['ra text-2xl', getItemIcon(item.item_type ?? undefined), getTypeColor(item.item_type ?? undefined)]"></i>
+                      </div>
+                    </div>
+                    <div
+                      v-if="selectedItemId === item.id"
+                      class="absolute top-1 right-1 w-5 h-5 rounded-full bg-lime-500 border-2 border-slate-900 flex items-center justify-center shadow-md"
+                    >
+                      <Check class="w-3 h-3 text-slate-950" stroke-width="3" />
+                    </div>
+                    <div class="absolute bottom-0 inset-x-0 px-1 py-1 bg-gradient-to-t from-slate-950/95 to-slate-950/0">
+                      <p class="text-[10px] font-bold text-slate-200 truncate leading-tight text-center">
+                        {{ item.name || item.id }}
+                      </p>
+                    </div>
+                  </button>
                 </div>
               </div>
 
-              <div class="flex justify-end pt-1">
+              <div class="pt-1">
                 <button
-                  v-if="hasRequiredKey"
-                  @click="handleUseKey"
-                  :disabled="busy"
-                  class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-wider text-xs rounded-xl shadow-lg shadow-emerald-500/10 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  @click="handleActivate"
+                  :disabled="busy || !hasSelection"
+                  class="w-full py-3 bg-lime-500 hover:bg-lime-400 disabled:bg-slate-800 text-slate-950 disabled:text-slate-600 font-black uppercase tracking-wider text-xs rounded-xl shadow-lg shadow-lime-500/10 transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                 >
                   <Unlock class="w-4 h-4" />
-                  <span>Use Item</span>
+                  <span>Activate</span>
                 </button>
-                <div v-else class="w-full text-center text-xs font-bold text-slate-500 uppercase tracking-widest border border-slate-800 py-3 rounded-xl bg-slate-950/20">
-                  You do not possess the required item
-                </div>
+                <p v-if="!hasSelection" class="text-[11px] text-slate-500 text-center mt-2 italic">
+                  Pick an item from your inventory to enable the activation.
+                </p>
               </div>
             </div>
 
