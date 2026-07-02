@@ -1001,7 +1001,8 @@ async def traverse_exit(
             WorldScene.id == target_scene_id,
         )
     )
-    if not scene_res.scalars().first():
+    scene = scene_res.scalars().first()
+    if not scene:
         raise HTTPException(status_code=400, detail="The target scene is not available.")
 
     state.current_scene_id = target_scene_id
@@ -1010,7 +1011,7 @@ async def traverse_exit(
         ChatMessage(
             session_id=state.session_id,
             role="system",
-            content=f"You pass through {world_exit.label or 'the exit'} into {target_scene_id}.",
+            content=f"You pass through {world_exit.label or 'the exit'} into {scene.label}.",
         )
     )
     await db.commit()

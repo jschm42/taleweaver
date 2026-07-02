@@ -148,7 +148,29 @@ To prevent terminal commands executed by AI agents (like the Gemini agent in Ant
 | `git log` | `git --no-pager log -n 5` | Bypasses the pager and prevents endless output. |
 | `cat huge_file.json` | `head -n 50 huge_file.json` | Protects the agent from immediate token overload. |
 
-## 9. General instructions
+## 9. Game Turn Loop & Mechanics Pipeline
+
+TaleWeaver processes each gameplay turn through a structured pipeline in [GameTurnManager](file:///c:/Users/jschmitz/DEV/git-repositories/taleweaver/backend/api/routes/adventures/gameplay_logic.py):
+
+* **Pass 1 (Mechanics Check)**:
+  * The LLM mechanics model processes the user prompt and suggests state changes (e.g. changing exit locks, switch states, opening containers, updating inventories).
+* **Pass 1.5 (Rule Validation & Reversion)**:
+  * Database state updates requested by the LLM are evaluated against game configuration rules/gates (required items, codes, story flags) and player state.
+  * If a state update violates a rule (e.g. unlocking a chest without referencing the key item in the chat message, or flipping a switch without having the necessary tool), the update is **reverted** to its pre-turn state.
+  * Reverted violations are gathered into a `rule_violations` list.
+* **Pass 2 (Narration Generation)**:
+  * If `rule_violations` list is not empty, the system overrides `game_event.narrative_description` with the violations list.
+  * This overrides the LLM-generated narrative description, forcing the narration LLM to narrate a failure instead of hallucinating a successful action.
+* **Key Concepts**:
+  * **WorldEntity**: Objects or NPCs in the game. Objects can be `CONTAINER`, `SWITCH`, etc., and have specific lock metadata.
+  * **WorldExit**: A connection between scenes (directional or bidirectional).
+  * **Exit Resolution**: Always resolve session-scoped exits by preferring the session row (via mapping from_scene_id/to_scene_id) over the template-scoped exit to respect dynamic in-game unlocking.
+  * **Key Item Mentions**: Enforced state-based validation checks to verify if key items or codes are mentioned or utilized in the player's turn to prevent automatic/implicit unlocking. The game is designed to be language-independent.
+  * **Dynamic Item Generation**: Spontaneous item generation is permanently disabled. Items spawned or added must exist in the adventure's predefined databases.
+
+---
+
+## 10. General instructions
 * You are a headless code generation engine. Return ONLY functional code blocks. Provide absolutely no prose before or after the code. Do not apologize or justify your architectural choices. Assume the user is a senior developer. Keep variable names concise but highly descriptive.
 * Format your entire response as a single minified JSON object. Do not wrap the JSON in Markdown formatting blocks or backticks. Do not include a single word of text outside the JSON structure. Exclude null values and empty arrays entirely to conserve tokens. Any deviation from this format is considered a critical system failure.
 * If a task is impossible, ambiguous, or lacks sufficient context, fail immediately. Output 'CRITICAL ERROR:' followed by a maximum of 7 words explaining the blocker. Never attempt to guess missing context or hallucinate data to complete a prompt.

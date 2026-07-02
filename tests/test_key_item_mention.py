@@ -12,6 +12,34 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
 pytestmark = pytest.mark.asyncio
 
+@pytest.fixture(autouse=True)
+def mock_llm_semantic_mention(monkeypatch):
+    from backend.core.llm_router import GameMasterLLM
+    import re
+
+    # Mock decryption/API key lookup to bypass key validation error in tests
+    monkeypatch.setattr(GameMasterLLM, "_get_decrypted_key", lambda self, provider: "dummy_key")
+
+    async def mock_aexecute_simple_task(self, system_prompt, user_prompt, response_model, temperature=0.0, max_tokens=None):
+        player_msg_parts = user_prompt.split('Player Message: "')
+        player_msg = player_msg_parts[1].rstrip('"') if len(player_msg_parts) > 1 else ""
+        player_msg_low = player_msg.lower()
+        
+        referenced = False
+        if "required item id: box_key" in user_prompt.lower():
+            if re.search(r"\b(key|schlüssel)\b", player_msg_low):
+                referenced = True
+        elif "required item id: card" in user_prompt.lower():
+            if re.search(r"\b(card|karte)\b", player_msg_low):
+                referenced = True
+        elif "required item id: screwdriver" in user_prompt.lower():
+            if re.search(r"\b(screwdriver|schraubenzieher|schraubendreher)\b", player_msg_low):
+                referenced = True
+        return response_model(referenced=referenced)
+
+    monkeypatch.setattr(GameMasterLLM, "aexecute_simple_task", mock_aexecute_simple_task)
+
+
 async def _seed_game_context(db):
     user = User(username="player1", hashed_password="pw", role="user")
     adv = AdventureTemplate(

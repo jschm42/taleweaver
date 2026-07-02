@@ -2279,32 +2279,42 @@ class GameTurnManager:
         if name_low in lowered_msg:
             return True
 
-        # 4. Significant tokens match (avoid short tokens like 'a', 'the', or tokens < 3 chars)
-        # Check boundary words to avoid accidental substring matches (e.g. matching "monkey" for "key")
-        target_name_low = target_name.strip().lower() if target_name else ""
-        for token in name_low.split():
-            cleaned_token = token.strip(".,:;!?()[]{}'\"")
-            if len(cleaned_token) >= 3:
-                # Avoid token matching if the token is also part of the target container/exit name itself
-                if target_name_low and cleaned_token in target_name_low:
-                    continue
-                pattern = r"\b" + re.escape(cleaned_token) + r"\b"
-                if re.search(pattern, lowered_msg):
-                    return True
-
-        # German translation fallback for key/schlüssel
-        if ("key" in item_id.lower() or "key" in name_low) and "schlüssel" in lowered_msg:
-            return True
-
-        # German translation fallback for card/karte
-        if ("card" in item_id.lower() or "card" in name_low) and "karte" in lowered_msg:
-            return True
-
-        # German translation fallback for screwdriver/schraubenzieher/schraubendreher
-        screwdriver_terms = {"screwdriver", "schraubenzieher", "schraubendreher"}
-        if (any(term in item_id.lower() or term in name_low for term in screwdriver_terms)
-                and any(term in lowered_msg for term in screwdriver_terms)):
-            return True
+        # 4. Fallback to LLM semantic evaluation for synonyms, translations, and descriptions
+        try:
+            from pydantic import BaseModel
+            llm = GameMasterLLM(self.user, model_category="small")
+            
+            system_prompt = (
+                "You are a mechanics checker for an AI Text Adventure RPG.\n"
+                "Determine if the player's message explicitly references, mentions, or utilizes a specific required item in the current turn.\n"
+                "You must respond with a JSON object containing a single boolean field: 'referenced'.\n"
+                "Guidelines:\n"
+                "1. If the player mentions the name of the item, the item's ID, or a direct synonym or translation (e.g. 'Schlüssel' for 'key', 'Schraubenzieher' or 'Schraubendreher' for 'screwdriver', 'Karte' for 'card'), 'referenced' must be true.\n"
+                "2. If the player only says a generic action (like 'öffne die kiste' or 'turn the switch') without specifying the item or tool they are using, 'referenced' must be false (even if the item is in their inventory).\n"
+                "3. Respond with exactly the JSON structure: {\"referenced\": true} or {\"referenced\": false}."
+            )
+            
+            user_prompt = (
+                f"Required Item ID: {item_id}\n"
+                f"Required Item Name: {item_name}\n"
+                f"Player Message: \"{lowered_msg}\""
+            )
+            
+            class ReferenceCheckResponse(BaseModel):
+                referenced: bool
+                
+            res = await llm.aexecute_simple_task(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_model=ReferenceCheckResponse,
+                temperature=0.0
+            )
+            if isinstance(res, ReferenceCheckResponse):
+                return res.referenced
+            elif isinstance(res, dict):
+                return bool(res.get("referenced", False))
+        except Exception as e:
+            logging.getLogger("backend").error(f"Error checking key item mention with LLM: {e}")
 
         return False
 
@@ -2530,7 +2540,7 @@ class GameTurnManager:
                 }
                 if required_item_id.upper() not in inventory_ids:
                     unlock_allowed = False
-                    reason = f"You need {required_item_id} to unlock {item.get('name', 'Container')}."
+                    reason = f"You need a specific item to unlock {item.get('name', 'Container')}."
                 elif not await self._is_key_item_referenced(required_item_id, lowered, item.get("name")):
                     unlock_allowed = False
                     reason = f"You must specify which item you are using to unlock {item.get('name', 'Container')}."
@@ -2642,7 +2652,7 @@ class GameTurnManager:
                 }
                 if required_item_id.upper() not in inventory_ids:
                     unlock_allowed = False
-                    reason = f"You need {required_item_id} to unlock {ex.label}."
+                    reason = f"You need a specific item to unlock {ex.label}."
                 elif not await self._is_key_item_referenced(required_item_id, lowered, ex.label):
                     unlock_allowed = False
                     reason = f"You must specify which item you are using to unlock {ex.label}."
