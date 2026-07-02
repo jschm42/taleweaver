@@ -320,3 +320,45 @@ async def test_rule_violations_modify_narrative_description(setup_test_db, monke
         assert "The attempted action failed and was reverted due to the following rule violations" in narration_prompt
         assert "You must specify which item you are using to unlock Strange Box" in narration_prompt
 
+async def test_resolve_session_exit_prefers_session_scoped(setup_test_db):
+    """Verifies that _resolve_session_exit prefers the session-scoped exit over the template-scoped exit."""
+    from tests.conftest import TestSessionLocal
+    from backend.api.routes.adventures.gameplay import _resolve_session_exit
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+
+        # 1. Create a template-scoped exit (locked)
+        template_exit = WorldExit(
+            id="CELLAR_EXIT_TEMPLATE",
+            template_id=adv.id,
+            session_id=None,
+            from_scene_id="START",
+            to_scene_id="CELLAR",
+            label="Heavy Oak Door",
+            is_locked=True
+        )
+        db.add(template_exit)
+
+        # 2. Create a session-scoped exit (unlocked)
+        session_exit = WorldExit(
+            id="CELLAR_EXIT_SESSION",
+            template_id=adv.id,
+            session_id=state.session_id,
+            from_scene_id="START",
+            to_scene_id="CELLAR",
+            label="Heavy Oak Door",
+            is_locked=False
+        )
+        db.add(session_exit)
+        await db.commit()
+
+        # Act: resolve exit by querying with the template exit ID
+        resolved = await _resolve_session_exit(db, state, "CELLAR_EXIT_TEMPLATE")
+
+        # Assert: should map to and return the session-scoped exit (unlocked)
+        assert resolved is not None
+        assert resolved.id == "CELLAR_EXIT_SESSION"
+        assert resolved.session_id == state.session_id
+        assert resolved.is_locked is False
+

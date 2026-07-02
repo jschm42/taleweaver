@@ -838,7 +838,24 @@ async def _resolve_session_exit(db: AsyncSession, state: SessionState, exit_id: 
             WorldExit.id == exit_id,
         )
     )
-    return res.scalars().first()
+    resolved = res.scalars().first()
+    if not resolved:
+        return None
+
+    # If it is template-scoped, try to find the corresponding session-scoped exit
+    if resolved.session_id is None:
+        session_res = await db.execute(
+            select(WorldExit).where(
+                WorldExit.session_id == state.session_id,
+                WorldExit.from_scene_id == resolved.from_scene_id,
+                WorldExit.to_scene_id == resolved.to_scene_id
+            )
+        )
+        session_exit = session_res.scalars().first()
+        if session_exit:
+            return session_exit
+
+    return resolved
 
 
 class ExitUnlockCodeRequest(BaseModel):
