@@ -318,3 +318,39 @@ async def test_constructable_consumes_scene_ingredient(setup_test_db):
         # Result revealed.
         reveal = next(u for u in event.updated_entities if u.entity_id == "LANTERN")
         assert reveal.is_hidden is False
+
+
+async def test_constructable_reverts_illegal_spawn(setup_test_db):
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as db:
+        user, _adv, avatar, state = await _seed(db)
+
+        db.add(WorldEntity(id="BATTERY", session_id=state.session_id, entity_type="OBJECT",
+                           item_type="DEFAULT", name="Battery", description="A battery.", current_scene_id="START",
+                           is_hidden=False, is_in_inventory=True))
+        db.add(WorldEntity(id="TORCH", session_id=state.session_id, entity_type="OBJECT",
+                           item_type="DEFAULT", name="Torch", description="A torch.", current_scene_id="START",
+                           is_hidden=False, is_in_inventory=True))
+        db.add(WorldEntity(id="LANTERN", session_id=state.session_id, entity_type="OBJECT",
+                           item_type="CONSTRUCTABLE", name="Lantern", description="A lantern.", current_scene_id="START",
+                           is_hidden=True, combination_ingredients=["BATTERY", "TORCH"]))
+        await db.commit()
+
+        manager = GameTurnManager(db, state.session_id, user)
+        await manager.initialize()
+
+        # The LLM outputs schema updates trying to illegally add/unhide the lantern.
+        from backend.engine.rule_engine import InventoryItem, WorldEntityUpdate
+        event = GameEvent(
+            new_inventory_items=[InventoryItem(id="LANTERN", name="Lantern")],
+            updated_entities=[WorldEntityUpdate(entity_id="LANTERN", is_hidden=False)]
+        )
+
+        messages = await manager._enforce_constructable_combination(event, "look at lantern")
+
+        # The lantern should be removed from new_inventory_items and updated_entities updates.
+        assert not event.new_inventory_items
+        assert not event.updated_entities
+        assert any("Rule Violation" in m for m in messages)
+

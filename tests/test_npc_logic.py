@@ -230,7 +230,7 @@ async def test_npc_inventory_sync_and_name_fallback_spawning(setup_test_db, monk
         reduced_npcs = manager._build_chat_progression_npcs([npc])
         assert reduced_npcs[0]["inventory"] == [{"id": "KITCHEN_KEY", "name": "Kitchen Key", "item_type": "KEY"}]
 
-        # Verify _build_chat_rule_pass_prompt appends allow_dynamic_items instructions
+        # Verify _build_chat_rule_pass_prompt appends allow_dynamic_items instructions (permanently disabled)
         state.allow_dynamic_items = False
         await db.commit()
         prompt_disabled = manager._build_chat_rule_pass_prompt([], [], reduced_npcs, [], [])
@@ -240,7 +240,7 @@ async def test_npc_inventory_sync_and_name_fallback_spawning(setup_test_db, monk
         state.allow_dynamic_items = True
         await db.commit()
         prompt_enabled = manager._build_chat_rule_pass_prompt([], [], reduced_npcs, [], [])
-        assert "DYNAMIC ITEMS IS ENABLED" in prompt_enabled
+        assert "DYNAMIC ITEMS IS DISABLED" in prompt_enabled
 
         # 4. Test fallback name matching when spawning an item in _spawn_scene_item
         key_obj = WorldEntity(

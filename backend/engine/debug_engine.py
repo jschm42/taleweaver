@@ -124,8 +124,7 @@ class DebugEngine:
             if len(parts) >= 3 and parts[1].lower() == "dynamic":
                 cmd = parts[2].lower()
                 if cmd == "on":
-                    state.allow_dynamic_items = True
-                    return "[DEBUG_DYNAMIC_ITEMS_ON] Dynamic item generation enabled for this session."
+                    return "DEBUG ERROR: Spontaneous item generation is permanently disabled in this version."
                 elif cmd == "off":
                     state.allow_dynamic_items = False
                     return "[DEBUG_DYNAMIC_ITEMS_OFF] Dynamic item generation disabled for this session."

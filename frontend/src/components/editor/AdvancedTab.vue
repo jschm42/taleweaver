@@ -6,7 +6,6 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'save-changes'): void
   (e: 'update:generator', val: boolean): void
-  (e: 'update:dynamic-items', val: boolean): void
   (e: 'update:can-damage-npcs', val: boolean): void
   (e: 'update:npcs-can-damage-protagonist', val: boolean): void
   (e: 'show-debug'): void
@@ -59,31 +58,6 @@ const emit = defineEmits<{
           <i class="ra ra-crystal-wand text-violet-400"></i> Game Master Capabilities
         </h4>
         <p class="text-xs text-slate-400 leading-relaxed">Control what the GM is allowed to do during live sessions of this adventure.</p>
-
-        <!-- allow_dynamic_items toggle -->
-        <div class="flex items-start gap-4 p-5 bg-black/30 rounded-2xl border border-white/5">
-          <div class="space-y-1 min-w-0 flex-1">
-            <p class="text-sm font-bold text-white">GM may create new items in-game</p>
-            <p class="text-xs text-slate-500 leading-relaxed">Allows the GM to invent and drop new items (e.g. potions, loot) that were not in the original world manifest.</p>
-          </div>
-          <button
-            id="toggle-allow-dynamic-items"
-            type="button"
-            @click="emit('update:dynamic-items', !form.allow_dynamic_items)"
-            :class="[
-              'w-14 h-8 shrink-0 mt-0.5 rounded-full transition-all relative flex items-center px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
-              form.allow_dynamic_items ? 'bg-violet-600' : 'bg-slate-800'
-            ]"
-            :aria-pressed="form.allow_dynamic_items"
-          >
-            <div
-              :class="[
-                'w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300',
-                form.allow_dynamic_items ? 'translate-x-6' : 'translate-x-0'
-              ]"
-            />
-          </button>
-        </div>
 
         <div class="flex items-start gap-4 p-5 bg-black/30 rounded-2xl border border-white/5">
           <div class="space-y-1 min-w-0 flex-1">

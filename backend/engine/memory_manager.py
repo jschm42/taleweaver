@@ -142,27 +142,58 @@ class MemoryManager:
                         switch_cfg = metadata.get("switch") or {}
                         states = metadata.get("switch_states") or switch_cfg.get("states") or []
                         states_str = f" (Possible states: {', '.join(states)})" if states else ""
-                        
+
                         current_st = getattr(e, "current_switch_state", None)
                         if not current_st:
                             current_st = switch_cfg.get("initial_state") or metadata.get("switch_initial_state") or ""
-                        
+
                         current_str = f" [Current State: {current_st}]" if current_st else ""
-                        switch_details = f"{states_str}{current_str}"
-                    
+
+                        # Build per-transition gate summary so the LLM knows requirements
+                        transitions = metadata.get("switch_transitions") or switch_cfg.get("transitions") or []
+                        gate_parts: list[str] = []
+                        if isinstance(transitions, list):
+                            for t in transitions:
+                                if not isinstance(t, dict):
+                                    continue
+                                to_s = str(t.get("to") or t.get("to_state") or "").strip()
+                                gates = t.get("gates") if isinstance(t.get("gates"), dict) else {}
+                                req_code = str(gates.get("code") or t.get("code") or "").strip()
+                                req_item = str(gates.get("item") or t.get("required_item") or "").strip()
+                                req_rule = str(gates.get("rule") or t.get("required_rule") or "").strip()
+                                reqs: list[str] = []
+                                if req_code:
+                                    reqs.append(f"code:{req_code}")
+                                if req_item:
+                                    reqs.append(f"item:{req_item}")
+                                if req_rule:
+                                    reqs.append(f"rule:{req_rule}")
+                                if to_s and reqs:
+                                    gate_parts.append(f"→{to_s}({','.join(reqs)})")
+                        gate_str = f" [Gates: {' '.join(gate_parts)}]" if gate_parts else ""
+                        switch_details = f"{states_str}{current_str}{gate_str}"
+
                     container_details = ""
                     if item_type == "CONTAINER":
+                        # Lock info lives in metadata_json, not as direct entity columns
+                        meta = dict(e.metadata_json or {})
+                        entity_states = {}  # overrides not available here; use metadata baseline
+                        code_to_unlock = str(meta.get("code_to_unlock") or "").strip()
+                        item_to_unlock = str(meta.get("item_to_unlock") or "").strip()
+                        rule_to_unlock = str(meta.get("rule_to_unlock") or "").strip()
+                        is_locked = bool(code_to_unlock or item_to_unlock or rule_to_unlock)
+
                         lock_parts = []
-                        if getattr(e, "locked", False):
+                        if is_locked:
                             lock_parts.append("LOCKED")
-                        if getattr(e, "code_to_unlock", None):
-                            lock_parts.append(f"Requires Code: {e.code_to_unlock}")
-                        if getattr(e, "item_to_unlock", None):
-                            lock_parts.append(f"Requires Item: {e.item_to_unlock}")
-                        if getattr(e, "unlock_rule", None):
-                            lock_parts.append(f"Unlock Rule: {e.unlock_rule}")
+                            if code_to_unlock:
+                                lock_parts.append(f"code_to_unlock:{code_to_unlock}")
+                            if item_to_unlock:
+                                lock_parts.append(f"item_to_unlock:{item_to_unlock}")
+                            if rule_to_unlock:
+                                lock_parts.append(f"rule_to_unlock:{rule_to_unlock}")
                         lock_str = f" [{', '.join(lock_parts)}]" if lock_parts else " [UNLOCKED]"
-                        
+
                         cont_items = []
                         if e.inventory:
                             for item in e.inventory:

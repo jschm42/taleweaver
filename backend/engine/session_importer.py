@@ -186,7 +186,7 @@ class SessionImporter:
                     is_completed=session_state_data.get("is_completed", False),
                     is_debug_enabled=session_state_data.get("is_debug_enabled", False),
                     is_walkthrough_revealed=session_state_data.get("is_walkthrough_revealed", False),
-                    allow_dynamic_items=session_state_data.get("allow_dynamic_items", True),
+                    allow_dynamic_items=session_state_data.get("allow_dynamic_items", False),
                 )
                 db.add(session_state)
 

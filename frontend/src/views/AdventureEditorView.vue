@@ -2411,7 +2411,6 @@ watch(
               v-if="activeTab === 'advanced'"
               :form="form"
               @update:generator="form.is_adventure_generator = $event; saveChanges()"
-              @update:dynamic-items="form.allow_dynamic_items = $event; saveChanges()"
               @update:can-damage-npcs="form.can_damage_npcs = $event; saveChanges()"
               @update:npcs-can-damage-protagonist="form.npcs_can_damage_protagonist = $event; saveChanges()"
               @show-debug="showDebug = true"

@@ -183,16 +183,16 @@ class MapEngine:
 
             if matched_edge is None:
                 edges.append({
-                    "id": ex.id,
+                    "id": getattr(ex, "id", None),
                     "from": current_scene_id if is_from_current else target_raw_id,
                     "to": target_raw_id if is_from_current else current_scene_id,
-                    "label": ex.label or "",
-                    "is_locked": ex.is_locked,
-                    "exit_type": ex.exit_type,
-                    "lock_description": ex.lock_description or "",
-                    "code_to_unlock": ex.code_to_unlock or "",
-                    "item_to_unlock": ex.item_to_unlock or "",
-                    "rule_to_unlock": ex.rule_to_unlock or "",
+                    "label": getattr(ex, "label", "") or "",
+                    "is_locked": getattr(ex, "is_locked", False),
+                    "exit_type": getattr(ex, "exit_type", "directional"),
+                    "lock_description": getattr(ex, "lock_description", "") or "",
+                    "code_to_unlock": getattr(ex, "code_to_unlock", "") or "",
+                    "item_to_unlock": getattr(ex, "item_to_unlock", "") or "",
+                    "rule_to_unlock": getattr(ex, "rule_to_unlock", "") or "",
                 })
             else:
                 # Always refresh the gate state and label from the source-of-truth WorldExit.

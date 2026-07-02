@@ -448,19 +448,78 @@ class GameTurnManager:
     def _build_chat_progression_exits(exits: list[WorldExit]) -> list[dict]:
         return TurnProgressionBuilder.build_chat_progression_exits(exits)
 
-    def _build_chat_rule_pass_prompt(self, quests: list[dict], awards: list[dict], npcs: list[dict], scenes: list[dict], exits: list[dict]) -> str:
+    @staticmethod
+    def _build_chat_progression_locked_containers(
+        all_entities: list[WorldEntity],
+        entity_states: dict[str, Any],
+    ) -> list[dict]:
+        """Returns a compact list of currently-locked containers for the chat rule pass.
+
+        Includes only containers that are locked (by code, item, or rule) so the
+        small LLM can emit the correct unlock event when the player provides the
+        right code or item in natural language.
+        """
+        result: list[dict] = []
+        for ent in all_entities:
+            if str(getattr(ent, "entity_type", "") or "").upper() != "OBJECT":
+                continue
+            if str(getattr(ent, "item_type", "") or "").upper() != "CONTAINER":
+                continue
+
+            # Honour session-state override for locked flag
+            state_locked = (entity_states.get(ent.id) or {}).get("locked")
+            if isinstance(state_locked, bool) and not state_locked:
+                continue  # explicitly unlocked in session state
+
+            meta = dict(ent.metadata_json or {})
+            code_to_unlock = str(meta.get("code_to_unlock") or "").strip()
+            item_to_unlock = str(meta.get("item_to_unlock") or "").strip()
+            rule_to_unlock = str(meta.get("rule_to_unlock") or "").strip()
+
+            # Skip if no lock requirements (open container)
+            if not (code_to_unlock or item_to_unlock or rule_to_unlock):
+                continue
+
+            entry: dict[str, Any] = {
+                "id": str(ent.id or "").strip(),
+                "name": str(ent.name or ent.id or "container").strip(),
+                "scene_id": str(ent.current_scene_id or "").strip(),
+            }
+            if code_to_unlock:
+                entry["code_to_unlock"] = code_to_unlock
+            if item_to_unlock:
+                entry["item_to_unlock"] = item_to_unlock
+            if rule_to_unlock:
+                entry["rule_to_unlock"] = rule_to_unlock
+            result.append(entry)
+        return result
+
+    def _build_chat_rule_pass_prompt(
+        self,
+        quests: list[dict],
+        awards: list[dict],
+        npcs: list[dict],
+        scenes: list[dict],
+        exits: list[dict],
+        locked_containers: list[dict] | None = None,
+    ) -> str:
         prompt = self._progression.build_chat_rule_pass_prompt(quests, awards, npcs, scenes, exits)
 
-        if self.state.allow_dynamic_items:
+        # Inject locked-container context so the LLM can handle natural-language unlocks
+        if locked_containers:
+            import json as _json
             prompt += (
-                "\n\nDYNAMIC ITEMS IS ENABLED:\n"
-                "- You are allowed to create/generate brand new items on-the-fly if contextually appropriate using `new_inventory_items` or `spawned_items`."
+                "\n\nLOCKED CONTAINERS IN THIS SESSION:\n"
+                "Use `updated_entities` with `locked=false` for the matching `entity_id` when the player "
+                "provides the correct code or possesses the required item.\n"
+                + _json.dumps(locked_containers, ensure_ascii=False, separators=(",", ":"))
             )
-        else:
-            prompt += (
-                "\n\nDYNAMIC ITEMS IS DISABLED:\n"
-                "- CRITICAL: You are NOT allowed to create/generate brand new items on-the-fly. You must ONLY move/use pre-defined items that already exist in the world or in NPC inventories."
-            )
+
+        # Dynamic items are permanently disabled
+        prompt += (
+            "\n\nDYNAMIC ITEMS IS DISABLED:\n"
+            "- CRITICAL: You are NOT allowed to create/generate brand new items on-the-fly. You must ONLY move/use pre-defined items that already exist in the world or in NPC inventories."
+        )
         return prompt
 
     def _get_gm_notes(self) -> list[str]:
@@ -601,7 +660,7 @@ class GameTurnManager:
         visible_objects: list[str] = []
         for ent in entities:
             ov = states.get(ent.id) or {}
-            is_hidden = bool(ov.get("is_hidden", True if str(ent.item_type or "").upper() == "CONSTRUCTABLE" else ent.is_hidden))
+            is_hidden = bool(ov.get("is_hidden", ent.is_hidden))
             is_in_inventory = bool(ov.get("is_in_inventory", ent.is_in_inventory))
             if is_hidden or is_in_inventory:
                 continue
@@ -756,7 +815,7 @@ class GameTurnManager:
                     gameover_condition=snapshot_adventure.get("gameover_condition") or self.state.gameover_condition,
                     tts_director_notes=snapshot_adventure.get("tts_director_notes") or self.state.tts_director_notes,
                     original_prompt=snapshot_adventure.get("original_prompt") or "",
-                    allow_dynamic_items=bool(snapshot_adventure.get("allow_dynamic_items", True)),
+                    allow_dynamic_items=False,
                     can_damage_npcs=bool(snapshot_adventure.get("can_damage_npcs", True)),
                     npcs_can_damage_protagonist=bool(snapshot_adventure.get("npcs_can_damage_protagonist", True)),
                     is_adventure_generator=bool(snapshot_adventure.get("is_adventure_generator", False)),
@@ -1850,8 +1909,96 @@ class GameTurnManager:
         _, cid, cname, code_to_unlock, item_to_unlock, rule_to_unlock, locked = best_match
         return cid, cname, code_to_unlock, item_to_unlock, rule_to_unlock, locked
 
+    async def _enforce_no_dynamic_item_generation(self, event: GameEvent) -> list[str]:
+        """
+        Enforces that the GM/LLM cannot dynamically generate new items on-the-fly.
+        Filters out any newly invented items from new_inventory_items and spawned_items.
+        """
+        reasons = []
+
+        has_new_inv = bool(event.new_inventory_items)
+        has_spawned = bool(event.spawned_items)
+        if not has_new_inv and not has_spawned:
+            return reasons
+
+        # 1. Fetch all pre-defined entity IDs and names for this session
+        res = await self.db.execute(
+            select(WorldEntity).where(WorldEntity.session_id == self.game_id)
+        )
+        db_entities = res.scalars().all()
+        existing_ids = {e.id.upper() for e in db_entities if e.id}
+        existing_names = {e.name.strip().lower() for e in db_entities if e.name}
+
+        # 2. Add avatar inventory items
+        for item in (self.avatar.inventory or []):
+            if isinstance(item, dict):
+                iid = str(item.get("id") or "").strip().upper()
+                iname = str(item.get("name") or "").strip().lower()
+                if iid:
+                    existing_ids.add(iid)
+                if iname:
+                    existing_names.add(iname)
+
+        # 3. Add items inside NPC or container inventories
+        for e in db_entities:
+            if isinstance(e.inventory, list):
+                for item in e.inventory:
+                    if isinstance(item, dict):
+                        iid = str(item.get("id") or "").strip().upper()
+                        iname = str(item.get("name") or "").strip().lower()
+                        if iid:
+                            existing_ids.add(iid)
+                        if iname:
+                            existing_names.add(iname)
+            meta = e.metadata_json or {}
+            if isinstance(meta, dict):
+                container_inv = meta.get("inventory") or []
+                if isinstance(container_inv, list):
+                    for item in container_inv:
+                        if isinstance(item, dict):
+                            iid = str(item.get("id") or "").strip().upper()
+                            iname = str(item.get("name") or "").strip().lower()
+                            if iid:
+                                existing_ids.add(iid)
+                            if iname:
+                                existing_names.add(iname)
+
+        # 4. Filter new_inventory_items
+        if event.new_inventory_items:
+            filtered_inv = []
+            for item in event.new_inventory_items:
+                iid = str(item.id or "").strip().upper()
+                iname = str(item.name or "").strip().lower()
+                exists = (iid in existing_ids) or (iname in existing_names)
+                if not exists:
+                    reasons.append(f"Spontaneous item generation blocked: '{item.name}' does not exist in the world template.")
+                    logger.warning(
+                        f"[Turn {self.game_id}] Blocked dynamic inventory item generation: ID={item.id}, Name={item.name}"
+                    )
+                else:
+                    filtered_inv.append(item)
+            event.new_inventory_items = filtered_inv
+
+        # 5. Filter spawned_items
+        if event.spawned_items:
+            filtered_spawned = []
+            for item in event.spawned_items:
+                iid = str(item.id or "").strip().upper()
+                iname = str(item.name or "").strip().lower()
+                exists = (iid in existing_ids) or (iname in existing_names)
+                if not exists:
+                    reasons.append(f"Spontaneous item generation blocked: '{item.name}' does not exist in the world template.")
+                    logger.warning(
+                        f"[Turn {self.game_id}] Blocked dynamic scene item spawn: ID={item.id}, Name={item.name}"
+                    )
+                else:
+                    filtered_spawned.append(item)
+            event.spawned_items = filtered_spawned
+
+        return reasons
+
     async def _enforce_constructable_combination(self, event: GameEvent, user_msg: str) -> list[str]:
-        """Deterministically resolve CONSTRUCTABLE items.
+        """Deterministically resolve CONSTRUCTABLE items and prevent illegal spawning/revealing of them.
 
         A CONSTRUCTABLE is a hidden object that materializes when the player
         combines ALL of its ``combination_ingredients`` (minimum 2). When the
@@ -1862,135 +2009,211 @@ class GameTurnManager:
         constructable in the player's current scene. ``reveals_item_id`` and
         ``reveal_rule`` are intentionally ignored for this type.
         """
-        lowered = (user_msg or "").strip().lower()
-        if not lowered:
-            return []
-
-        combine_intent = (
-            bool(event.combination_intent)
-            or lowered.startswith("use ")
-            or lowered.startswith("benutz")
-            or any(
-                kw in lowered
-                for kw in (
-                    "combine", "assembl", "craft", " mix ", "put together",
-                    "kombi", "misch", "zusammen", "herstell", "erzeug", "bastel", "bau "
-                )
-            )
-        )
-        if not combine_intent:
-            return []
-
         ent_res = await self.db.execute(
             select(WorldEntity).where(WorldEntity.session_id == self.game_id)
         )
         all_entities = list(ent_res.scalars().all())
-        if not any(str(e.item_type or "").upper() == "CONSTRUCTABLE" for e in all_entities):
+
+        constructable_entities = [
+            e for e in all_entities
+            if e.id and str(e.item_type or "").upper() == "CONSTRUCTABLE"
+        ]
+        if not constructable_entities:
             return []
 
-        ent_by_id_upper: dict[str, WorldEntity] = {
-            (e.id or "").upper(): e for e in all_entities if e.id
-        }
-
-        current_scene_id = self.state.current_scene_id
-        states_snapshot = dict(self.state.entity_states or {})
-
-        def _is_hidden_now(e: WorldEntity) -> bool:
-            ov = states_snapshot.get(e.id, {})
-            if "is_hidden" in ov and ov["is_hidden"] is not None:
-                return bool(ov["is_hidden"])
-            if str(e.item_type or "").upper() == "CONSTRUCTABLE":
-                return True
-            return bool(e.is_hidden)
-
-        # Inventory ingredient ids (preserve original case for removal matching).
-        inventory_id_lookup: dict[str, str] = {}
-        for item in (self.avatar.inventory or []):
-            if isinstance(item, dict) and item.get("id"):
-                inventory_id_lookup[str(item["id"]).strip().upper()] = str(item["id"])
-
-        # Visible entities in the current scene (inventory items are tracked separately).
-        scene_entity_ids: set[str] = set()
-        for e in all_entities:
-            if e.current_scene_id != current_scene_id:
-                continue
-            if e.is_in_inventory:
-                continue
-            if _is_hidden_now(e):
-                continue
-            if e.id:
-                scene_entity_ids.add(e.id.upper())
-
-        accessible_ids: set[str] = set(inventory_id_lookup.keys()) | scene_entity_ids
-
-        consumed: set[str] = set()
+        constructable_ids = {e.id.upper() for e in constructable_entities}
+        constructed_this_turn: set[str] = set()
         messages: list[str] = []
 
-        for e in all_entities:
-            if str(e.item_type or "").upper() != "CONSTRUCTABLE":
-                continue
-            raw_ingredients = e.combination_ingredients or []
-            needed = [str(i).strip() for i in raw_ingredients if i and str(i).strip()]
-            needed_upper = {i.upper() for i in needed}
-            if len(needed_upper) < 2:
-                continue
-            if e.id and e.id.upper() in consumed:
-                continue
-            # Skip already-revealed constructables.
-            if not _is_hidden_now(e):
-                continue
-            # An ingredient already consumed by a prior constructable this turn?
-            if needed_upper & consumed:
-                continue
-            # All ingredients must be accessible right now.
-            if not needed_upper.issubset(accessible_ids):
-                continue
-
-            # At least one ingredient must be referenced (by name or id) in the
-            # player's message, to avoid accidental construction.
-            referenced = False
-            for ing_upper in needed_upper:
-                ing_ent = ent_by_id_upper.get(ing_upper)
-                tokens = [ing_upper]
-                if ing_ent and ing_ent.name:
-                    tokens.append(ing_ent.name)
-                for tok in tokens:
-                    tok_low = (tok or "").lower()
-                    if len(tok_low) >= 3 and re.search(r"\b" + re.escape(tok_low) + r"\b", lowered):
-                        referenced = True
-                        break
-                if referenced:
-                    break
-            if not referenced:
-                continue
-
-            # CONSTRUCT — consume ingredients, reveal result.
-            for ing_upper in needed_upper:
-                if ing_upper in inventory_id_lookup:
-                    if event.removed_inventory_item_ids is None:
-                        event.removed_inventory_item_ids = []
-                    original = inventory_id_lookup[ing_upper]
-                    if original not in event.removed_inventory_item_ids:
-                        event.removed_inventory_item_ids.append(original)
-                else:
-                    self._upsert_entity_update(event, ing_upper, is_hidden=True)
-                consumed.add(ing_upper)
-
-            self._upsert_entity_update(event, e.id, is_hidden=False)
-            self._upsert_entity_movement(event, e.id, current_scene_id)
-
-            ing_names: list[str] = []
-            for ing_upper in needed_upper:
-                ing_ent = ent_by_id_upper.get(ing_upper)
-                ing_names.append(ing_ent.name if ing_ent and ing_ent.name else ing_upper)
-            msg = f"You combine {', '.join(ing_names)} to create {e.name}!"
-            messages.append(msg)
-            logger.info(
-                "[Turn %s] CONSTRUCTABLE '%s' materialized from ingredients %s",
-                self.game_id,
-                e.id,
-                sorted(needed_upper),
+        lowered = (user_msg or "").strip().lower()
+        combine_intent = False
+        if lowered:
+            combine_intent = (
+                bool(event.combination_intent)
+                or lowered.startswith("use ")
+                or lowered.startswith("benutz")
+                or any(
+                    kw in lowered
+                    for kw in (
+                        "combine", "assembl", "craft", " mix ", "put together",
+                        "kombi", "misch", "zusammen", "herstell", "erzeug", "bastel", "bau "
+                    )
+                )
             )
+
+        if combine_intent:
+            ent_by_id_upper: dict[str, WorldEntity] = {
+                (e.id or "").upper(): e for e in all_entities if e.id
+            }
+
+            current_scene_id = self.state.current_scene_id
+            states_snapshot = dict(self.state.entity_states or {})
+
+            def _is_hidden_now(e: WorldEntity) -> bool:
+                ov = states_snapshot.get(e.id, {})
+                if "is_hidden" in ov and ov["is_hidden"] is not None:
+                    return bool(ov["is_hidden"])
+                return bool(e.is_hidden)
+
+            # Inventory ingredient ids (preserve original case for removal matching).
+            inventory_id_lookup: dict[str, str] = {}
+            for item in (self.avatar.inventory or []):
+                if isinstance(item, dict) and item.get("id"):
+                    inventory_id_lookup[str(item["id"]).strip().upper()] = str(item["id"])
+
+            # Visible entities in the current scene (inventory items are tracked separately).
+            scene_entity_ids: set[str] = set()
+            for e in all_entities:
+                if e.current_scene_id != current_scene_id:
+                    continue
+                if e.is_in_inventory:
+                    continue
+                if _is_hidden_now(e):
+                    continue
+                if e.id:
+                    scene_entity_ids.add(e.id.upper())
+
+            accessible_ids: set[str] = set(inventory_id_lookup.keys()) | scene_entity_ids
+            consumed: set[str] = set()
+
+            for e in all_entities:
+                if str(e.item_type or "").upper() != "CONSTRUCTABLE":
+                    continue
+                raw_ingredients = e.combination_ingredients or []
+                needed = [str(i).strip() for i in raw_ingredients if i and str(i).strip()]
+                needed_upper = {i.upper() for i in needed}
+                if len(needed_upper) < 2:
+                    continue
+                if e.id and e.id.upper() in consumed:
+                    continue
+                # Skip already-revealed constructables.
+                if not _is_hidden_now(e):
+                    continue
+                # An ingredient already consumed by a prior constructable this turn?
+                if needed_upper & consumed:
+                    continue
+                # All ingredients must be accessible right now.
+                if not needed_upper.issubset(accessible_ids):
+                    continue
+
+                # At least one ingredient must be referenced (by name or id) in the
+                # player's message, to avoid accidental construction.
+                referenced = False
+                for ing_upper in needed_upper:
+                    ing_ent = ent_by_id_upper.get(ing_upper)
+                    tokens = [ing_upper]
+                    if ing_ent and ing_ent.name:
+                        tokens.append(ing_ent.name)
+                    for tok in tokens:
+                        tok_low = (tok or "").lower()
+                        if len(tok_low) >= 3 and re.search(r"\b" + re.escape(tok_low) + r"\b", lowered):
+                            referenced = True
+                            break
+                    if referenced:
+                        break
+                if not referenced:
+                    continue
+
+                # CONSTRUCT — consume ingredients, reveal result.
+                for ing_upper in needed_upper:
+                    if ing_upper in inventory_id_lookup:
+                        if event.removed_inventory_item_ids is None:
+                            event.removed_inventory_item_ids = []
+                        original = inventory_id_lookup[ing_upper]
+                        if original not in event.removed_inventory_item_ids:
+                            event.removed_inventory_item_ids.append(original)
+                    else:
+                        self._upsert_entity_update(event, ing_upper, is_hidden=True)
+                    consumed.add(ing_upper)
+
+                self._upsert_entity_update(event, e.id, is_hidden=False)
+                self._upsert_entity_movement(event, e.id, current_scene_id)
+                constructed_this_turn.add(e.id.upper())
+
+                ing_names: list[str] = []
+                for ing_upper in needed_upper:
+                    ing_ent = ent_by_id_upper.get(ing_upper)
+                    ing_names.append(ing_ent.name if ing_ent and ing_ent.name else ing_upper)
+                msg = f"You combine {', '.join(ing_names)} to create {e.name}!"
+                messages.append(msg)
+                logger.info(
+                    "[Turn %s] CONSTRUCTABLE '%s' materialized from ingredients %s",
+                    self.game_id,
+                    e.id,
+                    sorted(needed_upper),
+                )
+
+        # Reconcile / Guardrail Step: Ensure no constructable item has been spawned/revealed illegally by the LLM
+        for cid_upper in constructable_ids:
+            if cid_upper in constructed_this_turn:
+                continue
+
+            # Remove from event.new_inventory_items
+            if event.new_inventory_items:
+                filtered_new_inv = []
+                for item in event.new_inventory_items:
+                    item_id = getattr(item, "id", None) or getattr(item, "entity_id", None)
+                    if item_id and str(item_id).strip().upper() == cid_upper:
+                        original_ent = next((x for x in constructable_entities if x.id.upper() == cid_upper), None)
+                        name = original_ent.name if original_ent else item.name
+                        ingredients = original_ent.combination_ingredients if original_ent else []
+                        messages.append(
+                            f"Rule Violation: Attempted to add constructable item '{name}' ({cid_upper}) to inventory without combining its ingredients: {', '.join(ingredients) if ingredients else 'unknown'}."
+                        )
+                        continue
+                    filtered_new_inv.append(item)
+                event.new_inventory_items = filtered_new_inv
+
+            # Remove from event.updated_inventory_items
+            if event.updated_inventory_items:
+                filtered_updated_inv = []
+                for item in event.updated_inventory_items:
+                    item_id = getattr(item, "id", None) or getattr(item, "entity_id", None)
+                    if item_id and str(item_id).strip().upper() == cid_upper:
+                        continue
+                    filtered_updated_inv.append(item)
+                event.updated_inventory_items = filtered_updated_inv
+
+            # Remove from event.spawned_items
+            if event.spawned_items:
+                filtered_spawned = []
+                for item in event.spawned_items:
+                    item_id = getattr(item, "id", None) or getattr(item, "entity_id", None)
+                    if item_id and str(item_id).strip().upper() == cid_upper:
+                        original_ent = next((x for x in constructable_entities if x.id.upper() == cid_upper), None)
+                        name = original_ent.name if original_ent else item.name
+                        ingredients = original_ent.combination_ingredients if original_ent else []
+                        messages.append(
+                            f"Rule Violation: Attempted to spawn constructable item '{name}' ({cid_upper}) in scene without combining its ingredients: {', '.join(ingredients) if ingredients else 'unknown'}."
+                        )
+                        continue
+                    filtered_spawned.append(item)
+                event.spawned_items = filtered_spawned
+
+            # Remove from event.updated_entities
+            if event.updated_entities:
+                filtered_entities = []
+                for up in event.updated_entities:
+                    if up.entity_id and up.entity_id.upper() == cid_upper:
+                        if up.is_hidden is False:
+                            original_ent = next((x for x in constructable_entities if x.id.upper() == cid_upper), None)
+                            name = original_ent.name if original_ent else up.entity_id
+                            ingredients = original_ent.combination_ingredients if original_ent else []
+                            messages.append(
+                                f"Rule Violation: Attempted to reveal constructable entity '{name}' ({cid_upper}) without combining its ingredients: {', '.join(ingredients) if ingredients else 'unknown'}."
+                            )
+                        continue
+                    filtered_entities.append(up)
+                event.updated_entities = filtered_entities
+
+            # Remove from event.moved_entities
+            if event.moved_entities:
+                filtered_moved = []
+                for move in event.moved_entities:
+                    if move.entity_id and move.entity_id.upper() == cid_upper:
+                        continue
+                    filtered_moved.append(move)
+                event.moved_entities = filtered_moved
 
         return messages
 
@@ -2019,6 +2242,96 @@ class GameTurnManager:
                 return
         event.moved_entities.append(EntityMovement(entity_id=entity_id, to_scene_id=to_scene_id))
 
+    async def _is_key_item_referenced(self, item_id: str, lowered_msg: str, target_name: str | None = None) -> bool:
+        """Checks if the key item ID or its name/significant name tokens are referenced in the message."""
+        if not item_id:
+            return False
+
+        # 1. Direct ID match
+        if item_id.lower() in lowered_msg:
+            return True
+
+        # 2. Find item name
+        item_name = None
+        # Look in avatar inventory first
+        for item in (self.avatar.inventory or []):
+            if isinstance(item, dict) and str(item.get("id") or "").strip().upper() == item_id.upper():
+                item_name = item.get("name")
+                break
+
+        if not item_name:
+            # Look in database WorldEntities
+            res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == self.game_id,
+                    WorldEntity.id == item_id
+                )
+            )
+            db_ent = res.scalars().first()
+            if db_ent:
+                item_name = db_ent.name
+
+        if not item_name:
+            return False
+
+        # 3. Direct name match (case-insensitive substring)
+        name_low = item_name.strip().lower()
+        if name_low in lowered_msg:
+            return True
+
+        # 4. Significant tokens match (avoid short tokens like 'a', 'the', or tokens < 3 chars)
+        # Check boundary words to avoid accidental substring matches (e.g. matching "monkey" for "key")
+        target_name_low = target_name.strip().lower() if target_name else ""
+        for token in name_low.split():
+            cleaned_token = token.strip(".,:;!?()[]{}'\"")
+            if len(cleaned_token) >= 3:
+                # Avoid token matching if the token is also part of the target container/exit name itself
+                if target_name_low and cleaned_token in target_name_low:
+                    continue
+                pattern = r"\b" + re.escape(cleaned_token) + r"\b"
+                if re.search(pattern, lowered_msg):
+                    return True
+
+        # German translation fallback for key/schlüssel
+        if ("key" in item_id.lower() or "key" in name_low) and "schlüssel" in lowered_msg:
+            return True
+
+        # German translation fallback for card/karte
+        if ("card" in item_id.lower() or "card" in name_low) and "karte" in lowered_msg:
+            return True
+
+        # German translation fallback for screwdriver/schraubenzieher/schraubendreher
+        screwdriver_terms = {"screwdriver", "schraubenzieher", "schraubendreher"}
+        if (any(term in item_id.lower() or term in name_low for term in screwdriver_terms)
+                and any(term in lowered_msg for term in screwdriver_terms)):
+            return True
+
+        return False
+
+    async def _get_switch_story_flags(self) -> set[str]:
+        """Returns the set of all story flag keys configured as switch outcomes in this adventure."""
+        res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.entity_type == "OBJECT",
+                WorldEntity.item_type == "SWITCH"
+            )
+        )
+        switches = res.scalars().all()
+        flags = set()
+        for sw in switches:
+            meta = sw.metadata_json or {}
+            config = meta.get("switch") or {}
+            outcomes = meta.get("switch_outcomes") or config.get("outcomes") or []
+            for oc in outcomes:
+                if not isinstance(oc, dict):
+                    continue
+                effects = oc.get("effects") or []
+                for eff in effects:
+                    if isinstance(eff, dict) and eff.get("type") == "story_flag" and eff.get("key"):
+                        flags.add(str(eff.get("key")).strip())
+        return flags
+
     async def _enforce_container_unlock_guardrails(self, event: GameEvent, user_msg: str) -> list[str]:
         container_res = await self.db.execute(
             select(WorldEntity).where(
@@ -2037,17 +2350,28 @@ class GameTurnManager:
         reasons = []
         lowered = (user_msg or "").strip().lower()
 
+        switch_outcome_flags = await self._get_switch_story_flags()
+
         for ent in db_containers:
             is_locked = self._is_container_locked(ent, None)
             if not is_locked:
                 continue
+
+            # Determine if player is trying to open/unlock this container in free text
+            is_player_trying_to_open = False
+            ent_id_low = str(ent.id or "").strip().lower()
+            ent_name_low = str(ent.name or "").strip().lower()
+            if ent_id_low and ent_id_low in lowered:
+                is_player_trying_to_open = True
+            elif ent_name_low and ent_name_low in lowered:
+                is_player_trying_to_open = True
 
             is_being_unlocked = any(
                 update.entity_id == ent.id and update.locked is False
                 for update in (event.updated_entities or [])
             )
 
-            if not is_being_unlocked:
+            if not is_being_unlocked and not is_player_trying_to_open:
                 continue
 
             metadata_json = dict(ent.metadata_json or {})
@@ -2058,32 +2382,41 @@ class GameTurnManager:
             unlock_allowed = True
             reason = ""
 
+            # 1. Rule validation
             if required_rule:
-                if not self._switch_story_flags().get(required_rule, False):
-                    unlock_allowed = False
-                    hinted_actor = ""
-                    distract_match = re.search(r"\bdistract\w*\s+([A-Za-z0-9_\- ]{2,60})", required_rule, re.IGNORECASE)
-                    if distract_match:
-                        hinted_actor = distract_match.group(1).strip(" .,:;!?")
+                is_switch_flag = required_rule in switch_outcome_flags
+                flag_active = self._switch_story_flags().get(required_rule, False)
 
-                    if hinted_actor:
-                        reason = (
-                            f"{ent.name} stays shut. {hinted_actor} seems to keep a close eye on it. "
-                            "A clever distraction might create an opening."
-                        )
-                    else:
-                        reason = (
-                            f"{ent.name} stays shut. The moment does not feel right yet. "
-                            "A different approach might open a window."
-                        )
+                if is_switch_flag:
+                    if not flag_active:
+                        unlock_allowed = False
+                        reason = f"{ent.name} stays shut. It seems to require some mechanism to trigger."
+                else:
+                    if not is_being_unlocked:
+                        unlock_allowed = False
+                        hinted_actor = ""
+                        distract_match = re.search(r"\bdistract\w*\s+([A-Za-z0-9_\- ]{2,60})", required_rule, re.IGNORECASE)
+                        if distract_match:
+                            hinted_actor = distract_match.group(1).strip(" .,:;!?")
 
+                        if hinted_actor:
+                            reason = (
+                                f"{ent.name} stays shut. {hinted_actor} seems to keep a close eye on it. "
+                                "A clever distraction might create an opening."
+                            )
+                        else:
+                            reason = (
+                                f"{ent.name} stays shut. The moment does not feel right yet. "
+                                "A different approach might open a window."
+                            )
+
+            # 2. Code validation
             if unlock_allowed and required_code:
-                code_match = re.search(r"(?:code|pin|access|keypad)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
-                attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
-                if not attempted_code or attempted_code.lower() != required_code.lower():
+                if not is_being_unlocked or required_code.lower() not in lowered:
                     unlock_allowed = False
                     reason = f"{ent.name} gives a mocking click. That code won't do the trick."
 
+            # 3. Item validation
             if unlock_allowed and required_item_id:
                 inventory_ids = {
                     str(item.get("id") or "").strip().upper()
@@ -2093,6 +2426,15 @@ class GameTurnManager:
                 if required_item_id.upper() not in inventory_ids:
                     unlock_allowed = False
                     reason = f"You need {required_item_id} to unlock {ent.name}."
+                elif not await self._is_key_item_referenced(required_item_id, lowered, ent.name):
+                    unlock_allowed = False
+                    reason = f"You must specify which item you are using to unlock {ent.name}."
+                elif not is_being_unlocked:
+                    unlock_allowed = False
+                    reason = f"You try using the item to unlock {ent.name}."
+
+            if not is_being_unlocked:
+                unlock_allowed = False
 
             if not unlock_allowed:
                 sanitized_updates: list[WorldEntityUpdate] = []
@@ -2121,12 +2463,20 @@ class GameTurnManager:
             if not is_locked:
                 continue
 
+            # Determine if player is trying to open/unlock this container in free text
+            is_player_trying_to_open = False
+            item_name = str(item.get("name") or "").strip().lower()
+            if inv_id.lower() in lowered:
+                is_player_trying_to_open = True
+            elif item_name and item_name in lowered:
+                is_player_trying_to_open = True
+
             is_being_unlocked = any(
                 update.entity_id == inv_id and update.locked is False
                 for update in (event.updated_entities or [])
             )
 
-            if not is_being_unlocked:
+            if not is_being_unlocked and not is_player_trying_to_open:
                 continue
 
             metadata_json = item.get("metadata_json") or {}
@@ -2137,32 +2487,41 @@ class GameTurnManager:
             unlock_allowed = True
             reason = ""
 
+            # 1. Rule validation
             if required_rule:
-                if not self._switch_story_flags().get(required_rule, False):
-                    unlock_allowed = False
-                    hinted_actor = ""
-                    distract_match = re.search(r"\bdistract\w*\s+([A-Za-z0-9_\- ]{2,60})", required_rule, re.IGNORECASE)
-                    if distract_match:
-                        hinted_actor = distract_match.group(1).strip(" .,:;!?")
+                is_switch_flag = required_rule in switch_outcome_flags
+                flag_active = self._switch_story_flags().get(required_rule, False)
 
-                    if hinted_actor:
-                        reason = (
-                            f"{item.get('name', 'Container')} stays shut. {hinted_actor} seems to keep a close eye on it. "
-                            "A clever distraction might create an opening."
-                        )
-                    else:
-                        reason = (
-                            f"{item.get('name', 'Container')} stays shut. The moment does not feel right yet. "
-                            "A different approach might open a window."
-                        )
+                if is_switch_flag:
+                    if not flag_active:
+                        unlock_allowed = False
+                        reason = f"{item.get('name', 'Container')} stays shut. It seems to require some mechanism to trigger."
+                else:
+                    if not is_being_unlocked:
+                        unlock_allowed = False
+                        hinted_actor = ""
+                        distract_match = re.search(r"\bdistract\w*\s+([A-Za-z0-9_\- ]{2,60})", required_rule, re.IGNORECASE)
+                        if distract_match:
+                            hinted_actor = distract_match.group(1).strip(" .,:;!?")
 
+                        if hinted_actor:
+                            reason = (
+                                f"{item.get('name', 'Container')} stays shut. {hinted_actor} seems to keep a close eye on it. "
+                                "A clever distraction might create an opening."
+                            )
+                        else:
+                            reason = (
+                                f"{item.get('name', 'Container')} stays shut. The moment does not feel right yet. "
+                                "A different approach might open a window."
+                            )
+
+            # 2. Code validation
             if unlock_allowed and required_code:
-                code_match = re.search(r"(?:code|pin|access|keypad)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
-                attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
-                if not attempted_code or attempted_code.lower() != required_code.lower():
+                if not is_being_unlocked or required_code.lower() not in lowered:
                     unlock_allowed = False
                     reason = f"{item.get('name', 'Container')} gives a mocking click. That code won't do the trick."
 
+            # 3. Item validation
             if unlock_allowed and required_item_id:
                 inventory_ids = {
                     str(entry.get("id") or "").strip().upper()
@@ -2172,6 +2531,15 @@ class GameTurnManager:
                 if required_item_id.upper() not in inventory_ids:
                     unlock_allowed = False
                     reason = f"You need {required_item_id} to unlock {item.get('name', 'Container')}."
+                elif not await self._is_key_item_referenced(required_item_id, lowered, item.get("name")):
+                    unlock_allowed = False
+                    reason = f"You must specify which item you are using to unlock {item.get('name', 'Container')}."
+                elif not is_being_unlocked:
+                    unlock_allowed = False
+                    reason = f"You try using the item to unlock {item.get('name', 'Container')}."
+
+            if not is_being_unlocked:
+                unlock_allowed = False
 
             if not unlock_allowed:
                 sanitized_updates: list[WorldEntityUpdate] = []
@@ -2260,10 +2628,9 @@ class GameTurnManager:
                     unlock_allowed = False
                     reason = f"{ex.label} is locked."
 
+            # Code validation: language-agnostic substring check (see container guardrails).
             if unlock_allowed and required_code:
-                code_match = re.search(r"(?:code|pin|access)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
-                attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
-                if not attempted_code or attempted_code.lower() != required_code.lower():
+                if required_code.lower() not in lowered:
                     unlock_allowed = False
                     reason = f"{ex.label} answers with a cold red blink. That code won't open the way."
 
@@ -2276,6 +2643,9 @@ class GameTurnManager:
                 if required_item_id.upper() not in inventory_ids:
                     unlock_allowed = False
                     reason = f"You need {required_item_id} to unlock {ex.label}."
+                elif not await self._is_key_item_referenced(required_item_id, lowered, ex.label):
+                    unlock_allowed = False
+                    reason = f"You must specify which item you are using to unlock {ex.label}."
 
             if not unlock_allowed:
                 # Force stays locked in event.updated_exits
@@ -2383,10 +2753,9 @@ class GameTurnManager:
                 required_rule = str(gates.get("rule") or trans.get("required_rule") or "").strip()
                 fail_message = str(trans.get("fail_message") or "").strip()
 
+                # Code validation: language-agnostic substring check (see container guardrails).
                 if required_code:
-                    code_match = re.search(r"(?:code|pin|access|keypad)\W*([A-Za-z0-9]{1,32})", lowered, re.IGNORECASE)
-                    attempted_code = code_match.group(1) if code_match else self._extract_access_code(lowered)
-                    if not attempted_code or attempted_code.lower() != required_code.lower():
+                    if required_code.lower() not in lowered:
                         transition_allowed = False
                         reason = fail_message or f"{switch_entity.name} does not move."
 
@@ -2399,6 +2768,9 @@ class GameTurnManager:
                     if required_item.upper() not in inventory_ids:
                         transition_allowed = False
                         reason = fail_message or f"{switch_entity.name} does not move."
+                    elif not await self._is_key_item_referenced(required_item, lowered, switch_entity.name):
+                        transition_allowed = False
+                        reason = fail_message or f"You must specify which item you are using on {switch_entity.name}."
 
                 if transition_allowed and required_rule:
                     if not self._switch_story_flags().get(required_rule, False):
@@ -3769,6 +4141,7 @@ class GameTurnManager:
             if existing_ent:
                 existing_ent.current_scene_id = self.state.current_scene_id
                 existing_ent.is_in_inventory = False
+                existing_ent.is_hidden = False
 
                 # Keep session overrides in sync so snapshot filtering cannot hide dropped loot.
                 states = dict(self.state.entity_states or {})
@@ -3799,6 +4172,7 @@ class GameTurnManager:
         if existing_ent:
             existing_ent.current_scene_id = self.state.current_scene_id
             existing_ent.is_in_inventory = False
+            existing_ent.is_hidden = False
             
             # Also update override in session state
             states = dict(self.state.entity_states or {})
@@ -4357,16 +4731,11 @@ class GameTurnManager:
             if self.adventure.rule_enforcement_mode == "story":
                 mechanics_suffix = prompts.GM_STORY_MECHANICS_SUFFIX
             
-            if self.state.allow_dynamic_items:
-                dynamic_instr = (
-                    "- To add an item directly to the player, use `new_inventory_items`. You are allowed to create/generate brand new items on-the-fly if contextually appropriate.\n"
-                    "- To place a new item in the current scene, use `spawned_items`. You are allowed to create/generate brand new items on-the-fly.\n"
-                )
-            else:
-                dynamic_instr = (
-                    "- To add an existing pre-defined item to the player, use `new_inventory_items`. CRITICAL: You are NOT allowed to create/generate new items on-the-fly. Only move/use existing items defined in the world or NPC inventories.\n"
-                    "- To place an existing pre-defined item in the current scene, use `spawned_items`. CRITICAL: You are NOT allowed to create/generate new items on-the-fly. Only move/use existing items defined in the world or NPC inventories.\n"
-                )
+            # Dynamic items are permanently disabled
+            dynamic_instr = (
+                "- To add an existing pre-defined item to the player, use `new_inventory_items`. CRITICAL: You are NOT allowed to create/generate new items on-the-fly. Only move/use existing items defined in the world or NPC inventories.\n"
+                "- To place an existing pre-defined item in the current scene, use `spawned_items`. CRITICAL: You are NOT allowed to create/generate new items on-the-fly. Only move/use existing items defined in the world or NPC inventories.\n"
+            )
 
             mechanics_prompt = mechanics_system_prompt + "\n\n" + mechanics_suffix.format(
                 quests_json=self._compact_json(self.state.quests or []),
@@ -4530,6 +4899,12 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                dynamic_item_messages = await self._enforce_no_dynamic_item_generation(game_event)
+                rule_violations.extend(dynamic_item_messages)
+                for gm in dynamic_item_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
                 rule_violations.extend(guardrail_messages)
                 for gm in guardrail_messages:
@@ -4662,6 +5037,9 @@ class GameTurnManager:
             reduced_npcs = self._build_chat_progression_npcs(entities)
             reduced_scenes = self._build_chat_progression_scenes(all_scenes)
             reduced_exits = self._build_chat_progression_exits(exits)
+            locked_containers = self._build_chat_progression_locked_containers(
+                entities, self.state.entity_states or {}
+            )
 
             progression_prompt = self._build_chat_rule_pass_prompt(
                 quests=reduced_quests,
@@ -4669,6 +5047,7 @@ class GameTurnManager:
                 npcs=reduced_npcs,
                 scenes=reduced_scenes,
                 exits=reduced_exits,
+                locked_containers=locked_containers or None,
             )
             if global_unlock_rules_prompt_block:
                 progression_prompt += global_unlock_rules_prompt_block
@@ -4742,6 +5121,12 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                dynamic_item_messages = await self._enforce_no_dynamic_item_generation(game_event)
+                rule_violations.extend(dynamic_item_messages)
+                for gm in dynamic_item_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 guardrail_messages = await self._enforce_container_unlock_guardrails(game_event, user_msg)
                 rule_violations.extend(guardrail_messages)
                 for gm in guardrail_messages:
@@ -4811,6 +5196,11 @@ class GameTurnManager:
                 "You MUST narrate that these actions FAILED in this turn and explain the reason to the player:\n"
                 + "\n".join(f"- {v}" for v in rule_violations)
             )
+            if game_event:
+                game_event.narrative_description = (
+                    "The attempted action failed and was reverted due to the following rule violations: "
+                    + "; ".join(rule_violations)
+                )
 
         narration_prompt = (
             narration_system_prompt + "\n\n" + 
@@ -5810,7 +6200,6 @@ class GameTurnManager:
 
         if event.new_world_memories:
             import uuid
-            from datetime import datetime
             existing_memories = list(self.state.world_memories or [])
             for mem in event.new_world_memories:
                 new_mem = {
