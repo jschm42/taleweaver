@@ -378,6 +378,14 @@ async def _persist_avatar(
             if isinstance(item, dict):
                 protagonist_item_defs[item_id] = item
 
+    starting_stats = dict(prot.get("stats") or {})
+    starting_stats["special_actions"] = prot.get("special_actions") or []
+    starting_stats["unlocked_actions"] = [
+        act.get("id")
+        for act in (prot.get("special_actions") or [])
+        if not act.get("is_locked")
+    ]
+
     if not avatar:
         avatar = Avatar(
             template_id=template_id,
@@ -401,7 +409,7 @@ async def _persist_avatar(
             armor_class=prot.get("armor_class", 10),
             exp=prot.get("exp", 0),
             status_effects=prot.get("status_effects", []),
-            stats=prot.get("stats", {}),
+            stats=starting_stats,
             inventory=[],
             equipment={
                 "Head": None, "Chest": None, "Arms": None, "Legs": None,
@@ -430,12 +438,12 @@ async def _persist_avatar(
         avatar.armor_class = prot.get("armor_class", avatar.armor_class)
         avatar.exp = prot.get("exp", avatar.exp)
         avatar.status_effects = prot.get("status_effects") or avatar.status_effects
-        avatar.stats = prot.get("stats") or avatar.stats
+        avatar.stats = starting_stats
         avatar.inventory = []  # type: ignore[assignment]
         avatar.equipment = {  # type: ignore[assignment]
-            "head": None, "neck": None, "chest": None, "back": None,
-            "arms": None, "hands": None, "waist": None, "legs": None, "feet": None,
-            "main_hand": None, "off_hand": None, "ring_1": None, "ring_2": None,
+            "Head": None, "Chest": None, "Arms": None, "Legs": None,
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None,
+            "Neck": None, "MainHand": None, "OffHand": None,
         }
 
     # Portrait
@@ -736,6 +744,12 @@ async def _persist_npcs(
             npc_image_cache[n["id"]] = image_url
         processed_npcs.append(n)
 
+        npc_metadata = {
+            "equipped_weapon_id": n.get("equipped_weapon_id"),
+            "equipped_armor_id": n.get("equipped_armor_id"),
+            "special_actions": n.get("special_actions") or [],
+        }
+
         db.add(WorldEntity(
             id=n["id"],
             template_id=template_id,
@@ -759,6 +773,7 @@ async def _persist_npcs(
             reveal_rule=n.get("reveal_rule") or None,
             is_attackable=n.get("is_attackable", True),
             is_killable=n.get("is_killable", True),
+            metadata_json=npc_metadata,
         ))
 
         await db.commit()
@@ -766,14 +781,20 @@ async def _persist_npcs(
         if user:
             user = await db.get(User, user.id)
 
-    npc_inventories: dict[str, list[str]] = {
-        n["id"]: [
+    npc_inventories: dict[str, list[str]] = {}
+    for n in npcs:
+        inv_ids = [
             item_id
             for item_id in (_inventory_item_id(e) for e in (n.get("inventory") or []))
             if item_id
         ]
-        for n in npcs
-    }
+        eq_w = n.get("equipped_weapon_id")
+        if eq_w and eq_w not in inv_ids:
+            inv_ids.append(eq_w)
+        eq_a = n.get("equipped_armor_id")
+        if eq_a and eq_a not in inv_ids:
+            inv_ids.append(eq_a)
+        npc_inventories[n["id"]] = inv_ids
     return processed_npcs, npc_image_cache, npc_inventories
 
 
@@ -921,6 +942,11 @@ async def _persist_objects(
             metadata_json["stamina_change"] = stamina_change
         if mana_change is not None:
             metadata_json["mana_change"] = mana_change
+
+        if str(o.get("item_type") or "").upper() == "WEAPON":
+            metadata_json["damage_dice"] = o.get("damage_dice") or "1d8"
+            metadata_json["weapon_cost_type"] = o.get("weapon_cost_type") or "stamina"
+            metadata_json["weapon_cost_value"] = o.get("weapon_cost_value") if o.get("weapon_cost_value") is not None else 20
 
         if str(o.get("item_type") or "").upper() == "READABLE":
             _meta = o.get("metadata_json") or {}

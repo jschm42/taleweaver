@@ -1038,6 +1038,7 @@ class GameTurnManager:
                         f"Read {read_target}. If there is readable text/log content, print the full relevant text in the chat response "
                         "(not only in UI dialogs), so it remains in chat history."
                     )
+                    await self._handle_read_action_unlock(read_target)
                 else:
                     user_msg = "Usage: /read <target>"
                 # Continue turn as normal
@@ -1661,6 +1662,7 @@ class GameTurnManager:
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
                 response = f"Added {ent.name} to your inventory."
+                await self._check_special_action_unlocks("FIND_ITEM", ent.id)
             else:
                 response = "You cannot take that."
         
@@ -3522,6 +3524,101 @@ class GameTurnManager:
                 self._append_combat_log(combat, response_text, "aftermath")
                 self._set_combat_state(combat)
 
+    async def _calculate_npc_total_stats(self, npc: WorldEntity) -> dict[str, Any]:
+        """Calculates total stats for an NPC including equipment bonuses from metadata."""
+        stats = {
+            "dexterity": self._entity_stat(npc, "stat_modifier_dexterity", 10),
+            "armor_class": 10 + self._entity_stat(npc, "stat_modifier_armor_class", 0),
+            "strength": self._entity_stat(npc, "stat_modifier_strength", 10),
+            "intelligence": self._entity_stat(npc, "stat_modifier_intelligence", 10),
+            "wisdom": self._entity_stat(npc, "stat_modifier_wisdom", 10),
+            "charisma": self._entity_stat(npc, "stat_modifier_charisma", 10),
+        }
+        meta = dict(npc.metadata_json or {})
+        eq_weapon_id = meta.get("equipped_weapon_id")
+        eq_armor_id = meta.get("equipped_armor_id")
+        
+        for item_id in [eq_weapon_id, eq_armor_id]:
+            if not item_id:
+                continue
+            item_res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == self.game_id,
+                    WorldEntity.id == item_id
+                )
+            )
+            item = item_res.scalars().first()
+            if item:
+                stats["strength"] += item.stat_modifier_strength or 0
+                stats["dexterity"] += item.stat_modifier_dexterity or 0
+                stats["intelligence"] += item.stat_modifier_intelligence or 0
+                stats["wisdom"] += item.stat_modifier_wisdom or 0
+                stats["charisma"] += item.stat_modifier_charisma or 0
+                stats["armor_class"] += item.stat_modifier_armor_class or 0
+        return stats
+
+    async def _handle_read_action_unlock(self, read_target: str) -> None:
+        """Finds the read item and checks if it unlocks any special actions."""
+        target_lower = read_target.strip().lower()
+        
+        # 1. Search player inventory
+        for item in (self.avatar.inventory or []):
+            if isinstance(item, dict):
+                if item.get("name", "").lower() == target_lower or item.get("id", "").lower() == target_lower:
+                    if str(item.get("item_type") or "").upper() == "READABLE":
+                        await self._check_special_action_unlocks("READ_ITEM", item.get("id"))
+                        return
+                        
+        # 2. Search scene objects
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.current_scene_id == self.state.current_scene_id,
+                WorldEntity.entity_type == "OBJECT",
+                WorldEntity.is_hidden.is_(False),
+                WorldEntity.item_type == "READABLE"
+            )
+        )
+        candidates = ent_res.scalars().all()
+        for candidate in candidates:
+            if candidate.id and candidate.id.lower() == target_lower:
+                await self._check_special_action_unlocks("READ_ITEM", candidate.id)
+                return
+            if candidate.name and candidate.name.lower() == target_lower:
+                await self._check_special_action_unlocks("READ_ITEM", candidate.id)
+                return
+
+    async def _check_special_action_unlocks(self, condition_type: str, target_id: str) -> None:
+        """Checks if a readable item ID or found item ID unlocks any special actions for the protagonist."""
+        if not target_id:
+            return
+            
+        player_specials = self.avatar.stats.get("special_actions") or []
+        unlocked_actions = list(self.avatar.stats.get("unlocked_actions") or [])
+        
+        updated_unlocked = False
+        for action in player_specials:
+            action_id = action.get("id")
+            if action_id in unlocked_actions:
+                continue
+                
+            is_locked = action.get("is_locked", False)
+            cond_type = action.get("unlock_condition_type")
+            cond_target = action.get("unlock_condition_target")
+            
+            if is_locked and cond_type == condition_type and cond_target == target_id:
+                unlocked_actions.append(action_id)
+                updated_unlocked = True
+                msg = f"✨ Spezialaktion freigeschaltet: {action.get('name')}! ✨"
+                await self._save_chat_message("system", msg)
+                
+        if updated_unlocked:
+            stats = dict(self.avatar.stats or {})
+            stats["unlocked_actions"] = unlocked_actions
+            self.avatar.stats = stats
+            flag_modified(self.avatar, "stats")
+            await self.db.commit()
+
     async def _handle_fight_start(self, user_msg: str, initiated_by_enemy: bool = False) -> AsyncGenerator[str, None]:
         if (self.adventure.rule_enforcement_mode or "rpg") != "rpg":
             msg = "Turn-based combat is only available in RPG mode."
@@ -3594,9 +3691,12 @@ class GameTurnManager:
             return
 
         enemy_max_hp = self._entity_stat(target, "max_hp", enemy_hp if enemy_hp > 0 else 50)
-        # If no NPC dexterity value is provided, use a neutral baseline so enemies can act reliably.
-        enemy_dex = self._entity_stat(target, "stat_modifier_dexterity", 10)
-        enemy_ac_mod = self._entity_stat(target, "stat_modifier_armor_class", 0)
+        
+        # Calculate NPC stats based on equipment
+        npc_stats = await self._calculate_npc_total_stats(target)
+        enemy_dex = npc_stats["dexterity"]
+        enemy_ac_mod = npc_stats["armor_class"] - 10
+        
         player_stats = calculate_total_stats(self.avatar)
         player_dex = int(player_stats.get("dexterity", self.avatar.dexterity))
 
@@ -3615,6 +3715,8 @@ class GameTurnManager:
                 "max_hp": self.avatar.max_hp,
                 "stamina": self.avatar.stamina,
                 "max_stamina": self.avatar.max_stamina,
+                "mana": self.avatar.mana,
+                "max_mana": self.avatar.max_mana,
                 "ac": int(player_stats.get("armor_class", self.avatar.armor_class)),
             },
             "enemy": {
@@ -3625,6 +3727,8 @@ class GameTurnManager:
                 "max_hp": enemy_max_hp,
                 "stamina": self._entity_stat(target, "stamina", 0),
                 "max_stamina": self._entity_stat(target, "max_stamina", 0),
+                "mana": self._entity_stat(target, "mana", 0),
+                "max_mana": self._entity_stat(target, "max_mana", 0),
                 "dexterity_mod": enemy_dex,
                 "armor_mod": enemy_ac_mod,
                 "inventory": await self._normalize_loot_items(list(target.inventory or [])),
@@ -3711,6 +3815,8 @@ class GameTurnManager:
         player["max_hp"] = int(self.avatar.max_hp or RESOURCE_CAP)
         player["stamina"] = int(self.avatar.stamina or 0)
         player["max_stamina"] = int(self.avatar.max_stamina or RESOURCE_CAP)
+        player["mana"] = int(self.avatar.mana or 0)
+        player["max_mana"] = int(self.avatar.max_mana or RESOURCE_CAP)
         player["ac"] = int(player_stats.get("armor_class", self.avatar.armor_class))
         combat["player"] = player
 
@@ -4022,46 +4128,207 @@ class GameTurnManager:
         player_stats = calculate_total_stats(self.avatar)
         player_ac = int(player_stats.get("armor_class", self.avatar.armor_class))
 
+        meta = dict(enemy_ent.metadata_json or {})
+        eq_weapon_id = meta.get("equipped_weapon_id")
+        weapon_cost_type = "stamina"
+        weapon_cost_value = 20
+        weapon_dmg_dice = "1d6"
+        weapon_name = "unarmed attack"
+        
+        if eq_weapon_id:
+            w_res = await self.db.execute(
+                select(WorldEntity).where(
+                    WorldEntity.session_id == self.game_id,
+                    WorldEntity.id == eq_weapon_id
+                )
+            )
+            w_ent = w_res.scalars().first()
+            if w_ent:
+                w_meta = dict(w_ent.metadata_json or {})
+                weapon_cost_type = w_meta.get("weapon_cost_type") or "stamina"
+                weapon_cost_value = w_meta.get("weapon_cost_value") if w_meta.get("weapon_cost_value") is not None else 20
+                weapon_dmg_dice = w_meta.get("damage_dice") or "1d8"
+                weapon_name = w_ent.name
+
         enemy_stamina = self._entity_stat(enemy_ent, "stamina", 0)
         enemy_max_stamina = self._entity_stat(enemy_ent, "max_stamina", 0)
+        enemy_mana = self._entity_stat(enemy_ent, "mana", 0)
+        enemy_max_mana = self._entity_stat(enemy_ent, "max_mana", 0)
 
-        # Enforce stamina logic if NPC has stamina configured
-        if enemy_max_stamina > 0:
-            # Check if enemy is out of stamina
-            if enemy_stamina < 20:
-                # Enemy rests
-                enemy_stamina = min(enemy_max_stamina, enemy_stamina + 40)
+        # AI Special Action decision logic
+        npc_specials = meta.get("special_actions") or []
+        cast_action = None
+        
+        if enemy_hp > 0 and enemy_ent.max_hp and (enemy_hp / enemy_ent.max_hp) < 0.4:
+            heal_actions = [a for a in npc_specials if a.get("action_type") == "HEAL" and int(a.get("mana_cost", 0)) <= enemy_mana]
+            if heal_actions and random.random() < 0.8:
+                cast_action = random.choice(heal_actions)
                 
-                # Save enemy state
+        if not cast_action and npc_specials and random.random() < 0.3:
+            damage_utility_actions = [a for a in npc_specials if a.get("action_type") in ("ATTACK", "UTILITY") and int(a.get("mana_cost", 0)) <= enemy_mana]
+            if damage_utility_actions:
+                cast_action = random.choice(damage_utility_actions)
+
+        if cast_action:
+            # Execute special action
+            mana_cost = int(cast_action.get("mana_cost") or 0)
+            enemy_mana = max(0, enemy_mana - mana_cost)
+            
+            action_type = cast_action.get("action_type", "ATTACK").upper()
+            action_name = cast_action.get("name", "Special Action")
+            outcome_desc = cast_action.get("outcome_description") or ""
+            
+            text = ""
+            if action_type == "ATTACK":
+                from backend.engine.skill_check import roll_dice_detailed
+                spell_modifier = max(
+                    int(self._entity_stat(enemy_ent, "stat_modifier_intelligence", 10) - 10) // 2,
+                    int(self._entity_stat(enemy_ent, "stat_modifier_wisdom", 10) - 10) // 2,
+                    0
+                )
+                d20 = random.randint(1, 20)
+                hit_total = d20 + spell_modifier
+                is_hit = hit_total >= player_ac
+                
+                if is_hit:
+                    damage_type = cast_action.get("damage_type", "FIXED").upper()
+                    damage_val_str = cast_action.get("damage_value") or "10"
+                    
+                    damage = 0
+                    rolls_str = ""
+                    if damage_type == "FIXED":
+                        damage = int(damage_val_str)
+                        rolls_str = f"{damage} (fixed)"
+                    else:
+                        damage_info = roll_dice_detailed(damage_val_str)
+                        damage = damage_info["total"]
+                        rolls_str = f"{damage_info['dice_str']} ({' + '.join(str(r) for r in damage_info['rolls'])}{' + ' + str(damage_info['bonus']) if damage_info['bonus'] > 0 else ''}) = {damage}"
+                    
+                    self.avatar.hp = max(0, self.avatar.hp - damage)
+                    text = f"{enemy_ent.name} casts {action_name} (Mana: -{mana_cost})! Attack Roll: {d20} + {spell_modifier} = {hit_total} vs AC {player_ac} -> HIT | Damage: {rolls_str}."
+                else:
+                    text = f"{enemy_ent.name} casts {action_name} (Mana: -{mana_cost})! Attack Roll: {d20} + {spell_modifier} = {hit_total} vs AC {player_ac} -> MISS."
+                
+            elif action_type == "HEAL":
+                from backend.engine.skill_check import roll_dice_detailed
+                damage_type = cast_action.get("damage_type", "FIXED").upper()
+                damage_val_str = cast_action.get("damage_value") or "10"
+                
+                heal_amount = 0
+                rolls_str = ""
+                if damage_type == "FIXED":
+                    heal_amount = int(damage_val_str)
+                    rolls_str = f"{heal_amount} (fixed)"
+                else:
+                    damage_info = roll_dice_detailed(damage_val_str)
+                    heal_amount = damage_info["total"]
+                    rolls_str = f"{damage_info['dice_str']} ({' + '.join(str(r) for r in damage_info['rolls'])}{' + ' + str(damage_info['bonus']) if damage_info['bonus'] > 0 else ''}) = {heal_amount}"
+                
+                enemy_hp = min(enemy_max_hp, enemy_hp + heal_amount)
+                text = f"{enemy_ent.name} casts {action_name} (Mana: -{mana_cost})! Restores {rolls_str} HP."
+                
+            else:
+                text = f"{enemy_ent.name} performs special action {action_name} (Mana: -{mana_cost}). Outcome: {outcome_desc}"
+            
+            combat["enemy"]["hp"] = enemy_hp
+            combat["enemy"]["mana"] = enemy_mana
+            
+            states = dict(self.state.entity_states or {})
+            if enemy_id not in states:
+                states[enemy_id] = {}
+            states[enemy_id]["hp"] = enemy_hp
+            states[enemy_id]["mana"] = enemy_mana
+            self.state.entity_states = states
+            flag_modified(self.state, "entity_states")
+            
+            self._sync_combat_player_snapshot(combat)
+            self._append_combat_log(combat, text, "enemy_action")
+            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': text})}\n\n"
+            
+            if outcome_desc:
+                await self._save_chat_message("system", f"{enemy_ent.name} Special Action outcome: {outcome_desc}")
+            
+            if self.avatar.hp <= 0:
+                await self._finalize_session("game_over", f"{self.avatar.name} has fallen in battle.")
+                combat["active"] = False
+                combat["outcome"] = "defeat"
+                combat["status_note"] = "Game Over"
+                self._append_combat_log(combat, "The protagonist falls. Game Over.", "outcome")
+                self._set_combat_state(combat)
+                return
+                
+            combat["turn"] = "player"
+            combat["round"] = int(combat.get("round", 1)) + 1
+            self._append_combat_log(combat, f"Round {combat['round']}: {self.avatar.name}'s turn.", "turn")
+            self._set_combat_state(combat)
+            return
+
+        # Regular Weapon Action (Stamina/Mana checks)
+        if weapon_cost_type == "mana":
+            if enemy_mana < weapon_cost_value:
+                # Enemy rests (stamina + mana both recover)
+                enemy_stamina = min(enemy_max_stamina, enemy_stamina + 40)
+                enemy_mana = min(enemy_max_mana, enemy_mana + 40)
+
                 combat["enemy"]["stamina"] = enemy_stamina
+                combat["enemy"]["mana"] = enemy_mana
                 states = dict(self.state.entity_states or {})
                 if enemy_id not in states:
                     states[enemy_id] = {}
                 states[enemy_id]["stamina"] = enemy_stamina
+                states[enemy_id]["mana"] = enemy_mana
                 self.state.entity_states = states
                 flag_modified(self.state, "entity_states")
 
-                text = f"{enemy_ent.name} is exhausted and rests to recover stamina (+40 Stamina)."
+                text = f"{enemy_ent.name} is out of mana and rests to recover (+40 Stamina, +40 Mana)."
                 self._sync_combat_player_snapshot(combat)
                 self._append_combat_log(combat, text, "enemy_action")
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': text})}\n\n"
 
-                # Transition turn back to player
                 combat["turn"] = "player"
                 combat["round"] = int(combat.get("round", 1)) + 1
                 self._append_combat_log(combat, f"Round {combat['round']}: {self.avatar.name}'s turn.", "turn")
                 self._set_combat_state(combat)
                 return
+            enemy_mana = max(0, enemy_mana - weapon_cost_value)
+        else:
+            if enemy_max_stamina > 0 and enemy_stamina < weapon_cost_value:
+                # Enemy rests (stamina + mana both recover)
+                enemy_stamina = min(enemy_max_stamina, enemy_stamina + 40)
+                if enemy_max_mana > 0:
+                    enemy_mana = min(enemy_max_mana, enemy_mana + 40)
 
-            # Consume stamina for attacking
-            enemy_stamina = max(0, enemy_stamina - 20)
-            combat["enemy"]["stamina"] = enemy_stamina
-            states = dict(self.state.entity_states or {})
-            if enemy_id not in states:
-                states[enemy_id] = {}
-            states[enemy_id]["stamina"] = enemy_stamina
-            self.state.entity_states = states
-            flag_modified(self.state, "entity_states")
+                combat["enemy"]["stamina"] = enemy_stamina
+                combat["enemy"]["mana"] = enemy_mana
+                states = dict(self.state.entity_states or {})
+                if enemy_id not in states:
+                    states[enemy_id] = {}
+                states[enemy_id]["stamina"] = enemy_stamina
+                states[enemy_id]["mana"] = enemy_mana
+                self.state.entity_states = states
+                flag_modified(self.state, "entity_states")
+
+                text = f"{enemy_ent.name} is exhausted and rests to recover (+40 Stamina{', +40 Mana' if enemy_max_mana > 0 else ''})."
+                self._sync_combat_player_snapshot(combat)
+                self._append_combat_log(combat, text, "enemy_action")
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': text})}\n\n"
+
+                combat["turn"] = "player"
+                combat["round"] = int(combat.get("round", 1)) + 1
+                self._append_combat_log(combat, f"Round {combat['round']}: {self.avatar.name}'s turn.", "turn")
+                self._set_combat_state(combat)
+                return
+            enemy_stamina = max(0, enemy_stamina - weapon_cost_value)
+
+        combat["enemy"]["stamina"] = enemy_stamina
+        combat["enemy"]["mana"] = enemy_mana
+        states = dict(self.state.entity_states or {})
+        if enemy_id not in states:
+            states[enemy_id] = {}
+        states[enemy_id]["stamina"] = enemy_stamina
+        states[enemy_id]["mana"] = enemy_mana
+        self.state.entity_states = states
+        flag_modified(self.state, "entity_states")
 
         enemy_avatar = Avatar(
             name=enemy_ent.name,
@@ -4088,7 +4355,7 @@ class GameTurnManager:
             self._set_combat_state(combat)
             return
 
-        roll = roll_attack(enemy_avatar, "dexterity", player_ac, self._enemy_damage_dice(enemy_ent))
+        roll = roll_attack(enemy_avatar, "dexterity", player_ac, weapon_dmg_dice)
         if roll["is_hit"]:
             self.avatar.hp = max(0, self.avatar.hp - roll["damage_total"])
             dmg_bonus = int(roll.get("damage_bonus") or 0)
@@ -4504,19 +4771,52 @@ class GameTurnManager:
             return
 
         if cmd == "attack" or cmd == "/attack" or cmd == "a" or cmd.startswith("attack ") or cmd.startswith("/attack "):
-            if self.avatar.stamina < 20:
-                msg = f"Not enough stamina to attack! You have {self.avatar.stamina} stamina, but attacks require 20. Use Rest to recover."
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
-                async for chunk in self._emit_combat_final(msg):
-                    yield chunk
-                return
+            eq = self.avatar.equipment or {}
+            main_hand = eq.get("MainHand")
+            weapon_cost_type = "stamina"
+            weapon_cost_value = 20
+            weapon_dmg_dice = "1d8"
+            weapon_name = "Bare Fists"
             
-            # Deduct stamina
-            self.avatar.stamina = max(0, self.avatar.stamina - 20)
+            if isinstance(main_hand, dict):
+                weapon_name = main_hand.get("name", "Weapon")
+                meta = dict(main_hand.get("metadata_json") or {})
+                if not meta and "id" in main_hand:
+                    item_res = await self.db.execute(
+                        select(WorldEntity).where(
+                            WorldEntity.session_id == self.game_id,
+                            WorldEntity.id == main_hand["id"]
+                        )
+                    )
+                    item_ent = item_res.scalars().first()
+                    if item_ent and item_ent.metadata_json:
+                        meta = dict(item_ent.metadata_json)
+                
+                weapon_cost_type = meta.get("weapon_cost_type") or "stamina"
+                weapon_cost_value = meta.get("weapon_cost_value") if meta.get("weapon_cost_value") is not None else 20
+                weapon_dmg_dice = meta.get("damage_dice") or main_hand.get("damage_dice") or "1d8"
+
+            if weapon_cost_type == "mana":
+                if self.avatar.mana < weapon_cost_value:
+                    msg = f"Not enough mana to attack with {weapon_name}! You have {self.avatar.mana} mana, but attacks require {weapon_cost_value}. Use Rest to recover."
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                    async for chunk in self._emit_combat_final(msg):
+                        yield chunk
+                    return
+                self.avatar.mana = max(0, self.avatar.mana - weapon_cost_value)
+            else:
+                if self.avatar.stamina < weapon_cost_value:
+                    msg = f"Not enough stamina to attack with {weapon_name}! You have {self.avatar.stamina} stamina, but attacks require {weapon_cost_value}. Use Rest to recover."
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                    async for chunk in self._emit_combat_final(msg):
+                        yield chunk
+                    return
+                self.avatar.stamina = max(0, self.avatar.stamina - weapon_cost_value)
+
             self._sync_combat_player_snapshot(combat)
             
             # Roll attack
-            roll = roll_attack(self.avatar, "dexterity", enemy_ac, self._player_damage_dice())
+            roll = roll_attack(self.avatar, "dexterity", enemy_ac, weapon_dmg_dice)
             hit_status = "CRITICAL HIT" if roll.get("is_crit") else "HIT"
             if roll["is_hit"]:
                 enemy_hp = max(0, enemy_hp - roll["damage_total"])
@@ -4531,10 +4831,112 @@ class GameTurnManager:
             else:
                 action_msg = f"{self.avatar.name} ATTACK ROLL: {roll['hit_roll']} + {roll['hit_modifier']} = {roll['hit_total']} vs AC {enemy_ac} -> MISS"
             self._append_combat_log(combat, action_msg, "player_action")
+        elif cmd.startswith("special ") or cmd.startswith("/special ") or cmd.startswith("cast ") or cmd.startswith("/cast "):
+            action_parts = user_msg.strip().split(" ", 1)
+            action_id = action_parts[1].strip().upper() if len(action_parts) > 1 else ""
+            
+            player_specials = self.avatar.stats.get("special_actions") or []
+            action = None
+            for act in player_specials:
+                if act.get("id", "").upper() == action_id:
+                    action = act
+                    break
+            
+            if not action:
+                msg = f"Special action '{action_id}' not found. Available: " + ", ".join(act.get("id") for act in player_specials)
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                async for chunk in self._emit_combat_final(msg):
+                    yield chunk
+                return
+            
+            unlocked_actions = self.avatar.stats.get("unlocked_actions") or []
+            if action.get("id") not in unlocked_actions:
+                msg = f"Special action '{action.get('name')}' is locked. You must unlock it first!"
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                async for chunk in self._emit_combat_final(msg):
+                    yield chunk
+                return
+                
+            mana_cost = int(action.get("mana_cost") or 0)
+            if self.avatar.mana < mana_cost:
+                msg = f"Not enough mana! {action.get('name')} costs {mana_cost} Mana, but you only have {self.avatar.mana} Mana."
+                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
+                async for chunk in self._emit_combat_final(msg):
+                    yield chunk
+                return
+                
+            self.avatar.mana = max(0, self.avatar.mana - mana_cost)
+            self._sync_combat_player_snapshot(combat)
+            
+            action_type = action.get("action_type", "ATTACK").upper()
+            action_name = action.get("name", "Special Action")
+            outcome_desc = action.get("outcome_description") or ""
+            
+            if action_type == "ATTACK":
+                from backend.engine.skill_check import roll_dice_detailed
+                player_stats = calculate_total_stats(self.avatar)
+                spell_modifier = max(
+                    int(player_stats.get("intelligence", self.avatar.intelligence) - 10) // 2,
+                    int(player_stats.get("wisdom", self.avatar.wisdom) - 10) // 2,
+                    0
+                )
+                d20 = random.randint(1, 20)
+                hit_total = d20 + spell_modifier
+                is_hit = hit_total >= enemy_ac
+                
+                if is_hit:
+                    damage_type = action.get("damage_type", "FIXED").upper()
+                    damage_val_str = action.get("damage_value") or "10"
+                    
+                    damage = 0
+                    rolls_str = ""
+                    if damage_type == "FIXED":
+                        damage = int(damage_val_str)
+                        rolls_str = f"{damage} (fixed)"
+                    else:
+                        damage_info = roll_dice_detailed(damage_val_str)
+                        damage = damage_info["total"]
+                        rolls_str = f"{damage_info['dice_str']} ({' + '.join(str(r) for r in damage_info['rolls'])}{' + ' + str(damage_info['bonus']) if damage_info['bonus'] > 0 else ''}) = {damage}"
+                    
+                    enemy_hp = max(0, enemy_hp - damage)
+                    action_msg = f"{self.avatar.name} casts {action_name} (Mana: -{mana_cost})! Attack Roll: {d20} + {spell_modifier} = {hit_total} vs AC {enemy_ac} -> HIT | Damage: {rolls_str}."
+                else:
+                    action_msg = f"{self.avatar.name} casts {action_name} (Mana: -{mana_cost})! Attack Roll: {d20} + {spell_modifier} = {hit_total} vs AC {enemy_ac} -> MISS."
+                
+                self._append_combat_log(combat, action_msg, "player_action")
+                
+            elif action_type == "HEAL":
+                from backend.engine.skill_check import roll_dice_detailed
+                damage_type = action.get("damage_type", "FIXED").upper()
+                damage_val_str = action.get("damage_value") or "10"
+                
+                heal_amount = 0
+                rolls_str = ""
+                if damage_type == "FIXED":
+                    heal_amount = int(damage_val_str)
+                    rolls_str = f"{heal_amount} (fixed)"
+                else:
+                    damage_info = roll_dice_detailed(damage_val_str)
+                    heal_amount = damage_info["total"]
+                    rolls_str = f"{damage_info['dice_str']} ({' + '.join(str(r) for r in damage_info['rolls'])}{' + ' + str(damage_info['bonus']) if damage_info['bonus'] > 0 else ''}) = {heal_amount}"
+                
+                self.avatar.hp = min(self.avatar.max_hp, self.avatar.hp + heal_amount)
+                action_msg = f"{self.avatar.name} casts {action_name} (Mana: -{mana_cost})! Restores {rolls_str} HP."
+                self._append_combat_log(combat, action_msg, "player_action")
+                
+            else:
+                action_msg = f"{self.avatar.name} performs special action {action_name} (Mana: -{mana_cost}). Outcome: {outcome_desc}"
+                self._append_combat_log(combat, action_msg, "player_action")
+                
+            if outcome_desc:
+                await self._save_chat_message("system", f"Special action used: {action_name}. Outcome: {outcome_desc}")
+            
+            self._sync_combat_player_snapshot(combat)
         elif cmd in {"rest", "/rest", "wait", "/wait", "recover", "/recover", "skip", "/skip"}:
             self.avatar.stamina = min(self.avatar.max_stamina or 100, self.avatar.stamina + 40)
+            # Mana does NOT recover in combat — only stamina restores on rest
             self._sync_combat_player_snapshot(combat)
-            action_msg = f"{self.avatar.name} rests to recover stamina (+40 Stamina)."
+            action_msg = f"{self.avatar.name} rests to recover stamina (+40 Stamina). Mana can only be restored outside of combat or by using a potion."
             self._append_combat_log(combat, action_msg, "player_action")
         elif cmd in {"run", "/run", "r"}:
             player_stats = calculate_total_stats(self.avatar)
@@ -4560,7 +4962,7 @@ class GameTurnManager:
             self._sync_combat_player_snapshot(combat)
             self._append_combat_log(combat, action_msg, "consume")
         else:
-            msg = "Combat active. Valid actions: Attack, Run, Rest, or /consume <item>."
+            msg = "Combat active. Valid actions: Attack, Run, Rest, /consume <item>, or /special <action_id>."
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
             async for chunk in self._emit_combat_final(msg):
                 yield chunk

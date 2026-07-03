@@ -2652,7 +2652,7 @@ async def test_combat_npc_stamina_logic_active(setup_test_db, monkeypatch):
         combat = (state.entity_states or {}).get("__combat__") or {}
         assert combat.get("enemy", {}).get("stamina") == 20
         logs = combat.get("log") or []
-        assert any("is exhausted and rests to recover stamina" in entry.get("text", "") for entry in logs)
+        assert any("is exhausted and rests to recover" in entry.get("text", "") for entry in logs)
 
 
 async def test_combat_npc_stamina_logic_inactive(setup_test_db, monkeypatch):
@@ -2702,7 +2702,7 @@ async def test_combat_npc_stamina_logic_inactive(setup_test_db, monkeypatch):
         assert combat.get("enemy", {}).get("stamina") == 0
         logs = combat.get("log") or []
         # Enemy should not rest/be exhausted
-        assert not any("is exhausted and rests to recover stamina" in entry.get("text", "") for entry in logs)
+        assert not any("is exhausted and rests to recover" in entry.get("text", "") for entry in logs)
 
 
 async def test_wrong_container_access_code_is_rejected_server_side(setup_test_db):

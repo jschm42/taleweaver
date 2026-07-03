@@ -97,6 +97,10 @@ export const gameCommandService = {
       || msg === 'run'
       || msg === '/run'
       || msg.startsWith('/consume ')
+      || msg.startsWith('/special ')
+      || msg.startsWith('special ')
+      || msg.startsWith('/cast ')
+      || msg.startsWith('cast ')
     )
   },
 

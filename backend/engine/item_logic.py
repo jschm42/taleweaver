@@ -46,3 +46,43 @@ def get_item_slot(name: str, item_type: str) -> Optional[str]:
 
     return None
 
+
+def normalize_equipment_keys(equipment: Optional[dict]) -> dict:
+    """Normalizes equipment slot keys to the standard PascalCase keys expected by the frontend."""
+    if not equipment:
+        return {
+            "Head": None, "Chest": None, "Arms": None, "Legs": None,
+            "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None,
+            "Neck": None, "MainHand": None, "OffHand": None
+        }
+
+    key_mapping = {
+        "head": "Head",
+        "chest": "Chest",
+        "arms": "Arms",
+        "legs": "Legs",
+        "hands": "Hands",
+        "feet": "Feet",
+        "ring_1": "Ring_1",
+        "ring_2": "Ring_2",
+        "neck": "Neck",
+        "main_hand": "MainHand",
+        "mainhand": "MainHand",
+        "off_hand": "OffHand",
+        "offhand": "OffHand",
+    }
+
+    normalized = {
+        "Head": None, "Chest": None, "Arms": None, "Legs": None,
+        "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None,
+        "Neck": None, "MainHand": None, "OffHand": None
+    }
+
+    for k, v in equipment.items():
+        mapped_key = key_mapping.get(k.lower(), k)
+        if mapped_key in normalized:
+            normalized[mapped_key] = v
+
+    return normalized
+
+

@@ -81,6 +81,19 @@ export function normalizeHoverEntity(entity: any): any {
     if (value != null) normalized.stamina_change = value
   }
 
+  if (normalized.damage_dice == null) {
+    const value = metadata.damage_dice
+    if (typeof value === 'string' && value.trim()) normalized.damage_dice = value.trim()
+  }
+  if (normalized.weapon_cost_type == null) {
+    const value = metadata.weapon_cost_type
+    if (typeof value === 'string' && value.trim()) normalized.weapon_cost_type = value.trim().toLowerCase()
+  }
+  if (normalized.weapon_cost_value == null) {
+    const value = firstNumeric(metadata.weapon_cost_value)
+    if (value != null) normalized.weapon_cost_value = value
+  }
+
   return normalized
 }
 

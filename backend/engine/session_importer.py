@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
+from backend.engine.item_logic import normalize_equipment_keys
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.chat import ChatMessage
@@ -141,7 +142,7 @@ class SessionImporter:
                     armor_class=avatar_data.get("armor_class", 10),
                     stats=avatar_data.get("stats", {}),
                     inventory=avatar_data.get("inventory", []),
-                    equipment=avatar_data.get("equipment", {}),
+                    equipment=normalize_equipment_keys(avatar_data.get("equipment")),
                     status_effects=avatar_data.get("status_effects", []),
                 )
                 db.add(avatar)

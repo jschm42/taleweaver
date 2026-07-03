@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.core.config import settings
+from backend.engine.item_logic import normalize_equipment_keys
 from backend.engine.map_engine import MapEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -588,11 +589,87 @@ class AdventureLogic:
             img_map.update({k: v for k, v in snapshot_entity_images.items() if isinstance(v, str) and v})
         
         from backend.engine.item_logic import get_item_slot
+
+        def _entity_to_item_dict(ent: WorldEntity) -> dict:
+            """Build a minimal item dict from a WorldEntity for character sheet display."""
+            guessed_slot = get_item_slot(ent.name or "", ent.item_type or "PICKABLE")
+            wearable = ent.wearable_slots
+            if isinstance(wearable, list) and wearable:
+                item_slot = wearable[0]
+            elif isinstance(wearable, str):
+                item_slot = wearable
+            else:
+                item_slot = guessed_slot
+            metadata = ent.metadata_json or {}
+            effects = metadata.get("effects") if isinstance(metadata.get("effects"), dict) else {}
+
+            def _get_val(*candidates):
+                for c in candidates:
+                    if c is not None:
+                        try:
+                            return int(c)
+                        except (TypeError, ValueError):
+                            pass
+                return None
+
+            def _get_str(*candidates):
+                for c in candidates:
+                    if isinstance(c, str) and c.strip():
+                        return c.strip()
+                return None
+
+            return {
+                "id": ent.id,
+                "name": ent.name,
+                "description": ent.description,
+                "image_url": ent.image_url,
+                "item_type": ent.item_type or "PICKABLE",
+                "slot": item_slot,
+                "metadata_json": dict(metadata),
+                "stat_modifier_strength": _get_val(ent.stat_modifier_strength),
+                "stat_modifier_dexterity": _get_val(ent.stat_modifier_dexterity),
+                "stat_modifier_intelligence": _get_val(ent.stat_modifier_intelligence),
+                "stat_modifier_wisdom": _get_val(ent.stat_modifier_wisdom),
+                "stat_modifier_charisma": _get_val(ent.stat_modifier_charisma),
+                "stat_modifier_armor_class": _get_val(ent.stat_modifier_armor_class),
+                "hp_change": _get_val(metadata.get("hp_change"), effects.get("hp")),
+                "stamina_change": _get_val(metadata.get("stamina_change"), effects.get("stamina")),
+                "mana_change": _get_val(metadata.get("mana_change"), effects.get("mana")),
+                "damage_dice": _get_str(metadata.get("damage_dice")),
+                "weapon_cost_type": _get_str(metadata.get("weapon_cost_type")),
+                "weapon_cost_value": _get_val(metadata.get("weapon_cost_value")),
+            }
+
+        # Pre-load entity records for any string item IDs (legacy format: equipment stored as IDs)
+        item_ids_to_resolve: set[str] = set()
+        for _item in (avatar.inventory or []):
+            if isinstance(_item, str) and _item:
+                item_ids_to_resolve.add(_item)
+        normalized_eq_check = normalize_equipment_keys(avatar.equipment)
+        for _slot, _item in normalized_eq_check.items():
+            if isinstance(_item, str) and _item:
+                item_ids_to_resolve.add(_item)
+
+        entity_lookup: dict[str, Any] = {}
+        if item_ids_to_resolve:
+            ent_res = await db.execute(
+                select(WorldEntity).where(WorldEntity.id.in_(item_ids_to_resolve))
+            )
+            for ent in ent_res.scalars().all():
+                if ent.id not in entity_lookup:
+                    entity_lookup[ent.id] = ent
+                elif ent.session_id == state.session_id:
+                    # Prefer session-bound entities over template entities
+                    entity_lookup[ent.id] = ent
+
         synced_inventory = []
         for item in (avatar.inventory or []):
             if not isinstance(item, dict):
                 if isinstance(item, str):
-                    item = {"name": item}
+                    if item in entity_lookup:
+                        item = _entity_to_item_dict(entity_lookup[item])
+                    else:
+                        item = {"name": item}
                 else:
                     continue
             item_copy = dict(item)
@@ -604,11 +681,15 @@ class AdventureLogic:
             synced_inventory.append(item_copy)
             
         synced_equipment = {}
-        for slot, item in (avatar.equipment or {}).items():
+        normalized_equipment = normalize_equipment_keys(avatar.equipment)
+        for slot, item in normalized_equipment.items():
             if item:
                 if not isinstance(item, dict):
                     if isinstance(item, str):
-                        item = {"name": item}
+                        if item in entity_lookup:
+                            item = _entity_to_item_dict(entity_lookup[item])
+                        else:
+                            item = {"name": item}
                     else:
                         synced_equipment[slot] = item
                         continue
@@ -656,7 +737,6 @@ class AdventureLogic:
                 if resolved:
                     profile_image = resolved
                     break
-        
         snapshot = {
             "name": avatar.name,
             "role": avatar.role,
@@ -681,6 +761,8 @@ class AdventureLogic:
             "in_game_time": state.in_game_time,
             "start_datetime": start_datetime,
             "current_scene": current_scene.label if current_scene else state.current_scene_id,
+            "special_actions": avatar.stats.get("special_actions") or [],
+            "unlocked_actions": avatar.stats.get("unlocked_actions") or [],
             "scene_id": state.current_scene_id,
             "adventure_title": adventure.title if adventure else "Unknown",
             "adventure_version": adventure.version if adventure else None,

@@ -43,6 +43,8 @@ export interface CharacterSheet {
   adventure_tone?: string | null
   is_debug_enabled?: boolean
   debug_mode?: boolean
+  special_actions?: any[]
+  unlocked_actions?: string[]
   agent_active?: boolean
   agent_monkey_mode?: boolean
 }
@@ -79,6 +81,10 @@ export interface CombatState {
     hp: number
     max_hp?: number
     ac?: number
+    stamina?: number
+    max_stamina?: number
+    mana?: number
+    max_mana?: number
   }
   enemy: {
     id: string
@@ -88,6 +94,10 @@ export interface CombatState {
     max_hp?: number
     armor_mod?: number
     dexterity_mod?: number
+    stamina?: number
+    max_stamina?: number
+    mana?: number
+    max_mana?: number
     inventory?: InventoryItem[]
   }
   loot_pending?: boolean

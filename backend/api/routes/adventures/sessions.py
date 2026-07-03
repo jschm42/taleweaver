@@ -20,6 +20,7 @@ from backend.schemas.session import GameSessionUpdate
 from backend.engine.session_exporter import SessionExporter
 from backend.engine.session_importer import SessionImporter
 from backend.engine.session_checkpoint_service import SessionCheckpointService
+from backend.engine.item_logic import normalize_equipment_keys
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
@@ -232,7 +233,8 @@ def _rewrite_avatar_item_visual_urls(avatar: Avatar, session_id: str, cache: dic
     avatar.inventory = rewritten_inventory
 
     rewritten_equipment = {}
-    for slot, item in (avatar.equipment or {}).items():
+    normalized_equipment = normalize_equipment_keys(avatar.equipment)
+    for slot, item in normalized_equipment.items():
         if isinstance(item, dict):
             item_copy = dict(item)
             item_copy["image_url"] = _copy_data_asset_to_session(
@@ -384,7 +386,8 @@ def _backfill_avatar_items_from_template_entities(avatar: Avatar, entities_by_id
     avatar.inventory = inventory
 
     equipment = {}
-    for slot, item in (avatar.equipment or {}).items():
+    normalized_equipment = normalize_equipment_keys(avatar.equipment)
+    for slot, item in normalized_equipment.items():
         if isinstance(item, str) and item in entities_by_id:
             equipment[slot] = _reconstruct_item_dict_from_entity(entities_by_id[item])
         elif isinstance(item, dict) and item.get("id") in entities_by_id:
@@ -526,11 +529,7 @@ async def start_session_for_template(
             armor_class=template_avatar.armor_class,
             stats=deepcopy(template_avatar.stats or {}),
             inventory=deepcopy(template_avatar.inventory or []),
-            equipment=deepcopy(template_avatar.equipment or {
-                "Head": None, "Chest": None, "Arms": None, "Legs": None, 
-                "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, 
-                "Neck": None, "MainHand": None, "OffHand": None
-            }),
+            equipment=normalize_equipment_keys(template_avatar.equipment),
             status_effects=deepcopy(template_avatar.status_effects or []),
         )
     else:
@@ -557,11 +556,7 @@ async def start_session_for_template(
             armor_class=prot.get("armor_class", 10),
             stats=prot.get("stats", {}), 
             inventory=deepcopy(prot.get("starting_inventory") or prot.get("inventory", [])),
-            equipment=deepcopy(prot.get("starting_equipment") or {
-                "Head": None, "Chest": None, "Arms": None, "Legs": None, 
-                "Hands": None, "Feet": None, "Ring_1": None, "Ring_2": None, 
-                "Neck": None, "MainHand": None, "OffHand": None
-            }),
+            equipment=normalize_equipment_keys(prot.get("starting_equipment")),
             status_effects=deepcopy(prot.get("status_effects", [])),
         )
 
@@ -975,7 +970,7 @@ async def copy_session(
         armor_class=original_avatar.armor_class,
         stats=deepcopy(original_avatar.stats or {}),
         inventory=deepcopy(original_avatar.inventory or []),
-        equipment=deepcopy(original_avatar.equipment or {}),
+        equipment=normalize_equipment_keys(original_avatar.equipment),
         status_effects=deepcopy(original_avatar.status_effects or []),
     )
     db.add(cloned_avatar)

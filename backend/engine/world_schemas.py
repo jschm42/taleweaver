@@ -45,6 +45,22 @@ class WorldExitSchema(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SpecialActionSchema(BaseModel):
+    id: str = Field(..., description="Unique slug for the special action, e.g., HEAL_SPELL")
+    name: str = Field(..., description="Human-readable name")
+    description: str = Field(..., description="Short explanation of the action")
+    action_type: Literal["ATTACK", "HEAL", "UTILITY"] = Field(..., description="Type of special action")
+    mana_cost: int = Field(default=0, description="Mana cost to perform this action")
+    damage_type: Optional[Literal["FIXED", "ROLLED"]] = Field(None, description="Damage type (FIXED or ROLLED)")
+    damage_value: Optional[str] = Field(None, description="Damage or healing value, e.g. '15' (fixed) or '2d8+3' (rolled)")
+    outcome_description: str = Field(default="", description="Narrative description of what happens, especially for UTILITY actions.")
+    is_locked: bool = Field(default=False, description="Whether the action starts locked and must be unlocked.")
+    unlock_condition_type: Optional[Literal["READ_ITEM", "FIND_ITEM"]] = Field(None, description="Type of condition to unlock.")
+    unlock_condition_target: Optional[str] = Field(None, description="Item ID that triggers the unlock.")
+
+    model_config = {"extra": "forbid"}
+
+
 class WorldNPCSchema(BaseModel):
     id: str = Field(..., description="Unique slug for the NPC, e.g., MAD_ALCHEMIST")
     name: str = Field(..., description="Human-readable name")
@@ -72,6 +88,9 @@ class WorldNPCSchema(BaseModel):
         )
     )
     inventory: list[str] = Field(..., description="List of object IDs in this NPC's inventory. Use [] if empty.")
+    equipped_weapon_id: Optional[str] = Field(None, description="Optional ID of the equipped weapon object. Must exist in the objects list.")
+    equipped_armor_id: Optional[str] = Field(None, description="Optional ID of the equipped armor object. Must exist in the objects list.")
+    special_actions: list[SpecialActionSchema] = Field(default=[], description="List of up to 5 special actions this NPC can perform. Max 5.")
 
     model_config = {"extra": "forbid"}
 
@@ -160,6 +179,9 @@ class WorldObjectSchema(BaseModel):
     switch_transitions: list[SwitchTransitionSchema] = Field(default_factory=list, description="Only for SWITCH objects: deterministic transitions with optional gates and fail_message.")
     switch_outcomes: list[SwitchOutcomeSchema] = Field(default_factory=list, description="Only for SWITCH objects: state-based effects (unlock_exit, unlock_container, story_flag).")
     source_asset_id: Optional[str] = Field(None, description="Optional source object ID to reuse an old item image.")
+    damage_dice: Optional[str] = Field("1d8", description="Only for WEAPON items: damage formula (e.g. 1d8, 2d6, 1d10+1).")
+    weapon_cost_type: Optional[Literal["stamina", "mana"]] = Field("stamina", description="Only for WEAPON items: resource type consumed on attack.")
+    weapon_cost_value: Optional[int] = Field(20, description="Only for WEAPON items: amount of resource consumed on attack.")
 
     model_config = {"extra": "forbid"}
 
@@ -220,6 +242,7 @@ class ProtagonistSchema(BaseModel):
     mana: int = Field(..., description="Base mana points (0-300)")
     stamina: int = Field(..., description="Base stamina points (60-100)")
     source_asset_id: Optional[str] = Field(None, description="Optional source protagonist ID to reuse an old portrait image.")
+    special_actions: list[SpecialActionSchema] = Field(default=[], description="List of up to 5 special actions the protagonist has at the start. Max 5.")
 
     model_config = {"extra": "forbid"}
 

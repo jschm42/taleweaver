@@ -26,6 +26,7 @@ const emit = defineEmits<{
   attack: []
   run: []
   rest: []
+  special: [id: string]
   consume: [name: string]
   lootTake: [item: InventoryItem]
   lootLeave: [item: InventoryItem]
@@ -404,6 +405,54 @@ function toConsumableTooltipEntity(item: InventoryItem): Record<string, any> {
   }
 }
 
+function isActionLocked(action: any): boolean {
+  if (!action.is_locked) return false
+  const unlocked = props.playerSheet?.unlocked_actions || []
+  return !unlocked.includes(action.id)
+}
+
+function getSpecialActionIcon(type: string): string {
+  const t = String(type).toUpperCase()
+  if (t === 'HEAL') return 'ra-health-potion'
+  if (t === 'ATTACK') return 'ra-sword'
+  return 'ra-scroll'
+}
+
+function toSpecialActionTooltipEntity(action: any): Record<string, any> {
+  let unlockMsg = ''
+  if (action.is_locked) {
+    const isUnlocked = !isActionLocked(action)
+    const condType = action.unlock_condition_type
+    const target = action.unlock_condition_target || 'something'
+    if (isUnlocked) {
+      unlockMsg = ' (Freigeschaltet)'
+    } else {
+      if (condType === 'READ_ITEM') {
+        unlockMsg = ` (Gesperrt: Erfordert das Lesen von ${target})`
+      } else if (condType === 'FIND_ITEM') {
+        unlockMsg = ` (Gesperrt: Erfordert das Finden von ${target})`
+      } else {
+        unlockMsg = ' (Gesperrt)'
+      }
+    }
+  }
+  
+  return {
+    id: action.id,
+    entity_type: 'ITEM',
+    name: action.name + unlockMsg,
+    description: action.description || 'Special action that can be performed during combat.',
+    item_type: 'SPECIAL',
+    metadata_json: {
+      action_type: action.action_type,
+      mana_cost: action.mana_cost,
+      damage_type: action.damage_type,
+      damage_value: action.damage_value,
+      outcome_description: action.outcome_description
+    }
+  }
+}
+
 function emitHover(entity: any, event: MouseEvent): void {
   emit('entityHover', entity, event)
 }
@@ -413,72 +462,117 @@ function emitLeave(): void {
 }
 
 const mainHandItem = computed(() => {
-  return props.playerSheet?.equipment?.MainHand || null
+  const eq = props.playerSheet?.equipment || {}
+  return eq.MainHand || eq.main_hand || null
 })
 
 const playerStamina = computed(() => {
   return asInt(props.combat?.player?.stamina, asInt(props.playerSheet?.stamina))
 })
 
+const attackCost = computed(() => {
+  const item = mainHandItem.value as any
+  const meta = item?.metadata_json || {}
+  return {
+    type: (meta.weapon_cost_type || 'stamina') as 'stamina' | 'mana',
+    value: asInt(meta.weapon_cost_value, 20)
+  }
+})
+
 const isAttackDisabled = computed(() => {
-  return !isPlayerTurn.value || isInteractionLocked.value || playerStamina.value < 20 || (props.combat?.enemy?.hp ?? 0) <= 0
+  if (!isPlayerTurn.value || isInteractionLocked.value || (props.combat?.enemy?.hp ?? 0) <= 0) {
+    return true
+  }
+  const cost = attackCost.value
+  if (cost.type === 'mana') {
+    return asInt(props.playerSheet?.mana) < cost.value
+  } else {
+    return playerStamina.value < cost.value
+  }
 })
 
 const attackSlotClass = computed(() => {
   if (!isPlayerTurn.value || (props.combat?.enemy?.hp ?? 0) <= 0) {
-    return 'border-slate-800 bg-slate-950/20 opacity-50 cursor-not-allowed text-slate-500'
+    return 'border-slate-800 bg-slate-950/20 opacity-50 cursor-not-allowed text-slate-500 shadow-none'
   }
-  if (playerStamina.value < 20) {
-    return 'border-rose-900/60 bg-rose-950/20 text-rose-400 hover:border-rose-800/80 cursor-not-allowed ring-1 ring-rose-500/20'
+  const cost = attackCost.value
+  const hasResource = cost.type === 'mana'
+    ? asInt(props.playerSheet?.mana) >= cost.value
+    : playerStamina.value >= cost.value
+
+  if (!hasResource) {
+    return 'border-rose-900/60 bg-rose-950/20 text-rose-400 hover:border-rose-800/80 cursor-not-allowed ring-1 ring-rose-500/20 shadow-[inset_0_1px_0_rgba(244,63,94,0.05)]'
   }
-  return 'border-emerald-500/30 bg-emerald-950/10 hover:bg-emerald-950/20 hover:border-emerald-500/60 text-emerald-200 cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.05)] hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+  return 'border-emerald-500/40 bg-gradient-to-br from-emerald-950/30 via-slate-900/40 to-emerald-950/20 hover:from-emerald-950/50 hover:to-emerald-950/30 hover:border-emerald-400/70 text-emerald-200 cursor-pointer shadow-[0_0_14px_rgba(16,185,129,0.12),inset_0_1px_0_rgba(16,185,129,0.15)] hover:shadow-[0_0_22px_rgba(16,185,129,0.28),inset_0_1px_0_rgba(16,185,129,0.25)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200'
 })
 
 const restSlotClass = computed(() => {
   if (!isPlayerTurn.value || (props.combat?.enemy?.hp ?? 0) <= 0) {
-    return 'border-slate-800 bg-slate-950/20 opacity-50 cursor-not-allowed text-slate-500'
+    return 'border-slate-800 bg-slate-950/20 opacity-50 cursor-not-allowed text-slate-500 shadow-none'
   }
   if (playerStamina.value < 20) {
-    return 'border-emerald-500 bg-emerald-950/20 text-emerald-100 cursor-pointer ring-2 ring-emerald-500 ring-offset-2 ring-offset-slate-950 animate-pulse'
+    return 'border-emerald-400/70 bg-gradient-to-br from-emerald-950/40 to-emerald-900/20 text-emerald-100 cursor-pointer ring-2 ring-emerald-400/60 ring-offset-2 ring-offset-slate-950 animate-pulse shadow-[0_0_24px_rgba(16,185,129,0.4)]'
   }
-  return 'border-slate-700 bg-slate-900/40 hover:bg-slate-800/60 hover:border-slate-500 text-slate-200 cursor-pointer'
+  return 'border-slate-700 bg-gradient-to-br from-slate-900/60 to-slate-950/40 hover:from-slate-800/70 hover:to-slate-900/50 hover:border-slate-400/60 text-slate-200 cursor-pointer shadow-[inset_0_1px_0_rgba(148,163,184,0.08)] hover:-translate-y-0.5 transition-all duration-200'
 })
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="fight-fade">
-      <div 
-        v-if="isRendered" 
-        class="fixed inset-0 z-[110] bg-slate-950/70 backdrop-blur-sm p-3 sm:p-6 md:p-8 flex items-center justify-center"
+      <div
+        v-if="isRendered"
+        class="fixed inset-0 z-[110] bg-slate-950/80 backdrop-blur-md p-3 sm:p-6 md:p-8 flex items-center justify-center"
         style="pointer-events: auto;"
       >
-        <div class="w-full max-w-6xl h-[80vh] border border-amber-700/40 bg-gradient-to-b from-slate-900/95 via-slate-900 to-slate-950 rounded-2xl shadow-[0_0_60px_rgba(251,191,36,0.15)] overflow-hidden flex flex-col">
-          <header class="shrink-0 px-5 py-4 border-b border-amber-500/20 bg-slate-950/60 flex items-center justify-between">
-            <h2 class="text-base sm:text-lg uppercase tracking-[0.22em] text-amber-300 font-black">Turn-Based Combat</h2>
-            <div class="text-sm text-slate-300">
-              Round <span class="font-black text-amber-200">{{ combat.round }}</span>
-              <span class="mx-2 text-slate-600">|</span>
-              Turn: <span class="font-black" :class="activeTurn === 'player' ? 'text-emerald-300' : 'text-rose-300'">{{ activeTurn }}</span>
+        <div class="relative w-full max-w-7xl h-[84vh] border border-amber-700/40 bg-gradient-to-b from-slate-900/95 via-slate-900 to-slate-950 rounded-2xl shadow-[0_0_80px_rgba(251,191,36,0.18),inset_0_1px_0_rgba(251,191,36,0.08)] overflow-hidden flex flex-col">
+          <!-- Ambient atmosphere layers -->
+          <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(59,130,246,0.08),transparent_55%),radial-gradient(circle_at_85%_90%,rgba(244,63,94,0.08),transparent_55%)]"></div>
+          <div class="pointer-events-none absolute inset-0 opacity-[0.04] mix-blend-overlay" style="background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>')"></div>
+          <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent"></div>
+
+          <header class="relative shrink-0 px-6 py-4 border-b border-amber-500/20 bg-gradient-to-b from-slate-950/80 to-slate-950/40 flex items-center justify-between backdrop-blur-sm">
+            <div class="flex items-center gap-3">
+              <span class="relative flex h-2.5 w-2.5">
+                <span class="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-ping"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.9)]"></span>
+              </span>
+              <h2 class="text-base sm:text-lg uppercase tracking-[0.28em] text-amber-300 font-black drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]">Turn-Based Combat</h2>
+            </div>
+            <div class="flex items-center gap-4 text-sm">
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-500/25 bg-slate-950/60 shadow-[inset_0_1px_0_rgba(251,191,36,0.08)]">
+                <span class="text-[10px] uppercase tracking-[0.18em] text-amber-300/80 font-bold">Round</span>
+                <span class="font-black text-amber-200 text-base drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]">{{ combat.round }}</span>
+              </div>
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-full border bg-slate-950/60 shadow-[inset_0_1px_0_rgba(148,163,184,0.08)]" :class="activeTurn === 'player' ? 'border-emerald-500/40' : 'border-rose-500/40'">
+                <span class="text-[10px] uppercase tracking-[0.18em] font-bold" :class="activeTurn === 'player' ? 'text-emerald-300/80' : 'text-rose-300/80'">Turn</span>
+                <span class="font-black text-base" :class="activeTurn === 'player' ? 'text-emerald-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'text-rose-300 drop-shadow-[0_0_6px_rgba(244,63,94,0.5)]'">{{ activeTurn }}</span>
+              </div>
             </div>
           </header>
 
-          <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[260px_1fr_260px] gap-3 p-3 md:p-4">
+          <div class="relative flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[280px_1fr_280px] gap-4 p-3 md:p-5">
             <section
-              class="bg-slate-900/80 rounded-xl p-4 flex flex-col items-center justify-start transition-all duration-300"
+              class="relative bg-gradient-to-b from-slate-900/85 to-slate-950/85 rounded-xl p-4 flex flex-col items-center justify-start transition-all duration-300 backdrop-blur-sm"
               :class="activeTurn === 'player'
                 ? 'active-turn-player'
-                : 'border border-emerald-500/20'"
+                : 'border border-emerald-500/20 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]'"
               @mouseenter="protagonistTooltipEntity && emitHover(protagonistTooltipEntity, $event)"
               @mousemove="protagonistTooltipEntity && emitHover(protagonistTooltipEntity, $event)"
               @mouseleave="emitLeave"
             >
-              <div class="text-xs uppercase tracking-[0.2em] text-emerald-300/80 mb-3 font-bold">Protagonist</div>
-              <div class="relative w-32 h-32 sm:w-44 sm:h-44 rounded-xl overflow-hidden bg-slate-950 transition-all duration-300"
+              <div class="absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" v-if="activeTurn === 'player'"></div>
+              <div class="text-xs uppercase tracking-[0.22em] mb-3 font-black flex items-center gap-1.5" :class="activeTurn === 'player' ? 'text-emerald-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'text-emerald-300/60'">
+                <i class="ra ra-player text-xs"></i>
+                Protagonist
+              </div>
+              <div class="relative w-32 h-32 sm:w-44 sm:h-44 rounded-xl overflow-hidden bg-slate-950 transition-all duration-300 ring-1 ring-inset"
                 :class="activeTurn === 'player'
-                  ? 'active-turn-player'
-                  : 'border border-emerald-400/40'"
+                  ? 'active-turn-player ring-emerald-400/50'
+                  : 'border border-emerald-400/30'"
               >
+                <!-- Atmospheric portrait aura -->
+                <div v-if="activeTurn === 'player' && combat.player?.hp > 0" class="portrait-aura portrait-aura-emerald"></div>
                 <!-- Defeated Ribbon -->
                 <div v-if="combat.player?.hp <= 0" class="absolute -right-10 top-3 bg-red-600 text-white text-xs font-black uppercase tracking-[0.15em] py-1 w-32 text-center rotate-45 shadow-lg z-10">
                   Defeated
@@ -507,13 +601,22 @@ const restSlotClass = computed(() => {
               <div class="mt-3 w-full">
                 <StatBar label="HP" :value="asInt(combat.player?.hp)" :max="asInt(combat.player?.max_hp)" color="crimson" size="sm" />
                 <StatBar label="Stamina" :value="asInt(combat.player?.stamina, asInt(playerSheet?.stamina))" :max="asInt(combat.player?.max_stamina, asInt(playerSheet?.max_stamina))" color="emerald" size="sm" />
-                <StatBar v-if="asInt(playerSheet?.max_mana) > 0" label="Mana" :value="asInt(playerSheet?.mana)" :max="asInt(playerSheet?.max_mana)" color="sapphire" size="sm" />
+                <StatBar
+                  v-if="asInt(combat.player?.max_mana, asInt(playerSheet?.max_mana)) > 0"
+                  label="Mana"
+                  :value="asInt(combat.player?.mana, asInt(playerSheet?.mana))"
+                  :max="asInt(combat.player?.max_mana, asInt(playerSheet?.max_mana))"
+                  color="sapphire"
+                  size="sm"
+                />
               </div>
             </section>
 
-            <section class="border border-amber-500/20 bg-slate-900/80 rounded-xl min-h-0 flex flex-col">
-              <div class="px-4 py-2.5 border-b border-amber-500/15 text-xs uppercase tracking-[0.2em] text-amber-300/80 font-bold">
-                Battle Chronicle
+            <section class="relative border border-amber-500/20 bg-gradient-to-b from-slate-900/85 to-slate-950/80 rounded-xl min-h-0 flex flex-col backdrop-blur-sm shadow-[inset_0_1px_0_rgba(251,191,36,0.06)]">
+              <div class="relative px-4 py-2.5 border-b border-amber-500/15 bg-slate-950/40 text-xs uppercase tracking-[0.24em] font-black flex items-center gap-2">
+                <i class="ra ra-scroll-unfurled text-amber-300/80"></i>
+                <span class="text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.4)]">Battle Chronicle</span>
+                <span class="ml-auto text-[10px] text-amber-300/40 font-mono">{{ visibleLogs.length }} / {{ parsedLogs.length }}</span>
               </div>
               <div ref="logContainerRef" class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3">
                 <div v-for="(entry, idx) in visibleLogs" :key="makeLogKey(entry, idx)" class="combat-log-entry text-sm md:text-base leading-relaxed border-l-2 pl-3"
@@ -589,20 +692,26 @@ const restSlotClass = computed(() => {
             </section>
 
             <section
-              class="bg-slate-900/80 rounded-xl p-4 flex flex-col items-center justify-start transition-all duration-300"
+              class="relative bg-gradient-to-b from-slate-900/85 to-slate-950/85 rounded-xl p-4 flex flex-col items-center justify-start transition-all duration-300 backdrop-blur-sm"
               :class="activeTurn === 'enemy'
                 ? 'active-turn-enemy'
-                : 'border border-rose-500/20'"
+                : 'border border-rose-500/20 shadow-[inset_0_1px_0_rgba(148,163,184,0.05)]'"
               @mouseenter="enemyTooltipEntity && emitHover(enemyTooltipEntity, $event)"
               @mousemove="enemyTooltipEntity && emitHover(enemyTooltipEntity, $event)"
               @mouseleave="emitLeave"
             >
-              <div class="text-xs uppercase tracking-[0.2em] text-rose-300/80 mb-3 font-bold">Enemy</div>
-              <div class="relative w-32 h-32 sm:w-44 sm:h-44 rounded-xl overflow-hidden bg-slate-950 transition-all duration-300"
+              <div class="absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-rose-400/50 to-transparent" v-if="activeTurn === 'enemy'"></div>
+              <div class="text-xs uppercase tracking-[0.22em] mb-3 font-black flex items-center gap-1.5" :class="activeTurn === 'enemy' ? 'text-rose-300 drop-shadow-[0_0_6px_rgba(244,63,94,0.5)]' : 'text-rose-300/60'">
+                <i class="ra ra-monster-skull text-xs"></i>
+                Enemy
+              </div>
+              <div class="relative w-32 h-32 sm:w-44 sm:h-44 rounded-xl overflow-hidden bg-slate-950 transition-all duration-300 ring-1 ring-inset"
                 :class="activeTurn === 'enemy'
-                  ? 'active-turn-enemy'
-                  : 'border border-rose-400/40'"
+                  ? 'active-turn-enemy ring-rose-400/50'
+                  : 'border border-rose-400/30'"
               >
+                <!-- Atmospheric portrait aura -->
+                <div v-if="activeTurn === 'enemy' && combat.enemy?.hp > 0" class="portrait-aura portrait-aura-rose"></div>
                 <!-- Defeated Ribbon -->
                 <div v-if="combat.enemy?.hp <= 0" class="absolute -right-10 top-3 bg-red-600 text-white text-xs font-black uppercase tracking-[0.15em] py-1 w-32 text-center rotate-45 shadow-lg z-10">
                   Defeated
@@ -634,12 +743,20 @@ const restSlotClass = computed(() => {
               <div class="mt-3 w-full">
                 <StatBar label="HP" :value="asInt(combat.enemy?.hp)" :max="asInt(combat.enemy?.max_hp)" color="crimson" size="sm" />
                 <StatBar v-if="asInt(combat.enemy?.max_stamina, asInt(enemyTooltipEntity?.max_stamina)) > 0" label="Stamina" :value="asInt(combat.enemy?.stamina, asInt(enemyTooltipEntity?.stamina))" :max="asInt(combat.enemy?.max_stamina, asInt(enemyTooltipEntity?.max_stamina))" color="emerald" size="sm" />
-                <StatBar v-if="asInt(enemyTooltipEntity?.max_mana) > 0" label="Mana" :value="asInt(enemyTooltipEntity?.mana)" :max="asInt(enemyTooltipEntity?.max_mana)" color="sapphire" size="sm" />
+                <StatBar
+                  v-if="asInt(combat.enemy?.max_mana) > 0"
+                  label="Mana"
+                  :value="asInt(combat.enemy?.mana)"
+                  :max="asInt(combat.enemy?.max_mana)"
+                  color="sapphire"
+                  size="sm"
+                />
               </div>
             </section>
           </div>
 
-          <footer class="shrink-0 border-t border-amber-500/20 bg-slate-950/70 p-3.5 space-y-3.5">
+          <footer class="relative shrink-0 border-t border-amber-500/20 bg-gradient-to-b from-slate-950/80 to-slate-950/95 p-4 space-y-3.5 backdrop-blur-sm">
+            <div class="pointer-events-none absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent"></div>
             <!-- Debug Controls -->
             <div v-if="isDebug" class="flex items-center gap-2 pb-2 mb-2 border-b border-rose-500/20">
               <span class="text-xs font-black text-rose-400 uppercase tracking-widest mr-2">Debug Actions:</span>
@@ -690,7 +807,7 @@ const restSlotClass = computed(() => {
                 <div class="flex items-center justify-between">
                   <span class="text-xs uppercase font-black tracking-widest text-slate-400">Main Hand</span>
                   <span class="text-xs font-black px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-400">
-                    ⚡ 20 STA
+                    ⚡ {{ attackCost.value }} {{ attackCost.type === 'mana' ? 'MP' : 'STA' }}
                   </span>
                 </div>
                 
@@ -711,48 +828,104 @@ const restSlotClass = computed(() => {
                       {{ mainHandItem ? mainHandItem.name : 'Bare Fists' }}
                     </div>
                     <div class="text-xs text-slate-400 truncate">
-                      {{ mainHandItem && mainHandItem.damage ? `Dmg: ${mainHandItem.damage}` : 'Click to punch' }}
+                      {{ mainHandItem && (mainHandItem.damage_dice || mainHandItem.damage)
+                          ? `Dmg: ${mainHandItem.damage_dice || mainHandItem.damage}`
+                          : 'Click to punch' }}
                     </div>
                   </div>
                 </div>
 
                 <div class="text-xs text-center font-bold" :class="isAttackDisabled ? 'text-rose-400' : 'text-emerald-400'">
-                  {{ isAttackDisabled ? (playerStamina < 20 ? 'Insufficient Stamina' : 'Not Your Turn') : 'Click to Attack' }}
+                  {{ isAttackDisabled 
+                    ? (attackCost.type === 'mana' 
+                        ? (asInt(playerSheet?.mana) < attackCost.value ? 'Insufficient Mana' : 'Not Your Turn')
+                        : (playerStamina < attackCost.value ? 'Insufficient Stamina' : 'Not Your Turn'))
+                    : 'Click to Attack' }}
                 </div>
               </div>
 
-              <!-- Slot 2: Consumables grid row -->
-              <div class="border border-slate-800 bg-slate-900/20 rounded-xl p-3 flex flex-col justify-between">
-                <span class="text-xs uppercase font-black tracking-widest text-slate-400 mb-1.5">Consumables</span>
-                <div class="flex-grow flex items-center">
-                  <div class="flex flex-wrap gap-2.5 w-full">
-                    <button
-                      v-for="item in consumables"
-                      :key="item.id || item.name"
-                      class="group flex items-center gap-2.5 px-3 py-2 rounded-lg border border-cyan-500/25 bg-cyan-950/20 hover:bg-cyan-900/30 hover:border-cyan-400/40 disabled:opacity-40 disabled:hover:bg-cyan-950/20 transition-all text-left"
-                      @mouseenter="emitHover(toConsumableTooltipEntity(item), $event)"
-                      @mousemove="emitHover(toConsumableTooltipEntity(item), $event)"
-                      @mouseleave="emitLeave"
-                      :disabled="!isPlayerTurn || isInteractionLocked"
-                      @click="emit('consume', item.name)"
-                    >
-                      <div class="w-8 h-8 rounded overflow-hidden border border-cyan-500/30 bg-slate-950 shrink-0 flex items-center justify-center">
-                        <img
-                          v-if="hasRenderableImagePath(item.image_url as string)"
-                          :src="getImageUrl(item.image_url as string)"
-                          class="w-full h-full object-cover"
-                          :alt="item.name"
-                        >
-                        <i v-else :class="['ra text-sm', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
-                      </div>
-                      <div class="min-w-0 pr-1">
-                        <span class="text-xs font-bold text-cyan-200 block truncate max-w-28">
-                          {{ item.name }}
-                        </span>
-                        <span class="text-[10px] text-cyan-400/70 block">Use item</span>
-                      </div>
-                    </button>
-                    <span v-if="consumables.length === 0" class="text-sm text-slate-500 italic my-auto">No consumable items in inventory.</span>
+              <!-- Slot 2: Middle Column wrapper (Consumables & Special Actions) -->
+              <div class="flex flex-col gap-2.5 min-w-0">
+                <!-- Consumables row -->
+                <div class="relative border border-cyan-500/15 bg-gradient-to-br from-slate-900/50 to-slate-950/40 rounded-xl p-3 flex flex-col justify-between flex-1 shadow-[inset_0_1px_0_rgba(34,211,238,0.05)]">
+                  <span class="text-xs uppercase font-black tracking-[0.18em] text-cyan-300/80 mb-1.5 flex items-center gap-1.5">
+                    <i class="ra ra-potion text-cyan-300/70 text-xs"></i>
+                    Consumables
+                  </span>
+                  <div class="flex-grow flex items-center">
+                    <div class="flex flex-wrap gap-2 w-full">
+                      <button
+                        v-for="item in consumables"
+                        :key="item.id || item.name"
+                        class="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-gradient-to-br from-cyan-950/40 to-slate-950/30 hover:from-cyan-900/60 hover:to-cyan-950/40 hover:border-cyan-300/60 hover:shadow-[0_0_14px_rgba(34,211,238,0.25)] disabled:opacity-40 disabled:hover:shadow-none transition-all text-left hover:-translate-y-0.5 active:translate-y-0"
+                        @mouseenter="emitHover(toConsumableTooltipEntity(item), $event)"
+                        @mousemove="emitHover(toConsumableTooltipEntity(item), $event)"
+                        @mouseleave="emitLeave"
+                        :disabled="!isPlayerTurn || isInteractionLocked"
+                        @click="emit('consume', item.name)"
+                      >
+                        <div class="w-7 h-7 rounded overflow-hidden border border-cyan-500/30 bg-slate-950 shrink-0 flex items-center justify-center shadow-[inset_0_0_4px_rgba(34,211,238,0.2)]">
+                          <img
+                            v-if="hasRenderableImagePath(item.image_url as string)"
+                            :src="getImageUrl(item.image_url as string)"
+                            class="w-full h-full object-cover"
+                            :alt="item.name"
+                          >
+                          <i v-else :class="['ra text-sm', getItemIcon(item.item_type), getTypeColor(item.item_type)]"></i>
+                        </div>
+                        <div class="min-w-0 pr-1">
+                          <span class="text-xs font-bold text-cyan-100 block truncate max-w-24">
+                            {{ item.name }}
+                          </span>
+                          <span class="text-[9px] text-cyan-400/80 block">Use item</span>
+                        </div>
+                      </button>
+                      <span v-if="consumables.length === 0" class="text-xs text-slate-500 italic my-auto">No consumable items in inventory.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Special Actions row -->
+                <div class="relative border border-violet-500/15 bg-gradient-to-br from-slate-900/50 to-slate-950/40 rounded-xl p-3 flex flex-col justify-between flex-1 shadow-[inset_0_1px_0_rgba(167,139,250,0.05)]">
+                  <span class="text-xs uppercase font-black tracking-[0.18em] text-violet-300/80 mb-1.5 flex items-center gap-1.5">
+                    <i class="ra ra-scroll-quill text-violet-300/70 text-xs"></i>
+                    Special Actions
+                  </span>
+                  <div class="flex-grow flex items-center">
+                    <div class="flex flex-wrap gap-2 w-full">
+                      <button
+                        v-for="action in (playerSheet?.special_actions || [])"
+                        :key="action.id"
+                        class="group relative flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all text-left overflow-hidden hover:-translate-y-0.5 active:translate-y-0"
+                        :class="isActionLocked(action)
+                          ? 'border-slate-800 bg-slate-950/40 text-slate-500 cursor-not-allowed'
+                          : 'border-violet-500/35 bg-gradient-to-br from-violet-950/40 to-slate-950/30 hover:from-violet-900/60 hover:to-violet-950/40 hover:border-violet-300/60 hover:shadow-[0_0_14px_rgba(167,139,250,0.3)] text-violet-100'"
+                        @mouseenter="emitHover(toSpecialActionTooltipEntity(action), $event)"
+                        @mousemove="emitHover(toSpecialActionTooltipEntity(action), $event)"
+                        @mouseleave="emitLeave"
+                        :disabled="!isPlayerTurn || isInteractionLocked || isActionLocked(action) || asInt(props.playerSheet?.mana) < action.mana_cost"
+                        @click="emit('special', action.id)"
+                      >
+                        <!-- Lock overlay indicator -->
+                        <div v-if="isActionLocked(action)" class="absolute top-0.5 right-0.5 text-[8px]">
+                          <i class="ra ra-padlock text-slate-600"></i>
+                        </div>
+                        
+                        <div class="w-7 h-7 rounded overflow-hidden border bg-slate-950 shrink-0 flex items-center justify-center"
+                             :class="isActionLocked(action) ? 'border-slate-800' : 'border-violet-500/30'">
+                          <i :class="['ra text-sm', getSpecialActionIcon(action.action_type), isActionLocked(action) ? 'text-slate-600' : 'text-violet-300']"></i>
+                        </div>
+                        <div class="min-w-0 pr-1">
+                          <span class="text-xs font-bold block truncate max-w-24" :class="isActionLocked(action) ? 'text-slate-500' : 'text-violet-200'">
+                            {{ action.name }}
+                          </span>
+                          <span class="text-[9px] block font-semibold" :class="isActionLocked(action) ? 'text-slate-600' : 'text-violet-400/70'">
+                            {{ action.mana_cost }} MP
+                          </span>
+                        </div>
+                      </button>
+                      <span v-if="!(playerSheet?.special_actions && playerSheet.special_actions.length > 0)" class="text-xs text-slate-500 italic my-auto">No special actions.</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -783,8 +956,8 @@ const restSlotClass = computed(() => {
                 </div>
 
                 <!-- Run button -->
-                <div 
-                  class="flex flex-col justify-between p-3 rounded-xl border border-slate-700 bg-slate-900/40 hover:bg-rose-950/10 hover:border-rose-900/50 text-slate-200 cursor-pointer transition-all"
+                <div
+                  class="flex flex-col justify-between p-3 rounded-xl border border-slate-700 bg-gradient-to-br from-slate-900/60 to-slate-950/40 hover:from-rose-950/30 hover:to-rose-900/20 hover:border-rose-700/60 text-slate-200 cursor-pointer transition-all duration-200 shadow-[inset_0_1px_0_rgba(148,163,184,0.08)] hover:-translate-y-0.5"
                   :class="{ 'opacity-50 cursor-not-allowed': !isPlayerTurn || isInteractionLocked }"
                   @click="emit('run')"
                 >
@@ -996,35 +1169,67 @@ const restSlotClass = computed(() => {
 }
 
 .active-turn-player {
-  border: 1px solid rgba(59, 130, 246, 0.7);
-  animation: activePlayerGlow 2.5s infinite ease-in-out;
+  border: 1px solid rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 24px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(96, 165, 250, 0.15);
+  animation: activePlayerGlow 2.6s infinite ease-in-out;
 }
 
 .active-turn-enemy {
-  border: 1px solid rgba(239, 68, 68, 0.7);
-  animation: activeEnemyGlow 2.5s infinite ease-in-out;
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.25), inset 0 1px 0 rgba(248, 113, 113, 0.15);
+  animation: activeEnemyGlow 2.6s infinite ease-in-out;
 }
 
 @keyframes activePlayerGlow {
   0%, 100% {
-    box-shadow: 0 0 6px rgba(59, 130, 246, 0.35);
-    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(96, 165, 250, 0.12);
+    border-color: rgba(59, 130, 246, 0.55);
   }
   50% {
-    box-shadow: 0 0 18px rgba(59, 130, 246, 0.8);
-    border-color: rgba(59, 130, 246, 0.95);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.55), inset 0 1px 0 rgba(96, 165, 250, 0.25);
+    border-color: rgba(96, 165, 250, 0.95);
   }
 }
 
 @keyframes activeEnemyGlow {
   0%, 100% {
-    box-shadow: 0 0 6px rgba(239, 68, 68, 0.35);
-    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.25), inset 0 1px 0 rgba(248, 113, 113, 0.12);
+    border-color: rgba(239, 68, 68, 0.55);
   }
   50% {
-    box-shadow: 0 0 18px rgba(239, 68, 68, 0.8);
-    border-color: rgba(239, 68, 68, 0.95);
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.55), inset 0 1px 0 rgba(248, 113, 113, 0.25);
+    border-color: rgba(248, 113, 113, 0.95);
   }
+}
+
+.portrait-aura {
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  border-radius: 0.85rem;
+  z-index: 1;
+  mix-blend-mode: screen;
+  opacity: 0.65;
+}
+
+.portrait-aura-emerald {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(16, 185, 129, 0.35), transparent 55%),
+    radial-gradient(circle at 70% 80%, rgba(59, 130, 246, 0.3), transparent 55%);
+  animation: portraitAuraDrift 6s ease-in-out infinite alternate;
+}
+
+.portrait-aura-rose {
+  background:
+    radial-gradient(circle at 70% 20%, rgba(244, 63, 94, 0.35), transparent 55%),
+    radial-gradient(circle at 30% 80%, rgba(217, 70, 239, 0.28), transparent 55%);
+  animation: portraitAuraDrift 6s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes portraitAuraDrift {
+  0% { transform: translate(0, 0) scale(1); opacity: 0.55; }
+  50% { transform: translate(2px, -2px) scale(1.03); opacity: 0.75; }
+  100% { transform: translate(-2px, 2px) scale(1); opacity: 0.55; }
 }
 
 @media (prefers-reduced-motion: reduce) {

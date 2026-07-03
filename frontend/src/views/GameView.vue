@@ -1315,6 +1315,15 @@ const handleCombatRest = async () => {
   }
 }
 
+const handleCombatSpecial = async (actionId: string) => {
+  const dispatched = await gameActionService.runCombatCommand(combatActionInFlight, sendMessage, `/special ${actionId}`)
+  if (!dispatched) {
+    const blockedMsg = 'Your move is still being resolved. Hold your stance for a moment.'
+    addNotification(blockedMsg, 'info')
+    emitSystemMessage(blockedMsg)
+  }
+}
+
 const handleCombatDebugWin = async () => {
   await sendMessage('/debug win_fight')
 }
@@ -1712,6 +1721,7 @@ watch(
       @attack="handleCombatAttack"
       @run="handleCombatRun"
       @rest="handleCombatRest"
+      @special="handleCombatSpecial"
       @consume="handleCombatConsume"
       @loot-take="handleLootTake"
       @loot-leave="handleLootLeave"
