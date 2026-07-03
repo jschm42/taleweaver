@@ -14,7 +14,7 @@ import WalkthroughModal from '@/components/game/WalkthroughModal.vue'
 import GameOverScreen from '@/components/game/GameOverScreen.vue'
 import SuccessScreen from '@/components/game/SuccessScreen.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
-import GameScenePanel from '@/components/game/GameScenePanel.vue'
+import GameLocationPanel from '@/components/game/GameLocationPanel.vue'
 import GameNpcsPanel from '@/components/game/GameNpcsPanel.vue'
 import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
 import GameWorldMemoryPanel from '@/components/game/GameWorldMemoryPanel.vue'
@@ -1068,6 +1068,7 @@ const exitLockBadge = (exit: any): ExitLockBadge | null => {
   return { label: 'Locked', icon: 'ra ra-lock', detail: description || 'The way is barred' }
 }
 
+
 // Recover from stale snapshots where edges lack the WorldExit UUID by refreshing once.
 watch(sceneExits, (exits) => {
   if (!exits || exits.length === 0) return
@@ -1475,200 +1476,25 @@ watch(
             : 'fixed inset-y-6 left-6 z-40 w-72 -translate-x-[calc(100%+3rem)] xl:translate-x-0 xl:relative xl:inset-y-0 xl:left-0 xl:m-6'
         ]"
       >
-        <GameScenePanel
+        <GameLocationPanel
           :scene-id="sheet?.scene_id"
           :scene-name="sheet?.current_scene"
           :scene-description="currentSceneDescription"
           :scene-image="currentSceneImage"
           :show-image="showImage"
           :is-debug="!!sheet?.debug_mode"
+          :scene-exits="sceneExits"
+          :map-data="mapData"
+          :nodes="nodes"
+          :is-action-input-blocked="isActionInputBlocked"
+          :exit-traversal-busy="exitTraversalBusy"
+          :exit-unlock-busy="exitUnlockBusy"
           @hover="(payload, event) => handleHover(payload, event)"
           @move="mousePos = { x: $event.clientX, y: $event.clientY }"
           @leave="hoveredEntity = null"
-          @contextmenu="(payload, event) => openContextMenu(payload, event)"
-          @click="handleEntityClick"
-          @image-error="(path) => handleImageError(path)"
+          @traverse="handleExitClick"
+          @image-error="handleImageError"
         />
-
-        <!-- Exits Panel (directly under Location) -->
-        <div v-if="sceneExits.length > 0" class="mb-8">
-          <div class="flex items-center justify-between w-full mb-3 select-none">
-            <div class="flex items-center gap-1.5">
-              <i class="ra ra-double-doors text-cyan-500 text-sm"></i>
-              <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-cyan-500/80">Exits</h3>
-            </div>
-            <!-- View Mode Toggle Button -->
-            <button
-              @click="exitViewMode = exitViewMode === 'cards' ? 'radar' : 'cards'"
-              class="text-slate-400 hover:text-cyan-400 p-1 rounded hover:bg-slate-800/50 transition-colors"
-              :title="exitViewMode === 'cards' ? 'Show Radar Minimap' : 'Show RPG Cards'"
-            >
-              <i :class="['ra text-sm', exitViewMode === 'cards' ? 'ra-compass' : 'ra-bullet-list']"></i>
-            </button>
-          </div>
-
-          <!-- RPG Cards View -->
-          <div v-if="exitViewMode === 'cards'" class="flex flex-col gap-2">
-            <div
-              v-for="ex in sceneExits"
-              :key="ex.id"
-              role="button"
-              tabindex="0"
-              :aria-disabled="isActionInputBlocked || exitTraversalBusy === ex.id || exitUnlockBusy"
-              :class="[
-                'relative border rounded-2xl group transition-all duration-300 p-3 flex items-start gap-3 text-left select-none outline-none focus:ring-2 focus:ring-cyan-500/50 backdrop-blur-md',
-                (isActionInputBlocked || exitTraversalBusy === ex.id || exitUnlockBusy)
-                  ? 'opacity-50 cursor-not-allowed pointer-events-none'
-                  : 'cursor-pointer',
-                isExitLocked(ex)
-                  ? 'bg-rose-950/15 border-rose-900/30 hover:border-rose-500/60 hover:bg-rose-900/25 shadow-lg shadow-rose-950/10'
-                  : 'bg-slate-950/30 border-slate-800/40 hover:border-cyan-500/50 hover:bg-slate-900/40 shadow-lg shadow-black/20'
-              ]"
-              @click.stop="handleExitClick(ex)"
-              @keydown.enter="handleExitClick(ex)"
-              @keydown.space.prevent="handleExitClick(ex)"
-              @mouseenter="handleHover({ id: ex.id, name: ex.label, description: ex.lock_description, entity_type: 'EXIT', is_locked: isExitLocked(ex) }, $event)"
-              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
-              @mouseleave="hoveredEntity = null"
-            >
-              <!-- Icon Container -->
-              <div :class="['w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105',
-                isExitLocked(ex) ? 'bg-rose-500/10 border border-rose-500/20 text-rose-300' : 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400']">
-                <i :class="['ra text-sm', isExitLocked(ex) ? 'ra-lock' : 'ra-double-doors']"></i>
-              </div>
-              
-              <!-- Content -->
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between gap-1.5 mb-0.5">
-                  <h4 :class="['text-[11px] font-bold truncate transition-colors leading-tight',
-                    isExitLocked(ex) ? 'text-rose-200 group-hover:text-rose-100' : 'text-slate-100 group-hover:text-cyan-300']">
-                    {{ exitDisplayName(ex) }}
-                  </h4>
-                  <i v-if="exitTraversalBusy === ex.id" class="ra ra-hourglass text-[10px] animate-spin opacity-50 text-cyan-400 shrink-0"></i>
-                </div>
-                
-                <!-- Destination Info -->
-                <p class="text-[9px] text-slate-400 truncate mb-1 leading-tight">
-                  Leads to: <span class="text-slate-300 font-medium">{{ mapData?.nodes?.[ex.to]?.label || ex.to }}</span>
-                </p>
-
-                <!-- Gate Badge -->
-                <div class="flex items-center gap-1 flex-wrap">
-                  <span
-                    v-if="exitLockBadge(ex)"
-                    class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[7px] font-bold uppercase tracking-wider"
-                    :title="exitLockBadge(ex)?.detail"
-                  >
-                    <i :class="[exitLockBadge(ex)?.icon, 'text-[7px]']"></i>
-                    {{ exitLockBadge(ex)?.label }}
-                  </span>
-                  <span v-else class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[7px] font-bold uppercase tracking-wider">
-                    Unlocked
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Radar Minimap View -->
-          <div v-else class="relative border border-slate-800/40 bg-slate-950/20 backdrop-blur-md rounded-2xl p-4 flex items-center justify-center shadow-inner overflow-hidden h-[190px]">
-            <svg class="w-full h-full select-none" viewBox="0 0 260 180">
-              <defs>
-                <!-- Center Node Pulse/Glow -->
-                <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.4" />
-                  <stop offset="100%" stop-color="#06b6d4" stop-opacity="0" />
-                </radialGradient>
-              </defs>
-
-              <!-- Radial Radar Grid Lines -->
-              <circle cx="130" cy="90" r="70" class="fill-none stroke-slate-800/30 stroke-dasharray-[3_3] stroke-1" />
-              <circle cx="130" cy="90" r="35" class="fill-none stroke-slate-900/60 stroke-1" />
-              
-              <!-- Draw Connections (Lines) -->
-              <g>
-                <line
-                  v-for="(ex, idx) in sceneExits"
-                  :key="'line-' + ex.id"
-                  :x1="130"
-                  :y1="90"
-                  :x2="130 + 70 * Math.cos((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2)"
-                  :y2="90 + 70 * Math.sin((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2)"
-                  :class="[
-                    'transition-all duration-300',
-                    isExitLocked(ex)
-                      ? 'stroke-rose-800/40 stroke-dasharray-[3_3] stroke-[1.5]'
-                      : 'stroke-cyan-500/30 stroke-[1.5] group-hover:stroke-cyan-400/50'
-                  ]"
-                />
-              </g>
-
-              <!-- Draw Outer Exit Nodes -->
-              <g>
-                <g
-                  v-for="(ex, idx) in sceneExits"
-                  :key="'node-' + ex.id"
-                  class="cursor-pointer group"
-                  @click.stop="handleExitClick(ex)"
-                  @mouseenter="handleHover({ id: ex.id, name: ex.label, description: ex.lock_description, entity_type: 'EXIT', is_locked: isExitLocked(ex) }, $event)"
-                  @mouseleave="hoveredEntity = null"
-                >
-                  <!-- Outer Handle -->
-                  <circle
-                    :cx="130 + 70 * Math.cos((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2)"
-                    :cy="90 + 70 * Math.sin((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2)"
-                    r="12"
-                    :class="[
-                      'transition-all duration-300',
-                      isExitLocked(ex)
-                        ? 'fill-rose-950/80 stroke-rose-500/40 group-hover:stroke-rose-400 group-hover:fill-rose-900/80'
-                        : 'fill-slate-950/80 stroke-cyan-500/40 group-hover:stroke-cyan-400 group-hover:fill-cyan-950/80'
-                    ]"
-                  />
-                  <!-- Inner status indicator -->
-                  <circle
-                    :cx="130 + 70 * Math.cos((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2)"
-                    :cy="90 + 70 * Math.sin((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2)"
-                    r="4"
-                    :class="[
-                      'transition-colors duration-300',
-                      isExitLocked(ex) ? 'fill-rose-400' : 'fill-cyan-400'
-                    ]"
-                  />
-                  <!-- Floating Icon Indicator (Lock/Door) on line -->
-                  <g :transform="`translate(${130 + 38 * Math.cos((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2) - 6}, ${90 + 38 * Math.sin((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2) - 6})`">
-                    <rect width="12" height="12" rx="3" class="fill-slate-950 stroke-slate-800/60 stroke-[1]" />
-                    <!-- Tiny key or door symbol -->
-                    <path v-if="isExitLocked(ex)" d="M4,7 A2,2 0 1,1 8,7 L8,9 L7,9 L7,8 L5,8 L5,9 L4,9 Z" class="fill-none stroke-rose-400 stroke-[0.8]" />
-                    <path v-else d="M4,4 L8,4 L8,8 L4,8 Z" class="fill-none stroke-cyan-400 stroke-[0.8]" />
-                  </g>
-
-                  <!-- Label -->
-                  <text
-                    :x="130 + 92 * Math.cos((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2)"
-                    :y="90 + 92 * Math.sin((idx * 2 * Math.PI) / sceneExits.length - Math.PI / 2) + 3"
-                    text-anchor="middle"
-                    :class="[
-                      'text-[8px] font-bold uppercase tracking-wider transition-colors select-none',
-                      isExitLocked(ex)
-                        ? 'fill-rose-300/80 group-hover:fill-rose-200'
-                        : 'fill-slate-300 group-hover:fill-cyan-300'
-                    ]"
-                  >
-                    {{ exitDisplayName(ex) }}
-                  </text>
-                </g>
-              </g>
-
-              <!-- Central current room node -->
-              <circle cx="130" cy="90" r="28" fill="url(#centerGlow)" />
-              <circle cx="130" cy="90" r="18" class="fill-slate-950 stroke-cyan-500 stroke-[2] animate-pulse" />
-              <text x="130" y="93" text-anchor="middle" class="fill-cyan-300 text-[8px] font-extrabold uppercase tracking-widest select-none">
-                HERE
-              </text>
-            </svg>
-          </div>
-        </div>
 
         <GameNpcsPanel
           :npcs="npcs"

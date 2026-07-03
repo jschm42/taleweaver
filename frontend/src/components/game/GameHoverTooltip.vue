@@ -4,6 +4,7 @@ import StatBar from '@/components/game/StatBar.vue'
 import { getImageUrl, getItemIcon, hasRenderableImagePath } from '@/utils/game_icons'
 import { fixNewlines, hasNonZero } from '@/services/hoverEntityService'
 import { formatObjectIds } from '@/utils/editor_utils'
+import { DoorClosed, DoorClosedLocked } from 'lucide-vue-next'
 
 const props = defineProps<{
   hoveredEntity: any
@@ -99,17 +100,35 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
             <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent"></div>
              <div class="tooltip-image-fray absolute left-0 right-0 bottom-0 h-12"></div>
           </div>
-          <div v-else :class="['w-full relative bg-slate-950 flex items-center justify-center shrink-0', isExit ? 'h-16' : 'h-20']">
+          <div v-else :class="['w-full relative bg-slate-950 flex items-center justify-center shrink-0', isExit ? 'h-28' : 'h-20']">
             <div
               v-if="isNpc && (props.hoveredEntity.is_defeated || props.hoveredEntity.hp === 0)"
               class="absolute -right-8 top-2 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.12em] py-0.5 w-24 text-center rotate-45 shadow-lg z-20"
             >
               Defeated
             </div>
+            
+            <svg width="0" height="0" class="absolute">
+              <defs>
+                <linearGradient id="exit-tooltip-unlocked-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#06b6d4" />
+                  <stop offset="100%" stop-color="#3b82f6" />
+                </linearGradient>
+                <linearGradient id="exit-tooltip-locked-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#f43f5e" />
+                  <stop offset="100%" stop-color="#ec4899" />
+                </linearGradient>
+              </defs>
+            </svg>
+
+            <template v-if="isExit">
+              <DoorClosedLocked v-if="isEntityLocked" class="w-10 h-10 overflow-visible drop-shadow-[0_2px_8px_rgba(244,63,94,0.35)]" style="stroke: url(#exit-tooltip-locked-gradient); stroke-width: 2.25;" />
+              <DoorClosed v-else class="w-10 h-10 overflow-visible drop-shadow-[0_2px_8px_rgba(6,182,212,0.35)]" style="stroke: url(#exit-tooltip-unlocked-gradient); stroke-width: 2.25;" />
+            </template>
             <i
+              v-else
               :class="[
                 isNpc ? 'ra text-4xl ra-player text-cyan-400/80' :
-                isExit ? 'ra text-3xl ' + (isEntityLocked ? 'ra-lock text-rose-400/80' : 'ra-double-doors text-cyan-400/80') :
                 'ra text-4xl ra-vest text-amber-400/80'
               ]"
             ></i>
@@ -169,11 +188,15 @@ const isEntityLocked = computed(() => !!props.hoveredEntity?.is_locked)
               <p :class="['text-slate-300 leading-relaxed italic whitespace-pre-wrap break-words tooltip-readable-text', bodyTextClass]"
                  v-html="formatObjectIds(entityDescription)"></p>
 
-              <p v-if="isExit && isEntityLocked"
-                 class="text-[11px] uppercase tracking-widest text-rose-300 font-bold border-t border-slate-800 pt-2 mt-2 flex items-center gap-1.5">
-                <i class="ra ra-lock text-rose-400"></i>
-                This exit is locked
-              </p>
+              <div v-if="isExit && isEntityLocked" class="border-t border-slate-800 pt-2 mt-2">
+                <p class="text-[11px] uppercase tracking-widest text-rose-300 font-bold flex items-center gap-1.5">
+                  <i class="ra ra-lock text-rose-400"></i>
+                  This exit is locked
+                </p>
+                <p v-if="props.hoveredEntity.lock_description" class="text-xs text-rose-200/90 italic leading-relaxed whitespace-pre-wrap mt-1">
+                  {{ props.hoveredEntity.lock_description }}
+                </p>
+              </div>
             </div>
 
             <div v-if="(props.hoveredEntity.entity_type === 'OBJECT' || props.hoveredEntity.entity_type === 'ITEM') && props.ruleMode !== 'chat' && hasObjectDetails" :class="detailsPaddingClass">
