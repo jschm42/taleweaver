@@ -346,7 +346,9 @@ async def _clone_entity_image(
         suffix = f"_{counter}"
 
     try:
-        shutil.copy2(source_path, candidate_path)
+        safe_source_path = assert_within_data_dir(source_path)
+        safe_candidate_path = assert_within_data_dir(candidate_path)
+        shutil.copy2(safe_source_path, safe_candidate_path)
     except OSError as exc:
         logger.warning("Failed to clone image for entity %s: %s", new_entity_id, exc)
         return None
