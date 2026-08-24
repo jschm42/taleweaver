@@ -720,7 +720,20 @@ class MediaEngine:
                 ollama_url = (provider_options.get("ollama_url") or "http://localhost:11434").rstrip("/")
                 kwargs["api_base"] = ollama_url
 
-            logger.info("Final image generation kwargs: %s", _sanitize_generation_kwargs(kwargs))
+            logger.info(
+                "Final image generation config: provider=%s model=%s prompt=%s controls=%s",
+                provider_key,
+                model,
+                _safe_prompt_summary(prompt),
+                {
+                    "width": "width" in kwargs,
+                    "height": "height" in kwargs,
+                    "steps": "steps" in kwargs,
+                    "seed": "seed" in kwargs,
+                    "negative_prompt": "negative_prompt" in kwargs,
+                    "api_base": "api_base" in kwargs,
+                },
+            )
 
             # Call LiteLLM first - wrap in to_thread because LiteLLM image_generation is synchronous
             response = await asyncio.to_thread(
