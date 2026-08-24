@@ -95,7 +95,8 @@ def _copy_source_asset_to_current_adventure(
     except ValueError:
         return None
 
-    safe_prefix = slugify(str(source_asset_id or entity_type)) or "source"
+    raw_prefix = slugify(str(source_asset_id or entity_type))
+    safe_prefix = sanitize_relative_segment(raw_prefix) or "source"
     source_basename = os.path.basename(safe_source_local)
     safe_source_basename = sanitize_relative_segment(source_basename)
     if not safe_source_basename:
