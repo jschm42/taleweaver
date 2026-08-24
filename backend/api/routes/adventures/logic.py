@@ -23,6 +23,7 @@ from backend.utils.path_security import (
     data_url_to_local_path,
     ensure_within_data_dir,
     local_path_to_data_url,
+    sanitize_path_component,
 )
 
 logger = logging.getLogger(__name__)
@@ -208,8 +209,8 @@ class AdventureLogic:
         if not template_id or not profile_image:
             return profile_image
 
-        import re
-        if not re.match(r"^[A-Za-z0-9_-]{1,128}$", template_id):
+        safe_template_id = sanitize_path_component(template_id)
+        if not safe_template_id:
             return profile_image
 
         if "/adventures/sessions/" in profile_image:
@@ -217,7 +218,7 @@ class AdventureLogic:
             if abs_path and os.path.isfile(abs_path):
                 return profile_image
 
-            library_dir_raw = os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
+            library_dir_raw = os.path.join(settings.DATA_DIR, "adventures", "library", safe_template_id)
             try:
                 library_dir = ensure_within_data_dir(library_dir_raw)
             except ValueError:
