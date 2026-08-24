@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import shutil
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any, Optional
 
@@ -95,7 +96,8 @@ def _copy_source_asset_to_current_adventure(
     except ValueError:
         return None
 
-    safe_prefix = slugify(str(source_asset_id or entity_type)) or "source"
+    trusted_prefix = slugify(str(entity_type)) or "source"
+    safe_prefix = f"{trusted_prefix}_{uuid.uuid4().hex[:8]}"
     source_basename = os.path.basename(safe_source_local)
     safe_source_basename = sanitize_relative_segment(source_basename)
     if not safe_source_basename:
