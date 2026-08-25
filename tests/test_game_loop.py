@@ -3343,7 +3343,7 @@ async def test_exit_lock_guardrail_missing_item(setup_test_db):
 
         reasons = await manager._enforce_exit_unlock_guardrails(event, "I open the heavy steel gate")
 
-        assert any("You need CELLAR_KEY" in r for r in reasons)
+        assert any("You need a specific item to unlock" in r for r in reasons)
         assert event.new_scene_id is None
         assert any(up.to_scene_id == "CELLAR" and up.is_locked is True for up in event.updated_exits)
 

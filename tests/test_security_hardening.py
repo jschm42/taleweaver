@@ -4,6 +4,8 @@ import pytest
 
 from backend.api.routes.adventures.assets import _build_uploaded_visual_path
 from backend.api.routes.adventures.agent_logic import _resolve_session_issue_log_path
+from backend.api.routes.adventures.editor import _clone_entity_image
+from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.config_api import _build_catalog_upload_path, _route_error_response
 from backend.core.config import settings
 from backend.engine.media_engine import _build_output_filepath
@@ -73,3 +75,57 @@ def test_ensure_within_base_dir_rejects_escape(tmp_path):
     escaped = base_dir / ".." / ".." / "users" / "owned.txt"
     with pytest.raises(ValueError):
         _ensure_within_base_dir(str(escaped), str(base_dir))
+
+
+@pytest.mark.asyncio
+async def test_clone_entity_image_stays_inside_data_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+
+    entity_dir = tmp_path / "adventures" / "library" / "tpl_1" / "visuals" / "object"
+    entity_dir.mkdir(parents=True, exist_ok=True)
+    source_file = entity_dir / "item_1.png"
+    source_file.write_bytes(b"test image bytes")
+
+    source_url = "/data/adventures/library/tpl_1/visuals/object/item_1.png"
+    cloned_url = await _clone_entity_image(
+        source_image_url=source_url,
+        template_id="tpl_1",
+        new_entity_id="../../malicious/path",
+    )
+
+    assert cloned_url is not None
+    assert cloned_url.startswith("/data/adventures/library/tpl_1/visuals/object/")
+    assert cloned_url.endswith(".png")
+    assert "/malicious/" not in cloned_url
+    assert ".." not in cloned_url
+
+    # Check file exists on disk
+    rel_path = cloned_url.removeprefix("/data/")
+    cloned_file = tmp_path / rel_path
+    assert cloned_file.is_file()
+    assert cloned_file.read_bytes() == b"test image bytes"
+
+
+def test_heal_template_avatar_profile_image_stays_inside_data_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+
+    library_dir = tmp_path / "adventures" / "library" / "tpl_1"
+    library_dir.mkdir(parents=True, exist_ok=True)
+    protagonist_file = library_dir / "PROTAGONIST.png"
+    protagonist_file.write_bytes(b"avatar bytes")
+
+    # If pointing to missing session path, heal it to library PROTAGONIST image
+    result = AdventureLogic.heal_template_avatar_profile_image(
+        template_id="tpl_1",
+        profile_image="/data/adventures/sessions/sess_999/avatar.png",
+    )
+    assert result == "/data/adventures/library/tpl_1/PROTAGONIST.png"
+
+    # Traversal in template_id is safely rejected and unhealed
+    traversal_result = AdventureLogic.heal_template_avatar_profile_image(
+        template_id="../../etc",
+        profile_image="/data/adventures/sessions/sess_999/avatar.png",
+    )
+    assert traversal_result == "/data/adventures/sessions/sess_999/avatar.png"
+
+

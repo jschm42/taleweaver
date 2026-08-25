@@ -3,6 +3,7 @@ import os
 import re
 import json
 import shutil
+import uuid
 from copy import deepcopy
 from typing import Any, Literal, Optional, Union
 
@@ -77,7 +78,11 @@ from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from backend.utils.path_security import (
     assert_within_data_dir,
     data_url_to_local_path,
+    ensure_within_base_dir,
+    ensure_within_data_dir,
     local_path_to_data_url,
+    sanitize_path_component,
+    sanitize_relative_segment,
 )
 
 router = APIRouter(tags=["Editor"])
@@ -315,38 +320,58 @@ async def _clone_entity_image(
     if not source_path or not os.path.isfile(source_path):
         return None
 
-    target_dir = os.path.dirname(source_path)
+    data_root = os.path.realpath(settings.DATA_DIR)
+    safe_source_path = os.path.realpath(ensure_within_data_dir(source_path))
+    try:
+        if os.path.commonpath([safe_source_path, data_root]) != data_root:
+            return None
+    except ValueError:
+        return None
+
+    target_dir = os.path.dirname(safe_source_path)
     if not target_dir or not os.path.isdir(target_dir):
+        return None
+
+    safe_target_dir = os.path.realpath(ensure_within_data_dir(target_dir))
+    try:
+        if os.path.commonpath([safe_target_dir, data_root]) != data_root:
+            return None
+    except ValueError:
         return None
 
     # Restrict the extension to a hard-coded allowlist to satisfy the
     # path-traversal linter: a user-controlled image URL could otherwise inject
     # an arbitrary suffix into the constructed file name.
-    _, raw_ext = os.path.splitext(source_path)
+    _, raw_ext = os.path.splitext(safe_source_path)
     safe_ext = raw_ext.lower() if raw_ext.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"} else ".png"
 
-    safe_entity_id = re.sub(r"[^A-Za-z0-9_-]", "_", new_entity_id).strip("_") or "entity"
-    data_root = os.path.realpath(settings.DATA_DIR)
-    suffix = ""
-    counter = 1
-    while True:
-        candidate_name = f"{safe_entity_id}_clone{suffix}{safe_ext}"
-        candidate_path = os.path.realpath(os.path.join(target_dir, candidate_name))
-        try:
-            if os.path.commonpath([candidate_path, data_root]) != data_root:
-                return None
-        except ValueError:
+    safe_entity_token = sanitize_path_component(new_entity_id) or "entity"
+    target_name = f"{safe_entity_token}_clone_{uuid.uuid4().hex[:8]}{safe_ext}"
+    safe_filename = os.path.basename(
+        sanitize_relative_segment(target_name) or f"entity_clone_{uuid.uuid4().hex}{safe_ext}"
+    )
+
+    candidate_path = os.path.realpath(
+        ensure_within_base_dir(
+            os.path.join(safe_target_dir, safe_filename),
+            safe_target_dir,
+        )
+    )
+    try:
+        if (
+            os.path.commonpath([candidate_path, safe_target_dir]) != safe_target_dir
+            or os.path.commonpath([candidate_path, data_root]) != data_root
+        ):
             return None
-        # Re-validate at the sink so static analysers (CodeQL) see the value
-        # as verified-safe before we touch the filesystem.
-        candidate_path = assert_within_data_dir(candidate_path)
-        if not os.path.exists(candidate_path):
-            break
-        counter += 1
-        suffix = f"_{counter}"
+    except ValueError:
+        return None
+
+    # Re-validate before filesystem sink for taint-tracking static analysers
+    safe_source_path = assert_within_data_dir(safe_source_path)
+    candidate_path = assert_within_data_dir(candidate_path)
 
     try:
-        shutil.copy2(source_path, candidate_path)
+        shutil.copy2(safe_source_path, candidate_path)
     except OSError as exc:
         logger.warning("Failed to clone image for entity %s: %s", new_entity_id, exc)
         return None

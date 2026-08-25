@@ -21,8 +21,12 @@ from backend.models.world_map import WorldMap
 from backend.utils.path_security import (
     assert_within_data_dir,
     data_url_to_local_path,
+    ensure_within_base_dir,
     ensure_within_data_dir,
     local_path_to_data_url,
+    safe_data_path,
+    sanitize_path_component,
+    sanitize_relative_segment,
 )
 
 logger = logging.getLogger(__name__)
@@ -208,8 +212,8 @@ class AdventureLogic:
         if not template_id or not profile_image:
             return profile_image
 
-        import re
-        if not re.match(r"^[A-Za-z0-9_-]{1,128}$", template_id):
+        safe_template_id = sanitize_path_component(template_id)
+        if not safe_template_id:
             return profile_image
 
         if "/adventures/sessions/" in profile_image:
@@ -217,48 +221,48 @@ class AdventureLogic:
             if abs_path and os.path.isfile(abs_path):
                 return profile_image
 
-            library_dir_raw = os.path.join(settings.DATA_DIR, "adventures", "library", template_id)
             try:
-                library_dir = ensure_within_data_dir(library_dir_raw)
+                library_dir = safe_data_path("adventures", "library", safe_template_id)
             except ValueError:
                 return profile_image
+
             data_root = os.path.realpath(settings.DATA_DIR)
             if os.path.isdir(library_dir):
-                for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
-                    candidate_path = os.path.realpath(os.path.join(library_dir, f"PROTAGONIST{ext}"))
-                    try:
-                        if os.path.commonpath([candidate_path, data_root]) != data_root:
-                            continue
-                    except ValueError:
-                        continue
-                    # Re-validate at the sink so static analysers (CodeQL)
-                    # see the value as verified-safe before reading from it.
-                    try:
-                        candidate_path = assert_within_data_dir(candidate_path)
-                    except ValueError:
-                        continue
-                    if os.path.isfile(candidate_path):
-                        return local_path_to_data_url(candidate_path)
+                allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+                exact_match = None
+                fuzzy_match = None
 
-                pattern = os.path.join(library_dir, "*PROTAGONIST*")
-                for match in glob.glob(pattern):
-                    match_resolved = os.path.realpath(match)
-                    try:
-                        if os.path.commonpath([match_resolved, data_root]) != data_root:
-                            continue
-                    except ValueError:
-                        continue
-                    # Re-validate at the sink so static analysers (CodeQL)
-                    # see the value as verified-safe before reading from it.
-                    try:
-                        match_resolved = assert_within_data_dir(match_resolved)
-                    except ValueError:
-                        continue
-                    if os.path.isfile(match_resolved):
+                try:
+                    with os.scandir(library_dir) as entries:
+                        for entry in entries:
+                            if not entry.is_file():
+                                continue
+                            name_upper = entry.name.upper()
+                            _, ext = os.path.splitext(entry.name)
+                            if ext.lower() not in allowed_exts:
+                                continue
+                            if name_upper.startswith("PROTAGONIST."):
+                                exact_match = entry.name
+                                break
+                            if "PROTAGONIST" in name_upper and fuzzy_match is None:
+                                fuzzy_match = entry.name
+                except OSError:
+                    return profile_image
+
+                chosen_name = exact_match or fuzzy_match
+                if chosen_name:
+                    safe_name = os.path.basename(sanitize_relative_segment(chosen_name) or "")
+                    if safe_name:
                         try:
-                            return local_path_to_data_url(match_resolved)
+                            candidate_path = ensure_within_base_dir(
+                                os.path.join(library_dir, safe_name),
+                                library_dir,
+                            )
+                            candidate_path = assert_within_data_dir(candidate_path)
+                            if os.path.isfile(candidate_path):
+                                return local_path_to_data_url(candidate_path)
                         except ValueError:
-                            continue
+                            pass
 
         return profile_image
 

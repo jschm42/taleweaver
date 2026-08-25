@@ -5352,8 +5352,9 @@ class GameTurnManager:
             yield f"event: status\ndata: {json.dumps({'content': 'Checking generator tools...'})}\n\n"
             try:
                 llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
-            except ValueError as e:
-                yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+            except ValueError:
+                logger.exception("Generator tool model configuration is invalid for user %s", self.user.id)
+                yield f"event: error\ndata: {json.dumps({'detail': 'Generator tool model configuration is invalid. Please check your settings and try again.'})}\n\n"
                 return
 
             # Provide compact prior chat context so tool parameters can be derived from discussed details.
@@ -5440,8 +5441,9 @@ class GameTurnManager:
             yield f"event: status\ndata: {json.dumps({'content': 'Checking progression...'})}\n\n"
             try:
                 llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
-            except ValueError as e:
-                yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+            except ValueError:
+                logger.exception("Progression model configuration is invalid for user %s", self.user.id)
+                yield f"event: error\ndata: {json.dumps({'detail': 'Progression model configuration is invalid. Please check your settings and try again.'})}\n\n"
                 return
 
             reduced_quests = self._build_chat_progression_quests()
@@ -5594,8 +5596,9 @@ class GameTurnManager:
         yield f"event: status\ndata: {json.dumps({'content': 'Generating narrative...'})}\n\n"
         try:
             llm = GameMasterLLM(self.user, provider=complex_model_provider, model_category="complex")
-        except ValueError as e:
-            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+        except ValueError:
+            logger.exception("Narration model configuration is invalid for user %s", self.user.id)
+            yield f"event: error\ndata: {json.dumps({'detail': 'Narration model configuration is invalid. Please check your settings and try again.'})}\n\n"
             return
         tts_settings = self.user.tts_settings or {}
         use_vocal_tags = tts_settings.get("use_vocal_tags", True)
@@ -6997,19 +7000,20 @@ class GameTurnManager:
                 msg = f"SYSTEM: Adventure '{event.requested_adventure_generation.title}' generated successfully and added to library (ID: {new_adv_id})."
                 await self._emit_system_message(msg, stream_callback=stream_callback)
             except Exception as e:
+                logger.exception("Adventure generation tool failed")
                 if not event.tool_results:
                     event.tool_results = ToolResults()
+                user_safe_error = _friendly_llm_error_message(e)
                 event.tool_results.generation_success = False
-                event.tool_results.generation_error = str(e)
+                event.tool_results.generation_error = user_safe_error or "Adventure generation failed."
                 self._set_last_ag_generation_error(_llm_error_type(e))
 
                 await _post_generation_system_message("Generation aborted due to an error.")
 
-                user_safe_error = _friendly_llm_error_message(e)
                 if user_safe_error:
                     msg = f"SYSTEM: {user_safe_error}"
                 else:
-                    msg = f"SYSTEM ERROR: Adventure generation failed: {e}"
+                    msg = "SYSTEM: Adventure generation failed due to an unexpected error."
                 await self._emit_system_message(msg, stream_callback=stream_callback)
 
     async def _generate_terminal_epilogue_text(self, language: str | None = None) -> str:
