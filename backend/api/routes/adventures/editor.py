@@ -329,29 +329,33 @@ async def _clone_entity_image(
     data_root = os.path.realpath(settings.DATA_DIR)
     suffix = ""
     counter = 1
+    safe_candidate_path: Optional[str] = None
     while True:
         candidate_name = f"{safe_entity_id}_clone{suffix}{safe_ext}"
-        candidate_path = os.path.realpath(os.path.join(target_dir, candidate_name))
+        raw_candidate_path = os.path.realpath(os.path.join(target_dir, candidate_name))
         try:
-            if os.path.commonpath([candidate_path, data_root]) != data_root:
+            if os.path.commonpath([raw_candidate_path, data_root]) != data_root:
                 return None
         except ValueError:
             return None
-        # Re-validate at the sink so static analysers (CodeQL) see the value
-        # as verified-safe before we touch the filesystem.
-        candidate_path = assert_within_data_dir(candidate_path)
-        if not os.path.exists(candidate_path):
+        # Re-validate before filesystem access and keep using the sanitized path.
+        safe_candidate_path = assert_within_data_dir(raw_candidate_path)
+        if not os.path.exists(safe_candidate_path):
             break
         counter += 1
         suffix = f"_{counter}"
 
+    if not safe_candidate_path:
+        return None
+
     try:
-        shutil.copy2(source_path, candidate_path)
+        safe_source_path = assert_within_data_dir(source_path)
+        shutil.copy2(safe_source_path, safe_candidate_path)
     except OSError as exc:
         logger.warning("Failed to clone image for entity %s: %s", new_entity_id, exc)
         return None
 
-    return local_path_to_data_url(candidate_path)
+    return local_path_to_data_url(safe_candidate_path)
 
 
 def _normalize_lock_fields(
