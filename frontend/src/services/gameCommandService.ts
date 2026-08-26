@@ -21,6 +21,7 @@ export type ContextMenuModel = {
 const OPEN_CONTAINER_PREFIX = '[OPEN_CONTAINER] '
 const OPEN_TEXT_LOG_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
+const FLIP_SWITCH_PREFIX = '[FLIP_SWITCH] '
 
 const isContainerEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -186,6 +187,10 @@ export const gameCommandService = {
 
       if (isReadableEntity(entity)) {
         items.push({ label: 'Read', action: `${OPEN_TEXT_LOG_PREFIX}${entity.id || entity.name}` })
+      }
+
+      if (isSwitchEntity(entity)) {
+        items.push({ label: 'Switch / Flip', action: `${FLIP_SWITCH_PREFIX}${entity.id || entity.name}` })
       }
     }
 

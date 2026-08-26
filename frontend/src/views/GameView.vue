@@ -340,6 +340,7 @@ const handleEntityClick = async (entity: any) => {
 const CONTAINER_OPEN_PREFIX = '[OPEN_CONTAINER] '
 const TEXT_LOG_OPEN_PREFIX = '[OPEN_TEXT_LOG] '
 const PREFILL_SAY_TO_PREFIX = '[PREFILL_SAY_TO] '
+const FLIP_SWITCH_PREFIX = '[FLIP_SWITCH] '
 
 const isSwitchEntity = (entity: any): boolean => {
   if (!entity) return false
@@ -857,6 +858,30 @@ const openTextLogByHint = async (hint: string): Promise<boolean> => {
 
   if (inventoryReadable) {
     await openTextLogFromEntity(inventoryReadable)
+    return true
+  }
+
+  return false
+}
+
+const handleSwitchFlipByHint = (hint: string): boolean => {
+  const normalized = String(hint || '').trim().toLowerCase()
+  if (!normalized) return false
+
+  const targetSwitch = (items.value || []).find((entry: any) => {
+    if (!isSwitchEntity(entry)) return false
+    const byId = String(entry.id || '').toLowerCase() === normalized
+    const byName = String(entry.name || '').toLowerCase() === normalized
+    return byId || byName
+  }) || (entities.value || []).find((entry: any) => {
+    if (!isSwitchEntity(entry)) return false
+    const byId = String(entry.id || '').toLowerCase() === normalized
+    const byName = String(entry.name || '').toLowerCase() === normalized
+    return byId || byName
+  })
+
+  if (targetSwitch) {
+    openSwitchStateModal(targetSwitch)
     return true
   }
 

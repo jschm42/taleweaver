@@ -1923,25 +1923,29 @@ class GameTurnManager:
         if not has_new_inv and not has_spawned:
             return reasons
 
-        # 1. Fetch all pre-defined entity IDs and names for this session
+        # 1. Fetch all pre-defined entity IDs and entities for this session
         res = await self.db.execute(
             select(WorldEntity).where(WorldEntity.session_id == self.game_id)
         )
         db_entities = res.scalars().all()
-        existing_ids = {e.id.upper() for e in db_entities if e.id}
-        existing_names = {e.name.strip().lower() for e in db_entities if e.name}
+        entity_by_id: dict[str, WorldEntity] = {e.id.upper(): e for e in db_entities if e.id}
+        entity_by_name: dict[str, WorldEntity] = {(e.name or "").strip().lower(): e for e in db_entities if e.name}
 
-        # 2. Add avatar inventory items
+        # 2. Collect avatar inventory items
+        avatar_inv_by_id: dict[str, dict] = {}
+        avatar_inv_by_name: dict[str, dict] = {}
         for item in (self.avatar.inventory or []):
             if isinstance(item, dict):
                 iid = str(item.get("id") or "").strip().upper()
                 iname = str(item.get("name") or "").strip().lower()
                 if iid:
-                    existing_ids.add(iid)
+                    avatar_inv_by_id[iid] = item
                 if iname:
-                    existing_names.add(iname)
+                    avatar_inv_by_name[iname] = item
 
-        # 3. Add items inside NPC or container inventories
+        # 3. Collect NPC and container inventories
+        npc_container_inv_by_id: dict[str, dict] = {}
+        npc_container_inv_by_name: dict[str, dict] = {}
         for e in db_entities:
             if isinstance(e.inventory, list):
                 for item in e.inventory:
@@ -1949,9 +1953,9 @@ class GameTurnManager:
                         iid = str(item.get("id") or "").strip().upper()
                         iname = str(item.get("name") or "").strip().lower()
                         if iid:
-                            existing_ids.add(iid)
+                            npc_container_inv_by_id[iid] = item
                         if iname:
-                            existing_names.add(iname)
+                            npc_container_inv_by_name[iname] = item
             meta = e.metadata_json or {}
             if isinstance(meta, dict):
                 container_inv = meta.get("inventory") or []
@@ -1961,9 +1965,9 @@ class GameTurnManager:
                             iid = str(item.get("id") or "").strip().upper()
                             iname = str(item.get("name") or "").strip().lower()
                             if iid:
-                                existing_ids.add(iid)
+                                npc_container_inv_by_id[iid] = item
                             if iname:
-                                existing_names.add(iname)
+                                npc_container_inv_by_name[iname] = item
 
         # 4. Filter new_inventory_items
         if event.new_inventory_items:
@@ -1971,14 +1975,38 @@ class GameTurnManager:
             for item in event.new_inventory_items:
                 iid = str(item.id or "").strip().upper()
                 iname = str(item.name or "").strip().lower()
-                exists = (iid in existing_ids) or (iname in existing_names)
-                if not exists:
+
+                matched_entity = entity_by_id.get(iid) or entity_by_name.get(iname)
+                matched_inv = (
+                    avatar_inv_by_id.get(iid)
+                    or avatar_inv_by_name.get(iname)
+                    or npc_container_inv_by_id.get(iid)
+                    or npc_container_inv_by_name.get(iname)
+                )
+
+                if not matched_entity and not matched_inv:
                     reasons.append(f"Spontaneous item generation blocked: '{item.name}' does not exist in the world template.")
                     logger.warning(
                         f"[Turn {self.game_id}] Blocked dynamic inventory item generation: ID={item.id}, Name={item.name}"
                     )
-                else:
-                    filtered_inv.append(item)
+                    continue
+
+                if matched_entity:
+                    if not item.id or item.id != matched_entity.id:
+                        item.id = matched_entity.id
+                    if not item.name:
+                        item.name = matched_entity.name
+                    if matched_entity.image_url and not item.image_url:
+                        item.image_url = matched_entity.image_url
+                elif matched_inv:
+                    if matched_inv.get("id"):
+                        item.id = matched_inv["id"]
+                    if matched_inv.get("name"):
+                        item.name = matched_inv["name"]
+                    if matched_inv.get("image_url") and not item.image_url:
+                        item.image_url = matched_inv["image_url"]
+
+                filtered_inv.append(item)
             event.new_inventory_items = filtered_inv
 
         # 5. Filter spawned_items
@@ -1987,14 +2015,38 @@ class GameTurnManager:
             for item in event.spawned_items:
                 iid = str(item.id or "").strip().upper()
                 iname = str(item.name or "").strip().lower()
-                exists = (iid in existing_ids) or (iname in existing_names)
-                if not exists:
+
+                matched_entity = entity_by_id.get(iid) or entity_by_name.get(iname)
+                matched_inv = (
+                    avatar_inv_by_id.get(iid)
+                    or avatar_inv_by_name.get(iname)
+                    or npc_container_inv_by_id.get(iid)
+                    or npc_container_inv_by_name.get(iname)
+                )
+
+                if not matched_entity and not matched_inv:
                     reasons.append(f"Spontaneous item generation blocked: '{item.name}' does not exist in the world template.")
                     logger.warning(
                         f"[Turn {self.game_id}] Blocked dynamic scene item spawn: ID={item.id}, Name={item.name}"
                     )
-                else:
-                    filtered_spawned.append(item)
+                    continue
+
+                if matched_entity:
+                    if not item.id or item.id != matched_entity.id:
+                        item.id = matched_entity.id
+                    if not item.name:
+                        item.name = matched_entity.name
+                    if matched_entity.image_url and not item.image_url:
+                        item.image_url = matched_entity.image_url
+                elif matched_inv:
+                    if matched_inv.get("id"):
+                        item.id = matched_inv["id"]
+                    if matched_inv.get("name"):
+                        item.name = matched_inv["name"]
+                    if matched_inv.get("image_url") and not item.image_url:
+                        item.image_url = matched_inv["image_url"]
+
+                filtered_spawned.append(item)
             event.spawned_items = filtered_spawned
 
         return reasons
@@ -4462,84 +4514,12 @@ class GameTurnManager:
             flag_modified(self.state, "entity_states")
             return
 
-        # Otherwise create a new one (e.g. for loot or generated items)
-        if not raw_id:
-            raw_id = f"LOOT_{uuid.uuid4().hex[:8]}"
-            
-        safe_id = re.sub(r"[^A-Za-z0-9_\-]", "_", raw_id)[:50]
-        if not safe_id:
-            safe_id = f"LOOT_{uuid.uuid4().hex[:8]}"
-
-        # Prevent duplicate IDs in the same running session by suffixing collisions.
-        base_id = safe_id
-        counter = 1
-        while await self._session_entity_id_exists(safe_id):
-            suffix = f"_{counter}"
-            safe_id = f"{base_id[: max(1, 50 - len(suffix))]}{suffix}"
-            counter += 1
-
-        # Generate high-quality placeholder if image_url is missing
-        image_url = item.get("image_url")
-        if not image_url:
-            try:
-                from backend.engine.media_engine import MediaEngine
-                from backend.core.config import settings
-                import os
-                
-                item_type = item.get("item_type") or "PICKABLE"
-                safe_adventure_id = _sanitize_path_component(self.adventure.id) or "adventure"
-                target_dir = _ensure_within_data_dir(
-                    os.path.join(settings.DATA_DIR, "adventures", "library", safe_adventure_id, "entities")
-                )
-                image_url = await MediaEngine.generate_placeholder(
-                    adventure_id=self.adventure.id,
-                    entity_id=safe_id,
-                    target_dir=target_dir,
-                    category=f"ITEM_{item_type.upper()}"
-                )
-            except Exception as e:
-                logger.error("Failed to generate spawned item placeholder: %s", e)
-                image_url = None
-        states = dict(self.state.entity_states or {})
-        if safe_id in states:
-            states[safe_id]["is_in_inventory"] = False
-            states[safe_id]["current_scene_id"] = self.state.current_scene_id
-            states[safe_id]["is_hidden"] = False
-            self.state.entity_states = states
-            flag_modified(self.state, "entity_states")
-
-        entity = WorldEntity(
-            id=safe_id,
-            session_id=self.game_id,
-            template_id=None,
-            entity_type="OBJECT",
-            name=name,
-            description=str(item.get("description") or f"Loot from battle: {name}"),
-            current_scene_id=self.state.current_scene_id,
-            spatial_position=item.get("spatial_position") or "on the ground",
-            image_url=image_url,
-            item_type=item.get("item_type") or "PICKABLE",
-            wearable_slots=item.get("wearable_slots"),
-            is_in_inventory=False,
-            is_hidden=False,
-            unlock_rule=None,
-            is_portable=True,
-            stat_modifier_strength=item.get("stat_modifier_strength"),
-            stat_modifier_dexterity=item.get("stat_modifier_dexterity"),
-            stat_modifier_intelligence=item.get("stat_modifier_intelligence"),
-            stat_modifier_wisdom=item.get("stat_modifier_wisdom"),
-            stat_modifier_charisma=item.get("stat_modifier_charisma"),
-            stat_modifier_armor_class=item.get("stat_modifier_armor_class"),
-            metadata_json={
-                "hp_change": item.get("hp_change"),
-                "mana_change": item.get("mana_change"),
-                "stamina_change": item.get("stamina_change"),
-                "code_to_unlock": str(item.get("code_to_unlock") or "").strip(),
-                "item_to_unlock": str(item.get("item_to_unlock") or "").strip().upper(),
-                "locked": bool(item.get("locked")) if item.get("locked") is not None else None,
-            }
+        logger.warning(
+            "[Turn %s] Skipped spawning non-existent entity: ID=%s, Name=%s (dynamic item generation is disabled)",
+            self.game_id,
+            raw_id,
+            name,
         )
-        self.db.add(entity)
 
     async def _session_entity_id_exists(self, entity_id: str) -> bool:
         res = await self.db.execute(
