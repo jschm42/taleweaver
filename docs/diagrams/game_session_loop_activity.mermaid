@@ -1,42 +1,69 @@
 flowchart TD
-    Start([User Interaction]) --> ReceiveMsg[Receive Message Content]
-    ReceiveMsg --> LoadContext[Load Game State, Avatar & History]
-    LoadContext --> TickSystem[Advance Time & Apply Status Ticks]
+    Start([User Interaction / Turn Submission]) --> ReceiveMsg[Receive Message & Initialize GameTurnManager]
+    ReceiveMsg --> LoadContext[Load Session State, Avatar, Entities & Exits]
+    LoadContext --> TickSystem[Advance In-Game Time & Apply Status Effects]
     
-    TickSystem --> ModeCheck{Strict Rules Enabled?}
+    TickSystem --> ModeCheck{Rule Enforcement Mode}
     
-    subgraph StrictMode [Strict Mode: 2-Pass Logic]
+    subgraph Pass1 [Pass 1: Mechanics Check]
         direction TB
-        SmallLLM[Small LLM: Process Mechanics] --> Event[Generate GameEvent JSON]
-        Event --> ComplexLLM[Complex LLM: Narrative Generation]
-        ComplexLLM --> Prose[Atmospheric Narration]
-        Event --> ApplyRules[Rule Engine: Apply Event to Stats]
-        ApplyRules --> UpdateWorld[DB: Update Scene, Positions & Visibility]
+        SmallLLM[Small LLM: Evaluate Mechanics] --> ProposedEvent[Generate Proposed GameEvent JSON]
     end
-    
-    subgraph FreeformMode [Freeform Mode]
+
+    subgraph Pass15 [Pass 1.5: Validation & Reversion Gates]
         direction TB
-        NarrativeLLM[Complex LLM: Creative Narration] --> FreeProse[Narration based on textual context]
+        CheckExits{Exit Locks Valid?}
+        CheckContainers{Container Unlocks Valid?}
+        CheckSwitches{Switch Actions Valid?}
+        CheckVisibility{Inspect/Search Targets Visible?}
+        
+        ProposedEvent --> CheckExits
+        CheckExits -- Invalid --> RevertExit[Revert Exit State & Record Rule Violation]
+        CheckExits -- Valid --> CheckContainers
+        RevertExit --> CheckContainers
+        
+        CheckContainers -- Invalid --> RevertContainer[Revert Container State & Record Rule Violation]
+        CheckContainers -- Valid --> CheckSwitches
+        RevertContainer --> CheckSwitches
+        
+        CheckSwitches -- Invalid --> RevertSwitch[Revert Switch State & Record Rule Violation]
+        CheckSwitches -- Valid --> CheckVisibility
+        RevertSwitch --> CheckVisibility
+        
+        CheckVisibility -- Off-Scene Target --> BlockAction[Block Action & Record Rule Violation]
+        CheckVisibility -- Accessible --> ValidatedEvent[Consolidate Validated GameEvent & Violations]
+        BlockAction --> ValidatedEvent
     end
+
+    subgraph Pass2 [Pass 2: Narration Generation]
+        direction TB
+        HasViolations{Has Rule Violations?}
+        HasViolations -- Yes --> OverridePrompt[Override Narration Prompt with Failure Details]
+        HasViolations -- No --> StandardPrompt[Standard Atmospheric Storytelling Prompt]
+        OverridePrompt --> ComplexLLM[Complex LLM: Stream Narrative Prose]
+        StandardPrompt --> ComplexLLM
+    end
+
+    ModeCheck -- RPG / Story Mode --> Pass1
+    Pass1 --> Pass15
+    Pass15 --> Pass2
+    ModeCheck -- Chat Mode --> Pass2
+
+    Pass2 --> ApplyState[Persist State to DB: Avatar Stats, Inventories, Scene Positions]
+    ApplyState --> MapUpdate[MapEngine: Register Visited Scenes & Discovered Exits]
+    MapUpdate --> QuestUpdate[Evaluate Quest Progression & Award Triggers]
     
-    ModeCheck -- Yes --> StrictMode
-    ModeCheck -- No --> FreeformMode
-    
-    StrictMode --> MapUpdate[MapEngine: Register Visit & Discovery]
-    FreeformMode --> MapUpdate
-    
-    MapUpdate --> QuestUpdate[Update Quests & Evaluate Awards]
-    QuestUpdate --> VisualCheck{Auto-Visualize & Image Prompt?}
-    VisualCheck -- Yes --> GenImage[MediaEngine: Generate Scene Image]
-    GenImage --> SaveImage[Update Scene & Map Visuals]
+    QuestUpdate --> VisualCheck{Auto-Visualize & Image Needed?}
+    VisualCheck -- Yes --> GenImage[MediaEngine: Generate Scene/Entity Visual]
+    GenImage --> SaveImage[Update Scene Image URL & Session State]
     VisualCheck -- No --> Finalize
     SaveImage --> Finalize
     
-    Finalize[Build ChatResponse] --> End([Return Response to Client])
-    End --> TTSCheck{TTS Enabled?}
-    TTSCheck -- Yes --> GenAudio[TTSEngine: Synthesize Narration]
-    GenAudio --> PlayAudio([Play Audio in UI])
-    TTSCheck -- No --> Stop([End Turn])
-    
-    style StrictMode fill:#e1f5fe,stroke:#01579b
-    style FreeformMode fill:#fff3e0,stroke:#e65100
+    Finalize[Emit SSE State & Final Event] --> TTSCheck{TTS Audio Enabled?}
+    TTSCheck -- Yes --> GenAudio[TTSEngine: Strip Vocal Tags & Synthesize Audio]
+    GenAudio --> End([End Turn & Play Audio in Client])
+    TTSCheck -- No --> End
+
+    style Pass1 fill:#e1f5fe,stroke:#01579b,stroke-width:1.5px
+    style Pass15 fill:#fff3e0,stroke:#e65100,stroke-width:1.5px
+    style Pass2 fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px

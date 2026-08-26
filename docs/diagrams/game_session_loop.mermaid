@@ -1,45 +1,61 @@
 sequenceDiagram
+    autonumber
     participant C as Client
-    participant B as Backend (API)
-    participant RE as Rule Engine
-    participant MM as Memory Manager
-    participant LLM as LLM (SM/CM)
-    participant DB as Database
+    participant API as FastAPI Router
+    participant GTM as GameTurnManager
+    participant SM as Mechanics LLM (Small)
+    participant VAL as Pass 1.5 Validator & DB
+    participant CM as Narration LLM (Complex)
     participant ME as Media Engine
+    participant TTS as TTS Engine
 
-    C->>B: POST /adventures/{game_id}/chat (msg)
-    B->>DB: Load State (Avatar, Adventure, History)
-    B->>RE: Apply Ticks (Advanced Time, Status Effects)
-    B->>MM: Build Context Prompt
-    
-    alt Strict Rules (2-Pass System)
-        B->>LLM: Pass 1: Technical Reasoning (Small Model)
-        LLM-->>B: GameEvent (Scene Change, Entity Moves, Stats)
-        B->>LLM: Pass 2: Atmospheric Narration (Complex Model)
-        LLM-->>B: Narrative Prose
-        B->>RE: Apply GameEvent to Avatar Stats
-        B->>DB: Update World State (Positions, Visibility, Scene)
-    else Free-form (1-Pass)
-        B->>LLM: Atmospheric Narration (Complex Model)
-        LLM-->>B: Narrative Prose
+    C->>API: POST /adventures/{game_id}/chat (content, auto_visualize, language)
+    API->>GTM: process_turn()
+    GTM-->>C: SSE event: status ("Validating rules...")
+
+    rect rgb(240, 248, 255)
+        note over GTM,SM: Pass 1: Mechanics Evaluation
+        GTM->>SM: Prompt (Character Sheet, Location Context, Exits, Quests, Awards)
+        SM-->>GTM: GameEvent (Requested scene change, entity updates, exit states, switch/container actions)
     end
 
-    B->>DB: Register Visit & Exits in WorldMap
-    B->>MM: Evaluate Quest Progress & Award Triggers
-    B->>DB: Update Session Quests & Awards
-    
-    opt On-demand Visuals (auto_visualize)
-        B->>ME: Generate Scene Image (if prompt in Event)
-        ME-->>B: image_url
-        B->>DB: Save Image & Update Map
+    rect rgb(255, 245, 238)
+        note over GTM,VAL: Pass 1.5: Rule Validation & Reversion
+        GTM->>VAL: Validate state updates against DB gates (required items, codes, flags)
+        alt Illegal action / Missing key item or code
+            VAL-->>GTM: Revert state update & append to rule_violations list
+        else Valid action
+            VAL-->>GTM: Accept state update
+        end
     end
 
-    B->>DB: Save Chat Messages
-    B-->>C: ChatResponse (Narration, Sheet, Map, Entities)
+    GTM-->>C: SSE event: state (Pre-narration UI state)
+    GTM-->>C: SSE event: status ("Generating narrative...")
 
-    opt Narration Audio (TTS)
-        C->>B: POST /api/tts/generate (text)
-        B->>ME: Synthesize Speech (Gemini/ElevenLabs)
-        ME-->>B: audio_url
-        B-->>C: Audio Stream / URL
+    rect rgb(245, 255, 245)
+        note over GTM,CM: Pass 2: Atmospheric Narration
+        alt Has rule_violations
+            GTM->>CM: Narrative prompt overridden with rule_violations failure instructions
+        else Normal Turn
+            GTM->>CM: Narrative prompt with validated GameEvent outcome
+        end
+        CM-->>GTM: Streamed narrative prose
+        GTM-->>C: SSE event: message (Narration text chunk)
+    end
+
+    rect rgb(250, 250, 250)
+        note over GTM,VAL: State Persistence & Map Tracking
+        GTM->>VAL: Persist Avatar Stats, Inventories, Scene, and WorldMap discovery
+        opt Auto-Visualize (if scene change or image requested)
+            GTM->>ME: Generate Scene/Entity visual
+            ME-->>GTM: local_path & /data/... URL
+            GTM->>VAL: Update WorldScene / WorldEntity image
+        end
+    end
+
+    opt TTS Spoken Narration
+        C->>API: POST /api/tts/generate (narration text)
+        API->>TTS: Synthesize Speech (Strip vocal tags [whispers], resolve voice)
+        TTS-->>API: Audio Stream / URL
+        API-->>C: Audio playback
     end

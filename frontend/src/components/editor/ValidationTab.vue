@@ -577,7 +577,11 @@ async function applySelectedFix() {
         resp.status === 'applied' ? 'success' : 'info',
       )
       aiFixModalOpen.value = false
-      removeAppliedFinding()
+      if (resp.validation_run) {
+        applyPersistedRun(resp.validation_run)
+      } else {
+        removeAppliedFinding()
+      }
     } else {
       aiFixErrorMessage.value =
         resp.message ||

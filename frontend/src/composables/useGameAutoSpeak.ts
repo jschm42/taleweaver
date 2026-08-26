@@ -2,6 +2,7 @@ import { ref, watch, type Ref } from 'vue'
 import { audioService } from '@/services/audioService'
 
 const AUTO_SPEAK_DEBOUNCE_MS = 350
+const MAX_TRACKED_SIGNATURES = 200
 
 type AutoSpeakOptions = {
   messages: Ref<any[]>
@@ -14,12 +15,24 @@ type AutoSpeakOptions = {
   sessionId: Ref<string>
 }
 
-function getMessageSignature(message: { timestamp?: Date; content: string }, index: number): string {
-  const ts = message.timestamp instanceof Date ? message.timestamp.toISOString() : ''
-  return `${index}|${ts}`
+function computeContentHash(content: string): string {
+  const normalized = String(content || '').trim()
+  let hash = 5381
+  for (let i = 0; i < normalized.length; i++) {
+    hash = ((hash << 5) + hash) ^ normalized.charCodeAt(i)
+  }
+  return `${normalized.length}_${(hash >>> 0).toString(36)}`
 }
 
-function findLatestSpeakableAssistantMessage(messages: any[]): { index: number; message: { timestamp?: Date; content: string } } | null {
+function getMessageSignature(message: { id?: string; content: string }, index: number): string {
+  const hash = computeContentHash(message.content)
+  if (message.id) {
+    return `id:${message.id}|${hash}`
+  }
+  return `idx:${index}|${hash}`
+}
+
+function findLatestSpeakableAssistantMessage(messages: any[]): { index: number; message: { id?: string; timestamp?: Date; content: string } } | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const candidate = messages[index]
     if (!candidate) continue
@@ -43,15 +56,65 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     sessionId,
   } = options
 
-  const lastAutoSpokenSignature = ref<string | null>(null)
+  const spokenSignatures = new Set<string>()
+  const lastSpokenSignature = ref<string | null>(null)
+  const lastSpokenContent = ref<string | null>(null)
   const lastAutoSpeakAt = ref(0)
+
+  function pruneSpokenSignatures(): void {
+    if (spokenSignatures.size > MAX_TRACKED_SIGNATURES) {
+      const entries = Array.from(spokenSignatures)
+      const toRemove = entries.slice(0, entries.length - MAX_TRACKED_SIGNATURES)
+      for (const entry of toRemove) {
+        spokenSignatures.delete(entry)
+      }
+    }
+  }
+
+  function markMessageAsSpoken(message: { id?: string; content: string }, index: number): void {
+    const signature = getMessageSignature(message, index)
+    spokenSignatures.add(signature)
+    if (message.id) {
+      spokenSignatures.add(`id:${message.id}`)
+    }
+    const hash = computeContentHash(message.content)
+    spokenSignatures.add(`hash:${hash}`)
+    lastSpokenSignature.value = signature
+    lastSpokenContent.value = String(message.content || '').trim()
+    pruneSpokenSignatures()
+  }
+
+  function isMessageAlreadySpoken(message: { id?: string; content: string }, index: number): boolean {
+    const signature = getMessageSignature(message, index)
+    if (spokenSignatures.has(signature)) return true
+    if (message.id && spokenSignatures.has(`id:${message.id}`)) return true
+    const hash = computeContentHash(message.content)
+    if (spokenSignatures.has(`hash:${hash}`)) return true
+    if (signature === lastSpokenSignature.value) return true
+    const trimmed = String(message.content || '').trim()
+    if (lastSpokenContent.value && trimmed === lastSpokenContent.value) return true
+    return false
+  }
+
+  function seedExistingMessagesAsSpoken(): void {
+    if (!Array.isArray(messages.value)) return
+    for (let i = 0; i < messages.value.length; i++) {
+      const msg = messages.value[i]
+      if (msg && msg.role === 'assistant' && !msg.is_debug && String(msg.content || '').trim()) {
+        markMessageAsSpoken(msg, i)
+      }
+    }
+  }
+
+  // Pre-seed any existing messages on initial mount so old log history isn't auto-spoken.
+  seedExistingMessagesAsSpoken()
 
   function speakLatestAssistantMessage(params: { force?: boolean } = {}): void {
     const { force = false } = params
     if (!audioService.autoSpeechEnabled.value) return
     if (!audioService.isUnlocked.value) return
     if (isCombatActive.value) return
-    if (!force && (status.value === 'connecting' || status.value === 'loading')) return
+    if (!force && (status.value === 'connecting' || status.value === 'loading' || inputLocked.value)) return
 
     const now = Date.now()
     if (!force && now - lastAutoSpeakAt.value < AUTO_SPEAK_DEBOUNCE_MS) return
@@ -60,11 +123,10 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     if (!latest) return
     const { index, message: lastMsg } = latest
 
-    const signature = getMessageSignature(lastMsg, index)
-    if (!force && signature === lastAutoSpokenSignature.value) return
+    if (!force && isMessageAlreadySpoken(lastMsg, index)) return
 
     lastAutoSpeakAt.value = now
-    lastAutoSpokenSignature.value = signature
+    markMessageAsSpoken(lastMsg, index)
 
     void audioService.enqueueSpeak(lastMsg.content, {
       sceneDescription: currentSceneDescription.value,
@@ -77,57 +139,54 @@ export function useGameAutoSpeak(options: AutoSpeakOptions): { speakLatestAssist
     })
   }
 
+  watch(() => sessionId.value, (newSessionId, oldSessionId) => {
+    if (newSessionId !== oldSessionId) {
+      spokenSignatures.clear()
+      lastSpokenSignature.value = null
+      lastSpokenContent.value = null
+      lastAutoSpeakAt.value = 0
+      seedExistingMessagesAsSpoken()
+    }
+  })
+
   watch(() => inputLocked.value, (isLocked) => {
     if (isLocked || status.value === 'connecting' || status.value === 'loading') return
     speakLatestAssistantMessage()
   })
-
-  watch(() => messages.value.length, (newLength, oldLength) => {
-    if (newLength <= oldLength) return
-    const appended = messages.value[newLength - 1] as any
-    if (!appended) return
-    if (appended.role !== 'assistant') return
-    if (appended.is_debug) return
-    if (!String(appended.content || '').trim()) return
-    speakLatestAssistantMessage()
-  })
-
-  watch(
-    () => {
-      const latest = findLatestSpeakableAssistantMessage(messages.value)
-      if (!latest) return ''
-      return `${latest.index}|${String(latest.message.content || '').trim()}`
-    },
-    (snapshot, previous) => {
-      if (!snapshot || snapshot === previous) return
-      speakLatestAssistantMessage()
-    }
-  )
 
   watch(
     () => status.value,
     (newStatus, oldStatus) => {
       const wasBusy = oldStatus === 'connecting' || oldStatus === 'loading'
       const isReady = newStatus === 'connected' || newStatus === 'completed'
-      if (!wasBusy || !isReady) return
+      if (!wasBusy || !isReady || inputLocked.value) return
+      speakLatestAssistantMessage()
+    }
+  )
+
+  watch(
+    () => {
+      const latest = findLatestSpeakableAssistantMessage(messages.value)
+      if (!latest) return ''
+      return `${latest.message.id || latest.index}|${computeContentHash(latest.message.content)}`
+    },
+    (snapshot, previous) => {
+      if (!snapshot || snapshot === previous) return
+      if (inputLocked.value || status.value === 'connecting' || status.value === 'loading') return
       speakLatestAssistantMessage()
     }
   )
 
   watch(() => audioService.autoSpeechEnabled.value, (enabled) => {
     if (enabled) {
-      // Pre-seed the spoken signature with the currently last message so that
-      // it is treated as already handled. Autoplay will only trigger for
-      // blocks that are generated *after* the user switches it on.
-      const current = findLatestSpeakableAssistantMessage(messages.value)
-      if (current) {
-        lastAutoSpokenSignature.value = getMessageSignature(current.message, current.index)
-      }
+      // Pre-seed all current messages so autoplay only triggers for subsequent turns.
+      seedExistingMessagesAsSpoken()
       return
     }
 
     // On disable: reset state and stop any running audio.
-    lastAutoSpokenSignature.value = null
+    lastSpokenSignature.value = null
+    lastSpokenContent.value = null
     lastAutoSpeakAt.value = 0
     audioService.stop()
   })

@@ -2290,7 +2290,56 @@ async def ai_apply_fix_proposal(
         seen_keys.add(key)
         applied_tags.append(tag)
 
+    updated_run_dict = None
     if applied_tags:
+        # Also remove the fixed finding from the latest ValidationRun so it does not reappear on reload/re-enter
+        run_res = await db.execute(
+            select(ValidationRun)
+            .where(
+                ValidationRun.template_id == template_id,
+                ValidationRun.user_id == user_id,
+            )
+            .order_by(ValidationRun.run_at.desc(), ValidationRun.created_at.desc())
+            .limit(1)
+        )
+        run = run_res.scalars().first()
+        if run is not None:
+            before_ai = list(run.ai_findings or [])
+            before_structural = list(run.structural_findings or [])
+
+            def _matches_signature(entry: Any) -> bool:
+                try:
+                    vf = ValidationFinding(**entry) if isinstance(entry, dict) else entry
+                    return _finding_signature(vf) == payload.finding_signature
+                except Exception:
+                    return False
+
+            new_ai = [e for e in before_ai if not _matches_signature(e)]
+            new_structural = [e for e in before_structural if not _matches_signature(e)]
+
+            # Fallback if signature serialization differed: match on code & location
+            if len(new_ai) == len(before_ai) and len(new_structural) == len(before_structural):
+                parts = payload.finding_signature.split("|", 3)
+                if len(parts) >= 3:
+                    sig_code = parts[1].strip()
+                    sig_loc = parts[2].strip()
+                    def _matches_code_loc(entry: Any) -> bool:
+                        if not isinstance(entry, dict):
+                            return False
+                        return (
+                            str(entry.get("code") or "").strip() == sig_code
+                            and str(entry.get("location") or "").strip() == sig_loc
+                        )
+                    new_ai = [e for e in before_ai if not _matches_code_loc(e)]
+                    new_structural = [e for e in before_structural if not _matches_code_loc(e)]
+
+            if len(new_ai) != len(before_ai) or len(new_structural) != len(before_structural):
+                run.ai_findings = new_ai
+                run.structural_findings = new_structural
+                flag_modified(run, "ai_findings")
+                flag_modified(run, "structural_findings")
+                _recount_validation_findings(run)
+
         await db.commit()
         await _evict_cached_suggestions(
             db=db,
@@ -2298,6 +2347,18 @@ async def ai_apply_fix_proposal(
             user_id=user_id,
             signature=payload.finding_signature,
         )
+        if run is not None:
+            await db.refresh(run)
+            updated_run_dict = {
+                "structural_findings": list(run.structural_findings or []),
+                "ai_findings": list(run.ai_findings or []),
+                "ai_skipped_reason": run.ai_skipped_reason,
+                "run_at": run.run_at.isoformat() if run.run_at else None,
+                "structural_finding_count": run.structural_finding_count,
+                "ai_finding_count": run.ai_finding_count,
+                "error_count": run.error_count,
+                "warning_count": run.warning_count,
+            }
     else:
         await db.rollback()
         if failed_resolution:
@@ -2330,6 +2391,7 @@ async def ai_apply_fix_proposal(
         status=status,
         applied_targets=applied_tags,
         message=message,
+        validation_run=updated_run_dict,
     )
 
 

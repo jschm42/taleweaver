@@ -1,23 +1,23 @@
 graph TD
-    Start([Start Import]) --> Source{File Source}
-    Source -->|Folder Watcher| Watcher[Detect .adv / .adz in /adventures]
-    Source -->|UI Upload| Upload[API: POST /api/adventures/import]
+    Start([Start Import]) --> Source{Import Source}
+    Source -->|Folder Watcher| Watcher[Scan .adv / .adz in /adventures directory]
+    Source -->|UI Upload| Upload[API: POST /adventures/import]
     
-    Watcher --> LoadFile[Load File Content]
+    Watcher --> LoadFile[Read File Stream / Buffer]
     Upload --> LoadFile
     
-    LoadFile --> TypeCheck{File Type?}
-    TypeCheck -->|.adz| Unzip[Extract ZIP Archive]
-    TypeCheck -->|.adv| ParseJSON[Parse JSON Manifest]
+    LoadFile --> TypeCheck{File Extension?}
+    TypeCheck -->|.adz| Unzip[Extract ZIP Bundle into Temp Directory]
+    TypeCheck -->|.adv| ParseJSON[Parse JSON Manifest directly]
     
-    Unzip --> ExtractManifest[Read adventure.adv]
+    Unzip --> ExtractManifest[Read and Parse adventure.adv]
     ExtractManifest --> ParseJSON
     
-    ParseJSON --> CreateTemplate[Create AdventureTemplate DB Record]
-    CreateTemplate --> Assets[Move Images to /data/adventures/{id}/]
-    Assets --> CreateAvatar[Create Avatar & Sync Protagonist Stats]
-    CreateAvatar --> CreateSession[Create GameSession<br/>(Denormalize Title & Image)]
-    CreateSession --> CreateState[Create SessionState<br/>(Set Starting Scene & Items)]
+    ParseJSON --> Validate[Validate WorldManifesto Schema & IDs]
+    Validate --> CreateTemplate[Create AdventureTemplate DB Record]
+    CreateTemplate --> LocalizeAssets[Localize / Copy Assets into /data/adventures/library/{id}/]
+    LocalizeAssets --> ApplyWorld[WorldManifestApplier: Seed Scenes, Entities, Exits, Quests & Awards]
+    ApplyWorld --> CreateAvatar[Create Avatar & Sync Protagonist Baseline Stats]
     
-    CreateState --> Cleanup[Delete Source File (if Folder Watcher)]
-    Cleanup --> End([Import Complete])
+    CreateAvatar --> Cleanup[Delete Temporary Files / Source File if Folder Watcher]
+    Cleanup --> End([Import Complete: Template Ready])

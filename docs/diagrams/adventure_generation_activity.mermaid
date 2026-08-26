@@ -1,27 +1,30 @@
 flowchart TD
-    Start([Start Generation]) --> CreateShell[Create Adventure Shell & Avatar]
-    CreateShell --> StartBG[Launch Background Task]
+    Start([Start World Generation]) --> CreateShell[Create Template Shell & Avatar in DB]
+    CreateShell --> StartBG[Launch Async Background Task]
     
-    subgraph BackgroundTask [Background Generation]
+    subgraph BackgroundTask [World Generation Pipeline]
         direction TB
-        Init[Init Status, Context & Catalog] --> CallLLM[LLM: Generate World Manifesto]
-        CallLLM --> ValidateManifest{Manifest Valid?}
-        ValidateManifest -- No --> Retry[Retry / Log Error]
-        ValidateManifest -- Yes --> ApplyManifest[Apply Manifest to Database]
+        Init[Resolve Tone, Style Guidelines & Catalog] --> CallLLM[LLM: Generate Complete WorldManifesto]
+        CallLLM --> ValidateManifest{Manifest Valid & Connected?}
+        ValidateManifest -- No --> Retry[Auto-Fix / Retry LLM Generation]
+        Retry --> CallLLM
+        ValidateManifest -- Yes --> ApplyManifest[WorldManifestApplier: Write to Database]
         
-        subgraph ApplyLogic [Application Logic]
+        subgraph ApplyLogic [Entity & Asset Application]
             direction TB
-            ClearDB[Clear Existing World Objects] --> Protagonist[Sync Protagonist & Generate Portrait]
-            Protagonist --> Quests[Initialize Quests & Awards]
-            Quests --> Scenes[Generate Scenes & Atmospheric Images]
-            Scenes --> Entities[Generate NPCs & Items with Visuals]
-            Entities --> Exits[Connect Map via World Exits]
+            ClearDB[Clear Existing Template Data] --> Protagonist[Sync Protagonist Avatar & Stats]
+            Protagonist --> Meta[Save Plot, Rules, Walkthrough & Win/Loss Conditions]
+            Meta --> Quests[Initialize Quests & Achievements]
+            Quests --> Scenes[Create Scenes & Generate Background Visuals]
+            Scenes --> NPCs[Create NPCs with Voice Tags & Portraits]
+            NPCs --> Objects[Create Items, Containers & Switches with Art]
+            Objects --> Exits[Connect Map via Directional/Bidirectional Exits]
         end
         
         ApplyManifest --> Finalize[Set Adventure Status: Ready]
     end
     
-    Finalize --> End([Generation Complete])
+    Finalize --> End([Generation Complete & Ready for Play])
     
     style BackgroundTask fill:#f9f9f9,stroke:#333,stroke-width:2px
     style ApplyLogic fill:#fff,stroke:#666,stroke-dasharray: 5 5

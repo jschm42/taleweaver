@@ -400,6 +400,7 @@ export interface AIFixApplyResponse {
   status: 'applied' | 'no_op' | 'partial'
   applied_targets: string[]
   message?: string | null
+  validation_run?: PersistedValidationRun | null
 }
 
 export interface DeleteValidationFindingRef {

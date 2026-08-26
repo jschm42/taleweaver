@@ -4,6 +4,7 @@ import json
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth import create_access_token
@@ -11,6 +12,7 @@ from backend.core.config import settings as app_settings
 from backend.main import app
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
+from backend.models.validation_run import ValidationRun
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 from tests.conftest import TestSessionLocal
 
@@ -1540,3 +1542,89 @@ async def test_apply_fix_does_not_call_llm(client, setup_test_db, monkeypatch):
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "applied"
     assert llm_called["count"] == 0
+
+
+async def test_apply_fix_removes_finding_from_persisted_validation_run(client, setup_test_db):
+    """When an AI fix is applied, the fixed finding must be removed from the latest persisted ValidationRun."""
+    user = User(
+        username="fix_persist_user",
+        hashed_password="x",
+        role="admin",
+    )
+    async with TestSessionLocal() as db:
+        db.add(user)
+        await db.commit()
+        tpl_id = await _seed_simple_adventure(db, owner=user)
+
+        # Seed a persisted ValidationRun with 2 AI findings
+        finding1 = {
+            "severity": "warn",
+            "code": "orphaned_container_code",
+            "message": "Container has orphan code.",
+            "location": "object:SAFE_01",
+            "context": {"code": "593"},
+        }
+        finding2 = {
+            "severity": "warn",
+            "code": "plot_hole",
+            "message": "Some plot hole.",
+            "location": "scene:START",
+            "context": {},
+        }
+        from datetime import datetime, timezone
+        from backend.api.routes.adventures.editor import _finding_signature
+        from backend.schemas.validation import ValidationFinding
+        sig1 = _finding_signature(ValidationFinding(**finding1))
+
+        run = ValidationRun(
+            template_id=tpl_id,
+            user_id=user.id,
+            include_ai=True,
+            structural_findings=[],
+            ai_findings=[finding1, finding2],
+            structural_finding_count=0,
+            ai_finding_count=2,
+            error_count=0,
+            warning_count=2,
+            run_at=datetime.now(timezone.utc),
+        )
+        db.add(run)
+        await db.commit()
+
+    proposal = {
+        "title": "Fix orphan code",
+        "summary": "Update safe description.",
+        "patches": [
+            {
+                "target_type": "object",
+                "target_id": "SAFE_01",
+                "description": "Add code hint.",
+                "field_updates": {"description": "A heavy safe with code 593 stamped."},
+            }
+        ],
+    }
+
+    resp = await client.post(
+        f"/api/adventures/{tpl_id}/editor/validate/findings/apply-fix",
+        headers=_auth_headers("fix_persist_user"),
+        json={"finding_signature": sig1, "proposal": proposal},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "applied"
+    assert body["validation_run"] is not None
+    assert body["validation_run"]["ai_finding_count"] == 1
+    assert len(body["validation_run"]["ai_findings"]) == 1
+    assert body["validation_run"]["ai_findings"][0]["code"] == "plot_hole"
+
+    # Verify DB persistence directly
+    async with TestSessionLocal() as db:
+        res = await db.execute(
+            select(ValidationRun).where(ValidationRun.template_id == tpl_id)
+        )
+        persisted_run = res.scalars().first()
+        assert persisted_run is not None
+        assert len(persisted_run.ai_findings) == 1
+        assert persisted_run.ai_findings[0]["code"] == "plot_hole"
+        assert persisted_run.warning_count == 1
+

@@ -144,6 +144,10 @@ class AIFixApplyResponse(BaseModel):
     message: Optional[str] = Field(
         None, description="Optional human-readable summary of what was changed."
     )
+    validation_run: Optional[Dict[str, Any]] = Field(
+        None,
+        description="The updated latest ValidationRun snapshot after removing the resolved finding.",
+    )
 
 
 class DeleteValidationFindingRef(BaseModel):
