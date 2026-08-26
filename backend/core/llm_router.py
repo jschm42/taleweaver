@@ -1,6 +1,8 @@
+import asyncio
 import json
 import logging
 import re
+import time
 from copy import deepcopy
 from typing import Any, Optional, TypeVar
 
@@ -39,6 +41,25 @@ class GameMasterLLM:
 
 
     @staticmethod
+    def _is_transient_llm_error(exc: Exception) -> bool:
+        """Check if an exception is likely a transient connection drop, socket timeout or stale pool connection."""
+        err_type = type(exc).__name__.lower()
+        err_msg = str(exc or "").lower()
+        return (
+            "timeout" in err_type
+            or "connection" in err_type
+            or "disconnected" in err_msg
+            or "connection reset" in err_msg
+            or "time taken=0." in err_msg
+            or "time taken=0" in err_msg
+            or "serverdisconnected" in err_msg
+            or "payloaderror" in err_msg
+            or "remote disconnected" in err_msg
+            or "broken pipe" in err_msg
+            or "connection closed" in err_msg
+        )
+
+    @staticmethod
     def _extract_openrouter_available_providers(exc: Exception) -> list[str]:
         """Parse OpenRouter provider metadata from LiteLLM/OpenAI-style exceptions."""
         message = str(exc or "")
@@ -71,51 +92,76 @@ class GameMasterLLM:
         return retry_kwargs
 
     def _completion_with_openrouter_fallback(self, kwargs: dict):
-        """Call LiteLLM completion and retry once for OpenRouter provider-order mismatches."""
-        try:
-            return self._get_litellm().completion(**kwargs, request_timeout=self.request_timeout)
-        except Exception as exc:
-            if self.provider != "openrouter":
-                raise
+        """Call LiteLLM completion and retry for OpenRouter provider-order mismatches and transient connection drops."""
+        max_transient_retries = 2
+        for attempt in range(max_transient_retries):
+            try:
+                return self._get_litellm().completion(**kwargs, request_timeout=self.request_timeout)
+            except Exception as exc:
+                if self.provider == "openrouter":
+                    available_providers = self._extract_openrouter_available_providers(exc)
+                    if available_providers:
+                        logger.warning(
+                            "OpenRouter provider mismatch for model '%s'. Retrying with provider order: %s",
+                            kwargs.get("model"),
+                            ",".join(available_providers),
+                        )
+                        retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
+                        return self._get_litellm().completion(**retry_kwargs, request_timeout=self.request_timeout)
 
-            available_providers = self._extract_openrouter_available_providers(exc)
-            if not available_providers:
-                raise
+                if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
+                    logger.warning(
+                        "Transient LLM connection/timeout error on attempt %d (%s: %s). Retrying with fresh connection...",
+                        attempt + 1,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    time.sleep(0.5)
+                    continue
 
-            logger.warning(
-                "OpenRouter provider mismatch for model '%s'. Retrying with provider order: %s",
-                kwargs.get("model"),
-                ",".join(available_providers),
-            )
-            retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
-            return self._get_litellm().completion(**retry_kwargs, request_timeout=self.request_timeout)
+                raise
 
     async def _acompletion_with_openrouter_fallback(self, kwargs: dict):
-        """Async variant of completion retry for OpenRouter provider-order mismatches."""
-        try:
-            logger.info(
-                "GameMasterLLM calling LLM for user %s with model %s", self.user.id, kwargs.get("model")
-            )
-            return await self._get_litellm().acompletion(**kwargs, request_timeout=self.request_timeout)
-        except Exception as exc:
-            if self.provider != "openrouter":
+        """Async variant of completion retry for OpenRouter provider-order mismatches and transient connection drops."""
+        max_transient_retries = 2
+        for attempt in range(max_transient_retries):
+            try:
+                logger.info(
+                    "GameMasterLLM calling LLM for user %s with model %s (attempt %d/%d)",
+                    self.user.id,
+                    kwargs.get("model"),
+                    attempt + 1,
+                    max_transient_retries,
+                )
+                return await self._get_litellm().acompletion(**kwargs, request_timeout=self.request_timeout)
+            except Exception as exc:
+                if self.provider == "openrouter":
+                    available_providers = self._extract_openrouter_available_providers(exc)
+                    if available_providers:
+                        logger.warning(
+                            "OpenRouter provider mismatch for model '%s'. Retrying with provider order: %s",
+                            kwargs.get("model"),
+                            ",".join(available_providers),
+                        )
+                        retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
+                        logger.info(
+                            "GameMasterLLM calling LLM (Fallback) for user %s with model %s",
+                            self.user.id,
+                            kwargs.get("model"),
+                        )
+                        return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
+
+                if attempt < max_transient_retries - 1 and self._is_transient_llm_error(exc):
+                    logger.warning(
+                        "Transient LLM connection/timeout error on attempt %d (%s: %s). Retrying with fresh connection...",
+                        attempt + 1,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    await asyncio.sleep(0.5)
+                    continue
+
                 raise
-
-            available_providers = self._extract_openrouter_available_providers(exc)
-            if not available_providers:
-                raise
-
-            logger.warning(
-                "OpenRouter provider mismatch for model '%s'. Retrying with provider order: %s",
-                kwargs.get("model"),
-                ",".join(available_providers),
-            )
-            retry_kwargs = self._retry_kwargs_with_openrouter_provider_order(kwargs, available_providers)
-
-            logger.info(
-                "GameMasterLLM calling LLM (Fallback) for user %s with model %s", self.user.id, kwargs.get("model")
-            )
-            return await self._get_litellm().acompletion(**retry_kwargs, request_timeout=self.request_timeout)
 
     @staticmethod
     def _clean_json_string(content: str) -> str:
@@ -682,6 +728,12 @@ class GameMasterLLM:
             
         self.max_tokens = self._coerce_int(raw_max_tokens, default=default_max_tokens)
 
+        # OpenRouter provider routing preferences
+        raw_openrouter_provider = llm_settings.get(f"{prefix}openrouter_provider")
+        if raw_openrouter_provider is None:
+            raw_openrouter_provider = llm_settings.get("openrouter_provider")
+        self.openrouter_provider = (raw_openrouter_provider or "").strip()
+
         if self.provider == "ollama":
             self.api_base = (llm_settings.get("ollama_url") or "http://localhost:11434").rstrip("/")
         else:
@@ -762,6 +814,27 @@ class GameMasterLLM:
             "type": "enabled",
             "budget_tokens": self.max_thinking_tokens
         }
+
+    def _apply_openrouter_provider_routing(self, kwargs: dict) -> None:
+        """Inject provider routing ordering into OpenRouter requests if configured."""
+        if self.provider != "openrouter" and not (
+            isinstance(self.api_key, str) and self.api_key.startswith("sk-or-v1")
+        ):
+            return
+
+        if not self.openrouter_provider:
+            return
+
+        providers = [p.strip() for p in self.openrouter_provider.split(",") if p.strip()]
+        if not providers:
+            return
+
+        extra_body = dict(kwargs.get("extra_body") or {})
+        provider_block = dict(extra_body.get("provider") or {})
+        provider_block["order"] = providers
+        provider_block["allow_fallbacks"] = False
+        extra_body["provider"] = provider_block
+        kwargs["extra_body"] = extra_body
 
     def _get_decrypted_key(self, provider: str) -> str:
         from backend.core.config import settings
@@ -864,6 +937,8 @@ class GameMasterLLM:
         ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
 
+        self._apply_openrouter_provider_routing(kwargs)
+
         log_structured_event(
             "gm.turn.request",
             model=normalized_model,
@@ -958,6 +1033,8 @@ class GameMasterLLM:
             and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
         ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
+
+        self._apply_openrouter_provider_routing(kwargs)
         
         log_structured_event(
             "gm.turn.request",
@@ -1054,6 +1131,8 @@ class GameMasterLLM:
             and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
         ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
+
+        self._apply_openrouter_provider_routing(kwargs)
         
         log_structured_event(
             "gm.turn.stream.request",
@@ -1167,6 +1246,8 @@ class GameMasterLLM:
             and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
         ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
+
+        self._apply_openrouter_provider_routing(kwargs)
 
         log_structured_event(
             "gm.turn.request",
@@ -1388,6 +1469,8 @@ class GameMasterLLM:
             and (self.api_key.startswith("sk-or-v1") or self.provider == "openrouter")
         ):
             kwargs["api_base"] = "https://openrouter.ai/api/v1"
+
+        self._apply_openrouter_provider_routing(kwargs)
 
         log_structured_event(
             "gm.turn.request",

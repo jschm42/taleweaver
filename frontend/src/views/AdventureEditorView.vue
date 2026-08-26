@@ -2423,6 +2423,7 @@ watch(
               :adventure-title="adventure?.title"
               @notify="addNotification"
               @findings-count="onValidationFindingsCount"
+              @fix-applied="refreshData"
             />
           </div>
         </div>

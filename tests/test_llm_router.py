@@ -561,3 +561,231 @@ async def test_aexecute_complex_task_treats_empty_cleaned_content_as_no_content(
             response_model=_MiniSchema,
             model="claude-3-5-sonnet",
         )
+
+
+def test_openrouter_provider_routing_single_provider(monkeypatch):
+    """When openrouter_provider is set, GameMasterLLM injects the provider order and allow_fallbacks=False."""
+    user = _make_user(
+        llm_settings={
+            "small_model_provider": "openrouter",
+            "small_openrouter_provider": "Together",
+        },
+        encrypted_api_keys={"openrouter": "placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test")
+    router = GameMasterLLM(user, provider="openrouter", model_category="small")
+
+    captured = {}
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.completion", fake_completion)
+
+    router.execute_simple_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        model="meta-llama/llama-3-8b-instruct",
+    )
+
+    assert "extra_body" in captured
+    assert captured["extra_body"]["provider"] == {
+        "order": ["Together"],
+        "allow_fallbacks": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_openrouter_provider_routing_comma_separated(monkeypatch):
+    """Multiple comma-separated providers are trimmed and passed in order."""
+    user = _make_user(
+        llm_settings={
+            "complex_model_provider": "openrouter",
+            "complex_openrouter_provider": "Together, grok, alibaba",
+        },
+        encrypted_api_keys={"openrouter": "placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test")
+    router = GameMasterLLM(user, provider="openrouter", model_category="complex")
+
+    captured = {}
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    await router.aexecute_simple_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        model="meta-llama/llama-3-8b-instruct",
+    )
+
+    assert "extra_body" in captured
+    assert captured["extra_body"]["provider"] == {
+        "order": ["Together", "grok", "alibaba"],
+        "allow_fallbacks": False,
+    }
+
+
+def test_openrouter_no_provider_routing_when_empty(monkeypatch):
+    """When openrouter_provider is not set or whitespace-only, no provider routing block is injected."""
+    user = _make_user(
+        llm_settings={
+            "small_model_provider": "openrouter",
+            "small_openrouter_provider": "   ",
+        },
+        encrypted_api_keys={"openrouter": "placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-or-v1-test")
+    router = GameMasterLLM(user, provider="openrouter", model_category="small")
+
+    captured = {}
+
+    class _Msg:
+        content = "ok"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    def fake_completion(**kwargs):
+        captured.update(kwargs)
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.completion", fake_completion)
+
+    router.execute_simple_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        model="meta-llama/llama-3-8b-instruct",
+    )
+
+    assert captured.get("extra_body") is None or "provider" not in captured.get("extra_body", {})
+
+
+@pytest.mark.asyncio
+async def test_acompletion_retries_on_transient_socket_timeout(monkeypatch):
+    """When a stale pooled socket causes an immediate 0.015s Timeout, acompletion retries with a fresh connection."""
+    import litellm
+
+    user = _make_user(
+        llm_settings={"complex_model_provider": "deepseek"},
+        encrypted_api_keys={"deepseek": "placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-test")
+    router = GameMasterLLM(user, provider="deepseek", model_category="complex")
+
+    call_count = 0
+
+    class _Msg:
+        content = "recovered successfully"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    async def fake_acompletion(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise litellm.Timeout("DeepseekException - Connection timed out. Timeout passed=60.0, time taken=0.015 seconds", model="deepseek-chat", llm_provider="deepseek")
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.acompletion", fake_acompletion)
+
+    out = await router.aexecute_simple_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        model="deepseek-chat",
+    )
+
+    assert call_count == 2
+    assert out == "recovered successfully"
+
+
+def test_completion_retries_on_transient_socket_timeout(monkeypatch):
+    """Sync completion also recovers on transient connection/timeout drops."""
+    import litellm
+
+    user = _make_user(
+        llm_settings={"small_model_provider": "openai"},
+        encrypted_api_keys={"openai": "placeholder"},
+    )
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM._get_decrypted_key", lambda self, p: "sk-test")
+    router = GameMasterLLM(user, provider="openai", model_category="small")
+
+    call_count = 0
+
+    class _Msg:
+        content = "sync recovered"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+        @staticmethod
+        def model_dump():
+            return {}
+
+    def fake_completion(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise litellm.APIConnectionError("Connection closed by peer", model="gpt-4o", llm_provider="openai")
+        return _Resp()
+
+    monkeypatch.setattr("backend.core.llm_router.litellm.completion", fake_completion)
+
+    out = router.execute_simple_task(
+        system_prompt="sys",
+        user_prompt="prompt",
+        model="gpt-4o",
+    )
+
+    assert call_count == 2
+    assert out == "sync recovered"
+
+

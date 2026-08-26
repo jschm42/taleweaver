@@ -27,22 +27,26 @@ class SettingsService {
     small_max_tokens: 12288,
     small_enable_thinking: false,
     small_max_thinking_tokens: 1024,
+    small_openrouter_provider: '',
 
     complex_model: '',
     complex_model_provider: 'openai',
     complex_max_tokens: 24576,
     complex_enable_thinking: false,
     complex_max_thinking_tokens: 1024,
+    complex_openrouter_provider: '',
 
     generator_model: '',
     generator_model_provider: 'openai',
     generator_max_tokens: 32768,
     generator_enable_thinking: false,
     generator_max_thinking_tokens: 1024,
+    generator_openrouter_provider: '',
 
     play_agent_model: '',
     play_agent_model_provider: 'openai',
     play_agent_monkey_mode: false,
+    play_agent_openrouter_provider: '',
 
     preferred_provider: 'openai',
     ollama_url: 'http://localhost:11434',

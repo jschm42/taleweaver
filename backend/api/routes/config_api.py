@@ -435,20 +435,25 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
         "small_max_tokens": DEFAULT_SMALL_MAX_TOKENS,
         "small_enable_thinking": False,
         "small_max_thinking_tokens": 1024,
+        "small_openrouter_provider": "",
         "complex_model": "",
         "complex_model_provider": "openai",
         "complex_max_tokens": DEFAULT_COMPLEX_MAX_TOKENS,
         "complex_enable_thinking": False,
         "complex_max_thinking_tokens": 2048,
+        "complex_openrouter_provider": "",
         "generator_model": "",
         "generator_model_provider": "openai",
         "generator_max_tokens": DEFAULT_GENERATOR_MAX_TOKENS,
         "generator_enable_thinking": False,
         "generator_max_thinking_tokens": 2048,
+        "generator_openrouter_provider": "",
         "play_agent_model": "",
         "play_agent_model_provider": "openai",
         "play_agent_monkey_mode": False,
+        "play_agent_openrouter_provider": "",
         "preferred_provider": "openai",  # Legacy/Default
+        "openrouter_provider": "",
         "ollama_url": "http://localhost:11434",
         "minimax_url": "https://api.minimax.chat/v1",
     }
@@ -471,6 +476,30 @@ def _normalize_llm_settings(llm_settings: Optional[dict]) -> dict:
             or normalized.get("preferred_provider")
             or "openai"
         )
+
+    # OpenRouter routing preferences normalization
+    if "small_openrouter_provider" not in normalized:
+        normalized["small_openrouter_provider"] = normalized.get("openrouter_provider") or ""
+    if "complex_openrouter_provider" not in normalized:
+        normalized["complex_openrouter_provider"] = (
+            normalized.get("small_openrouter_provider")
+            or normalized.get("openrouter_provider")
+            or ""
+        )
+    if "generator_openrouter_provider" not in normalized:
+        normalized["generator_openrouter_provider"] = (
+            normalized.get("complex_openrouter_provider")
+            or normalized.get("openrouter_provider")
+            or ""
+        )
+    if "play_agent_openrouter_provider" not in normalized:
+        normalized["play_agent_openrouter_provider"] = (
+            normalized.get("small_openrouter_provider")
+            or normalized.get("openrouter_provider")
+            or ""
+        )
+    if "openrouter_provider" not in normalized:
+        normalized["openrouter_provider"] = normalized.get("small_openrouter_provider") or ""
 
     # Per-model Max Tokens
     if "small_max_tokens" not in normalized:
@@ -765,24 +794,29 @@ class SettingsPayload(BaseModel):
     small_max_tokens: int = DEFAULT_SMALL_MAX_TOKENS
     small_enable_thinking: bool = False
     small_max_thinking_tokens: int = 1024
+    small_openrouter_provider: Optional[str] = ""
     
     complex_model: str
     complex_model_provider: str
     complex_max_tokens: int = DEFAULT_COMPLEX_MAX_TOKENS
     complex_enable_thinking: bool = False
     complex_max_thinking_tokens: int = 1024
+    complex_openrouter_provider: Optional[str] = ""
     
     generator_model: Optional[str] = ""
     generator_model_provider: Optional[str] = "openai"
     generator_max_tokens: int = DEFAULT_GENERATOR_MAX_TOKENS
     generator_enable_thinking: bool = False
     generator_max_thinking_tokens: int = 1024
+    generator_openrouter_provider: Optional[str] = ""
 
     play_agent_model: Optional[str] = ""
     play_agent_model_provider: Optional[str] = "openai"
     play_agent_monkey_mode: bool = False
+    play_agent_openrouter_provider: Optional[str] = ""
     
     preferred_provider: str # Legacy
+    openrouter_provider: Optional[str] = ""
     ollama_url: Optional[str] = None
     minimax_url: Optional[str] = None
 
@@ -1158,6 +1192,7 @@ class TestLLMPayload(BaseModel):
     model: str
     provider: str
     ollama_url: Optional[str] = None
+    openrouter_provider: Optional[str] = None
 
 @router.post("/test-llm")
 async def test_llm_connection(
@@ -1168,10 +1203,16 @@ async def test_llm_connection(
     """Tests the connection to an LLM provider with a simple prompt and measures latency."""
     user = await _resolve_global_settings_owner(db, current_user)
 
-    # Inject temporary ollama_url if provided
+    # Inject temporary ollama_url or openrouter_provider if provided
+    old_settings = user.llm_settings or {}
+    temp_settings = dict(old_settings)
     if payload.provider == "ollama" and payload.ollama_url:
-        old_settings = user.llm_settings or {}
-        user.llm_settings = {**old_settings, "ollama_url": payload.ollama_url}
+        temp_settings["ollama_url"] = payload.ollama_url
+    if payload.provider == "openrouter" and payload.openrouter_provider is not None:
+        temp_settings["small_openrouter_provider"] = payload.openrouter_provider
+        temp_settings["complex_openrouter_provider"] = payload.openrouter_provider
+        temp_settings["openrouter_provider"] = payload.openrouter_provider
+    user.llm_settings = temp_settings
 
     import time
     try:

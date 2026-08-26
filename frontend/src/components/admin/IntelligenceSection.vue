@@ -31,7 +31,7 @@ const missingProviders = computed(() => {
 
 const emit = defineEmits<{
   (e: 'save', payload: any): void
-  (e: 'test', payload: { key: string, model: string, provider: string }): void
+  (e: 'test', payload: { key: string, model: string, provider: string, openrouterProvider?: string }): void
   (e: 'refreshOllamaModels', ollamaUrl?: string): void
   (e: 'refreshMinimaxModels', minimaxUrl?: string): void
   (e: 'refreshLlmModels', provider: string, apiBase?: string): void
@@ -190,7 +190,7 @@ const handleSave = () => {
             <i class="ra ra-gear-hammer"></i> Simple Model (Mechanics)
           </h3>
           <button 
-            @click="emit('test', { key: 'simple', model: localForm.small_model, provider: localForm.small_model_provider })"
+            @click="emit('test', { key: 'simple', model: localForm.small_model, provider: localForm.small_model_provider, openrouterProvider: localForm.small_openrouter_provider })"
             class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
           >
             <i class="ra ra-gear-hammer"></i> Test Connection
@@ -238,6 +238,12 @@ const handleSave = () => {
           <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
           <input v-model="localForm.small_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
         </div>
+
+        <div v-if="localForm.small_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
+          <input v-model="localForm.small_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. "Together", "alibaba", "grok"). Disables fallbacks to unlisted providers.</p>
+        </div>
         <p class="text-xxs text-slate-500">Efficient logic for rule enforcement and mechanical reasoning (Pass 1).</p>
 
         <div v-if="testResults.simple" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.simple.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.simple.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
@@ -275,7 +281,7 @@ const handleSave = () => {
             <i class="ra ra-feather-wing"></i> Complex Model (Narratives & World Gen)
           </h3>
           <button 
-            @click="emit('test', { key: 'complex', model: localForm.complex_model, provider: localForm.complex_model_provider })"
+            @click="emit('test', { key: 'complex', model: localForm.complex_model, provider: localForm.complex_model_provider, openrouterProvider: localForm.complex_openrouter_provider })"
             class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
           >
             <i class="ra ra-gear-hammer"></i> Test Connection
@@ -323,6 +329,12 @@ const handleSave = () => {
           <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
           <input v-model="localForm.complex_model" type="text" maxlength="100" placeholder="e.g. gpt-4o" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
         </div>
+
+        <div v-if="localForm.complex_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
+          <input v-model="localForm.complex_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. "Together", "alibaba", "grok"). Disables fallbacks to unlisted providers.</p>
+        </div>
         <p class="text-xxs text-slate-500">Rich storytelling, complex world-building, and high-fidelity prose (Pass 2).</p>
 
         <div v-if="testResults.complex" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.complex.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.complex.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
@@ -360,7 +372,7 @@ const handleSave = () => {
             <i class="ra ra-world"></i> Adventure Generator Model
           </h3>
           <button 
-            @click="emit('test', { key: 'generator', model: localForm.generator_model, provider: localForm.generator_model_provider })"
+            @click="emit('test', { key: 'generator', model: localForm.generator_model, provider: localForm.generator_model_provider, openrouterProvider: localForm.generator_openrouter_provider })"
             class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
           >
             <i class="ra ra-gear-hammer"></i> Test Connection
@@ -408,6 +420,12 @@ const handleSave = () => {
           <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
           <input v-model="localForm.generator_model" type="text" maxlength="100" placeholder="e.g. gpt-4o" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
         </div>
+
+        <div v-if="localForm.generator_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
+          <input v-model="localForm.generator_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. "Together", "alibaba", "grok"). Disables fallbacks to unlisted providers.</p>
+        </div>
         <p class="text-xxs text-slate-500">Highest reasoning models for creating complete adventures, logic blueprints and complex manifests (World Generation).</p>
 
         <div v-if="testResults.generator" :class="['p-4 rounded-xl text-sm font-medium border animate-fade-in', testResults.generator.status === 'loading' ? 'bg-slate-800 border-slate-700 text-slate-300' : testResults.generator.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400']">
@@ -445,7 +463,7 @@ const handleSave = () => {
             <i class="ra ra-player"></i> Play Agent Model (Autonomous Gameplay)
           </h3>
           <button
-            @click="emit('test', { key: 'play_agent', model: localForm.play_agent_model, provider: localForm.play_agent_model_provider })"
+            @click="emit('test', { key: 'play_agent', model: localForm.play_agent_model, provider: localForm.play_agent_model_provider, openrouterProvider: localForm.play_agent_openrouter_provider })"
             class="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-xs font-bold rounded-lg border border-purple-600/30 transition-all flex items-center gap-2"
           >
             <i class="ra ra-gear-hammer"></i> Test Connection
@@ -492,6 +510,12 @@ const handleSave = () => {
         <div v-if="isModelCustom(localForm.play_agent_model, localForm.play_agent_model_provider) || localForm.play_agent_model === ''" class="space-y-2 animate-fade-in">
           <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Custom Model ID</label>
           <input v-model="localForm.play_agent_model" type="text" maxlength="100" placeholder="e.g. gpt-4o-mini" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+        </div>
+
+        <div v-if="localForm.play_agent_model_provider === 'openrouter'" class="space-y-2 animate-fade-in">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">OpenRouter Provider Routing (Optional)</label>
+          <input v-model="localForm.play_agent_openrouter_provider" type="text" maxlength="100" placeholder="e.g. Together, Grok, Alibaba" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50 font-mono" />
+          <p class="text-xxs text-slate-500">Specify host providers in order of preference (e.g. "Together", "alibaba", "grok"). Disables fallbacks to unlisted providers.</p>
         </div>
 
         <p class="text-xxs text-slate-500">Used when Autonomous Agent Mode is active. Falls back to the Simple Model if left empty.</p>

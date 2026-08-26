@@ -45,6 +45,7 @@ const emit = defineEmits<{
     ai: number,
     structural: number,
   ): void
+  (e: 'fix-applied'): void
 }>()
 
 const findings = ref<AnnotatedValidationFinding[]>([])
@@ -582,6 +583,7 @@ async function applySelectedFix() {
       } else {
         removeAppliedFinding()
       }
+      emit('fix-applied')
     } else {
       aiFixErrorMessage.value =
         resp.message ||

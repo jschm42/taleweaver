@@ -97,8 +97,8 @@ const handleSaveGameSettings = async (payload: any) => {
 
 // ============ TEST HANDLERS ============
 
-const handleTestLlm = async (key: string, model: string, provider: string) => {
-  await testService.testLlm(key, model, provider, settingsService.llmForm.value.ollama_url)
+const handleTestLlm = async (key: string, model: string, provider: string, openrouterProvider?: string) => {
+  await testService.testLlm(key, model, provider, settingsService.llmForm.value.ollama_url, openrouterProvider)
 }
 
 const handleTestVision = async (payload: any) => {
@@ -284,7 +284,7 @@ onMounted(() => {
           :is-loading-llm-models="settingsService.isLoadingLlmModels.value"
           :test-results="testService.testResults.value"
           @save="handleSaveLlmSettings"
-          @test="({ key, model, provider }) => handleTestLlm(key, model, provider)"
+          @test="({ key, model, provider, openrouterProvider }) => handleTestLlm(key, model, provider, openrouterProvider)"
           @refresh-ollama-models="handleRefreshOllamaModels"
           @refresh-minimax-models="handleRefreshMinimaxModels"
           @refresh-llm-models="handleRefreshLlmModels"
