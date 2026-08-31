@@ -258,11 +258,13 @@ const handleSave = () => {
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
           <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+            <div class="flex items-center h-6">
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+            </div>
             <input v-model.number="localForm.small_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
           </div>
           <div class="space-y-2">
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between h-6">
               <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
               <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
                 <input type="checkbox" v-model="localForm.small_enable_thinking" class="sr-only peer">
@@ -349,11 +351,13 @@ const handleSave = () => {
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
           <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+            <div class="flex items-center h-6">
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+            </div>
             <input v-model.number="localForm.complex_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
           </div>
           <div class="space-y-2">
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between h-6">
               <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
               <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
                 <input type="checkbox" v-model="localForm.complex_enable_thinking" class="sr-only peer">
@@ -440,11 +444,13 @@ const handleSave = () => {
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-900">
           <div class="space-y-2">
-            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+            <div class="flex items-center h-6">
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Max Tokens</label>
+            </div>
             <input v-model.number="localForm.generator_max_tokens" type="number" step="1024" min="128" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-500/50" />
           </div>
           <div class="space-y-2">
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between h-6">
               <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Thinking Mode</label>
               <label class="relative inline-flex items-center cursor-pointer scale-75 origin-right">
                 <input type="checkbox" v-model="localForm.generator_enable_thinking" class="sr-only peer">
