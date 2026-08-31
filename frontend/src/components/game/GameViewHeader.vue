@@ -82,7 +82,7 @@ const hasLicenseInfo = computed(() => {
         <button
           @click="emit('toggle-view-mode')"
           class="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-amber-500/10 hover:border-amber-500/40 text-amber-300 hover:text-amber-200 transition-all duration-300 backdrop-blur-md shadow-xl group shrink-0"
-          :title="props.viewMode === 'classic' ? 'Switch to Immersive Comic Mode' : 'Switch to Classic Mode'"
+          :title="props.viewMode === 'classic' ? 'Switch to Immersive View' : 'Switch to Classic Mode'"
         >
           <Sparkles class="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
         </button>
@@ -119,7 +119,7 @@ const hasLicenseInfo = computed(() => {
     </div>
 
     <div class="z-20 shrink-0 sm:w-1/4 flex justify-end order-2 sm:order-3 col-span-1 justify-self-end w-full sm:w-auto">
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 sm:gap-3">
         <div
           v-if="props.isCheckpointSaving"
           class="inline-flex items-center gap-2 rounded-full border border-emerald-400/35 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-emerald-300 animate-pulse"
@@ -128,6 +128,17 @@ const hasLicenseInfo = computed(() => {
           Saving...
         </div>
         <GameClockWidget :game-time="props.gameTime" :clock-tick="props.clockTick" />
+
+        <!-- View Switcher Button (Switch to Immersive View) -->
+        <button
+          type="button"
+          @click="emit('toggle-view-mode')"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/60 hover:border-amber-400 hover:bg-amber-500/10 text-slate-300 hover:text-white transition-all text-xs font-black uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer backdrop-blur-md"
+          title="Switch to Immersive Stage View"
+        >
+          <Sparkles class="w-3.5 h-3.5 text-amber-400" />
+          <span class="hidden sm:inline">Immersive View</span>
+        </button>
       </div>
     </div>
 

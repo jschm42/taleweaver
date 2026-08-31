@@ -1492,16 +1492,6 @@ watch(
 
     <!-- CLASSIC RPG PANEL VIEW MODE -->
     <template v-else>
-      <!-- Floating View Switcher to jump to Immersive Mode -->
-      <button
-        @click="toggleGameViewMode"
-        class="fixed top-3 right-4 z-40 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 hover:border-amber-400 hover:bg-amber-500/10 text-slate-200 hover:text-amber-300 transition-all text-xs font-black uppercase tracking-wider shadow-xl flex items-center gap-1.5 cursor-pointer backdrop-blur-md"
-        title="Switch to Immersive Comic Mode"
-      >
-        <Sparkles class="w-3.5 h-3.5 text-amber-400" />
-        <span class="hidden sm:inline">Comic View</span>
-      </button>
-
       <!-- Full-Width Adventure Background (Top Third) -->
       <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
         <img 
@@ -1542,18 +1532,27 @@ watch(
         @toggle-view-mode="toggleGameViewMode"
       />
 
-      <!-- Floating Header Toggle (when collapsed) -->
-      <button 
-        v-if="isHeaderCollapsed"
-        @click="isHeaderCollapsed = false"
-        class="absolute top-0 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 rounded-b-xl border border-t-0 border-slate-800 bg-slate-900/90 text-slate-400 hover:text-slate-200 transition-all hover:bg-slate-800 shadow-lg flex items-center justify-center gap-1 cursor-pointer animate-fade-in"
-        title="Show Header"
-      >
-        <span class="text-[9px] uppercase tracking-widest font-black">Show Header</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      <!-- Floating Controls (when header is collapsed) -->
+      <div v-if="isHeaderCollapsed" class="absolute top-0 right-4 z-40 flex items-center gap-2">
+        <button
+          @click="toggleGameViewMode"
+          class="px-3 py-1.5 rounded-b-xl border border-t-0 border-slate-800 bg-slate-900/90 text-amber-400 hover:text-amber-300 transition-all hover:bg-slate-800 shadow-lg flex items-center gap-1.5 cursor-pointer text-xs font-black uppercase tracking-wider backdrop-blur-md"
+          title="Switch to Immersive View"
+        >
+          <Sparkles class="w-3.5 h-3.5 text-amber-400" />
+          <span class="hidden sm:inline">Immersive View</span>
+        </button>
+        <button 
+          @click="isHeaderCollapsed = false"
+          class="px-4 py-1.5 rounded-b-xl border border-t-0 border-slate-800 bg-slate-900/90 text-slate-400 hover:text-slate-200 transition-all hover:bg-slate-800 shadow-lg flex items-center justify-center gap-1 cursor-pointer backdrop-blur-md"
+          title="Show Header"
+        >
+          <span class="text-[9px] uppercase tracking-widest font-black">Show Header</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
 
       <div v-if="configState.isLoaded && !configState.hasLlmConfig" class="px-12 pt-6">
         <SetupWarningBanner />
