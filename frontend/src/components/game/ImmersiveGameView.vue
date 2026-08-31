@@ -78,25 +78,26 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'send', content: string): void
-  (e: 'openSheet'): void
-  (e: 'openMap'): void
-  (e: 'openQuests'): void
-  (e: 'openChronicles'): void
-  (e: 'openWalkthrough'): void
-  (e: 'toggleViewMode'): void
-  (e: 'npcHover', name: string, event: MouseEvent): void
-  (e: 'npcLeave'): void
-  (e: 'itemHover', item: any, event: MouseEvent): void
-  (e: 'itemLeave'): void
-  (e: 'takeDirect', entity: any): void
-  (e: 'npcContextmenu', entity: any, event: MouseEvent): void
-  (e: 'itemContextmenu', entity: any, event: MouseEvent): void
-  (e: 'selectAction', actionId: string | null): void
-  (e: 'npcClick', name: string): void
-  (e: 'itemClick', item: any): void
-  (e: 'traverseExit', exit: any): void
-  (e: 'switchFlip', entity: any): void
+  send: [content: string]
+  openSheet: []
+  openMap: []
+  openQuests: []
+  openChronicles: []
+  openDebug: []
+  openWalkthrough: []
+  toggleViewMode: []
+  npcHover: [entityOrName: any, event: MouseEvent]
+  npcLeave: []
+  itemHover: [item: any, event: MouseEvent]
+  itemLeave: []
+  takeDirect: [entity: any]
+  npcContextmenu: [entity: any, event: MouseEvent]
+  itemContextmenu: [item: any, event: MouseEvent]
+  selectAction: [actionId: string | null]
+  npcClick: [name: string]
+  itemClick: [item: any]
+  traverseExit: [exit: any]
+  switchFlip: [entity: any]
 }>()
 
 // --- State: Scene Image & Fallbacks ---
@@ -955,18 +956,18 @@ defineExpose({
 
     <!-- 3. MAIN INTERACTIVE STAGE AREA -->
     <div class="relative z-10 flex-grow min-h-0 flex flex-col md:flex-row gap-4 p-4 sm:p-6 overflow-hidden">
-      <!-- 3A. LEFT / SCENE NPC STAGE (Large Comic Portraits with Connected Speaking Pointer) -->
-      <aside class="flex md:flex-col gap-3 shrink-0 overflow-x-auto md:overflow-y-auto md:w-64 lg:w-72 custom-scrollbar no-scrollbar py-1">
+      <!-- 3A. LEFT / SCENE NPC STAGE (Compact 2:3 Vertical Portraits with Overlaid Name) -->
+      <aside class="flex md:flex-col gap-2.5 shrink-0 overflow-x-auto md:overflow-y-auto md:w-40 lg:w-44 custom-scrollbar pr-1 py-1 max-h-full">
         <div
           v-for="npc in npcs"
           :key="npc.id"
-          class="relative group flex flex-col items-center bg-slate-900/90 hover:bg-slate-900 backdrop-blur-md rounded-2xl border-2 transition-all duration-300 p-2.5 shrink-0 w-36 sm:w-44 md:w-full cursor-pointer shadow-[0_8px_20px_rgba(0,0,0,0.6)] active:scale-98"
+          class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-28 sm:w-32 md:w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
           :class="[
             isNpcSpeaking(npc)
-              ? 'border-amber-400/95 shadow-[0_0_30px_rgba(251,191,36,0.55)] ring-2 ring-amber-400/50'
+              ? 'border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.6)] ring-2 ring-amber-400/60'
               : npc.id === 'PLAYER'
-                ? 'border-emerald-500/60 hover:border-emerald-400'
-                : 'border-slate-700/60 hover:border-cyan-400/60'
+                ? 'border-emerald-500/70 hover:border-emerald-400'
+                : 'border-slate-700/70 hover:border-cyan-400/80'
           ]"
           @click="handleNpcClick(npc)"
           @mouseenter="emit('npcHover', getEntityForHover(npc), $event)"
@@ -974,58 +975,42 @@ defineExpose({
           @mouseleave="emit('npcLeave')"
           @contextmenu.prevent="emit('npcContextmenu', npc, $event)"
         >
+          <!-- Full 2:3 Character Portrait -->
+          <img
+            v-if="npc.image_url && showImage(npc.image_url)"
+            :src="getImageUrl(npc.image_url, { thumbnail: true })"
+            :alt="npc.name"
+            class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
+            :class="{ 'grayscale opacity-50': npc.hp === 0 }"
+            @error="onImageLoadError($event, npc.image_url)"
+          />
+          <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 text-slate-600">
+            <i :class="['ra text-4xl mb-1', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
+          </div>
+
           <!-- Active Speaker Badge -->
-          <div v-if="isNpcSpeaking(npc)" class="absolute -top-2.5 right-2 z-20 px-2 py-0.5 rounded-full bg-amber-500 text-black text-[9px] font-black uppercase tracking-wider shadow-md animate-bounce">
+          <div v-if="isNpcSpeaking(npc)" class="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[8px] font-black uppercase tracking-wider shadow-md animate-bounce">
             Speaking
           </div>
 
           <!-- Hero Tag for Player -->
-          <div v-else-if="npc.id === 'PLAYER'" class="absolute -top-2.5 left-2 z-20 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[9px] font-black uppercase tracking-wider">
+          <div v-else-if="npc.id === 'PLAYER'" class="absolute top-2 left-2 z-20 px-1.5 py-0.5 rounded-full bg-emerald-500/80 text-white backdrop-blur-md border border-emerald-300/40 text-[8px] font-black uppercase tracking-wider shadow-md">
             You
           </div>
 
-          <!-- Large Character Portrait -->
-          <div class="relative w-full h-28 sm:h-36 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center mb-2 shadow-inner">
-            <img
-              v-if="npc.image_url && showImage(npc.image_url)"
-              :src="getImageUrl(npc.image_url, { thumbnail: true })"
-              :alt="npc.name"
-              class="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
-              :class="{ 'grayscale opacity-50': npc.hp === 0 }"
-              @error="(e) => {
-                const target = e.target as HTMLImageElement
-                if (target.src.includes('_thumb')) {
-                  target.src = getOriginalImageUrl(npc.image_url)
-                } else {
-                  handleImageError(npc.image_url)
-                }
-              }"
-            />
-            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-slate-950 text-slate-600">
-              <i :class="['ra text-4xl mb-1', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
-            </div>
-
-            <!-- Defeated Ribbon -->
-            <div v-if="npc.hp === 0" class="absolute inset-x-0 bottom-2 bg-red-600/90 text-white text-[9px] font-black uppercase tracking-widest text-center py-0.5 shadow-md">
-              Defeated
-            </div>
+          <!-- Defeated Ribbon -->
+          <div v-if="npc.hp === 0" class="absolute inset-x-0 top-1/2 -translate-y-1/2 bg-red-600/90 text-white text-[9px] font-black uppercase tracking-widest text-center py-0.5 shadow-xl z-20">
+            Defeated
           </div>
 
-          <!-- Character Details -->
-          <div class="w-full text-center">
-            <h4 class="text-xs sm:text-sm font-black text-slate-100 group-hover:text-amber-300 transition-colors uppercase tracking-tight truncate">
+          <!-- Name & Role Overlay with Gradient & Strong Shadow -->
+          <div class="absolute inset-x-0 bottom-0 pt-8 pb-2 px-2 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col items-center text-center pointer-events-none z-10">
+            <h4 class="text-[11px] sm:text-xs font-black text-white group-hover:text-amber-300 transition-colors uppercase tracking-wider drop-shadow-[0_2px_3px_rgba(0,0,0,1)] truncate w-full">
               {{ npc.name }}
             </h4>
-            <span v-if="npc.role" class="block text-[10px] font-semibold text-slate-400/80 uppercase tracking-wider truncate">
+            <span v-if="npc.role" class="text-[9px] font-bold text-slate-300/90 uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate w-full mt-0.5">
               {{ npc.role }}
             </span>
-          </div>
-
-          <!-- HP / Stamina / Mana Stat Bars -->
-          <div v-if="props.mode !== 'chat' && (npc.hp != null || npc.stamina != null || npc.mana != null)" class="w-full mt-2 flex flex-col gap-1 px-1">
-            <StatBar v-if="npc.hp != null" :value="npc.hp" :max="npc.max_hp" color="crimson" size="xs" />
-            <StatBar v-if="npc.stamina != null" :value="npc.stamina" :max="npc.max_stamina" color="emerald" size="xs" />
-            <StatBar v-if="npc.mana != null && props.mode === 'rpg'" :value="npc.mana" :max="npc.max_mana" color="sapphire" size="xs" />
           </div>
         </div>
       </aside>
