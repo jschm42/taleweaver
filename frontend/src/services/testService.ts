@@ -10,6 +10,22 @@ import { api } from '@/composables/useApi'
  * Test results are stored with status (loading/success/error), message,
  * and optionally image_url for vision tests or audio playback for TTS.
  */
+function extractErrorMessage(err: any, defaultMsg = 'Test failed.'): string {
+  if (err?.body?.message && typeof err.body.message === 'string') {
+    return err.body.message
+  }
+  if (err?.body?.detail && typeof err.body.detail === 'string') {
+    return err.body.detail
+  }
+  if (err?.message && typeof err.message === 'string' && err.message !== 'Failed to fetch') {
+    return err.message
+  }
+  if (err?.message === 'Failed to fetch') {
+    return 'Could not connect to TaleWeaver backend server.'
+  }
+  return defaultMsg
+}
+
 class TestService {
   // ============ STATE ============
   testResults = ref<
@@ -48,7 +64,7 @@ class TestService {
       }
     } catch (err: any) {
       console.error('[TestService] TTS test failed:', err)
-      this.testResults.value['tts'] = { status: 'error', message: err.message || 'Test failed.' }
+      this.testResults.value['tts'] = { status: 'error', message: extractErrorMessage(err, 'TTS test failed.') }
     }
   }
 
@@ -73,7 +89,7 @@ class TestService {
       }
     } catch (err) {
       console.error(`[TestService] LLM test (${key}) failed:`, err)
-      this.testResults.value[key] = { status: 'error', message: 'Test failed.' }
+      this.testResults.value[key] = { status: 'error', message: extractErrorMessage(err, 'LLM connection test failed.') }
     }
   }
 
@@ -130,7 +146,7 @@ class TestService {
       }
     } catch (err) {
       console.error(`[TestService] Vision test (${key}) failed:`, err)
-      this.testResults.value[key] = { status: 'error', message: 'Test failed.' }
+      this.testResults.value[key] = { status: 'error', message: extractErrorMessage(err, 'Image generation test failed.') }
     }
   }
 

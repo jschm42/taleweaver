@@ -33,8 +33,14 @@ class EncryptionUtil:
         """Decrypt an encrypted API key."""
         if not encrypted_key:
             return ""
-        decrypted = self._fernet.decrypt(encrypted_key.encode('utf-8'))
-        return decrypted.decode('utf-8')
+        try:
+            decrypted = self._fernet.decrypt(encrypted_key.encode('utf-8'))
+            return decrypted.decode('utf-8')
+        except Exception as e:
+            logger.error(f"Failed to decrypt key: {e}")
+            raise ValueError(
+                "Failed to decrypt stored API key. The ENCRYPTION_KEY in .env may have changed since the key was saved."
+            ) from e
 
 # Global instance for easy usage
 encryption_util = EncryptionUtil()

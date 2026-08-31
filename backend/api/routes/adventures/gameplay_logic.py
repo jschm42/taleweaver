@@ -166,16 +166,41 @@ def _is_invalid_llm_payload_error(exc: Exception) -> bool:
 
 
 def _friendly_llm_error_message(exc: Exception) -> str | None:
+    from backend.core.error_diagnostics import diagnose_provider_error
+    lower_text = str(exc or "").lower()
+
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
-        return "The Game Master is busy right now. Please try again in a moment."
+        return "The Game Master is busy (rate limit or quota reached). Please check your account credits or try again in a moment."
     if _is_timeout_error(exc):
         return "The Game Master took too long to respond. Please try again."
     if _is_service_unavailable_error(exc):
         return "The Game Master is temporarily unavailable. Please try again shortly."
     if _is_invalid_llm_payload_error(exc):
         return "The selected model returned an invalid response. Please try again or choose a different model."
+    
+    # Specific actionable provider errors (Auth, ENCRYPTION_KEY, 404 Model, Connection)
+    if any(
+        kw in lower_text
+        for kw in (
+            "encryption_key",
+            "invalidtoken",
+            "invalidsignature",
+            "failed to decrypt",
+            "no api key",
+            "authenticationerror",
+            "invalid_api_key",
+            "incorrect api key",
+            "unauthorized",
+            "notfounderror",
+            "no endpoints found",
+            "model not found",
+            "connection refused",
+        )
+    ) or getattr(exc, "status_code", None) in (401, 404):
+        return diagnose_provider_error(exc)
+
     return None
 
 
@@ -184,6 +209,13 @@ def _friendly_llm_unexpected_error_message() -> str:
 
 
 def _llm_error_type(exc: Exception) -> str | None:
+    lower_text = str(exc or "").lower()
+    if any(kw in lower_text for kw in ("encryption_key", "invalidtoken", "invalidsignature", "failed to decrypt")):
+        return "encryption_error"
+    if any(kw in lower_text for kw in ("authenticationerror", "invalid_api_key", "unauthorized")) or getattr(exc, "status_code", None) == 401:
+        return "auth_error"
+    if any(kw in lower_text for kw in ("notfounderror", "no endpoints found", "model not found")) or getattr(exc, "status_code", None) == 404:
+        return "model_not_found"
     if _is_token_limit_error(exc):
         return "token_limit"
     if _is_rate_limit_error(exc):

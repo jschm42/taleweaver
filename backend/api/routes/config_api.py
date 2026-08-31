@@ -29,6 +29,7 @@ TTS_MODEL_ALIASES = {
 from backend.core.auth import get_current_admin, get_current_user
 from backend.core.config import settings
 from backend.core.database import get_db
+from backend.core.error_diagnostics import diagnose_provider_error
 from backend.core.llm_router import GameMasterLLM
 from backend.core.models_config import (
     IMAGE_PROVIDERS,
@@ -1227,31 +1228,13 @@ async def test_llm_connection(
         latency = round(end_time - start_time, 2)
         return {"status": "success", "message": response, "response_time": latency}
     except Exception as exc:
-        err_text = str(exc or "").lower()
-        auth_tokens = (
-            "invalid authentication",
-            "authenticationerror",
-            "invalid_api_key",
-            "incorrect api key",
-            "unauthorized",
-            "401",
-        )
-        if any(token in err_text for token in auth_tokens):
-            logger.warning(
-                "LLM connection test authentication failed for provider '%s': %s",
-                payload.provider,
-                exc,
-            )
-            return {
-                "status": "error",
-                "message": f"Authentication failed for provider '{payload.provider}'. Please verify the API key.",
-            }
-
-        return _route_error_response(
-            "LLM connection test",
-            "Connection test failed. Check provider settings and server logs.",
+        diag = diagnose_provider_error(exc, provider=payload.provider, model=payload.model, context="llm")
+        logger.warning(
+            "LLM connection test failed for provider '%s': %s",
+            payload.provider,
             exc,
         )
+        return {"status": "error", "message": diag}
 
 class TestVisionPayload(BaseModel):
     model: str
@@ -1281,8 +1264,12 @@ async def test_vision_connection(
         api_key = settings.get_env_api_key(provider_key)
         if not api_key:
             if not user.encrypted_api_keys or provider_key not in user.encrypted_api_keys:
-                return {"status": "error", "message": f"No API key for {payload.provider}"}
-            api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider_key])
+                return {"status": "error", "message": f"No API key configured for {payload.provider}."}
+            try:
+                api_key = encryption_util.decrypt_key(user.encrypted_api_keys[provider_key])
+            except Exception as dec_exc:
+                diag = diagnose_provider_error(dec_exc, provider=payload.provider, context="vision")
+                return {"status": "error", "message": diag}
 
     try:
         test_dir = _safe_data_path("scratch", "test_connection")
@@ -1331,12 +1318,10 @@ async def test_vision_connection(
             return {"status": "success", "message": "Image generation successful!", "image_url": img_url}
         else:
             return {"status": "error", "message": "Image generation failed."}
-    except (ValueError, RuntimeError, TypeError) as exc:
-        return _route_error_response(
-            "Vision connection test",
-            "Image connection test failed. Check provider settings and server logs.",
-            exc,
-        )
+    except Exception as exc:
+        diag = diagnose_provider_error(exc, provider=payload.provider, model=payload.model, context="vision")
+        logger.warning("Vision connection test failed for provider '%s': %s", payload.provider, exc)
+        return {"status": "error", "message": diag}
 
 @router.post("/test-tts")
 async def test_tts_connection(
@@ -1352,10 +1337,14 @@ async def test_tts_connection(
     if not api_key and user.encrypted_api_keys:
         enc_key = user.encrypted_api_keys.get(provider)
         if enc_key:
-            api_key = encryption_util.decrypt_key(enc_key)
+            try:
+                api_key = encryption_util.decrypt_key(enc_key)
+            except Exception as dec_exc:
+                diag = diagnose_provider_error(dec_exc, provider=provider, context="tts")
+                return {"status": "error", "message": diag}
 
     if not api_key:
-        raise HTTPException(status_code=400, detail=f"{provider.capitalize()} API Key not configured for TTS.")
+        return {"status": "error", "message": f"No API key configured for TTS provider '{provider.capitalize()}'."}
 
     test_text = "Tale Weaver connection test successful! The journey begins now."
     
@@ -1380,12 +1369,10 @@ async def test_tts_connection(
             "status": "error",
             "message": "The selected TTS model is currently unavailable. Please choose a different model and try again.",
         }
-    except (ValueError, RuntimeError, TypeError) as exc:
-        return _route_error_response(
-            "TTS connection test",
-            "TTS connection test failed. Check provider settings and server logs.",
-            exc,
-        )
+    except Exception as exc:
+        diag = diagnose_provider_error(exc, provider=provider, context="tts")
+        logger.warning("TTS connection test failed for provider '%s': %s", provider, exc)
+        return {"status": "error", "message": diag}
 
 
 @router.post("/image-styles")
