@@ -2197,10 +2197,32 @@ class GameTurnManager:
                             break
                     if referenced:
                         break
+
+                # If strict string matching fails (e.g. due to translations/synonyms),
+                # but the Game Master LLM explicitly decided to grant the combined item
+                # as a result of this action, we trust the LLM and consider it intended.
+                if not referenced:
+                    llm_granted = False
+                    if event.new_inventory_items:
+                        for item in event.new_inventory_items:
+                            iid = getattr(item, "id", None) or getattr(item, "entity_id", None)
+                            if iid and str(iid).strip().upper() == e.id.upper():
+                                llm_granted = True
+                                break
+                    if not llm_granted and event.spawned_items:
+                        for item in event.spawned_items:
+                            iid = getattr(item, "id", None) or getattr(item, "entity_id", None)
+                            if iid and str(iid).strip().upper() == e.id.upper():
+                                llm_granted = True
+                                break
+                    if llm_granted:
+                        referenced = True
+
                 if not referenced:
                     continue
 
                 # CONSTRUCT — consume ingredients, reveal result.
+                all_in_inventory = True
                 for ing_upper in needed_upper:
                     if ing_upper in inventory_id_lookup:
                         if event.removed_inventory_item_ids is None:
@@ -2210,10 +2232,24 @@ class GameTurnManager:
                             event.removed_inventory_item_ids.append(original)
                     else:
                         self._upsert_entity_update(event, ing_upper, is_hidden=True)
+                        all_in_inventory = False
                     consumed.add(ing_upper)
 
                 self._upsert_entity_update(event, e.id, is_hidden=False)
-                self._upsert_entity_movement(event, e.id, current_scene_id)
+                if all_in_inventory:
+                    from backend.engine.rule_engine import InventoryItem
+                    if event.new_inventory_items is None:
+                        event.new_inventory_items = []
+                    # Check if already added
+                    if not any(i.id == e.id for i in event.new_inventory_items):
+                        event.new_inventory_items.append(InventoryItem(
+                            id=e.id, 
+                            name=e.name or "Unknown Item",
+                            description=e.description,
+                            item_type=e.item_type
+                        ))
+                else:
+                    self._upsert_entity_movement(event, e.id, current_scene_id)
                 constructed_this_turn.add(e.id.upper())
 
                 ing_names: list[str] = []
