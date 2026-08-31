@@ -661,17 +661,10 @@ const activeSpeakers = computed<Set<string>>(() => {
   const speakers = new Set<string>()
   if (!activeTurn.value) return speakers
   for (const d of activeTurn.value.dialogues) {
+    if (d.isPlayer) continue
     if (d.speaker) speakers.add(d.speaker.toLowerCase())
     if (d.speakerEntity?.id) speakers.add(String(d.speakerEntity.id).toLowerCase())
     if (d.speakerEntity?.name) speakers.add(String(d.speakerEntity.name).toLowerCase())
-    if (d.target) speakers.add(d.target.toLowerCase())
-    if (d.targetEntity?.id) speakers.add(String(d.targetEntity.id).toLowerCase())
-  }
-  if (activeTurn.value.userTargetName) {
-    speakers.add(activeTurn.value.userTargetName.toLowerCase())
-  }
-  if (activeTurn.value.userTargetEntity?.id) {
-    speakers.add(String(activeTurn.value.userTargetEntity.id).toLowerCase())
   }
   return speakers
 })
@@ -685,7 +678,7 @@ function isNpcSpeaking(npc: any): boolean {
 
 const npcs = computed(() => {
   const worldNpcs = (props.entities || [])
-    .filter((e) => e.entity_type === 'NPC')
+    .filter((e) => String(e.entity_type || e.type || '').toUpperCase() === 'NPC')
     .map((e) => {
       const meta = resolveNpcMetadata(e.name) || resolveNpcMetadata(e.id)
       return {
@@ -1175,8 +1168,12 @@ defineExpose({
             class="group flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-400/60 text-slate-200 hover:text-white backdrop-blur-md transition-all shadow-lg cursor-pointer active:scale-95"
             @click="emit('traverseExit', exit)"
           >
-            <component
-              :is="exit.is_locked ? Lock : DoorOpen"
+            <Lock
+              v-if="exit.is_locked"
+              class="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform"
+            />
+            <DoorOpen
+              v-else
               class="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform"
             />
             <span class="text-xs font-bold uppercase tracking-wider truncate max-w-[8rem]">{{ exit.label || 'Exit' }}</span>
