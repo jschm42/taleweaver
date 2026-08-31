@@ -795,13 +795,10 @@ function insertSayCommand() {
   if (!inputText.value.startsWith('/say ')) {
     inputText.value = '/say ' + inputText.value
   }
-  inputEl.value?.focus()
-  const len = inputText.value.length
-  inputEl.value?.setSelectionRange(len, len)
   void nextTick(() => {
     inputEl.value?.focus()
-    const pos = inputText.value.length
-    inputEl.value?.setSelectionRange(pos, pos)
+    const len = inputText.value.length
+    inputEl.value?.setSelectionRange(len, len)
   })
 }
 
@@ -926,12 +923,12 @@ function handleGlobalKeyup(e: KeyboardEvent) {
 }
 
 onMounted(() => {
-  window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('keydown', handleGlobalKeydown, { capture: true })
   window.addEventListener('keyup', handleGlobalKeyup)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('keydown', handleGlobalKeydown, { capture: true })
   window.removeEventListener('keyup', handleGlobalKeyup)
   if (whisperStatusTimer) clearInterval(whisperStatusTimer)
 })
