@@ -2,7 +2,7 @@
 import GameQuestTracker from '@/components/game/GameQuestTracker.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import LicenseInfoPopup from '@/components/common/LicenseInfoPopup.vue'
-import { FileText, History, PenLine, ScrollText } from 'lucide-vue-next'
+import { FileText, History, PenLine, ScrollText, Sparkles } from 'lucide-vue-next'
 import { ref, computed } from 'vue'
 
 const props = defineProps<{
@@ -18,6 +18,7 @@ const props = defineProps<{
   debugMode?: boolean
   isCheckpointSaving?: boolean
   collapsed?: boolean
+  viewMode?: 'immersive' | 'classic'
 }>()
 
 const emit = defineEmits<{
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   (e: 'open-chronicles'): void
   (e: 'collapse'): void
   (e: 'hide-quest'): void
+  (e: 'toggle-view-mode'): void
 }>()
 
 const handleBack = () => {
@@ -75,6 +77,14 @@ const hasLicenseInfo = computed(() => {
           title="Edit Session Note"
         >
           <FileText class="w-5 h-5" />
+        </button>
+
+        <button
+          @click="emit('toggle-view-mode')"
+          class="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-amber-500/10 hover:border-amber-500/40 text-amber-300 hover:text-amber-200 transition-all duration-300 backdrop-blur-md shadow-xl group shrink-0"
+          :title="props.viewMode === 'classic' ? 'Switch to Immersive Comic Mode' : 'Switch to Classic Mode'"
+        >
+          <Sparkles class="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
         </button>
       </div>
 

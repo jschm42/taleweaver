@@ -20,6 +20,7 @@ import GameItemsPanel from '@/components/game/GameItemsPanel.vue'
 import GameWorldMemoryPanel from '@/components/game/GameWorldMemoryPanel.vue'
 import GameViewHeader from '@/components/game/GameViewHeader.vue'
 import GameDialogPanel from '@/components/game/GameDialogPanel.vue'
+import ImmersiveGameView from '@/components/game/ImmersiveGameView.vue'
 import FightDialogModal from '@/components/game/FightDialogModal.vue'
 import CombatLootPopup from '@/components/game/CombatLootPopup.vue'
 import ContainerModal from '@/components/game/ContainerModal.vue'
@@ -34,6 +35,7 @@ import CheckpointRestoreConfirmModal from '@/components/game/CheckpointRestoreCo
 import ContextMenu from '@/components/game/ContextMenu.vue'
 import SetupWarningBanner from '@/components/portal/SetupWarningBanner.vue'
 import SessionNoteModal from '@/components/portal/SessionNoteModal.vue'
+import { Sparkles } from 'lucide-vue-next'
 import { api } from '@/composables/useApi'
 import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
@@ -69,6 +71,17 @@ const isHeaderCollapsed = ref(
   (localStorage.getItem('tw_header_collapsed') === null && isMobileViewport.value)
 )
 const isQuestTrackerHidden = ref(localStorage.getItem('tw_quest_tracker_hidden') === 'true')
+const gameViewMode = ref<'immersive' | 'classic'>(
+  (localStorage.getItem('tw_game_view_mode') as any) || 'immersive'
+)
+
+watch(gameViewMode, (val) => {
+  localStorage.setItem('tw_game_view_mode', val)
+})
+
+const toggleGameViewMode = () => {
+  gameViewMode.value = gameViewMode.value === 'immersive' ? 'classic' : 'immersive'
+}
 
 let viewportMql: MediaQueryList | null = null
 const handleViewportChange = (e: MediaQueryListEvent) => {
@@ -1167,6 +1180,7 @@ const {
   fullWorldDebug,
   goBack,
   openDebugInspector,
+  openWalkthroughPanel,
   revealWalkthrough,
   buyHint,
   handlePlayerInput: handlePlayerInputBase,
@@ -1247,6 +1261,7 @@ const {
   ruleMode: computed(() => sheet.value?.rule_enforcement_mode),
   npcMetadata,
   npcEntities: npcs,
+  playerSheet: sheet,
   handlePlayerInput,
   onAction: () => {
     if (showSheet.value) sheetDirty.value = true
@@ -1418,233 +1433,303 @@ watch(
     class="h-full min-h-0 bg-slate-950 flex flex-col font-sans overflow-hidden relative"
     :class="{ 'selection-mode': activeActionId }"
   >
-    <!-- Full-Width Adventure Background (Top Third) -->
-    <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
-      <img 
-        :src="getImageUrl(adventureImage, { thumbnail: true })" 
-        class="w-full h-full object-cover blur-sm brightness-[0.5]"
-        @error="(e) => {
-          const target = e.target as HTMLImageElement
-          if (target.src.includes('_thumb')) {
-            target.src = getOriginalImageUrl(adventureImage)
-          } else {
-            adventureImage = null
-          }
-        }"
-      >
-      <div class="absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/40 to-slate-950"></div>
-      <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
-    </div>
-
-    <GameViewHeader
-      :title="sheet?.adventure_title"
-      :version="sheet?.adventure_version"
-      :creator="sheet?.creator"
-      :copyright="sheet?.copyright"
-      :license="sheet?.license"
-      :license-url="sheet?.license_url"
-      :tracked-quest="displayedTrackedQuest"
-      :game-time="gameTime"
-      :clock-tick="clockTick"
-      :debug-mode="!!sheet?.debug_mode"
-      :is-checkpoint-saving="isCheckpointSaving"
-      :collapsed="isHeaderCollapsed"
-      @back="goBack"
-      @open-chronicles="openChroniclesModal"
-      @edit-note="showNoteModal = true"
-      @collapse="isHeaderCollapsed = true"
-      @hide-quest="isQuestTrackerHidden = true"
-    />
-
-    <!-- Floating Header Toggle (when collapsed) -->
-    <button 
-      v-if="isHeaderCollapsed"
-      @click="isHeaderCollapsed = false"
-      class="absolute top-0 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 rounded-b-xl border border-t-0 border-slate-800 bg-slate-900/90 text-slate-400 hover:text-slate-200 transition-all hover:bg-slate-800 shadow-lg flex items-center justify-center gap-1 cursor-pointer animate-fade-in"
-      title="Show Header"
-    >
-      <span class="text-[9px] uppercase tracking-widest font-black">Show Header</span>
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-      </svg>
-    </button>
-
-    <div v-if="configState.isLoaded && !configState.hasLlmConfig" class="px-12 pt-6">
-      <SetupWarningBanner />
-    </div>
-
-
-    <div class="flex-grow min-h-0 flex overflow-hidden relative">
-      <div
-        v-if="showVoiceUnlockHint"
-        class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-xl border border-amber-400/40 bg-amber-300/10 backdrop-blur-md shadow-lg max-w-[92%]"
-      >
-        <div class="flex items-center gap-3 text-xs text-amber-100">
-          <i class="ra ra-sound-on text-amber-300"></i>
-          <span>Auto-Speak is enabled, but browser policy blocks audio until your first interaction.</span>
-          <button
-            type="button"
-            class="px-2.5 py-1 rounded-md bg-amber-400/20 hover:bg-amber-400/35 border border-amber-300/40 text-amber-50 font-semibold transition-colors"
-            @click="handleUnlockVoice"
-          >
-            Enable voice
-          </button>
-        </div>
-      </div>
-
-      <!-- Backdrop for mobile sidebar drawer -->
-      <div
-        v-if="isMobileSidebarOpen && hasSceneContext"
-        class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 xl:hidden animate-fade-in"
-        @click="isMobileSidebarOpen = false"
-      ></div>
-
-      <!-- Left Sidebar: Scene, inhabitants & Discovery -->
-      <aside
-        v-if="hasSceneContext" 
-        :class="[
-          'bg-slate-900/95 xl:bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex flex-col p-6 shrink-0 overflow-y-auto custom-scrollbar shadow-2xl transition-all duration-300 ease-in-out',
-          // Mobile/Tablet drawer placement & translate behavior
-          isMobileSidebarOpen 
-            ? 'fixed inset-y-6 left-6 z-40 w-72 max-w-[calc(100vw-3rem)] translate-x-0' 
-            : 'fixed inset-y-6 left-6 z-40 w-72 -translate-x-[calc(100%+3rem)] xl:translate-x-0 xl:relative xl:inset-y-0 xl:left-0 xl:m-6'
-        ]"
-      >
-        <GameLocationPanel
-          :scene-id="sheet?.scene_id"
-          :scene-name="sheet?.current_scene"
-          :scene-description="currentSceneDescription"
-          :scene-image="currentSceneImage"
-          :show-image="showImage"
-          :is-debug="!!sheet?.debug_mode"
-          :scene-exits="sceneExits"
-          :map-data="mapData"
-          :nodes="nodes"
-          :is-action-input-blocked="isActionInputBlocked"
-          :exit-traversal-busy="exitTraversalBusy"
-          :exit-unlock-busy="exitUnlockBusy"
-          @hover="(payload, event) => handleHover(payload, event)"
-          @move="mousePos = { x: $event.clientX, y: $event.clientY }"
-          @leave="hoveredEntity = null"
-          @traverse="handleExitClick"
-          @image-error="handleImageError"
-        />
-
-        <GameNpcsPanel
-          :npcs="npcs"
-          :show-image="showImage"
-          :mode="sheet?.rule_enforcement_mode"
-          :is-debug="!!sheet?.debug_mode"
-          @hover="(entity, event) => handleHover({ ...entity, entity_type: 'NPC' }, event)"
-          @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
-          @leave="hoveredEntity = null"
-          @contextmenu="(entity, event) => openContextMenu({ ...entity, entity_type: 'NPC' }, event)"
-          @click="handleEntityClick"
-          @image-error="(path) => handleImageError(path)"
-        />
-
-        <GameItemsPanel
-          :items="items"
-          :show-image="showImage"
-          :is-debug="!!sheet?.debug_mode"
-          @hover="(entity, event) => handleHover(entity, event)"
-          @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
-          @leave="hoveredEntity = null"
-          @contextmenu="(entity, event) => openContextMenu(entity, event)"
-          @click="handleEntityClick"
-          @image-error="(path) => handleImageError(path)"
-          @take-direct="handleTakeDirect"
-        />
-
-        <!-- Switches Panel -->
-        <div v-if="sceneSwitches.length > 0" class="mb-8">
-          <button
-            class="flex items-center gap-1.5 w-full text-left focus:outline-none cursor-pointer mb-4 select-none"
-          >
-            <i class="ra ra-lever text-lime-500 text-sm"></i>
-            <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-lime-500/80">Switches</h3>
-          </button>
-          <div class="flex flex-col gap-2">
-            <div
-              v-for="sw in sceneSwitches"
-              :key="sw.id"
-              class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group transition-all hover:border-lime-500/40 hover:bg-slate-900/50 p-3 flex items-center gap-3 cursor-pointer shadow-lg"
-              @click="!isActionInputBlocked && openSwitchStateModal(sw)"
-              @contextmenu.prevent="!isActionInputBlocked && openSwitchStateModal(sw)"
-              @mouseenter="handleHover(sw, $event)"
-              @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
-              @mouseleave="hoveredEntity = null"
-            >
-              <div class="w-10 h-10 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0">
-                <img
-                  v-if="sw.image_url && showImage(sw.image_url)"
-                  :src="sw.image_url"
-                  class="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
-                  @error="handleImageError(sw.image_url)"
-                />
-                <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
-                  <i class="ra ra-lever text-xl text-lime-400"></i>
-                </div>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-xs font-black text-slate-300 group-hover:text-lime-400 transition-colors uppercase tracking-tight truncate">{{ sw.name }}</p>
-                <p class="text-[10px] text-slate-500 mt-0.5 font-mono truncate" v-if="!!sheet?.debug_mode">ID: {{ sw.id }}</p>
-              </div>
-              <span class="px-2 py-0.5 bg-lime-500/10 border border-lime-500/20 rounded-full text-[9px] font-black text-lime-400 uppercase tracking-wider shrink-0">
-                {{ String(sw.switch_state || (sw.metadata_json?.switch?.initial_state) || '—').toUpperCase() }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <GameWorldMemoryPanel
-          :memories="worldMemories"
-        />
-      </aside>
-
-      <!-- Main Game Area -->
-      <GameDialogPanel
+    <!-- IMMERSIVE COMIC VIEW MODE -->
+    <template v-if="gameViewMode === 'immersive'">
+      <ImmersiveGameView
         ref="dialogPanel"
         :messages="messages"
         :status="status"
-        :input-locked="isActionInputBlocked"
         :npc-metadata="npcMetadata"
         :entities="entities"
-        :inventory-items="inventoryItems"
+        :inventory="inventoryItems"
+        :scene-exits="sceneExits"
+        :scene-switches="sceneSwitches"
+        :items="items"
         :tracked-quest="trackedQuest"
         :status-text="statusText"
         :show-debug-log="showDebugLog"
         :debug-logs="debugLogs"
-        :game-over-reason="gameOverReason"
-        :exp="sheet?.exp || 0"
-        :mode="sheet?.rule_enforcement_mode"
         :inventory-glow="inventoryGlow"
         :map-glow="mapGlow"
         :quest-glow="questGlow"
         :active-action-id="activeActionId"
+        :mode="sheet?.rule_enforcement_mode"
+        :input-locked="isActionInputBlocked"
         :sheet="sheet"
         :game-id="props.id"
+        :current-scene-image="currentSceneImage"
+        :adventure-image="adventureImage"
+        :current-scene-name="sheet?.current_scene"
         :current-scene-description="currentSceneDescription"
         :prompt-suggestions="promptSuggestions"
+        :exp="sheet?.exp || 0"
+        :game-time="gameTime"
+        :clock-tick="clockTick"
+        :is-checkpoint-saving="isCheckpointSaving"
+        :exit-traversal-busy="exitTraversalBusy"
+        :exit-unlock-busy="exitUnlockBusy"
         @send="handlePlayerInput"
         @open-sheet="showSheet = true"
         @open-map="showMap = true"
         @open-quests="showQuests = true"
-        @toggle-sidebar="isMobileSidebarOpen = !isMobileSidebarOpen"
-        @select-action="(id) => activeActionId = id"
-        @npc-hover="handleChatNpcHover"
+        @open-chronicles="openChroniclesModal"
+        @open-debug="openDebugInspector"
+        @open-walkthrough="openWalkthroughPanel"
+        @toggle-view-mode="toggleGameViewMode"
+        @npc-hover="(ent, event) => typeof ent === 'object' && ent !== null ? handleHover(ent, event) : handleChatNpcHover(ent, event)"
         @npc-leave="hoveredEntity = null"
         @npc-click="(name) => handleEntityClick({ name, entity_type: 'NPC' })"
         @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
         @item-leave="hoveredEntity = null"
         @item-click="handleEntityClick"
         @take-direct="handleTakeDirect"
-        @open-debug="openDebugInspector"
-        @toggle-debug-log="(val) => showDebugLog = val"
         @npc-contextmenu="(entity, event) => openContextMenu(entity, event)"
         @item-contextmenu="(entity, event) => openContextMenu(entity, event)"
+        @traverse-exit="handleExitClick"
+        @switch-flip="openSwitchStateModal"
       />
-    </div>
+    </template>
+
+    <!-- CLASSIC RPG PANEL VIEW MODE -->
+    <template v-else>
+      <!-- Floating View Switcher to jump to Immersive Mode -->
+      <button
+        @click="toggleGameViewMode"
+        class="fixed top-3 right-4 z-40 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 hover:border-amber-400 hover:bg-amber-500/10 text-slate-200 hover:text-amber-300 transition-all text-xs font-black uppercase tracking-wider shadow-xl flex items-center gap-1.5 cursor-pointer backdrop-blur-md"
+        title="Switch to Immersive Comic Mode"
+      >
+        <Sparkles class="w-3.5 h-3.5 text-amber-400" />
+        <span class="hidden sm:inline">Comic View</span>
+      </button>
+
+      <!-- Full-Width Adventure Background (Top Third) -->
+      <div v-if="adventureImage" class="absolute inset-x-0 top-0 h-[35vh] pointer-events-none z-0 overflow-hidden">
+        <img 
+          :src="getImageUrl(adventureImage, { thumbnail: true })" 
+          class="w-full h-full object-cover blur-sm brightness-[0.5]"
+          @error="(e) => {
+            const target = e.target as HTMLImageElement
+            if (target.src.includes('_thumb')) {
+              target.src = getOriginalImageUrl(adventureImage)
+            } else {
+              adventureImage = null
+            }
+          }"
+        >
+        <div class="absolute inset-0 bg-gradient-to-b from-transparent via-slate-950/40 to-slate-950"></div>
+        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-slate-950/20 to-slate-950"></div>
+      </div>
+
+      <GameViewHeader
+        :title="sheet?.adventure_title"
+        :version="sheet?.adventure_version"
+        :creator="sheet?.creator"
+        :copyright="sheet?.copyright"
+        :license="sheet?.license"
+        :license-url="sheet?.license_url"
+        :tracked-quest="displayedTrackedQuest"
+        :game-time="gameTime"
+        :clock-tick="clockTick"
+        :debug-mode="!!sheet?.debug_mode"
+        :is-checkpoint-saving="isCheckpointSaving"
+        :collapsed="isHeaderCollapsed"
+        :view-mode="gameViewMode"
+        @back="goBack"
+        @open-chronicles="openChroniclesModal"
+        @edit-note="showNoteModal = true"
+        @collapse="isHeaderCollapsed = true"
+        @hide-quest="isQuestTrackerHidden = true"
+        @toggle-view-mode="toggleGameViewMode"
+      />
+
+      <!-- Floating Header Toggle (when collapsed) -->
+      <button 
+        v-if="isHeaderCollapsed"
+        @click="isHeaderCollapsed = false"
+        class="absolute top-0 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 rounded-b-xl border border-t-0 border-slate-800 bg-slate-900/90 text-slate-400 hover:text-slate-200 transition-all hover:bg-slate-800 shadow-lg flex items-center justify-center gap-1 cursor-pointer animate-fade-in"
+        title="Show Header"
+      >
+        <span class="text-[9px] uppercase tracking-widest font-black">Show Header</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      <div v-if="configState.isLoaded && !configState.hasLlmConfig" class="px-12 pt-6">
+        <SetupWarningBanner />
+      </div>
+
+      <div class="flex-grow min-h-0 flex overflow-hidden relative">
+        <div
+          v-if="showVoiceUnlockHint"
+          class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-xl border border-amber-400/40 bg-amber-300/10 backdrop-blur-md shadow-lg max-w-[92%]"
+        >
+          <div class="flex items-center gap-3 text-xs text-amber-100">
+            <i class="ra ra-sound-on text-amber-300"></i>
+            <span>Auto-Speak is enabled, but browser policy blocks audio until your first interaction.</span>
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-md bg-amber-400/20 hover:bg-amber-400/35 border border-amber-300/40 text-amber-50 font-semibold transition-colors"
+              @click="handleUnlockVoice"
+            >
+              Enable voice
+            </button>
+          </div>
+        </div>
+
+        <!-- Backdrop for mobile sidebar drawer -->
+        <div
+          v-if="isMobileSidebarOpen && hasSceneContext"
+          class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 xl:hidden animate-fade-in"
+          @click="isMobileSidebarOpen = false"
+        ></div>
+
+        <!-- Left Sidebar: Scene, inhabitants & Discovery -->
+        <aside
+          v-if="hasSceneContext" 
+          :class="[
+            'bg-slate-900/95 xl:bg-slate-900/20 backdrop-blur-md border border-slate-800/50 rounded-3xl flex flex-col p-6 shrink-0 overflow-y-auto custom-scrollbar shadow-2xl transition-all duration-300 ease-in-out',
+            isMobileSidebarOpen 
+              ? 'fixed inset-y-6 left-6 z-40 w-72 max-w-[calc(100vw-3rem)] translate-x-0' 
+              : 'fixed inset-y-6 left-6 z-40 w-72 -translate-x-[calc(100%+3rem)] xl:translate-x-0 xl:relative xl:inset-y-0 xl:left-0 xl:m-6'
+          ]"
+        >
+          <GameLocationPanel
+            :scene-id="sheet?.scene_id"
+            :scene-name="sheet?.current_scene"
+            :scene-description="currentSceneDescription"
+            :scene-image="currentSceneImage"
+            :show-image="showImage"
+            :is-debug="!!sheet?.debug_mode"
+            :scene-exits="sceneExits"
+            :map-data="mapData"
+            :nodes="nodes"
+            :is-action-input-blocked="isActionInputBlocked"
+            :exit-traversal-busy="exitTraversalBusy"
+            :exit-unlock-busy="exitUnlockBusy"
+            @hover="(payload, event) => handleHover(payload, event)"
+            @move="mousePos = { x: $event.clientX, y: $event.clientY }"
+            @leave="hoveredEntity = null"
+            @traverse="handleExitClick"
+            @image-error="handleImageError"
+          />
+
+          <GameNpcsPanel
+            :npcs="npcs"
+            :show-image="showImage"
+            :mode="sheet?.rule_enforcement_mode"
+            :is-debug="!!sheet?.debug_mode"
+            @hover="(entity, event) => handleHover({ ...entity, entity_type: 'NPC' }, event)"
+            @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
+            @leave="hoveredEntity = null"
+            @contextmenu="(entity, event) => openContextMenu({ ...entity, entity_type: 'NPC' }, event)"
+            @click="handleEntityClick"
+            @image-error="(path) => handleImageError(path)"
+          />
+
+          <GameItemsPanel
+            :items="items"
+            :show-image="showImage"
+            :is-debug="!!sheet?.debug_mode"
+            @hover="(entity, event) => handleHover(entity, event)"
+            @move="(event) => mousePos = { x: event.clientX, y: event.clientY }"
+            @leave="hoveredEntity = null"
+            @contextmenu="(entity, event) => openContextMenu(entity, event)"
+            @click="handleEntityClick"
+            @image-error="(path) => handleImageError(path)"
+            @take-direct="handleTakeDirect"
+          />
+
+          <!-- Switches Panel -->
+          <div v-if="sceneSwitches.length > 0" class="mb-8">
+            <button
+              class="flex items-center gap-1.5 w-full text-left focus:outline-none cursor-pointer mb-4 select-none"
+            >
+              <i class="ra ra-lever text-lime-500 text-sm"></i>
+              <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-lime-500/80">Switches</h3>
+            </button>
+            <div class="flex flex-col gap-2">
+              <div
+                v-for="sw in sceneSwitches"
+                :key="sw.id"
+                class="relative bg-slate-950/40 border border-slate-800/40 rounded-2xl group transition-all hover:border-lime-500/40 hover:bg-slate-900/50 p-3 flex items-center gap-3 cursor-pointer shadow-lg"
+                @click="!isActionInputBlocked && openSwitchStateModal(sw)"
+                @contextmenu.prevent="!isActionInputBlocked && openSwitchStateModal(sw)"
+                @mouseenter="handleHover(sw, $event)"
+                @mousemove="mousePos = { x: $event.clientX, y: $event.clientY }"
+                @mouseleave="hoveredEntity = null"
+              >
+                <div class="w-10 h-10 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center shrink-0">
+                  <img
+                    v-if="sw.image_url && showImage(sw.image_url)"
+                    :src="sw.image_url"
+                    class="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
+                    @error="handleImageError(sw.image_url)"
+                  />
+                  <div v-else class="w-full h-full flex items-center justify-center bg-slate-800/50">
+                    <i class="ra ra-lever text-xl text-lime-400"></i>
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-black text-slate-300 group-hover:text-lime-400 transition-colors uppercase tracking-tight truncate">{{ sw.name }}</p>
+                  <p class="text-[10px] text-slate-500 mt-0.5 font-mono truncate" v-if="!!sheet?.debug_mode">ID: {{ sw.id }}</p>
+                </div>
+                <span class="px-2 py-0.5 bg-lime-500/10 border border-lime-500/20 rounded-full text-[9px] font-black text-lime-400 uppercase tracking-wider shrink-0">
+                  {{ String(sw.switch_state || (sw.metadata_json?.switch?.initial_state) || '—').toUpperCase() }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <GameWorldMemoryPanel
+            :memories="worldMemories"
+          />
+        </aside>
+
+        <!-- Main Game Area -->
+        <GameDialogPanel
+          ref="dialogPanel"
+          :messages="messages"
+          :status="status"
+          :input-locked="isActionInputBlocked"
+          :npc-metadata="npcMetadata"
+          :entities="entities"
+          :inventory-items="inventoryItems"
+          :tracked-quest="trackedQuest"
+          :status-text="statusText"
+          :show-debug-log="showDebugLog"
+          :debug-logs="debugLogs"
+          :game-over-reason="gameOverReason"
+          :exp="sheet?.exp || 0"
+          :mode="sheet?.rule_enforcement_mode"
+          :inventory-glow="inventoryGlow"
+          :map-glow="mapGlow"
+          :quest-glow="questGlow"
+          :active-action-id="activeActionId"
+          :sheet="sheet"
+          :game-id="props.id"
+          :current-scene-description="currentSceneDescription"
+          :prompt-suggestions="promptSuggestions"
+          @send="handlePlayerInput"
+          @open-sheet="showSheet = true"
+          @open-map="showMap = true"
+          @open-quests="showQuests = true"
+          @toggle-sidebar="isMobileSidebarOpen = !isMobileSidebarOpen"
+          @select-action="(id) => activeActionId = id"
+          @npc-hover="handleChatNpcHover"
+          @npc-leave="hoveredEntity = null"
+          @npc-click="(name) => handleEntityClick({ name, entity_type: 'NPC' })"
+          @item-hover="(item, event) => handleHover({ ...item, entity_type: 'ITEM', description: item.description || 'A mysterious item in your possession.' }, event)"
+          @item-leave="hoveredEntity = null"
+          @item-click="handleEntityClick"
+          @take-direct="handleTakeDirect"
+          @open-debug="openDebugInspector"
+          @toggle-debug-log="(val) => showDebugLog = val"
+          @npc-contextmenu="(entity, event) => openContextMenu(entity, event)"
+          @item-contextmenu="(entity, event) => openContextMenu(entity, event)"
+        />
+      </div>
+    </template>
 
     <!-- Modals -->
     <CharacterSheetModal 

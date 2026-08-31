@@ -14,6 +14,7 @@ type UseGameInteractionStateOptions = {
   ruleMode: Ref<string | undefined>
   npcMetadata: Ref<Record<string, any>>
   npcEntities?: Ref<any[]>
+  playerSheet?: Ref<any>
   handlePlayerInput: (content: string) => Promise<void>
   onAction?: () => void
   onDirectAction?: (action: string) => boolean
@@ -25,6 +26,7 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     ruleMode,
     npcMetadata,
     npcEntities,
+    playerSheet,
     handlePlayerInput,
     onAction,
     onDirectAction,
@@ -75,6 +77,11 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
     return style
   })
 
+  const showsMechanics = computed(() => {
+    const mode = ruleMode.value
+    return mode === 'full_visible' || mode === 'narrative_with_rolls'
+  })
+
   const isConsumableHover = computed(() => isConsumableEntity(hoveredEntity.value))
 
   const handleHover = (ent: any, event: MouseEvent) => {
@@ -86,6 +93,33 @@ export function useGameInteractionState(options: UseGameInteractionStateOptions)
   const handleChatNpcHover = (name: string, event: MouseEvent) => {
     const normalizedName = String(name || '').trim().toLowerCase()
     if (!normalizedName) return
+
+    const sheet = playerSheet?.value
+    if (sheet) {
+      const sheetName = String(sheet.name || '').trim().toLowerCase()
+      if (normalizedName === 'you' || normalizedName === sheetName || normalizedName === `you (${sheetName})`) {
+        const playerEntity = {
+          id: 'PLAYER',
+          name: sheet.name ? `You (${sheet.name})` : 'You',
+          entity_type: 'NPC',
+          description: sheet.description || 'Your hero character.',
+          image_url: sheet.profile_image || null,
+          role: sheet.role || 'Hero',
+          hp: sheet.hp,
+          max_hp: sheet.max_hp,
+          mana: sheet.mana,
+          max_mana: sheet.max_mana,
+          stamina: sheet.stamina,
+          max_stamina: sheet.max_stamina,
+          inventory: sheet.inventory || [],
+          stats: sheet.stats,
+        }
+        tooltipImageFailed.value = false
+        hoveredEntity.value = normalizeHoverEntity(playerEntity)
+        mousePos.value = { x: event.clientX, y: event.clientY }
+        return
+      }
+    }
 
     const fromEntities = (npcEntities?.value || []).find((entity: any) => {
       const entityName = String(entity?.name || '').trim().toLowerCase()

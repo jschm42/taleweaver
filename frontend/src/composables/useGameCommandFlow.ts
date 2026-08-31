@@ -170,6 +170,7 @@ export function useGameCommandFlow(options: UseGameCommandFlowOptions) {
     fullWorldDebug,
     goBack,
     openDebugInspector,
+    openWalkthroughPanel,
     revealWalkthrough,
     buyHint,
     handlePlayerInput,
