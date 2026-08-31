@@ -364,6 +364,8 @@ function handleMicButtonMousedown(e: MouseEvent | TouchEvent) {
 interface DialogueSegment {
   speaker: string
   speakerEntity?: any
+  target?: string
+  targetEntity?: any
   avatarUrl?: string | null
   isPlayer?: boolean
   text: string
@@ -374,6 +376,8 @@ interface ComicTurn {
   index: number
   userMessage?: ChatMessage | null
   userIsDialogue?: boolean
+  userTargetName?: string | null
+  userTargetEntity?: any
   userSpeechText?: string
   assistantMessage?: ChatMessage | null
   systemMessages: ChatMessage[]
@@ -383,21 +387,124 @@ interface ComicTurn {
   timestamp?: string
 }
 
-function parseUserMessage(msg: ChatMessage | null | undefined): { isDialogue: boolean; speechText: string } {
+function resolveNpcMetadata(nameOrId: string) {
+  if (!nameOrId || !props.npcMetadata) return null
+  const norm = String(nameOrId).trim().toLowerCase()
+  if (props.npcMetadata[nameOrId]) return props.npcMetadata[nameOrId]
+  if (props.npcMetadata[norm]) return props.npcMetadata[norm]
+  for (const [k, v] of Object.entries(props.npcMetadata)) {
+    if (k.toLowerCase() === norm || (v as any)?.name?.toLowerCase() === norm || (v as any)?.id?.toLowerCase() === norm) {
+      return v
+    }
+  }
+  return null
+}
+
+function resolveNpc(name: string) {
+  if (!name) return null
+  const norm = name.trim().toLowerCase()
+  const foundEntity = (props.entities || []).find((e) => e.entity_type === 'NPC' && (e.name?.toLowerCase() === norm || e.id?.toLowerCase() === norm))
+  const meta = resolveNpcMetadata(name) || (foundEntity ? resolveNpcMetadata(foundEntity.id) || resolveNpcMetadata(foundEntity.name) : null)
+
+  if (foundEntity || meta) {
+    return {
+      id: foundEntity?.id || meta?.id || norm,
+      entity_type: 'NPC',
+      name: foundEntity?.name || meta?.name || name,
+      description: foundEntity?.description || meta?.description || meta?.backstory || 'A character in this adventure.',
+      image_url: foundEntity?.image_url || meta?.image_url || null,
+      role: foundEntity?.role || meta?.role || null,
+      hp: foundEntity?.hp != null ? foundEntity.hp : meta?.hp != null ? meta.hp : 100,
+      max_hp: foundEntity?.max_hp != null ? foundEntity.max_hp : meta?.max_hp != null ? meta.max_hp : 100,
+      stamina: foundEntity?.stamina != null ? foundEntity.stamina : meta?.stamina != null ? meta.stamina : 50,
+      max_stamina: foundEntity?.max_stamina != null ? foundEntity.max_stamina : meta?.max_stamina != null ? meta.max_stamina : 50,
+      mana: foundEntity?.mana != null ? foundEntity.mana : meta?.mana != null ? meta.mana : 50,
+      max_mana: foundEntity?.max_mana != null ? foundEntity.max_mana : meta?.max_mana != null ? meta.max_mana : 50,
+      inventory: Array.isArray(foundEntity?.inventory) ? foundEntity.inventory : Array.isArray(meta?.inventory) ? meta.inventory : [],
+      stat_modifiers: foundEntity?.stat_modifiers || meta?.stat_modifiers || {},
+      metadata_json: foundEntity?.metadata_json || meta?.metadata_json || {},
+    }
+  }
+  return null
+}
+
+function parseUserMessage(msg: ChatMessage | null | undefined): {
+  isDialogue: boolean
+  targetName?: string | null
+  targetEntity?: any
+  speechText: string
+} {
   if (!msg || !msg.content) return { isDialogue: false, speechText: '' }
   const raw = msg.content.trim()
 
   if (raw.toLowerCase().startsWith('/say to ')) {
-    const speech = raw.slice(8).trim()
-    return { isDialogue: true, speechText: speech }
+    const after = raw.slice(8).trim()
+    const colonIdx = after.indexOf(':')
+    if (colonIdx > 0) {
+      const targetCandidate = after.slice(0, colonIdx).trim()
+      const speech = after.slice(colonIdx + 1).trim().replace(/^["“]|["”]$/g, '')
+      const targetEntity = resolveNpc(targetCandidate)
+      return {
+        isDialogue: true,
+        targetName: targetEntity?.name || targetCandidate,
+        targetEntity,
+        speechText: speech,
+      }
+    } else {
+      for (const ent of (props.entities || [])) {
+        if (ent.entity_type === 'NPC' && ent.name) {
+          const entName = ent.name.toLowerCase()
+          if (after.toLowerCase().startsWith(entName)) {
+            const speech = after.slice(ent.name.length).trim().replace(/^[:,"“\s]+|["”]$/g, '')
+            return {
+              isDialogue: true,
+              targetName: ent.name,
+              targetEntity: resolveNpc(ent.name),
+              speechText: speech,
+            }
+          }
+        }
+      }
+      return { isDialogue: true, speechText: after }
+    }
   }
+
   if (raw.toLowerCase().startsWith('/say ')) {
     const speech = raw.slice(5).trim().replace(/^["“]|["”]$/g, '')
+    const colonIdx = speech.indexOf(':')
+    if (colonIdx > 0) {
+      const targetCandidate = speech.slice(0, colonIdx).trim()
+      const targetEntity = resolveNpc(targetCandidate)
+      if (targetEntity) {
+        return {
+          isDialogue: true,
+          targetName: targetEntity.name,
+          targetEntity,
+          speechText: speech.slice(colonIdx + 1).trim().replace(/^["“]|["”]$/g, ''),
+        }
+      }
+    }
     return { isDialogue: true, speechText: speech }
   }
+
   if (raw.startsWith('"') && raw.endsWith('"') && raw.length > 2) {
-    return { isDialogue: true, speechText: raw.slice(1, -1) }
+    const unquoted = raw.slice(1, -1).trim()
+    const colonIdx = unquoted.indexOf(':')
+    if (colonIdx > 0) {
+      const targetCandidate = unquoted.slice(0, colonIdx).trim()
+      const targetEntity = resolveNpc(targetCandidate)
+      if (targetEntity) {
+        return {
+          isDialogue: true,
+          targetName: targetEntity.name,
+          targetEntity,
+          speechText: unquoted.slice(colonIdx + 1).trim().replace(/^["“]|["”]$/g, ''),
+        }
+      }
+    }
+    return { isDialogue: true, speechText: unquoted }
   }
+
   return { isDialogue: false, speechText: raw }
 }
 
@@ -432,6 +539,8 @@ const gameTurns = computed<ComicTurn[]>(() => {
       currentTurn.userMessage = msg
       const userParsed = parseUserMessage(msg)
       currentTurn.userIsDialogue = userParsed.isDialogue
+      currentTurn.userTargetName = userParsed.targetName
+      currentTurn.userTargetEntity = userParsed.targetEntity
       currentTurn.userSpeechText = userParsed.speechText
       currentTurn.timestamp = msg.timestamp
     } else if (msg.role === 'assistant') {
@@ -486,41 +595,6 @@ function goToLatestTurn() {
   viewingTurnIndex.value = null
 }
 
-function resolveNpcMetadata(nameOrId: string) {
-  if (!nameOrId || !props.npcMetadata) return null
-  const norm = String(nameOrId).trim().toLowerCase()
-  if (props.npcMetadata[nameOrId]) return props.npcMetadata[nameOrId]
-  if (props.npcMetadata[norm]) return props.npcMetadata[norm]
-  for (const [k, v] of Object.entries(props.npcMetadata)) {
-    if (k.toLowerCase() === norm || (v as any)?.name?.toLowerCase() === norm || (v as any)?.id?.toLowerCase() === norm) {
-      return v
-    }
-  }
-  return null
-}
-
-function resolveNpc(name: string) {
-  const norm = name.trim().toLowerCase()
-  const foundEntity = (props.entities || []).find((e) => e.entity_type === 'NPC' && (e.name?.toLowerCase() === norm || e.id?.toLowerCase() === norm))
-  const meta = resolveNpcMetadata(name) || (foundEntity ? resolveNpcMetadata(foundEntity.id) || resolveNpcMetadata(foundEntity.name) : null)
-
-  if (foundEntity || meta) {
-    return {
-      id: foundEntity?.id || meta?.id || norm,
-      name: foundEntity?.name || meta?.name || name,
-      image_url: foundEntity?.image_url || meta?.image_url || null,
-      role: foundEntity?.role || meta?.role || null,
-      hp: foundEntity?.hp,
-      max_hp: foundEntity?.max_hp,
-      stamina: foundEntity?.stamina,
-      max_stamina: foundEntity?.max_stamina,
-      mana: foundEntity?.mana,
-      max_mana: foundEntity?.max_mana,
-    }
-  }
-  return null
-}
-
 function parseAssistantContent(content: string): { narration: string; dialogues: DialogueSegment[] } {
   if (!content) return { narration: '', dialogues: [] }
 
@@ -537,7 +611,17 @@ function parseAssistantContent(content: string): { narration: string; dialogues:
 
     const match = line.match(speechRegex)
     if (match) {
-      const speakerName = (match[1] || match[2] || match[3] || '').trim()
+      let speakerName = (match[1] || match[2] || match[3] || '').trim()
+      let targetName: string | undefined = undefined
+      let targetEntity: any = undefined
+
+      const toMatch = speakerName.match(/^(.+?)\s+(?:to|\(to)\s+(.+?)\)?$/i)
+      if (toMatch) {
+        speakerName = toMatch[1].trim()
+        targetName = toMatch[2].trim()
+        targetEntity = resolveNpc(targetName)
+      }
+
       const speechText = (match[4] || match[5] || '').trim().replace(/^["“]|["”]$/g, '')
 
       const resolvedNpc = resolveNpc(speakerName)
@@ -545,6 +629,8 @@ function parseAssistantContent(content: string): { narration: string; dialogues:
         dialogues.push({
           speaker: props.sheet?.name || 'You',
           isPlayer: true,
+          target: targetName,
+          targetEntity,
           avatarUrl: props.sheet?.profile_image,
           text: speechText,
         })
@@ -552,6 +638,8 @@ function parseAssistantContent(content: string): { narration: string; dialogues:
         dialogues.push({
           speaker: resolvedNpc?.name || speakerName,
           speakerEntity: resolvedNpc,
+          target: targetName,
+          targetEntity,
           avatarUrl: resolvedNpc?.image_url,
           isPlayer: false,
           text: speechText,
@@ -576,6 +664,14 @@ const activeSpeakers = computed<Set<string>>(() => {
     if (d.speaker) speakers.add(d.speaker.toLowerCase())
     if (d.speakerEntity?.id) speakers.add(String(d.speakerEntity.id).toLowerCase())
     if (d.speakerEntity?.name) speakers.add(String(d.speakerEntity.name).toLowerCase())
+    if (d.target) speakers.add(d.target.toLowerCase())
+    if (d.targetEntity?.id) speakers.add(String(d.targetEntity.id).toLowerCase())
+  }
+  if (activeTurn.value.userTargetName) {
+    speakers.add(activeTurn.value.userTargetName.toLowerCase())
+  }
+  if (activeTurn.value.userTargetEntity?.id) {
+    speakers.add(String(activeTurn.value.userTargetEntity.id).toLowerCase())
   }
   return speakers
 })
@@ -599,6 +695,13 @@ const npcs = computed(() => {
       }
     })
 
+  // Actively speaking NPCs are prioritized directly under the protagonist
+  const sortedWorldNpcs = [...worldNpcs].sort((a, b) => {
+    const aSpeaking = isNpcSpeaking(a) ? 1 : 0
+    const bSpeaking = isNpcSpeaking(b) ? 1 : 0
+    return bSpeaking - aSpeaking
+  })
+
   if (props.sheet && props.sheet.name) {
     const playerEntity = {
       id: 'PLAYER',
@@ -616,14 +719,20 @@ const npcs = computed(() => {
       inventory: Array.isArray(props.sheet.inventory) ? props.sheet.inventory : [],
       stats: props.sheet.stats,
     }
-    return [playerEntity, ...worldNpcs]
+    return [playerEntity, ...sortedWorldNpcs]
   }
-  return worldNpcs
+  return sortedWorldNpcs
 })
 
 function getEntityForHover(nameOrEntity: any) {
   if (typeof nameOrEntity === 'object' && nameOrEntity && nameOrEntity.id) {
-    return nameOrEntity
+    const cloned = { ...nameOrEntity }
+    if (!cloned.entity_type) cloned.entity_type = 'NPC'
+    if (!cloned.description) {
+      const meta = resolveNpcMetadata(cloned.name || cloned.id)
+      if (meta?.description || meta?.backstory) cloned.description = meta.description || meta.backstory
+    }
+    return cloned
   }
   const name = typeof nameOrEntity === 'string' ? nameOrEntity.trim() : String(nameOrEntity?.name || '').trim()
   const norm = name.toLowerCase()
@@ -646,10 +755,16 @@ function getEntityForHover(nameOrEntity: any) {
     }
   }
   const found = npcs.value.find((n) => n.name?.toLowerCase() === norm || n.id?.toLowerCase() === norm)
-  if (found) return found
+  if (found) {
+    return {
+      ...found,
+      entity_type: 'NPC',
+      description: found.description || resolveNpcMetadata(found.name || found.id)?.description || resolveNpcMetadata(found.name || found.id)?.backstory || 'A character in this adventure.',
+    }
+  }
   const resolved = resolveNpc(name)
   if (resolved) return resolved
-  return { name, entity_type: 'NPC' }
+  return { name, entity_type: 'NPC', description: 'A character in this adventure.' }
 }
 
 function renderFormattedHtml(text: string): string {
@@ -958,61 +1073,63 @@ defineExpose({
     <div class="relative z-10 flex-grow min-h-0 flex flex-col md:flex-row gap-4 p-4 sm:p-6 overflow-hidden">
       <!-- 3A. LEFT / SCENE NPC STAGE (Compact 2:3 Vertical Portraits with Overlaid Name) -->
       <aside class="flex md:flex-col gap-2.5 shrink-0 overflow-x-auto md:overflow-y-auto md:w-40 lg:w-44 custom-scrollbar pr-1 py-1 max-h-full">
-        <div
-          v-for="npc in npcs"
-          :key="npc.id"
-          class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-28 sm:w-32 md:w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
-          :class="[
-            isNpcSpeaking(npc)
-              ? 'border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.6)] ring-2 ring-amber-400/60'
-              : npc.id === 'PLAYER'
-                ? 'border-emerald-500/70 hover:border-emerald-400'
-                : 'border-slate-700/70 hover:border-cyan-400/80'
-          ]"
-          @click="handleNpcClick(npc)"
-          @mouseenter="emit('npcHover', getEntityForHover(npc), $event)"
-          @mousemove="emit('npcHover', getEntityForHover(npc), $event)"
-          @mouseleave="emit('npcLeave')"
-          @contextmenu.prevent="emit('npcContextmenu', npc, $event)"
-        >
-          <!-- Full 2:3 Character Portrait -->
-          <img
-            v-if="npc.image_url && showImage(npc.image_url)"
-            :src="getImageUrl(npc.image_url, { thumbnail: true })"
-            :alt="npc.name"
-            class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
-            :class="{ 'grayscale opacity-50': npc.hp === 0 }"
-            @error="onImageLoadError($event, npc.image_url)"
-          />
-          <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 text-slate-600">
-            <i :class="['ra text-4xl mb-1', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
-          </div>
+        <TransitionGroup name="npc-stage" tag="div" class="flex md:flex-col gap-2.5 w-full">
+          <div
+            v-for="npc in npcs"
+            :key="npc.id"
+            class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-28 sm:w-32 md:w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
+            :class="[
+              isNpcSpeaking(npc)
+                ? 'border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.6)] ring-2 ring-amber-400/60'
+                : npc.id === 'PLAYER'
+                  ? 'border-emerald-500/70 hover:border-emerald-400'
+                  : 'border-slate-700/70 hover:border-cyan-400/80'
+            ]"
+            @click="handleNpcClick(npc)"
+            @mouseenter="emit('npcHover', getEntityForHover(npc), $event)"
+            @mousemove="emit('npcHover', getEntityForHover(npc), $event)"
+            @mouseleave="emit('npcLeave')"
+            @contextmenu.prevent="emit('npcContextmenu', npc, $event)"
+          >
+            <!-- Full 2:3 Character Portrait -->
+            <img
+              v-if="npc.image_url && showImage(npc.image_url)"
+              :src="getImageUrl(npc.image_url, { thumbnail: true })"
+              :alt="npc.name"
+              class="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
+              :class="{ 'grayscale opacity-50': npc.hp === 0 }"
+              @error="onImageLoadError($event, npc.image_url)"
+            />
+            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950 text-slate-600">
+              <i :class="['ra text-4xl mb-1', npc.id === 'PLAYER' ? 'ra-player text-emerald-400' : 'ra-helmet text-cyan-400']"></i>
+            </div>
 
-          <!-- Active Speaker Badge -->
-          <div v-if="isNpcSpeaking(npc)" class="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[8px] font-black uppercase tracking-wider shadow-md animate-bounce">
-            Speaking
-          </div>
+            <!-- Active Speaker Badge -->
+            <div v-if="isNpcSpeaking(npc)" class="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[8px] font-black uppercase tracking-wider shadow-md animate-bounce">
+              Speaking
+            </div>
 
-          <!-- Hero Tag for Player -->
-          <div v-else-if="npc.id === 'PLAYER'" class="absolute top-2 left-2 z-20 px-1.5 py-0.5 rounded-full bg-emerald-500/80 text-white backdrop-blur-md border border-emerald-300/40 text-[8px] font-black uppercase tracking-wider shadow-md">
-            You
-          </div>
+            <!-- Hero Tag for Player -->
+            <div v-else-if="npc.id === 'PLAYER'" class="absolute top-2 left-2 z-20 px-1.5 py-0.5 rounded-full bg-emerald-500/80 text-white backdrop-blur-md border border-emerald-300/40 text-[8px] font-black uppercase tracking-wider shadow-md">
+              You
+            </div>
 
-          <!-- Defeated Ribbon -->
-          <div v-if="npc.hp === 0" class="absolute inset-x-0 top-1/2 -translate-y-1/2 bg-red-600/90 text-white text-[9px] font-black uppercase tracking-widest text-center py-0.5 shadow-xl z-20">
-            Defeated
-          </div>
+            <!-- Defeated Ribbon -->
+            <div v-if="npc.hp === 0" class="absolute inset-x-0 top-1/2 -translate-y-1/2 bg-red-600/90 text-white text-[9px] font-black uppercase tracking-widest text-center py-0.5 shadow-xl z-20">
+              Defeated
+            </div>
 
-          <!-- Name & Role Overlay with Gradient & Strong Shadow -->
-          <div class="absolute inset-x-0 bottom-0 pt-8 pb-2 px-2 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col items-center text-center pointer-events-none z-10">
-            <h4 class="text-[11px] sm:text-xs font-black text-white group-hover:text-amber-300 transition-colors uppercase tracking-wider drop-shadow-[0_2px_3px_rgba(0,0,0,1)] truncate w-full">
-              {{ npc.name }}
-            </h4>
-            <span v-if="npc.role" class="text-[9px] font-bold text-slate-300/90 uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate w-full mt-0.5">
-              {{ npc.role }}
-            </span>
+            <!-- Name & Role Overlay with Gradient & Strong Shadow -->
+            <div class="absolute inset-x-0 bottom-0 pt-8 pb-2 px-2 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex flex-col items-center text-center pointer-events-none z-10">
+              <h4 class="text-[11px] sm:text-xs font-black text-white group-hover:text-amber-300 transition-colors uppercase tracking-wider drop-shadow-[0_2px_3px_rgba(0,0,0,1)] truncate w-full">
+                {{ npc.name }}
+              </h4>
+              <span v-if="npc.role" class="text-[9px] font-bold text-slate-300/90 uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,1)] truncate w-full mt-0.5">
+                {{ npc.role }}
+              </span>
+            </div>
           </div>
-        </div>
+        </TransitionGroup>
       </aside>
 
       <!-- 3B. CENTER / COMIC STORY & SPEECH BUBBLES AREA -->
@@ -1146,13 +1263,14 @@ defineExpose({
                 <div
                   class="relative p-3.5 sm:p-4.5 rounded-2xl border-2 shadow-[0_8px_25px_rgba(0,0,0,0.6)] backdrop-blur-xl bg-slate-900/95 border-emerald-400 text-slate-100"
                 >
-                  <!-- Content: Name Tag & Speech in same text size -->
+                  <!-- Content: Name Tag, Target Addressee & Speech in same text size -->
                   <p
                     class="text-sm sm:text-base leading-relaxed font-semibold"
                     :class="activeTurn.userIsDialogue ? 'italic text-white' : 'text-emerald-100'"
                   >
+                    <!-- Speaker Tag -->
                     <span
-                      class="inline-flex items-center align-baseline mr-2.5 not-italic select-none px-2 py-0.5 rounded-lg border font-black text-xs sm:text-sm uppercase tracking-wider bg-emerald-500/20 border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/30 hover:border-emerald-400 cursor-pointer transition-all shadow-sm"
+                      class="inline-flex items-center align-baseline mr-1.5 not-italic select-none px-2 py-0.5 rounded-lg border font-black text-xs sm:text-sm uppercase tracking-wider bg-emerald-500/20 border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/30 hover:border-emerald-400 cursor-pointer transition-all shadow-sm"
                       @mouseenter="emit('npcHover', getEntityForHover(props.sheet?.name || 'You'), $event)"
                       @mousemove="emit('npcHover', getEntityForHover(props.sheet?.name || 'You'), $event)"
                       @mouseleave="emit('npcLeave')"
@@ -1160,6 +1278,23 @@ defineExpose({
                     >
                       {{ props.sheet?.name || 'You' }}
                     </span>
+
+                    <!-- Target Addressee Tag with Arrow (e.g. ➔ [DAD ARTHUR]) -->
+                    <template v-if="activeTurn.userTargetName">
+                      <span class="inline-flex items-center align-baseline text-slate-400 mx-1 not-italic font-black text-xs select-none">
+                        ➔
+                      </span>
+                      <span
+                        class="inline-flex items-center align-baseline mr-2.5 not-italic select-none px-2 py-0.5 rounded-lg border font-black text-xs sm:text-sm uppercase tracking-wider bg-cyan-500/20 border-cyan-400/50 text-cyan-300 hover:bg-cyan-500/30 hover:border-cyan-400 cursor-pointer transition-all shadow-sm"
+                        @mouseenter="emit('npcHover', getEntityForHover(activeTurn.userTargetEntity || activeTurn.userTargetName), $event)"
+                        @mousemove="emit('npcHover', getEntityForHover(activeTurn.userTargetEntity || activeTurn.userTargetName), $event)"
+                        @mouseleave="emit('npcLeave')"
+                        @click="emit('npcClick', activeTurn.userTargetName)"
+                      >
+                        {{ activeTurn.userTargetName }}
+                      </span>
+                    </template>
+
                     {{ activeTurn.userIsDialogue ? `"${activeTurn.userSpeechText}"` : activeTurn.userSpeechText }}
                   </p>
                 </div>
@@ -1220,8 +1355,9 @@ defineExpose({
                   :class="dlg.isPlayer ? 'border-emerald-400 text-slate-100' : 'border-amber-400 text-slate-100 shadow-[0_0_20px_rgba(251,191,36,0.25)]'"
                 >
                   <p class="text-sm sm:text-base leading-relaxed font-medium italic text-white">
+                    <!-- Speaker Tag -->
                     <span
-                      class="inline-flex items-center align-baseline mr-2.5 not-italic select-none px-2 py-0.5 rounded-lg border font-black text-xs sm:text-sm uppercase tracking-wider cursor-pointer transition-all shadow-sm"
+                      class="inline-flex items-center align-baseline mr-1.5 not-italic select-none px-2 py-0.5 rounded-lg border font-black text-xs sm:text-sm uppercase tracking-wider cursor-pointer transition-all shadow-sm"
                       :class="[
                         dlg.isPlayer
                           ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/30 hover:border-emerald-400'
@@ -1235,6 +1371,23 @@ defineExpose({
                     >
                       {{ dlg.speaker }}
                     </span>
+
+                    <!-- Target Addressee Badge (if targeted) -->
+                    <template v-if="dlg.target">
+                      <span class="inline-flex items-center align-baseline text-slate-400 mx-1 not-italic font-black text-xs select-none">
+                        ➔
+                      </span>
+                      <span
+                        class="inline-flex items-center align-baseline mr-2.5 not-italic select-none px-2 py-0.5 rounded-lg border font-black text-xs sm:text-sm uppercase tracking-wider bg-cyan-500/20 border-cyan-400/50 text-cyan-300 hover:bg-cyan-500/30 hover:border-cyan-400 cursor-pointer transition-all shadow-sm"
+                        @mouseenter="emit('npcHover', getEntityForHover(dlg.targetEntity || dlg.target), $event)"
+                        @mousemove="emit('npcHover', getEntityForHover(dlg.targetEntity || dlg.target), $event)"
+                        @mouseleave="emit('npcLeave')"
+                        @click="emit('npcClick', dlg.target)"
+                      >
+                        {{ dlg.target }}
+                      </span>
+                    </template>
+
                     "{{ dlg.text }}"
                   </p>
                 </div>
@@ -1520,6 +1673,17 @@ defineExpose({
 
 .animate-fade-in {
   animation: comicPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.npc-stage-move,
+.npc-stage-enter-active,
+.npc-stage-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.npc-stage-enter-from,
+.npc-stage-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
 }
 
 @keyframes comicPop {
