@@ -172,6 +172,28 @@ function navigateHistory(direction: 'up' | 'down') {
   }
 }
 
+// Exit Tooltip State
+const hoveredExit = ref<any | null>(null)
+const hoveredExitPos = ref({ x: 0, y: 0 })
+
+function handleExitMouseEnter(exit: any, event: MouseEvent) {
+  hoveredExit.value = exit
+  hoveredExitPos.value = { x: event.clientX, y: event.clientY }
+}
+
+function handleExitMouseLeave() {
+  hoveredExit.value = null
+}
+
+function handleExitMouseMove(event: MouseEvent) {
+  if (hoveredExit.value) {
+    hoveredExitPos.value = { x: event.clientX, y: event.clientY }
+  }
+}
+
+// Mobile Layout State
+const showMobileInteract = ref(false)
+
 // Command Autocompletion
 const showCommandPopup = ref(false)
 const commandPopupIndex = ref(0)
@@ -1070,18 +1092,28 @@ defineExpose({
           <LayoutGrid class="w-3.5 h-3.5 text-emerald-400" />
           <span class="hidden sm:inline">Classic View</span>
         </button>
+
+        <!-- Mobile Interact Toggle (Only on mobile) -->
+        <button
+          type="button"
+          @click="showMobileInteract = !showMobileInteract"
+          class="md:hidden flex items-center justify-center px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/50 text-amber-300 hover:bg-amber-500/30 transition-all text-xs font-black uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer"
+          title="Toggle Interact Menu"
+        >
+          <MapIcon class="w-4 h-4" />
+        </button>
       </div>
     </header>
 
     <!-- 3. MAIN INTERACTIVE STAGE AREA -->
-    <div class="relative z-10 flex-grow min-h-0 flex flex-col md:flex-row gap-4 p-4 sm:p-6 overflow-hidden">
+    <div class="relative z-10 flex-grow min-h-0 flex flex-row gap-2 sm:gap-4 p-2 sm:p-4 lg:p-6 overflow-hidden">
       <!-- 3A. LEFT / SCENE NPC STAGE (Compact 2:3 Vertical Portraits with Overlaid Name) -->
-      <aside class="flex md:flex-col gap-2.5 shrink-0 overflow-x-auto md:overflow-y-auto md:w-40 lg:w-44 custom-scrollbar pr-1 py-1 max-h-full">
-        <TransitionGroup name="npc-stage" tag="div" class="flex md:flex-col gap-2.5 w-full">
+      <aside class="flex flex-col gap-2 shrink-0 overflow-y-auto w-20 sm:w-28 md:w-36 lg:w-44 custom-scrollbar pr-1 py-1 max-h-full">
+        <TransitionGroup name="npc-stage" tag="div" class="flex flex-col gap-2 w-full">
           <div
             v-for="npc in npcs"
             :key="npc.id"
-            class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-28 sm:w-32 md:w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
+            class="relative group flex flex-col items-center bg-slate-950 rounded-xl border-2 transition-all duration-300 shrink-0 w-full aspect-[2/3] overflow-hidden cursor-pointer shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:scale-98"
             :class="[
               isNpcSpeaking(npc)
                 ? 'border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.6)] ring-2 ring-amber-400/60'
@@ -1140,8 +1172,11 @@ defineExpose({
       <main class="flex-1 flex flex-col justify-between min-h-0 relative overflow-hidden">
         <!-- Floating Interactive Scene Hotspots (Items, Switches, Exits) -->
         <div
-          class="flex flex-wrap items-center gap-2 mb-3 shrink-0 z-10"
-          :class="{ 'opacity-50 pointer-events-none': isEvaluating }"
+          class="shrink-0 z-50 md:z-10"
+          :class="[
+            isEvaluating ? 'opacity-50 pointer-events-none' : '',
+            showMobileInteract ? 'absolute right-2 top-2 bg-slate-900/95 p-3 rounded-2xl border border-slate-700 shadow-2xl max-w-[70vw] max-h-[60vh] overflow-y-auto flex flex-col gap-2' : 'hidden md:flex flex-wrap items-center gap-2 mb-3'
+          ]"
         >
           <!-- Exits / Portals -->
           <div
@@ -1149,6 +1184,9 @@ defineExpose({
             :key="exit.id || exit.label"
             class="group flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-400/60 text-slate-200 hover:text-white backdrop-blur-md transition-all shadow-lg cursor-pointer active:scale-95"
             @click="emit('traverseExit', exit)"
+            @mouseenter="e => handleExitMouseEnter(exit, e)"
+            @mouseleave="handleExitMouseLeave"
+            @mousemove="handleExitMouseMove"
           >
             <Lock
               v-if="exit.is_locked"
@@ -1669,9 +1707,51 @@ defineExpose({
       </div>
     </footer>
   </div>
+
+  <!-- EXIT HOVER TOOLTIP -->
+  <Teleport to="body">
+    <Transition name="tooltip">
+      <div 
+        v-if="hoveredExit" 
+        class="fixed z-[110] pointer-events-none transition-all duration-75"
+        :style="{ left: (hoveredExitPos.x + 20) + 'px', top: (hoveredExitPos.y - 40) + 'px' }"
+      >
+        <div class="w-64 bg-slate-900/95 border border-slate-700 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl overflow-hidden flex flex-col p-4 animate-tooltip-in">
+          <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
+            <span class="text-xs font-black uppercase text-slate-400 tracking-wider">Exit Connection</span>
+            <span 
+              class="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tight"
+              :class="hoveredExit.is_locked ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'"
+            >
+              {{ hoveredExit.is_locked ? 'Locked' : 'Unlocked' }}
+            </span>
+          </div>
+          <p class="text-xs font-bold text-white mb-1 uppercase tracking-tight">{{ hoveredExit.label }}</p>
+          <p class="text-[10px] font-bold text-slate-500 flex items-center gap-1.5" v-if="hoveredExit.target_scene_id">
+            {{ props.currentSceneName || 'Current Location' }} 
+            <i class="ra ra-plain-arrow text-slate-600"></i>
+            <span class="text-slate-300">{{ hoveredExit.target_scene_id }}</span>
+          </p>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
+/* Tooltip Animations */
+.tooltip-enter-active, .tooltip-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.tooltip-enter-from, .tooltip-leave-to { opacity: 0; transform: scale(0.96) translateY(4px); }
+
+.animate-tooltip-in {
+  animation: toolTipIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes toolTipIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .comic-title {
   font-family: 'Acme', sans-serif;
   letter-spacing: 0.05em;
