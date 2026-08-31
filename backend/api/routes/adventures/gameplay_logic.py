@@ -2303,6 +2303,155 @@ class GameTurnManager:
 
         return messages
 
+    async def _enforce_hidden_entity_reveal(
+        self, event: GameEvent, user_msg: str, draft_narration: str = ""
+    ) -> list[str]:
+        """Auto-reveals hidden entities in the current scene when reveal conditions or search actions match.
+
+        A hidden entity (is_hidden=True) should be revealed when:
+        1. The LLM explicitly flags it in `discovered_entity_ids`.
+        2. The event spawns or adds the item to inventory without an explicit unhide flag.
+        """
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(WorldEntity.session_id == self.game_id)
+        )
+        all_entities = list(ent_res.scalars().all())
+        current_scene_id = self.state.current_scene_id
+        states_snapshot = dict(self.state.entity_states or {})
+
+        def _is_hidden_now(e: WorldEntity) -> bool:
+            ov = states_snapshot.get(e.id, {})
+            if "is_hidden" in ov and ov["is_hidden"] is not None:
+                return bool(ov["is_hidden"])
+            return bool(e.is_hidden)
+
+        container_payloads = [
+            {"item_type": e.item_type, "inventory": e.inventory}
+            for e in all_entities
+        ]
+        contained_item_ids = AdventureLogic.collect_container_item_ids(container_payloads)
+
+        hidden_entities = [
+            e
+            for e in all_entities
+            if e.current_scene_id == current_scene_id
+            and not getattr(e, "is_in_inventory", False)
+            and str(e.id or "") not in contained_item_ids
+            and str(e.item_type or "").upper() != "CONSTRUCTABLE"
+            and _is_hidden_now(e)
+        ]
+
+        if not hidden_entities:
+            return []
+
+        revealed_messages: list[str] = []
+
+        # Prepare list of explicitly discovered IDs from the LLM
+        discovered_ids = {str(eid).strip().upper() for eid in (getattr(event, "discovered_entity_ids", []) or [])}
+
+        for e in hidden_entities:
+            eid = e.id
+            if not eid:
+                continue
+
+            # Check if already revealed in event.updated_entities
+            already_revealed = False
+            for up in (event.updated_entities or []):
+                if (up.entity_id or "").upper() == eid.upper() and up.is_hidden is False:
+                    already_revealed = True
+                    break
+            if already_revealed:
+                continue
+
+            should_reveal = False
+            
+            # Condition 1: Explicitly flagged by LLM as discovered
+            if eid.upper() in discovered_ids:
+                should_reveal = True
+
+            # Condition 2: Spawned or added to inventory
+            if not should_reveal and event.spawned_items:
+                for s in event.spawned_items:
+                    sid = str(getattr(s, "id", "") or getattr(s, "entity_id", "") or "").upper()
+                    sname = str(getattr(s, "name", "") or "").strip().lower()
+                    if sid == eid.upper() or (sname and sname == (e.name or "").strip().lower()):
+                        should_reveal = True
+                        break
+
+            if not should_reveal and event.new_inventory_items:
+                for inv in event.new_inventory_items:
+                    iid = str(getattr(inv, "id", "") or getattr(inv, "entity_id", "") or "").upper()
+                    iname = str(getattr(inv, "name", "") or "").strip().lower()
+                    if iid == eid.upper() or (iname and iname == (e.name or "").strip().lower()):
+                        should_reveal = True
+                        break
+
+            # Fallback to fast LLM semantic evaluation for language-agnostic discovery
+            if not should_reveal and (user_msg or draft_narration):
+                try:
+                    from backend.core.llm_router import GameMasterLLM
+                    from pydantic import BaseModel
+                    llm_settings = self.user.llm_settings or {}
+                    small_model_provider = (
+                        llm_settings.get("small_model_provider")
+                        or llm_settings.get("provider")
+                        or "openai"
+                    )
+                    small_model = (
+                        llm_settings.get("small_model_name")
+                        or llm_settings.get("model")
+                        or "gpt-4o-mini"
+                    )
+                    llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
+                    
+                    system_prompt = (
+                        "You are a mechanics checker for an AI Text Adventure RPG.\n"
+                        "Determine if the Game Master's narration or the player's message explicitly describes finding, discovering, or revealing a specific hidden entity.\n"
+                        "You must respond with a JSON object containing a single boolean field: 'discovered'.\n"
+                        "Guidelines:\n"
+                        "1. If the narration describes the player finding the item, or the item being uncovered (even using synonyms or translated words), 'discovered' must be true.\n"
+                        "2. If the player searches the exact hiding spot (e.g. they search the couch, and the entity is hidden in the couch cushions), 'discovered' must be true.\n"
+                        "3. Otherwise, if the item remains hidden or unmentioned, 'discovered' must be false.\n"
+                        "4. Respond with exactly the JSON structure: {\"discovered\": true} or {\"discovered\": false}."
+                    )
+                    
+                    user_prompt = (
+                        f"Hidden Entity ID: {eid}\n"
+                        f"Hidden Entity Name: {e.name}\n"
+                        f"Entity Hidden At/Reveal Rule: {e.spatial_position or ''} {e.reveal_rule or ''}\n"
+                        f"Player Message: \"{user_msg}\"\n"
+                        f"Game Master Narration: \"{draft_narration}\""
+                    )
+                    
+                    class DiscoveryCheckResponse(BaseModel):
+                        discovered: bool
+                        
+                    res = await llm.aexecute_complex_task(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        model=small_model,
+                        response_model=DiscoveryCheckResponse
+                    )
+                    if isinstance(res, DiscoveryCheckResponse):
+                        should_reveal = res.discovered
+                    elif isinstance(res, dict):
+                        should_reveal = bool(res.get("discovered", False))
+                except Exception as ex:
+                    import logging
+                    logging.getLogger("backend").error(f"Error checking hidden entity discovery with LLM: {ex}")
+
+            if should_reveal:
+                self._upsert_entity_update(event, eid, is_hidden=False)
+                logger.info(
+                    "[Turn %s] Auto-revealed hidden entity '%s' (%s) in scene '%s'",
+                    self.game_id,
+                    eid,
+                    e.name,
+                    current_scene_id,
+                )
+
+        return revealed_messages
+
     def _upsert_entity_update(self, event: GameEvent, entity_id: str, **fields: object) -> None:
         """Insert or merge a WorldEntityUpdate for ``entity_id`` into the event."""
         if not entity_id:
@@ -2368,7 +2517,21 @@ class GameTurnManager:
         # 4. Fallback to LLM semantic evaluation for synonyms, translations, and descriptions
         try:
             from pydantic import BaseModel
-            llm = GameMasterLLM(self.user, model_category="small")
+            from backend.core.llm_router import GameMasterLLM
+            
+            llm_settings = self.user.llm_settings or {}
+            small_model_provider = (
+                llm_settings.get("small_model_provider")
+                or llm_settings.get("provider")
+                or "openai"
+            )
+            small_model = (
+                llm_settings.get("small_model_name")
+                or llm_settings.get("model")
+                or "gpt-4o-mini"
+            )
+            
+            llm = GameMasterLLM(self.user, provider=small_model_provider, model_category="small")
             
             system_prompt = (
                 "You are a mechanics checker for an AI Text Adventure RPG.\n"
@@ -2389,11 +2552,11 @@ class GameTurnManager:
             class ReferenceCheckResponse(BaseModel):
                 referenced: bool
                 
-            res = await llm.aexecute_simple_task(
+            res = await llm.aexecute_complex_task(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                response_model=ReferenceCheckResponse,
-                temperature=0.0
+                model=small_model,
+                response_model=ReferenceCheckResponse
             )
             if isinstance(res, ReferenceCheckResponse):
                 return res.referenced
@@ -5332,6 +5495,12 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                reveal_messages = await self._enforce_hidden_entity_reveal(game_event, user_msg)
+                rule_violations.extend(reveal_messages)
+                for gm in reveal_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 await self._enforce_quest_and_award_guardrails(game_event)
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
@@ -5556,6 +5725,12 @@ class GameTurnManager:
                     await self._save_chat_message("system", gm)
                     yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
 
+                reveal_messages = await self._enforce_hidden_entity_reveal(game_event, user_msg)
+                rule_violations.extend(reveal_messages)
+                for gm in reveal_messages:
+                    await self._save_chat_message("system", gm)
+                    yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': gm})}\n\n"
+
                 await self._enforce_quest_and_award_guardrails(game_event)
                 system_msgs = await self._apply_game_event(game_event)
                 for sm in system_msgs:
@@ -5614,10 +5789,19 @@ class GameTurnManager:
                     + "; ".join(rule_violations)
                 )
 
+        if game_event:
+            outcome_dict = game_event.model_dump()
+            draft_narration = outcome_dict.pop("narrative_description", "")
+            outcome_json = json.dumps(outcome_dict)
+        else:
+            draft_narration = ""
+            outcome_json = "{}"
+
         narration_prompt = (
             narration_system_prompt + "\n\n" + 
+            f"DRAFT NARRATION (Expand on this): {draft_narration}\n\n" +
             prompts.GM_NARRATION_TECHNICAL_OUTCOME_PREFIX.format(
-                outcome_json=game_event.model_dump_json() if game_event else "{}"
+                outcome_json=outcome_json
             ) + 
             violations_str + "\n\n" +
             prompts.GM_NARRATION_MANDATORY_FORMATTING
@@ -5788,10 +5972,21 @@ class GameTurnManager:
                     eid = update.entity_id
                     # Find name
                     ent_name = "Someone"
-                    # Try to find in current entities list (from start of turn)
+                    # Try to find in current entities list (from start of turn) or all entities
                     match = next((e for e in entities if e.id == eid), None)
+                    if not match:
+                        match = next((e for e in all_entities if e.id == eid), None)
                     if match:
                         ent_name = match.name
+                    
+                    if update.is_hidden is False:
+                        was_hidden = (self.state.entity_states or {}).get(eid, {}).get("is_hidden")
+                        if was_hidden is None and match:
+                            was_hidden = bool(getattr(match, "is_hidden", False))
+                        if was_hidden:
+                            msg = f"Discovered {ent_name}."
+                            await self._save_chat_message("system", msg)
+                            yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': msg})}\n\n"
                     
                     if update.hp is not None and match and match.hp is not None:
                         diff = update.hp - match.hp
@@ -6088,11 +6283,10 @@ class GameTurnManager:
                             )
                     else:
                         logger.info(
-                            "[Turn %s] Skipping duplicate inventory item id %s (exists in session but not in inventory)",
+                            "[Turn %s] Permitting pickup/implied update for item id %s (exists in session but not in inventory)",
                             self.game_id,
                             item.id,
                         )
-                        continue
                 
                 filtered_inventory_items.append(item)
                 if item.id:

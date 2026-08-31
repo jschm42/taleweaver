@@ -178,6 +178,9 @@ class AdventureGeneratorToolIntent(BaseModel):
     game_completed: bool = False
     status_note: Optional[str] = None
     
+    # Discovery
+    discovered_entity_ids: Optional[list[str]] = Field(None, description="List the IDs of any hidden items or NPCs the player has just discovered, uncovered, or found during this turn.")
+    
     # World State Updates
     new_scene_id: Optional[str] = None
     exit_label: Optional[str] = None
@@ -221,6 +224,7 @@ class GameEvent(BaseModel):
     updated_exits: Optional[list[ExitUpdate]] = None
     updated_entities: Optional[list[WorldEntityUpdate]] = None
     deleted_entities: Optional[list[str]] = None # List of IDs to remove
+    discovered_entity_ids: Optional[list[str]] = Field(None, description="List the IDs of any hidden items or NPCs the player has just discovered, uncovered, or found during this turn.")
     
     # Skill Checks & Combat
     requested_skill_checks: Optional[list[SkillCheckRequest]] = None

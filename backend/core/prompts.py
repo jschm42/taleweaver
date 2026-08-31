@@ -228,6 +228,9 @@ GM_MECHANICS_SUFFIX = (
     "- To modify an existing item in the player's inventory, use `updated_inventory_items` with the item's ID.\n"
     "- NPCs also have inventories. If the player gives an item to an NPC, receives one, or if an NPC drops/places an item in the scene, update BOTH the player's inventory (via `removed_inventory_item_ids`/`new_inventory_items`) and the NPC's `inventory` field (via `updated_entities`). If the item is dropped/placed in the scene, use `spawned_items` with the item's correct `id` and `name` so it retains its pre-defined properties and image.\n"
     "- For CONSUMABLE items, you can define direct effects using `hp_change`, `mana_change`, or `stamina_change` directly in the item object.\n"
+    "REVEALING HIDDEN ITEMS & NPCS (CRITICAL):\n"
+    "- When the player searches the scene, inspects a spot where an item or NPC is hidden, or fulfills a `reveal_rule` (or when you narrate discovering/finding an item or NPC), you MUST immediately reveal it by adding its ID to the `discovered_entity_ids` list.\n"
+    "- Do NOT just write in the narrative text that the player found an item without adding its ID to `discovered_entity_ids` — the item only becomes visible and interactable in the game UI when explicitly flagged!\n"
     "UNRESOLVED QUESTS:\n"
     "{quests_json}\n"
     "If an action affects an NPC or object (e.g. healing, movement, aggression), use `updated_entities` to reflect the new state. "
@@ -275,6 +278,9 @@ GM_STORY_MECHANICS_SUFFIX = (
     "- To remove an item from the player, use `removed_inventory_item_ids`.\n"
     "- To modify an existing item in the player's inventory, use `updated_inventory_items` with the item's ID.\n"
     "- NPCs also have inventories. If the player gives an item to an NPC, receives one, or if an NPC drops/places an item in the scene, update BOTH the player's inventory (via `removed_inventory_item_ids`/`new_inventory_items`) and the NPC's `inventory` field (via `updated_entities`). If the item is dropped/placed in the scene, use `spawned_items` with the item's correct `id` and `name` so it retains its pre-defined properties and image.\n"
+    "REVEALING HIDDEN ITEMS & NPCS (CRITICAL):\n"
+    "- When the player searches the scene, inspects a spot where an item or NPC is hidden, or fulfills a `reveal_rule` (or when you narrate discovering/finding an item or NPC), you MUST immediately reveal it by adding its ID to the `discovered_entity_ids` list.\n"
+    "- Do NOT just write in the narrative text that the player found an item without adding its ID to `discovered_entity_ids` — the item only becomes visible and interactable in the game UI when explicitly flagged!\n"
     "UNRESOLVED QUESTS:\n"
     "{quests_json}\n"
     "NATURAL LANGUAGE UNLOCKING (CRITICAL): Players may attempt to unlock containers, exits, or switches by simply stating the code or item in their message in any language or phrasing (e.g. 'unlock the safe with 4711', 'I use the golden key on the door'). "
@@ -359,7 +365,8 @@ GM_NARRATION_MANDATORY_FORMATTING = (
     "NPC INTERACTION RULE: If multiple NPCs are present in the current scene, let them occasionally talk to each other directly (not only to the player), as long as it is narratively appropriate.\n\n"
     "MANDATORY FORMATTING: Start all character dialogue on a NEW LINE. "
     "Use the format: Character Name: \"Dialogue\" (no markdown bold). "
-    "Separate narrative prose from speech with a blank line."
+    "Separate narrative prose from speech with a blank line.\n\n"
+    "CRITICAL: DO NOT output any JSON, code blocks, or curly braces { } in your response. Your entire response MUST be purely narrative prose/story."
 )
 
 def get_vocal_direction_prompt(provider: str = "google") -> str:
