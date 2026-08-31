@@ -401,7 +401,7 @@ export function useGameSocket(): UseGameSocket {
       return
     }
 
-    const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume', '/shuffle', '/suggest', '/suggestions']
+    const silentCommands = ['/take_direct', '/rule-pass', '/equip', '/unequip', '/consume', '/shuffle', '/suggest', '/suggestions', '/traverse_exit']
     const isSilent = silentCommands.some(cmd => normalizedContent.toLowerCase().startsWith(cmd))
 
     if (normalizedContent && !isSilent) _pushMessage('user', normalizedContent)
@@ -541,6 +541,10 @@ export function useGameSocket(): UseGameSocket {
               status.value = 'connected'
               statusText.value = ''
             }
+          } else if (event === 'scene_transition') {
+            // Clear previous scene's chat bubbles; the LLM will narrate the new scene
+            messages.value = []
+            applySessionSnapshot(data, false)
           } else if (event === 'checkpoint') {
             triggerCheckpointPulse()
           }

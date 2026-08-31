@@ -731,28 +731,31 @@ const handleExitClick = async (exit: any) => {
   if (!exit || isActionInputBlocked.value) return
   if (exitTraversalBusy.value || exitUnlockBusy.value) return
 
+  // Map edges have no 'id' but always have 'from'/'to'. Build a composite key.
+  // If a direct exit DB-ID is available (e.g., from unlock modal), use it.
   const exitId = String(exit.id || '').trim()
-  if (!exitId) return
+  const fromId = String(exit.from || '').trim().toUpperCase()
+  const toId = String(exit.to || '').trim().toUpperCase()
+  const exitRef = exitId || (fromId && toId ? `${fromId}::${toId}` : '')
+  if (!exitRef) return
 
   if (isExitLocked(exit)) {
-    exitUnlockModalTarget.value = { ...exit, id: exitId, name: exit.label || 'Exit' }
+    exitUnlockModalTarget.value = { ...exit, id: exitRef, name: exit.label || 'Exit' }
     exitUnlockError.value = ''
     showExitUnlockModal.value = true
     return
   }
 
-  await traverseSceneExit(exit, exitId)
+  await traverseSceneExit(exit, exitRef)
 }
 
-const traverseSceneExit = async (exit: any, exitId: string) => {
-  exitTraversalBusy.value = exitId
+const traverseSceneExit = async (exit: any, exitRef: string) => {
+  exitTraversalBusy.value = exitRef
   try {
-    const result = await api.traverseExit(props.id, exitId)
-    addNotification(`You pass through ${exit?.label || 'the exit'}.`, 'success')
-    if (typeof refreshSession === 'function') {
-      await refreshSession()
-    }
-    void result?.scene_id
+    // Use the sendMessage pipeline so the scene transition triggers
+    // a full LLM narration turn and clears old chat bubbles via the
+    // scene_transition SSE event handled in useGameSocket.
+    await sendMessage(`/traverse_exit ${exitRef}`)
   } catch (error: any) {
     addNotification(error?.message || 'Failed to traverse the exit.', 'error')
   } finally {
