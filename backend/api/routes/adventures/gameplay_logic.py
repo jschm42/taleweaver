@@ -4486,62 +4486,47 @@ class GameTurnManager:
         self._set_combat_state(combat)
 
     async def _spawn_scene_item(self, item: dict[str, Any]) -> None:
-        name = str(item.get("name") or "Unknown Loot")
-        raw_id = str(item.get("id") or "")
-        
-        # If it's an existing entity in this session, just move it back to the scene
-        existing_ent = None
+        name = str(item.get("name") or "").strip()
+        raw_id = str(item.get("id") or item.get("entity_id") or "").strip()
+
+        ent_res = await self.db.execute(
+            select(WorldEntity).where(
+                WorldEntity.session_id == self.game_id,
+                WorldEntity.entity_type == "OBJECT"
+            )
+        )
+        all_objs = ent_res.scalars().all()
+
+        existing_ent: Optional[WorldEntity] = None
+        # 1. Exact or case-insensitive ID match
         if raw_id:
-            ent_res = await self.db.execute(
-                select(WorldEntity).where(
-                    WorldEntity.session_id == self.game_id,
-                    WorldEntity.id == raw_id
-                )
-            )
-            existing_ent = ent_res.scalars().first()
-            if existing_ent:
-                existing_ent.current_scene_id = self.state.current_scene_id
-                existing_ent.is_in_inventory = False
-                existing_ent.is_hidden = False
-
-                # Keep session overrides in sync so snapshot filtering cannot hide dropped loot.
-                states = dict(self.state.entity_states or {})
-                if raw_id not in states:
-                    states[raw_id] = {}
-                states[raw_id]["is_in_inventory"] = False
-                states[raw_id]["current_scene_id"] = self.state.current_scene_id
-                states[raw_id]["is_hidden"] = False
-                self.state.entity_states = states
-                flag_modified(self.state, "entity_states")
-                return
-
-        # Fallback: match by name (case-insensitive) to preserve pre-configured items (like keys)
-        if not existing_ent and name:
-            ent_res = await self.db.execute(
-                select(WorldEntity).where(
-                    WorldEntity.session_id == self.game_id,
-                    WorldEntity.entity_type == "OBJECT"
-                )
-            )
-            all_objs = ent_res.scalars().all()
+            raw_upper = raw_id.upper()
             for obj in all_objs:
-                if (obj.name or "").strip().lower() == name.strip().lower():
+                if (obj.id or "").strip().upper() == raw_upper:
                     existing_ent = obj
-                    raw_id = obj.id
+                    break
+
+        # 2. Match by exact or case-insensitive name
+        if not existing_ent and name:
+            name_low = name.lower()
+            for obj in all_objs:
+                if (obj.name or "").strip().lower() == name_low:
+                    existing_ent = obj
                     break
 
         if existing_ent:
             existing_ent.current_scene_id = self.state.current_scene_id
             existing_ent.is_in_inventory = False
             existing_ent.is_hidden = False
-            
+
             # Also update override in session state
             states = dict(self.state.entity_states or {})
-            if raw_id not in states:
-                states[raw_id] = {}
-            states[raw_id]["is_in_inventory"] = False
-            states[raw_id]["current_scene_id"] = self.state.current_scene_id
-            states[raw_id]["is_hidden"] = False
+            canon_id = existing_ent.id
+            if canon_id not in states:
+                states[canon_id] = {}
+            states[canon_id]["is_in_inventory"] = False
+            states[canon_id]["current_scene_id"] = self.state.current_scene_id
+            states[canon_id]["is_hidden"] = False
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
             return
@@ -6285,8 +6270,21 @@ class GameTurnManager:
                 state_dirty = True
 
         if event.updated_entities:
+            session_ents_res = await self.db.execute(
+                select(WorldEntity).where(WorldEntity.session_id == self.game_id)
+            )
+            canonical_ents = session_ents_res.scalars().all()
+            ent_lookup_by_id = {e.id.upper(): e.id for e in canonical_ents if e.id}
+            ent_lookup_by_name = {(e.name or "").strip().lower(): e.id for e in canonical_ents if e.name}
+
             for update in event.updated_entities:
-                eid = update.entity_id
+                raw_eid = str(update.entity_id or "").strip()
+                canonical_id = (
+                    ent_lookup_by_id.get(raw_eid.upper())
+                    or ent_lookup_by_name.get(raw_eid.lower())
+                    or raw_eid
+                )
+                eid = canonical_id
                 ent_obj = None
                 if eid not in states:
                     states[eid] = {}

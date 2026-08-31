@@ -292,11 +292,11 @@ class MemoryManager:
                 rule_str = " | Reveal condition: (default) reveal when the protagonist searches the scene OR when this NPC starts speaking"
             else:
                 rule_str = " | Reveal condition: (default) reveal when the protagonist searches the scene"
-            lines.append(f"- [{entity_type}] {e.name}{pos_str}{rule_str}")
+            lines.append(f"- [{entity_type}] ID='{e.id}' Name='{e.name}'{pos_str}{rule_str}")
 
         lines.append(
-            "REVEAL MECHANIC: To reveal an entity, include it in 'updated_entities' with is_hidden=false. "
-            "This makes it visible to the player in the next turn."
+            "REVEAL MECHANIC: When a reveal condition is met, reveal the entity by including its exact ID in 'updated_entities' with is_hidden=false (e.g. {\"entity_id\": \"ITEM_ID\", \"is_hidden\": false}) or in 'spawned_items'. "
+            "This immediately makes the item/NPC visible to the player."
         )
         return "\n".join(lines) + "\n"
 

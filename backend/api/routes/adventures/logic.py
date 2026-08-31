@@ -471,13 +471,20 @@ class AdventureLogic:
         ]
 
         session_overrides = state.entity_states or {}
+        norm_overrides_by_id = {str(k).strip().upper(): v for k, v in session_overrides.items() if isinstance(v, dict)}
+
         merged_entities: list[dict[str, Any]] = []
         for ent in base_entities:
             eid = ent.get("id")
+            eid_upper = str(eid or "").strip().upper()
+
             if eid in session_overrides:
                 ent.update(session_overrides[eid])
+            elif eid_upper in norm_overrides_by_id:
+                ent.update(norm_overrides_by_id[eid_upper])
+
             if str(ent.get("item_type") or "").upper() == "CONSTRUCTABLE":
-                override = session_overrides.get(eid, {})
+                override = session_overrides.get(eid) or norm_overrides_by_id.get(eid_upper) or {}
                 if "is_hidden" not in override:
                     ent["is_hidden"] = True
             metadata_json = ent.get("metadata_json") if isinstance(ent.get("metadata_json"), dict) else {}
