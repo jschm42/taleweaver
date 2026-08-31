@@ -1262,7 +1262,7 @@ defineExpose({
                   {{ props.statusText || 'Game Master is resolving your action...' }}
                 </span>
               </div>
-              <p class="text-[11px] text-amber-300/80 italic font-serif mt-0.5 truncate">
+              <p class="text-[11px] text-amber-300/80 italic mt-0.5 truncate">
                 Weaving the world's narrative response...
               </p>
             </div>
@@ -1313,7 +1313,7 @@ defineExpose({
                 >
                   <!-- Content: Name Tag, Target Addressee & Speech in same text size -->
                   <p
-                    class="text-sm sm:text-base leading-relaxed font-semibold"
+                    class="comic-bubble-text text-sm sm:text-base leading-relaxed font-semibold"
                     :class="activeTurn.userIsDialogue ? 'italic text-white' : 'text-emerald-100'"
                   >
                     <!-- Speaker Tag -->
@@ -1366,7 +1366,7 @@ defineExpose({
                 </button>
 
                 <!-- Narrative Text with Inline "GAME MASTER" Badge in Text Flow -->
-                <div class="comic-narration-text text-sm sm:text-base leading-relaxed font-serif text-slate-100">
+                <div class="comic-narration-text text-sm sm:text-base leading-relaxed text-slate-100">
                   <span
                     class="inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm"
                   >
@@ -1417,7 +1417,7 @@ defineExpose({
                   class="relative p-3.5 sm:p-4.5 rounded-2xl border-2 shadow-[0_10px_30px_rgba(0,0,0,0.65)] backdrop-blur-xl bg-slate-900/95"
                   :class="dlg.isPlayer ? 'border-emerald-400 text-slate-100' : 'border-amber-400 text-slate-100 shadow-[0_0_20px_rgba(251,191,36,0.25)]'"
                 >
-                  <p class="text-sm sm:text-base leading-relaxed font-medium italic text-white">
+                  <p class="comic-bubble-text text-sm sm:text-base leading-relaxed font-medium italic text-white">
                     <!-- Speaker Tag -->
                     <span
                       class="inline-flex items-center align-baseline mr-1.5 not-italic select-none px-2 py-0.5 rounded-lg border font-black text-xs sm:text-sm uppercase tracking-wider cursor-pointer transition-all shadow-sm"
@@ -1697,17 +1697,22 @@ defineExpose({
   letter-spacing: 0.05em;
 }
 
-.comic-narration-text {
-  font-family: 'Newsreader', Georgia, serif;
+.comic-narration-text,
+.comic-bubble-text {
+  font-family: 'Acme', sans-serif;
+  letter-spacing: 0.02em;
 }
 
 :deep(.comic-voice-tag) {
-  display: inline-block;
-  padding: 0.1rem 0.4rem;
-  margin: 0 0.2rem;
-  border-radius: 0.35rem;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  padding: 0.125rem 0.4rem;
+  margin: 0 0.3rem 0 0;
+  border-radius: 0.375rem;
+  font-size: 0.6875rem;
   font-weight: 800;
+  line-height: 1.25;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   background: rgba(251, 191, 36, 0.15);
@@ -1716,11 +1721,16 @@ defineExpose({
 }
 
 :deep(.comic-object-tag) {
-  display: inline-block;
-  padding: 0 0.3rem;
-  border-radius: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  padding: 0.125rem 0.35rem;
+  margin: 0 0.2rem;
+  border-radius: 0.375rem;
   font-family: monospace;
+  font-size: 0.75rem;
   font-weight: 700;
+  line-height: 1.25;
   background: rgba(56, 189, 248, 0.15);
   color: rgb(56, 189, 248);
   border: 1px solid rgba(56, 189, 248, 0.3);

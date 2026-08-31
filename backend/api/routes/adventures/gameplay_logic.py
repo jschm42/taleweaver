@@ -2386,6 +2386,24 @@ class GameTurnManager:
                         should_reveal = True
                         break
 
+            # Condition 3: Parent container/object was unlocked, opened, or updated in this event
+            if not should_reveal and event.updated_entities:
+                for up in event.updated_entities:
+                    if not up.entity_id:
+                        continue
+                    parent_ent = next((pe for pe in all_entities if pe.id == up.entity_id), None)
+                    if parent_ent and parent_ent.reveals_item_id and parent_ent.reveals_item_id.strip().upper() == eid.upper():
+                        should_reveal = True
+                        break
+                    parent_tag = f"##{up.entity_id.upper()}"
+                    if (
+                        parent_tag in str(e.spatial_position or "").upper()
+                        or parent_tag in str(e.reveal_rule or "").upper()
+                        or up.entity_id.upper() in str(e.spatial_position or "").upper()
+                    ):
+                        should_reveal = True
+                        break
+
             # Fallback to fast LLM semantic evaluation for language-agnostic discovery
             if not should_reveal and (user_msg or draft_narration):
                 try:
@@ -2442,6 +2460,7 @@ class GameTurnManager:
 
             if should_reveal:
                 self._upsert_entity_update(event, eid, is_hidden=False)
+                revealed_messages.append(f"Revealed {e.name}")
                 logger.info(
                     "[Turn %s] Auto-revealed hidden entity '%s' (%s) in scene '%s'",
                     self.game_id,
@@ -5939,7 +5958,11 @@ class GameTurnManager:
                 if update_id and update_name:
                     id_to_name[update_id] = update_name
 
-        response_text = self._replace_entity_ids_with_names(response_text, id_to_name)
+        # Post-narration check: If the narration described uncovering any hidden entities in the scene
+        if isinstance(game_event, GameEvent):
+            post_reveal_messages = await self._enforce_hidden_entity_reveal(game_event, user_msg, draft_narration=response_text)
+            if post_reveal_messages or (game_event and game_event.updated_entities):
+                await self._apply_game_event(game_event)
 
         # Finalize
         assistant_chat = ChatMessage(session_id=self.state.session_id, role="assistant", content=response_text)
