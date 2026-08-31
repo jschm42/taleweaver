@@ -25,6 +25,7 @@ import StatBar from './StatBar.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import CommandPopup from '@/components/game/CommandPopup.vue'
+import { getFilteredCommands } from '@/utils/commands'
 import {
   Mic,
   Scroll,
@@ -174,32 +175,9 @@ function navigateHistory(direction: 'up' | 'down') {
 // Command Autocompletion
 const showCommandPopup = ref(false)
 const commandPopupIndex = ref(0)
-const commands = [
-  { id: '/say', label: '/say <text> (Direct Speech)' },
-  { id: '/sheet', label: '/sheet' },
-  { id: '/inventory', label: '/inventory' },
-  { id: '/map', label: '/map' },
-  { id: '/quests', label: '/quests' },
-  { id: '/hint', label: '/hint' },
-  { id: '/walkthrough', label: '/walkthrough' },
-  { id: '/equip', label: '/equip' },
-  { id: '/unequip', label: '/unequip' },
-  { id: '/consume', label: '/consume' },
-  { id: '/open', label: '/open' },
-  { id: '/read', label: '/read' },
-  { id: '/debug session', label: '/debug session' },
-  { id: '/debug reveal_map', label: '/debug reveal_map' },
-  { id: '/debug walkthrough', label: '/debug walkthrough' },
-]
 
 const filteredCommands = computed(() => {
-  if (!inputText.value.startsWith('/')) return []
-  const q = inputText.value.toLowerCase().slice(1)
-  const debugEnabled = !!props.sheet?.debug_mode
-  let list = commands
-  if (!debugEnabled) list = list.filter((c) => !c.id.startsWith('/debug'))
-  if (!q) return list
-  return list.filter((c) => c.label.toLowerCase().includes(q))
+  return getFilteredCommands(inputText.value, !!props.sheet?.debug_mode)
 })
 
 watch(inputText, (newVal) => {
@@ -989,7 +967,7 @@ defineExpose({
       <img
         v-if="activeSceneImageUrl"
         :src="activeSceneImageUrl"
-        class="w-full h-full object-cover object-center filter brightness-[0.75] saturate-[1.1] contrast-[1.05] scale-[1.01] transition-all duration-1000"
+        class="w-full h-full object-cover object-center filter brightness-[0.9] saturate-[1.1] contrast-[1.05] scale-[1.01] transition-all duration-1000"
         alt="Scene background"
         @error="handleImageError(props.currentSceneImage || props.adventureImage)"
       />
@@ -1646,8 +1624,10 @@ defineExpose({
           <CommandPopup
             v-if="showCommandPopup && filteredCommands.length"
             :commands="filteredCommands"
-            :selected-index="commandPopupIndex"
+            :active-index="commandPopupIndex"
             @select="selectCommand"
+            @close="showCommandPopup = false"
+            @update:active-index="val => commandPopupIndex = val"
           />
 
           <!-- Push-To-Talk Mic Button -->

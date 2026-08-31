@@ -123,27 +123,14 @@ const showMenuPopup = ref(false)
 const isAnyGlowActive = computed(() => Boolean(props.inventoryGlow || props.mapGlow || props.questGlow))
 
 // Command Auto-completion
+import { getFilteredCommands } from '@/utils/commands'
+
 const showCommandPopup = ref(false)
 const commandPopupIndex = ref(0)
-const commands = [
-  { id: '/sheet', label: '/sheet' },
-  { id: '/inventory', label: '/inventory' },
-  { id: '/map', label: '/map' },
-  { id: '/quests', label: '/quests' },
-  { id: '/hint', label: '/hint' },
-  { id: '/walkthrough', label: '/walkthrough' },
-  { id: '/equip', label: '/equip' },
-  { id: '/unequip', label: '/unequip' },
-  { id: '/consume', label: '/consume' },
-  { id: '/open', label: '/open' },
-  { id: '/read', label: '/read' },
-  { id: '/debug session', label: '/debug session' },
-  { id: '/debug reveal_map', label: '/debug reveal_map' },
-  { id: '/debug walkthrough', label: '/debug walkthrough' },
-  { id: '/debug log on', label: '/debug log on' },
-  { id: '/debug log off', label: '/debug log off' },
-  { id: '/rule-pass', label: '/rule-pass (Force Rule Check)' },
-]
+
+const filteredCommands = computed(() => {
+  return getFilteredCommands(inputText.value, !!props.sheet?.debug_mode)
+})
 
 // Command History
 const history = ref<string[]>(JSON.parse(sessionStorage.getItem('tw_chat_history') || '[]'))
@@ -180,19 +167,7 @@ function navigateHistory(direction: 'up' | 'down') {
   }
 }
 
-const filteredCommands = computed(() => {
-  if (!inputText.value.startsWith('/')) return []
-  const q = inputText.value.toLowerCase().slice(1)
-  
-  const debugEnabled = !!props.sheet?.debug_mode
-  let list = commands
-  if (!debugEnabled) {
-    list = list.filter(c => !c.id.startsWith('/debug'))
-  }
-  
-  if (!q) return list
-  return list.filter(c => c.label.toLowerCase().includes(q))
-})
+
 
 watch(inputText, (newVal) => {
   if (newVal.startsWith('/')) {
@@ -1452,9 +1427,8 @@ onUnmounted(() => {
             <!-- Command Popup -->
             <CommandPopup
               v-if="showCommandPopup && filteredCommands.length > 0"
-              :query="inputText"
+              :commands="filteredCommands"
               :active-index="commandPopupIndex"
-              :debug-mode="!!sheet?.debug_mode"
               @select="selectCommand"
               @close="showCommandPopup = false"
               @update:active-index="val => commandPopupIndex = val"
