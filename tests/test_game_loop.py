@@ -1672,6 +1672,19 @@ async def test_game_event_schema_tool_results_is_strict_object():
 async def _seed_combat_npc(db) -> tuple[User, AdventureTemplate, Avatar, SessionState, WorldEntity]:
     user, adv, avatar, state = await _seed_game_context(db)
     adv.rule_enforcement_mode = "rpg"
+    item = WorldEntity(
+        id="RAT_TOOTH",
+        session_id=state.session_id,
+        template_id=None,
+        entity_type="OBJECT",
+        name="Rat Tooth",
+        description="A sharp rat tooth.",
+        current_scene_id=state.current_scene_id,
+        is_hidden=False,
+        is_in_inventory=False,
+        is_portable=True,
+    )
+    db.add(item)
     npc = WorldEntity(
         id="RAT_ENEMY",
         session_id=state.session_id,

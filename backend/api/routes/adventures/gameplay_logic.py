@@ -172,7 +172,7 @@ def _friendly_llm_error_message(exc: Exception) -> str | None:
     if _is_token_limit_error(exc):
         return _friendly_token_limit_message()
     if _is_rate_limit_error(exc):
-        return "The Game Master is busy (rate limit or quota reached). Please check your account credits or try again in a moment."
+        return "The Game Master is busy right now (rate limit or quota reached). Please check your account credits or try again in a moment."
     if _is_timeout_error(exc):
         return "The Game Master took too long to respond. Please try again."
     if _is_service_unavailable_error(exc):
