@@ -500,7 +500,9 @@ class AdventureLogic:
         contained_item_ids = AdventureLogic.collect_container_item_ids(merged_entities)
         entities: list[dict[str, Any]] = []
         for ent in merged_entities:
-            if ent.get("current_scene_id") != state.current_scene_id:
+            ent_scene = str(ent.get("current_scene_id") or "").strip().lower().replace("-", "_").replace(" ", "_")
+            current_scene = str(state.current_scene_id or "").strip().lower().replace("-", "_").replace(" ", "_")
+            if ent_scene != current_scene:
                 continue
             if ent.get("is_hidden") or ent.get("is_in_inventory"):
                 continue

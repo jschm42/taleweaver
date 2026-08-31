@@ -19,15 +19,18 @@ MAX_CHECKPOINTS_PER_SESSION = 5
 
 def _reason_title(reason: str, snapshot: dict[str, Any]) -> str:
     scene_label = str(snapshot.get("scene_label") or "").strip()
-    if reason == "SCENE_CHANGE":
+    norm = str(reason or "").upper()
+    if norm == "SCENE_CHANGE":
         if scene_label:
             return f"Checkpoint: Arrived at {scene_label}"
         return "Checkpoint: Scene Changed"
-    if reason == "QUEST_UPDATE":
+    if norm == "QUEST_UPDATE":
         return "Checkpoint: Quest Update"
-    if reason == "AWARD_GRANTED":
+    if norm == "AWARD_GRANTED":
         return "Checkpoint: Award Granted"
-    return "Checkpoint"
+    if "WORLD_MEMOR" in norm:
+        return "Checkpoint: World Memory Updated"
+    return f"Checkpoint: {reason.replace('_', ' ').title()}" if reason else "Checkpoint"
 
 
 class SessionCheckpointService:

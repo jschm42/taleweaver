@@ -549,8 +549,8 @@ export function useGameSocket(): UseGameSocket {
 
       if (receivedFinalEvent) {
         const snapshot = await fetchSessionSnapshot(currentGameId)
-        if (snapshot && Array.isArray(snapshot.messages)) {
-          messages.value = snapshot.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
+        if (snapshot) {
+          applySessionSnapshot(snapshot, true)
         }
       }
 
@@ -719,8 +719,8 @@ export function useGameSocket(): UseGameSocket {
 
       if (receivedFinalEvent) {
         const snapshot = await fetchSessionSnapshot(currentGameId)
-        if (snapshot && Array.isArray(snapshot.messages)) {
-          messages.value = snapshot.messages.map((m: any) => ({ ...m, timestamp: new Date() }))
+        if (snapshot) {
+          applySessionSnapshot(snapshot, true)
         }
       }
     } catch (err: any) {

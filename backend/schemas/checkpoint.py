@@ -4,11 +4,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-CheckpointTriggerReason = Literal[
-    "SCENE_CHANGE",
-    "QUEST_UPDATE",
-    "AWARD_GRANTED",
-]
+CheckpointTriggerReason = str
 
 
 class SessionCheckpointResponse(BaseModel):

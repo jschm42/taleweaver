@@ -131,7 +131,7 @@ const activeSceneImageUrl = computed(() => {
 
 // --- State: Turn Evaluation & Input Blocking ---
 const isEvaluating = computed(() => {
-  return props.status === 'connecting' || props.status === 'loading'
+  return props.status === 'connecting' || props.status === 'loading' || !!props.inputLocked
 })
 
 const canSendInput = computed(() => {
@@ -690,12 +690,13 @@ const npcs = computed(() => {
       const meta = resolveNpcMetadata(e.name) || resolveNpcMetadata(e.id)
       return {
         ...e,
+        entity_type: 'NPC',
         image_url: e.image_url || meta?.image_url || null,
         role: e.role || meta?.role || null,
       }
     })
 
-  // Actively speaking NPCs are prioritized directly under the protagonist
+  // Actively speaking NPCs in the current scene are prioritized directly under the protagonist
   const sortedWorldNpcs = [...worldNpcs].sort((a, b) => {
     const aSpeaking = isNpcSpeaking(a) ? 1 : 0
     const bSpeaking = isNpcSpeaking(b) ? 1 : 0
@@ -792,6 +793,7 @@ function handleSend() {
 
 // Prefill /say command when TAB key is pressed
 function insertSayCommand() {
+  if (!canSendInput.value) return
   if (!inputText.value.startsWith('/say ')) {
     inputText.value = '/say ' + inputText.value
   }
@@ -807,7 +809,9 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Tab' || e.code === 'Tab' || e.keyCode === 9) {
     e.preventDefault()
     e.stopPropagation()
-    insertSayCommand()
+    if (canSendInput.value) {
+      insertSayCommand()
+    }
     return
   }
 
@@ -846,7 +850,9 @@ function handleKeydown(e: KeyboardEvent) {
   }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
-    handleSend()
+    if (canSendInput.value) {
+      handleSend()
+    }
   }
 }
 
@@ -862,6 +868,7 @@ function handleNpcClick(npc: any) {
   if (npc.id === 'PLAYER') {
     emit('openSheet')
   } else {
+    if (!canSendInput.value) return
     emit('npcClick', npc.name)
     inputText.value = `/say to ${npc.name}: `
     void nextTick(() => {
@@ -872,10 +879,25 @@ function handleNpcClick(npc: any) {
   }
 }
 
-function speakTurn() {
-  if (!activeTurn.value?.assistantMessage || !configState.isTtsEnabled) return
+function getBubbleTtsText(text: string, speakerName?: string) {
+  return speakerName ? `${speakerName}: ${text}` : text
+}
+
+function isSpeakingBubble(text: string, speakerName?: string) {
+  if (!audioService.isPlaying.value) return false
+  const target = getBubbleTtsText(text, speakerName)
+  return audioService.currentText.value === target || audioService.currentText.value === text
+}
+
+function speakBubble(text: string, speakerName?: string) {
+  if (!text || !configState.isTtsEnabled) return
+  if (isSpeakingBubble(text, speakerName)) {
+    audioService.stop()
+    return
+  }
   audioService.unlock()
-  audioService.speak(activeTurn.value.assistantMessage.content, {
+  const contentToSpeak = getBubbleTtsText(text, speakerName)
+  audioService.speak(contentToSpeak, {
     sceneDescription: props.currentSceneDescription || undefined,
     adventureId: props.sheet?.template_id,
     sessionId: props.gameId,
@@ -889,9 +911,11 @@ function speakTurn() {
 function handleGlobalKeydown(e: KeyboardEvent) {
   // Global TAB shortcut to jump to chat & prefill /say
   if (e.key === 'Tab' || e.code === 'Tab' || e.keyCode === 9) {
-    e.preventDefault()
-    e.stopPropagation()
-    insertSayCommand()
+    if (canSendInput.value) {
+      e.preventDefault()
+      e.stopPropagation()
+      insertSayCommand()
+    }
     return
   }
 
@@ -1005,9 +1029,13 @@ defineExpose({
               {{ props.currentSceneName || props.sheet?.current_scene || 'Unknown Location' }}
             </h2>
           </div>
-          <p v-if="props.sheet?.adventure_title" class="text-[11px] text-slate-400 truncate opacity-80 font-medium">
-            {{ props.sheet.adventure_title }}
-          </p>
+          <div class="flex items-center gap-2 text-[11px] text-slate-400 truncate opacity-80 font-medium">
+            <span v-if="props.sheet?.adventure_title" class="truncate">{{ props.sheet.adventure_title }}</span>
+            <span v-if="props.sheet?.adventure_title && (props.sheet?.copyright || props.sheet?.creator)" class="text-slate-600 select-none">•</span>
+            <span v-if="props.sheet?.copyright || props.sheet?.creator" class="text-[10px] text-slate-500 tracking-wide truncate">
+              {{ props.sheet.copyright || `© ${props.sheet.creator}` }}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1038,8 +1066,12 @@ defineExpose({
             type="button"
             @click="audioService.toggleAutoSpeech()"
             class="flex items-center justify-center w-8 h-8 rounded-lg transition-all border cursor-pointer"
-            :class="audioService.autoSpeechEnabled.value ? 'bg-sky-500/20 border-sky-400/40 text-sky-300 shadow-[0_0_10px_rgba(56,189,248,0.2)]' : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:text-slate-200'"
-            :title="audioService.autoSpeechEnabled.value ? 'Auto-Speech Enabled' : 'Auto-Speech Disabled'"
+            :class="[
+              audioService.autoSpeechEnabled.value
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30'
+                : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            ]"
+            :title="audioService.autoSpeechEnabled.value ? 'Auto-Narration ON (Click to disable)' : 'Auto-Narration OFF (Click to enable)'"
           >
             <Volume2 class="w-4 h-4" />
           </button>
@@ -1057,7 +1089,7 @@ defineExpose({
         <button
           type="button"
           @click="emit('toggleViewMode')"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 hover:border-emerald-400/60 hover:bg-emerald-500/10 text-slate-200 hover:text-white transition-all text-xs font-black uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/60 hover:border-emerald-400/50 hover:bg-emerald-500/10 text-slate-300 hover:text-white transition-all text-xs font-black uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer"
           title="Switch to Classic RPG Panel View"
         >
           <LayoutGrid class="w-3.5 h-3.5 text-emerald-400" />
@@ -1143,9 +1175,14 @@ defineExpose({
             class="group flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-400/60 text-slate-200 hover:text-white backdrop-blur-md transition-all shadow-lg cursor-pointer active:scale-95"
             @click="emit('traverseExit', exit)"
           >
-            <DoorOpen v-if="!exit.is_locked" class="w-4 h-4 text-emerald-400" />
-            <Lock v-else class="w-4 h-4 text-red-400" />
-            <span class="text-xs font-bold uppercase tracking-wider truncate max-w-[10rem]">{{ exit.label || 'Exit' }}</span>
+            <component
+              :is="exit.is_locked ? Lock : DoorOpen"
+              class="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform"
+            />
+            <span class="text-xs font-bold uppercase tracking-wider truncate max-w-[8rem]">{{ exit.label || 'Exit' }}</span>
+            <span v-if="exit.is_locked" class="px-1.5 py-0.2 bg-red-500/20 text-red-300 border border-red-500/30 text-[9px] font-black rounded-full uppercase">
+              Locked
+            </span>
           </div>
 
           <!-- Switches -->
@@ -1240,9 +1277,22 @@ defineExpose({
             <!-- 1) PROTAGONIST / USER SPEECH OR ACTION BUBBLE -->
             <div
               v-if="activeTurn.userMessage"
-              class="flex flex-col gap-1 animate-fade-in items-start"
+              class="flex flex-col gap-1 animate-fade-in items-start group"
             >
               <div class="relative max-w-2xl">
+                <!-- Overlay TTS Button (visible on hover) -->
+                <button
+                  v-if="configState.isTtsEnabled"
+                  type="button"
+                  @click.stop="speakBubble(activeTurn.userSpeechText || activeTurn.userMessage.content, props.sheet?.name || 'You')"
+                  class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-400/60 text-emerald-300 text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md"
+                  :title="isSpeakingBubble(activeTurn.userSpeechText || activeTurn.userMessage.content, props.sheet?.name || 'You') ? 'Stop Audio' : 'Play Audio'"
+                >
+                  <VolumeX v-if="isSpeakingBubble(activeTurn.userSpeechText || activeTurn.userMessage.content, props.sheet?.name || 'You')" class="w-3 h-3 text-red-400" />
+                  <Volume2 v-else class="w-3 h-3" />
+                  <span>{{ isSpeakingBubble(activeTurn.userSpeechText || activeTurn.userMessage.content, props.sheet?.name || 'You') ? 'Stop' : 'Audio' }}</span>
+                </button>
+
                 <!-- SVG Speech Tail pointing to Speaker on Left -->
                 <svg
                   class="absolute -left-3.5 top-4 w-4 h-6 text-slate-900 pointer-events-none z-20 overflow-visible"
@@ -1299,22 +1349,23 @@ defineExpose({
             </div>
 
             <!-- 2) GM COMIC NARRATIVE CAPTION BOX -->
-            <div v-if="activeTurn.narration" class="animate-fade-in relative">
+            <div v-if="activeTurn.narration" class="animate-fade-in relative group">
               <div class="relative bg-slate-900/95 border-2 border-amber-500/70 rounded-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-                <!-- TTS Playback Button (Top Right) -->
+                <!-- Overlay TTS Button (sitting on upper border frame) -->
                 <button
                   v-if="configState.isTtsEnabled"
                   type="button"
-                  @click="speakTurn"
-                  class="absolute top-3.5 right-3.5 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer z-10"
-                  title="Speak Narration"
+                  @click.stop="speakBubble(activeTurn.narration)"
+                  class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/90 hover:bg-amber-900 border border-amber-400/60 text-amber-300 text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md"
+                  :title="isSpeakingBubble(activeTurn.narration) ? 'Stop Audio' : 'Play Audio'"
                 >
-                  <Volume2 class="w-3.5 h-3.5" />
-                  <span>Narrate</span>
+                  <VolumeX v-if="isSpeakingBubble(activeTurn.narration)" class="w-3 h-3 text-red-400" />
+                  <Volume2 v-else class="w-3 h-3" />
+                  <span>{{ isSpeakingBubble(activeTurn.narration) ? 'Stop' : 'Audio' }}</span>
                 </button>
 
                 <!-- Narrative Text with Inline "GAME MASTER" Badge in Text Flow -->
-                <div class="comic-narration-text text-sm sm:text-base leading-relaxed font-serif text-slate-100 pr-20">
+                <div class="comic-narration-text text-sm sm:text-base leading-relaxed font-serif text-slate-100">
                   <span
                     class="inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm"
                   >
@@ -1329,9 +1380,23 @@ defineExpose({
             <div
               v-for="(dlg, dIdx) in activeTurn.dialogues"
               :key="dIdx"
-              class="flex flex-col gap-1 animate-fade-in items-start"
+              class="flex flex-col gap-1 animate-fade-in items-start group"
             >
               <div class="relative max-w-2xl">
+                <!-- Overlay TTS Button (visible on hover) -->
+                <button
+                  v-if="configState.isTtsEnabled"
+                  type="button"
+                  @click.stop="speakBubble(dlg.text, dlg.speaker)"
+                  class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md border"
+                  :class="dlg.isPlayer ? 'bg-emerald-950/90 hover:bg-emerald-900 border-emerald-400/60 text-emerald-300' : 'bg-amber-950/90 hover:bg-amber-900 border-amber-400/60 text-amber-300'"
+                  :title="isSpeakingBubble(dlg.text, dlg.speaker) ? 'Stop Audio' : 'Play Audio'"
+                >
+                  <VolumeX v-if="isSpeakingBubble(dlg.text, dlg.speaker)" class="w-3 h-3 text-red-400" />
+                  <Volume2 v-else class="w-3 h-3" />
+                  <span>{{ isSpeakingBubble(dlg.text, dlg.speaker) ? 'Stop' : 'Audio' }}</span>
+                </button>
+
                 <!-- Comic Angled Speech Tail pointing Left directly towards the NPC portrait card -->
                 <svg
                   class="absolute -left-3.5 top-4 w-4 h-6 text-slate-900 pointer-events-none z-20 overflow-visible"
