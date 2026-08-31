@@ -653,7 +653,7 @@ async def start_session_for_template(
         session_id=new_session.id, user_id=current_user.id, template_id=template_id, avatar_id=avatar.id,
         current_scene_id=first_scene_id, in_game_time=0, quests=deepcopy(adventure.quests or []),
         entity_states=initial_entity_states,
-        start_datetime=AdventureLogic.resolve_start_datetime(adventure.original_manifest),
+        start_datetime=AdventureLogic.resolve_start_datetime(adventure.original_manifest, time_config=adventure.time_config),
         plot=adventure.plot,
         rules=adventure.rules,
         walkthrough=adventure.walkthrough,

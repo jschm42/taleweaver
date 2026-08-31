@@ -549,6 +549,9 @@ const form = ref({
   original_prompt: '',
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
+  clock_enabled: false,
+  time_system: 'calendar' as 'calendar' | 'relative',
+  time_config: { start_time: '08:00', day_label: 'Day' } as Record<string, any>,
   min_scenes: null as number | null,
   max_scenes: null as number | null,
   min_items: null as number | null,
@@ -731,6 +734,13 @@ async function fetchAdventure() {
     form.value.original_prompt = data.original_prompt || ''
     form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
+    form.value.clock_enabled = data.clock_enabled ?? false
+    form.value.time_system = (data.time_system === 'relative' ? 'relative' : 'calendar')
+    form.value.time_config = data.time_config && typeof data.time_config === 'object'
+      ? { ...data.time_config }
+      : { start_time: '08:00', day_label: 'Day' }
+    if (!form.value.time_config.start_time) form.value.time_config.start_time = '08:00'
+    if (!form.value.time_config.day_label) form.value.time_config.day_label = 'Day'
     form.value.min_scenes = data.min_scenes !== undefined ? data.min_scenes : null
     form.value.max_scenes = data.max_scenes !== undefined ? data.max_scenes : null
     form.value.min_items = data.min_items !== undefined ? data.min_items : null
@@ -2215,6 +2225,10 @@ watch(
               @generate-field="handleGenerateField"
               @update:temp-value="tempValue = $event"
               @update:pacing="form.time_per_turn = $event"
+              @update:clock-enabled="form.clock_enabled = $event"
+              @update:time-system="form.time_system = $event"
+              @update:start-time="form.time_config = { ...(form.time_config || {}), start_time: $event }"
+              @update:day-label="form.time_config = { ...(form.time_config || {}), day_label: $event }"
               @update:mode="form.rule_enforcement_mode = $event as any"
               @save-changes="saveChanges"
             />

@@ -273,6 +273,9 @@ class AdventureTemplateResponse(BaseModel):
     time_per_turn: int
     pacing_minutes: int
     clock_enabled: bool
+    time_system: str = "calendar"
+    time_config: Optional[dict[str, Any]] = None
+    starting_timestamp: int = 0
     game_over_rules: Optional[dict[str, Any]]
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None

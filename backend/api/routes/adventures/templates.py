@@ -928,7 +928,7 @@ async def create_adventure(
         in_game_time=0,
         quests=deepcopy(adv.quests or []),
         entity_states=initial_entity_states,
-        start_datetime=AdventureLogic.resolve_start_datetime(adv.original_manifest),
+        start_datetime=AdventureLogic.resolve_start_datetime(adv.original_manifest, time_config=adv.time_config),
         plot=adv.plot,
         rules=adv.rules,
         walkthrough=adv.walkthrough,
@@ -1376,7 +1376,8 @@ async def update_adventure(
         "gameover_condition",
         "tts_director_notes",
     }
-    if any(f in update_data for f in narrative_fields):
+    time_fields = {"time_system", "time_config", "clock_enabled", "pacing_minutes"}
+    if any(f in update_data for f in narrative_fields) or any(f in update_data for f in time_fields):
         from backend.models.session_state import SessionState
 
         session_res = await db.execute(
@@ -1387,6 +1388,10 @@ async def update_adventure(
             for f in narrative_fields:
                 if f in update_data:
                     setattr(state, f, update_data[f])
+            if "time_system" in update_data:
+                state.time_system = update_data["time_system"]
+            if "time_config" in update_data:
+                state.time_config = update_data["time_config"]
 
     await db.commit()
     await db.refresh(adv)

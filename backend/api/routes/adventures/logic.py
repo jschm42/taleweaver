@@ -284,7 +284,7 @@ class AdventureLogic:
         return AdventureLogic.resolve_existing_data_asset_url(res.scalars().first())
 
     @staticmethod
-    def resolve_start_datetime(manifest: dict[str, Optional[Any]], state: Optional[SessionState] = None) -> Optional[str]:
+    def resolve_start_datetime(manifest: dict[str, Optional[Any]], state: Optional[SessionState] = None, time_config: Optional[dict] = None) -> Optional[str]:
         """Returns a usable ISO datetime string. Prioritizes session-specific state over manifest."""
         if state and state.start_datetime:
             return state.start_datetime
@@ -292,26 +292,44 @@ class AdventureLogic:
         target_manifest = manifest
         if not target_manifest:
             return None
-            
+
+        # Merge explicit editor time_config over manifest defaults so in-game
+        # start time can be configured from the world editor.
+        merged_time_config = dict(time_config or {})
+        manifest_time_config = target_manifest.get("time_config")
+        if isinstance(manifest_time_config, dict):
+            for k, v in manifest_time_config.items():
+                merged_time_config.setdefault(k, v)
+
         start_datetime = target_manifest.get("start_datetime")
         if isinstance(start_datetime, str) and start_datetime.strip():
             return start_datetime
         start_date = manifest.get("start_date")
         start_time = manifest.get("start_time")
-        if not (isinstance(start_date, str) and start_date.strip() and isinstance(start_time, str) and start_time.strip()):
-            time_config = target_manifest.get("time_config") or {}
-            year_override = time_config.get("start_year_override")
-            if year_override:
-                try:
-                    dt = datetime(year=int(year_override), month=1, day=1, hour=8, minute=0)
-                    return dt.isoformat()
-                except:
-                    pass
+        if isinstance(start_date, str) and start_date.strip() and isinstance(start_time, str) and start_time.strip():
+            try:
+                dt = datetime.fromisoformat(f"{start_date.strip()}T{start_time.strip()}")
+                return dt.isoformat()
+            except ValueError:
+                pass
+
+        # Build from start_time (e.g. "14:30") + optional start_year_override.
+        base_hour, base_minute = 8, 0
+        configured_start = merged_time_config.get("start_time")
+        if isinstance(configured_start, str) and configured_start.strip():
+            try:
+                h, m = map(int, configured_start.strip().split(":"))
+                base_hour, base_minute = h, m
+            except Exception:
+                pass
+        year_override = merged_time_config.get("start_year_override")
+        if not configured_start and not year_override:
             return None
         try:
-            dt = datetime.fromisoformat(f"{start_date.strip()}T{start_time.strip()}")
+            year = int(year_override) if year_override else 2026
+            dt = datetime(year=year, month=1, day=1, hour=base_hour, minute=base_minute)
             return dt.isoformat()
-        except ValueError:
+        except Exception:
             return None
 
     @staticmethod
@@ -585,10 +603,19 @@ class AdventureLogic:
         adventure = adv_res.scalars().first()
         session_snapshot = AdventureLogic.extract_manifest_snapshot(state)
         session_manifest = AdventureLogic.resolve_manifest_for_state(state)
-        start_datetime = AdventureLogic.resolve_start_datetime(adventure.original_manifest if adventure else session_manifest, state=state)
+        adventure_time_config = adventure.time_config if adventure else (session_snapshot.get("adventure") or {}).get("time_config")
+        start_datetime = AdventureLogic.resolve_start_datetime(
+            adventure.original_manifest if adventure else session_manifest,
+            state=state,
+            time_config=adventure_time_config,
+        )
         
         if not start_datetime and ((adventure and adventure.clock_enabled) or bool((session_snapshot.get("adventure") or {}).get("clock_enabled"))):
-            start_datetime = "2026-04-17T08:00:00"
+            resolved = AdventureLogic.resolve_start_datetime(
+                {"time_config": adventure_time_config or {}},
+                time_config=adventure_time_config,
+            )
+            start_datetime = resolved or "2026-04-17T08:00:00"
 
         snapshot = AdventureLogic.extract_asset_snapshot(state)
         has_asset_snapshot = "__asset_snapshot__" in (state.entity_states or {})

@@ -338,29 +338,28 @@ class MemoryManager:
         """Translates total minutes into a formatted string based on the system."""
         time_config = time_config or {}
         day_label = time_config.get("day_label", "Day")
-        base_hour = 8
+        base_minutes_of_day = 8 * 60  # default 08:00
         
         # If there's a start_time in config, use it instead of 08:00
         if time_config.get("start_time"):
             try:
                 h, m = map(int, time_config["start_time"].split(':'))
-                base_hour = h
-                # We could also use m here if we wanted to be precise
-            except:
+                base_minutes_of_day = h * 60 + m
+            except (TypeError, ValueError):
                 pass
 
-        total_hours = minutes // 60
-        extra_minutes = minutes % 60
-        
-        current_hour = (base_hour + total_hours) % 24
-        days_passed = (base_hour + total_hours) // 24
+        total_minutes = base_minutes_of_day + minutes
+        days_passed = total_minutes // (24 * 60)
+        rem_minutes = total_minutes % (24 * 60)
+        current_hour = rem_minutes // 60
+        current_minute = rem_minutes % 60
         
         if time_system == "relative":
-            return f"{day_label} {1 + days_passed}, {current_hour:02d}:{extra_minutes:02d}"
+            return f"{day_label} {1 + days_passed}, {current_hour:02d}:{current_minute:02d}"
         
         # Calendar mode is handled by the frontend mostly, 
         # but for the LLM prompt we provide a readable string.
-        return f"Day {1 + days_passed}, {current_hour:02d}:{extra_minutes:02d}"
+        return f"Day {1 + days_passed}, {current_hour:02d}:{current_minute:02d}"
 
     @staticmethod
     def build_system_prompt(

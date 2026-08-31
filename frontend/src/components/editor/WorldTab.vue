@@ -33,6 +33,10 @@ const emit = defineEmits<{
   (e: 'update:mode', val: 'rpg' | 'story' | 'chat'): void
   (e: 'save-changes'): void
   (e: 'update:pacing', val: number): void
+  (e: 'update:clock-enabled', val: boolean): void
+  (e: 'update:time-system', val: 'calendar' | 'relative'): void
+  (e: 'update:start-time', val: string): void
+  (e: 'update:day-label', val: string): void
 }>()
 
 function buildVisualImageUrl(imagePath?: string | null) {
@@ -48,6 +52,38 @@ function getCoverNarrativeContext() {
 function handlePacingInput(event: Event) {
   const target = event.target as HTMLInputElement
   emit('update:pacing', parseInt(target.value))
+}
+
+function handleStartTimeInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  emit('update:start-time', target.value || '08:00')
+}
+
+function handleDayLabelInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  emit('update:day-label', target.value || 'Day')
+}
+
+const clockConfigChanged = computed(() => {
+  const advClock = !!props.adventure?.clock_enabled
+  const advTimeConfig = props.adventure?.time_config || {}
+  const formTimeConfig = props.form?.time_config || {}
+  const advTimeSystem = props.adventure?.time_system || 'calendar'
+  const formTimeSystem = props.form?.time_system || 'calendar'
+  return (
+    !!props.form?.clock_enabled !== advClock
+    || (formTimeSystem !== advTimeSystem)
+    || (formTimeConfig.start_time || '08:00') !== (advTimeConfig.start_time || '08:00')
+    || (formTimeConfig.day_label || 'Day') !== (advTimeConfig.day_label || 'Day')
+  )
+})
+
+function discardClockConfig() {
+  const advTimeConfig = props.adventure?.time_config || {}
+  emit('update:clock-enabled', !!props.adventure?.clock_enabled)
+  emit('update:time-system', (props.adventure?.time_system === 'relative' ? 'relative' : 'calendar'))
+  emit('update:start-time', advTimeConfig.start_time || '08:00')
+  emit('update:day-label', advTimeConfig.day_label || 'Day')
 }
 
 const URL_PATTERN = /^(https?:\/\/)[^\s/$.?#].[^\s]*$/i
@@ -118,6 +154,75 @@ const licenseUrlInvalid = computed(() => {
           </div>
         </div>
         <input :value="form.time_per_turn" @input="handlePacingInput" type="range" min="1" max="60" class="w-full accent-emerald-500 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer mt-3" />
+      </div>
+    </div>
+
+    <!-- In-Game Clock & Time -->
+    <div class="bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-xl">
+      <div class="flex justify-between items-center mb-6">
+        <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">In-Game Clock</label>
+        <div class="flex items-center gap-3">
+          <div v-if="clockConfigChanged" class="flex gap-2 animate-fade-in mr-2">
+            <button @click="discardClockConfig" class="text-xs font-bold text-slate-500 hover:text-white uppercase transition-colors">Discard</button>
+            <button @click="emit('save-changes')" class="text-xs font-bold text-emerald-500 hover:text-emerald-400 uppercase transition-colors">Save</button>
+          </div>
+          <button
+            @click="emit('update:clock-enabled', !form.clock_enabled)"
+            class="relative w-12 h-6 rounded-full transition-colors"
+            :class="form.clock_enabled ? 'bg-emerald-500' : 'bg-slate-700'"
+          >
+            <div :class="['absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm', form.clock_enabled ? 'left-7' : 'left-1']"></div>
+          </button>
+          <span class="text-xs font-bold uppercase tracking-widest" :class="form.clock_enabled ? 'text-emerald-400' : 'text-slate-500'">
+            {{ form.clock_enabled ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+      </div>
+
+      <div v-if="form.clock_enabled" class="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
+        <div class="space-y-2">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Start Time</label>
+          <input
+            type="time"
+            :value="form.time_config?.start_time || '08:00'"
+            @input="handleStartTimeInput"
+            class="w-full bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all"
+          />
+          <p class="text-[10px] text-slate-600 uppercase tracking-widest">The in-game clock starts at this time on day 1.</p>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Time System</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              @click="emit('update:time-system', 'calendar')"
+              class="px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border"
+              :class="(form.time_system || 'calendar') === 'calendar' ? 'bg-emerald-600/80 border-emerald-500 text-white' : 'bg-black/40 border-white/10 text-slate-400 hover:text-white'"
+            >
+              Calendar
+            </button>
+            <button
+              @click="emit('update:time-system', 'relative')"
+              class="px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border"
+              :class="(form.time_system || 'calendar') === 'relative' ? 'bg-emerald-600/80 border-emerald-500 text-white' : 'bg-black/40 border-white/10 text-slate-400 hover:text-white'"
+            >
+              Relative
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Day Label</label>
+          <input
+            :value="form.time_config?.day_label || 'Day'"
+            @input="handleDayLabelInput"
+            type="text"
+            maxlength="20"
+            placeholder="Day"
+            class="w-full bg-black/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-white text-sm font-bold focus:ring-2 ring-emerald-500/20 outline-none transition-all"
+          />
+          <p class="text-[10px] text-slate-600 uppercase tracking-widest">Name of a day, e.g. "Day" or "Sol".</p>
+        </div>
       </div>
     </div>
 
