@@ -1082,6 +1082,7 @@ async function saveEntityText(data: any) {
       new_id: newId || undefined,
       name: data.name,
       description: data.description,
+      item_type: editEntityContext.value.type === 'object' ? data.item_type : undefined,
       hp: data.hp || undefined,
       stamina: data.stamina || undefined,
       mana: data.mana || undefined,
@@ -1861,7 +1862,7 @@ async function confirmChangeItemType(newItemType: string) {
       target_id: target.id,
       item_type: normalized,
     })
-    await fetchDebugInfo()
+    await Promise.all([fetchAdventure(), fetchDebugInfo()])
     addNotification(`Item "${target.name}" is now ${normalized}.`, 'success')
     closeChangeItemTypeModal()
   } catch (error: any) {

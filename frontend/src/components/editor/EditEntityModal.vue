@@ -261,7 +261,6 @@ watch(() => localForm.value.entity_id, (newVal) => {
 })
 
 watch(() => localForm.value.item_type, (newType) => {
-  if (!props.isCreateEntityMode) return
   const type = String(newType || '').toUpperCase()
   if (type === 'SWITCH') {
     localForm.value.is_portable = false
@@ -273,13 +272,13 @@ watch(() => localForm.value.item_type, (newType) => {
     }
   } else if (type === 'WEARABLE') {
     localForm.value.is_portable = true
-  } else {
+  } else if (props.isCreateEntityMode) {
     localForm.value.is_portable = true
   }
   if (type === 'CONSTRUCTABLE') {
     // Constructables materialize only once all ingredients are combined.
     if (!Array.isArray(localForm.value.combination_ingredients_input) ||
-        localForm.value.combination_ingredients_input.filter((s: string) => Boolean(s)).length < 2) {
+        localForm.value.combination_ingredients_input.length === 0) {
       localForm.value.combination_ingredients_input = ['', '']
     }
   }
@@ -774,7 +773,7 @@ const textLogPreviewClass = computed(() => {
                   <div class="space-y-2">
                     <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Item Type</label>
                     <select
-                      v-if="isCreateEntityMode && !localForm.is_item_type_fixed"
+                      v-if="!localForm.is_item_type_fixed"
                       v-model="localForm.item_type"
                       class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2 text-white font-bold uppercase tracking-widest focus:border-emerald-500/50 outline-none transition-all"
                     >

@@ -9,13 +9,13 @@ const props = defineProps<{
   <div class="z-10">
     <div class="relative group flex flex-col items-end select-none game-clock" :class="{ 'clock-tick': props.clockTick }">
       <template v-if="props.gameTime">
-        <div class="flex items-center gap-3 px-4 py-2 bg-slate-800/40 border border-slate-700/30 rounded-xl backdrop-blur-md shadow-lg transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500/80 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div class="flex items-center gap-2 sm:gap-2.5 px-2.5 py-1 sm:px-3.5 sm:py-1.5 bg-slate-900/80 border border-slate-700/60 rounded-xl backdrop-blur-md shadow-lg transition-all">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div class="flex flex-col items-end min-w-0">
-            <span class="text-xs font-black text-amber-500/60 uppercase tracking-widest leading-none mb-1.5 whitespace-nowrap truncate max-w-[120px]">{{ props.gameTime.dateShort }}</span>
-            <span class="clock-time text-2xl font-black text-amber-300 tracking-widest leading-none tabular-nums">
+            <span class="text-[9px] sm:text-xs font-black text-amber-500/60 uppercase tracking-widest leading-none mb-0.5 sm:mb-1 whitespace-nowrap truncate max-w-[120px]">{{ props.gameTime.dateShort }}</span>
+            <span class="clock-time text-sm sm:text-lg font-black text-amber-300 tracking-widest leading-none tabular-nums">
               {{ props.gameTime.time }}
             </span>
           </div>

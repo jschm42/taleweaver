@@ -22,6 +22,7 @@ import type { ConnectionStatus } from '@/composables/useGameSocket'
 import { getItemIcon, getTypeColor, getImageUrl, getOriginalImageUrl } from '@/utils/game_icons'
 import { audioService } from '@/services/audioService'
 import StatBar from './StatBar.vue'
+import GameClockWidget from '@/components/game/GameClockWidget.vue'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import CommandPopup from '@/components/game/CommandPopup.vue'
 import {
@@ -1044,6 +1045,9 @@ defineExpose({
 
       <!-- Right: Status, Audio & View Switcher -->
       <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <!-- In-Game Clock -->
+        <GameClockWidget :game-time="props.gameTime || null" :clock-tick="props.clockTick || false" />
+
         <!-- TTS Toggle / Stop -->
         <div v-if="configState.isTtsEnabled" class="flex items-center gap-1.5">
           <button

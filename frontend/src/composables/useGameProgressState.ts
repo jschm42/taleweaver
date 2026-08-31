@@ -30,27 +30,29 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
   const clockTick = ref(false)
 
   const gameTime = computed(() => {
-    if (!(sheet.value as any)?.start_datetime && (sheet.value as any)?.time_system !== 'relative') return null
-
+    const elapsedMinutes = (sheet.value as any)?.in_game_time ?? 0
     const timeSystem = (sheet.value as any)?.time_system || 'calendar'
     const timeConfig = (sheet.value as any)?.time_config || {}
     const dayLabel = timeConfig.day_label || 'Day'
-    const elapsedMinutes = (sheet.value as any)?.in_game_time ?? 0
+    const startDatetimeRaw = (sheet.value as any)?.start_datetime
 
-    if (timeSystem === 'relative') {
+    if (timeSystem === 'relative' || !startDatetimeRaw) {
       const totalMinutes = elapsedMinutes
       let baseHour = 8
+      let baseMin = 0
       if (timeConfig.start_time) {
-        const [h] = timeConfig.start_time.split(':').map(Number)
+        const [h, m] = String(timeConfig.start_time).split(':').map(Number)
         if (!isNaN(h)) baseHour = h
+        if (!isNaN(m)) baseMin = m
       }
 
-      const totalHours = Math.floor(totalMinutes / 60)
-      const extraMinutes = totalMinutes % 60
-      const currentHour = (baseHour + totalHours) % 24
-      const daysPassed = Math.floor((baseHour + totalHours) / 24)
+      const totalMinsCombined = baseHour * 60 + baseMin + totalMinutes
+      const daysPassed = Math.floor(totalMinsCombined / (24 * 60))
+      const remDayMins = ((totalMinsCombined % (24 * 60)) + (24 * 60)) % (24 * 60)
+      const currentHour = Math.floor(remDayMins / 60)
+      const currentMin = remDayMins % 60
 
-      const timeStr = `${currentHour.toString().padStart(2, '0')}:${extraMinutes.toString().padStart(2, '0')}`
+      const timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`
       return {
         date: `${dayLabel} ${1 + daysPassed}`,
         dateShort: `${dayLabel} ${1 + daysPassed}`,
@@ -58,8 +60,18 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
       }
     }
 
-    const start = new Date((sheet.value as any).start_datetime || 0)
-    if (Number.isNaN(start.getTime())) return null
+    const start = new Date(startDatetimeRaw)
+    if (Number.isNaN(start.getTime())) {
+      const totalMinutes = elapsedMinutes
+      const daysPassed = Math.floor(totalMinutes / (24 * 60))
+      const currentHour = Math.floor((totalMinutes % (24 * 60)) / 60)
+      const currentMin = totalMinutes % 60
+      return {
+        date: `${dayLabel} ${1 + daysPassed}`,
+        dateShort: `${dayLabel} ${1 + daysPassed}`,
+        time: `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`,
+      }
+    }
 
     const current = new Date(start.getTime() + elapsedMinutes * 60_000)
 
