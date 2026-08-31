@@ -1090,6 +1090,7 @@ _FIX_NPC_FIELDS = frozenset(
     {
         "name", "description", "goal", "character",
         "is_killable", "current_scene_id",
+        "is_hidden", "reveal_rule", "spatial_position",
     }
 )
 
@@ -1098,6 +1099,7 @@ _FIX_OBJECT_FIELDS = frozenset(
         "name", "description", "is_portable", "current_scene_id",
         "locked", "code_to_unlock", "item_to_unlock", "rule_to_unlock",
         "text_log_content", "text_log_format",
+        "is_hidden", "reveal_rule", "spatial_position",
     }
 )
 
@@ -3185,6 +3187,14 @@ async def update_editor_entity(
                 if payload.inventory is not None:
                     ent.inventory = list(payload.inventory)
                     flag_modified(ent, "inventory")
+                if payload.is_hidden is not None:
+                    ent.is_hidden = bool(payload.is_hidden)
+                if payload.reveal_rule is not None:
+                    normalized = str(payload.reveal_rule or "").strip()
+                    ent.reveal_rule = normalized[:500] if normalized else None
+                if payload.spatial_position is not None:
+                    normalized = str(payload.spatial_position or "").strip()
+                    ent.spatial_position = normalized[:255] if normalized else None
                 if payload.current_scene_id is not None:
                     new_scene_id = str(payload.current_scene_id or "").strip().upper()
                     if not new_scene_id:

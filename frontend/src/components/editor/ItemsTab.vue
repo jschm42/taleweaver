@@ -380,6 +380,7 @@ const activeFilterLabel = computed(() => {
             <div v-if="isQuickGenerating['object_' + obj.id]" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-20">
               <i class="ra ra-cycle animate-spin text-lg text-emerald-500"></i>
             </div>
+            <div v-if="obj.is_hidden" class="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wide border border-violet-500/50 bg-violet-500/30 text-violet-200 z-10">HIDDEN</div>
             <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent opacity-80"></div>
             <div class="absolute bottom-0 left-0 right-0 p-2">
               <div class="text-[10px] font-black text-white uppercase tracking-wider truncate drop-shadow-md">{{ obj.name }}</div>

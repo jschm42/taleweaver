@@ -828,6 +828,9 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
   const selectedObject = type === 'object'
     ? ([...(editorObjects.value || []), ...(editorTextLogs.value || []), ...(editorSwitches.value || []), ...(editorContainers.value || [])]).find((entry: any) => String(entry.id) === String(id))
     : null
+  const selectedNpc = type === 'npc'
+    ? (debugData.value?.npcs || []).find((entry: any) => String(entry.id) === String(id))
+    : null
 
   editEntityContext.value = { type, id }
   const resolvedDescription = type === 'object'
@@ -851,17 +854,19 @@ function openTextEdit(type: string, id: string, currentName: string, currentDesc
     item_to_unlock: selectedObject?.item_to_unlock || '',
     inventory_input: Array.isArray(selectedObject?.inventory)
       ? [...selectedObject.inventory.map((item: any) => typeof item === 'string' ? item : (item?.id || ''))]
-      : [],
+      : Array.isArray(selectedNpc?.inventory)
+        ? [...selectedNpc.inventory.map((item: any) => typeof item === 'string' ? item : (item?.id || ''))]
+        : [],
     text_log_content: fixNewlines(metadata?.text_log_content || ''),
     text_log_format: String(metadata?.text_log_format || selectedObject?.text_log_format || 'DOCUMENT').trim().toUpperCase(),
-    entity_id: String(selectedObject?.id || id || ''),
+    entity_id: String(selectedObject?.id || selectedNpc?.id || id || ''),
     wearable_slots_input: selectedObject?.wearable_slots || [],
     combination_ingredients_input: Array.isArray(selectedObject?.combination_ingredients)
       ? [...selectedObject.combination_ingredients]
       : (metadata?.combination_ingredients ? [...metadata.combination_ingredients] : []),
-    reveal_rule: String(selectedObject?.reveal_rule || metadata?.reveal_rule || ''),
-    is_hidden: !!(selectedObject?.is_hidden ?? metadata?.is_hidden ?? false),
-    spatial_position: String(selectedObject?.spatial_position || metadata?.spatial_position || ''),
+    reveal_rule: type === 'npc' ? String(selectedNpc?.reveal_rule || '') : String(selectedObject?.reveal_rule || metadata?.reveal_rule || ''),
+    is_hidden: type === 'npc' ? !!(selectedNpc?.is_hidden ?? false) : !!(selectedObject?.is_hidden ?? metadata?.is_hidden ?? false),
+    spatial_position: type === 'npc' ? String(selectedNpc?.spatial_position || '') : String(selectedObject?.spatial_position || metadata?.spatial_position || ''),
     reveals_item_id: String(selectedObject?.reveals_item_id || metadata?.reveals_item_id || ''),
     switch_states_json: JSON.stringify(selectedObject?.switch_states || metadata?.switch?.states || metadata?.switch_states || [], null, 2),
     switch_initial_state: String(selectedObject?.switch_initial_state || metadata?.switch?.initial_state || metadata?.switch_initial_state || ''),
@@ -939,6 +944,9 @@ async function saveEntityText(data: any) {
           goal: String(data.goal || '').trim() || undefined,
           character: String(data.character || '').trim() || undefined,
           is_killable: Boolean(data.is_killable),
+          is_hidden: Boolean(data.is_hidden),
+          reveal_rule: String(data.reveal_rule || '').trim() || undefined,
+          spatial_position: String(data.spatial_position || '').trim() || undefined,
         })
       } else {
         const itemType = String(data.item_type || 'DEFAULT').toUpperCase()
@@ -1084,22 +1092,22 @@ async function saveEntityText(data: any) {
       locked: editEntityContext.value.type === 'object' ? data.locked : undefined,
       code_to_unlock: editEntityContext.value.type === 'object' ? data.code_to_unlock : undefined,
       item_to_unlock: editEntityContext.value.type === 'object' ? data.item_to_unlock : undefined,
-      inventory: editEntityContext.value.type === 'object' ? data.inventory : undefined,
+      inventory: ['npc', 'object'].includes(editEntityContext.value.type) ? data.inventory : undefined,
       text_log_content: editEntityContext.value.type === 'object' ? data.text_log_content : undefined,
       text_log_format: editEntityContext.value.type === 'object' && String(data.item_type || '').toUpperCase() === 'READABLE'
         ? data.text_log_format
         : undefined,
       wearable_slots: editEntityContext.value.type === 'object' ? data.wearable_slots : undefined,
       combination_ingredients: editEntityContext.value.type === 'object' ? data.combination_ingredients : undefined,
-      spatial_position: editEntityContext.value.type === 'object' ? data.spatial_position : undefined,
+      spatial_position: ['npc', 'object'].includes(editEntityContext.value.type) ? data.spatial_position : undefined,
       reveals_item_id: editEntityContext.value.type === 'object' ? data.reveals_item_id : undefined,
       switch_states: editEntityContext.value.type === 'object' ? data.switch_states : undefined,
       switch_initial_state: editEntityContext.value.type === 'object' ? data.switch_initial_state : undefined,
       switch_transitions: editEntityContext.value.type === 'object' ? data.switch_transitions : undefined,
       effects: editEntityContext.value.type === 'object' ? data.effects : undefined,
       stat_modifier_strength: editEntityContext.value.type === 'object' ? data.stat_modifier_strength : undefined,
-      is_hidden: editEntityContext.value.type === 'object' ? data.is_hidden : undefined,
-      reveal_rule: editEntityContext.value.type === 'object' ? data.reveal_rule : undefined,
+      is_hidden: ['npc', 'object'].includes(editEntityContext.value.type) ? data.is_hidden : undefined,
+      reveal_rule: ['npc', 'object'].includes(editEntityContext.value.type) ? data.reveal_rule : undefined,
     })
     // Redirect if we renamed the scene we are currently viewing
     if (editEntityContext.value.type === 'scene' && newId && oldId !== newId && activeMapSceneId.value === oldId) {

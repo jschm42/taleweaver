@@ -718,6 +718,57 @@ const textLogPreviewClass = computed(() => {
                 </p>
               </div>
 
+              <!-- NPC Hidden State & Reveal Condition -->
+              <div v-if="context.type === 'npc'" class="p-4 bg-black/30 border border-white/10 rounded-2xl space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="space-y-1 pr-4">
+                    <p class="text-xs font-black text-slate-200 uppercase tracking-widest">Start Hidden</p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-tighter">If enabled, this NPC starts hidden and will only appear when discovered or when speaking.</p>
+                  </div>
+                  <button
+                    type="button"
+                    @click="localForm.is_hidden = !localForm.is_hidden"
+                    :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_hidden ? 'bg-emerald-600' : 'bg-slate-700']"
+                  >
+                    <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_hidden ? 'translate-x-6' : 'translate-x-0']"></div>
+                  </button>
+                </div>
+
+                <div v-if="localForm.is_hidden" class="space-y-3 pt-2 border-t border-white/5">
+                  <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Spatial Position</label>
+                    <input
+                      v-model="localForm.spatial_position"
+                      type="text"
+                      maxlength="255"
+                      placeholder="e.g. Hiding in the cellar behind the wine barrels"
+                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all shadow-inner"
+                    />
+                    <span class="block text-[10px] text-slate-500 leading-normal">
+                      Location hint used by the narrator when describing the scene.
+                    </span>
+                  </div>
+
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveal Rule</label>
+                      <span class="text-[10px] font-mono text-slate-500 tracking-widest">{{ (localForm.reveal_rule || '').length }} / 500</span>
+                    </div>
+                    <ReferenceTextarea
+                      v-model="localForm.reveal_rule"
+                      :options="referenceOptions || []"
+                      :rows="2"
+                      :maxlength="500"
+                      placeholder="e.g. When the protagonist inspects the wine rack or calls out the secret passphrase."
+                      class-name="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all resize-none shadow-inner"
+                    />
+                    <span class="block text-[10px] text-slate-500 leading-normal">
+                      GM narration rule that triggers this NPC to be revealed. Leave empty for default scene search reveal.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div v-if="context.type === 'object'" class="p-4 bg-black/30 border border-white/10 rounded-2xl space-y-5">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="space-y-2">
@@ -762,32 +813,60 @@ const textLogPreviewClass = computed(() => {
                   </div>
                 </div>
 
-                <!-- Hidden state & Reveal rule (only for non-constructable types) -->
-                <div v-if="props.context?.type === 'object' && ['DEFAULT', 'CONSUMABLE', 'WEARABLE', 'WEAPON', 'READABLE', 'CONTAINER', 'SWITCH'].includes(currentItemType)" class="space-y-4 border-t border-white/5 pt-4">
-                  <div class="grid grid-cols-2 gap-4">
+                <!-- Hidden state & Reveal rule for Objects -->
+                <div v-if="currentItemType !== 'CONSTRUCTABLE'" class="space-y-4 border-t border-white/5 pt-4">
+                  <div class="flex items-center justify-between">
+                    <div class="space-y-1 pr-4">
+                      <p class="text-xs font-black text-slate-200 uppercase tracking-widest">Start Hidden</p>
+                      <p class="text-[10px] text-slate-500 uppercase tracking-tighter">When enabled, the player must explicitly search the scene or fulfill a condition before discovering this item.</p>
+                    </div>
+                    <button
+                      type="button"
+                      @click="localForm.is_hidden = !localForm.is_hidden"
+                      :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_hidden ? 'bg-emerald-600' : 'bg-slate-700']"
+                    >
+                      <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_hidden ? 'translate-x-6' : 'translate-x-0']"></div>
+                    </button>
+                  </div>
+
+                  <div v-if="localForm.is_hidden" class="space-y-3 pt-2">
                     <div class="space-y-2">
-                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Start Hidden</label>
-                      <button
-                        type="button"
-                        @click="localForm.is_hidden = !localForm.is_hidden"
-                        :class="['w-14 h-8 rounded-full transition-all relative flex items-center px-1', localForm.is_hidden ? 'bg-emerald-600' : 'bg-slate-700']"
-                      >
-                        <div :class="['w-6 h-6 bg-white rounded-full shadow-lg transition-transform duration-300', localForm.is_hidden ? 'translate-x-6' : 'translate-x-0']"></div>
-                      </button>
+                      <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Spatial Position</label>
+                      <input
+                        v-model="localForm.spatial_position"
+                        type="text"
+                        maxlength="255"
+                        placeholder="e.g. Under the couch cushions, inside the locked desk drawer"
+                        class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all shadow-inner"
+                      />
+                      <span class="block text-[10px] text-slate-500 leading-normal">
+                        Free-text location hint used by the GM when describing the room.
+                      </span>
+                    </div>
+
+                    <div class="space-y-2">
+                      <div class="flex justify-between items-center">
+                        <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveal Rule</label>
+                        <span class="text-[10px] font-mono text-slate-500 tracking-widest">{{ (localForm.reveal_rule || '').length }} / 500</span>
+                      </div>
+                      <ReferenceTextarea
+                        v-model="localForm.reveal_rule"
+                        :options="referenceOptions || []"
+                        :rows="2"
+                        :maxlength="500"
+                        placeholder="e.g. player inspects the couch, player opens the junk drawer"
+                        class-name="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all resize-none shadow-inner"
+                      />
+                      <span class="block text-[10px] text-slate-500 leading-normal">
+                        Specific action or event that triggers this item to reveal in the room. Leave empty for default search reveal.
+                      </span>
                     </div>
                   </div>
-                  
-                  <div class="space-y-2">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest">Reveal Rule</label>
-                    <input
-                      v-model="localForm.reveal_rule"
-                      placeholder="e.g. player inspects the desk, player defeats boss"
-                      class="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:border-emerald-500 outline-none transition-all shadow-inner"
-                    />
-                    <span class="block text-[10px] text-slate-500 leading-normal">
-                      Specify the action or event that triggers this item to reveal in the room. Keep empty if visible by default.
-                    </span>
-                  </div>
+                </div>
+                <div v-else class="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                  <p class="text-xs text-violet-300 font-bold leading-relaxed">
+                    CONSTRUCTABLE items always start hidden and automatically materialize when all required combination ingredients are combined.
+                  </p>
                 </div>
 
                 <!-- WEAPON / WEARABLE: Wearable Slots -->

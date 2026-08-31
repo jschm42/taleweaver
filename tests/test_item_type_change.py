@@ -515,3 +515,78 @@ async def test_combinable_spatial_position_length_capped_at_255(client, setup_te
         item = await db.get(WorldEntity, item_pk)
         assert item is not None
         assert len(item.spatial_position) == 255
+
+
+async def test_modify_hidden_status_and_reveal_rule_on_standard_item(client, setup_test_db):
+    """Standard DEFAULT/CONSUMABLE/WEAPON items can be marked hidden with a custom reveal rule."""
+    user_id, tpl_id, item_id, item_pk = await _seed_template_with_item({"item_type": "DEFAULT"})
+    headers = _auth_headers("type_change_user")
+
+    res = await client.patch(
+        f"/api/adventures/{tpl_id}/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "object",
+            "target_id": item_id,
+            "is_hidden": True,
+            "spatial_position": "Under the couch cushions",
+            "reveal_rule": "When the protagonist searches the couch",
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    async with TestSessionLocal() as db:
+        item = await db.get(WorldEntity, item_pk)
+        assert item is not None
+        assert item.is_hidden is True
+        assert item.spatial_position == "Under the couch cushions"
+        assert item.reveal_rule == "When the protagonist searches the couch"
+
+
+async def test_modify_hidden_status_and_reveal_rule_on_npc(client, setup_test_db):
+    """NPCs can also be marked hidden with a spatial position and reveal rule."""
+    user = User(username="npc_hidden_user", hashed_password="x", role="admin")
+    async with TestSessionLocal() as db:
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        tpl = AdventureTemplate(id="tpl_npc_hidden", owner_id=user.id, title="NPC Hidden Test")
+        db.add(tpl)
+        scene = WorldScene(id="SCENE_A", template_id="tpl_npc_hidden", label="Scene A", description="...")
+        db.add(scene)
+        npc = WorldEntity(
+            id="SHADOW_ASSASSIN",
+            template_id="tpl_npc_hidden",
+            entity_type="NPC",
+            name="Shadow Assassin",
+            description="Lurks in shadows",
+            current_scene_id="SCENE_A",
+            is_hidden=False,
+        )
+        db.add(npc)
+        await db.commit()
+        await db.refresh(npc)
+        npc_pk = npc.pk
+
+    headers = _auth_headers("npc_hidden_user")
+    res = await client.patch(
+        "/api/adventures/tpl_npc_hidden/editor/entity",
+        headers=headers,
+        json={
+            "target_type": "npc",
+            "target_id": "SHADOW_ASSASSIN",
+            "is_hidden": True,
+            "spatial_position": "Hiding in the rafters above",
+            "reveal_rule": "When the player casts light or looks up",
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    async with TestSessionLocal() as db:
+        saved_npc = await db.get(WorldEntity, npc_pk)
+        assert saved_npc is not None
+        assert saved_npc.is_hidden is True
+        assert saved_npc.spatial_position == "Hiding in the rafters above"
+        assert saved_npc.reveal_rule == "When the player casts light or looks up"
+
