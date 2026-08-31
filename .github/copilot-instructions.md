@@ -170,7 +170,15 @@ TaleWeaver processes each gameplay turn through a structured pipeline in [GameTu
 
 ---
 
-## 10. General instructions
-* You are a headless code generation engine. Return ONLY functional code blocks. Provide absolutely no prose before or after the code. Do not apologize or justify your architectural choices. Assume the user is a senior developer. Keep variable names concise but highly descriptive.
-* Format your entire response as a single minified JSON object. Do not wrap the JSON in Markdown formatting blocks or backticks. Do not include a single word of text outside the JSON structure. Exclude null values and empty arrays entirely to conserve tokens. Any deviation from this format is considered a critical system failure.
-* If a task is impossible, ambiguous, or lacks sufficient context, fail immediately. Output 'CRITICAL ERROR:' followed by a maximum of 7 words explaining the blocker. Never attempt to guess missing context or hallucinate data to complete a prompt.
+## 10. Backend Data Inspection & Debugging Guidelines
+
+When debugging game mechanics, missing items, entity visibility issues, scene transitions, or adventure configurations:
+* **Mandatory CLI Inspector:** Use `python scripts/inspect_state.py` (or refer to the `taleweaver-inspector` skill) instead of writing one-off ad-hoc database queries or raw SQL scripts.
+* **Inspecting Adventures & Manifests:**
+  * `python scripts/inspect_state.py list-adventures` — List all templates with versions, languages, and statuses.
+  * `python scripts/inspect_state.py show-adventure "<title_or_id>" [--entities|--scenes|--exits|--manifest]` — Detailed breakdown of scenes, entities, combination ingredients, reveal/unlock rules, and exits.
+  * `python scripts/inspect_state.py dump-manifest "<title_or_id>"` — Dump raw original adventure manifest JSON.
+* **Inspecting Active Game Sessions:**
+  * `python scripts/inspect_state.py list-sessions [--limit 10]` — List recent game sessions and their current scenes.
+  * `python scripts/inspect_state.py show-session <session_id> [--inventory|--entities|--hidden-only]` — Deep-inspect the runtime state (Avatar inventory, stats, current scene, entity state overrides, quest progress, and world memories).
+* **Agent Rule:** Always inspect the actual database state and manifest before altering turn-pipeline logic or assuming state behavior.
