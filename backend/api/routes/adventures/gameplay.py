@@ -826,6 +826,7 @@ INVALID_EXIT_CODE_MESSAGE = "That code does not open this way."
 
 async def _resolve_session_exit(db: AsyncSession, state: SessionState, exit_id: str) -> WorldExit | None:
     """Returns the exit used for the current session, preferring the session-scoped row."""
+    clean_id = (exit_id or "").strip()
     res = await db.execute(
         select(WorldExit).where(
             or_(
@@ -835,7 +836,10 @@ async def _resolve_session_exit(db: AsyncSession, state: SessionState, exit_id: 
                     WorldExit.session_id.is_(None),
                 ),
             ),
-            WorldExit.id == exit_id,
+            or_(
+                WorldExit.id == clean_id,
+                func.lower(WorldExit.id) == clean_id.lower(),
+            ),
         )
     )
     resolved = res.scalars().first()

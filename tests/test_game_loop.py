@@ -812,8 +812,8 @@ async def test_adventure_generator_chat_mode_emits_fallback_narrative_when_empty
         assert any("floating catalogs" in c for c in chunks)
 
 
-async def test_adventure_generator_requires_image_confirmation_before_generation(setup_test_db, monkeypatch):
-    """Image-enabled generation must wait for user confirmation and allow a no-image continuation."""
+async def test_adventure_generator_emits_proposal_event_before_generation(setup_test_db, monkeypatch):
+    """When the LLM requests adventure generation, it must emit an adventure_generator_proposal event with full request parameters."""
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as db:
@@ -845,13 +845,7 @@ async def test_adventure_generator_requires_image_confirmation_before_generation
 
         mock_llm_instance.stream_simple_task = AsyncMock(return_value=empty_stream())
 
-        generate_adventure_mock = AsyncMock(return_value="adv-generated-2")
-
         monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
-        monkeypatch.setattr(
-            "backend.engine.adventure_generator_service.AdventureGeneratorService.generate_adventure",
-            generate_adventure_mock,
-        )
 
         manager = GameTurnManager(db, "session-1", user)
         turn1_chunks = []
@@ -859,85 +853,12 @@ async def test_adventure_generator_requires_image_confirmation_before_generation
             turn1_chunks.append(chunk)
 
         await db.refresh(state)
-        assert any("please confirm" in c.lower() for c in turn1_chunks)
-        assert any("event: system\ndata:" in c for c in turn1_chunks)
-        assert not any("event: system\\ndata:" in c for c in turn1_chunks)
-        assert generate_adventure_mock.await_count == 0
-        assert "__ag_image_confirmation__" in (state.exit_states or {})
-
-        turn2_chunks = []
-        async for chunk in manager.process_turn("yes without images"):
-            turn2_chunks.append(chunk)
-
-        await db.refresh(state)
-        assert generate_adventure_mock.await_count == 1
-        req_arg = generate_adventure_mock.await_args.args[2]
-        assert req_arg.generate_scene_images is False
-        assert "__ag_image_confirmation__" not in (state.exit_states or {})
-        assert any("text-only world generation" in c for c in turn2_chunks)
-        assert any("event: system\ndata:" in c for c in turn2_chunks)
-        assert not any("event: system\\ndata:" in c for c in turn2_chunks)
-
-
-async def test_adventure_generator_always_confirms_image_mode_before_generation(setup_test_db, monkeypatch):
-    """Generator requests must always ask for explicit image-mode confirmation."""
-    from tests.conftest import TestSessionLocal
-
-    async with TestSessionLocal() as db:
-        user, adv, _avatar, state = await _seed_game_context(db)
-        adv.strict_rules = False
-        adv.rule_enforcement_mode = "chat"
-        adv.is_adventure_generator = True
-        await db.commit()
-
-        mock_llm_instance = MagicMock()
-        mock_llm_instance.aexecute_complex_task = AsyncMock(return_value=AdventureGeneratorToolIntent(
-            requested_adventure_generation={
-                "title": "Quiet Archive",
-                "prompt": "Create a library world with hidden passages.",
-                "min_scenes": 4,
-                "max_scenes": 6,
-                "generate_scene_images": False,
-                "selected_image_styles": ["cinematic-realism"],
-                "selected_tone": "mystery",
-                "min_awards": 1,
-                "max_awards": 3,
-                "award_generation_enabled": True,
-            }
-        ))
-
-        async def empty_stream():
-            if False:
-                yield None
-
-        mock_llm_instance.stream_simple_task = AsyncMock(return_value=empty_stream())
-
-        generate_adventure_mock = AsyncMock(return_value="adv-confirm-1")
-
-        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
-        monkeypatch.setattr(
-            "backend.engine.adventure_generator_service.AdventureGeneratorService.generate_adventure",
-            generate_adventure_mock,
-        )
-
-        manager = GameTurnManager(db, "session-1", user)
-        turn1_chunks = []
-        async for chunk in manager.process_turn("generate archive world"):
-            turn1_chunks.append(chunk)
-
-        await db.refresh(state)
-        assert any("please confirm image mode" in c.lower() for c in turn1_chunks)
-        assert generate_adventure_mock.await_count == 0
-        assert "__ag_image_confirmation__" in (state.exit_states or {})
-
-        turn2_chunks = []
-        async for chunk in manager.process_turn("yes with images"):
-            turn2_chunks.append(chunk)
-
-        assert generate_adventure_mock.await_count == 1
-        req_arg = generate_adventure_mock.await_args.args[2]
-        assert req_arg.generate_scene_images is True
-        assert any("generation finished successfully" in c.lower() for c in turn2_chunks)
+        assert any("event: adventure_generator_proposal\ndata:" in c for c in turn1_chunks)
+        assert any("Neon Foundry" in c for c in turn1_chunks)
+        assert "__ag_last_generation_request__" in (state.exit_states or {})
+        last_req = state.exit_states["__ag_last_generation_request__"]
+        assert last_req["title"] == "Neon Foundry"
+        assert last_req["selected_tone"] == "mystery"
 
 
 async def test_token_limit_error_is_user_safe_in_chat(setup_test_db, monkeypatch):
@@ -1068,6 +989,30 @@ async def test_unknown_pass1_error_returns_generic_sse_error(setup_test_db, monk
         assert not any("socket exploded" in c.lower() or "trace details" in c.lower() for c in chunks)
 
 
+async def test_repair_json_fixes_unescaped_quotes_and_trailing_commas():
+    """_repair_json should successfully repair unescaped quotes in string values and trailing commas."""
+    from backend.core.llm_router import GameMasterLLM
+    import json
+
+    raw_malformed = (
+        '{\n'
+        '  "title": "The WG",\n'
+        '  "tts_director_notes": "Tone: "heilige Couch", \'Seestern\'. Pause after.",\n'
+        '  "description": "On the box it says: "Frag den Schreibtisch."",\n'
+        '  "items": [\n'
+        '    "item1",\n'
+        '  ]\n'
+        '}'
+    )
+
+    repaired = GameMasterLLM._repair_json(raw_malformed)
+    data = json.loads(repaired)
+    assert data["title"] == "The WG"
+    assert '\"heilige Couch\"' in data["tts_director_notes"] or 'heilige Couch' in data["tts_director_notes"]
+    assert 'Frag den Schreibtisch' in data["description"]
+    assert len(data["items"]) == 1
+
+
 async def test_unknown_chat_progression_error_returns_generic_sse_error(setup_test_db, monkeypatch):
     """Unknown pass-1 exceptions in chat-progression mode should not silently abort the SSE stream."""
     from tests.conftest import TestSessionLocal
@@ -1141,19 +1086,9 @@ async def test_adventure_generator_retry_uses_last_request(setup_test_db, monkey
         async for chunk in manager.process_turn("bitte nochmal erstellen"):
             chunks.append(chunk)
 
-        # Mandatory image-mode confirmation should be requested first.
-        assert any("please confirm image mode" in c.lower() for c in chunks)
-        assert generate_adventure_mock.await_count == 0
-
-        confirm_chunks = []
-        async for chunk in manager.process_turn("yes without images"):
-            confirm_chunks.append(chunk)
-
-        assert generate_adventure_mock.await_count == 1
-        req_arg = generate_adventure_mock.await_args.args[2]
-        assert req_arg.title == "Bundy Boulevard"
-        assert req_arg.generate_scene_images is False
-        assert any("Generation finished successfully" in c for c in confirm_chunks)
+        # A proposal event should be emitted for the client dialog.
+        assert any("event: adventure_generator_proposal\ndata:" in c for c in chunks)
+        assert any("Bundy Boulevard" in c for c in chunks)
 
 
 async def test_chat_mode_runs_progression_pass_and_keeps_progress_unchanged(setup_test_db, monkeypatch):
@@ -1312,6 +1247,56 @@ async def test_chat_mode_progression_completes_quest_and_award(setup_test_db, mo
         heroic_award = next((aw for aw in awards if aw.get("key") == "heroic-heart"), None)
         assert heroic_award is not None
         assert heroic_award.get("is_earned") is True
+
+
+async def test_traverse_exit_with_lowercase_uuid_id(setup_test_db, monkeypatch):
+    """Exit traversal must resolve exit IDs case-insensitively (including lowercase uuid7 IDs)."""
+    from tests.conftest import TestSessionLocal
+    from backend.models.world_entity import WorldExit, WorldScene
+
+    async with TestSessionLocal() as db:
+        user, adv, avatar, state = await _seed_game_context(db)
+        state.current_scene_id = "scene-1"
+
+        # Add target scene
+        scene2 = WorldScene(
+            id="scene-2",
+            template_id=adv.id,
+            label="Courtyard",
+            description="A quiet stone courtyard.",
+        )
+        db.add(scene2)
+
+        # Add exit with lowercase UUID ID
+        uuid_exit = WorldExit(
+            id="01a062c3-bc95-79c3-affa-1bd8e5f4683b",
+            template_id=adv.id,
+            from_scene_id="scene-1",
+            to_scene_id="scene-2",
+            label="iron gate",
+            exit_type="one_way",
+            is_locked=False,
+        )
+        db.add(uuid_exit)
+        await db.commit()
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(choices=[MagicMock(delta=MagicMock(content="You step into the courtyard."))])
+
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.stream_simple_task = AsyncMock(return_value=mock_stream())
+        monkeypatch.setattr("backend.api.routes.adventures.gameplay_logic.GameMasterLLM", lambda *args, **kwargs: mock_llm_instance)
+
+        manager = GameTurnManager(db, "session-1", user)
+        chunks = []
+        async for chunk in manager.process_turn("/traverse_exit 01a062c3-bc95-79c3-affa-1bd8e5f4683b"):
+            chunks.append(chunk)
+
+        await db.refresh(state)
+        assert not any("not found" in c.lower() for c in chunks)
+        assert state.current_scene_id == "scene-2"
+        assert any("scene_transition" in c for c in chunks)
+        assert any("scene-2" in c for c in chunks)
 
 
 async def test_deterministic_quest_completion_marks_inactive_quest_and_emits_system_message(setup_test_db, monkeypatch):

@@ -223,12 +223,28 @@ watch(activeSuggestionIndex, async (index) => {
   optionEl?.scrollIntoView({ block: 'nearest' })
 })
 
+let blurTimer: number | null = null
+
+function handleBlur(): void {
+  if (blurTimer !== null) {
+    clearTimeout(blurTimer)
+  }
+  blurTimer = window.setTimeout(() => {
+    closeSuggestions()
+    blurTimer = null
+  }, 120)
+}
+
 onMounted(() => {
   window.addEventListener('resize', repositionPopup)
   window.addEventListener('scroll', repositionPopup, true)
 })
 
 onBeforeUnmount(() => {
+  if (blurTimer !== null) {
+    clearTimeout(blurTimer)
+    blurTimer = null
+  }
   window.removeEventListener('resize', repositionPopup)
   window.removeEventListener('scroll', repositionPopup, true)
 })
@@ -247,7 +263,7 @@ onBeforeUnmount(() => {
       @click="handleCaretInteraction"
       @keyup="handleCaretInteraction"
       @keydown="handleKeydown"
-      @blur="setTimeout(closeSuggestions, 120)"
+      @blur="handleBlur"
     />
 
     <Teleport to="body">

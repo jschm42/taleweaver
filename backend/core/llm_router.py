@@ -329,6 +329,27 @@ class GameMasterLLM:
             return f': "{val}"'
             
         content = re.sub(r":\s*'([^'\\]*(?:\\.[^'\\]*)*)'", _replace_val, content)
+
+        # 5. Try parsing again; if it still fails, attempt to fix unescaped double quotes inside values
+        try:
+            json.loads(content)
+            return content
+        except json.JSONDecodeError:
+            pass
+
+        def _fix_unescaped_line_quotes(line: str) -> str:
+            # Match standard JSON field line: `"key": "..."` or `"..."` with possible trailing comma
+            m = re.match(r'^(\s*"(?:[^"\\]|\\.)+"\s*:\s*")(.*)("[\s,]*)$', line)
+            if m:
+                prefix, val, suffix = m.group(1), m.group(2), m.group(3)
+                if '"' in val:
+                    # Escape any double quotes that are not already preceded by backslash
+                    escaped_val = re.sub(r'(?<!\\)"', r'\"', val)
+                    return f"{prefix}{escaped_val}{suffix}"
+            return line
+
+        lines = content.splitlines(keepends=True)
+        content = "".join(_fix_unescaped_line_quotes(l) for l in lines)
         
         return content
 
@@ -1312,7 +1333,7 @@ class GameMasterLLM:
             try:
                 data = json.loads(content)
             except json.JSONDecodeError as exc:
-                if self._is_truncated_json(content):
+                if finish_reason == "length" or self._is_truncated_json(content):
                     logger.error(
                         "LLM response appears truncated. Length: %d, finish_reason: %s. Full content: %s",
                         len(content), finish_reason, content,
@@ -1529,7 +1550,7 @@ class GameMasterLLM:
             try:
                 data = json.loads(content)
             except json.JSONDecodeError as exc:
-                if self._is_truncated_json(content):
+                if finish_reason == "length" or self._is_truncated_json(content):
                     logger.error(
                         "LLM response appears truncated. Length: %d, finish_reason: %s. Full content: %s",
                         len(content), finish_reason, content,

@@ -33,6 +33,7 @@ WORLD_GENERATION_SYSTEM_PROMPT = (
     "interconnected game world based on a provided Story Idea.\n\n"
     "JSON STRUCTURE REQUIREMENTS (CRITICAL):\n"
     "Return one JSON object (no markdown, no wrapper list).\n"
+    "CRITICAL JSON FORMATTING: In string fields (descriptions, text logs, notes), NEVER use raw unescaped double quotes (\") inside string values. If you quote words, ALWAYS use single quotes (') or properly escape them (\\\").\n"
     "Required top-level keys: protagonist, scenes, exits, npcs, objects, quests, awards, language, teaser, plot, rules, walkthrough, completed_condition, gameover_condition, intro_text, origin_id, tts_director_notes.\n\n"
     "SCENES & DECORATIVE OBJECTS:\n"
     "Each scene in `scenes` MUST include a `decorative_objects` field as a JSON array of up to 7 short strings (max 100 characters each), describing simple, non-interactable background details, features, or static furniture (e.g., ['metal table', 'hanging light fixture', 'cracked stone floor']). Do NOT put these items in the top-level `objects` or `npcs` list — they live ONLY as a structured `decorative_objects` array on the scene. Do NOT embed them into the `description` string either; the scene description must remain clean prose.\n\n"

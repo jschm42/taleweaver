@@ -28,6 +28,7 @@ import ContainerUnlockModal from '@/components/game/ContainerUnlockModal.vue'
 import SwitchStateModal from '@/components/game/SwitchStateModal.vue'
 import SwitchUnlockModal from '@/components/game/SwitchUnlockModal.vue'
 import TextLogModal from '@/components/game/TextLogModal.vue'
+import AdventureGeneratorModal from '@/components/game/AdventureGeneratorModal.vue'
 import GameHoverTooltip from '@/components/game/GameHoverTooltip.vue'
 import GameNotificationsOverlay from '@/components/game/GameNotificationsOverlay.vue'
 import ChroniclesModal from '@/components/game/ChroniclesModal.vue'
@@ -196,6 +197,10 @@ const {
   agentPaused,
   agentStepByStep,
   isCheckpointSaving,
+  generatorProposal,
+  showGeneratorModal,
+  openGeneratorModal,
+  closeGeneratorModal,
   connect,
   disconnect,
   haltActiveOperations,
@@ -1920,6 +1925,16 @@ watch(
       :content="activeTextLog?.content || ''"
       :image-url="activeTextLog?.imageUrl || null"
       @close="closeTextLogModal"
+    />
+
+    <AdventureGeneratorModal
+      :open="showGeneratorModal"
+      :proposal="generatorProposal"
+      @close="closeGeneratorModal"
+      @completed="(advId, title) => {
+        emitSystemMessage(`SYSTEM: Adventure '${title}' successfully created and added to your archives.`)
+        addNotification(`Adventure '${title}' created successfully!`, 'success')
+      }"
     />
 
     <!-- HOVER TOOLTIP -->

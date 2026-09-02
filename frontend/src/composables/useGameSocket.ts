@@ -42,6 +42,10 @@ export interface UseGameSocket {
   agentPaused: Ref<boolean>
   agentStepByStep: Ref<boolean>
   isCheckpointSaving: Ref<boolean>
+  generatorProposal: Ref<any | null>
+  showGeneratorModal: Ref<boolean>
+  openGeneratorModal: (proposal?: any) => void
+  closeGeneratorModal: () => void
   connect: (gameId: string) => Promise<void>
   disconnect: () => void
   haltActiveOperations: () => void
@@ -97,6 +101,17 @@ export function useGameSocket(): UseGameSocket {
   const agentStepByStep = ref(localStorage.getItem('tw_agent_step_by_step') === 'true')
   const isCheckpointSaving = ref(false)
   let checkpointPulseTimer: number | null = null
+  const generatorProposal = ref<any | null>(null)
+  const showGeneratorModal = ref(false)
+
+  function openGeneratorModal(proposal?: any): void {
+    if (proposal) generatorProposal.value = proposal
+    showGeneratorModal.value = true
+  }
+
+  function closeGeneratorModal(): void {
+    showGeneratorModal.value = false
+  }
 
   function triggerCheckpointPulse(): void {
     isCheckpointSaving.value = true
@@ -413,6 +428,7 @@ export function useGameSocket(): UseGameSocket {
     }
     let receivedFinalEvent = false
     let receivedErrorEvent = false
+    let hadSceneTransition = false
     const controller = new AbortController()
     activeChatController = controller
     const timeoutId = window.setTimeout(() => controller.abort(), 90_000)
@@ -543,8 +559,14 @@ export function useGameSocket(): UseGameSocket {
             }
           } else if (event === 'scene_transition') {
             // Clear previous scene's chat bubbles; the LLM will narrate the new scene
+            hadSceneTransition = true
             messages.value = []
             applySessionSnapshot(data, false)
+          } else if (event === 'adventure_generator_proposal') {
+            generatorProposal.value = data.request || data
+            window.setTimeout(() => {
+              showGeneratorModal.value = true
+            }, 600)
           } else if (event === 'checkpoint') {
             triggerCheckpointPulse()
           }
@@ -554,7 +576,10 @@ export function useGameSocket(): UseGameSocket {
       if (receivedFinalEvent) {
         const snapshot = await fetchSessionSnapshot(currentGameId)
         if (snapshot) {
-          applySessionSnapshot(snapshot, true)
+          // After a scene transition the SSE stream already built the new-scene
+          // messages in memory. Re-loading ALL DB history here would re-inject
+          // bubbles from previous scenes, so we only sync non-message state.
+          applySessionSnapshot(snapshot, !hadSceneTransition)
         }
       }
 
@@ -822,6 +847,10 @@ export function useGameSocket(): UseGameSocket {
     agentPaused,
     agentStepByStep,
     isCheckpointSaving,
+    generatorProposal,
+    showGeneratorModal,
+    openGeneratorModal,
+    closeGeneratorModal,
     connect,
     disconnect,
     haltActiveOperations,

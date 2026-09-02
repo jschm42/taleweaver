@@ -1205,15 +1205,15 @@ class GameTurnManager:
     async def _handle_traverse_exit(self, exit_ref: str, language: str | None = None) -> AsyncGenerator[str, None]:
         """Performs scene exit traversal and triggers an LLM narration pass for the new scene."""
         import json
-        from sqlalchemy import or_, and_
+        from sqlalchemy import or_, and_, func
 
-        current_scene_id = str(self.state.current_scene_id or "").strip().upper()
+        current_scene_id = str(self.state.current_scene_id or "").strip()
         world_exit = None
 
         # Support both a direct exit DB-ID and a 'FROM::TO' scene composite key
         # (map edges expose from/to but have no id field)
         if "::" in exit_ref:
-            parts = exit_ref.upper().split("::", 1)
+            parts = exit_ref.split("::", 1)
             from_id, to_id = parts[0].strip(), parts[1].strip()
             exit_res = await self.db.execute(
                 select(WorldExit).where(
@@ -1225,18 +1225,22 @@ class GameTurnManager:
                         ),
                     ),
                     or_(
-                        and_(WorldExit.from_scene_id == from_id, WorldExit.to_scene_id == to_id),
+                        and_(
+                            func.lower(WorldExit.from_scene_id) == from_id.lower(),
+                            func.lower(WorldExit.to_scene_id) == to_id.lower(),
+                        ),
                         and_(
                             WorldExit.exit_type == "bidirectional",
-                            WorldExit.from_scene_id == to_id,
-                            WorldExit.to_scene_id == from_id,
+                            func.lower(WorldExit.from_scene_id) == to_id.lower(),
+                            func.lower(WorldExit.to_scene_id) == from_id.lower(),
                         ),
                     ),
                 )
             )
             world_exit = exit_res.scalars().first()
         else:
-            # Legacy: lookup by exit DB primary key
+            # Lookup by exit DB primary key (case-insensitive for UUIDs and custom string keys)
+            clean_ref = exit_ref.strip()
             exit_res = await self.db.execute(
                 select(WorldExit).where(
                     or_(
@@ -1246,7 +1250,10 @@ class GameTurnManager:
                             WorldExit.session_id.is_(None),
                         ),
                     ),
-                    WorldExit.id == exit_ref.upper(),
+                    or_(
+                        WorldExit.id == clean_ref,
+                        func.lower(WorldExit.id) == clean_ref.lower(),
+                    ),
                 )
             )
             world_exit = exit_res.scalars().first()
@@ -1261,9 +1268,12 @@ class GameTurnManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': err})}\n\n"
             return
 
-        if world_exit.from_scene_id == current_scene_id:
+        if world_exit.from_scene_id.lower() == current_scene_id.lower():
             target_scene_id = world_exit.to_scene_id
-        elif world_exit.exit_type.lower() == "bidirectional" and world_exit.to_scene_id == current_scene_id:
+        elif (
+            str(world_exit.exit_type or "").lower() == "bidirectional"
+            and world_exit.to_scene_id.lower() == current_scene_id.lower()
+        ):
             target_scene_id = world_exit.from_scene_id
         else:
             err = "This exit does not connect to the current scene."
@@ -1280,7 +1290,10 @@ class GameTurnManager:
                         WorldScene.session_id.is_(None),
                     ),
                 ),
-                WorldScene.id == target_scene_id,
+                or_(
+                    WorldScene.id == target_scene_id,
+                    func.lower(WorldScene.id) == str(target_scene_id).lower(),
+                ),
             )
         )
         scene = scene_res.scalars().first()
@@ -1289,12 +1302,12 @@ class GameTurnManager:
             yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': err})}\n\n"
             return
 
-        # Commit the scene change
-        self.state.current_scene_id = target_scene_id
+        # Commit the scene change with canonical scene ID
+        self.state.current_scene_id = scene.id
         await self.db.commit()
 
         # Signal frontend to clear old chat bubbles
-        yield f"event: scene_transition\ndata: {json.dumps({'scene_id': target_scene_id, 'scene_label': scene.label})}\n\n"
+        yield f"event: scene_transition\ndata: {json.dumps({'scene_id': scene.id, 'scene_label': scene.label})}\n\n"
 
         # Build a narration prompt for the new scene
         exit_label = world_exit.label or "the exit"
@@ -5416,6 +5429,7 @@ class GameTurnManager:
         pre_inventory_ids = set()
         response_text = ""
         rule_violations = []
+        pending_generator_proposal: dict[str, Any] | None = None
 
         # Pass 1: Mechanics (strict adventures), chat progression intent (normal chat),
         # or adventure-generator tool-intent pass (generator chat mode).
@@ -5760,15 +5774,18 @@ class GameTurnManager:
                         game_event.narrative_description = "Understood. I will retry the last adventure generation now."
 
             if game_event.requested_adventure_generation:
-                self._set_pending_ag_image_confirmation(game_event.requested_adventure_generation)
-                confirmation_msg = (
-                    "SYSTEM: Before I start generation, please confirm image mode: "
-                    "reply with 'yes with images', 'yes without images', or 'cancel'."
-                )
-                await self._save_chat_message("system", confirmation_msg)
-                yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': confirmation_msg})}\n\n"
+                req = game_event.requested_adventure_generation
+                self._set_last_ag_generation_request(req)
+                pending_generator_proposal = {
+                    "request": req.model_dump(),
+                    "message": "The Architect has prepared a world proposal based on your vision.",
+                }
+                if not game_event.narrative_description:
+                    game_event.narrative_description = (
+                        "The Architect inclines his head and gestures toward the Loom. "
+                        "The blueprint of your vision has materialized for your review."
+                    )
                 game_event.requested_adventure_generation = None
-                game_event.narrative_description = "The Architect pauses at the threshold, awaiting your confirmation."
 
             if (
                 game_event.request_available_image_styles
@@ -6317,6 +6334,8 @@ class GameTurnManager:
             'status': 'success'
         })
         yield f"event: final\ndata: {json.dumps(final_data)}\n\n"
+        if pending_generator_proposal:
+            yield f"event: adventure_generator_proposal\ndata: {json.dumps(pending_generator_proposal)}\n\n"
 
     async def _build_map_payload(self) -> dict:
         """Helper to build the augmented map payload for the frontend."""
