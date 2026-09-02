@@ -210,6 +210,57 @@ function handleTimeFormatInput(val: '24h' | '12h') {
   emit('update:time-format', val)
 }
 
+const time12Parts = computed(() => {
+  const raw = props.form?.time_config?.start_time || '08:00'
+  let h = 8
+  let m = 0
+  try {
+    const [hRaw, mRaw] = String(raw).split(':').map(Number)
+    if (!isNaN(hRaw)) h = hRaw
+    if (!isNaN(mRaw)) m = mRaw
+  } catch (e) {}
+
+  const isPM = h >= 12
+  const h12 = h % 12 || 12
+  return {
+    hour12: h12,
+    minute: m,
+    minuteStr: m.toString().padStart(2, '0'),
+    ampm: (isPM ? 'PM' : 'AM') as 'AM' | 'PM',
+  }
+})
+
+function update12hTime(newHour12: number, newMinute: number, newAmpm: 'AM' | 'PM') {
+  const h12Clamped = Math.max(1, Math.min(12, Number(newHour12) || 12))
+  const mClamped = Math.max(0, Math.min(59, Number(newMinute) || 0))
+  let h24 = 0
+  if (newAmpm === 'PM') {
+    h24 = (h12Clamped % 12) + 12
+  } else {
+    h24 = h12Clamped % 12
+  }
+  const formatted24h = `${h24.toString().padStart(2, '0')}:${mClamped.toString().padStart(2, '0')}`
+  emit('update:start-time', formatted24h)
+}
+
+function handle12hHourInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  const rawVal = parseInt(target.value, 10)
+  const clamped = isNaN(rawVal) ? 1 : Math.max(1, Math.min(12, rawVal))
+  update12hTime(clamped, time12Parts.value.minute, time12Parts.value.ampm)
+}
+
+function handle12hMinuteInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  const rawVal = parseInt(target.value, 10)
+  const clamped = isNaN(rawVal) ? 0 : Math.max(0, Math.min(59, rawVal))
+  update12hTime(time12Parts.value.hour12, clamped, time12Parts.value.ampm)
+}
+
+function handle12hAmpmChange(newAmpm: 'AM' | 'PM') {
+  update12hTime(time12Parts.value.hour12, time12Parts.value.minute, newAmpm)
+}
+
 const timeValidationErrors = computed(() => {
   const errors: Record<string, string> = {}
   if (!props.form?.clock_enabled) return errors
@@ -226,8 +277,10 @@ const timeValidationErrors = computed(() => {
     }
 
     const dayNum = Number(cfg.initial_day ?? 1)
-    if (isNaN(dayNum) || dayNum < 1 || !Number.isInteger(dayNum)) {
+    if (isNaN(dayNum) || !isFinite(dayNum) || dayNum < 1 || !Number.isInteger(dayNum)) {
       errors.initial_day = 'Start day must be an integer >= 1.'
+    } else if (dayNum > 10000) {
+      errors.initial_day = 'Start day cannot exceed 10,000.'
     }
 
     if (!cfg.start_time || !/^([01]\d|2[0-3]):([0-5]\d)$/.test(cfg.start_time)) {
@@ -235,15 +288,19 @@ const timeValidationErrors = computed(() => {
     }
 
     const pacingVal = getCalendarPacingValue()
-    if (isNaN(pacingVal) || pacingVal < 1) {
+    if (isNaN(pacingVal) || !isFinite(pacingVal) || pacingVal < 1) {
       errors.pacing = 'Turn pacing must be at least 1.'
+    } else if (pacingVal > 10000) {
+      errors.pacing = 'Turn pacing cannot exceed 10,000.'
     }
 
     const maxValStr = getCalendarMaxValue()
     if (maxValStr) {
       const maxVal = Number(maxValStr)
-      if (isNaN(maxVal) || maxVal < 1) {
+      if (isNaN(maxVal) || !isFinite(maxVal) || maxVal < 1) {
         errors.max_time = 'Max limit must be at least 1.'
+      } else if (maxVal > 10000) {
+        errors.max_time = 'Max limit cannot exceed 10,000.'
       } else {
         const pacingUnit = getCalendarPacingUnit()
         const maxUnit = getCalendarMaxUnit()
@@ -264,21 +321,29 @@ const timeValidationErrors = computed(() => {
     }
 
     const initVal = Number(cfg.initial_value ?? 0)
-    if (isNaN(initVal)) {
+    if (isNaN(initVal) || !isFinite(initVal)) {
       errors.initial_value = 'Initial value must be a valid number.'
+    } else if (initVal < 0) {
+      errors.initial_value = 'Initial value must be at least 0.'
+    } else if (initVal > 10000) {
+      errors.initial_value = 'Initial value cannot exceed 10,000.'
     }
 
     const pacing = Number(props.form?.time_per_turn ?? 1)
-    if (isNaN(pacing) || pacing <= 0) {
+    if (isNaN(pacing) || !isFinite(pacing) || pacing <= 0) {
       errors.units_pacing = 'Turn pacing must be greater than 0.'
+    } else if (pacing > 10000) {
+      errors.units_pacing = 'Turn pacing cannot exceed 10,000.'
     }
 
     const maxTime = props.form?.max_time_per_turn
     if (maxTime !== null && maxTime !== undefined && maxTime !== '') {
       const maxNum = Number(maxTime)
-      if (isNaN(maxNum) || maxNum <= 0) {
+      if (isNaN(maxNum) || !isFinite(maxNum) || maxNum <= 0) {
         errors.units_max = 'Max limit must be greater than 0.'
-      } else if (!isNaN(pacing) && maxNum < pacing) {
+      } else if (maxNum > 10000) {
+        errors.units_max = 'Max limit cannot exceed 10,000.'
+      } else if (!isNaN(pacing) && isFinite(pacing) && maxNum < pacing) {
         errors.units_max = 'Max limit cannot be less than turn pacing.'
       }
     }
@@ -572,6 +637,7 @@ const licenseUrlInvalid = computed(() => {
               <input
                 type="number"
                 min="1"
+                max="10000"
                 step="1"
                 :value="form.time_config?.initial_day ?? 1"
                 @input="handleInitialDayInput"
@@ -580,21 +646,77 @@ const licenseUrlInvalid = computed(() => {
                 :class="timeValidationErrors.initial_day ? 'border-red-500/80 focus:ring-2 ring-red-500/20' : 'border-amber-500/50 focus:ring-2 ring-amber-500/20'"
               />
               <p v-if="timeValidationErrors.initial_day" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.initial_day }}</p>
-              <p v-else class="text-[10px] text-slate-500">Initial day number at adventure start (default: 1).</p>
+              <p v-else class="text-[10px] text-slate-500">Initial day number at adventure start (default: 1, max: 10,000).</p>
             </div>
 
             <!-- Start Time -->
             <div class="space-y-2">
               <label class="block text-xs font-black text-amber-400 uppercase tracking-[0.2em]">Start Time</label>
+              
+              <!-- 24h mode input -->
               <input
+                v-if="form.time_config?.time_format !== '12h'"
                 type="time"
                 :value="form.time_config?.start_time || '08:00'"
                 @input="handleStartTimeInput"
                 class="w-full bg-black/60 border rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none transition-all"
                 :class="timeValidationErrors.start_time ? 'border-red-500/80 focus:ring-2 ring-red-500/20' : 'border-amber-500/50 focus:ring-2 ring-amber-500/20'"
               />
+
+              <!-- 12h mode input: Hour (1-12) : Minute (00-59) + AM/PM toggle -->
+              <div
+                v-else
+                class="flex items-center gap-1.5 bg-black/60 border rounded-xl px-3 py-1.5 transition-all"
+                :class="timeValidationErrors.start_time ? 'border-red-500/80 focus-within:ring-2 ring-red-500/20' : 'border-amber-500/50 focus-within:ring-2 ring-amber-500/20'"
+              >
+                <!-- 1-12 Hour Input -->
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  step="1"
+                  :value="time12Parts.hour12"
+                  @input="handle12hHourInput"
+                  class="w-10 bg-transparent text-white text-sm font-bold text-center outline-none"
+                  title="Hour (1-12)"
+                />
+                <span class="text-amber-400 font-bold">:</span>
+                <!-- 00-59 Minute Input -->
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  step="1"
+                  :value="time12Parts.minuteStr"
+                  @input="handle12hMinuteInput"
+                  class="w-10 bg-transparent text-white text-sm font-bold text-center outline-none"
+                  title="Minute (00-59)"
+                />
+                <!-- AM / PM Switcher -->
+                <div class="flex bg-black/50 p-0.5 rounded-lg border border-white/10 ml-auto">
+                  <button
+                    type="button"
+                    @click="handle12hAmpmChange('AM')"
+                    class="px-2 py-1 rounded text-[10px] font-black uppercase transition-all"
+                    :class="time12Parts.ampm === 'AM' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-400 hover:text-white'"
+                  >
+                    AM
+                  </button>
+                  <button
+                    type="button"
+                    @click="handle12hAmpmChange('PM')"
+                    class="px-2 py-1 rounded text-[10px] font-black uppercase transition-all"
+                    :class="time12Parts.ampm === 'PM' ? 'bg-amber-500 text-slate-950 font-black shadow-sm' : 'text-slate-400 hover:text-white'"
+                  >
+                    PM
+                  </button>
+                </div>
+              </div>
+
               <p v-if="timeValidationErrors.start_time" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.start_time }}</p>
-              <p v-else class="text-[10px] text-slate-500">Time of day when the adventure begins.</p>
+              <p v-else class="text-[10px] text-slate-500">
+                {{ form.time_config?.time_format === '12h' ? '12-hour start time with AM/PM.' : 'Time of day when the adventure begins.' }}
+              </p>
             </div>
 
             <!-- Time Format -->
@@ -631,6 +753,7 @@ const licenseUrlInvalid = computed(() => {
                 <input
                   type="number"
                   min="1"
+                  max="10000"
                   step="1"
                   :value="getCalendarPacingValue()"
                   @input="handleCalendarPacingValueChange"
@@ -648,7 +771,7 @@ const licenseUrlInvalid = computed(() => {
                 </select>
               </div>
               <p v-if="timeValidationErrors.pacing" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.pacing }}</p>
-              <p v-else class="text-[10px] text-slate-500">Standard in-game time advancement each turn.</p>
+              <p v-else class="text-[10px] text-slate-500">Standard in-game time advancement each turn (max: 10,000).</p>
             </div>
 
             <!-- Max Time per Turn (GM Limit) -->
@@ -658,6 +781,7 @@ const licenseUrlInvalid = computed(() => {
                 <input
                   type="number"
                   min="1"
+                  max="10000"
                   step="1"
                   placeholder="Uncapped (Optional)"
                   :value="getCalendarMaxValue()"
@@ -676,7 +800,7 @@ const licenseUrlInvalid = computed(() => {
                 </select>
               </div>
               <p v-if="timeValidationErrors.max_time" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.max_time }}</p>
-              <p v-else class="text-[10px] text-slate-500">Maximum time advancement allowed per turn for complex GM actions.</p>
+              <p v-else class="text-[10px] text-slate-500">Maximum time advancement allowed per turn (max: 10,000).</p>
             </div>
           </div>
         </div>
@@ -707,13 +831,15 @@ const licenseUrlInvalid = computed(() => {
                 :value="form.time_config?.initial_value ?? 0"
                 @input="handleInitialValueInput"
                 type="number"
+                min="0"
+                max="10000"
                 step="any"
                 placeholder="0"
                 class="w-full bg-black/60 border rounded-xl px-4 py-2.5 text-white text-sm font-bold outline-none transition-all"
                 :class="timeValidationErrors.initial_value ? 'border-red-500/80 focus:ring-2 ring-red-500/20' : 'border-cyan-500/50 focus:ring-2 ring-cyan-500/20'"
               />
               <p v-if="timeValidationErrors.initial_value" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.initial_value }}</p>
-              <p v-else class="text-[10px] text-slate-500">Starting numeric counter value when adventure begins.</p>
+              <p v-else class="text-[10px] text-slate-500">Starting numeric counter value (0 - 10,000).</p>
             </div>
           </div>
 
@@ -728,6 +854,7 @@ const licenseUrlInvalid = computed(() => {
                 type="number"
                 step="any"
                 min="0.001"
+                max="10000"
                 :value="form.time_per_turn ?? 1"
                 @input="handleUnitsPacingChange"
                 placeholder="e.g. 1"
@@ -735,7 +862,7 @@ const licenseUrlInvalid = computed(() => {
                 :class="timeValidationErrors.units_pacing ? 'border-red-500/80 focus:ring-2 ring-red-500/20' : 'border-cyan-500/50 focus:ring-2 ring-cyan-500/20'"
               />
               <p v-if="timeValidationErrors.units_pacing" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.units_pacing }}</p>
-              <p v-else class="text-[10px] text-slate-500">Default {{ form.time_config?.unit_name || 'units' }} that elapse automatically each turn.</p>
+              <p v-else class="text-[10px] text-slate-500">Default {{ form.time_config?.unit_name || 'units' }} that elapse automatically each turn (max: 10,000).</p>
             </div>
 
             <!-- Max Units (GM Limit) -->
@@ -747,6 +874,7 @@ const licenseUrlInvalid = computed(() => {
                 type="number"
                 step="any"
                 min="0.001"
+                max="10000"
                 :value="form.max_time_per_turn ?? ''"
                 @input="handleUnitsMaxChange"
                 placeholder="e.g. 10 (Optional)"
@@ -754,7 +882,7 @@ const licenseUrlInvalid = computed(() => {
                 :class="timeValidationErrors.units_max ? 'border-red-500/80 focus:ring-2 ring-red-500/20' : 'border-cyan-500/50 focus:ring-2 ring-cyan-500/20'"
               />
               <p v-if="timeValidationErrors.units_max" class="text-[10px] text-red-400 font-bold">{{ timeValidationErrors.units_max }}</p>
-              <p v-else class="text-[10px] text-slate-500">Maximum {{ form.time_config?.unit_name || 'units' }} allowed per turn for complex GM actions.</p>
+              <p v-else class="text-[10px] text-slate-500">Maximum {{ form.time_config?.unit_name || 'units' }} allowed per turn (max: 10,000).</p>
             </div>
           </div>
         </div>

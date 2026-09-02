@@ -23,6 +23,7 @@ import { getItemIcon, getTypeColor, getImageUrl, getOriginalImageUrl } from '@/u
 import { audioService } from '@/services/audioService'
 import StatBar from './StatBar.vue'
 import GameClockWidget from '@/components/game/GameClockWidget.vue'
+import LicenseInfoBlock from '@/components/game/LicenseInfoBlock.vue'
 import BableFishSelector from '@/components/game/BableFishSelector.vue'
 import CommandPopup from '@/components/game/CommandPopup.vue'
 import { getFilteredCommands } from '@/utils/commands'
@@ -383,6 +384,7 @@ interface ComicTurn {
   userSpeechText?: string
   assistantMessage?: ChatMessage | null
   systemMessages: ChatMessage[]
+  licenseMessage?: ChatMessage | null
   narration: string
   dialogues: DialogueSegment[]
   revealedItemIds: string[]
@@ -518,6 +520,7 @@ const gameTurns = computed<ComicTurn[]>(() => {
   let currentTurn: ComicTurn = {
     index: 0,
     systemMessages: [],
+    licenseMessage: null,
     narration: '',
     dialogues: [],
     revealedItemIds: [],
@@ -525,14 +528,24 @@ const gameTurns = computed<ComicTurn[]>(() => {
 
   for (let i = 0; i < msgs.length; i++) {
     const msg = msgs[i]
-    if (msg.role === 'license_info') continue
+    if (msg.role === 'license_info') {
+      currentTurn.licenseMessage = msg
+      continue
+    }
 
     if (msg.role === 'user') {
-      if (currentTurn.userMessage || currentTurn.assistantMessage || currentTurn.narration) {
+      if (
+        currentTurn.userMessage ||
+        currentTurn.assistantMessage ||
+        currentTurn.narration ||
+        currentTurn.systemMessages.length ||
+        currentTurn.licenseMessage
+      ) {
         turns.push(currentTurn)
         currentTurn = {
           index: turns.length,
           systemMessages: [],
+          licenseMessage: null,
           narration: '',
           dialogues: [],
           revealedItemIds: [],
@@ -559,7 +572,13 @@ const gameTurns = computed<ComicTurn[]>(() => {
     }
   }
 
-  if (currentTurn.userMessage || currentTurn.assistantMessage || currentTurn.narration || currentTurn.systemMessages.length) {
+  if (
+    currentTurn.userMessage ||
+    currentTurn.assistantMessage ||
+    currentTurn.narration ||
+    currentTurn.systemMessages.length ||
+    currentTurn.licenseMessage
+  ) {
     turns.push(currentTurn)
   }
 
@@ -1268,6 +1287,41 @@ defineExpose({
           </div>
 
           <template v-else-if="activeTurn">
+            <!-- 0A) LICENSE & CREDITS BANNER (Initial Turn / Re-run) -->
+            <LicenseInfoBlock v-if="activeTurn.licenseMessage" :msg="activeTurn.licenseMessage" />
+
+            <!-- 0B) SYSTEM MESSAGES / INTRO TEXT BANNER -->
+            <div
+              v-for="(sysMsg, sIdx) in activeTurn.systemMessages"
+              :key="sIdx"
+              class="animate-fade-in relative group my-1"
+            >
+              <div class="relative bg-slate-900/95 border-l-4 border-emerald-500 rounded-r-2xl p-4 sm:p-5 shadow-[0_12px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl border-y border-r border-emerald-500/30 text-slate-100">
+                <!-- Overlay TTS Button -->
+                <button
+                  v-if="configState.isTtsEnabled"
+                  type="button"
+                  @click.stop="speakBubble(sysMsg.content, 'System')"
+                  class="absolute -top-2.5 right-3 z-30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-200 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-400/60 text-emerald-300 text-[10px] font-black uppercase tracking-wider shadow-lg cursor-pointer backdrop-blur-md"
+                  :title="isSpeakingBubble(sysMsg.content, 'System') ? 'Stop Audio' : 'Play Audio'"
+                >
+                  <VolumeX v-if="isSpeakingBubble(sysMsg.content, 'System')" class="w-3 h-3 text-red-400" />
+                  <Volume2 v-else class="w-3 h-3" />
+                  <span>{{ isSpeakingBubble(sysMsg.content, 'System') ? 'Stop' : 'Audio' }}</span>
+                </button>
+
+                <!-- System Header & Content -->
+                <div class="comic-narration-text text-sm sm:text-base leading-relaxed text-emerald-100">
+                  <span
+                    class="inline-flex items-center align-middle mr-2.5 not-italic select-none px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-sans font-black text-[10px] uppercase tracking-[0.2em] shadow-sm"
+                  >
+                    System
+                  </span>
+                  <span class="italic font-medium" v-html="renderFormattedHtml(sysMsg.content)"></span>
+                </div>
+              </div>
+            </div>
+
             <!-- 1) PROTAGONIST / USER SPEECH OR ACTION BUBBLE -->
             <div
               v-if="activeTurn.userMessage"
