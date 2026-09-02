@@ -42,7 +42,8 @@ import {
   DoorOpen,
   Lock,
   SendHorizontal,
-  Hand
+  Hand,
+  Brain
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -1258,32 +1259,8 @@ defineExpose({
           </div>
         </div>
 
-        <!-- COMIC STORY CONTAINER (Turn Display & GM Thinking Spinner) -->
+        <!-- COMIC STORY CONTAINER (Turn Display) -->
         <div class="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4 flex flex-col gap-4 min-h-0 relative">
-          <!-- GM Thinking Spinner Overlay / Banner -->
-          <div
-            v-if="isEvaluating"
-            class="flex items-center gap-3.5 p-4 rounded-2xl bg-amber-950/80 border-2 border-amber-400/80 text-amber-100 shadow-[0_8px_30px_rgba(251,191,36,0.3)] backdrop-blur-xl animate-fade-in my-1 shrink-0"
-          >
-            <div class="relative flex items-center justify-center w-7 h-7 shrink-0">
-              <div class="w-7 h-7 border-3 border-amber-400/30 border-t-amber-400 rounded-full animate-spin"></div>
-              <Sparkles class="w-3.5 h-3.5 text-amber-300 absolute animate-pulse" />
-            </div>
-            <div class="flex flex-col min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-[0.2em]">
-                  Thinking
-                </span>
-                <span class="text-xs font-black uppercase tracking-wider text-amber-200">
-                  {{ props.statusText || 'Game Master is resolving your action...' }}
-                </span>
-              </div>
-              <p class="text-[11px] text-amber-300/80 italic mt-0.5 truncate">
-                Weaving the world's narrative response...
-              </p>
-            </div>
-          </div>
-
           <!-- Empty State -->
           <div v-if="!activeTurn && !isEvaluating" class="flex-1 flex flex-col items-center justify-center text-slate-500">
             <Sparkles class="w-8 h-8 text-amber-400/60 mb-2 animate-pulse" />
@@ -1294,7 +1271,7 @@ defineExpose({
             <!-- 1) PROTAGONIST / USER SPEECH OR ACTION BUBBLE -->
             <div
               v-if="activeTurn.userMessage"
-              class="flex flex-col gap-1 animate-fade-in items-start group"
+              class="flex flex-wrap items-center gap-3 animate-fade-in group"
             >
               <div class="relative max-w-2xl">
                 <!-- Overlay TTS Button (visible on hover) -->
@@ -1363,6 +1340,35 @@ defineExpose({
                   </p>
                 </div>
               </div>
+
+              <!-- Animated Brain Thinking Indicator right next to the bubble -->
+              <div
+                v-if="isEvaluating"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-amber-950/80 border border-amber-400/70 text-amber-200 shadow-[0_0_20px_rgba(251,191,36,0.3)] backdrop-blur-xl animate-fade-in shrink-0 self-center select-none"
+                :title="props.statusText || 'Thinking & Validating rules...'"
+              >
+                <div class="relative flex items-center justify-center w-5 h-5">
+                  <div class="absolute inset-0 rounded-full bg-amber-400/20 animate-ping"></div>
+                  <Brain class="w-4 h-4 text-amber-400 animate-pulse" />
+                </div>
+                <span class="text-xs font-black uppercase tracking-wider text-amber-300">
+                  {{ props.statusText || 'Thinking...' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Fallback Brain Thinking Indicator if evaluating without a user message -->
+            <div
+              v-else-if="isEvaluating"
+              class="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-amber-950/80 border border-amber-400/70 text-amber-200 shadow-[0_0_20px_rgba(251,191,36,0.3)] backdrop-blur-xl animate-fade-in shrink-0 self-start my-1 select-none"
+            >
+              <div class="relative flex items-center justify-center w-5 h-5">
+                <div class="absolute inset-0 rounded-full bg-amber-400/20 animate-ping"></div>
+                <Brain class="w-4 h-4 text-amber-400 animate-pulse" />
+              </div>
+              <span class="text-xs font-black uppercase tracking-wider text-amber-300">
+                {{ props.statusText || 'Thinking...' }}
+              </span>
             </div>
 
             <!-- 2) GM COMIC NARRATIVE CAPTION BOX -->

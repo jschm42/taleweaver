@@ -34,6 +34,7 @@ class AdventureTemplateBase(BaseModel):
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat"]] = "rpg"
     time_per_turn: Optional[int] = 5
     pacing_minutes: Optional[int] = 5
+    max_time_per_turn: Optional[int] = None
     clock_enabled: Optional[bool] = False
     time_system: Optional[str] = "calendar"
     time_config: Optional[dict[str, Any]] = None
@@ -97,6 +98,7 @@ class AdventureTemplateUpdate(BaseModel):
     rule_enforcement_mode: Optional[Literal["rpg", "story", "chat", "strict"]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
+    max_time_per_turn: Optional[int] = None
     clock_enabled: Optional[bool] = None
     time_system: Optional[str] = None
     time_config: Optional[dict[str, Any]] = None

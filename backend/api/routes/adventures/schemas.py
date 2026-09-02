@@ -28,7 +28,10 @@ class CreateAdventureTemplatePayload(BaseModel):
     automatic_npc_voice_assignment: bool = True
     time_per_turn: int = 5
     pacing_minutes: Optional[int] = None
+    max_time_per_turn: Optional[int] = None
     clock_enabled: Optional[bool] = False
+    time_system: Optional[str] = "calendar"
+    time_config: Optional[dict[str, Any]] = None
     game_over_rules: Optional[dict[str, Any]] = None
     selected_image_styles: Optional[list[dict[str, Any]]] = None
     selected_tone: Optional[dict[str, Any]] = None
@@ -272,6 +275,7 @@ class AdventureTemplateResponse(BaseModel):
     strict_rules: bool = True
     time_per_turn: int
     pacing_minutes: int
+    max_time_per_turn: Optional[int] = None
     clock_enabled: bool
     time_system: str = "calendar"
     time_config: Optional[dict[str, Any]] = None
@@ -545,6 +549,8 @@ class AdventureTemplateUpdate(BaseModel):
     selected_style_id: Optional[str] = None
     selected_tone_id: Optional[str] = None
     time_system: Optional[str] = None
+    time_config: Optional[dict[str, Any]] = None
+    max_time_per_turn: Optional[int] = None
     allow_dynamic_items: Optional[bool] = None
     can_damage_npcs: Optional[bool] = None
     npcs_can_damage_protagonist: Optional[bool] = None

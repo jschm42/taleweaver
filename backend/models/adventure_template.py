@@ -33,6 +33,7 @@ class AdventureTemplate(Base, TimestampMixin):
     rule_enforcement_mode: Mapped[str] = mapped_column(String(16), default="strict", nullable=False)
     time_per_turn: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     pacing_minutes: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    max_time_per_turn: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     clock_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     time_system: Mapped[str] = mapped_column(String(20), default="calendar", nullable=False)
     time_config: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)

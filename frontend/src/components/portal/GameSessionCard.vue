@@ -225,7 +225,9 @@ function runAction(action: 'resume' | 'delete' | 'copy' | 'edit-note' | 'export'
         <!-- Time Played -->
         <div class="min-w-0 flex flex-col gap-1.5 items-end text-right">
           <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Playtime</span>
-          <span class="text-base font-black text-slate-200 tracking-wide leading-none truncate">{{ props.session.in_game_time || 0 }} MIN</span>
+          <span class="text-base font-black text-slate-200 tracking-wide leading-none truncate">
+            {{ props.session.in_game_time || 0 }} {{ (props.session as any).time_system === 'units' ? ((props.session as any).time_config?.unit_name || 'UNITS') : 'MIN' }}
+          </span>
         </div>
       </div>
 

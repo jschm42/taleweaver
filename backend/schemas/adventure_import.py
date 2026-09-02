@@ -74,7 +74,10 @@ class AdventureTemplateImportPayload(BaseModel):
     objects: Optional[list[ItemSpec]] = None
     time_per_turn: Optional[int] = None
     pacing_minutes: Optional[int] = None
+    max_time_per_turn: Optional[int] = None
     clock_enabled: Optional[bool] = None
+    time_system: Optional[str] = None
+    time_config: Optional[dict[str, Any]] = None
     start_date: Optional[str] = None
     start_time: Optional[str] = None
     start_datetime: Optional[str] = None

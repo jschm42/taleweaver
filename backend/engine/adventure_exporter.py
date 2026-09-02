@@ -319,6 +319,7 @@ class AdventureExporter:
                 "rule_enforcement_mode": adv.rule_enforcement_mode,
                 "time_per_turn": adv.time_per_turn,
                 "pacing_minutes": adv.pacing_minutes,
+                "max_time_per_turn": adv.max_time_per_turn,
                 "clock_enabled": adv.clock_enabled,
                 "selected_tone": adv.selected_tone,
                 "selected_image_styles": adv.selected_image_styles,

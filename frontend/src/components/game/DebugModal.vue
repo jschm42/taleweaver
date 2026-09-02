@@ -238,7 +238,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                 </div>
                 <div class="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
                   <div class="text-slate-500 text-xs uppercase tracking-widest">Runtime Time</div>
-                  <div class="text-slate-200">{{ data?.sheet?.in_game_time ?? 0 }} min</div>
+                  <div class="text-slate-200">
+                    {{ data?.sheet?.in_game_time ?? 0 }} {{ data?.sheet?.time_system === 'units' ? (data?.sheet?.time_config?.unit_name || 'units') : 'min' }}
+                  </div>
                 </div>
                 <div class="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
                   <div class="text-slate-500 text-xs uppercase tracking-widest">Visible Entities</div>

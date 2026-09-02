@@ -67,3 +67,28 @@ def test_resolve_start_datetime_prefers_explicit_start_datetime():
     manifest = {"start_datetime": "2026-04-17T10:00:00"}
     res = AdventureLogic.resolve_start_datetime(manifest, time_config={"start_time": "14:30"})
     assert res == "2026-04-17T10:00:00"
+
+def test_resolve_start_datetime_from_start_date_and_time():
+    manifest = {"start_date": "2026-05-20", "start_time": "16:45"}
+    res = AdventureLogic.resolve_start_datetime(manifest)
+    assert res == "2026-05-20T16:45:00"
+
+def test_format_game_time_units_system():
+    config = {"unit_name": "Blobs", "initial_value": 100}
+    res = MemoryManager.format_game_time(0, time_system="units", time_config=config)
+    assert res == "100 Blobs"
+
+    res = MemoryManager.format_game_time(15, time_system="units", time_config=config)
+    assert res == "115 Blobs"
+
+    config_ly = {"unit_name": "Lightyears", "initial_value": 0}
+    res = MemoryManager.format_game_time(42, time_system="units", time_config=config_ly)
+    assert res == "42 Lightyears"
+
+def test_format_game_time_calendar_with_start_datetime():
+    config = {"start_datetime": "2026-04-17T08:00:00"}
+    res = MemoryManager.format_game_time(0, time_system="calendar", time_config=config)
+    assert res == "2026-04-17 08:00"
+
+    res = MemoryManager.format_game_time(90, time_system="calendar", time_config=config)
+    assert res == "2026-04-17 09:30"

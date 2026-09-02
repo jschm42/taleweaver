@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Save, X } from 'lucide-vue-next'
+
 const props = defineProps<{
   form: any
   adventure: any
@@ -25,9 +27,14 @@ const emit = defineEmits<{
               <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Choose the narrative voice and mood</p>
            </div>
         </div>
-        <div v-if="form.selected_tone_id !== (adventure?.selected_tone || '')" class="flex gap-4 animate-fade-in">
-           <button @click="$emit('update:tone', adventure?.selected_tone || '')" class="px-4 py-2 rounded-xl bg-slate-800 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-white transition-all">Discard</button>
-           <button @click="$emit('save-changes')" class="px-6 py-2 rounded-xl bg-indigo-600 text-xs font-black text-white uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg">Apply Tone</button>
+        <div v-if="form.selected_tone_id !== (adventure?.selected_tone || '')" class="flex items-center gap-2 animate-fade-in">
+           <button @click="$emit('save-changes')" :disabled="isSaving" class="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg disabled:opacity-50 flex items-center justify-center" title="Speichern">
+              <i v-if="isSaving" class="ra ra-cycle animate-spin text-sm"></i>
+              <Save v-else class="w-4 h-4" />
+           </button>
+           <button @click="$emit('update:tone', adventure?.selected_tone || '')" :disabled="isSaving" class="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all flex items-center justify-center" title="Abbrechen">
+              <X class="w-4 h-4" />
+           </button>
         </div>
      </div>
        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">

@@ -549,9 +549,10 @@ const form = ref({
   original_prompt: '',
   rule_enforcement_mode: 'rpg' as 'rpg' | 'story' | 'chat',
   time_per_turn: 5,
+  max_time_per_turn: null as number | null,
   clock_enabled: false,
-  time_system: 'calendar' as 'calendar' | 'relative',
-  time_config: { start_time: '08:00', day_label: 'Day' } as Record<string, any>,
+  time_system: 'calendar' as string,
+  time_config: { start_date: '2026-01-01', start_time: '08:00', day_label: 'Day', unit_name: 'Blobs', initial_value: 0 } as Record<string, any>,
   min_scenes: null as number | null,
   max_scenes: null as number | null,
   min_items: null as number | null,
@@ -734,13 +735,60 @@ async function fetchAdventure() {
     form.value.original_prompt = data.original_prompt || ''
     form.value.rule_enforcement_mode = (data.rule_enforcement_mode as 'rpg' | 'story' | 'chat') || 'rpg'
     form.value.time_per_turn = data.time_per_turn || 5
+    form.value.max_time_per_turn = data.max_time_per_turn !== undefined ? data.max_time_per_turn : null
     form.value.clock_enabled = data.clock_enabled ?? false
-    form.value.time_system = (data.time_system === 'relative' ? 'relative' : 'calendar')
+    form.value.time_system = data.time_system || 'calendar'
     form.value.time_config = data.time_config && typeof data.time_config === 'object'
       ? { ...data.time_config }
-      : { start_time: '08:00', day_label: 'Day' }
+      : { start_date: '2026-01-01', start_time: '08:00', day_label: 'Day', unit_name: 'Blobs', initial_value: 0 }
+    if (!form.value.time_config.start_date) form.value.time_config.start_date = '2026-01-01'
     if (!form.value.time_config.start_time) form.value.time_config.start_time = '08:00'
     if (!form.value.time_config.day_label) form.value.time_config.day_label = 'Day'
+    if (!form.value.time_config.unit_name) form.value.time_config.unit_name = 'Blobs'
+    if (form.value.time_config.initial_value === undefined) form.value.time_config.initial_value = 0
+    if (!form.value.time_config.calendar_pacing_unit) {
+      const t = form.value.time_per_turn || 5
+      if (t >= 525600 && t % 525600 === 0) {
+        form.value.time_config.calendar_pacing_value = t / 525600
+        form.value.time_config.calendar_pacing_unit = 'Years'
+      } else if (t >= 10080 && t % 10080 === 0) {
+        form.value.time_config.calendar_pacing_value = t / 10080
+        form.value.time_config.calendar_pacing_unit = 'Weeks'
+      } else if (t >= 1440 && t % 1440 === 0) {
+        form.value.time_config.calendar_pacing_value = t / 1440
+        form.value.time_config.calendar_pacing_unit = 'Days'
+      } else if (t >= 60 && t % 60 === 0) {
+        form.value.time_config.calendar_pacing_value = t / 60
+        form.value.time_config.calendar_pacing_unit = 'Hours'
+      } else {
+        form.value.time_config.calendar_pacing_value = t
+        form.value.time_config.calendar_pacing_unit = 'Minutes'
+      }
+    }
+    if (!form.value.time_config.calendar_max_unit) {
+      const mt = form.value.max_time_per_turn
+      if (mt && mt > 0) {
+        if (mt >= 525600 && mt % 525600 === 0) {
+          form.value.time_config.calendar_max_value = mt / 525600
+          form.value.time_config.calendar_max_unit = 'Years'
+        } else if (mt >= 10080 && mt % 10080 === 0) {
+          form.value.time_config.calendar_max_value = mt / 10080
+          form.value.time_config.calendar_max_unit = 'Weeks'
+        } else if (mt >= 1440 && mt % 1440 === 0) {
+          form.value.time_config.calendar_max_value = mt / 1440
+          form.value.time_config.calendar_max_unit = 'Days'
+        } else if (mt >= 60 && mt % 60 === 0) {
+          form.value.time_config.calendar_max_value = mt / 60
+          form.value.time_config.calendar_max_unit = 'Hours'
+        } else {
+          form.value.time_config.calendar_max_value = mt
+          form.value.time_config.calendar_max_unit = 'Minutes'
+        }
+      } else {
+        form.value.time_config.calendar_max_value = null
+        form.value.time_config.calendar_max_unit = 'Minutes'
+      }
+    }
     form.value.min_scenes = data.min_scenes !== undefined ? data.min_scenes : null
     form.value.max_scenes = data.max_scenes !== undefined ? data.max_scenes : null
     form.value.min_items = data.min_items !== undefined ? data.min_items : null
@@ -2225,10 +2273,18 @@ watch(
               @generate-field="handleGenerateField"
               @update:temp-value="tempValue = $event"
               @update:pacing="form.time_per_turn = $event"
+              @update:max-time-per-turn="form.max_time_per_turn = $event"
               @update:clock-enabled="form.clock_enabled = $event"
               @update:time-system="form.time_system = $event"
+              @update:start-date="form.time_config = { ...(form.time_config || {}), start_date: $event }"
               @update:start-time="form.time_config = { ...(form.time_config || {}), start_time: $event }"
               @update:day-label="form.time_config = { ...(form.time_config || {}), day_label: $event }"
+              @update:unit-name="form.time_config = { ...(form.time_config || {}), unit_name: $event }"
+              @update:initial-value="form.time_config = { ...(form.time_config || {}), initial_value: $event }"
+              @update:calendar-pacing-value="form.time_config = { ...(form.time_config || {}), calendar_pacing_value: $event }"
+              @update:calendar-pacing-unit="form.time_config = { ...(form.time_config || {}), calendar_pacing_unit: $event }"
+              @update:calendar-max-value="form.time_config = { ...(form.time_config || {}), calendar_max_value: $event }"
+              @update:calendar-max-unit="form.time_config = { ...(form.time_config || {}), calendar_max_unit: $event }"
               @update:mode="form.rule_enforcement_mode = $event as any"
               @save-changes="saveChanges"
             />

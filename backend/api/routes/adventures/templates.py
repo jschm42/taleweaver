@@ -798,7 +798,10 @@ async def create_adventure(
         rule_enforcement_mode=payload.rule_enforcement_mode or "rpg",
         time_per_turn=payload.time_per_turn,
         pacing_minutes=pacing_minutes,
+        max_time_per_turn=payload.max_time_per_turn,
         clock_enabled=payload.clock_enabled or False,
+        time_system=payload.time_system or "calendar",
+        time_config=payload.time_config,
         generate_scene_images=payload.generate_scene_images,
         generate_npc_images=payload.generate_npc_images,
         generate_item_images=payload.generate_item_images,
@@ -1376,7 +1379,7 @@ async def update_adventure(
         "gameover_condition",
         "tts_director_notes",
     }
-    time_fields = {"time_system", "time_config", "clock_enabled", "pacing_minutes"}
+    time_fields = {"time_system", "time_config", "clock_enabled", "pacing_minutes", "time_per_turn", "max_time_per_turn"}
     if any(f in update_data for f in narrative_fields) or any(f in update_data for f in time_fields):
         from backend.models.session_state import SessionState
 

@@ -12,6 +12,8 @@ export interface Adventure {
   original_prompt?: string
   rule_enforcement_mode: 'rpg' | 'story' | 'chat'
   time_per_turn: number
+  pacing_minutes?: number
+  max_time_per_turn?: number | null
   clock_enabled?: boolean
   time_system?: string
   time_config?: Record<string, any> | null
@@ -59,6 +61,8 @@ export interface AdventureFormData {
   original_prompt: string
   rule_enforcement_mode: 'rpg' | 'story' | 'chat'
   time_per_turn: number
+  pacing_minutes?: number
+  max_time_per_turn?: number | null
   clock_enabled?: boolean
   time_system?: string
   time_config?: Record<string, any> | null

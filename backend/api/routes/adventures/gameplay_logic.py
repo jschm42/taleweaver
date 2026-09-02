@@ -7019,6 +7019,32 @@ class GameTurnManager:
             flag_modified(self.state, "world_memories")
             self._queue_checkpoint("world_memories_updated")
 
+        # Time Management
+        if event.start_datetime_override:
+            self.state.start_datetime = event.start_datetime_override
+            state_dirty = True
+
+        if event.time_override_minutes is not None:
+            self.state.in_game_time = max(0, int(event.time_override_minutes))
+            state_dirty = True
+        elif event.extra_time_minutes != 0:
+            base_turn = int(self.adventure.time_per_turn if self.adventure.time_per_turn is not None else 5)
+            max_turn = getattr(self.adventure, "max_time_per_turn", None)
+            if max_turn is None and self.adventure.time_config:
+                max_turn = self.adventure.time_config.get("max_time_per_turn")
+
+            extra = int(event.extra_time_minutes)
+            if max_turn is not None and max_turn > 0:
+                total_turn_time = max(0, min(base_turn + extra, max_turn))
+                delta_to_add = total_turn_time - base_turn
+            else:
+                total_turn_time = max(0, base_turn + extra)
+                delta_to_add = total_turn_time - base_turn
+
+            if delta_to_add != 0:
+                self.state.in_game_time = max(0, self.state.in_game_time + delta_to_add)
+                state_dirty = True
+
         if state_dirty:
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")

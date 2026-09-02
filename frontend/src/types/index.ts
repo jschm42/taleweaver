@@ -35,8 +35,12 @@ export interface CharacterSheet {
   inventory: InventoryItem[]
   equipment: Record<string, InventoryItem | null>
   status_effects: string[]
-  in_game_time: number  // minutes elapsed in-game
+  in_game_time: number  // minutes or units elapsed in-game
   start_datetime?: string | null
+  time_system?: 'calendar' | 'units' | 'relative' | string
+  time_config?: Record<string, any> | null
+  time_per_turn?: number
+  max_time_per_turn?: number | null
   current_scene?: string | null
   scene_id?: string | null
   rule_enforcement_mode?: 'rpg' | 'story' | 'chat'
@@ -229,8 +233,11 @@ export interface CreateAdventurePayload {
   clock_enabled?: boolean
   heartbeat_enabled?: boolean
   automatic_cover_generation?: boolean
+  time_system?: 'calendar' | 'units' | 'relative' | string
+  time_config?: Record<string, any> | null
   time_per_turn?: number
   pacing_minutes?: number
+  max_time_per_turn?: number | null
   pacing?: Record<string, unknown>
   original_manifest?: Record<string, unknown>
   award_generation_enabled?: boolean

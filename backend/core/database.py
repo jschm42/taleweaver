@@ -431,6 +431,12 @@ async def apply_sqlite_compat_migrations() -> None:
                 )
                 logger.info("SQLite migration: added adventure_templates.starting_timestamp")
 
+            if "max_time_per_turn" not in template_cols:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE adventure_templates ADD COLUMN max_time_per_turn INTEGER"
+                )
+                logger.info("SQLite migration: added adventure_templates.max_time_per_turn")
+
             if "generation_logs" not in template_cols:
                 await conn.exec_driver_sql(
                     "ALTER TABLE adventure_templates ADD COLUMN generation_logs TEXT"

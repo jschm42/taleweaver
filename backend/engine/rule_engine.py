@@ -234,8 +234,8 @@ class GameEvent(BaseModel):
     attack_results: Optional[list[AttackResult]] = None
     
     # Time Management
-    extra_time_minutes: int = 0 # Extra time this action takes (added to turn base)
-    time_override_minutes: Optional[int] = None # Absolute override for in_game_time (minutes since start)
+    extra_time_minutes: int = Field(0, validation_alias=AliasChoices("extra_time_minutes", "extra_time", "extra_time_units", "time_passed")) # Extra time or units this action takes (added to turn base)
+    time_override_minutes: Optional[int] = Field(None, validation_alias=AliasChoices("time_override_minutes", "time_override", "time_override_units")) # Absolute override for in_game_time
     start_datetime_override: Optional[str] = None # ISO string for start_datetime (shifts the entire calendar)
     
     # Quest System

@@ -289,9 +289,7 @@ class AdventureLogic:
         if state and state.start_datetime:
             return state.start_datetime
         
-        target_manifest = manifest
-        if not target_manifest:
-            return None
+        target_manifest = manifest or {}
 
         # Merge explicit editor time_config over manifest defaults so in-game
         # start time can be configured from the world editor.
@@ -301,14 +299,31 @@ class AdventureLogic:
             for k, v in manifest_time_config.items():
                 merged_time_config.setdefault(k, v)
 
+        # Check explicit start_datetime in time_config
+        config_start_dt = merged_time_config.get("start_datetime")
+        if isinstance(config_start_dt, str) and config_start_dt.strip():
+            try:
+                dt = datetime.fromisoformat(config_start_dt.strip().replace("Z", "+00:00"))
+                return dt.isoformat()
+            except ValueError:
+                pass
+
+        # Check explicit start_datetime in manifest
         start_datetime = target_manifest.get("start_datetime")
         if isinstance(start_datetime, str) and start_datetime.strip():
-            return start_datetime
-        start_date = manifest.get("start_date")
-        start_time = manifest.get("start_time")
-        if isinstance(start_date, str) and start_date.strip() and isinstance(start_time, str) and start_time.strip():
             try:
-                dt = datetime.fromisoformat(f"{start_date.strip()}T{start_time.strip()}")
+                dt = datetime.fromisoformat(start_datetime.strip().replace("Z", "+00:00"))
+                return dt.isoformat()
+            except ValueError:
+                pass
+
+        # Check start_date + start_time in merged config or manifest
+        start_date = merged_time_config.get("start_date") or target_manifest.get("start_date")
+        start_time = merged_time_config.get("start_time") or target_manifest.get("start_time")
+        if isinstance(start_date, str) and start_date.strip():
+            time_part = start_time.strip() if isinstance(start_time, str) and start_time.strip() else "08:00"
+            try:
+                dt = datetime.fromisoformat(f"{start_date.strip()}T{time_part}")
                 return dt.isoformat()
             except ValueError:
                 pass
@@ -816,6 +831,8 @@ class AdventureLogic:
             "adventure_tone": adventure.selected_tone if adventure else (session_snapshot.get("adventure") or {}).get("selected_tone"),
             "time_system": state.time_system or (adventure.time_system if adventure else (session_snapshot.get("adventure") or {}).get("time_system", "calendar")),
             "time_config": state.time_config or (adventure.time_config if adventure else (session_snapshot.get("adventure") or {}).get("time_config")),
+            "time_per_turn": adventure.time_per_turn if adventure else (session_snapshot.get("adventure") or {}).get("time_per_turn", 5),
+            "max_time_per_turn": adventure.max_time_per_turn if adventure else (session_snapshot.get("adventure") or {}).get("max_time_per_turn"),
             "agent_active": bool((state.entity_states or {}).get("__agent__", {}).get("active", False)),
             "agent_monkey_mode": bool((state.entity_states or {}).get("__agent__", {}).get("monkey_mode", False)),
             "is_debug_enabled": bool(state.is_debug_enabled),

@@ -1183,6 +1183,14 @@ async def apply_manifest(
         adventure.license = _adv_field("license") or adventure.license  # type: ignore[assignment]
         adventure.license_url = _adv_field("license_url") or adventure.license_url  # type: ignore[assignment]
 
+        if manifest_dict.get("time_per_turn") is not None:
+            adventure.time_per_turn = int(manifest_dict["time_per_turn"])  # type: ignore[assignment]
+        if manifest_dict.get("pacing_minutes") is not None:
+            adventure.pacing_minutes = int(manifest_dict["pacing_minutes"])  # type: ignore[assignment]
+        if manifest_dict.get("max_time_per_turn") is not None:
+            adventure.max_time_per_turn = int(manifest_dict["max_time_per_turn"])  # type: ignore[assignment]
+        if manifest_dict.get("clock_enabled") is not None:
+            adventure.clock_enabled = bool(manifest_dict["clock_enabled"])  # type: ignore[assignment]
         if manifest_dict.get("time_system"):
             adventure.time_system = manifest_dict["time_system"]  # type: ignore[assignment]
         if manifest_dict.get("time_config"):

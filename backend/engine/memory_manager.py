@@ -334,32 +334,50 @@ class MemoryManager:
         return "\n".join(lines) + "\n"
 
     @staticmethod
-    def format_game_time(minutes: int, time_system: str = "calendar", time_config: Optional[dict] = None) -> str:
-        """Translates total minutes into a formatted string based on the system."""
+    def format_game_time(minutes: int | float, time_system: str = "calendar", time_config: Optional[dict] = None) -> str:
+        """Translates total time into a formatted string based on the system (calendar, relative, or units)."""
         time_config = time_config or {}
+
+        if time_system == "units":
+            unit_name = time_config.get("unit_name") or time_config.get("unit") or "Units"
+            initial_value = time_config.get("initial_value", 0)
+            try:
+                numeric_initial = float(initial_value)
+            except (TypeError, ValueError):
+                numeric_initial = 0.0
+            total_val = numeric_initial + float(minutes or 0)
+            formatted_val = f"{int(total_val)}" if total_val.is_integer() else f"{total_val:g}"
+            return f"{formatted_val} {unit_name}"
+
+        # Calendar with explicit start_datetime
+        if time_config.get("start_datetime"):
+            try:
+                from datetime import datetime, timedelta
+                raw_iso = str(time_config["start_datetime"]).strip().replace("Z", "+00:00")
+                start_dt = datetime.fromisoformat(raw_iso)
+                current_dt = start_dt + timedelta(minutes=float(minutes or 0))
+                return current_dt.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                pass
+
         day_label = time_config.get("day_label", "Day")
         base_minutes_of_day = 8 * 60  # default 08:00
         
         # If there's a start_time in config, use it instead of 08:00
         if time_config.get("start_time"):
             try:
-                h, m = map(int, time_config["start_time"].split(':'))
+                h, m = map(int, str(time_config["start_time"]).split(':'))
                 base_minutes_of_day = h * 60 + m
             except (TypeError, ValueError):
                 pass
 
-        total_minutes = base_minutes_of_day + minutes
+        total_minutes = int(base_minutes_of_day + (minutes or 0))
         days_passed = total_minutes // (24 * 60)
         rem_minutes = total_minutes % (24 * 60)
         current_hour = rem_minutes // 60
         current_minute = rem_minutes % 60
         
-        if time_system == "relative":
-            return f"{day_label} {1 + days_passed}, {current_hour:02d}:{current_minute:02d}"
-        
-        # Calendar mode is handled by the frontend mostly, 
-        # but for the LLM prompt we provide a readable string.
-        return f"Day {1 + days_passed}, {current_hour:02d}:{current_minute:02d}"
+        return f"{day_label} {1 + days_passed}, {current_hour:02d}:{current_minute:02d}"
 
     @staticmethod
     def build_system_prompt(

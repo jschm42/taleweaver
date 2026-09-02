@@ -36,6 +36,23 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
     const dayLabel = timeConfig.day_label || 'Day'
     const startDatetimeRaw = (sheet.value as any)?.start_datetime
 
+    if (timeSystem === 'units') {
+      const unitName = timeConfig.unit_name || timeConfig.unit || 'Units'
+      const initialVal = Number(timeConfig.initial_value ?? 0)
+      const currentVal = (isNaN(initialVal) ? 0 : initialVal) + (Number(elapsedMinutes) || 0)
+      const formattedVal = Number.isInteger(currentVal)
+        ? currentVal.toString()
+        : currentVal.toLocaleString('de-DE', { maximumFractionDigits: 2 })
+      return {
+        isUnits: true,
+        unitName,
+        value: formattedVal,
+        date: unitName,
+        dateShort: unitName,
+        time: formattedVal,
+      }
+    }
+
     if (timeSystem === 'relative' || !startDatetimeRaw) {
       const totalMinutes = elapsedMinutes
       let baseHour = 8
@@ -54,6 +71,9 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
 
       const timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`
       return {
+        isUnits: false,
+        unitName: undefined,
+        value: undefined,
         date: `${dayLabel} ${1 + daysPassed}`,
         dateShort: `${dayLabel} ${1 + daysPassed}`,
         time: timeStr,
@@ -67,6 +87,7 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
       const currentHour = Math.floor((totalMinutes % (24 * 60)) / 60)
       const currentMin = totalMinutes % 60
       return {
+        isUnits: false,
         date: `${dayLabel} ${1 + daysPassed}`,
         dateShort: `${dayLabel} ${1 + daysPassed}`,
         time: `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`,
@@ -111,6 +132,7 @@ export function useGameProgressState(options: UseGameProgressStateOptions) {
     })
 
     return {
+      isUnits: false,
       date,
       dateShort,
       time: gameSettings.value.clock_24h ? time24 : time,
